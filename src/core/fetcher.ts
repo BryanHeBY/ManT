@@ -1,3 +1,31 @@
+export interface CommandResult {
+  stdout: Uint8Array;
+  stderr: string;
+  exitCode: number;
+}
+
+interface CommandOptions {
+  stdin?: Uint8Array;
+}
+
+type CommandRunner = (
+  command: string[],
+  options?: CommandOptions,
+) => Promise<CommandResult>;
+
+export interface FetchManHtmlDependencies {
+  runCommand?: CommandRunner;
+  readFile?: (path: string) => Promise<Uint8Array>;
+  isMandocAvailable?: () => boolean;
+  onMandocFallback?: (topic: string, error: Error) => void;
+}
+
+const decoder = new TextDecoder();
+
+function decode(bytes: Uint8Array): string {
+  return decoder.decode(bytes);
+}
+
 function getDecompressor(path: string): string | null {
   if (path.endsWith(".zst")) return "zstdcat";
   if (path.endsWith(".gz")) return "zcat";
@@ -7,104 +35,139 @@ function getDecompressor(path: string): string | null {
 }
 
 async function runCommand(
-  cmd: string[],
-  options: { stdin?: ReadableStream<Uint8Array> } = {}
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const proc = Bun.spawn(cmd, {
-    stdin: options.stdin ?? "inherit",
+  command: string[],
+  options: CommandOptions = {},
+): Promise<CommandResult> {
+  const process = Bun.spawn(command, {
+    stdin: options.stdin ?? "ignore",
     stdout: "pipe",
     stderr: "pipe",
   });
 
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  const exitCode = await proc.exited;
+  // Read both pipes concurrently.  Reading stdout before stderr can deadlock
+  // when a formatter writes enough diagnostics to fill the stderr pipe.
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(process.stdout).arrayBuffer(),
+    new Response(process.stderr).text(),
+    process.exited,
+  ]);
 
-  return { stdout, stderr, exitCode };
+  return { stdout: new Uint8Array(stdout), stderr, exitCode };
 }
 
-async function locateManPage(topic: string): Promise<string | null> {
-  const { stdout, exitCode } = await runCommand(["man", "-w", topic]);
-  if (exitCode !== 0) return null;
-
-  const firstPath = stdout.trim().split("\n")[0];
-  return firstPath ?? null;
+async function readFile(path: string): Promise<Uint8Array> {
+  return new Uint8Array(await Bun.file(path).arrayBuffer());
 }
 
-async function renderWithMandoc(path: string): Promise<string> {
+function commandError(command: string[], result: CommandResult): Error {
+  return new Error(
+    result.stderr.trim() || `${command.join(" ")} failed with code ${result.exitCode}`,
+  );
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function hasSourceInclude(source: Uint8Array): boolean {
+  // mandoc resolves .so relative to its current working directory.  Feeding a
+  // page through stdin loses the source file's location, so delegate these
+  // pages to man-db/groff, which resolves the include in the man hierarchy.
+  return /^(?:\.|')so[\t ]+/m.test(decode(source));
+}
+
+async function locateManPage(
+  topic: string,
+  commandRunner: CommandRunner,
+): Promise<string | null> {
+  const command = ["man", "-w", topic];
+  const result = await commandRunner(command);
+  if (result.exitCode !== 0) return null;
+
+  const firstPath = decode(result.stdout).trim().split(/\r?\n/, 1)[0];
+  return firstPath || null;
+}
+
+async function loadManSource(
+  path: string,
+  commandRunner: CommandRunner,
+  fileReader: (path: string) => Promise<Uint8Array>,
+): Promise<Uint8Array> {
   const decompressor = getDecompressor(path);
+  if (!decompressor) return fileReader(path);
 
-  if (decompressor) {
-    const decompressProc = Bun.spawn([decompressor, path], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const mandocProc = Bun.spawn(["mandoc", "-Thtml"], {
-      stdin: decompressProc.stdout,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const html = await new Response(mandocProc.stdout).text();
-    const mandocErr = await new Response(mandocProc.stderr).text();
-    const decompressErr = await new Response(decompressProc.stderr).text();
-    const mandocCode = await mandocProc.exited;
-    const decompressCode = await decompressProc.exited;
-
-    if (decompressCode !== 0 || mandocCode !== 0) {
-      throw new Error(
-        (mandocErr || decompressErr || "mandoc pipeline failed").trim()
-      );
-    }
-
-    return html;
-  }
-
-  const { stdout, stderr, exitCode } = await runCommand([
-    "mandoc",
-    "-Thtml",
-    path,
-  ]);
-
-  if (exitCode !== 0) {
-    throw new Error(stderr.trim() || `mandoc -Thtml ${path} failed`);
-  }
-
-  return stdout;
+  const command = [decompressor, path];
+  const result = await commandRunner(command);
+  if (result.exitCode !== 0) throw commandError(command, result);
+  return result.stdout;
 }
 
-async function renderWithMan(topic: string): Promise<string> {
-  const { stdout, stderr, exitCode } = await runCommand([
-    "man",
-    "-Thtml",
-    topic,
-  ]);
+async function renderWithMandoc(
+  source: Uint8Array,
+  commandRunner: CommandRunner,
+): Promise<string> {
+  // -Wunsupp turns mandoc's known GNU roff incompatibilities into a non-zero
+  // exit code.  That lets us fall back to groff instead of silently returning
+  // incomplete HTML for pages mandoc cannot faithfully render.
+  const command = ["mandoc", "-Wunsupp", "-Thtml"];
+  const result = await commandRunner(command, { stdin: source });
+  if (result.exitCode !== 0) throw commandError(command, result);
 
-  if (exitCode !== 0) {
-    throw new Error(
-      stderr.trim() || `man -Thtml ${topic} failed with code ${exitCode}`
-    );
-  }
-
-  return stdout;
+  const html = decode(result.stdout);
+  if (!html.trim()) throw new Error("mandoc produced no HTML");
+  return html;
 }
 
-export async function fetchManHtml(topic: string): Promise<string> {
-  const path = await locateManPage(topic);
+async function renderWithMan(
+  topic: string,
+  commandRunner: CommandRunner,
+): Promise<string> {
+  // man-db documents -Thtml as the stdout-oriented groff device option.
+  // Do not use --html here: that option launches a browser instead.
+  const command = ["man", "-Thtml", topic];
+  const result = await commandRunner(command);
+  if (result.exitCode !== 0) throw commandError(command, result);
+  return decode(result.stdout);
+}
 
-  if (path) {
-    try {
-      const html = await renderWithMandoc(path);
-      if (html.trim().length > 0) {
-        return html;
+function defaultMandocFallback(topic: string, error: Error): void {
+  if (process.env.MANT_DEBUG) {
+    console.warn(`mandoc failed for ${topic}, falling back to man: ${error.message}`);
+  }
+}
+
+/**
+ * Creates a man-page HTML fetcher.  The injectable process and file adapters
+ * keep the renderer selection deterministic in tests without requiring the
+ * host to have man-db, mandoc, or compression utilities installed.
+ */
+export function createManHtmlFetcher(
+  dependencies: FetchManHtmlDependencies = {},
+): (topic: string) => Promise<string> {
+  const commandRunner = dependencies.runCommand ?? runCommand;
+  const fileReader = dependencies.readFile ?? readFile;
+  const isMandocAvailable = dependencies.isMandocAvailable ?? (() => Bun.which("mandoc") !== null);
+  const onMandocFallback = dependencies.onMandocFallback ?? defaultMandocFallback;
+
+  return async function fetchManHtml(topic: string): Promise<string> {
+    if (isMandocAvailable()) {
+      const path = await locateManPage(topic, commandRunner);
+
+      if (path) {
+        try {
+          const source = await loadManSource(path, commandRunner, fileReader);
+          if (hasSourceInclude(source)) {
+            throw new Error("manual source contains a .so include");
+          }
+          return await renderWithMandoc(source, commandRunner);
+        } catch (error) {
+          onMandocFallback(topic, asError(error));
+        }
       }
-    } catch (err) {
-      // Fall back to `man -Thtml` if mandoc fails for any reason.
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`mandoc failed for ${topic}, falling back to man: ${message}`);
     }
-  }
 
-  return renderWithMan(topic);
+    return renderWithMan(topic, commandRunner);
+  };
 }
+
+export const fetchManHtml = createManHtmlFetcher();
