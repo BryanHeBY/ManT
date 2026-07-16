@@ -9,11 +9,17 @@
     "mant": "./src/cli.ts"
   },
   "files": [
-    "src"
+    "src",
+    "native/mandoc-json",
+    "scripts",
+    "native/bin"
   ],
   "scripts": {
     "dev": "bun src/cli.ts",
+    "build": "bun scripts/ci.ts",
+    "ci": "bun run build",
     "lint": "tsc --noEmit",
+    "build:mandoc-json": "sh scripts/build-mandoc-json.sh",
     "test": "bun test",
     "test:unit": "bun test tests/unit",
     "test:e2e": "bun test tests/e2e"

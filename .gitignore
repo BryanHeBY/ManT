@@ -27,3 +27,6 @@ yarn-error.log*
 # Temporary / scratch files
 tmp-*
 *.tmp
+
+# Platform-specific artifact built from the pinned mandoc source.
+native/bin/
