@@ -6,6 +6,21 @@ import { loadManPageFixture } from "../../fixtures/man-pages";
 import { parseManHtml } from "../../../src/core/parser";
 import type { QueryResult } from "../../../src/query";
 
+// OpenTUI's testRender does not wrap renderer creation in React act(), which
+// causes a console warning for every e2e test.  That is framework-level noise
+// we cannot fix here; filter it so the test output stays readable.
+const originalConsoleError = console.error;
+console.error = (...args: unknown[]) => {
+  const message = typeof args[0] === "string" ? args[0] : "";
+  if (
+    message.includes("was not wrapped in act") ||
+    message.includes("wrap tests with act")
+  ) {
+    return;
+  }
+  originalConsoleError.apply(console, args);
+};
+
 function mandocHtmlWithPreInDl(): string {
   return `
     <html>

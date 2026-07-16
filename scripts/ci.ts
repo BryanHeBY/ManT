@@ -1,4 +1,4 @@
-import { chmod, mkdir } from "node:fs/promises";
+import { chmod, mkdir, access, constants } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -10,6 +10,15 @@ const sidecarName = process.platform === "win32"
   : "mant-mandoc-json";
 const executablePath = join(distDirectory, executableName);
 const sidecarOutput = join(distDirectory, sidecarName);
+
+async function isExecutable(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function run(
   label: string,
@@ -69,9 +78,24 @@ async function main(): Promise<void> {
 
   await run("install locked dependencies", [process.execPath, "install", "--frozen-lockfile"]);
   await run("type check", [process.execPath, "run", "lint"]);
-  await run("build libmandoc sidecar with GCC", [process.execPath, "run", "build:mandoc-json"], {
-    CC: gcc,
-  });
+
+  // Skip the mandoc download/compile cycle when a usable sidecar already
+  // exists.  Set MANT_REBUILD_SIDECAR=1 to force a rebuild after changing
+  // native/mandoc-json/mant-mandoc-json.c or the pinned mandoc version.
+  const rebuildSidecar = process.env.MANT_REBUILD_SIDECAR === "1";
+  const sidecarReady = !rebuildSidecar && await isExecutable(sidecarSource);
+  if (sidecarReady) {
+    console.log("\n==> libmandoc sidecar already present; skipping build:mandoc-json");
+    console.log("    (set MANT_REBUILD_SIDECAR=1 to force a rebuild)");
+  } else {
+    const label = rebuildSidecar
+      ? "rebuild libmandoc sidecar with GCC"
+      : "build libmandoc sidecar with GCC";
+    await run(label, [process.execPath, "run", "build:mandoc-json"], {
+      CC: gcc,
+    });
+  }
+
   await run("test", [process.execPath, "test"]);
   await run("compile current-platform executable", [
     process.execPath,

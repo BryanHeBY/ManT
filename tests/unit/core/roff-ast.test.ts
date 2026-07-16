@@ -43,6 +43,11 @@ describe("fetchRoffAst", () => {
       runCommand: async (command) => {
         commands.push(command);
         if (command[0] === "man") return result("/fixtures/tool.1.gz\n");
+        if (command[0] === "zcat") {
+          // Decompressor output is written to a temp file before the sidecar
+          // sees it, so the exact bytes do not matter for this test.
+          return result(".TH TOOL 1");
+        }
         if (command[0] === "/tools/mant-mandoc-json") {
           return result(JSON.stringify(ast), 0, "unsupported roff request\n");
         }
@@ -54,10 +59,10 @@ describe("fetchRoffAst", () => {
       document: ast,
       diagnostics: ["unsupported roff request"],
     });
-    expect(commands).toEqual([
-      ["man", "-w", "tool"],
-      ["/tools/mant-mandoc-json", "/fixtures/tool.1.gz"],
-    ]);
+    expect(commands[0]).toEqual(["man", "-w", "tool"]);
+    expect(commands[1]).toEqual(["zcat", "/fixtures/tool.1.gz"]);
+    expect(commands[2]![0]).toBe("/tools/mant-mandoc-json");
+    expect(commands[2]![1]).toMatch(/source\.roff$/);
   });
 
   test("explains how to build a missing sidecar", async () => {

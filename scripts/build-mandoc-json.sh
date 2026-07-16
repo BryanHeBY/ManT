@@ -22,13 +22,35 @@ if [ "$CC_BIN" = cc ] && [ -x /usr/bin/cc ]; then
   CC_BIN=/usr/bin/cc
 fi
 
-curl --fail --location --silent --show-error "$MANDOC_URL" \
-  --output "$WORKDIR/mandoc.tar.gz"
+MANDOC_TARBALL="$WORKDIR/mandoc.tar.gz"
+
+# Download with resume and retries; curl exit 33 means the server does not
+# support resuming from the current offset, in which case we restart.
+for attempt in 1 2 3; do
+  echo "downloading mandoc ${MANDOC_VERSION} (attempt ${attempt})..."
+  if curl --fail --location --silent --show-error \
+          --retry 3 --retry-delay 2 \
+          --connect-timeout 15 --max-time 120 \
+          --continue-at - \
+          "$MANDOC_URL" --output "$MANDOC_TARBALL"; then
+    break
+  fi
+  curl_exit=$?
+  if [ "$attempt" -eq 3 ]; then
+    echo "failed to download mandoc source (curl exit ${curl_exit})" >&2
+    exit 1
+  fi
+  if [ "$curl_exit" -eq 33 ]; then
+    echo "server rejected resume, restarting download..."
+    rm -f "$MANDOC_TARBALL"
+  fi
+  sleep 2
+done
 
 if command -v sha256sum >/dev/null 2>&1; then
-  ACTUAL_SHA256=$(sha256sum "$WORKDIR/mandoc.tar.gz" | awk '{print $1}')
+  ACTUAL_SHA256=$(sha256sum "$MANDOC_TARBALL" | awk '{print $1}')
 else
-  ACTUAL_SHA256=$(shasum -a 256 "$WORKDIR/mandoc.tar.gz" | awk '{print $1}')
+  ACTUAL_SHA256=$(shasum -a 256 "$MANDOC_TARBALL" | awk '{print $1}')
 fi
 
 if [ "$ACTUAL_SHA256" != "$MANDOC_SHA256" ]; then

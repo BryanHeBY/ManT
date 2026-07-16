@@ -1,4 +1,6 @@
 import { dirname, join } from "node:path";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import type { CommandResult } from "./fetcher";
 
 declare const MANT_COMPILED: boolean;
@@ -64,6 +66,14 @@ export interface RoffAstFetcherDependencies {
 
 const decoder = new TextDecoder();
 
+function getDecompressor(path: string): string | null {
+  if (path.endsWith(".zst")) return "zstdcat";
+  if (path.endsWith(".gz")) return "zcat";
+  if (path.endsWith(".bz2")) return "bzcat";
+  if (path.endsWith(".xz")) return "xzcat";
+  return null;
+}
+
 function defaultSidecarPath(): string {
   if (process.env.MANT_MANDOC_JSON_BIN) {
     return process.env.MANT_MANDOC_JSON_BIN;
@@ -86,6 +96,35 @@ async function runCommand(command: string[]): Promise<CommandResult> {
     process.exited,
   ]);
   return { stdout: new Uint8Array(stdout), stderr, exitCode };
+}
+
+async function prepareSourceFile(
+  path: string,
+  commandRunner: CommandRunner,
+): Promise<string> {
+  const decompressor = getDecompressor(path);
+  if (!decompressor) return path;
+
+  // libmandoc only reads plain roff source.  Modern man pages are often
+  // compressed with zstd, so stream them through the matching decompressor
+  // into a temporary file and hand that path to the sidecar.
+  const tmpDir = await mkdtemp(join(tmpdir(), "mant-roff-"));
+  const tmpPath = join(tmpDir, "source.roff");
+
+  const command = [decompressor, path];
+  const result = await commandRunner(command);
+  if (result.exitCode !== 0) {
+    await rm(tmpDir, { recursive: true, force: true });
+    throw commandError(command, result);
+  }
+
+  await writeFile(tmpPath, result.stdout);
+  return tmpPath;
+}
+
+async function cleanupSourceFile(path: string, originalPath: string): Promise<void> {
+  if (path === originalPath) return;
+  await rm(dirname(path), { recursive: true, force: true });
 }
 
 function commandError(command: string[], result: CommandResult): Error {
@@ -142,16 +181,21 @@ export function createRoffAstFetcher(
     }
 
     const sourcePath = await locateManPage(topic, commandRunner);
-    const command = [sidecar, sourcePath];
-    const result = await commandRunner(command);
-    if (result.exitCode !== 0) throw commandError(command, result);
+    const parsedPath = await prepareSourceFile(sourcePath, commandRunner);
+    try {
+      const command = [sidecar, parsedPath];
+      const result = await commandRunner(command);
+      if (result.exitCode !== 0) throw commandError(command, result);
 
-    return {
-      document: parseDocument(result.stdout),
-      diagnostics: result.stderr.trim()
-        ? result.stderr.trim().split(/\r?\n/)
-        : [],
-    };
+      return {
+        document: parseDocument(result.stdout),
+        diagnostics: result.stderr.trim()
+          ? result.stderr.trim().split(/\r?\n/)
+          : [],
+      };
+    } finally {
+      await cleanupSourceFile(parsedPath, sourcePath);
+    }
   };
 }
 
