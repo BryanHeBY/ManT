@@ -7,7 +7,6 @@ import {
   getHeadingText,
   parseBlockElement,
   parseBlockElementWithIndent,
-  parseIndent,
   isHeading,
 } from "./parser-utils";
 

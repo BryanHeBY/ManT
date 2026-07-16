@@ -108,7 +108,7 @@ describe("git man page — pre block parsing", () => {
   });
 
   test("all pre blocks have numeric indent (not undefined)", () => {
-    for (const { block, path } of preBlocks) {
+    for (const { block } of preBlocks) {
       expect(block.type).toBe("pre");
       if (block.type === "pre") {
         expect(typeof block.indent).toBe("number");
@@ -118,7 +118,7 @@ describe("git man page — pre block parsing", () => {
   });
 
   test("no pre block contains literal HTML tags", () => {
-    for (const { block, path } of preBlocks) {
+    for (const { block } of preBlocks) {
       if (block.type === "pre") {
         const hasTags = hasLiteralHtmlTag(block.children);
         expect(hasTags).toBe(false);

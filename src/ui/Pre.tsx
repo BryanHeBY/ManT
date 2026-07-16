@@ -90,7 +90,7 @@ export function Pre({ children, block = false, indent = 0 }: PreProps): ReactNod
   const spans = makeCodeSpans(text);
   if (block) {
     return (
-      <box shouldFill={true} bg="#181825" paddingLeft={indent}>
+      <box shouldFill={true} backgroundColor="#181825" paddingLeft={indent}>
         <text wrapMode="char" fg="#cdd6f4">
           {spans}
         </text>
