@@ -178,6 +178,27 @@ describe("git man page — pre block parsing", () => {
     }
   });
 
+  test("keeps the explicit blank paragraph around the -C command example", () => {
+    const options = sections.find((s) => s.title === "OPTIONS")!;
+    const preIndex = options.blocks.findIndex(
+      (block) =>
+        block.type === "pre" &&
+        block.children.some(
+          (node) => node.type === "text" && node.content.includes("git --git-dir=a.git"),
+        ),
+    );
+
+    expect(preIndex).toBeGreaterThan(0);
+    const preceding = options.blocks[preIndex - 1];
+    const following = options.blocks[preIndex + 1];
+    expect(preceding?.type).toBe("spacer");
+    expect(preceding?.type === "spacer" && preceding.indent).toBe(4);
+    expect(following?.type).toBe("paragraph");
+    if (following?.type === "paragraph") {
+      expect(inlinePreview(following.children)).toContain("-c");
+    }
+  });
+
   test("CONFIGURATION MECHANISM pre has indent=4 and break nodes", () => {
     const cfg = sections.find((s) => s.title === "CONFIGURATION MECHANISM");
     const pre = cfg!.blocks.find((b) => b.type === "pre");
@@ -445,6 +466,8 @@ describe("git man page — no HTML tags in parse output", () => {
           for (const item of block.items) {
             texts.push(...extractAllText(item));
           }
+          break;
+        case "spacer":
           break;
       }
     }

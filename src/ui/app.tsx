@@ -137,7 +137,8 @@ function renderBlockNodes(blocks: BlockNode[], baseIndent = 0): ReactNode[] {
     inlineBuffer = [];
   }
 
-  for (const block of blocks) {
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+    const block = blocks[blockIndex]!;
     switch (block.type) {
       case "paragraph": {
         if (inlineBuffer.length > 0 && baseIndent + block.indent !== bufferIndent) {
@@ -177,6 +178,17 @@ function renderBlockNodes(blocks: BlockNode[], baseIndent = 0): ReactNode[] {
             indent={baseIndent + block.indent}
           />
         );
+        // Display blocks are separated from the next paragraph in both groff
+        // and mandoc output.  The parser may also provide an explicit spacer
+        // before the block; avoid adding a duplicate only when one follows it.
+        if (blocks[blockIndex + 1]?.type !== "spacer" && blockIndex < blocks.length - 1) {
+          result.push(<box key={`pre-gap-${keyCounter++}`} height={1} />);
+        }
+        break;
+      }
+      case "spacer": {
+        flushInline();
+        result.push(<box key={`spacer-${keyCounter++}`} height={1} />);
         break;
       }
       default:

@@ -9,7 +9,8 @@ export interface SectionNode {
 export type BlockNode =
   | { type: "paragraph"; children: InlineNode[]; indent: number }
   | { type: "pre"; children: InlineNode[]; indent: number }
-  | { type: "list"; items: InlineNode[][]; indent: number };
+  | { type: "list"; items: InlineNode[][]; indent: number }
+  | { type: "spacer"; indent: number };
 
 export type InlineNode =
   | { type: "text"; content: string }

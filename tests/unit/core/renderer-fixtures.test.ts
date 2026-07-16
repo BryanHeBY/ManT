@@ -71,6 +71,8 @@ describe("real renderer HTML fixtures", () => {
           if (block.type === "list") {
             expect(block.items.length).toBeGreaterThan(0);
             expect(block.items.some(containsRendererHtmlTag)).toBe(false);
+          } else if (block.type === "spacer") {
+            expect(block.indent).toBeGreaterThanOrEqual(0);
           } else {
             expect(containsRendererHtmlTag(block.children)).toBe(false);
           }

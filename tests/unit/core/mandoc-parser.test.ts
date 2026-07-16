@@ -84,6 +84,31 @@ describe("parseMandoc - basic structure", () => {
 // ── Definition list tests ─────────────────────────────────
 
 describe("parseMandoc - definition lists", () => {
+  test("preserves an empty Pp paragraph as a spacer around display blocks", () => {
+    const html = `<body>
+      <div class="manual-text">
+        <section class="Sh">
+          <h1 class="Sh" id="EXAMPLES">EXAMPLES</h1>
+          <p class="Pp">The following commands are equivalent:</p>
+          <p class="Pp"></p>
+          <div class="Bd-indent"><pre>git status\ngit diff</pre></div>
+          <p class="Pp">Next option</p>
+        </section>
+      </div>
+    </body>`;
+
+    const blocks = parseMandoc(html)[0]?.blocks ?? [];
+
+    expect(blocks.map((block) => block.type)).toEqual([
+      "paragraph",
+      "spacer",
+      "pre",
+      "paragraph",
+    ]);
+    expect(blocks[1]?.type === "spacer" && blocks[1].indent).toBe(0);
+    expect(blocks[2]?.type === "pre" && blocks[2].indent).toBe(4);
+  });
+
   test("parses Bl-tag with inline dd content", () => {
     const html = `<body>
       <div class="manual-text">

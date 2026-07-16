@@ -143,7 +143,10 @@ export function parseBlockElementWithIndent(
         children.push(...parseInline(child));
       }
     }
-    if (children.length === 0) return null;
+    // mandoc uses an empty <p class="Pp"></p> to request vertical space,
+    // notably around display blocks.  Keep that layout signal rather than
+    // dropping it as an empty paragraph.
+    if (children.length === 0) return { type: "spacer", indent };
     return { type: "paragraph", children, indent };
   }
 

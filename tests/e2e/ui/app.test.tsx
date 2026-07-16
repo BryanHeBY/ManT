@@ -467,4 +467,54 @@ describe("App (e2e)", () => {
 
     setup.renderer.destroy();
   });
+
+  test("keeps a blank row between a pre block and the following option", async () => {
+    const result: QueryResult = {
+      topic: "spacing",
+      sections: [
+        {
+          id: "section-0",
+          title: "OPTIONS",
+          level: 2,
+          blocks: [
+            {
+              type: "paragraph",
+              children: [{ type: "text", content: "Equivalent commands:" }],
+              indent: 0,
+            },
+            { type: "spacer", indent: 0 },
+            {
+              type: "pre",
+              children: [
+                { type: "text", content: "command one" },
+                { type: "break" },
+                { type: "text", content: "command two" },
+              ],
+              indent: 0,
+            },
+            {
+              type: "paragraph",
+              children: [{ type: "text", content: "-c <name>=<value>" }],
+              indent: 0,
+            },
+          ],
+          children: [],
+        },
+      ],
+    };
+
+    const setup = await testRender(<App result={result} onQuit={() => {}} />, {
+      width: 80,
+      height: 24,
+    });
+    await setup.renderOnce();
+    const lines = setup.captureCharFrame().split("\n");
+    const lastCodeLine = lines.findIndex((line) => line.includes("command two"));
+
+    expect(lastCodeLine).toBeGreaterThanOrEqual(0);
+    expect(lines[lastCodeLine + 1]).not.toContain("-c <name>=<value>");
+    expect(lines[lastCodeLine + 2]).toContain("-c <name>=<value>");
+
+    setup.renderer.destroy();
+  });
 });
