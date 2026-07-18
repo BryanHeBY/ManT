@@ -11,6 +11,7 @@ import type { QueryResult } from "../query";
 import type { BlockNode, InlineNode, SectionNode } from "../core";
 import { tldrPageText, type TldrCommandPart, type TldrPage } from "../tldr";
 import { Pre } from "./Pre";
+import { renderSearchHighlights } from "./search-highlight";
 
 interface AppProps {
   result: QueryResult;
@@ -216,7 +217,11 @@ function trimSegmentWhitespace(nodes: InlineNode[]): InlineNode[] {
  * Pre blocks are kept separate because they need char-wrap mode and a
  * distinct visual style.
  */
-function renderBlockNodes(blocks: BlockNode[], baseIndent = 0): ReactNode[] {
+function renderBlockNodes(
+  blocks: BlockNode[],
+  baseIndent = 0,
+  searchQuery = "",
+): ReactNode[] {
   const result: ReactNode[] = [];
   let inlineBuffer: ReactNode[] = [];
   let bufferIndent = 0;
@@ -228,7 +233,7 @@ function renderBlockNodes(blocks: BlockNode[], baseIndent = 0): ReactNode[] {
       const key = inlineKey++;
       switch (node.type) {
         case "text":
-          return node.content;
+          return renderSearchHighlights(node.content, searchQuery, `inline-${key}`);
         case "bold":
           return (
             <span key={key} fg="#cdd6f4">
@@ -242,7 +247,7 @@ function renderBlockNodes(blocks: BlockNode[], baseIndent = 0): ReactNode[] {
             </span>
           );
         case "code":
-          return <Pre key={key} children={node.children} />;
+          return <Pre key={key} children={node.children} searchQuery={searchQuery} />;
         case "break":
           return null;
         default:
@@ -302,6 +307,7 @@ function renderBlockNodes(blocks: BlockNode[], baseIndent = 0): ReactNode[] {
             children={block.children}
             block
             indent={baseIndent + block.indent}
+            searchQuery={searchQuery}
           />
         );
         // Display blocks are separated from the next paragraph in both groff
@@ -325,35 +331,48 @@ function renderBlockNodes(blocks: BlockNode[], baseIndent = 0): ReactNode[] {
   return result;
 }
 
-function SectionContent({ node, baseIndent = 3 }: { node: SectionNode; baseIndent?: number }) {
+function SectionContent({
+  node,
+  baseIndent = 3,
+  searchQuery = "",
+}: {
+  node: SectionNode;
+  baseIndent?: number;
+  searchQuery?: string;
+}) {
   return (
     <box flexDirection="column" gap={0}>
       <text id={contentId(node.id)} fg="#94e2d5">
-        <b>{node.title}</b>
+        <b>{renderSearchHighlights(node.title, searchQuery, `heading-${node.id}`)}</b>
       </text>
-      {renderBlockNodes(node.blocks, baseIndent)}
+      {renderBlockNodes(node.blocks, baseIndent, searchQuery)}
       <box flexDirection="column" gap={0}>
         {node.children.map((child: SectionNode) => (
-          <SectionContent key={child.id} node={child} baseIndent={baseIndent + 4} />
+          <SectionContent
+            key={child.id}
+            node={child}
+            baseIndent={baseIndent + 4}
+            searchQuery={searchQuery}
+          />
         ))}
       </box>
     </box>
   );
 }
 
-function TldrCommand({ parts }: { parts: TldrCommandPart[] }) {
+function TldrCommand({ parts, searchQuery }: { parts: TldrCommandPart[]; searchQuery: string }) {
   return (
     <text fg="#cdd6f4" wrapMode="char">
       {parts.map((part, index) => (
         <span key={index} fg={part.type === "placeholder" ? "#f9e2af" : "#cdd6f4"}>
-          {part.content}
+          {renderSearchHighlights(part.content, searchQuery, `tldr-command-${index}`)}
         </span>
       ))}
     </text>
   );
 }
 
-function TldrQuickReference({ page }: { page: TldrPage }) {
+function TldrQuickReference({ page, searchQuery }: { page: TldrPage; searchQuery: string }) {
   return (
     <box
       id={contentId(TLDR_NAV_ID)}
@@ -367,25 +386,29 @@ function TldrQuickReference({ page }: { page: TldrPage }) {
       paddingBottom={1}
     >
       <text fg="#cba6f7">
-        <b>{`TLDR QUICK REFERENCE · ${page.title}`}</b>
+        <b>{renderSearchHighlights(`TLDR QUICK REFERENCE · ${page.title}`, searchQuery, "tldr-title")}</b>
       </text>
       {page.description.map((line, index) => (
         <text key={`description-${index}`} fg="#bac2de" wrapMode="word">
-          {line}
+          {renderSearchHighlights(line, searchQuery, `tldr-description-${index}`)}
         </text>
       ))}
       {page.examples.map((example, index) => (
         <box key={`example-${index}`} flexDirection="column" paddingTop={index === 0 ? 1 : 0}>
-          <text fg="#a6e3a1" wrapMode="word">{example.description}</text>
+          <text fg="#a6e3a1" wrapMode="word">
+            {renderSearchHighlights(example.description, searchQuery, `tldr-example-${index}`)}
+          </text>
           {example.command && (
             <box paddingLeft={2}>
-              <TldrCommand parts={example.commandParts} />
+              <TldrCommand parts={example.commandParts} searchQuery={searchQuery} />
             </box>
           )}
         </box>
       ))}
       {page.moreInformation && (
-        <text fg="#89b4fa" wrapMode="char">{`More information: ${page.moreInformation}`}</text>
+        <text fg="#89b4fa" wrapMode="char">
+          {renderSearchHighlights(`More information: ${page.moreInformation}`, searchQuery, "tldr-more-information")}
+        </text>
       )}
       <text fg="#7f849c">
         {`tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`}
@@ -884,7 +907,9 @@ export function App({ result, onQuit }: AppProps) {
                     <span fg={selectedId === TLDR_NAV_ID ? "#f5e0dc" : "#cba6f7"}>
                       {selectedId === TLDR_NAV_ID ? "› ◆ " : "  ◆ "}
                     </span>
-                    <span fg="#cba6f7"><b>TLDR QUICK REFERENCE</b></span>
+                    <span fg="#cba6f7">
+                      <b>{renderSearchHighlights("TLDR QUICK REFERENCE", searchQuery, "nav-tldr")}</b>
+                    </span>
                   </text>
                 </box>
               )}
@@ -922,13 +947,17 @@ export function App({ result, onQuit }: AppProps) {
                           <text fg="#fab387" wrapMode="none">{labelPrefix}</text>
                         </box>
                         <box flexGrow={1}>
-                          <text fg={titleColor} wrapMode="word">{node.title}</text>
+                          <text fg={titleColor} wrapMode="word">
+                            {renderSearchHighlights(node.title, searchQuery, `nav-${node.id}`)}
+                          </text>
                         </box>
                       </>
                     ) : (
                       <text truncate wrapMode="none">
                         <span fg="#6c7086">{labelPrefix}</span>
-                        <span fg={titleColor}>{node.title}</span>
+                        <span fg={titleColor}>
+                          {renderSearchHighlights(node.title, searchQuery, `nav-${node.id}`)}
+                        </span>
                       </text>
                     )}
                   </box>
@@ -947,7 +976,7 @@ export function App({ result, onQuit }: AppProps) {
         >
           <scrollbox ref={contentScrollRef} flexGrow={1} scrollY focusable={false}>
             <box flexDirection="column" gap={1}>
-              {result.tldr && <TldrQuickReference page={result.tldr} />}
+              {result.tldr && <TldrQuickReference page={result.tldr} searchQuery={searchQuery} />}
               {result.tldr && result.sections.length > 0 && (
                 <box height={1} border={["top"]} borderColor="#45475a" paddingLeft={1}>
                   <text fg="#6c7086">MANUAL</text>
@@ -967,7 +996,7 @@ export function App({ result, onQuit }: AppProps) {
                 </box>
               )}
               {result.sections.map((node) => (
-                <SectionContent key={node.id} node={node} />
+                <SectionContent key={node.id} node={node} searchQuery={searchQuery} />
               ))}
               <box height={terminalHeight} flexShrink={0} />
             </box>

@@ -512,6 +512,14 @@ describe("App (e2e)", () => {
     let frame = setup.captureCharFrame();
     expect(frame).toContain("Find: directory");
     expect(frame).toContain("1/1");
+    const highlightedDirectorySpans = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .filter((span) => span.text.toLocaleLowerCase() === "directory");
+    expect(
+      highlightedDirectorySpans.some(
+        (span) => span.bg.toInts().slice(0, 3).join(",") === "249,226,175"
+      )
+    ).toBe(true);
 
     setup.mockInput.pressEscape();
     await flushEscape(setup);

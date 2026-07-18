@@ -1,5 +1,10 @@
 import type { ReactNode } from "react";
 import type { InlineNode } from "../core";
+import {
+  getSearchHighlightRanges,
+  SEARCH_HIGHLIGHT_BACKGROUND,
+  splitTextByHighlightRanges,
+} from "./search-highlight";
 
 const CODE_TOKEN_RE =
   /(\b(?:void|int|char|float|double|long|short|signed|unsigned|return|if|else|for|while|do|switch|case|break|continue|struct|union|enum|typedef|static|const|volatile|extern|inline|restrict|sizeof|NULL|true|false|null)\b)|(--?[A-Za-z][\w-]*(?:=\S+)?)|(\b\d+(?:\.\d+)?\b)|("[^"]*"|'[^']*')|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(\s+)|(\w+)|(.)/g;
@@ -19,11 +24,13 @@ function flattenInline(nodes: InlineNode[]): string {
     .join("");
 }
 
-function makeCodeSpans(text: string): ReactNode[] {
+function makeCodeSpans(text: string, searchQuery: string): ReactNode[] {
   const spans: ReactNode[] = [];
+  const highlightRanges = getSearchHighlightRanges(text, searchQuery);
   let key = 0;
   for (const match of text.matchAll(CODE_TOKEN_RE)) {
     const token = match[0];
+    const tokenOffset = match.index ?? 0;
     let color = "#cdd6f4";
     let bold = false;
     let italic = false;
@@ -46,22 +53,15 @@ function makeCodeSpans(text: string): ReactNode[] {
     } else {
       color = "#cdd6f4";
     }
-    if (bold) {
+    for (const fragment of splitTextByHighlightRanges(token, highlightRanges, tokenOffset)) {
+      const content = bold ? <b>{fragment.text}</b> : italic ? <i>{fragment.text}</i> : fragment.text;
       spans.push(
-        <span key={key++} fg={color}>
-          <b>{token}</b>
-        </span>
-      );
-    } else if (italic) {
-      spans.push(
-        <span key={key++} fg={color}>
-          <i>{token}</i>
-        </span>
-      );
-    } else {
-      spans.push(
-        <span key={key++} fg={color}>
-          {token}
+        <span
+          key={key++}
+          fg={color}
+          {...(fragment.highlighted ? { bg: SEARCH_HIGHLIGHT_BACKGROUND } : {})}
+        >
+          {content}
         </span>
       );
     }
@@ -73,6 +73,7 @@ interface PreProps {
   children: InlineNode[];
   block?: boolean;
   indent?: number;
+  searchQuery?: string;
 }
 
 /**
@@ -82,9 +83,9 @@ interface PreProps {
  * background therefore starts at the body indent instead of looking like a
  * full-width block glued to the content pane's left edge.
  */
-export function Pre({ children, block = false, indent = 0 }: PreProps): ReactNode {
+export function Pre({ children, block = false, indent = 0, searchQuery = "" }: PreProps): ReactNode {
   const text = flattenInline(children);
-  const spans = makeCodeSpans(text);
+  const spans = makeCodeSpans(text, searchQuery);
   if (block) {
     return (
       <box shouldFill={true} flexDirection="row">
