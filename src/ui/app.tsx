@@ -118,6 +118,81 @@ function treePrefix({ depth, isLast, ancestorHasNext }: FlatNode): string {
   return `${ancestorGuides}${isLast ? "╰─" : "├─"}`;
 }
 
+/**
+ * Keep ancestor guide columns visible after a selected navigation label wraps.
+ * The final two spaces reserve the current node's branch/disclosure columns.
+ */
+function treeContinuationPrefix({ ancestorHasNext }: FlatNode): string {
+  return `${ancestorHasNext.map((hasNext) => (hasNext ? "│ " : "  ")).join("")}  `;
+}
+
+function terminalColumnWidth(text: string): number {
+  let width = 0;
+  for (const character of text) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) continue;
+    width +=
+      codePoint >= 0x1100 &&
+      (codePoint <= 0x115f ||
+        codePoint === 0x2329 ||
+        codePoint === 0x232a ||
+        (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
+        (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
+        (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+        (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
+        (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
+        (codePoint >= 0xff00 && codePoint <= 0xff60) ||
+        (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+        (codePoint >= 0x20000 && codePoint <= 0x3fffd))
+        ? 2
+        : 1;
+  }
+  return width;
+}
+
+function splitLongNavigationWord(word: string, maxColumns: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  let lineWidth = 0;
+
+  for (const character of word) {
+    const characterWidth = terminalColumnWidth(character);
+    if (line && lineWidth + characterWidth > maxColumns) {
+      lines.push(line);
+      line = "";
+      lineWidth = 0;
+    }
+    line += character;
+    lineWidth += characterWidth;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/** Wrap a selected navigation title while retaining a prefix column per row. */
+function wrapNavigationTitle(title: string, maxColumns: number): string[] {
+  const availableColumns = Math.max(1, maxColumns);
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
+
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (terminalColumnWidth(candidate) <= availableColumns) {
+      line = candidate;
+      continue;
+    }
+    if (line) lines.push(line);
+
+    const fragments = splitLongNavigationWord(word, availableColumns);
+    line = fragments.pop() ?? "";
+    lines.push(...fragments);
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -870,15 +945,15 @@ export function App({ result, onQuit }: AppProps) {
               border={["bottom"]}
               borderColor="#313244"
             >
-              <text height={1} fg="#cdd6f4" truncate wrapMode="none">
+              <text height={1} fg="#cdd6f4" truncate wrapMode="none" selectable={false}>
                 {`MANUAL · ${result.topic}`}
               </text>
-              <text height={1} fg="#7f849c">
+              <text height={1} fg="#7f849c" selectable={false}>
                 {`${result.sections.length} top-level · ${visibleNodes.length} manual${result.tldr ? " · TLDR" : ""}`}
               </text>
             </box>
             <box height={1} paddingLeft={1} paddingRight={1}>
-              <text fg="#6c7086">SECTIONS</text>
+              <text fg="#6c7086" selectable={false}>SECTIONS</text>
             </box>
             <scrollbox
               ref={navScrollRef}
@@ -903,12 +978,12 @@ export function App({ result, onQuit }: AppProps) {
                   backgroundColor={selectedId === TLDR_NAV_ID ? "#49405f" : "#1d1a2b"}
                   onMouseDown={() => selectSection(TLDR_NAV_ID)}
                 >
-                  <text truncate wrapMode="none">
+                  <text truncate wrapMode="none" selectable={false}>
                     <span fg={selectedId === TLDR_NAV_ID ? "#f5e0dc" : "#cba6f7"}>
                       {selectedId === TLDR_NAV_ID ? "› ◆ " : "  ◆ "}
                     </span>
                     <span fg="#cba6f7">
-                      <b>{renderSearchHighlights("TLDR QUICK REFERENCE", searchQuery, "nav-tldr")}</b>
+                      <b>TLDR QUICK REFERENCE</b>
                     </span>
                   </text>
                 </box>
@@ -929,6 +1004,12 @@ export function App({ result, onQuit }: AppProps) {
                     : "▸ "
                   : "· ";
                 const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
+                const selectedTitleLines = isSelected
+                  ? wrapNavigationTitle(
+                      node.title,
+                      navigationWidth - 1 - terminalColumnWidth(labelPrefix),
+                    )
+                  : [];
                 return (
                   <box
                     key={navId(node.id)}
@@ -936,28 +1017,42 @@ export function App({ result, onQuit }: AppProps) {
                     ref={attachSectionClick(node.id, hasChildren)}
                     width="100%"
                     height={isSelected ? "auto" : 1}
-                    flexDirection="row"
+                    flexDirection={isSelected ? "column" : "row"}
                     flexShrink={0}
                     paddingLeft={1}
                     backgroundColor={isSelected ? "#313244" : "#11111b"}
                   >
                     {isSelected ? (
-                      <>
-                        <box width={labelPrefix.length} flexShrink={0}>
-                          <text fg="#fab387" wrapMode="none">{labelPrefix}</text>
-                        </box>
-                        <box flexGrow={1}>
-                          <text fg={titleColor} wrapMode="word">
-                            {renderSearchHighlights(node.title, searchQuery, `nav-${node.id}`)}
-                          </text>
-                        </box>
-                      </>
+                      selectedTitleLines.map((line, index) => {
+                        const prefix = index === 0
+                          ? labelPrefix
+                          : `  ${treeContinuationPrefix(flatNode)}`;
+                        return (
+                          <box
+                            key={`${node.id}-line-${index}`}
+                            width="100%"
+                            height={1}
+                            flexDirection="row"
+                            backgroundColor="#313244"
+                          >
+                            <text
+                              width={terminalColumnWidth(prefix)}
+                              fg={index === 0 ? "#fab387" : "#f5c2e7"}
+                              wrapMode="none"
+                              selectable={false}
+                            >
+                              {prefix}
+                            </text>
+                            <text fg={titleColor} wrapMode="none" selectable={false}>
+                              {line}
+                            </text>
+                          </box>
+                        );
+                      })
                     ) : (
-                      <text truncate wrapMode="none">
+                      <text truncate wrapMode="none" selectable={false}>
                         <span fg="#6c7086">{labelPrefix}</span>
-                        <span fg={titleColor}>
-                          {renderSearchHighlights(node.title, searchQuery, `nav-${node.id}`)}
-                        </span>
+                        <span fg={titleColor}>{node.title}</span>
                       </text>
                     )}
                   </box>

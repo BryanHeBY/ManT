@@ -12,6 +12,19 @@ function navLines(frame: string): string[] {
   return frame.split("\n").map((line) => line.slice(0, NAV_WIDTH));
 }
 
+function navigationSpans(lines: ReturnType<Awaited<ReturnType<typeof testRender>>["captureSpans"]>["lines"]) {
+  // Exclude the top menu and the bottom status/search rows, which also start
+  // at column zero but are not part of the sidebar.
+  return lines.slice(1, -2).flatMap((line) => {
+    let column = 0;
+    return line.spans.filter((span) => {
+      const startsInNavigation = column < NAV_WIDTH;
+      column += span.text.length;
+      return startsInNavigation;
+    });
+  });
+}
+
 function navPosition(frame: string, label: string): { x: number; y: number } {
   const lines = navLines(frame);
   const y = lines.findIndex((line) => line.includes(label));
@@ -755,6 +768,13 @@ describe("App (e2e)", () => {
             },
           ],
         },
+        {
+          id: "section-1",
+          title: "SIBLING",
+          level: 2,
+          blocks: [],
+          children: [],
+        },
       ],
     };
     const setup = await testRender(<App result={result} onQuit={() => {}} />, {
@@ -770,6 +790,72 @@ describe("App (e2e)", () => {
     expect(lines.some((line) => line.includes("FIRSTMARKERABCDEFGHI"))).toBe(true);
     expect(lines.some((line) => line.includes("SECONDMARKERABCDEFGH"))).toBe(true);
     expect(lines.some((line) => line.includes("THIRDMARKERABCDEFGHI"))).toBe(true);
+    expect(lines.some((line) => line.includes("│") && line.includes("SECONDMARKER"))).toBe(true);
+
+    // Text nodes in the navigation must not enter OpenTUI's native selection
+    // mode when a user drags over a wrapped title. That selection paints only
+    // text fragments and looks like a broken search highlight.
+    const firstTitle = navPosition(setup.captureCharFrame(), "FIRSTMARKERABCDEFGHI");
+    await setup.mockMouse.drag(firstTitle.x, firstTitle.y, firstTitle.x + 8, firstTitle.y);
+    await setup.flush();
+    const draggedTitleSpans = navigationSpans(setup.captureSpans().lines).filter((span) =>
+      span.text.includes("FIRSTMARKER"),
+    );
+    expect(
+      draggedTitleSpans.every(
+        (span) => span.bg.toInts().slice(0, 3).join(",") === "49,50,68",
+      ),
+    ).toBe(true);
+
+    // Search highlighting belongs to the manual content, not navigation
+    // labels. The selected item's uniform background keeps wrapped titles and
+    // tree connectors visually continuous.
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("firstmarker");
+    await flushKeyboard(setup);
+    const titleSpans = navigationSpans(setup.captureSpans().lines).filter((span) =>
+      span.text.includes("FIRSTMARKER"),
+    );
+    expect(titleSpans.length).toBeGreaterThan(0);
+    expect(
+      titleSpans.every(
+        (span) => span.bg.toInts().slice(0, 3).join(",") === "49,50,68",
+      ),
+    ).toBe(true);
+
+    setup.renderer.destroy();
+  });
+
+  test("uses only the item background for a searched GCC navigation title", async () => {
+    const result: QueryResult = {
+      topic: "gcc",
+      sections: parseManHtml(loadManPageFixture("gcc")),
+    };
+    const setup = await testRender(<App result={result} onQuit={() => {}} />, {
+      width: 80,
+      height: 24,
+    });
+
+    await setup.renderOnce();
+    for (let index = 0; index < 5; index++) {
+      setup.mockInput.pressKey("j");
+      await flushKeyboard(setup);
+    }
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("kind of output");
+    await flushKeyboard(setup);
+
+    const titleSpans = navigationSpans(setup.captureSpans().lines).filter((span) =>
+      /Options Controlling|Kind of Output/.test(span.text),
+    );
+    expect(titleSpans.length).toBeGreaterThan(0);
+    expect(
+      titleSpans.every(
+        (span) => span.bg.toInts().slice(0, 3).join(",") === "49,50,68",
+      ),
+    ).toBe(true);
 
     setup.renderer.destroy();
   });
