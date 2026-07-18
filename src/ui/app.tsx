@@ -577,11 +577,28 @@ export function App({ result, onQuit }: AppProps) {
 }
 
 export async function runTui(result: QueryResult): Promise<void> {
+  let resolveDestroyed: () => void = () => {};
+  const destroyed = new Promise<void>((resolve) => {
+    resolveDestroyed = resolve;
+  });
   const renderer = await createCliRenderer({
     exitOnCtrlC: true,
     useMouse: true,
+    onDestroy: resolveDestroyed,
   });
 
-  const quit = () => renderer.destroy();
-  createRoot(renderer).render(<App result={result} onQuit={quit} />);
+  try {
+    const quit = () => renderer.destroy();
+    createRoot(renderer).render(<App result={result} onQuit={quit} />);
+  } catch (error) {
+    // A synchronous React/OpenTUI setup failure must not leave the terminal in
+    // raw mode. The CLI boundary will turn the original error into a concise
+    // user-facing diagnostic after the renderer has restored the terminal.
+    renderer.destroy();
+    throw error;
+  }
+
+  // Keep the CLI execution boundary alive for the complete interactive
+  // session instead of considering startup alone to be a successful run.
+  await destroyed;
 }

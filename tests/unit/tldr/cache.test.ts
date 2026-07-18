@@ -150,4 +150,23 @@ describe("tldr cache and parser", () => {
     expect(result.action).toBe("updated");
     expect(commands[0]).toEqual(["git", "-C", cacheDir, "pull", "--ff-only"]);
   });
+
+  test("preserves the clone failure when temporary cleanup also fails", async () => {
+    const update = createTldrCacheUpdater({
+      cacheDir: () => "/cache/mant/tldr-pages",
+      gitPath: () => "git",
+      pathExists: async () => false,
+      createDirectory: async () => {},
+      makeTempDirectory: async () => "/cache/mant/tldr-pages.tmp-1",
+      moveDirectory: async () => {},
+      removeDirectory: async () => { throw new Error("cleanup failed"); },
+      runCommand: async () => ({
+        stdout: "",
+        stderr: "network unavailable",
+        exitCode: 128,
+      }),
+    });
+
+    await expect(update()).rejects.toThrow("network unavailable");
+  });
 });

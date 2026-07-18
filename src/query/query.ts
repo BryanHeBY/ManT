@@ -23,14 +23,21 @@ export function createQuery(dependencies: QueryDependencies = {}) {
   const getTldrPage = dependencies.fetchTldrPage ?? fetchCachedTldrPage;
 
   return async function query(options: QueryOptions): Promise<QueryResult> {
-    const tldrPagePromise = getTldrPage(options.topic).catch(() => null);
+    const topic = options.topic.trim();
+    if (!topic) throw new Error("manual topic must not be empty");
+
+    const tldrPagePromise = getTldrPage(topic).catch(() => null);
     try {
-      const html = await getManHtml(options.topic);
+      const html = await getManHtml(topic);
       const sections = parse(html);
       const tldr = await tldrPagePromise;
 
+      if (sections.length === 0 && !tldr) {
+        throw new Error(`no readable manual content was found for '${topic}'`);
+      }
+
       return {
-        topic: options.topic,
+        topic,
         section: options.section,
         sections,
         ...(tldr ? { tldr } : {}),
@@ -40,7 +47,7 @@ export function createQuery(dependencies: QueryDependencies = {}) {
       if (!tldr) throw manError;
 
       return {
-        topic: options.topic,
+        topic,
         section: options.section,
         sections: [],
         tldr,

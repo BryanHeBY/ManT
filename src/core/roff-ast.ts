@@ -104,20 +104,34 @@ async function prepareSourceFile(
   const tmpDir = await mkdtemp(join(tmpdir(), "mant-roff-"));
   const tmpPath = join(tmpDir, "source.roff");
 
-  const command = [decompressor, path];
-  const result = await commandRunner(command);
-  if (result.exitCode !== 0) {
-    await rm(tmpDir, { recursive: true, force: true });
-    throw commandError(command, result);
-  }
+  try {
+    const command = [decompressor, path];
+    const result = await commandRunner(command);
+    if (result.exitCode !== 0) throw commandError(command, result);
 
-  await writeFile(tmpPath, result.stdout);
-  return tmpPath;
+    await writeFile(tmpPath, result.stdout);
+    return tmpPath;
+  } catch (error) {
+    await removeTemporaryDirectory(tmpDir);
+    throw error;
+  }
 }
 
 async function cleanupSourceFile(path: string, originalPath: string): Promise<void> {
   if (path === originalPath) return;
-  await rm(dirname(path), { recursive: true, force: true });
+  await removeTemporaryDirectory(dirname(path));
+}
+
+async function removeTemporaryDirectory(path: string): Promise<void> {
+  try {
+    await rm(path, { recursive: true, force: true });
+  } catch (error) {
+    // Cleanup trouble should not hide a more useful renderer result or error.
+    // Developers can still inspect it explicitly when diagnosing the host.
+    if (process.env.MANT_DEBUG) {
+      console.warn(`could not remove temporary roff directory ${path}: ${String(error)}`);
+    }
+  }
 }
 
 function parseDocument(output: Uint8Array): RoffAstDocument {

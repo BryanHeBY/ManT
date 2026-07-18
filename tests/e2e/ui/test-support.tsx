@@ -73,6 +73,28 @@ export async function flushEscape(setup: { flush: () => Promise<void> }): Promis
   await setup.flush();
 }
 
+/** Waits for an asynchronous UI effect by observing frames, not a fixed delay. */
+export async function waitForFrame(
+  setup: {
+    flush: () => Promise<void>;
+    captureCharFrame: () => string;
+  },
+  predicate: (frame: string) => boolean,
+  timeoutMs = 500,
+): Promise<string> {
+  const deadline = performance.now() + timeoutMs;
+  let frame = setup.captureCharFrame();
+  while (!predicate(frame) && performance.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await setup.flush();
+    frame = setup.captureCharFrame();
+  }
+  if (!predicate(frame)) {
+    throw new Error(`UI did not reach the expected frame within ${timeoutMs}ms`);
+  }
+  return frame;
+}
+
 let didInstallWarningFilter = false;
 
 /** Filters React act() warnings caused by OpenTUI's test renderer itself. */

@@ -16,6 +16,17 @@ const tldr: TldrPage = {
 };
 
 describe("query with cached tldr pages", () => {
+  test("rejects an empty topic before starting cache or man work", async () => {
+    let fetched = false;
+    const query = createQuery({
+      fetchManHtml: async () => { fetched = true; return ""; },
+      fetchTldrPage: async () => { fetched = true; return null; },
+    });
+
+    await expect(query({ topic: "   " })).rejects.toThrow("manual topic must not be empty");
+    expect(fetched).toBeFalse();
+  });
+
   test("places an available quick reference alongside parsed man sections", async () => {
     const query = createQuery({
       fetchManHtml: async () => "<html />",
@@ -40,5 +51,17 @@ describe("query with cached tldr pages", () => {
     const result = await query({ topic: "ls" });
     expect(result.sections).toEqual([]);
     expect(result.tldr).toBe(tldr);
+  });
+
+  test("does not open an empty UI when neither parser nor tldr has content", async () => {
+    const query = createQuery({
+      fetchManHtml: async () => "<html />",
+      parseManHtml: () => [],
+      fetchTldrPage: async () => null,
+    });
+
+    await expect(query({ topic: "broken" })).rejects.toThrow(
+      "no readable manual content was found for 'broken'",
+    );
   });
 });

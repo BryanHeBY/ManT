@@ -4,6 +4,7 @@
 
 import { access, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { runCommand as runProcessCommand } from "../core/process";
 import { parseTldrPage } from "./parser";
 import type { TldrCacheUpdate, TldrPage } from "./types";
 
@@ -69,13 +70,12 @@ async function readFile(path: string): Promise<string> {
 }
 
 async function runCommand(command: string[]): Promise<TldrCommandResult> {
-  const process = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-  return { stdout, stderr, exitCode };
+  const result = await runProcessCommand(command);
+  return {
+    stdout: new TextDecoder().decode(result.stdout),
+    stderr: result.stderr,
+    exitCode: result.exitCode,
+  };
 }
 
 function commandError(command: string[], result: TldrCommandResult): Error {
@@ -205,7 +205,17 @@ export function createTldrCacheUpdater(
         if (result.exitCode !== 0) throw commandError(command, result);
         await moveDirectory(temporary, target);
       } catch (error) {
-        await removeDirectory(temporary);
+        try {
+          await removeDirectory(temporary);
+        } catch (cleanupError) {
+          // Preserve the clone/rename failure that explains why the update did
+          // not complete; cleanup detail remains available in debug mode.
+          if (process.env.MANT_DEBUG) {
+            console.warn(
+              `could not remove incomplete tldr cache ${temporary}: ${String(cleanupError)}`,
+            );
+          }
+        }
         throw error;
       }
       action = "cloned";

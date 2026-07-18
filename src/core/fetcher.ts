@@ -95,7 +95,9 @@ async function renderWithMan(
   const command = ["man", "-Thtml", topic];
   const result = await commandRunner(command);
   if (result.exitCode !== 0) throw commandError(command, result);
-  return decode(result.stdout);
+  const html = decode(result.stdout);
+  if (!html.trim()) throw new Error(`man produced no HTML for '${topic}'`);
+  return html;
 }
 
 function defaultMandocFallback(topic: string, error: Error): void {

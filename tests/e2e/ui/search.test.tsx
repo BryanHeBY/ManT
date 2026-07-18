@@ -14,6 +14,7 @@ import {
   NAV_WIDTH,
   navLines,
   renderApp,
+  waitForFrame,
 } from "./test-support";
 
 installOpenTuiWarningFilter();
@@ -103,9 +104,11 @@ describe("App search (e2e)", () => {
     await flushKeyboard(setup);
     setup.mockInput.pressEnter();
     await flushKeyboard(setup);
-    await flushKeyboard(setup);
 
-    const frame = setup.captureCharFrame();
+    const frame = await waitForFrame(
+      setup,
+      (candidate) => candidate.includes("Needle result is here."),
+    );
     expect(contentPosition(frame, "Needle result is here.").y).toBe(2);
     expect(
       frame.split("\n").some((line) => line.slice(NAV_WIDTH).includes("TARGET SECTION")),
