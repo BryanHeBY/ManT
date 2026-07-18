@@ -524,6 +524,18 @@ describe("App (e2e)", () => {
     await flushKeyboard(setup);
     let frame = setup.captureCharFrame();
     expect(frame).toContain("Find: directory");
+    expect(frame).toContain("Enter search · Esc cancel");
+    expect(frame).not.toContain("1/1");
+    expect(navLines(frame).some((line) => line.includes("› · NAME"))).toBe(true);
+    expect(
+      setup.captureSpans().lines
+        .flatMap((line) => line.spans)
+        .some((span) => span.bg.toInts().slice(0, 3).join(",") === "249,226,175")
+    ).toBe(false);
+
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+    frame = setup.captureCharFrame();
     expect(frame).toContain("1/1");
     const highlightedDirectorySpans = setup.captureSpans().lines
       .flatMap((line) => line.spans)

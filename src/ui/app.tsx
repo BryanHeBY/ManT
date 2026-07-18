@@ -508,6 +508,10 @@ export function App({ result, onQuit }: AppProps) {
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [menuCursor, setMenuCursor] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  // Keep the editing buffer separate from the applied query. Updating the
+  // latter re-renders and searches the entire manual, so it must happen only
+  // after explicit confirmation.
+  const [searchDraft, setSearchDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -598,16 +602,23 @@ export function App({ result, onQuit }: AppProps) {
   const openSearch = () => {
     setOpenMenu(null);
     setIsHelpOpen(false);
+    setSearchDraft(searchQuery);
     setIsSearchOpen(true);
   };
 
   const closeSearch = () => {
+    setSearchDraft(searchQuery);
     setIsSearchOpen(false);
   };
 
-  const updateSearchQuery = (query: string) => {
-    setSearchQuery(query);
-    const matches = findSearchMatches(result.sections, result.tldr, query);
+  const submitSearch = () => {
+    if (searchDraft === searchQuery) {
+      selectSearchMatch(searchIndex + 1);
+      return;
+    }
+
+    const matches = findSearchMatches(result.sections, result.tldr, searchDraft);
+    setSearchQuery(searchDraft);
     setSearchIndex(0);
     if (matches[0]) selectSection(matches[0].targetId);
   };
@@ -785,10 +796,13 @@ export function App({ result, onQuit }: AppProps) {
       if (e.name === "escape") {
         e.preventDefault();
         closeSearch();
-      } else if (e.name === "return" || e.name === "enter" || e.name === "down") {
+      } else if (e.name === "return" || e.name === "enter") {
+        e.preventDefault();
+        submitSearch();
+      } else if (e.name === "down" && searchDraft === searchQuery) {
         e.preventDefault();
         selectSearchMatch(searchIndex + 1);
-      } else if (e.name === "up") {
+      } else if (e.name === "up" && searchDraft === searchQuery) {
         e.preventDefault();
         selectSearchMatch(searchIndex - 1);
       }
@@ -1112,7 +1126,7 @@ export function App({ result, onQuit }: AppProps) {
           <input
             ref={searchInputRef}
             flexGrow={1}
-            value={searchQuery}
+            value={searchDraft}
             focused
             placeholder="Search this page"
             placeholderColor="#6c7086"
@@ -1120,12 +1134,14 @@ export function App({ result, onQuit }: AppProps) {
             focusedBackgroundColor="#313244"
             textColor="#cdd6f4"
             focusedTextColor="#cdd6f4"
-            onInput={updateSearchQuery}
-            onSubmit={() => selectSearchMatch(searchIndex + 1)}
+            onInput={setSearchDraft}
+            onSubmit={submitSearch}
           />
           <box width={1} />
           <text fg="#7f849c">
-            {searchMatches.length > 0
+            {searchDraft !== searchQuery
+              ? "Enter search · Esc cancel"
+              : searchMatches.length > 0
               ? `${searchIndex + 1}/${searchMatches.length}  Enter next · Esc close`
               : "0 matches  Esc close"}
           </text>
