@@ -1,7 +1,7 @@
 import {
   createCliRenderer,
+  type BoxRenderable,
   type ScrollBoxRenderable,
-  type TextRenderable,
 } from "@opentui/core";
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
@@ -18,19 +18,30 @@ interface FlatNode {
   node: SectionNode;
   depth: number;
   hasChildren: boolean;
+  isLast: boolean;
+  /** Whether each ancestor has another visible sibling after it. */
+  ancestorHasNext: boolean[];
 }
 
 function flattenVisibleNodes(
   nodes: SectionNode[],
   expanded: Set<string>,
-  depth = 0
+  depth = 0,
+  ancestorHasNext: boolean[] = []
 ): FlatNode[] {
   const result: FlatNode[] = [];
-  for (const node of nodes) {
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]!;
+    const isLast = index === nodes.length - 1;
     const hasChildren = node.children.length > 0;
-    result.push({ node, depth, hasChildren });
+    result.push({ node, depth, hasChildren, isLast, ancestorHasNext });
     if (hasChildren && expanded.has(node.id)) {
-      result.push(...flattenVisibleNodes(node.children, expanded, depth + 1));
+      result.push(
+        ...flattenVisibleNodes(node.children, expanded, depth + 1, [
+          ...ancestorHasNext,
+          !isLast,
+        ])
+      );
     }
   }
   return result;
@@ -45,12 +56,35 @@ function findNodeById(nodes: SectionNode[], id: string): SectionNode | null {
   return null;
 }
 
+function findParentById(
+  nodes: SectionNode[],
+  id: string,
+  parent: SectionNode | null = null
+): SectionNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return parent;
+    const found = findParentById(node.children, id, node);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 function navId(id: string): string {
   return `nav-${id}`;
 }
 
 function contentId(id: string): string {
   return `content-${id}`;
+}
+
+function treePrefix({ depth, isLast, ancestorHasNext }: FlatNode): string {
+  if (depth === 0) return "";
+
+  const ancestorGuides = ancestorHasNext
+    .slice(0, -1)
+    .map((hasNext) => (hasNext ? "│ " : "  "))
+    .join("");
+  return `${ancestorGuides}${isLast ? "╰─" : "├─"}`;
 }
 
 function splitByBreak(nodes: InlineNode[]): InlineNode[][] {
@@ -227,6 +261,7 @@ export function App({ result, onQuit }: AppProps) {
     return initial;
   });
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
+  const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
 
   const visibleNodes = useMemo(
     () => flattenVisibleNodes(result.sections, expanded),
@@ -237,14 +272,20 @@ export function App({ result, onQuit }: AppProps) {
     contentScrollRef.current?.scrollChildIntoView(contentId(id));
   };
 
+  const selectSection = (id: string) => {
+    setSelectedId(id);
+    scrollToNode(id);
+    navScrollRef.current?.scrollChildIntoView(navId(id));
+  };
+
   const attachSectionClick = (id: string, hasChildren: boolean) => {
-    return (el: TextRenderable | null) => {
+    return (el: BoxRenderable | null) => {
       if (!el) return;
       el.onMouseDown = () => {
         if (hasChildren && selectedId === id) {
           toggleExpanded(id);
         } else {
-          setSelectedId(id);
+          selectSection(id);
           if (hasChildren) {
             setExpanded((prev) => {
               const next = new Set(prev);
@@ -253,7 +294,6 @@ export function App({ result, onQuit }: AppProps) {
             });
           }
         }
-        scrollToNode(id);
       };
     };
   };
@@ -272,15 +312,13 @@ export function App({ result, onQuit }: AppProps) {
       const next = Math.min(currentIndex + 1, visibleNodes.length - 1);
       if (next >= 0) {
         const id = visibleNodes[next]!.node.id;
-        setSelectedId(id);
-        scrollToNode(id);
+        selectSection(id);
       }
     } else if (e.name === "k" || e.name === "up") {
       const next = Math.max(currentIndex - 1, 0);
       if (next >= 0) {
         const id = visibleNodes[next]!.node.id;
-        setSelectedId(id);
-        scrollToNode(id);
+        selectSection(id);
       }
     } else if (e.name === "h" || e.name === "left") {
       const node = findNodeById(result.sections, selectedId);
@@ -290,15 +328,27 @@ export function App({ result, onQuit }: AppProps) {
           next.delete(node.id);
           return next;
         });
+      } else {
+        const parent = findParentById(result.sections, selectedId);
+        if (parent) selectSection(parent.id);
       }
     } else if (e.name === "l" || e.name === "right") {
       const node = findNodeById(result.sections, selectedId);
-      if (node && node.children.length > 0 && !expanded.has(node.id)) {
-        setExpanded((prev) => {
-          const next = new Set(prev);
-          next.add(node.id);
-          return next;
-        });
+      if (node && node.children.length > 0) {
+        if (!expanded.has(node.id)) {
+          setExpanded((prev) => {
+            const next = new Set(prev);
+            next.add(node.id);
+            return next;
+          });
+        } else {
+          selectSection(node.children[0]!.id);
+        }
+      }
+    } else if (e.name === "return" || e.name === "enter" || e.name === "space") {
+      const node = findNodeById(result.sections, selectedId);
+      if (node?.children.length) {
+        toggleExpanded(node.id);
       }
     } else if (e.name === "d" || e.name === "pagedown") {
       contentScrollRef.current?.scrollBy({ x: 0, y: 10 }, "step");
@@ -320,42 +370,82 @@ export function App({ result, onQuit }: AppProps) {
     <box flexDirection="column" shouldFill={true}>
       <box flexDirection="row" shouldFill={true} flexGrow={1}>
         <box
-          width={30}
+          width={32}
           flexDirection="column"
-          backgroundColor="#1e1e2e"
-          padding={1}
-          gap={1}
+          flexShrink={0}
+          backgroundColor="#11111b"
+          border={["right"]}
+          borderColor="#313244"
         >
-          <text fg="#94e2d5"><b>{`MAN: ${result.topic}`}</b></text>
-          <scrollbox flexGrow={1} scrollY>
-            {visibleNodes.map(({ node, depth, hasChildren }) => {
+          <box
+            flexDirection="column"
+            paddingLeft={1}
+            paddingRight={1}
+            paddingTop={1}
+            paddingBottom={1}
+            border={["bottom"]}
+            borderColor="#313244"
+          >
+            <text height={1} fg="#cdd6f4" truncate wrapMode="none">
+              {`MANUAL · ${result.topic}`}
+            </text>
+            <text height={1} fg="#7f849c">
+              {`${result.sections.length} top-level · ${visibleNodes.length} visible`}
+            </text>
+          </box>
+          <box height={1} paddingLeft={1} paddingRight={1}>
+            <text fg="#6c7086">SECTIONS</text>
+          </box>
+          <scrollbox
+            ref={navScrollRef}
+            flexGrow={1}
+            scrollY
+            focusable={false}
+            horizontalScrollbarOptions={{ visible: false }}
+            verticalScrollbarOptions={{
+              trackOptions: {
+                foregroundColor: "#45475a",
+                backgroundColor: "#11111b",
+              },
+            }}
+          >
+            {visibleNodes.map((flatNode) => {
+              const { node, hasChildren } = flatNode;
               const isSelected = node.id === selectedId;
-              const indent = "  ".repeat(depth);
-              const prefix = hasChildren
+              const titleColor = isSelected
+                ? "#f5e0dc"
+                : flatNode.depth === 0
+                  ? "#cdd6f4"
+                  : flatNode.depth === 1
+                    ? "#89b4fa"
+                    : "#a6adc8";
+              const disclosure = hasChildren
                 ? expanded.has(node.id)
                   ? "▾ "
                   : "▸ "
-                : "  ";
-              const label = `${indent}${prefix}${node.title}`;
-              return isSelected ? (
-                <text
+                : "· ";
+              const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
+              return (
+                <box
                   key={navId(node.id)}
                   id={navId(node.id)}
                   ref={attachSectionClick(node.id, hasChildren)}
-                  fg="#cdd6f4"
-                  bg="#313244"
+                  width="100%"
+                  height={1}
+                  flexShrink={0}
+                  paddingLeft={1}
+                  backgroundColor={isSelected ? "#313244" : "#11111b"}
                 >
-                  {label}
-                </text>
-              ) : (
-                <text
-                  key={navId(node.id)}
-                  id={navId(node.id)}
-                  ref={attachSectionClick(node.id, hasChildren)}
-                  fg="#6c7086"
-                >
-                  {label}
-                </text>
+                  <text
+                    truncate
+                    wrapMode="none"
+                  >
+                    <span fg={isSelected ? "#fab387" : "#6c7086"}>
+                      {labelPrefix}
+                    </span>
+                    <span fg={titleColor}>{node.title}</span>
+                  </text>
+                </box>
               );
             })}
           </scrollbox>
@@ -369,7 +459,7 @@ export function App({ result, onQuit }: AppProps) {
           paddingBottom={1}
           paddingRight={1}
         >
-          <scrollbox ref={contentScrollRef} flexGrow={1} scrollY focusable>
+          <scrollbox ref={contentScrollRef} flexGrow={1} scrollY focusable={false}>
             <box flexDirection="column" gap={1}>
               {result.sections.map((node) => (
                 <SectionContent key={node.id} node={node} />
@@ -389,9 +479,11 @@ export function App({ result, onQuit }: AppProps) {
         <text fg="#6c7086">
           <span fg="#cdd6f4">q</span> quit
           {"  "}
-          <span fg="#cdd6f4">j/k</span> nav
+          <span fg="#cdd6f4">↑↓</span> select
           {"  "}
-          <span fg="#cdd6f4">h/l</span> fold
+          <span fg="#cdd6f4">enter</span> fold
+          {"  "}
+          <span fg="#cdd6f4">←→</span> tree
           {"  "}
           <span fg="#cdd6f4">d/u</span> scroll
         </text>

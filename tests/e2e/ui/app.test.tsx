@@ -6,6 +6,26 @@ import { loadManPageFixture } from "../../fixtures/man-pages";
 import { parseManHtml } from "../../../src/core/parser";
 import type { QueryResult } from "../../../src/query";
 
+const NAV_WIDTH = 32;
+
+function navLines(frame: string): string[] {
+  return frame.split("\n").map((line) => line.slice(0, NAV_WIDTH));
+}
+
+function navPosition(frame: string, label: string): { x: number; y: number } {
+  const lines = navLines(frame);
+  const y = lines.findIndex((line) => line.includes(label));
+  if (y < 0) throw new Error(`Navigation item not found: ${label}`);
+  return { x: lines[y]!.indexOf(label), y };
+}
+
+async function flushKeyboard(setup: { flush: () => Promise<void> }): Promise<void> {
+  // Keyboard events are delivered outside React's synthetic event queue. Give
+  // React one turn to schedule the state update before capturing the frame.
+  await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  await setup.flush();
+}
+
 // OpenTUI's testRender does not wrap renderer creation in React act(), which
 // causes a console warning for every e2e test.  That is framework-level noise
 // we cannot fix here; filter it so the test output stays readable.
@@ -57,7 +77,8 @@ describe("App (e2e)", () => {
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
 
-    expect(frame).toContain("MAN: ls");
+    expect(frame).toContain("MANUAL");
+    expect(frame).toContain("ls");
     expect(frame).toContain("NAME");
     expect(frame).toContain("SYNOPSIS");
     expect(frame).toContain("DESCRIPTION");
@@ -96,9 +117,9 @@ describe("App (e2e)", () => {
 
     await setup.renderOnce();
 
-    // Click on SYNOPSIS in the sidebar.
-    // New layout (no borders, padding=1): header at row 0, gap, NAME at row 2, SYNOPSIS at row 3.
-    await setup.mockMouse.click(1, 3);
+    // Click the entire SYNOPSIS row, not just its label.
+    const synopsis = navPosition(setup.captureCharFrame(), "SYNOPSIS");
+    await setup.mockMouse.click(NAV_WIDTH - 3, synopsis.y);
     await setup.flush();
 
     const frame = setup.captureCharFrame();
@@ -126,7 +147,8 @@ describe("App (e2e)", () => {
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
 
-    expect(frame).toContain("MAN: gcc");
+    expect(frame).toContain("MANUAL");
+    expect(frame).toContain("gcc");
     expect(frame).toContain("NAME");
     expect(frame).toContain("SYNOPSIS");
     expect(frame).toContain("DESCRIPTION");
@@ -159,7 +181,7 @@ describe("App (e2e)", () => {
 
     // Subsections should appear in the navigation.
     expect(frame).toContain("Option Summary");
-    expect(frame).toContain("Options Controlling");
+    expect(navLines(frame).some((line) => line.includes("Options...Kind"))).toBe(true);
 
     setup.renderer.destroy();
   });
@@ -195,10 +217,16 @@ describe("App (e2e)", () => {
 
     // Move down to SYNOPSIS.
     setup.mockInput.pressKey("j");
-    await setup.flush();
+    await flushKeyboard(setup);
 
-    const frame = setup.captureCharFrame();
-    expect(frame).toContain("SYNOPSIS");
+    let frame = setup.captureCharFrame();
+    expect(frame).toContain("› · SYNOPSIS");
+
+    // Move back to NAME.
+    setup.mockInput.pressKey("k");
+    await flushKeyboard(setup);
+    frame = setup.captureCharFrame();
+    expect(frame).toContain("› · NAME");
 
     setup.renderer.destroy();
   });
@@ -252,7 +280,8 @@ describe("App (e2e)", () => {
     await setup.renderOnce();
     const frame = setup.captureCharFrame();
 
-    expect(frame).toContain("MAN: smoke");
+    expect(frame).toContain("MANUAL");
+    expect(frame).toContain("smoke");
     expect(frame).toContain("CODE");
     expect(frame).toContain("ls -la");
     expect(frame).toContain("int main()");
@@ -308,7 +337,8 @@ describe("App (e2e)", () => {
     const frame = setup.captureCharFrame();
 
     expect(frame.trim().length).toBeGreaterThan(0);
-    expect(frame).toContain("MAN: ls");
+    expect(frame).toContain("MANUAL");
+    expect(frame).toContain("ls");
 
     setup.renderer.destroy();
   });
@@ -360,32 +390,30 @@ describe("App (e2e)", () => {
     // Initially PARENT is selected and expanded in the sidebar.
     let frame = setup.captureCharFrame();
     expect(frame).toContain("▾ PARENT");
-    expect(frame).toContain("  CHILD");
+    expect(frame).toContain("╰─· CHILD");
 
     // Click PARENT again to collapse it.
-    // New layout (no borders, padding=1, gap=1): padding at row 0, header at row 1, gap at row 2, PARENT at row 3.
-    await setup.mockMouse.click(1, 3);
+    let parent = navPosition(frame, "PARENT");
+    await setup.mockMouse.click(NAV_WIDTH - 3, parent.y);
     await setup.flush();
 
     frame = setup.captureCharFrame();
     expect(frame).toContain("▸ PARENT");
-    // Assert only the sidebar (first 30 columns) no longer shows the child.
-    let sidebarLines = frame.split("\n").map((line) => line.slice(0, 30));
-    expect(sidebarLines.some((line) => line.includes("  CHILD"))).toBe(false);
+    expect(navLines(frame).some((line) => line.includes("CHILD"))).toBe(false);
 
     // Click PARENT again to expand it.
-    await setup.mockMouse.click(1, 3);
+    parent = navPosition(frame, "PARENT");
+    await setup.mockMouse.click(NAV_WIDTH - 3, parent.y);
     await setup.flush();
 
     frame = setup.captureCharFrame();
     expect(frame).toContain("▾ PARENT");
-    sidebarLines = frame.split("\n").map((line) => line.slice(0, 30));
-    expect(sidebarLines.some((line) => line.includes("  CHILD"))).toBe(true);
+    expect(navLines(frame).some((line) => line.includes("╰─· CHILD"))).toBe(true);
 
     setup.renderer.destroy();
   });
 
-  test("collapses sections with h key", async () => {
+  test("navigates the section tree with h/l keys", async () => {
     const result: QueryResult = {
       topic: "parent",
       sections: [
@@ -432,7 +460,7 @@ describe("App (e2e)", () => {
     // PARENT is expanded by default in the sidebar.
     let frame = setup.captureCharFrame();
     expect(frame).toContain("▾ PARENT");
-    expect(frame).toContain("  CHILD");
+    expect(frame).toContain("╰─· CHILD");
 
     // Collapse with h.
     setup.mockInput.pressKey("h");
@@ -440,8 +468,21 @@ describe("App (e2e)", () => {
 
     frame = setup.captureCharFrame();
     expect(frame).toContain("▸ PARENT");
-    const sidebarLinesCollapsed = frame.split("\n").map((line) => line.slice(0, 28));
-    expect(sidebarLinesCollapsed.some((line) => line.includes("  CHILD"))).toBe(false);
+    expect(navLines(frame).some((line) => line.includes("CHILD"))).toBe(false);
+
+    // Right opens a collapsed branch, then moves into its first child.
+    setup.mockInput.pressArrow("right");
+    await flushKeyboard(setup);
+    expect(navLines(setup.captureCharFrame()).some((line) => line.includes("╰─· CHILD"))).toBe(true);
+
+    setup.mockInput.pressArrow("right");
+    await flushKeyboard(setup);
+    expect(setup.captureCharFrame()).toContain("› ╰─· CHILD");
+
+    // Left on a leaf returns to its parent.
+    setup.mockInput.pressArrow("left");
+    await flushKeyboard(setup);
+    expect(setup.captureCharFrame()).toContain("› ▾ PARENT");
 
     setup.renderer.destroy();
   });
