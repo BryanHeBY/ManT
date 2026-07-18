@@ -1,5 +1,5 @@
 /**
- * @file Tests tldr cache lookup and transactional Git update behavior.
+ * @file Tests installed-client cache lookup and both TLDR update strategies.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -7,9 +7,11 @@ import { join } from "node:path";
 import {
   createCachedTldrPageFetcher,
   createTldrCacheUpdater,
+  getSystemTldrCacheDirs,
   getTldrCacheDir,
   getTldrLanguages,
   getTldrPlatforms,
+  getTldrReadCacheDirs,
   normalizeTldrTopic,
   parseTldrCommand,
   parseTldrPage,
@@ -89,6 +91,39 @@ describe("tldr cache and parser", () => {
     expect(parsed?.platform).toBe("common");
   });
 
+  test("reads the pages.en layout used by Rust TLDR clients", async () => {
+    const cacheDir = "/cache/tlrc";
+    const sourcePath = join(cacheDir, "pages.en", "linux", "tar.md");
+    const fetchPage = createCachedTldrPageFetcher({
+      cacheDirs: () => [cacheDir],
+      env: { LANG: "C" },
+      platform: () => "linux",
+      pathExists: async (path) => path === sourcePath,
+      readFile: async () => page,
+    });
+
+    const parsed = await fetchPage("tar");
+    expect(parsed?.sourcePath).toBe(sourcePath);
+    expect(parsed?.language).toBe("en");
+  });
+
+  test("prefers the host platform over a translated common page", async () => {
+    const translatedCommon = "/cache/pages.zh/common/tar.md";
+    const englishLinux = "/cache/pages/linux/tar.md";
+    const fetchPage = createCachedTldrPageFetcher({
+      cacheDirs: () => ["/cache"],
+      env: { LANG: "zh_CN.UTF-8" },
+      platform: () => "linux",
+      pathExists: async (path) => path === translatedCommon || path === englishLinux,
+      readFile: async () => page,
+    });
+
+    const parsed = await fetchPage("tar");
+    expect(parsed?.sourcePath).toBe(englishLinux);
+    expect(parsed?.platform).toBe("linux");
+    expect(parsed?.language).toBe("en");
+  });
+
   test("normalises cache paths, topic names, language, and platform priority", () => {
     expect(getTldrCacheDir({ HOME: "/home/test" }, "linux")).toBe("/home/test/.cache/mant/tldr-pages");
     expect(getTldrCacheDir({ LOCALAPPDATA: "C:/Users/test/AppData/Local" }, "win32"))
@@ -99,6 +134,62 @@ describe("tldr cache and parser", () => {
     expect(normalizeTldrTopic("Git Commit")).toBe("git-commit");
   });
 
+  test("uses installed-client caches before Mant's private fallback", () => {
+    const env = { HOME: "/home/test", XDG_CACHE_HOME: "/cache" };
+    expect(getSystemTldrCacheDirs(env, "linux")).toEqual([
+      "/cache/tldr",
+      "/cache/tlrc",
+      "/cache/tealdeer/tldr-pages",
+      "/home/test/.tldr",
+      "/usr/local/share/tldr",
+      "/usr/share/tldr",
+    ]);
+    expect(getTldrReadCacheDirs(env, "linux", "/usr/bin/tldr"))
+      .toEqual(getSystemTldrCacheDirs(env, "linux"));
+    expect(getTldrReadCacheDirs(env, "linux", null))
+      .toEqual(["/cache/mant/tldr-pages"]);
+    expect(getTldrReadCacheDirs({ ...env, MANT_TLDR_DIR: "/custom" }, "linux", "/usr/bin/tldr"))
+      .toEqual(["/custom"]);
+  });
+
+  test("updates an installed client by spawning tldr --update", async () => {
+    const commands: string[][] = [];
+    const update = createTldrCacheUpdater({
+      env: {},
+      tldrPath: () => "/usr/bin/tldr",
+      gitPath: () => { throw new Error("git lookup should not run"); },
+      runCommand: async (command) => {
+        commands.push(command);
+        return {
+          stdout: "Updated cache for language en: 100 entries\n",
+          stderr: "",
+          exitCode: 0,
+        };
+      },
+    });
+
+    await expect(update()).resolves.toEqual({
+      action: "updated",
+      client: "/usr/bin/tldr",
+      output: "Updated cache for language en: 100 entries",
+    });
+    expect(commands).toEqual([["/usr/bin/tldr", "--update"]]);
+  });
+
+  test("surfaces an installed client's update failure", async () => {
+    const update = createTldrCacheUpdater({
+      env: {},
+      tldrPath: () => "tldr",
+      runCommand: async () => ({
+        stdout: "",
+        stderr: "Unable to update cache",
+        exitCode: 1,
+      }),
+    });
+
+    await expect(update()).rejects.toThrow("Unable to update cache");
+  });
+
   test("clones into a temporary cache directory and then moves it into place", async () => {
     const commands: string[][] = [];
     const created: string[] = [];
@@ -106,6 +197,7 @@ describe("tldr cache and parser", () => {
     const update = createTldrCacheUpdater({
       cacheDir: () => "/cache/mant/tldr-pages",
       repository: "https://example.test/tldr.git",
+      tldrPath: () => null,
       gitPath: () => "git",
       pathExists: async () => false,
       createDirectory: async (path) => { created.push(path); },
@@ -138,6 +230,7 @@ describe("tldr cache and parser", () => {
     const cacheDir = "/cache/mant/tldr-pages";
     const update = createTldrCacheUpdater({
       cacheDir: () => cacheDir,
+      tldrPath: () => null,
       gitPath: () => "git",
       pathExists: async (path) => path === cacheDir || path === join(cacheDir, ".git"),
       runCommand: async (command) => {
@@ -154,6 +247,7 @@ describe("tldr cache and parser", () => {
   test("preserves the clone failure when temporary cleanup also fails", async () => {
     const update = createTldrCacheUpdater({
       cacheDir: () => "/cache/mant/tldr-pages",
+      tldrPath: () => null,
       gitPath: () => "git",
       pathExists: async () => false,
       createDirectory: async () => {},
@@ -168,5 +262,24 @@ describe("tldr cache and parser", () => {
     });
 
     await expect(update()).rejects.toThrow("network unavailable");
+  });
+
+  test("keeps an explicit MANT_TLDR_DIR independent from the installed client", async () => {
+    const commands: string[][] = [];
+    const target = "/custom/tldr";
+    const update = createTldrCacheUpdater({
+      env: { MANT_TLDR_DIR: target },
+      cacheDir: () => target,
+      tldrPath: () => "/usr/bin/tldr",
+      gitPath: () => "git",
+      pathExists: async (path) => path === target || path === join(target, ".git"),
+      runCommand: async (command) => {
+        commands.push(command);
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+    });
+
+    await update();
+    expect(commands[0]).toEqual(["git", "-C", target, "pull", "--ff-only"]);
   });
 });

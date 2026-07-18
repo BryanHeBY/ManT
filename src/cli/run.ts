@@ -51,7 +51,10 @@ export async function runCli(
         ?? (await import("../tldr")).updateTldrCache;
       const result = await update();
       const revision = result.revision ? ` (${result.revision})` : "";
-      stdout(`tldr cache ${result.action}: ${result.cacheDir}${revision}`);
+      const provider = result.client ? ` via ${result.client}` : "";
+      const location = result.cacheDir ? `: ${result.cacheDir}` : "";
+      const summary = `tldr cache ${result.action}${provider}${location}${revision}`;
+      stdout(result.output ? `${result.output}\n${summary}` : summary);
       return 0;
     }
 

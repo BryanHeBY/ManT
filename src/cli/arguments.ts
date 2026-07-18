@@ -36,7 +36,7 @@ Options:
   -j, --json       Print the parsed manual as JSON
       --roff-ast   Print the source-level libmandoc AST as JSON
       --update-tldr
-                   Clone or update the local tldr-pages cache
+                   Update the installed TLDR client or Mant fallback cache
   --               Treat all remaining arguments as the topic
 
 Examples:

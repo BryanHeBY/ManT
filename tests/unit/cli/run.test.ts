@@ -146,4 +146,21 @@ describe("CLI execution", () => {
     expect(exitCode).toBe(0);
     expect(output.stdout).toEqual(["tldr cache updated: /cache/tldr (abc123)"]);
   });
+
+  test("preserves installed-client update output and identifies its provider", async () => {
+    const output = captureOutput();
+    const exitCode = await runCli(["--update-tldr"], {
+      ...output.dependencies,
+      updateTldrCache: async () => ({
+        action: "updated",
+        client: "/usr/bin/tldr",
+        output: "Updated cache for language en",
+      }),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(output.stdout).toEqual([
+      "Updated cache for language en\ntldr cache updated via /usr/bin/tldr",
+    ]);
+  });
 });

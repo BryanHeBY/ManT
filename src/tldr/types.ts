@@ -24,6 +24,8 @@ export interface TldrPage {
 
 export interface TldrCacheUpdate {
   action: "cloned" | "updated";
-  cacheDir: string;
+  cacheDir?: string;
+  client?: string;
+  output?: string;
   revision?: string;
 }
