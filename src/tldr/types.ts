@@ -1,3 +1,7 @@
+/**
+ * @file Declares the small structured model used to render cached tldr pages.
+ */
+
 export type TldrCommandPart =
   | { type: "text"; content: string }
   | { type: "placeholder"; content: string };

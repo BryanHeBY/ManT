@@ -1,3 +1,7 @@
+/**
+ * @file Checks cross-renderer indentation consistency from parsed output.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parseManHtml } from "../../../src/core/parser";
 import { parseGroff } from "../../../src/core/groff-parser";

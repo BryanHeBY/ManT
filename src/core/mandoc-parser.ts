@@ -1,5 +1,10 @@
+/**
+ * @file Parses mandoc HTML into Mant's renderer-neutral section tree.
+ */
+
 import { parse, HTMLElement } from "node-html-parser";
-import type { BlockNode, InlineNode, SectionNode } from "./types";
+import type { InlineNode, SectionNode } from "./types";
+import { SectionTree } from "./section-tree";
 import {
   isElement,
   isText,
@@ -46,52 +51,6 @@ function findMandocHeading(section: HTMLElement): HTMLElement | null {
     section.querySelector("h1.Sh, h2.Ss, h1, h2") ??
     null
   );
-}
-
-// ── Section tree builder ───────────────────────────────────
-
-class SectionTree {
-  private sections: SectionNode[] = [];
-  private stack: SectionNode[] = [];
-  private nextId = 0;
-
-  private closeSections(level: number): void {
-    while (this.stack.length > 0 && this.stack[this.stack.length - 1]!.level >= level) {
-      this.stack.pop();
-    }
-  }
-
-  currentSection(): SectionNode | null {
-    return this.stack[this.stack.length - 1] ?? null;
-  }
-
-  addBlock(block: BlockNode): void {
-    const section = this.currentSection();
-    if (section) section.blocks.push(block);
-  }
-
-  pushSection(title: string, level: number): SectionNode {
-    this.closeSections(level);
-    const newSection: SectionNode = {
-      id: `section-${this.nextId++}`,
-      title,
-      level,
-      blocks: [],
-      children: [],
-    };
-
-    if (this.stack.length === 0) {
-      this.sections.push(newSection);
-    } else {
-      this.currentSection()!.children.push(newSection);
-    }
-    this.stack.push(newSection);
-    return newSection;
-  }
-
-  getSections(): SectionNode[] {
-    return this.sections;
-  }
 }
 
 // ── Mandoc content parser ──────────────────────────────────

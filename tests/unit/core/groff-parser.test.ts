@@ -1,3 +1,7 @@
+/**
+ * @file Tests groff/man-db HTML parsing, including indentation and tables.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parseGroff } from "../../../src/core/groff-parser";
 import { loadManPageFixture } from "../../fixtures/man-pages";

@@ -1,3 +1,7 @@
+/**
+ * @file Renders preformatted roff blocks with their intended body indentation.
+ */
+
 import type { ReactNode } from "react";
 import type { InlineNode } from "../core";
 import {

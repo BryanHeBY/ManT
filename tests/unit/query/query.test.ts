@@ -1,3 +1,7 @@
+/**
+ * @file Tests query composition of authoritative man and cached tldr data.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { createQuery } from "../../../src/query";
 import type { TldrPage } from "../../../src/tldr";

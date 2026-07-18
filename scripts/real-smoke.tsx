@@ -1,3 +1,7 @@
+/**
+ * @file Runs a small real-renderer smoke test against the terminal interface.
+ */
+
 import { createTestRenderer } from "@opentui/core/testing";
 import { createRoot } from "@opentui/react";
 import { query } from "../src/query";

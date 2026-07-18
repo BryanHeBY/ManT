@@ -1,3 +1,7 @@
+/**
+ * @file Exposes tldr cache, parsing, and data-model APIs.
+ */
+
 export {
   createCachedTldrPageFetcher,
   createTldrCacheUpdater,

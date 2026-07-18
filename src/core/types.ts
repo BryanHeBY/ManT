@@ -1,3 +1,7 @@
+/**
+ * @file Declares the renderer-neutral document model shared across Mant.
+ */
+
 export interface SectionNode {
   id: string;
   title: string;

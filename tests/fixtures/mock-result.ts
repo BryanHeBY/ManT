@@ -1,3 +1,7 @@
+/**
+ * @file Defines compact query results shared by terminal UI test scenarios.
+ */
+
 import type { QueryResult } from "../../src/query";
 
 export const mockLsResult: QueryResult = {

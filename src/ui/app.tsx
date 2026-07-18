@@ -1,570 +1,49 @@
+/**
+ * @file Coordinates manual-view state, keyboard input, scrolling, and layout.
+ *
+ * Stateless visual regions live beside this controller so interaction policy is
+ * easy to trace here without making the main TUI module a rendering monolith.
+ */
+
 import {
   createCliRenderer,
-  type BoxRenderable,
   type InputRenderable,
-  type MouseEvent as TuiMouseEvent,
   type ScrollBoxRenderable,
 } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { QueryResult } from "../query";
-import type { BlockNode, InlineNode, SectionNode } from "../core";
-import { tldrPageText, type TldrCommandPart, type TldrPage } from "../tldr";
-import { Pre } from "./Pre";
-import { renderSearchHighlights } from "./search-highlight";
+import { TLDR_NAV_ID, contentId, navId } from "./ids";
+import {
+  KeyboardHelpDialog,
+  MENU_BAR,
+  MenuBar,
+  MenuPopup,
+  type MenuEntry,
+  type MenuId,
+} from "./menu-bar";
+import { SectionContent, TldrQuickReference } from "./manual-content";
+import { ManualSidebar } from "./manual-sidebar";
+import {
+  clamp,
+  collectBranchIds,
+  findNodeById,
+  findParentById,
+  flattenVisibleNodes,
+} from "./navigation-tree";
+import { findSearchMatches } from "./search";
+import { ManualStatusBar, SearchBar } from "./status-bar";
+import { useDeferredNavigationSync } from "./use-deferred-navigation-sync";
+import { useSidebarResize } from "./use-sidebar-resize";
 
 interface AppProps {
   result: QueryResult;
   onQuit: () => void;
 }
 
-const DEFAULT_NAV_WIDTH = 32;
-const MIN_NAV_WIDTH = 24;
-const MIN_CONTENT_WIDTH = 32;
-const TLDR_NAV_ID = "tldr-quick-reference";
-const NAVIGATION_SYNC_DELAY_MS = 180;
-
-const MENU_BAR = [
-  { id: "file", label: "File", left: 0 },
-  { id: "view", label: "View", left: 6 },
-  { id: "navigate", label: "Navigate", left: 12 },
-  { id: "search", label: "Search", left: 22 },
-  { id: "help", label: "Help", left: 30 },
-] as const;
-
-type MenuId = (typeof MENU_BAR)[number]["id"];
-
-interface MenuEntry {
-  label: string;
-  shortcut?: string;
-  checked?: boolean;
-  action: () => void;
-}
-
-interface SearchMatch {
-  targetId: string;
-  sectionId: string;
-  title: string;
-  blockIndex?: number;
-}
-
-interface FlatNode {
-  node: SectionNode;
-  depth: number;
-  hasChildren: boolean;
-  isLast: boolean;
-  /** Whether each ancestor has another visible sibling after it. */
-  ancestorHasNext: boolean[];
-}
-
-function flattenVisibleNodes(
-  nodes: SectionNode[],
-  expanded: Set<string>,
-  depth = 0,
-  ancestorHasNext: boolean[] = []
-): FlatNode[] {
-  const result: FlatNode[] = [];
-  for (let index = 0; index < nodes.length; index++) {
-    const node = nodes[index]!;
-    const isLast = index === nodes.length - 1;
-    const hasChildren = node.children.length > 0;
-    result.push({ node, depth, hasChildren, isLast, ancestorHasNext });
-    if (hasChildren && expanded.has(node.id)) {
-      result.push(
-        ...flattenVisibleNodes(node.children, expanded, depth + 1, [
-          ...ancestorHasNext,
-          !isLast,
-        ])
-      );
-    }
-  }
-  return result;
-}
-
-function findNodeById(nodes: SectionNode[], id: string): SectionNode | null {
-  for (const node of nodes) {
-    if (node.id === id) return node;
-    const found = findNodeById(node.children, id);
-    if (found) return found;
-  }
-  return null;
-}
-
-function findParentById(
-  nodes: SectionNode[],
-  id: string,
-  parent: SectionNode | null = null
-): SectionNode | null {
-  for (const node of nodes) {
-    if (node.id === id) return parent;
-    const found = findParentById(node.children, id, node);
-    if (found !== null) return found;
-  }
-  return null;
-}
-
-/** Return a node's ancestry in document order, including the node itself. */
-function findNodePath(nodes: SectionNode[], id: string, path: string[] = []): string[] | null {
-  for (const node of nodes) {
-    const nextPath = [...path, node.id];
-    if (node.id === id) return nextPath;
-    const found = findNodePath(node.children, id, nextPath);
-    if (found) return found;
-  }
-  return null;
-}
-
-function sectionIdsInDocumentOrder(nodes: SectionNode[]): string[] {
-  const ids: string[] = [];
-  const visit = (node: SectionNode) => {
-    ids.push(node.id);
-    for (const child of node.children) visit(child);
-  };
-  for (const node of nodes) visit(node);
-  return ids;
-}
-
-function navId(id: string): string {
-  return `nav-${id}`;
-}
-
-function contentId(id: string): string {
-  return `content-${id}`;
-}
-
-function contentBlockId(sectionId: string, blockIndex: number): string {
-  return `${contentId(sectionId)}-block-${blockIndex}`;
-}
-
-function treePrefix({ depth, isLast, ancestorHasNext }: FlatNode): string {
-  if (depth === 0) return "";
-
-  const ancestorGuides = ancestorHasNext
-    .slice(0, -1)
-    .map((hasNext) => (hasNext ? "│ " : "  "))
-    .join("");
-  return `${ancestorGuides}${isLast ? "╰─" : "├─"}`;
-}
-
-/**
- * Keep ancestor guide columns visible after a selected navigation label wraps.
- * The final two spaces reserve the current node's branch/disclosure columns.
- */
-function treeContinuationPrefix({ ancestorHasNext }: FlatNode): string {
-  return `${ancestorHasNext.map((hasNext) => (hasNext ? "│ " : "  ")).join("")}  `;
-}
-
-function terminalColumnWidth(text: string): number {
-  let width = 0;
-  for (const character of text) {
-    const codePoint = character.codePointAt(0) ?? 0;
-    if (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) continue;
-    width +=
-      codePoint >= 0x1100 &&
-      (codePoint <= 0x115f ||
-        codePoint === 0x2329 ||
-        codePoint === 0x232a ||
-        (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
-        (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
-        (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-        (codePoint >= 0xfe10 && codePoint <= 0xfe19) ||
-        (codePoint >= 0xfe30 && codePoint <= 0xfe6f) ||
-        (codePoint >= 0xff00 && codePoint <= 0xff60) ||
-        (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-        (codePoint >= 0x20000 && codePoint <= 0x3fffd))
-        ? 2
-        : 1;
-  }
-  return width;
-}
-
-function splitLongNavigationWord(word: string, maxColumns: number): string[] {
-  const lines: string[] = [];
-  let line = "";
-  let lineWidth = 0;
-
-  for (const character of word) {
-    const characterWidth = terminalColumnWidth(character);
-    if (line && lineWidth + characterWidth > maxColumns) {
-      lines.push(line);
-      line = "";
-      lineWidth = 0;
-    }
-    line += character;
-    lineWidth += characterWidth;
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-/** Wrap a selected navigation title while retaining a prefix column per row. */
-function wrapNavigationTitle(title: string, maxColumns: number): string[] {
-  const availableColumns = Math.max(1, maxColumns);
-  const words = title.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [""];
-
-  const lines: string[] = [];
-  let line = "";
-  for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word;
-    if (terminalColumnWidth(candidate) <= availableColumns) {
-      line = candidate;
-      continue;
-    }
-    if (line) lines.push(line);
-
-    const fragments = splitLongNavigationWord(word, availableColumns);
-    line = fragments.pop() ?? "";
-    lines.push(...fragments);
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-function inlineText(nodes: InlineNode[]): string {
-  return nodes
-    .map((node) => {
-      if (node.type === "text") return node.content;
-      if (node.type === "break") return "\n";
-      return inlineText(node.children);
-    })
-    .join("");
-}
-
-function blockText(block: BlockNode): string {
-  switch (block.type) {
-    case "paragraph":
-    case "pre":
-      return inlineText(block.children);
-    case "list":
-      return block.items.map(inlineText).join("\n");
-    case "spacer":
-      return "";
-  }
-}
-
-function findSearchMatches(
-  nodes: SectionNode[],
-  tldr: TldrPage | undefined,
-  query: string,
-): SearchMatch[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  if (!normalizedQuery) return [];
-
-  const matches: SearchMatch[] = [];
-  if (tldr && tldrPageText(tldr).toLocaleLowerCase().includes(normalizedQuery)) {
-    matches.push({
-      targetId: contentId(TLDR_NAV_ID),
-      sectionId: TLDR_NAV_ID,
-      title: "TLDR QUICK REFERENCE",
-    });
-  }
-  const visit = (node: SectionNode) => {
-    if (node.title.toLocaleLowerCase().includes(normalizedQuery)) {
-      matches.push({
-        targetId: contentId(node.id),
-        sectionId: node.id,
-        title: node.title,
-      });
-    }
-    node.blocks.forEach((block, blockIndex) => {
-      if (!blockText(block).toLocaleLowerCase().includes(normalizedQuery)) return;
-      matches.push({
-        targetId: contentBlockId(node.id, blockIndex),
-        sectionId: node.id,
-        title: node.title,
-        blockIndex,
-      });
-    });
-    for (const child of node.children) {
-      visit(child);
-    }
-  };
-
-  for (const node of nodes) visit(node);
-  return matches;
-}
-
-function collectBranchIds(nodes: SectionNode[]): Set<string> {
-  const ids = new Set<string>();
-  const visit = (node: SectionNode) => {
-    if (node.children.length > 0) ids.add(node.id);
-    for (const child of node.children) visit(child);
-  };
-  for (const node of nodes) visit(node);
-  return ids;
-}
-
-function splitByBreak(nodes: InlineNode[]): InlineNode[][] {
-  const segments: InlineNode[][] = [[]];
-  for (const node of nodes) {
-    if (node.type === "break") {
-      segments.push([]);
-    } else {
-      segments[segments.length - 1]!.push(node);
-    }
-  }
-  return segments.filter((s) => s.length > 0).map(trimSegmentWhitespace);
-}
-
-function trimSegmentWhitespace(nodes: InlineNode[]): InlineNode[] {
-  if (nodes.length === 0) return nodes;
-
-  const trimmed = [...nodes];
-  const first = trimmed[0];
-  if (first?.type === "text") {
-    first.content = first.content.replace(/^\s+/, "");
-  }
-
-  const last = trimmed[trimmed.length - 1];
-  if (last?.type === "text") {
-    last.content = last.content.replace(/\s+$/, "");
-  }
-
-  return trimmed;
-}
-
-/**
- * Merges consecutive paragraph and list blocks into a single `<text>` element
- * to avoid creating one TextBuffer per block (which can exceed the native
- * TextBuffer limit on large man pages like gcc ~16k blocks).
- *
- * Pre blocks are kept separate because they need char-wrap mode and a
- * distinct visual style.
- */
-function renderBlockNodes(
-  blocks: BlockNode[],
-  baseIndent = 0,
-  searchQuery = "",
-  sectionId?: string,
-  activeBlockIndex?: number,
-): ReactNode[] {
-  const result: ReactNode[] = [];
-  let inlineBuffer: ReactNode[] = [];
-  let bufferIndent = 0;
-  let keyCounter = 0;
-  let inlineKey = 0;
-
-  function renderInlineNodes(nodes: InlineNode[]): ReactNode[] {
-    return nodes.map((node) => {
-      const key = inlineKey++;
-      switch (node.type) {
-        case "text":
-          return renderSearchHighlights(node.content, searchQuery, `inline-${key}`);
-        case "bold":
-          return (
-            <span key={key} fg="#cdd6f4">
-              <b>{renderInlineNodes(node.children)}</b>
-            </span>
-          );
-        case "italic":
-          return (
-            <span key={key} fg="#7f849c">
-              <u>{renderInlineNodes(node.children)}</u>
-            </span>
-          );
-        case "code":
-          return <Pre key={key} children={node.children} searchQuery={searchQuery} />;
-        case "break":
-          return null;
-        default:
-          return null;
-      }
-    });
-  }
-
-  function flushInline(anchorId?: string) {
-    if (inlineBuffer.length === 0) return;
-    result.push(
-      <box
-        key={`merged-${keyCounter++}`}
-        {...(anchorId ? { id: anchorId } : {})}
-        paddingLeft={bufferIndent}
-        shouldFill={true}
-      >
-        <text fg="#a6adc8" wrapMode="word">
-          {inlineBuffer}
-        </text>
-      </box>
-    );
-    inlineBuffer = [];
-  }
-
-  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
-    const block = blocks[blockIndex]!;
-    const isActiveBlock = sectionId !== undefined && blockIndex === activeBlockIndex;
-    if (isActiveBlock) flushInline();
-    switch (block.type) {
-      case "paragraph": {
-        if (inlineBuffer.length > 0 && baseIndent + block.indent !== bufferIndent) {
-          flushInline();
-        }
-        if (inlineBuffer.length === 0) {
-          bufferIndent = baseIndent + block.indent;
-        }
-        const segments = splitByBreak(block.children);
-        for (const segment of segments) {
-          inlineBuffer.push(...renderInlineNodes(segment));
-          inlineBuffer.push("\n");
-        }
-        if (isActiveBlock) flushInline(contentBlockId(sectionId, blockIndex));
-        break;
-      }
-      case "list": {
-        if (inlineBuffer.length > 0 && baseIndent + block.indent !== bufferIndent) {
-          flushInline();
-        }
-        if (inlineBuffer.length === 0) {
-          bufferIndent = baseIndent + block.indent;
-        }
-        for (const item of block.items) {
-          inlineBuffer.push(<span key={`bullet-${inlineKey++}`} fg="#94e2d5">{"• "}</span>);
-          inlineBuffer.push(...renderInlineNodes(item));
-          inlineBuffer.push("\n");
-        }
-        if (isActiveBlock) flushInline(contentBlockId(sectionId, blockIndex));
-        break;
-      }
-      case "pre": {
-        flushInline();
-        const pre = (
-          <Pre
-            key={`pre-${keyCounter++}`}
-            children={block.children}
-            block
-            indent={baseIndent + block.indent}
-            searchQuery={searchQuery}
-          />
-        );
-        result.push(
-          isActiveBlock
-            ? <box key={`pre-anchor-${keyCounter++}`} id={contentBlockId(sectionId, blockIndex)}>{pre}</box>
-            : pre
-        );
-        // Display blocks are separated from the next paragraph in both groff
-        // and mandoc output.  The parser may also provide an explicit spacer
-        // before the block; avoid adding a duplicate only when one follows it.
-        if (blocks[blockIndex + 1]?.type !== "spacer" && blockIndex < blocks.length - 1) {
-          result.push(<box key={`pre-gap-${keyCounter++}`} height={1} />);
-        }
-        break;
-      }
-      case "spacer": {
-        flushInline();
-        result.push(<box key={`spacer-${keyCounter++}`} height={1} />);
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  flushInline();
-  return result;
-}
-
-function SectionContent({
-  node,
-  baseIndent = 3,
-  searchQuery = "",
-  activeSearchSectionId,
-  activeBlockIndex,
-}: {
-  node: SectionNode;
-  baseIndent?: number;
-  searchQuery?: string;
-  activeSearchSectionId?: string | undefined;
-  activeBlockIndex?: number | undefined;
-}) {
-  return (
-    <box flexDirection="column" gap={0}>
-      <text id={contentId(node.id)} fg="#94e2d5">
-        <b>{renderSearchHighlights(node.title, searchQuery, `heading-${node.id}`)}</b>
-      </text>
-      {renderBlockNodes(
-        node.blocks,
-        baseIndent,
-        searchQuery,
-        node.id,
-        activeSearchSectionId === node.id ? activeBlockIndex : undefined,
-      )}
-      <box flexDirection="column" gap={0}>
-        {node.children.map((child: SectionNode) => (
-          <SectionContent
-            key={child.id}
-            node={child}
-            baseIndent={baseIndent + 4}
-            searchQuery={searchQuery}
-            activeSearchSectionId={activeSearchSectionId}
-            activeBlockIndex={activeBlockIndex}
-          />
-        ))}
-      </box>
-    </box>
-  );
-}
-
-function TldrCommand({ parts, searchQuery }: { parts: TldrCommandPart[]; searchQuery: string }) {
-  return (
-    <text fg="#cdd6f4" wrapMode="char">
-      {parts.map((part, index) => (
-        <span key={index} fg={part.type === "placeholder" ? "#f9e2af" : "#cdd6f4"}>
-          {renderSearchHighlights(part.content, searchQuery, `tldr-command-${index}`)}
-        </span>
-      ))}
-    </text>
-  );
-}
-
-function TldrQuickReference({ page, searchQuery }: { page: TldrPage; searchQuery: string }) {
-  return (
-    <box
-      id={contentId(TLDR_NAV_ID)}
-      flexDirection="column"
-      backgroundColor="#28243a"
-      border={["top", "right", "bottom", "left"]}
-      borderColor="#cba6f7"
-      paddingLeft={1}
-      paddingRight={1}
-      paddingTop={1}
-      paddingBottom={1}
-    >
-      <text fg="#cba6f7">
-        <b>{renderSearchHighlights(`TLDR QUICK REFERENCE · ${page.title}`, searchQuery, "tldr-title")}</b>
-      </text>
-      {page.description.map((line, index) => (
-        <text key={`description-${index}`} fg="#bac2de" wrapMode="word">
-          {renderSearchHighlights(line, searchQuery, `tldr-description-${index}`)}
-        </text>
-      ))}
-      {page.examples.map((example, index) => (
-        <box key={`example-${index}`} flexDirection="column" paddingTop={index === 0 ? 1 : 0}>
-          <text fg="#a6e3a1" wrapMode="word">
-            {renderSearchHighlights(example.description, searchQuery, `tldr-example-${index}`)}
-          </text>
-          {example.command && (
-            <box paddingLeft={2}>
-              <TldrCommand parts={example.commandParts} searchQuery={searchQuery} />
-            </box>
-          )}
-        </box>
-      ))}
-      {page.moreInformation && (
-        <text fg="#89b4fa" wrapMode="char">
-          {renderSearchHighlights(`More information: ${page.moreInformation}`, searchQuery, "tldr-more-information")}
-        </text>
-      )}
-      <text fg="#7f849c">
-        {`tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`}
-      </text>
-    </box>
-  );
-}
-
 export function App({ result, onQuit }: AppProps) {
+  // ── View state and render references ──────────────────────
+
   const [selectedId, setSelectedId] = useState<string>(
     result.tldr ? TLDR_NAV_ID : result.sections[0]?.id ?? ""
   );
@@ -576,7 +55,6 @@ export function App({ result, onQuit }: AppProps) {
     return initial;
   });
   const [isNavigationVisible, setIsNavigationVisible] = useState(true);
-  const [navigationWidth, setNavigationWidth] = useState(DEFAULT_NAV_WIDTH);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [menuCursor, setMenuCursor] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -591,22 +69,19 @@ export function App({ result, onQuit }: AppProps) {
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const searchInputRef = useRef<InputRenderable | null>(null);
-  const navigationSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const navigationResizeRef = useRef<{
-    startX: number;
-    startWidth: number;
-  } | null>(null);
   const { width: terminalWidth, height: terminalHeight } = useTerminalDimensions();
-  const maxNavigationWidth = Math.max(
-    MIN_NAV_WIDTH,
-    terminalWidth - MIN_CONTENT_WIDTH - 1
-  );
+  const {
+    navigationWidth,
+    resetNavigationWidth,
+    startResize,
+    resize,
+    finishResize,
+  } = useSidebarResize({
+    isVisible: isNavigationVisible,
+    terminalWidth,
+  });
 
-  useEffect(() => {
-    setNavigationWidth((currentWidth) =>
-      clamp(currentWidth, MIN_NAV_WIDTH, maxNavigationWidth)
-    );
-  }, [maxNavigationWidth]);
+  // ── Derived document model ─────────────────────────────────
 
   const visibleNodes = useMemo(
     () => flattenVisibleNodes(result.sections, expanded),
@@ -621,7 +96,6 @@ export function App({ result, onQuit }: AppProps) {
     ],
     [result.tldr, visibleNodes]
   );
-  const selectedNavigationItem = navigationItems.find((item) => item.id === selectedId);
   const searchMatches = useMemo(
     () => findSearchMatches(result.sections, result.tldr, searchQuery),
     [result.sections, result.tldr, searchQuery]
@@ -630,13 +104,7 @@ export function App({ result, onQuit }: AppProps) {
     () => collectBranchIds(result.sections),
     [result.sections]
   );
-  const contentSectionIds = useMemo(
-    () => [
-      ...(result.tldr ? [TLDR_NAV_ID] : []),
-      ...sectionIdsInDocumentOrder(result.sections),
-    ],
-    [result.sections, result.tldr]
-  );
+  // ── Section selection and scrolling ────────────────────────
 
   const scrollToContent = (targetId: string) => {
     const scrollbox = contentScrollRef.current;
@@ -658,50 +126,13 @@ export function App({ result, onQuit }: AppProps) {
 
   const scrollToNode = (id: string) => scrollToContent(contentId(id));
 
-  const syncNavigationToContent = () => {
-    const scrollbox = contentScrollRef.current;
-    if (!scrollbox || contentSectionIds.length === 0) return;
-
-    // The selected row is the last heading at or above the first content row.
-    // This runs only after scrolling becomes idle, never for every wheel tick.
-    let activeId = contentSectionIds[0]!;
-    for (const id of contentSectionIds) {
-      const heading = scrollbox.content.findDescendantById(contentId(id));
-      if (!heading) continue;
-      if (heading.y > scrollbox.viewport.y) break;
-      activeId = id;
-    }
-
-    setSelectedId((current) => (current === activeId ? current : activeId));
-
-    // Reveal a subsection that reaches the top while its ancestors are folded.
-    if (activeId !== TLDR_NAV_ID) {
-      const path = findNodePath(result.sections, activeId);
-      if (path) {
-        setExpanded((current) => {
-          let changed = false;
-          const next = new Set(current);
-          for (const id of path) {
-            if (!next.has(id)) {
-              next.add(id);
-              changed = true;
-            }
-          }
-          return changed ? next : current;
-        });
-      }
-    }
-  };
-
-  const scheduleNavigationSync = () => {
-    if (navigationSyncTimerRef.current) {
-      clearTimeout(navigationSyncTimerRef.current);
-    }
-    navigationSyncTimerRef.current = setTimeout(() => {
-      navigationSyncTimerRef.current = null;
-      syncNavigationToContent();
-    }, NAVIGATION_SYNC_DELAY_MS);
-  };
+  const scheduleNavigationSync = useDeferredNavigationSync({
+    sections: result.sections,
+    hasTldr: Boolean(result.tldr),
+    contentScrollRef,
+    setSelectedId,
+    setExpanded,
+  });
 
   const selectSection = (id: string) => {
     setSelectedId(id);
@@ -730,6 +161,8 @@ export function App({ result, onQuit }: AppProps) {
     if (next) selectSection(next.id);
   };
 
+  // ── Search actions ─────────────────────────────────────────
+
   const openSearch = () => {
     setOpenMenu(null);
     setIsHelpOpen(false);
@@ -757,6 +190,8 @@ export function App({ result, onQuit }: AppProps) {
       setPendingSearchTarget(matches[0].targetId);
     }
   };
+
+  // ── Tree expansion actions ─────────────────────────────────
 
   const expandAll = () => setExpanded(new Set(branchIds));
   const collapseAll = () => setExpanded(new Set());
@@ -787,6 +222,8 @@ export function App({ result, onQuit }: AppProps) {
     });
   };
 
+  // ── Menu actions ───────────────────────────────────────────
+
   const menuEntries: Record<MenuId, MenuEntry[]> = {
     file: [
       { label: "Quit", shortcut: "q", action: onQuit },
@@ -800,7 +237,7 @@ export function App({ result, onQuit }: AppProps) {
       },
       {
         label: "Reset Sidebar Width",
-        action: () => setNavigationWidth(DEFAULT_NAV_WIDTH),
+        action: resetNavigationWidth,
       },
       { label: "Expand All", shortcut: "", action: expandAll },
       { label: "Collapse All", shortcut: "", action: collapseAll },
@@ -854,18 +291,11 @@ export function App({ result, onQuit }: AppProps) {
     setMenuCursor(0);
   };
 
+  // ── Layout synchronization effects ─────────────────────────
+
   useEffect(() => {
     if (isSearchOpen) searchInputRef.current?.focus();
   }, [isSearchOpen]);
-
-  useEffect(
-    () => () => {
-      if (navigationSyncTimerRef.current) {
-        clearTimeout(navigationSyncTimerRef.current);
-      }
-    },
-    []
-  );
 
   useEffect(() => {
     // A selected long title may grow from one row into several after React
@@ -885,59 +315,21 @@ export function App({ result, onQuit }: AppProps) {
     return () => clearTimeout(timer);
   }, [pendingSearchTarget, searchIndex, searchQuery]);
 
-  const attachSectionClick = (id: string, hasChildren: boolean) => {
-    return (el: BoxRenderable | null) => {
-      if (!el) return;
-      el.onMouseDown = () => {
-        if (hasChildren && selectedId === id) {
-          toggleExpanded(id);
-        } else {
-          selectSection(id);
-          if (hasChildren) {
-            setExpanded((prev) => {
-              const next = new Set(prev);
-              next.add(id);
-              return next;
-            });
-          }
-        }
-      };
-    };
-  };
+  // ── Sidebar mouse interactions ─────────────────────────────
 
-  const startNavigationResize = (event: TuiMouseEvent) => {
-    if (!isNavigationVisible || Math.abs(event.x - navigationWidth) > 1) {
+  const activateSidebarNode = (id: string, hasChildren: boolean) => {
+    if (hasChildren && selectedId === id) {
+      toggleExpanded(id);
       return;
     }
 
-    event.stopPropagation();
-    event.preventDefault();
-    navigationResizeRef.current = {
-      startX: event.x,
-      startWidth: navigationWidth,
-    };
+    selectSection(id);
+    if (hasChildren) {
+      setExpanded((current) => new Set(current).add(id));
+    }
   };
 
-  const resizeNavigation = (event: TuiMouseEvent) => {
-    const resize = navigationResizeRef.current;
-    if (!resize) return;
-
-    event.stopPropagation();
-    event.preventDefault();
-    const delta = event.x - resize.startX;
-    setNavigationWidth(
-      clamp(resize.startWidth + delta, MIN_NAV_WIDTH, maxNavigationWidth)
-    );
-  };
-
-  const finishNavigationResize = (event: TuiMouseEvent) => {
-    const resize = navigationResizeRef.current;
-    if (!resize) return;
-
-    event.stopPropagation();
-    event.preventDefault();
-    navigationResizeRef.current = null;
-  };
+  // ── Keyboard routing ───────────────────────────────────────
 
   useKeyboard((e) => {
     if (isHelpOpen) {
@@ -1065,173 +457,35 @@ export function App({ result, onQuit }: AppProps) {
     });
   }
 
+  // ── TUI composition ────────────────────────────────────────
+
   return (
     <box flexDirection="column" shouldFill={true}>
-      <box
-        height={1}
-        flexDirection="row"
-        backgroundColor="#181825"
-        border={["bottom"]}
-        borderColor="#313244"
-      >
-        {MENU_BAR.map((menu) => {
-          const isOpen = openMenu === menu.id;
-          return (
-            <box
-              key={menu.id}
-              height={1}
-              paddingLeft={1}
-              paddingRight={1}
-              backgroundColor={isOpen ? "#45475a" : "#181825"}
-              onMouseDown={() => openMenuById(menu.id)}
-            >
-              <text fg={isOpen ? "#f5e0dc" : "#bac2de"}>{menu.label}</text>
-            </box>
-          );
-        })}
-        <box flexGrow={1} flexDirection="row" justifyContent="flex-end" paddingRight={1}>
-          <text fg="#7f849c" truncate wrapMode="none">{`${result.topic}${result.section ? `(${result.section})` : ""}`}</text>
-        </box>
-      </box>
+      <MenuBar
+        topic={result.topic}
+        section={result.section}
+        openMenu={openMenu}
+        onToggleMenu={openMenuById}
+      />
       <box
         flexDirection="row"
         shouldFill={true}
         flexGrow={1}
-        onMouseDown={startNavigationResize}
-        onMouseDrag={resizeNavigation}
-        onMouseUp={finishNavigationResize}
+        onMouseDown={startResize}
+        onMouseDrag={resize}
+        onMouseUp={finishResize}
       >
         {isNavigationVisible && (
-          <box
+          <ManualSidebar
+            result={result}
+            visibleNodes={visibleNodes}
+            selectedId={selectedId}
+            expanded={expanded}
             width={navigationWidth}
-            flexDirection="column"
-            flexShrink={0}
-            backgroundColor="#11111b"
-          >
-            <box
-              flexDirection="column"
-              paddingLeft={1}
-              paddingRight={1}
-              paddingTop={1}
-              paddingBottom={1}
-              border={["bottom"]}
-              borderColor="#313244"
-            >
-              <text height={1} fg="#cdd6f4" truncate wrapMode="none" selectable={false}>
-                {`MANUAL · ${result.topic}`}
-              </text>
-              <text height={1} fg="#7f849c" selectable={false}>
-                {`${result.sections.length} top-level · ${visibleNodes.length} manual${result.tldr ? " · TLDR" : ""}`}
-              </text>
-            </box>
-            <box height={1} paddingLeft={1} paddingRight={1}>
-              <text fg="#6c7086" selectable={false}>SECTIONS</text>
-            </box>
-            <scrollbox
-              ref={navScrollRef}
-              flexGrow={1}
-              scrollY
-              focusable={false}
-              horizontalScrollbarOptions={{ visible: false }}
-              verticalScrollbarOptions={{
-                trackOptions: {
-                  foregroundColor: "#45475a",
-                  backgroundColor: "#11111b",
-                },
-              }}
-            >
-              {result.tldr && (
-                <box
-                  id={navId(TLDR_NAV_ID)}
-                  width="100%"
-                  height={1}
-                  flexShrink={0}
-                  paddingLeft={1}
-                  backgroundColor={selectedId === TLDR_NAV_ID ? "#49405f" : "#1d1a2b"}
-                  onMouseDown={() => selectSection(TLDR_NAV_ID)}
-                >
-                  <text truncate wrapMode="none" selectable={false}>
-                    <span fg={selectedId === TLDR_NAV_ID ? "#f5e0dc" : "#cba6f7"}>
-                      {selectedId === TLDR_NAV_ID ? "› ◆ " : "  ◆ "}
-                    </span>
-                    <span fg="#cba6f7">
-                      <b>TLDR QUICK REFERENCE</b>
-                    </span>
-                  </text>
-                </box>
-              )}
-              {visibleNodes.map((flatNode) => {
-                const { node, hasChildren } = flatNode;
-                const isSelected = node.id === selectedId;
-                const titleColor = isSelected
-                  ? "#f5e0dc"
-                  : flatNode.depth === 0
-                    ? "#cdd6f4"
-                    : flatNode.depth === 1
-                      ? "#89b4fa"
-                      : "#a6adc8";
-                const disclosure = hasChildren
-                  ? expanded.has(node.id)
-                    ? "▾ "
-                    : "▸ "
-                  : "· ";
-                const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
-                const selectedTitleLines = isSelected
-                  ? wrapNavigationTitle(
-                      node.title,
-                      navigationWidth - 1 - terminalColumnWidth(labelPrefix),
-                    )
-                  : [];
-                return (
-                  <box
-                    key={navId(node.id)}
-                    id={navId(node.id)}
-                    ref={attachSectionClick(node.id, hasChildren)}
-                    width="100%"
-                    height={isSelected ? "auto" : 1}
-                    flexDirection={isSelected ? "column" : "row"}
-                    flexShrink={0}
-                    paddingLeft={1}
-                    backgroundColor={isSelected ? "#313244" : "#11111b"}
-                  >
-                    {isSelected ? (
-                      selectedTitleLines.map((line, index) => {
-                        const prefix = index === 0
-                          ? labelPrefix
-                          : `  ${treeContinuationPrefix(flatNode)}`;
-                        return (
-                          <box
-                            key={`${node.id}-line-${index}`}
-                            width="100%"
-                            height={1}
-                            flexDirection="row"
-                            backgroundColor="#313244"
-                          >
-                            <text
-                              width={terminalColumnWidth(prefix)}
-                              fg={index === 0 ? "#fab387" : "#f5c2e7"}
-                              wrapMode="none"
-                              selectable={false}
-                            >
-                              {prefix}
-                            </text>
-                            <text fg={titleColor} wrapMode="none" selectable={false}>
-                              {line}
-                            </text>
-                          </box>
-                        );
-                      })
-                    ) : (
-                      <text truncate wrapMode="none" selectable={false}>
-                        <span fg="#6c7086">{labelPrefix}</span>
-                        <span fg={titleColor}>{node.title}</span>
-                      </text>
-                    )}
-                  </box>
-                );
-              })}
-            </scrollbox>
-          </box>
+            scrollRef={navScrollRef}
+            onActivateNode={activateSidebarNode}
+            onActivateTldr={() => selectSection(TLDR_NAV_ID)}
+          />
         )}
         <box
           flexGrow={1}
@@ -1288,124 +542,36 @@ export function App({ result, onQuit }: AppProps) {
       </box>
 
       {isSearchOpen ? (
-        <box
-          height={1}
-          flexDirection="row"
-          backgroundColor="#181825"
-          paddingLeft={1}
-          paddingRight={1}
-        >
-          <text fg="#f9e2af">Find:</text>
-          <box width={1} />
-          <input
-            ref={searchInputRef}
-            flexGrow={1}
-            value={searchDraft}
-            focused
-            placeholder="Search this page"
-            placeholderColor="#6c7086"
-            backgroundColor="#313244"
-            focusedBackgroundColor="#313244"
-            textColor="#cdd6f4"
-            focusedTextColor="#cdd6f4"
-            onInput={setSearchDraft}
-            onSubmit={submitSearch}
-          />
-          <box width={1} />
-          <text fg="#7f849c">
-            {searchDraft !== searchQuery
-              ? "Enter search · Esc cancel"
-              : searchMatches.length > 0
-              ? `${searchIndex + 1}/${searchMatches.length}  Enter next · Esc close`
-              : "0 matches  Esc close"}
-          </text>
-        </box>
+        <SearchBar
+          inputRef={searchInputRef}
+          draft={searchDraft}
+          appliedQuery={searchQuery}
+          matchCount={searchMatches.length}
+          matchIndex={searchIndex}
+          onDraftChange={setSearchDraft}
+          onSubmit={submitSearch}
+        />
       ) : (
-        <box
-          height={1}
-          flexDirection="row"
-          backgroundColor="#1e1e2e"
-          paddingLeft={1}
-          paddingRight={1}
-        >
-          <text fg="#a6adc8" truncate wrapMode="none">
-            {navigationItems.length > 0
-              ? `${navigationItems.findIndex((item) => item.id === selectedId) + 1}/${navigationItems.length} · ${selectedNavigationItem?.title ?? ""}`
-              : "No content"}
-          </text>
-          <box flexGrow={1} />
-          <text fg="#6c7086" truncate wrapMode="none">
-            {searchQuery && searchMatches.length > 0
-              ? `Find “${searchQuery}” · ${searchMatches.length} matches`
-              : `${visibleNodes.length} visible manual sections${result.tldr ? " · TLDR cached" : ""}`}
-          </text>
-        </box>
+        <ManualStatusBar
+          navigationItems={navigationItems}
+          selectedId={selectedId}
+          visibleSectionCount={visibleNodes.length}
+          hasTldr={Boolean(result.tldr)}
+          searchQuery={searchQuery}
+          searchMatchCount={searchMatches.length}
+        />
       )}
 
       {openMenu && (
-        <box
-          position="absolute"
-          left={MENU_BAR.find((menu) => menu.id === openMenu)!.left}
-          top={1}
-          width={30}
-          flexDirection="column"
-          zIndex={10}
-          backgroundColor="#1e1e2e"
-          border={["left", "right", "bottom"]}
-          borderColor="#585b70"
-        >
-          {activeMenuEntries.map((entry, index) => {
-            const isActive = index === menuCursor;
-            return (
-              <box
-                key={`${openMenu}-${entry.label}`}
-                height={1}
-                flexDirection="row"
-                paddingLeft={1}
-                paddingRight={1}
-                backgroundColor={isActive ? "#45475a" : "#1e1e2e"}
-                onMouseDown={(event) => {
-                  event.stopPropagation();
-                  activateMenuEntry(entry);
-                }}
-              >
-                <text fg={isActive ? "#f5e0dc" : "#cdd6f4"}>
-                  {entry.checked ? "✓ " : "  "}
-                  {entry.label}
-                </text>
-                <box flexGrow={1} />
-                <text fg={isActive ? "#bac2de" : "#7f849c"}>{entry.shortcut}</text>
-              </box>
-            );
-          })}
-        </box>
+        <MenuPopup
+          menu={openMenu}
+          entries={activeMenuEntries}
+          cursor={menuCursor}
+          onActivate={activateMenuEntry}
+        />
       )}
 
-      {isHelpOpen && (
-        <box
-          position="absolute"
-          left={Math.max(2, Math.floor((terminalWidth - 54) / 2))}
-          top={3}
-          width={Math.min(54, terminalWidth - 4)}
-          flexDirection="column"
-          zIndex={20}
-          backgroundColor="#1e1e2e"
-          border={["top", "right", "bottom", "left"]}
-          borderColor="#89b4fa"
-          padding={1}
-        >
-          <text fg="#89b4fa"><b>Keyboard Shortcuts</b></text>
-          <text fg="#cdd6f4">↑/↓ or j/k  select section</text>
-          <text fg="#cdd6f4">←/→ or h/l  move through the section tree</text>
-          <text fg="#cdd6f4">Enter        fold or unfold selected section</text>
-          <text fg="#cdd6f4">Ctrl+F or /   find in current page</text>
-          <text fg="#cdd6f4">n / N        next / previous search match</text>
-          <text fg="#cdd6f4">F10          open menu bar</text>
-          <text fg="#cdd6f4">q            quit</text>
-          <box height={1} />
-          <text fg="#7f849c">Esc or ? closes this window</text>
-        </box>
-      )}
+      {isHelpOpen && <KeyboardHelpDialog terminalWidth={terminalWidth} />}
     </box>
   );
 }

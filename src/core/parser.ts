@@ -1,3 +1,7 @@
+/**
+ * @file Detects a renderer's HTML dialect and dispatches to its parser.
+ */
+
 import { parse } from "node-html-parser";
 import type { SectionNode } from "./types";
 import { parseMandoc } from "./mandoc-parser";

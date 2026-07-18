@@ -1,3 +1,7 @@
+/**
+ * @file Tests mandoc HTML parsing for sections, lists, and inline content.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parseMandoc } from "../../../src/core/mandoc-parser";
 import { loadManPageFixture } from "../../fixtures/man-pages";

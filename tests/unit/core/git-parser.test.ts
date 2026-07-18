@@ -1,3 +1,7 @@
+/**
+ * @file Protects parsing regressions found in the large real git manual page.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parseManHtml } from "../../../src/core/parser";
 import { parseMandoc } from "../../../src/core/mandoc-parser";

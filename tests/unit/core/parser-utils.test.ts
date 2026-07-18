@@ -1,3 +1,7 @@
+/**
+ * @file Locks in shared DOM-to-inline parsing and whitespace regressions.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parse } from "node-html-parser";
 import {

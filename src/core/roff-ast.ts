@@ -1,11 +1,21 @@
+/**
+ * @file Fetches source-level roff ASTs through the bundled libmandoc sidecar.
+ *
+ * The sidecar protocol isolates Bun from the libmandoc ABI while this module
+ * handles source discovery, temporary decompression, and JSON validation.
+ */
+
 import { dirname, join } from "node:path";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import type { CommandResult } from "./fetcher";
+import {
+  commandError,
+  getDecompressor,
+  runCommand,
+  type CommandRunner,
+} from "./process";
 
 declare const MANT_COMPILED: boolean;
-
-type CommandRunner = (command: string[]) => Promise<CommandResult>;
 
 export type RoffAstResultLevel =
   | "ok"
@@ -66,14 +76,6 @@ export interface RoffAstFetcherDependencies {
 
 const decoder = new TextDecoder();
 
-function getDecompressor(path: string): string | null {
-  if (path.endsWith(".zst")) return "zstdcat";
-  if (path.endsWith(".gz")) return "zcat";
-  if (path.endsWith(".bz2")) return "bzcat";
-  if (path.endsWith(".xz")) return "xzcat";
-  return null;
-}
-
 function defaultSidecarPath(): string {
   if (process.env.MANT_MANDOC_JSON_BIN) {
     return process.env.MANT_MANDOC_JSON_BIN;
@@ -86,16 +88,6 @@ function defaultSidecarPath(): string {
 
 async function defaultIsSidecarAvailable(path: string): Promise<boolean> {
   return Bun.file(path).exists();
-}
-
-async function runCommand(command: string[]): Promise<CommandResult> {
-  const process = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).arrayBuffer(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-  return { stdout: new Uint8Array(stdout), stderr, exitCode };
 }
 
 async function prepareSourceFile(
@@ -125,12 +117,6 @@ async function prepareSourceFile(
 async function cleanupSourceFile(path: string, originalPath: string): Promise<void> {
   if (path === originalPath) return;
   await rm(dirname(path), { recursive: true, force: true });
-}
-
-function commandError(command: string[], result: CommandResult): Error {
-  return new Error(
-    result.stderr.trim() || `${command.join(" ")} failed with code ${result.exitCode}`,
-  );
 }
 
 function parseDocument(output: Uint8Array): RoffAstDocument {

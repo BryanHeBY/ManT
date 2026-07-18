@@ -1,7 +1,13 @@
+/**
+ * @file Manages the local tldr-pages Git cache and reads command quick references.
+ */
+
 import { access, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { parseTldrPage } from "./parser";
 import type { TldrCacheUpdate, TldrPage } from "./types";
+
+// ── Cache conventions and dependency contracts ──────────────
 
 const DEFAULT_REPOSITORY = "https://github.com/tldr-pages/tldr.git";
 const ALL_PLATFORMS = [
@@ -47,6 +53,8 @@ export interface TldrCacheUpdateDependencies {
   runCommand?: TldrCommandRunner;
 }
 
+// ── Default host adapters ───────────────────────────────────
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -73,6 +81,8 @@ async function runCommand(command: string[]): Promise<TldrCommandResult> {
 function commandError(command: string[], result: TldrCommandResult): Error {
   return new Error(result.stderr.trim() || `${command.join(" ")} failed with code ${result.exitCode}`);
 }
+
+// ── Platform and locale resolution ──────────────────────────
 
 export function getTldrCacheDir(
   env: Record<string, string | undefined> = process.env,
@@ -128,6 +138,8 @@ export function normalizeTldrTopic(topic: string): string {
   return topic.trim().toLocaleLowerCase().replace(/\s+/g, "-");
 }
 
+// ── Cache reads ─────────────────────────────────────────────
+
 /** Reads a cached tldr page only; it never initiates a network request. */
 export function createCachedTldrPageFetcher(
   dependencies: CachedTldrPageDependencies = {},
@@ -153,6 +165,8 @@ export function createCachedTldrPageFetcher(
     return null;
   };
 }
+
+// ── Transactional cache updates ─────────────────────────────
 
 export function createTldrCacheUpdater(
   dependencies: TldrCacheUpdateDependencies = {},

@@ -1,3 +1,7 @@
+/**
+ * @file Tests renderer selection, decompression, and fallback policy.
+ */
+
 import { describe, expect, test } from "bun:test";
 import {
   createManHtmlFetcher,

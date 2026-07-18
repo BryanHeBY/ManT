@@ -1,3 +1,7 @@
+/**
+ * @file Verifies the compiled libmandoc sidecar against a real compressed page.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { fetchRoffAst } from "../../../src/core";
 

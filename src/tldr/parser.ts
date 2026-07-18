@@ -1,3 +1,7 @@
+/**
+ * @file Parses tldr-pages Markdown into placeholder-aware quick-reference data.
+ */
+
 import type { TldrCommandPart, TldrExample, TldrPage } from "./types";
 
 export interface TldrPageLocation {

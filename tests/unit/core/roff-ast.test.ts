@@ -1,3 +1,7 @@
+/**
+ * @file Tests the JSON sidecar boundary used for source-level roff ASTs.
+ */
+
 import { describe, expect, test } from "bun:test";
 import {
   createRoffAstFetcher,

@@ -1,3 +1,7 @@
+/**
+ * @file Runs Mant's local cross-platform build and test verification sequence.
+ */
+
 import { chmod, mkdir, access, constants } from "node:fs/promises";
 import { dirname, join } from "node:path";
 

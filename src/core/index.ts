@@ -1,3 +1,7 @@
+/**
+ * @file Defines the public core API for rendering, parsing, and roff AST work.
+ */
+
 export * from "./types";
 export { fetchManHtml } from "./fetcher";
 export { parseManHtml } from "./parser";

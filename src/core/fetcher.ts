@@ -1,17 +1,20 @@
-export interface CommandResult {
-  stdout: Uint8Array;
-  stderr: string;
-  exitCode: number;
-}
+/**
+ * @file Selects the most faithful available HTML renderer for a local man page.
+ *
+ * It prefers source-fed mandoc, falls back to man-db/groff when source features
+ * are unsupported, and leaves all OS process work to the shared process layer.
+ */
 
-interface CommandOptions {
-  stdin?: Uint8Array;
-}
+import {
+  commandError,
+  getDecompressor,
+  runCommand,
+  type CommandRunner,
+} from "./process";
 
-type CommandRunner = (
-  command: string[],
-  options?: CommandOptions,
-) => Promise<CommandResult>;
+// Kept as a public re-export so existing callers can type injected runners
+// without learning about the internal process module.
+export type { CommandResult } from "./process";
 
 export interface FetchManHtmlDependencies {
   runCommand?: CommandRunner;
@@ -26,43 +29,8 @@ function decode(bytes: Uint8Array): string {
   return decoder.decode(bytes);
 }
 
-function getDecompressor(path: string): string | null {
-  if (path.endsWith(".zst")) return "zstdcat";
-  if (path.endsWith(".gz")) return "zcat";
-  if (path.endsWith(".bz2")) return "bzcat";
-  if (path.endsWith(".xz")) return "xzcat";
-  return null;
-}
-
-async function runCommand(
-  command: string[],
-  options: CommandOptions = {},
-): Promise<CommandResult> {
-  const process = Bun.spawn(command, {
-    stdin: options.stdin ?? "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  // Read both pipes concurrently.  Reading stdout before stderr can deadlock
-  // when a formatter writes enough diagnostics to fill the stderr pipe.
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).arrayBuffer(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-
-  return { stdout: new Uint8Array(stdout), stderr, exitCode };
-}
-
 async function readFile(path: string): Promise<Uint8Array> {
   return new Uint8Array(await Bun.file(path).arrayBuffer());
-}
-
-function commandError(command: string[], result: CommandResult): Error {
-  return new Error(
-    result.stderr.trim() || `${command.join(" ")} failed with code ${result.exitCode}`,
-  );
 }
 
 function asError(error: unknown): Error {

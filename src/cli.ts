@@ -1,4 +1,8 @@
 #!/usr/bin/env bun
+/**
+ * @file Parses Mant's command-line arguments and starts the terminal UI.
+ */
+
 import { query } from "./query";
 import { fetchRoffAst } from "./core";
 import { updateTldrCache } from "./tldr";

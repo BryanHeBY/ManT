@@ -1,3 +1,7 @@
+/**
+ * @file Compares parser behavior against HTML rendered by installed man tools.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parseGroff, parseManHtml, parseMandoc } from "../../../src/core";
 import type { InlineNode, SectionNode } from "../../../src/core";

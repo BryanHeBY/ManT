@@ -1,3 +1,7 @@
+/**
+ * @file Tests tldr cache lookup and transactional Git update behavior.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {

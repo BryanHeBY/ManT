@@ -1,3 +1,7 @@
+/**
+ * @file Tests renderer detection and the unified man HTML parser API.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parseManHtml } from "../../../src/core/parser";
 import { loadManPageFixture } from "../../fixtures/man-pages";

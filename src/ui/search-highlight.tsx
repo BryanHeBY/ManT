@@ -1,3 +1,7 @@
+/**
+ * @file Splits rendered inline text into case-insensitive search highlights.
+ */
+
 import type { ReactNode } from "react";
 
 export const SEARCH_HIGHLIGHT_BACKGROUND = "#f9e2af";

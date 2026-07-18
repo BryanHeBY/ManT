@@ -1,3 +1,7 @@
+/**
+ * @file Confirms real renderer fixtures exclude document chrome from sections.
+ */
+
 import { describe, expect, test } from "bun:test";
 import { parseManHtml } from "../../../src/core/parser";
 import type { InlineNode, SectionNode } from "../../../src/core/types";

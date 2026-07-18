@@ -1,3 +1,7 @@
+/**
+ * @file Combines local manual parsing with optional cached tldr quick references.
+ */
+
 import { fetchManHtml, parseManHtml } from "../core";
 import { fetchCachedTldrPage, type TldrPage } from "../tldr";
 import type { QueryOptions, QueryResult } from "./schema";

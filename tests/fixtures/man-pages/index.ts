@@ -1,3 +1,7 @@
+/**
+ * @file Loads checked-in real renderer fixtures for parser and UI tests.
+ */
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 

@@ -1,3 +1,7 @@
+/**
+ * @file Shares DOM-to-inline and block conversion helpers between HTML parsers.
+ */
+
 import { parse, HTMLElement, TextNode } from "node-html-parser";
 import type { BlockNode, InlineNode } from "./types";
 

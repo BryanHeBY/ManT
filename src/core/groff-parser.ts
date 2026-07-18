@@ -1,5 +1,10 @@
+/**
+ * @file Parses the HTML layout emitted by man-db/groff into Mant section nodes.
+ */
+
 import { parse, HTMLElement } from "node-html-parser";
-import type { BlockNode, SectionNode } from "./types";
+import type { SectionNode } from "./types";
+import { SectionTree } from "./section-tree";
 import {
   isElement,
   isText,
@@ -9,55 +14,6 @@ import {
   parseBlockElementWithIndent,
   isHeading,
 } from "./parser-utils";
-
-// ── Section tree builder ───────────────────────────────────
-//
-// Reusable builder that manages the section hierarchy.
-// Shared between groff and mandoc parsers.
-
-export class SectionTree {
-  private sections: SectionNode[] = [];
-  private stack: SectionNode[] = [];
-  private nextId = 0;
-
-  private closeSections(level: number): void {
-    while (this.stack.length > 0 && this.stack[this.stack.length - 1]!.level >= level) {
-      this.stack.pop();
-    }
-  }
-
-  currentSection(): SectionNode | null {
-    return this.stack[this.stack.length - 1] ?? null;
-  }
-
-  addBlock(block: BlockNode): void {
-    const section = this.currentSection();
-    if (section) section.blocks.push(block);
-  }
-
-  pushSection(title: string, level: number): SectionNode {
-    this.closeSections(level);
-    const newSection: SectionNode = {
-      id: `section-${this.nextId++}`,
-      title,
-      level,
-      blocks: [],
-      children: [],
-    };
-
-    if (this.stack.length === 0) {
-      this.sections.push(newSection);
-    } else {
-      this.currentSection()!.children.push(newSection);
-    }
-    this.stack.push(newSection);
-    return newSection;
-  }
-
-  getSections(): SectionNode[] {
-    return this.sections;
-  }
-}
 
 // ── Groff HTML parser ──────────────────────────────────────
 //
