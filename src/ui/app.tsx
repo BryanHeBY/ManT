@@ -1,10 +1,11 @@
 import {
   createCliRenderer,
   type BoxRenderable,
+  type MouseEvent as TuiMouseEvent,
   type ScrollBoxRenderable,
 } from "@opentui/core";
-import { createRoot, useKeyboard } from "@opentui/react";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { QueryResult } from "../query";
 import type { BlockNode, InlineNode, SectionNode } from "../core";
 import { Pre } from "./Pre";
@@ -13,6 +14,10 @@ interface AppProps {
   result: QueryResult;
   onQuit: () => void;
 }
+
+const DEFAULT_NAV_WIDTH = 32;
+const MIN_NAV_WIDTH = 24;
+const MIN_CONTENT_WIDTH = 32;
 
 interface FlatNode {
   node: SectionNode;
@@ -85,6 +90,10 @@ function treePrefix({ depth, isLast, ancestorHasNext }: FlatNode): string {
     .map((hasNext) => (hasNext ? "│ " : "  "))
     .join("");
   return `${ancestorGuides}${isLast ? "╰─" : "├─"}`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function splitByBreak(nodes: InlineNode[]): InlineNode[][] {
@@ -260,8 +269,24 @@ export function App({ result, onQuit }: AppProps) {
     }
     return initial;
   });
+  const [navigationWidth, setNavigationWidth] = useState(DEFAULT_NAV_WIDTH);
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
+  const navigationResizeRef = useRef<{
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const { width: terminalWidth } = useTerminalDimensions();
+  const maxNavigationWidth = Math.max(
+    MIN_NAV_WIDTH,
+    terminalWidth - MIN_CONTENT_WIDTH - 1
+  );
+
+  useEffect(() => {
+    setNavigationWidth((currentWidth) =>
+      clamp(currentWidth, MIN_NAV_WIDTH, maxNavigationWidth)
+    );
+  }, [maxNavigationWidth]);
 
   const visibleNodes = useMemo(
     () => flattenVisibleNodes(result.sections, expanded),
@@ -296,6 +321,40 @@ export function App({ result, onQuit }: AppProps) {
         }
       };
     };
+  };
+
+  const startNavigationResize = (event: TuiMouseEvent) => {
+    if (Math.abs(event.x - navigationWidth) > 1) {
+      return;
+    }
+
+    event.stopPropagation();
+    event.preventDefault();
+    navigationResizeRef.current = {
+      startX: event.x,
+      startWidth: navigationWidth,
+    };
+  };
+
+  const resizeNavigation = (event: TuiMouseEvent) => {
+    const resize = navigationResizeRef.current;
+    if (!resize) return;
+
+    event.stopPropagation();
+    event.preventDefault();
+    const delta = event.x - resize.startX;
+    setNavigationWidth(
+      clamp(resize.startWidth + delta, MIN_NAV_WIDTH, maxNavigationWidth)
+    );
+  };
+
+  const finishNavigationResize = (event: TuiMouseEvent) => {
+    const resize = navigationResizeRef.current;
+    if (!resize) return;
+
+    event.stopPropagation();
+    event.preventDefault();
+    navigationResizeRef.current = null;
   };
 
   useKeyboard((e) => {
@@ -368,89 +427,90 @@ export function App({ result, onQuit }: AppProps) {
 
   return (
     <box flexDirection="column" shouldFill={true}>
-      <box flexDirection="row" shouldFill={true} flexGrow={1}>
+      <box
+        flexDirection="row"
+        shouldFill={true}
+        flexGrow={1}
+        onMouseDown={startNavigationResize}
+        onMouseDrag={resizeNavigation}
+        onMouseUp={finishNavigationResize}
+      >
         <box
-          width={32}
+          width={navigationWidth}
           flexDirection="column"
           flexShrink={0}
           backgroundColor="#11111b"
-          border={["right"]}
-          borderColor="#313244"
         >
-          <box
-            flexDirection="column"
-            paddingLeft={1}
-            paddingRight={1}
-            paddingTop={1}
-            paddingBottom={1}
-            border={["bottom"]}
-            borderColor="#313244"
-          >
-            <text height={1} fg="#cdd6f4" truncate wrapMode="none">
-              {`MANUAL · ${result.topic}`}
-            </text>
-            <text height={1} fg="#7f849c">
-              {`${result.sections.length} top-level · ${visibleNodes.length} visible`}
-            </text>
-          </box>
-          <box height={1} paddingLeft={1} paddingRight={1}>
-            <text fg="#6c7086">SECTIONS</text>
-          </box>
-          <scrollbox
-            ref={navScrollRef}
-            flexGrow={1}
-            scrollY
-            focusable={false}
-            horizontalScrollbarOptions={{ visible: false }}
-            verticalScrollbarOptions={{
-              trackOptions: {
-                foregroundColor: "#45475a",
-                backgroundColor: "#11111b",
-              },
-            }}
-          >
-            {visibleNodes.map((flatNode) => {
-              const { node, hasChildren } = flatNode;
-              const isSelected = node.id === selectedId;
-              const titleColor = isSelected
-                ? "#f5e0dc"
-                : flatNode.depth === 0
-                  ? "#cdd6f4"
-                  : flatNode.depth === 1
-                    ? "#89b4fa"
-                    : "#a6adc8";
-              const disclosure = hasChildren
-                ? expanded.has(node.id)
-                  ? "▾ "
-                  : "▸ "
-                : "· ";
-              const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
-              return (
-                <box
-                  key={navId(node.id)}
-                  id={navId(node.id)}
-                  ref={attachSectionClick(node.id, hasChildren)}
-                  width="100%"
-                  height={1}
-                  flexShrink={0}
-                  paddingLeft={1}
-                  backgroundColor={isSelected ? "#313244" : "#11111b"}
-                >
-                  <text
-                    truncate
-                    wrapMode="none"
+            <box
+              flexDirection="column"
+              paddingLeft={1}
+              paddingRight={1}
+              paddingTop={1}
+              paddingBottom={1}
+              border={["bottom"]}
+              borderColor="#313244"
+            >
+              <text height={1} fg="#cdd6f4" truncate wrapMode="none">
+                {`MANUAL · ${result.topic}`}
+              </text>
+              <text height={1} fg="#7f849c">
+                {`${result.sections.length} top-level · ${visibleNodes.length} visible`}
+              </text>
+            </box>
+            <box height={1} paddingLeft={1} paddingRight={1}>
+              <text fg="#6c7086">SECTIONS</text>
+            </box>
+            <scrollbox
+              ref={navScrollRef}
+              flexGrow={1}
+              scrollY
+              focusable={false}
+              horizontalScrollbarOptions={{ visible: false }}
+              verticalScrollbarOptions={{
+                trackOptions: {
+                  foregroundColor: "#45475a",
+                  backgroundColor: "#11111b",
+                },
+              }}
+            >
+              {visibleNodes.map((flatNode) => {
+                const { node, hasChildren } = flatNode;
+                const isSelected = node.id === selectedId;
+                const titleColor = isSelected
+                  ? "#f5e0dc"
+                  : flatNode.depth === 0
+                    ? "#cdd6f4"
+                    : flatNode.depth === 1
+                      ? "#89b4fa"
+                      : "#a6adc8";
+                const disclosure = hasChildren
+                  ? expanded.has(node.id)
+                    ? "▾ "
+                    : "▸ "
+                  : "· ";
+                const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
+                return (
+                  <box
+                    key={navId(node.id)}
+                    id={navId(node.id)}
+                    ref={attachSectionClick(node.id, hasChildren)}
+                    width="100%"
+                    height={1}
+                    flexShrink={0}
+                    paddingLeft={1}
+                    backgroundColor={isSelected ? "#313244" : "#11111b"}
                   >
-                    <span fg={isSelected ? "#fab387" : "#6c7086"}>
-                      {labelPrefix}
-                    </span>
-                    <span fg={titleColor}>{node.title}</span>
-                  </text>
-                </box>
-              );
-            })}
-          </scrollbox>
+                    <text truncate wrapMode="none">
+                      <span fg={isSelected ? "#fab387" : "#6c7086"}>
+                        {labelPrefix}
+                      </span>
+                      <span fg={titleColor}>{node.title}</span>
+                    </text>
+                  </box>
+                );
+              })}
+            </scrollbox>
         </box>
-
         <box
           flexGrow={1}
           flexDirection="column"

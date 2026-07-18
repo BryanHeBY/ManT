@@ -181,7 +181,11 @@ describe("App (e2e)", () => {
 
     // Subsections should appear in the navigation.
     expect(frame).toContain("Option Summary");
-    expect(navLines(frame).some((line) => line.includes("Options...Kind"))).toBe(true);
+    expect(
+      navLines(frame).some(
+        (line) => line.includes("Options") && line.includes("Kind")
+      )
+    ).toBe(true);
 
     setup.renderer.destroy();
   });
@@ -339,6 +343,31 @@ describe("App (e2e)", () => {
     expect(frame.trim().length).toBeGreaterThan(0);
     expect(frame).toContain("MANUAL");
     expect(frame).toContain("ls");
+
+    setup.renderer.destroy();
+  });
+
+  test("resizes the navigation by dragging its boundary", async () => {
+    const setup = await testRender(
+      <App result={mockLsResult} onQuit={() => {}} />,
+      {
+        width: 80,
+        height: 24,
+      }
+    );
+
+    await setup.renderOnce();
+    let frame = setup.captureCharFrame();
+    expect(navLines(frame).some((line) => line.includes("MANUAL"))).toBe(true);
+    const initialContentX = frame.split("\n")[1]!.indexOf("NAME");
+
+    // Dragging the colour boundary widens the sidebar and shifts content right.
+    await setup.mockMouse.drag(NAV_WIDTH, 2, NAV_WIDTH + 8, 2);
+    await setup.flush();
+
+    frame = setup.captureCharFrame();
+    expect(navLines(frame).some((line) => line.includes("MANUAL"))).toBe(true);
+    expect(frame.split("\n")[1]!.indexOf("NAME")).toBeGreaterThan(initialContentX);
 
     setup.renderer.destroy();
   });
