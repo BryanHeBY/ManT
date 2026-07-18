@@ -420,7 +420,7 @@ export function App({ result, onQuit }: AppProps) {
     startX: number;
     startWidth: number;
   } | null>(null);
-  const { width: terminalWidth } = useTerminalDimensions();
+  const { width: terminalWidth, height: terminalHeight } = useTerminalDimensions();
   const maxNavigationWidth = Math.max(
     MIN_NAV_WIDTH,
     terminalWidth - MIN_CONTENT_WIDTH - 1
@@ -456,7 +456,21 @@ export function App({ result, onQuit }: AppProps) {
   );
 
   const scrollToNode = (id: string) => {
-    contentScrollRef.current?.scrollChildIntoView(contentId(id));
+    const scrollbox = contentScrollRef.current;
+    if (!scrollbox) return;
+
+    const heading = scrollbox.content.findDescendantById(contentId(id));
+    if (!heading) return;
+
+    // scrollChildIntoView deliberately chooses the nearest edge, which often
+    // leaves a newly selected later section at the bottom of the viewport.
+    // Translate the heading's current screen coordinate into a scroll offset
+    // so every selected section starts at the top of the content viewport.
+    const offsetToViewportTop = heading.y - scrollbox.viewport.y;
+    scrollbox.scrollTo({
+      x: scrollbox.scrollLeft,
+      y: Math.max(0, scrollbox.scrollTop + offsetToViewportTop),
+    });
   };
 
   const selectSection = (id: string) => {
@@ -939,6 +953,7 @@ export function App({ result, onQuit }: AppProps) {
               {result.sections.map((node) => (
                 <SectionContent key={node.id} node={node} />
               ))}
+              <box height={terminalHeight} flexShrink={0} />
             </box>
           </scrollbox>
         </box>

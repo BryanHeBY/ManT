@@ -19,6 +19,15 @@ function navPosition(frame: string, label: string): { x: number; y: number } {
   return { x: lines[y]!.indexOf(label), y };
 }
 
+function contentPosition(frame: string, label: string): { x: number; y: number } {
+  const lines = frame.split("\n");
+  for (let y = 0; y < lines.length; y++) {
+    const x = lines[y]!.indexOf(label);
+    if (x >= NAV_WIDTH) return { x, y };
+  }
+  throw new Error(`Content heading not found: ${label}`);
+}
+
 async function flushKeyboard(setup: { flush: () => Promise<void> }): Promise<void> {
   // Keyboard events are delivered outside React's synthetic event queue. Give
   // React one turn to schedule the state update before capturing the frame.
@@ -133,6 +142,53 @@ describe("App (e2e)", () => {
     expect(frame).toContain("SYNOPSIS");
     expect(frame).toContain("ls");
     expect(frame).toContain("[OPTION]");
+
+    setup.renderer.destroy();
+  });
+
+  test("places a clicked section heading at the top of the content viewport", async () => {
+    const result: QueryResult = {
+      topic: "scrolling",
+      sections: [
+        {
+          id: "section-0",
+          title: "INTRODUCTION",
+          level: 2,
+          blocks: Array.from({ length: 28 }, (_, index) => ({
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, content: `Intro line ${index}` }],
+            indent: 0,
+          })),
+          children: [],
+        },
+        {
+          id: "section-1",
+          title: "LATE SECTION",
+          level: 2,
+          blocks: [
+            {
+              type: "paragraph",
+              children: [{ type: "text", content: "Late section body" }],
+              indent: 0,
+            },
+          ],
+          children: [],
+        },
+      ],
+    };
+    const setup = await testRender(<App result={result} onQuit={() => {}} />, {
+      width: 80,
+      height: 24,
+    });
+
+    await setup.renderOnce();
+    const lateSection = navPosition(setup.captureCharFrame(), "LATE SECTION");
+    await setup.mockMouse.click(NAV_WIDTH - 3, lateSection.y);
+    await setup.flush();
+
+    // Row 2 is the first row in the padded content scroll viewport. The
+    // trailing scroll space lets even the final section land here.
+    expect(contentPosition(setup.captureCharFrame(), "LATE SECTION").y).toBe(2);
 
     setup.renderer.destroy();
   });
