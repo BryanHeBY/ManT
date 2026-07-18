@@ -22,6 +22,7 @@ const DEFAULT_NAV_WIDTH = 32;
 const MIN_NAV_WIDTH = 24;
 const MIN_CONTENT_WIDTH = 32;
 const TLDR_NAV_ID = "tldr-quick-reference";
+const NAVIGATION_SYNC_DELAY_MS = 180;
 
 const MENU_BAR = [
   { id: "file", label: "File", left: 0 },
@@ -100,6 +101,27 @@ function findParentById(
     if (found !== null) return found;
   }
   return null;
+}
+
+/** Return a node's ancestry in document order, including the node itself. */
+function findNodePath(nodes: SectionNode[], id: string, path: string[] = []): string[] | null {
+  for (const node of nodes) {
+    const nextPath = [...path, node.id];
+    if (node.id === id) return nextPath;
+    const found = findNodePath(node.children, id, nextPath);
+    if (found) return found;
+  }
+  return null;
+}
+
+function sectionIdsInDocumentOrder(nodes: SectionNode[]): string[] {
+  const ids: string[] = [];
+  const visit = (node: SectionNode) => {
+    ids.push(node.id);
+    for (const child of node.children) visit(child);
+  };
+  for (const node of nodes) visit(node);
+  return ids;
 }
 
 function navId(id: string): string {
@@ -569,6 +591,7 @@ export function App({ result, onQuit }: AppProps) {
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const searchInputRef = useRef<InputRenderable | null>(null);
+  const navigationSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigationResizeRef = useRef<{
     startX: number;
     startWidth: number;
@@ -607,6 +630,13 @@ export function App({ result, onQuit }: AppProps) {
     () => collectBranchIds(result.sections),
     [result.sections]
   );
+  const contentSectionIds = useMemo(
+    () => [
+      ...(result.tldr ? [TLDR_NAV_ID] : []),
+      ...sectionIdsInDocumentOrder(result.sections),
+    ],
+    [result.sections, result.tldr]
+  );
 
   const scrollToContent = (targetId: string) => {
     const scrollbox = contentScrollRef.current;
@@ -627,6 +657,51 @@ export function App({ result, onQuit }: AppProps) {
   };
 
   const scrollToNode = (id: string) => scrollToContent(contentId(id));
+
+  const syncNavigationToContent = () => {
+    const scrollbox = contentScrollRef.current;
+    if (!scrollbox || contentSectionIds.length === 0) return;
+
+    // The selected row is the last heading at or above the first content row.
+    // This runs only after scrolling becomes idle, never for every wheel tick.
+    let activeId = contentSectionIds[0]!;
+    for (const id of contentSectionIds) {
+      const heading = scrollbox.content.findDescendantById(contentId(id));
+      if (!heading) continue;
+      if (heading.y > scrollbox.viewport.y) break;
+      activeId = id;
+    }
+
+    setSelectedId((current) => (current === activeId ? current : activeId));
+
+    // Reveal a subsection that reaches the top while its ancestors are folded.
+    if (activeId !== TLDR_NAV_ID) {
+      const path = findNodePath(result.sections, activeId);
+      if (path) {
+        setExpanded((current) => {
+          let changed = false;
+          const next = new Set(current);
+          for (const id of path) {
+            if (!next.has(id)) {
+              next.add(id);
+              changed = true;
+            }
+          }
+          return changed ? next : current;
+        });
+      }
+    }
+  };
+
+  const scheduleNavigationSync = () => {
+    if (navigationSyncTimerRef.current) {
+      clearTimeout(navigationSyncTimerRef.current);
+    }
+    navigationSyncTimerRef.current = setTimeout(() => {
+      navigationSyncTimerRef.current = null;
+      syncNavigationToContent();
+    }, NAVIGATION_SYNC_DELAY_MS);
+  };
 
   const selectSection = (id: string) => {
     setSelectedId(id);
@@ -782,6 +857,15 @@ export function App({ result, onQuit }: AppProps) {
   useEffect(() => {
     if (isSearchOpen) searchInputRef.current?.focus();
   }, [isSearchOpen]);
+
+  useEffect(
+    () => () => {
+      if (navigationSyncTimerRef.current) {
+        clearTimeout(navigationSyncTimerRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     // A selected long title may grow from one row into several after React
@@ -965,8 +1049,10 @@ export function App({ result, onQuit }: AppProps) {
       }
     } else if (e.name === "d" || e.name === "pagedown") {
       contentScrollRef.current?.scrollBy({ x: 0, y: 10 }, "step");
+      scheduleNavigationSync();
     } else if (e.name === "u" || e.name === "pageup") {
       contentScrollRef.current?.scrollBy({ x: 0, y: -10 }, "step");
+      scheduleNavigationSync();
     }
   });
 
@@ -1155,7 +1241,15 @@ export function App({ result, onQuit }: AppProps) {
           paddingBottom={1}
           paddingRight={1}
         >
-          <scrollbox ref={contentScrollRef} flexGrow={1} scrollY focusable={false}>
+          <scrollbox
+            ref={contentScrollRef}
+            flexGrow={1}
+            scrollY
+            focusable={false}
+            onMouseScroll={scheduleNavigationSync}
+            onMouseDrag={scheduleNavigationSync}
+            onMouseUp={scheduleNavigationSync}
+          >
             <box flexDirection="column" gap={1}>
               {result.tldr && <TldrQuickReference page={result.tldr} searchQuery={searchQuery} />}
               {result.tldr && result.sections.length > 0 && (

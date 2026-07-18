@@ -206,6 +206,57 @@ describe("App (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("updates navigation after the content scroll becomes idle", async () => {
+    const result: QueryResult = {
+      topic: "scroll-spy",
+      sections: [
+        {
+          id: "section-0",
+          title: "INTRODUCTION",
+          level: 2,
+          blocks: Array.from({ length: 28 }, (_, index) => ({
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, content: `Intro line ${index}` }],
+            indent: 0,
+          })),
+          children: [],
+        },
+        {
+          id: "section-1",
+          title: "CURRENT SECTION",
+          level: 2,
+          blocks: Array.from({ length: 28 }, (_, index) => ({
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, content: `Current line ${index}` }],
+            indent: 0,
+          })),
+          children: [],
+        },
+      ],
+    };
+    const setup = await testRender(<App result={result} onQuit={() => {}} />, {
+      width: 80,
+      height: 24,
+    });
+
+    await setup.renderOnce();
+    for (let index = 0; index < 4; index++) {
+      setup.mockInput.pressKey("d");
+      await flushKeyboard(setup);
+    }
+
+    // No sidebar render occurs during an active sequence of page scrolling.
+    expect(navLines(setup.captureCharFrame()).some((line) => line.includes("› · INTRODUCTION"))).toBe(true);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 220));
+    await setup.flush();
+    expect(
+      navLines(setup.captureCharFrame()).some((line) => line.includes("› · CURRENT SECTION")),
+    ).toBe(true);
+
+    setup.renderer.destroy();
+  });
+
   test("renders gcc full manual with bold and italic parameters", async () => {
     const result = {
       topic: "gcc",
