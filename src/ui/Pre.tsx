@@ -78,22 +78,22 @@ interface PreProps {
 /**
  * Renders preformatted text (code blocks).
  *
- * In block mode the component fills the full available width so the
- * background colour (`#181825`) spans the entire content area.  The indent
- * is applied via `paddingLeft` on the wrapping `<box>` (not the `<text>`):
- * in this OpenTUI version `paddingLeft` on a `<text>` element has no visual
- * effect, whereas on a `<box>` it correctly insets the content while the
- * box background still fills the full width.
+ * In block mode an unpainted spacer carries the roff indentation.  The code
+ * background therefore starts at the body indent instead of looking like a
+ * full-width block glued to the content pane's left edge.
  */
 export function Pre({ children, block = false, indent = 0 }: PreProps): ReactNode {
   const text = flattenInline(children);
   const spans = makeCodeSpans(text);
   if (block) {
     return (
-      <box shouldFill={true} backgroundColor="#181825" paddingLeft={indent}>
-        <text wrapMode="char" fg="#cdd6f4">
-          {spans}
-        </text>
+      <box shouldFill={true} flexDirection="row">
+        {indent > 0 && <box width={indent} flexShrink={0} />}
+        <box flexGrow={1} backgroundColor="#181825">
+          <text wrapMode="char" fg="#cdd6f4">
+            {spans}
+          </text>
+        </box>
       </box>
     );
   }
