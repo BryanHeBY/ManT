@@ -51,3 +51,24 @@ export const mockLsResult: QueryResult = {
     },
   ],
 };
+
+export const mockLsWithTldrResult: QueryResult = {
+  ...mockLsResult,
+  tldr: {
+    title: "ls",
+    description: ["List directory contents."],
+    examples: [
+      {
+        description: "List files, including hidden entries",
+        command: "ls {{[-a|--all]}}",
+        commandParts: [
+          { type: "text", content: "ls " },
+          { type: "placeholder", content: "--all" },
+        ],
+      },
+    ],
+    platform: "common",
+    language: "en",
+    sourcePath: "/cache/mant/tldr-pages/pages/common/ls.md",
+  },
+};

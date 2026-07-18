@@ -1,4 +1,5 @@
 import type { SectionNode } from "../core";
+import type { TldrPage } from "../tldr";
 
 export interface QueryOptions {
   topic: string;
@@ -10,4 +11,6 @@ export interface QueryResult {
   topic: string;
   section?: number | undefined;
   sections: SectionNode[];
+  /** Cached community quick-reference content, independent from man sections. */
+  tldr?: TldrPage;
 }

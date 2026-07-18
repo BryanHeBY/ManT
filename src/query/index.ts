@@ -1,2 +1,2 @@
 export * from "./schema";
-export { query } from "./query";
+export { createQuery, query, type QueryDependencies } from "./query";

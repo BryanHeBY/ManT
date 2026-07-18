@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { App } from "../../../src/ui/app";
-import { mockLsResult } from "../../fixtures/mock-result";
+import { mockLsResult, mockLsWithTldrResult } from "../../fixtures/mock-result";
 import { loadManPageFixture } from "../../fixtures/man-pages";
 import { parseManHtml } from "../../../src/core/parser";
 import type { QueryResult } from "../../../src/query";
@@ -369,7 +369,49 @@ describe("App (e2e)", () => {
     expect(frame.split("\n")[0]).toContain("Search");
     expect(frame.split("\n")[0]).toContain("Help");
     expect(frame).toContain("1/3 · NAME");
-    expect(frame).toContain("3 visible sections");
+    expect(frame).toContain("3 visible manual sections");
+
+    setup.renderer.destroy();
+  });
+
+  test("shows the tldr quick reference before the man page and in the navigation tree", async () => {
+    const setup = await testRender(
+      <App result={mockLsWithTldrResult} onQuit={() => {}} />,
+      { width: 100, height: 32 }
+    );
+
+    await setup.renderOnce();
+    let frame = setup.captureCharFrame();
+    const tldrPosition = frame.indexOf("TLDR QUICK REFERENCE · ls");
+    const manualPosition = frame.indexOf("list directory contents");
+
+    expect(navLines(frame).some((line) => line.includes("◆ TLDR QUICK REFERENCE"))).toBe(true);
+    expect(frame).toContain("tldr-pages · CC BY 4.0 · common · en");
+    expect(frame).toContain("List files, including hidden entries");
+    expect(tldrPosition).toBeGreaterThanOrEqual(0);
+    expect(manualPosition).toBeGreaterThan(tldrPosition);
+    expect(frame).toContain("› ◆ TLDR QUICK REFERENCE");
+
+    setup.mockInput.pressKey("j");
+    await flushKeyboard(setup);
+    frame = setup.captureCharFrame();
+    expect(frame).toContain("› · NAME");
+
+    setup.renderer.destroy();
+  });
+
+  test("keeps a cached tldr page usable when no local man page exists", async () => {
+    const setup = await testRender(
+      <App result={{ ...mockLsWithTldrResult, sections: [] }} onQuit={() => {}} />,
+      { width: 100, height: 28 }
+    );
+
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+
+    expect(frame).toContain("TLDR QUICK REFERENCE · ls");
+    expect(frame).toContain("No local man page was found");
+    expect(navLines(frame).some((line) => line.includes("◆ TLDR QUICK REFERENCE"))).toBe(true);
 
     setup.renderer.destroy();
   });

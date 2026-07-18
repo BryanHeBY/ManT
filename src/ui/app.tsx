@@ -9,6 +9,7 @@ import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { QueryResult } from "../query";
 import type { BlockNode, InlineNode, SectionNode } from "../core";
+import { tldrPageText, type TldrCommandPart, type TldrPage } from "../tldr";
 import { Pre } from "./Pre";
 
 interface AppProps {
@@ -19,6 +20,7 @@ interface AppProps {
 const DEFAULT_NAV_WIDTH = 32;
 const MIN_NAV_WIDTH = 24;
 const MIN_CONTENT_WIDTH = 32;
+const TLDR_NAV_ID = "tldr-quick-reference";
 
 const MENU_BAR = [
   { id: "file", label: "File", left: 0 },
@@ -38,7 +40,7 @@ interface MenuEntry {
 }
 
 interface SearchMatch {
-  sectionId: string;
+  targetId: string;
   title: string;
 }
 
@@ -141,17 +143,24 @@ function blockText(block: BlockNode): string {
   }
 }
 
-function findSearchMatches(nodes: SectionNode[], query: string): SearchMatch[] {
+function findSearchMatches(
+  nodes: SectionNode[],
+  tldr: TldrPage | undefined,
+  query: string,
+): SearchMatch[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) return [];
 
   const matches: SearchMatch[] = [];
+  if (tldr && tldrPageText(tldr).toLocaleLowerCase().includes(normalizedQuery)) {
+    matches.push({ targetId: TLDR_NAV_ID, title: "TLDR QUICK REFERENCE" });
+  }
   const visit = (node: SectionNode) => {
     const searchableText = [node.title, ...node.blocks.map(blockText)]
       .join("\n")
       .toLocaleLowerCase();
     if (searchableText.includes(normalizedQuery)) {
-      matches.push({ sectionId: node.id, title: node.title });
+      matches.push({ targetId: node.id, title: node.title });
     }
     for (const child of node.children) visit(child);
   };
@@ -332,9 +341,62 @@ function SectionContent({ node, baseIndent = 3 }: { node: SectionNode; baseInden
   );
 }
 
+function TldrCommand({ parts }: { parts: TldrCommandPart[] }) {
+  return (
+    <text fg="#cdd6f4" wrapMode="char">
+      {parts.map((part, index) => (
+        <span key={index} fg={part.type === "placeholder" ? "#f9e2af" : "#cdd6f4"}>
+          {part.content}
+        </span>
+      ))}
+    </text>
+  );
+}
+
+function TldrQuickReference({ page }: { page: TldrPage }) {
+  return (
+    <box
+      id={contentId(TLDR_NAV_ID)}
+      flexDirection="column"
+      backgroundColor="#28243a"
+      border={["top", "right", "bottom", "left"]}
+      borderColor="#cba6f7"
+      paddingLeft={1}
+      paddingRight={1}
+      paddingTop={1}
+      paddingBottom={1}
+    >
+      <text fg="#cba6f7">
+        <b>{`TLDR QUICK REFERENCE · ${page.title}`}</b>
+      </text>
+      {page.description.map((line, index) => (
+        <text key={`description-${index}`} fg="#bac2de" wrapMode="word">
+          {line}
+        </text>
+      ))}
+      {page.examples.map((example, index) => (
+        <box key={`example-${index}`} flexDirection="column" paddingTop={index === 0 ? 1 : 0}>
+          <text fg="#a6e3a1" wrapMode="word">{example.description}</text>
+          {example.command && (
+            <box paddingLeft={2}>
+              <TldrCommand parts={example.commandParts} />
+            </box>
+          )}
+        </box>
+      ))}
+      {page.moreInformation && (
+        <text fg="#89b4fa" wrapMode="char">{`More information: ${page.moreInformation}`}</text>
+      )}
+      <text fg="#7f849c">
+        {`tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`}
+      </text>
+    </box>
+  );
+}
+
 export function App({ result, onQuit }: AppProps) {
   const [selectedId, setSelectedId] = useState<string>(
-    result.sections[0]?.id ?? ""
+    result.tldr ? TLDR_NAV_ID : result.sections[0]?.id ?? ""
   );
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const initial = new Set<string>();
@@ -374,9 +436,19 @@ export function App({ result, onQuit }: AppProps) {
     () => flattenVisibleNodes(result.sections, expanded),
     [result.sections, expanded]
   );
+  const navigationItems = useMemo(
+    () => [
+      ...(result.tldr
+        ? [{ id: TLDR_NAV_ID, title: "TLDR QUICK REFERENCE" }]
+        : []),
+      ...visibleNodes.map(({ node }) => ({ id: node.id, title: node.title })),
+    ],
+    [result.tldr, visibleNodes]
+  );
+  const selectedNavigationItem = navigationItems.find((item) => item.id === selectedId);
   const searchMatches = useMemo(
-    () => findSearchMatches(result.sections, searchQuery),
-    [result.sections, searchQuery]
+    () => findSearchMatches(result.sections, result.tldr, searchQuery),
+    [result.sections, result.tldr, searchQuery]
   );
   const branchIds = useMemo(
     () => collectBranchIds(result.sections),
@@ -397,20 +469,18 @@ export function App({ result, onQuit }: AppProps) {
     if (searchMatches.length === 0) return;
     const nextIndex = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length;
     setSearchIndex(nextIndex);
-    selectSection(searchMatches[nextIndex]!.sectionId);
+    selectSection(searchMatches[nextIndex]!.targetId);
   };
 
   const selectRelativeSection = (offset: number) => {
-    const currentIndex = visibleNodes.findIndex(
-      (node) => node.node.id === selectedId
-    );
+    const currentIndex = navigationItems.findIndex((item) => item.id === selectedId);
     const nextIndex = clamp(
       currentIndex + offset,
       0,
-      Math.max(visibleNodes.length - 1, 0)
+      Math.max(navigationItems.length - 1, 0)
     );
-    const next = visibleNodes[nextIndex];
-    if (next) selectSection(next.node.id);
+    const next = navigationItems[nextIndex];
+    if (next) selectSection(next.id);
   };
 
   const openSearch = () => {
@@ -425,9 +495,9 @@ export function App({ result, onQuit }: AppProps) {
 
   const updateSearchQuery = (query: string) => {
     setSearchQuery(query);
-    const matches = findSearchMatches(result.sections, query);
+    const matches = findSearchMatches(result.sections, result.tldr, query);
     setSearchIndex(0);
-    if (matches[0]) selectSection(matches[0].sectionId);
+    if (matches[0]) selectSection(matches[0].targetId);
   };
 
   const expandAll = () => setExpanded(new Set(branchIds));
@@ -482,11 +552,11 @@ export function App({ result, onQuit }: AppProps) {
       { label: "Next Section", shortcut: "↓ / j", action: () => selectRelativeSection(1) },
       { label: "Parent Section", shortcut: "← / h", action: navigateToParent },
       { label: "First Child", shortcut: "→ / l", action: navigateToFirstChild },
-      { label: "First Section", shortcut: "", action: () => selectRelativeSection(-visibleNodes.length) },
-      { label: "Last Section", shortcut: "", action: () => selectRelativeSection(visibleNodes.length) },
+      { label: "First Section", shortcut: "", action: () => selectRelativeSection(-navigationItems.length) },
+      { label: "Last Section", shortcut: "", action: () => selectRelativeSection(navigationItems.length) },
     ],
     search: [
-      { label: "Find in Manual…", shortcut: "Ctrl+F / /", action: openSearch },
+      { label: "Find in Page…", shortcut: "Ctrl+F / /", action: openSearch },
       {
         label: "Find Next",
         shortcut: "n",
@@ -761,7 +831,7 @@ export function App({ result, onQuit }: AppProps) {
                 {`MANUAL · ${result.topic}`}
               </text>
               <text height={1} fg="#7f849c">
-                {`${result.sections.length} top-level · ${visibleNodes.length} visible`}
+                {`${result.sections.length} top-level · ${visibleNodes.length} manual${result.tldr ? " · TLDR" : ""}`}
               </text>
             </box>
             <box height={1} paddingLeft={1} paddingRight={1}>
@@ -780,6 +850,24 @@ export function App({ result, onQuit }: AppProps) {
                 },
               }}
             >
+              {result.tldr && (
+                <box
+                  id={navId(TLDR_NAV_ID)}
+                  width="100%"
+                  height={1}
+                  flexShrink={0}
+                  paddingLeft={1}
+                  backgroundColor={selectedId === TLDR_NAV_ID ? "#49405f" : "#1d1a2b"}
+                  onMouseDown={() => selectSection(TLDR_NAV_ID)}
+                >
+                  <text truncate wrapMode="none">
+                    <span fg={selectedId === TLDR_NAV_ID ? "#f5e0dc" : "#cba6f7"}>
+                      {selectedId === TLDR_NAV_ID ? "› ◆ " : "  ◆ "}
+                    </span>
+                    <span fg="#cba6f7"><b>TLDR QUICK REFERENCE</b></span>
+                  </text>
+                </box>
+              )}
               {visibleNodes.map((flatNode) => {
                 const { node, hasChildren } = flatNode;
                 const isSelected = node.id === selectedId;
@@ -829,6 +917,25 @@ export function App({ result, onQuit }: AppProps) {
         >
           <scrollbox ref={contentScrollRef} flexGrow={1} scrollY focusable={false}>
             <box flexDirection="column" gap={1}>
+              {result.tldr && <TldrQuickReference page={result.tldr} />}
+              {result.tldr && result.sections.length > 0 && (
+                <box height={1} border={["top"]} borderColor="#45475a" paddingLeft={1}>
+                  <text fg="#6c7086">MANUAL</text>
+                </box>
+              )}
+              {result.tldr && result.sections.length === 0 && (
+                <box
+                  backgroundColor="#1e1e2e"
+                  border={["top"]}
+                  borderColor="#45475a"
+                  paddingLeft={1}
+                  paddingRight={1}
+                >
+                  <text fg="#f9e2af" wrapMode="word">
+                    No local man page was found; showing the cached tldr quick reference.
+                  </text>
+                </box>
+              )}
               {result.sections.map((node) => (
                 <SectionContent key={node.id} node={node} />
               ))}
@@ -852,7 +959,7 @@ export function App({ result, onQuit }: AppProps) {
             flexGrow={1}
             value={searchQuery}
             focused
-            placeholder="Search this manual"
+            placeholder="Search this page"
             placeholderColor="#6c7086"
             backgroundColor="#313244"
             focusedBackgroundColor="#313244"
@@ -877,13 +984,15 @@ export function App({ result, onQuit }: AppProps) {
           paddingRight={1}
         >
           <text fg="#a6adc8" truncate wrapMode="none">
-            {`${Math.max(visibleNodes.findIndex((node) => node.node.id === selectedId) + 1, 1)}/${visibleNodes.length} · ${findNodeById(result.sections, selectedId)?.title ?? ""}`}
+            {navigationItems.length > 0
+              ? `${navigationItems.findIndex((item) => item.id === selectedId) + 1}/${navigationItems.length} · ${selectedNavigationItem?.title ?? ""}`
+              : "No content"}
           </text>
           <box flexGrow={1} />
           <text fg="#6c7086" truncate wrapMode="none">
             {searchQuery && searchMatches.length > 0
               ? `Find “${searchQuery}” · ${searchMatches.length} matches`
-              : `${visibleNodes.length} visible sections`}
+              : `${visibleNodes.length} visible manual sections${result.tldr ? " · TLDR cached" : ""}`}
           </text>
         </box>
       )}
@@ -944,7 +1053,7 @@ export function App({ result, onQuit }: AppProps) {
           <text fg="#cdd6f4">↑/↓ or j/k  select section</text>
           <text fg="#cdd6f4">←/→ or h/l  move through the section tree</text>
           <text fg="#cdd6f4">Enter        fold or unfold selected section</text>
-          <text fg="#cdd6f4">Ctrl+F or /   find in manual</text>
+          <text fg="#cdd6f4">Ctrl+F or /   find in current page</text>
           <text fg="#cdd6f4">n / N        next / previous search match</text>
           <text fg="#cdd6f4">F10          open menu bar</text>
           <text fg="#cdd6f4">q            quit</text>
