@@ -1,6 +1,7 @@
 import {
   createCliRenderer,
   type BoxRenderable,
+  type InputRenderable,
   type MouseEvent as TuiMouseEvent,
   type ScrollBoxRenderable,
 } from "@opentui/core";
@@ -18,6 +19,28 @@ interface AppProps {
 const DEFAULT_NAV_WIDTH = 32;
 const MIN_NAV_WIDTH = 24;
 const MIN_CONTENT_WIDTH = 32;
+
+const MENU_BAR = [
+  { id: "file", label: "File", left: 0 },
+  { id: "view", label: "View", left: 6 },
+  { id: "navigate", label: "Navigate", left: 12 },
+  { id: "search", label: "Search", left: 22 },
+  { id: "help", label: "Help", left: 30 },
+] as const;
+
+type MenuId = (typeof MENU_BAR)[number]["id"];
+
+interface MenuEntry {
+  label: string;
+  shortcut?: string;
+  checked?: boolean;
+  action: () => void;
+}
+
+interface SearchMatch {
+  sectionId: string;
+  title: string;
+}
 
 interface FlatNode {
   node: SectionNode;
@@ -94,6 +117,57 @@ function treePrefix({ depth, isLast, ancestorHasNext }: FlatNode): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function inlineText(nodes: InlineNode[]): string {
+  return nodes
+    .map((node) => {
+      if (node.type === "text") return node.content;
+      if (node.type === "break") return "\n";
+      return inlineText(node.children);
+    })
+    .join("");
+}
+
+function blockText(block: BlockNode): string {
+  switch (block.type) {
+    case "paragraph":
+    case "pre":
+      return inlineText(block.children);
+    case "list":
+      return block.items.map(inlineText).join("\n");
+    case "spacer":
+      return "";
+  }
+}
+
+function findSearchMatches(nodes: SectionNode[], query: string): SearchMatch[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) return [];
+
+  const matches: SearchMatch[] = [];
+  const visit = (node: SectionNode) => {
+    const searchableText = [node.title, ...node.blocks.map(blockText)]
+      .join("\n")
+      .toLocaleLowerCase();
+    if (searchableText.includes(normalizedQuery)) {
+      matches.push({ sectionId: node.id, title: node.title });
+    }
+    for (const child of node.children) visit(child);
+  };
+
+  for (const node of nodes) visit(node);
+  return matches;
+}
+
+function collectBranchIds(nodes: SectionNode[]): Set<string> {
+  const ids = new Set<string>();
+  const visit = (node: SectionNode) => {
+    if (node.children.length > 0) ids.add(node.id);
+    for (const child of node.children) visit(child);
+  };
+  for (const node of nodes) visit(node);
+  return ids;
 }
 
 function splitByBreak(nodes: InlineNode[]): InlineNode[][] {
@@ -269,9 +343,17 @@ export function App({ result, onQuit }: AppProps) {
     }
     return initial;
   });
+  const [isNavigationVisible, setIsNavigationVisible] = useState(true);
   const [navigationWidth, setNavigationWidth] = useState(DEFAULT_NAV_WIDTH);
+  const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
+  const [menuCursor, setMenuCursor] = useState(0);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchIndex, setSearchIndex] = useState(0);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
+  const searchInputRef = useRef<InputRenderable | null>(null);
   const navigationResizeRef = useRef<{
     startX: number;
     startWidth: number;
@@ -292,6 +374,14 @@ export function App({ result, onQuit }: AppProps) {
     () => flattenVisibleNodes(result.sections, expanded),
     [result.sections, expanded]
   );
+  const searchMatches = useMemo(
+    () => findSearchMatches(result.sections, searchQuery),
+    [result.sections, searchQuery]
+  );
+  const branchIds = useMemo(
+    () => collectBranchIds(result.sections),
+    [result.sections]
+  );
 
   const scrollToNode = (id: string) => {
     contentScrollRef.current?.scrollChildIntoView(contentId(id));
@@ -302,6 +392,143 @@ export function App({ result, onQuit }: AppProps) {
     scrollToNode(id);
     navScrollRef.current?.scrollChildIntoView(navId(id));
   };
+
+  const selectSearchMatch = (index: number) => {
+    if (searchMatches.length === 0) return;
+    const nextIndex = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length;
+    setSearchIndex(nextIndex);
+    selectSection(searchMatches[nextIndex]!.sectionId);
+  };
+
+  const selectRelativeSection = (offset: number) => {
+    const currentIndex = visibleNodes.findIndex(
+      (node) => node.node.id === selectedId
+    );
+    const nextIndex = clamp(
+      currentIndex + offset,
+      0,
+      Math.max(visibleNodes.length - 1, 0)
+    );
+    const next = visibleNodes[nextIndex];
+    if (next) selectSection(next.node.id);
+  };
+
+  const openSearch = () => {
+    setOpenMenu(null);
+    setIsHelpOpen(false);
+    setIsSearchOpen(true);
+  };
+
+  const closeSearch = () => {
+    setIsSearchOpen(false);
+  };
+
+  const updateSearchQuery = (query: string) => {
+    setSearchQuery(query);
+    const matches = findSearchMatches(result.sections, query);
+    setSearchIndex(0);
+    if (matches[0]) selectSection(matches[0].sectionId);
+  };
+
+  const expandAll = () => setExpanded(new Set(branchIds));
+  const collapseAll = () => setExpanded(new Set());
+
+  const navigateToParent = () => {
+    const parent = findParentById(result.sections, selectedId);
+    if (parent) selectSection(parent.id);
+  };
+
+  const navigateToFirstChild = () => {
+    const node = findNodeById(result.sections, selectedId);
+    if (node?.children[0]) selectSection(node.children[0].id);
+  };
+
+  const expandCurrentSection = () => {
+    const node = findNodeById(result.sections, selectedId);
+    if (!node?.children.length) return;
+    setExpanded((current) => new Set(current).add(node.id));
+  };
+
+  const collapseCurrentSection = () => {
+    const node = findNodeById(result.sections, selectedId);
+    if (!node?.children.length) return;
+    setExpanded((current) => {
+      const next = new Set(current);
+      next.delete(node.id);
+      return next;
+    });
+  };
+
+  const menuEntries: Record<MenuId, MenuEntry[]> = {
+    file: [
+      { label: "Quit", shortcut: "q", action: onQuit },
+    ],
+    view: [
+      {
+        label: "Sidebar",
+        shortcut: "",
+        checked: isNavigationVisible,
+        action: () => setIsNavigationVisible((visible) => !visible),
+      },
+      {
+        label: "Reset Sidebar Width",
+        action: () => setNavigationWidth(DEFAULT_NAV_WIDTH),
+      },
+      { label: "Expand All", shortcut: "", action: expandAll },
+      { label: "Collapse All", shortcut: "", action: collapseAll },
+    ],
+    navigate: [
+      { label: "Previous Section", shortcut: "↑ / k", action: () => selectRelativeSection(-1) },
+      { label: "Next Section", shortcut: "↓ / j", action: () => selectRelativeSection(1) },
+      { label: "Parent Section", shortcut: "← / h", action: navigateToParent },
+      { label: "First Child", shortcut: "→ / l", action: navigateToFirstChild },
+      { label: "First Section", shortcut: "", action: () => selectRelativeSection(-visibleNodes.length) },
+      { label: "Last Section", shortcut: "", action: () => selectRelativeSection(visibleNodes.length) },
+    ],
+    search: [
+      { label: "Find in Manual…", shortcut: "Ctrl+F / /", action: openSearch },
+      {
+        label: "Find Next",
+        shortcut: "n",
+        action: () => selectSearchMatch(searchIndex + 1),
+      },
+      {
+        label: "Find Previous",
+        shortcut: "N",
+        action: () => selectSearchMatch(searchIndex - 1),
+      },
+    ],
+    help: [
+      {
+        label: "Keyboard Shortcuts",
+        shortcut: "?",
+        action: () => {
+          setOpenMenu(null);
+          setIsSearchOpen(false);
+          setIsHelpOpen(true);
+        },
+      },
+    ],
+  };
+
+  const activeMenuEntries = openMenu ? menuEntries[openMenu] : [];
+
+  const openMenuById = (menu: MenuId) => {
+    setIsSearchOpen(false);
+    setIsHelpOpen(false);
+    setOpenMenu((current) => (current === menu ? null : menu));
+    setMenuCursor(0);
+  };
+
+  const activateMenuEntry = (entry: MenuEntry) => {
+    entry.action();
+    setOpenMenu(null);
+    setMenuCursor(0);
+  };
+
+  useEffect(() => {
+    if (isSearchOpen) searchInputRef.current?.focus();
+  }, [isSearchOpen]);
 
   const attachSectionClick = (id: string, hasChildren: boolean) => {
     return (el: BoxRenderable | null) => {
@@ -324,7 +551,7 @@ export function App({ result, onQuit }: AppProps) {
   };
 
   const startNavigationResize = (event: TuiMouseEvent) => {
-    if (Math.abs(event.x - navigationWidth) > 1) {
+    if (!isNavigationVisible || Math.abs(event.x - navigationWidth) > 1) {
       return;
     }
 
@@ -358,50 +585,103 @@ export function App({ result, onQuit }: AppProps) {
   };
 
   useKeyboard((e) => {
+    if (isHelpOpen) {
+      if (e.name === "escape" || e.name === "?") {
+        e.preventDefault();
+        setIsHelpOpen(false);
+      }
+      return;
+    }
+
+    if (isSearchOpen) {
+      if (e.name === "escape") {
+        e.preventDefault();
+        closeSearch();
+      } else if (e.name === "return" || e.name === "enter" || e.name === "down") {
+        e.preventDefault();
+        selectSearchMatch(searchIndex + 1);
+      } else if (e.name === "up") {
+        e.preventDefault();
+        selectSearchMatch(searchIndex - 1);
+      }
+      return;
+    }
+
+    if (openMenu) {
+      const currentMenuIndex = MENU_BAR.findIndex((menu) => menu.id === openMenu);
+      if (e.name === "escape") {
+        e.preventDefault();
+        setOpenMenu(null);
+      } else if (e.name === "left" || e.name === "right") {
+        e.preventDefault();
+        const direction = e.name === "left" ? -1 : 1;
+        const nextMenuIndex =
+          (currentMenuIndex + direction + MENU_BAR.length) % MENU_BAR.length;
+        setOpenMenu(MENU_BAR[nextMenuIndex]!.id);
+        setMenuCursor(0);
+      } else if (e.name === "down") {
+        e.preventDefault();
+        setMenuCursor((current) => (current + 1) % activeMenuEntries.length);
+      } else if (e.name === "up") {
+        e.preventDefault();
+        setMenuCursor(
+          (current) => (current - 1 + activeMenuEntries.length) % activeMenuEntries.length
+        );
+      } else if (e.name === "return" || e.name === "enter" || e.name === "space") {
+        e.preventDefault();
+        const entry = activeMenuEntries[menuCursor];
+        if (entry) activateMenuEntry(entry);
+      }
+      return;
+    }
+
+    if (e.name === "f10") {
+      e.preventDefault();
+      openMenuById("file");
+      return;
+    }
+
+    if ((e.ctrl && e.name === "f") || e.name === "/") {
+      e.preventDefault();
+      openSearch();
+      return;
+    }
+
+    if (e.name === "?") {
+      e.preventDefault();
+      setIsHelpOpen(true);
+      return;
+    }
+
+    if (e.name === "n" && searchMatches.length > 0) {
+      e.preventDefault();
+      selectSearchMatch(searchIndex + (e.shift ? -1 : 1));
+      return;
+    }
+
     if (e.name === "q" || e.name === "Q") {
       onQuit();
       return;
     }
 
-    const currentIndex = visibleNodes.findIndex(
-      (n) => n.node.id === selectedId
-    );
-
     if (e.name === "j" || e.name === "down") {
-      const next = Math.min(currentIndex + 1, visibleNodes.length - 1);
-      if (next >= 0) {
-        const id = visibleNodes[next]!.node.id;
-        selectSection(id);
-      }
+      selectRelativeSection(1);
     } else if (e.name === "k" || e.name === "up") {
-      const next = Math.max(currentIndex - 1, 0);
-      if (next >= 0) {
-        const id = visibleNodes[next]!.node.id;
-        selectSection(id);
-      }
+      selectRelativeSection(-1);
     } else if (e.name === "h" || e.name === "left") {
       const node = findNodeById(result.sections, selectedId);
       if (node && expanded.has(node.id) && node.children.length > 0) {
-        setExpanded((prev) => {
-          const next = new Set(prev);
-          next.delete(node.id);
-          return next;
-        });
+        collapseCurrentSection();
       } else {
-        const parent = findParentById(result.sections, selectedId);
-        if (parent) selectSection(parent.id);
+        navigateToParent();
       }
     } else if (e.name === "l" || e.name === "right") {
       const node = findNodeById(result.sections, selectedId);
       if (node && node.children.length > 0) {
         if (!expanded.has(node.id)) {
-          setExpanded((prev) => {
-            const next = new Set(prev);
-            next.add(node.id);
-            return next;
-          });
+          expandCurrentSection();
         } else {
-          selectSection(node.children[0]!.id);
+          navigateToFirstChild();
         }
       }
     } else if (e.name === "return" || e.name === "enter" || e.name === "space") {
@@ -428,6 +708,32 @@ export function App({ result, onQuit }: AppProps) {
   return (
     <box flexDirection="column" shouldFill={true}>
       <box
+        height={1}
+        flexDirection="row"
+        backgroundColor="#181825"
+        border={["bottom"]}
+        borderColor="#313244"
+      >
+        {MENU_BAR.map((menu) => {
+          const isOpen = openMenu === menu.id;
+          return (
+            <box
+              key={menu.id}
+              height={1}
+              paddingLeft={1}
+              paddingRight={1}
+              backgroundColor={isOpen ? "#45475a" : "#181825"}
+              onMouseDown={() => openMenuById(menu.id)}
+            >
+              <text fg={isOpen ? "#f5e0dc" : "#bac2de"}>{menu.label}</text>
+            </box>
+          );
+        })}
+        <box flexGrow={1} flexDirection="row" justifyContent="flex-end" paddingRight={1}>
+          <text fg="#7f849c" truncate wrapMode="none">{`${result.topic}${result.section ? `(${result.section})` : ""}`}</text>
+        </box>
+      </box>
+      <box
         flexDirection="row"
         shouldFill={true}
         flexGrow={1}
@@ -435,12 +741,13 @@ export function App({ result, onQuit }: AppProps) {
         onMouseDrag={resizeNavigation}
         onMouseUp={finishNavigationResize}
       >
-        <box
-          width={navigationWidth}
-          flexDirection="column"
-          flexShrink={0}
-          backgroundColor="#11111b"
-        >
+        {isNavigationVisible && (
+          <box
+            width={navigationWidth}
+            flexDirection="column"
+            flexShrink={0}
+            backgroundColor="#11111b"
+          >
             <box
               flexDirection="column"
               paddingLeft={1}
@@ -510,7 +817,8 @@ export function App({ result, onQuit }: AppProps) {
                 );
               })}
             </scrollbox>
-        </box>
+          </box>
+        )}
         <box
           flexGrow={1}
           flexDirection="column"
@@ -529,25 +837,121 @@ export function App({ result, onQuit }: AppProps) {
         </box>
       </box>
 
-      <box
-        height={1}
-        flexDirection="row"
-        backgroundColor="#1e1e2e"
-        paddingLeft={1}
-        paddingRight={1}
-      >
-        <text fg="#6c7086">
-          <span fg="#cdd6f4">q</span> quit
-          {"  "}
-          <span fg="#cdd6f4">↑↓</span> select
-          {"  "}
-          <span fg="#cdd6f4">enter</span> fold
-          {"  "}
-          <span fg="#cdd6f4">←→</span> tree
-          {"  "}
-          <span fg="#cdd6f4">d/u</span> scroll
-        </text>
-      </box>
+      {isSearchOpen ? (
+        <box
+          height={1}
+          flexDirection="row"
+          backgroundColor="#181825"
+          paddingLeft={1}
+          paddingRight={1}
+        >
+          <text fg="#f9e2af">Find:</text>
+          <box width={1} />
+          <input
+            ref={searchInputRef}
+            flexGrow={1}
+            value={searchQuery}
+            focused
+            placeholder="Search this manual"
+            placeholderColor="#6c7086"
+            backgroundColor="#313244"
+            focusedBackgroundColor="#313244"
+            textColor="#cdd6f4"
+            focusedTextColor="#cdd6f4"
+            onInput={updateSearchQuery}
+            onSubmit={() => selectSearchMatch(searchIndex + 1)}
+          />
+          <box width={1} />
+          <text fg="#7f849c">
+            {searchMatches.length > 0
+              ? `${searchIndex + 1}/${searchMatches.length}  Enter next · Esc close`
+              : "0 matches  Esc close"}
+          </text>
+        </box>
+      ) : (
+        <box
+          height={1}
+          flexDirection="row"
+          backgroundColor="#1e1e2e"
+          paddingLeft={1}
+          paddingRight={1}
+        >
+          <text fg="#a6adc8" truncate wrapMode="none">
+            {`${Math.max(visibleNodes.findIndex((node) => node.node.id === selectedId) + 1, 1)}/${visibleNodes.length} · ${findNodeById(result.sections, selectedId)?.title ?? ""}`}
+          </text>
+          <box flexGrow={1} />
+          <text fg="#6c7086" truncate wrapMode="none">
+            {searchQuery && searchMatches.length > 0
+              ? `Find “${searchQuery}” · ${searchMatches.length} matches`
+              : `${visibleNodes.length} visible sections`}
+          </text>
+        </box>
+      )}
+
+      {openMenu && (
+        <box
+          position="absolute"
+          left={MENU_BAR.find((menu) => menu.id === openMenu)!.left}
+          top={1}
+          width={30}
+          flexDirection="column"
+          zIndex={10}
+          backgroundColor="#1e1e2e"
+          border={["left", "right", "bottom"]}
+          borderColor="#585b70"
+        >
+          {activeMenuEntries.map((entry, index) => {
+            const isActive = index === menuCursor;
+            return (
+              <box
+                key={`${openMenu}-${entry.label}`}
+                height={1}
+                flexDirection="row"
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={isActive ? "#45475a" : "#1e1e2e"}
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                  activateMenuEntry(entry);
+                }}
+              >
+                <text fg={isActive ? "#f5e0dc" : "#cdd6f4"}>
+                  {entry.checked ? "✓ " : "  "}
+                  {entry.label}
+                </text>
+                <box flexGrow={1} />
+                <text fg={isActive ? "#bac2de" : "#7f849c"}>{entry.shortcut}</text>
+              </box>
+            );
+          })}
+        </box>
+      )}
+
+      {isHelpOpen && (
+        <box
+          position="absolute"
+          left={Math.max(2, Math.floor((terminalWidth - 54) / 2))}
+          top={3}
+          width={Math.min(54, terminalWidth - 4)}
+          flexDirection="column"
+          zIndex={20}
+          backgroundColor="#1e1e2e"
+          border={["top", "right", "bottom", "left"]}
+          borderColor="#89b4fa"
+          padding={1}
+        >
+          <text fg="#89b4fa"><b>Keyboard Shortcuts</b></text>
+          <text fg="#cdd6f4">↑/↓ or j/k  select section</text>
+          <text fg="#cdd6f4">←/→ or h/l  move through the section tree</text>
+          <text fg="#cdd6f4">Enter        fold or unfold selected section</text>
+          <text fg="#cdd6f4">Ctrl+F or /   find in manual</text>
+          <text fg="#cdd6f4">n / N        next / previous search match</text>
+          <text fg="#cdd6f4">F10          open menu bar</text>
+          <text fg="#cdd6f4">q            quit</text>
+          <box height={1} />
+          <text fg="#7f849c">Esc or ? closes this window</text>
+        </box>
+      )}
     </box>
   );
 }

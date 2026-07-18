@@ -26,6 +26,13 @@ async function flushKeyboard(setup: { flush: () => Promise<void> }): Promise<voi
   await setup.flush();
 }
 
+async function flushEscape(setup: { flush: () => Promise<void> }): Promise<void> {
+  // Escape is an ANSI sequence, so the terminal input parser waits briefly to
+  // distinguish it from the start of a longer key sequence.
+  await new Promise<void>((resolve) => setTimeout(resolve, 220));
+  await setup.flush();
+}
+
 // OpenTUI's testRender does not wrap renderer creation in React act(), which
 // causes a console warning for every e2e test.  That is framework-level noise
 // we cannot fix here; filter it so the test output stays readable.
@@ -347,6 +354,108 @@ describe("App (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("exposes the classic menu bar and a compact status bar", async () => {
+    const setup = await testRender(
+      <App result={mockLsResult} onQuit={() => {}} />,
+      { width: 80, height: 24 }
+    );
+
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+
+    expect(frame.split("\n")[0]).toContain("File");
+    expect(frame.split("\n")[0]).toContain("View");
+    expect(frame.split("\n")[0]).toContain("Navigate");
+    expect(frame.split("\n")[0]).toContain("Search");
+    expect(frame.split("\n")[0]).toContain("Help");
+    expect(frame).toContain("1/3 · NAME");
+    expect(frame).toContain("3 visible sections");
+
+    setup.renderer.destroy();
+  });
+
+  test("toggles the sidebar from the View menu", async () => {
+    const setup = await testRender(
+      <App result={mockLsResult} onQuit={() => {}} />,
+      { width: 80, height: 24 }
+    );
+
+    await setup.renderOnce();
+    await setup.mockMouse.click(7, 0);
+    await setup.flush();
+
+    let frame = setup.captureCharFrame();
+    expect(frame).toContain("✓ Sidebar");
+    expect(frame).toContain("Reset Sidebar Width");
+
+    await setup.mockMouse.click(8, 1);
+    await setup.flush();
+    frame = setup.captureCharFrame();
+
+    expect(navLines(frame).some((line) => line.includes("MANUAL"))).toBe(false);
+    expect(frame).toContain("list directory contents");
+
+    setup.renderer.destroy();
+  });
+
+  test("searches the manual from the temporary bottom input", async () => {
+    const setup = await testRender(
+      <App result={mockLsResult} onQuit={() => {}} />,
+      { width: 80, height: 24 }
+    );
+
+    await setup.renderOnce();
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    expect(setup.captureCharFrame()).toContain("Find:");
+
+    setup.mockInput.typeText("directory");
+    await flushKeyboard(setup);
+    let frame = setup.captureCharFrame();
+    expect(frame).toContain("Find: directory");
+    expect(frame).toContain("1/1");
+
+    setup.mockInput.pressEscape();
+    await flushEscape(setup);
+    frame = setup.captureCharFrame();
+    expect(frame).not.toContain("Find: directory");
+    expect(frame).toContain("Find “directory” · 1 matches");
+
+    setup.renderer.destroy();
+  });
+
+  test("opens the bottom search input with Ctrl+F", async () => {
+    const setup = await testRender(
+      <App result={mockLsResult} onQuit={() => {}} />,
+      { width: 80, height: 24 }
+    );
+
+    await setup.renderOnce();
+    setup.mockInput.pressKey("f", { ctrl: true });
+    await flushKeyboard(setup);
+
+    expect(setup.captureCharFrame()).toContain("Find:");
+    setup.renderer.destroy();
+  });
+
+  test("shows keyboard help from the Help menu shortcut", async () => {
+    const setup = await testRender(
+      <App result={mockLsResult} onQuit={() => {}} />,
+      { width: 80, height: 24 }
+    );
+
+    await setup.renderOnce();
+    setup.mockInput.pressKey("?");
+    await flushKeyboard(setup);
+    expect(setup.captureCharFrame()).toContain("Keyboard Shortcuts");
+
+    setup.mockInput.pressKey("?");
+    await flushKeyboard(setup);
+    expect(setup.captureCharFrame()).not.toContain("Keyboard Shortcuts");
+
+    setup.renderer.destroy();
+  });
+
   test("resizes the navigation by dragging its boundary", async () => {
     const setup = await testRender(
       <App result={mockLsResult} onQuit={() => {}} />,
@@ -359,7 +468,12 @@ describe("App (e2e)", () => {
     await setup.renderOnce();
     let frame = setup.captureCharFrame();
     expect(navLines(frame).some((line) => line.includes("MANUAL"))).toBe(true);
-    const initialContentX = frame.split("\n")[1]!.indexOf("NAME");
+    const contentColumn = (currentFrame: string) =>
+      currentFrame
+        .split("\n")
+        .find((line) => line.includes("list directory contents"))!
+        .indexOf("list directory contents");
+    const initialContentX = contentColumn(frame);
 
     // Dragging the colour boundary widens the sidebar and shifts content right.
     await setup.mockMouse.drag(NAV_WIDTH, 2, NAV_WIDTH + 8, 2);
@@ -367,7 +481,7 @@ describe("App (e2e)", () => {
 
     frame = setup.captureCharFrame();
     expect(navLines(frame).some((line) => line.includes("MANUAL"))).toBe(true);
-    expect(frame.split("\n")[1]!.indexOf("NAME")).toBeGreaterThan(initialContentX);
+    expect(contentColumn(frame)).toBeGreaterThan(initialContentX);
 
     setup.renderer.destroy();
   });
