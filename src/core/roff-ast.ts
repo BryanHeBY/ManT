@@ -14,6 +14,7 @@ import {
   runCommand,
   type CommandRunner,
 } from "./process";
+import { materializeEmbeddedSidecar } from "./sidecar-cache";
 
 declare const MANT_COMPILED: boolean;
 
@@ -70,18 +71,18 @@ export interface RoffAstResult {
 
 export interface RoffAstFetcherDependencies {
   runCommand?: CommandRunner;
-  getSidecarPath?: () => string;
+  getSidecarPath?: () => string | Promise<string>;
   isSidecarAvailable?: (path: string) => Promise<boolean>;
 }
 
 const decoder = new TextDecoder();
 
-function defaultSidecarPath(): string {
+function defaultSidecarPath(): string | Promise<string> {
   if (process.env.MANT_MANDOC_JSON_BIN) {
     return process.env.MANT_MANDOC_JSON_BIN;
   }
   if (typeof MANT_COMPILED !== "undefined" && MANT_COMPILED) {
-    return join(dirname(process.execPath), "mant-mandoc-json");
+    return materializeEmbeddedSidecar();
   }
   return new URL("../../native/bin/mant-mandoc-json", import.meta.url).pathname;
 }
@@ -159,7 +160,7 @@ export function createRoffAstFetcher(
   const isSidecarAvailable = dependencies.isSidecarAvailable ?? defaultIsSidecarAvailable;
 
   return async function fetchRoffAst(topic: string): Promise<RoffAstResult> {
-    const sidecar = getSidecarPath();
+    const sidecar = await getSidecarPath();
     if (!(await isSidecarAvailable(sidecar))) {
       throw new Error(
         "bundled mandoc sidecar is unavailable; run bun run build:mandoc-json",

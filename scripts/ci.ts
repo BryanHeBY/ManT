@@ -2,18 +2,15 @@
  * @file Runs Mant's local cross-platform build and test verification sequence.
  */
 
-import { chmod, mkdir, access, constants } from "node:fs/promises";
+import { access, constants, mkdir, readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const sidecarSource = join(root, "native", "bin", "mant-mandoc-json");
 const executableName = process.platform === "win32" ? "mant.exe" : "mant";
-const sidecarName = process.platform === "win32"
-  ? "mant-mandoc-json.exe"
-  : "mant-mandoc-json";
 const executablePath = join(distDirectory, executableName);
-const sidecarOutput = join(distDirectory, sidecarName);
+const compiledEntrypoint = join(distDirectory, ".mant-compile-entry.ts");
 
 async function isExecutable(path: string): Promise<boolean> {
   try {
@@ -45,29 +42,55 @@ async function run(
 
 async function verifyPackagedExecutable(): Promise<void> {
   console.log("\n==> packaged AST smoke test");
-  const child = Bun.spawn([executablePath, "ls", "--roff-ast"], {
-    cwd: distDirectory,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [output, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (exitCode !== 0) {
-    throw new Error(`packaged AST smoke test failed: ${stderr.trim()}`);
-  }
+  const sidecarCache = join(distDirectory, ".sidecar-cache");
+  await rm(sidecarCache, { recursive: true, force: true });
+  try {
+    const child = Bun.spawn([executablePath, "ls", "--roff-ast"], {
+      cwd: distDirectory,
+      env: { ...process.env, MANT_SIDECAR_DIR: sidecarCache },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [output, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (exitCode !== 0) {
+      throw new Error(`packaged AST smoke test failed: ${stderr.trim()}`);
+    }
 
-  const result = JSON.parse(output) as {
-    document?: { schema?: string; engine?: { name?: string } };
-  };
-  if (
-    result.document?.schema !== "mant.roff-ast/v1"
-    || result.document.engine?.name !== "libmandoc"
-  ) {
-    throw new Error("packaged executable did not use the bundled mandoc sidecar");
+    const result = JSON.parse(output) as {
+      document?: { schema?: string; engine?: { name?: string } };
+    };
+    if (
+      result.document?.schema !== "mant.roff-ast/v1"
+      || result.document.engine?.name !== "libmandoc"
+    ) {
+      throw new Error("packaged executable did not use the embedded mandoc sidecar");
+    }
+
+    const cachedFiles = await readdir(sidecarCache, { recursive: true });
+    if (!cachedFiles.some((path) => path.endsWith("mant-mandoc-json"))) {
+      throw new Error("packaged executable did not materialize its embedded mandoc sidecar");
+    }
+  } finally {
+    await rm(sidecarCache, { recursive: true, force: true });
   }
+}
+
+async function writeCompiledEntrypoint(): Promise<void> {
+  // Keep the asset-only import outside src/ so `bun run dev` can work before a
+  // native sidecar has been built. Bun embeds this bare file import in --compile
+  // mode, where src/core/sidecar-cache.ts discovers it through embeddedFiles.
+  await Bun.write(
+    compiledEntrypoint,
+    [
+      'import "../src/cli.ts";',
+      'import "../native/bin/mant-mandoc-json" with { type: "file" };',
+      "",
+    ].join("\n"),
+  );
 }
 
 async function main(): Promise<void> {
@@ -101,20 +124,24 @@ async function main(): Promise<void> {
   }
 
   await run("test", [process.execPath, "test"]);
-  await run("compile current-platform executable", [
-    process.execPath,
-    "build",
-    "--compile",
-    "--define",
-    "MANT_COMPILED=true",
-    "--outfile",
-    executablePath,
-    "src/cli.ts",
-  ]);
-
   await mkdir(distDirectory, { recursive: true });
-  await Bun.write(sidecarOutput, Bun.file(sidecarSource));
-  if (process.platform !== "win32") await chmod(sidecarOutput, 0o755);
+  await rm(join(distDirectory, "mant-mandoc-json"), { force: true });
+  await rm(join(distDirectory, "mant-mandoc-json.exe"), { force: true });
+  await writeCompiledEntrypoint();
+  try {
+    await run("compile current-platform executable", [
+      process.execPath,
+      "build",
+      "--compile",
+      "--define",
+      "MANT_COMPILED=true",
+      "--outfile",
+      executablePath,
+      compiledEntrypoint,
+    ]);
+  } finally {
+    await rm(compiledEntrypoint, { force: true });
+  }
   await verifyPackagedExecutable();
 
   console.log(`\nlocal CI succeeded: ${dirname(executablePath)}`);
