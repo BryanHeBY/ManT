@@ -728,6 +728,44 @@ describe("App (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("expands a selected long navigation title across multiple rows", async () => {
+    const result: QueryResult = {
+      topic: "long-title",
+      sections: [
+        {
+          id: "section-0",
+          title: "PARENT",
+          level: 2,
+          blocks: [],
+          children: [
+            {
+              id: "section-0-0",
+              title: "FIRSTMARKERABCDEFGHI SECONDMARKERABCDEFGH THIRDMARKERABCDEFGHI",
+              level: 3,
+              blocks: [],
+              children: [],
+            },
+          ],
+        },
+      ],
+    };
+    const setup = await testRender(<App result={result} onQuit={() => {}} />, {
+      width: 80,
+      height: 24,
+    });
+
+    await setup.renderOnce();
+    setup.mockInput.pressKey("j");
+    await flushKeyboard(setup);
+
+    const lines = navLines(setup.captureCharFrame());
+    expect(lines.some((line) => line.includes("FIRSTMARKERABCDEFGHI"))).toBe(true);
+    expect(lines.some((line) => line.includes("SECONDMARKERABCDEFGH"))).toBe(true);
+    expect(lines.some((line) => line.includes("THIRDMARKERABCDEFGHI"))).toBe(true);
+
+    setup.renderer.destroy();
+  });
+
   test("SYNOPSIS pre block is indented to the section body level", async () => {
     // Regression: `paddingLeft` on a <text> element has no visual effect in
     // this OpenTUI version, so the Pre component must apply indent on its

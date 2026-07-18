@@ -614,6 +614,12 @@ export function App({ result, onQuit }: AppProps) {
     if (isSearchOpen) searchInputRef.current?.focus();
   }, [isSearchOpen]);
 
+  useEffect(() => {
+    // A selected long title may grow from one row into several after React
+    // commits.  Re-run the visibility adjustment after that layout change.
+    if (selectedId) navScrollRef.current?.scrollChildIntoView(navId(selectedId));
+  }, [selectedId, visibleNodes]);
+
   const attachSectionClick = (id: string, hasChildren: boolean) => {
     return (el: BoxRenderable | null) => {
       if (!el) return;
@@ -904,17 +910,27 @@ export function App({ result, onQuit }: AppProps) {
                     id={navId(node.id)}
                     ref={attachSectionClick(node.id, hasChildren)}
                     width="100%"
-                    height={1}
+                    height={isSelected ? "auto" : 1}
+                    flexDirection="row"
                     flexShrink={0}
                     paddingLeft={1}
                     backgroundColor={isSelected ? "#313244" : "#11111b"}
                   >
-                    <text truncate wrapMode="none">
-                      <span fg={isSelected ? "#fab387" : "#6c7086"}>
-                        {labelPrefix}
-                      </span>
-                      <span fg={titleColor}>{node.title}</span>
-                    </text>
+                    {isSelected ? (
+                      <>
+                        <box width={labelPrefix.length} flexShrink={0}>
+                          <text fg="#fab387" wrapMode="none">{labelPrefix}</text>
+                        </box>
+                        <box flexGrow={1}>
+                          <text fg={titleColor} wrapMode="word">{node.title}</text>
+                        </box>
+                      </>
+                    ) : (
+                      <text truncate wrapMode="none">
+                        <span fg="#6c7086">{labelPrefix}</span>
+                        <span fg={titleColor}>{node.title}</span>
+                      </text>
+                    )}
                   </box>
                 );
               })}
