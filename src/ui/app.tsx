@@ -42,7 +42,9 @@ interface MenuEntry {
 
 interface SearchMatch {
   targetId: string;
+  sectionId: string;
   title: string;
+  blockIndex?: number;
 }
 
 interface FlatNode {
@@ -106,6 +108,10 @@ function navId(id: string): string {
 
 function contentId(id: string): string {
   return `content-${id}`;
+}
+
+function contentBlockId(sectionId: string, blockIndex: number): string {
+  return `${contentId(sectionId)}-block-${blockIndex}`;
 }
 
 function treePrefix({ depth, isLast, ancestorHasNext }: FlatNode): string {
@@ -229,16 +235,32 @@ function findSearchMatches(
 
   const matches: SearchMatch[] = [];
   if (tldr && tldrPageText(tldr).toLocaleLowerCase().includes(normalizedQuery)) {
-    matches.push({ targetId: TLDR_NAV_ID, title: "TLDR QUICK REFERENCE" });
+    matches.push({
+      targetId: contentId(TLDR_NAV_ID),
+      sectionId: TLDR_NAV_ID,
+      title: "TLDR QUICK REFERENCE",
+    });
   }
   const visit = (node: SectionNode) => {
-    const searchableText = [node.title, ...node.blocks.map(blockText)]
-      .join("\n")
-      .toLocaleLowerCase();
-    if (searchableText.includes(normalizedQuery)) {
-      matches.push({ targetId: node.id, title: node.title });
+    if (node.title.toLocaleLowerCase().includes(normalizedQuery)) {
+      matches.push({
+        targetId: contentId(node.id),
+        sectionId: node.id,
+        title: node.title,
+      });
     }
-    for (const child of node.children) visit(child);
+    node.blocks.forEach((block, blockIndex) => {
+      if (!blockText(block).toLocaleLowerCase().includes(normalizedQuery)) return;
+      matches.push({
+        targetId: contentBlockId(node.id, blockIndex),
+        sectionId: node.id,
+        title: node.title,
+        blockIndex,
+      });
+    });
+    for (const child of node.children) {
+      visit(child);
+    }
   };
 
   for (const node of nodes) visit(node);
@@ -296,6 +318,8 @@ function renderBlockNodes(
   blocks: BlockNode[],
   baseIndent = 0,
   searchQuery = "",
+  sectionId?: string,
+  activeBlockIndex?: number,
 ): ReactNode[] {
   const result: ReactNode[] = [];
   let inlineBuffer: ReactNode[] = [];
@@ -331,10 +355,15 @@ function renderBlockNodes(
     });
   }
 
-  function flushInline() {
+  function flushInline(anchorId?: string) {
     if (inlineBuffer.length === 0) return;
     result.push(
-      <box key={`merged-${keyCounter++}`} paddingLeft={bufferIndent} shouldFill={true}>
+      <box
+        key={`merged-${keyCounter++}`}
+        {...(anchorId ? { id: anchorId } : {})}
+        paddingLeft={bufferIndent}
+        shouldFill={true}
+      >
         <text fg="#a6adc8" wrapMode="word">
           {inlineBuffer}
         </text>
@@ -345,6 +374,8 @@ function renderBlockNodes(
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!;
+    const isActiveBlock = sectionId !== undefined && blockIndex === activeBlockIndex;
+    if (isActiveBlock) flushInline();
     switch (block.type) {
       case "paragraph": {
         if (inlineBuffer.length > 0 && baseIndent + block.indent !== bufferIndent) {
@@ -358,6 +389,7 @@ function renderBlockNodes(
           inlineBuffer.push(...renderInlineNodes(segment));
           inlineBuffer.push("\n");
         }
+        if (isActiveBlock) flushInline(contentBlockId(sectionId, blockIndex));
         break;
       }
       case "list": {
@@ -372,11 +404,12 @@ function renderBlockNodes(
           inlineBuffer.push(...renderInlineNodes(item));
           inlineBuffer.push("\n");
         }
+        if (isActiveBlock) flushInline(contentBlockId(sectionId, blockIndex));
         break;
       }
       case "pre": {
         flushInline();
-        result.push(
+        const pre = (
           <Pre
             key={`pre-${keyCounter++}`}
             children={block.children}
@@ -384,6 +417,11 @@ function renderBlockNodes(
             indent={baseIndent + block.indent}
             searchQuery={searchQuery}
           />
+        );
+        result.push(
+          isActiveBlock
+            ? <box key={`pre-anchor-${keyCounter++}`} id={contentBlockId(sectionId, blockIndex)}>{pre}</box>
+            : pre
         );
         // Display blocks are separated from the next paragraph in both groff
         // and mandoc output.  The parser may also provide an explicit spacer
@@ -410,17 +448,27 @@ function SectionContent({
   node,
   baseIndent = 3,
   searchQuery = "",
+  activeSearchSectionId,
+  activeBlockIndex,
 }: {
   node: SectionNode;
   baseIndent?: number;
   searchQuery?: string;
+  activeSearchSectionId?: string | undefined;
+  activeBlockIndex?: number | undefined;
 }) {
   return (
     <box flexDirection="column" gap={0}>
       <text id={contentId(node.id)} fg="#94e2d5">
         <b>{renderSearchHighlights(node.title, searchQuery, `heading-${node.id}`)}</b>
       </text>
-      {renderBlockNodes(node.blocks, baseIndent, searchQuery)}
+      {renderBlockNodes(
+        node.blocks,
+        baseIndent,
+        searchQuery,
+        node.id,
+        activeSearchSectionId === node.id ? activeBlockIndex : undefined,
+      )}
       <box flexDirection="column" gap={0}>
         {node.children.map((child: SectionNode) => (
           <SectionContent
@@ -428,6 +476,8 @@ function SectionContent({
             node={child}
             baseIndent={baseIndent + 4}
             searchQuery={searchQuery}
+            activeSearchSectionId={activeSearchSectionId}
+            activeBlockIndex={activeBlockIndex}
           />
         ))}
       </box>
@@ -514,6 +564,7 @@ export function App({ result, onQuit }: AppProps) {
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState(0);
+  const [pendingSearchTarget, setPendingSearchTarget] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
@@ -557,23 +608,25 @@ export function App({ result, onQuit }: AppProps) {
     [result.sections]
   );
 
-  const scrollToNode = (id: string) => {
+  const scrollToContent = (targetId: string) => {
     const scrollbox = contentScrollRef.current;
     if (!scrollbox) return;
 
-    const heading = scrollbox.content.findDescendantById(contentId(id));
-    if (!heading) return;
+    const target = scrollbox.content.findDescendantById(targetId);
+    if (!target) return;
 
     // scrollChildIntoView deliberately chooses the nearest edge, which often
     // leaves a newly selected later section at the bottom of the viewport.
     // Translate the heading's current screen coordinate into a scroll offset
     // so every selected section starts at the top of the content viewport.
-    const offsetToViewportTop = heading.y - scrollbox.viewport.y;
+    const offsetToViewportTop = target.y - scrollbox.viewport.y;
     scrollbox.scrollTo({
       x: scrollbox.scrollLeft,
       y: Math.max(0, scrollbox.scrollTop + offsetToViewportTop),
     });
   };
+
+  const scrollToNode = (id: string) => scrollToContent(contentId(id));
 
   const selectSection = (id: string) => {
     setSelectedId(id);
@@ -584,8 +637,11 @@ export function App({ result, onQuit }: AppProps) {
   const selectSearchMatch = (index: number) => {
     if (searchMatches.length === 0) return;
     const nextIndex = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length;
+    const match = searchMatches[nextIndex]!;
     setSearchIndex(nextIndex);
-    selectSection(searchMatches[nextIndex]!.targetId);
+    setSelectedId(match.sectionId);
+    navScrollRef.current?.scrollChildIntoView(navId(match.sectionId));
+    setPendingSearchTarget(match.targetId);
   };
 
   const selectRelativeSection = (offset: number) => {
@@ -620,7 +676,11 @@ export function App({ result, onQuit }: AppProps) {
     const matches = findSearchMatches(result.sections, result.tldr, searchDraft);
     setSearchQuery(searchDraft);
     setSearchIndex(0);
-    if (matches[0]) selectSection(matches[0].targetId);
+    if (matches[0]) {
+      setSelectedId(matches[0].sectionId);
+      navScrollRef.current?.scrollChildIntoView(navId(matches[0].sectionId));
+      setPendingSearchTarget(matches[0].targetId);
+    }
   };
 
   const expandAll = () => setExpanded(new Set(branchIds));
@@ -728,6 +788,18 @@ export function App({ result, onQuit }: AppProps) {
     // commits.  Re-run the visibility adjustment after that layout change.
     if (selectedId) navScrollRef.current?.scrollChildIntoView(navId(selectedId));
   }, [selectedId, visibleNodes]);
+
+  useEffect(() => {
+    if (!pendingSearchTarget) return;
+    // The block anchor is inserted by the same commit that changes the
+    // selected match. Wait for OpenTUI to finish its next layout pass before
+    // reading its y coordinate.
+    const timer = setTimeout(() => {
+      scrollToContent(pendingSearchTarget);
+      setPendingSearchTarget(null);
+    }, 16);
+    return () => clearTimeout(timer);
+  }, [pendingSearchTarget, searchIndex, searchQuery]);
 
   const attachSectionClick = (id: string, hasChildren: boolean) => {
     return (el: BoxRenderable | null) => {
@@ -1105,7 +1177,15 @@ export function App({ result, onQuit }: AppProps) {
                 </box>
               )}
               {result.sections.map((node) => (
-                <SectionContent key={node.id} node={node} searchQuery={searchQuery} />
+                <SectionContent
+                  key={node.id}
+                  node={node}
+                  searchQuery={searchQuery}
+                  activeSearchSectionId={searchMatches[searchIndex]?.sectionId}
+                  activeBlockIndex={
+                    searchMatches[searchIndex]?.blockIndex
+                  }
+                />
               ))}
               <box height={terminalHeight} flexShrink={0} />
             </box>

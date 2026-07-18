@@ -555,6 +555,64 @@ describe("App (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("scrolls confirmed body matches to their paragraph instead of the section title", async () => {
+    const result: QueryResult = {
+      topic: "anchored-search",
+      sections: [
+        {
+          id: "section-0",
+          title: "INTRODUCTION",
+          level: 2,
+          blocks: Array.from({ length: 24 }, (_, index) => ({
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, content: `Filler line ${index}` }],
+            indent: 0,
+          })),
+          children: [],
+        },
+        {
+          id: "section-1",
+          title: "TARGET SECTION",
+          level: 2,
+          blocks: [
+            {
+              type: "paragraph",
+              children: [{ type: "text", content: "Context before the result." }],
+              indent: 0,
+            },
+            {
+              type: "paragraph",
+              children: [{ type: "text", content: "Needle result is here." }],
+              indent: 0,
+            },
+          ],
+          children: [],
+        },
+      ],
+    };
+    const setup = await testRender(<App result={result} onQuit={() => {}} />, {
+      width: 80,
+      height: 24,
+    });
+
+    await setup.renderOnce();
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("needle");
+    await flushKeyboard(setup);
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+    await flushKeyboard(setup);
+
+    const frame = setup.captureCharFrame();
+    expect(contentPosition(frame, "Needle result is here.").y).toBe(2);
+    expect(
+      frame.split("\n").some((line) => line.slice(NAV_WIDTH).includes("TARGET SECTION")),
+    ).toBe(false);
+
+    setup.renderer.destroy();
+  });
+
   test("opens the bottom search input with Ctrl+F", async () => {
     const setup = await testRender(
       <App result={mockLsResult} onQuit={() => {}} />,
