@@ -173,6 +173,11 @@ fn git_keeps_nested_sections_examples_and_inline_grouping() {
     assert!(contains_strong(option_summary, "--all"));
     assert!(contains_strong(option_summary, "-a"));
     assert!(inline_text(option_summary).contains("is given then all available"));
+
+    let ancillary = section(document, "Ancillary Commands");
+    let ancillary_text = block_slice_text(&ancillary.blocks);
+    assert!(ancillary_text.contains("git-config(1)"));
+    assert!(ancillary_text.contains("git-fast-export(1)"));
 }
 
 #[test]
@@ -362,7 +367,8 @@ fn fixed_roff_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
                         && !value.contains("\\*")
                         && !value.contains("<br")
                         && !value.contains("<b>")
-                        && !value.contains("<i>"),
+                        && !value.contains("<i>")
+                        && !value.contains(['\u{1d}', '\u{1e}', '\u{1f}']),
                     "fixture {name} leaked source markup: {value:?}",
                 );
             });

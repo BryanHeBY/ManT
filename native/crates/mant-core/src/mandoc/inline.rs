@@ -13,6 +13,13 @@ enum Font {
     Code,
 }
 
+// libmandoc stores line-breaking semantics in otherwise non-printing ASCII
+// bytes inside text nodes. They are parser-internal markers, not document
+// characters, so translate them before they cross the Mant AST boundary.
+const ASCII_BREAK: char = '\u{1d}';
+const ASCII_HYPH: char = '\u{1e}';
+const ASCII_NBRSP: char = '\u{1f}';
+
 pub(super) struct InlineBuilder {
     nodes: Vec<Inline>,
     suppress_space: bool,
@@ -255,8 +262,14 @@ pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
     let mut index = 0;
 
     while index < characters.len() {
-        if characters[index] != '\\' {
-            buffer.push(characters[index]);
+        let character = characters[index];
+        if character != '\\' {
+            match character {
+                ASCII_BREAK => {}
+                ASCII_HYPH => buffer.push('-'),
+                ASCII_NBRSP => buffer.push(' '),
+                _ => buffer.push(character),
+            }
             index += 1;
             continue;
         }
@@ -412,7 +425,7 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_roff_text, plain_text};
+    use super::{ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, parse_roff_text, plain_text};
     use mant_ast::Inline;
 
     #[test]
@@ -422,5 +435,12 @@ mod tests {
 
         assert_eq!(plain_text(&nodes), "-h FILE");
         assert!(matches!(nodes[0], Inline::ExternalLink { .. }));
+    }
+
+    #[test]
+    fn decodes_libmandoc_internal_breaking_markers() {
+        let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next");
+
+        assert_eq!(plain_text(&parse_roff_text(&source)), "git-config (1)next");
     }
 }
