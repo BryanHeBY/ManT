@@ -1,0 +1,10 @@
+[package]
+name = "mant-mandoc-sys"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+links = "mant_mandoc"
+
+[lints]
+workspace = true

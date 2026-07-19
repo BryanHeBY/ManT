@@ -1,0 +1,13 @@
+[package]
+name = "mant-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+mant-ast = { path = "../mant-ast" }
+mant-mandoc-sys = { path = "../mant-mandoc-sys" }
+
+[lints]
+workspace = true

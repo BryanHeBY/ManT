@@ -30,3 +30,6 @@ tmp-*
 
 # Platform-specific artifact built from the pinned mandoc source.
 native/bin/
+
+# Cargo workspace output. Cargo.lock remains tracked for reproducible builds.
+native/target/

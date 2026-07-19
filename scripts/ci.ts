@@ -135,6 +135,21 @@ async function main(): Promise<void> {
 
   await run("install locked dependencies", [process.execPath, "install", "--frozen-lockfile"]);
   await run("type check", [process.execPath, "run", "lint"]);
+  await run("check Rust formatting", [
+    "cargo",
+    "fmt",
+    "--manifest-path",
+    join(root, "native", "Cargo.toml"),
+    "--all",
+    "--check",
+  ]);
+  await run("test Rust workspace", [
+    "cargo",
+    "test",
+    "--manifest-path",
+    join(root, "native", "Cargo.toml"),
+    "--workspace",
+  ]);
 
   // Skip the mandoc download/compile cycle when a usable sidecar already
   // exists.  Set MANT_REBUILD_SIDECAR=1 to force a rebuild after changing

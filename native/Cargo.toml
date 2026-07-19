@@ -1,0 +1,21 @@
+[workspace]
+members = [
+  "crates/mant-ast",
+  "crates/mant-core",
+  "crates/mant-mandoc-sys",
+  "crates/mant-napi",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
