@@ -9,7 +9,8 @@ publish.workspace = true
 [dependencies]
 mant-ast = { path = "../mant-ast" }
 mant-mandoc-sys = { path = "../mant-mandoc-sys" }
-scraper = "0.27.0"
+# scraper 0.26 and 0.27 use let-chains stabilized after Mant's Rust 1.85 MSRV.
+scraper = "0.25.0"
 serde.workspace = true
 serde_json.workspace = true
 
