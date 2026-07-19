@@ -150,6 +150,17 @@ async function main(): Promise<void> {
     join(root, "native", "Cargo.toml"),
     "--workspace",
   ]);
+  await run("lint Rust workspace", [
+    "cargo",
+    "clippy",
+    "--manifest-path",
+    join(root, "native", "Cargo.toml"),
+    "--workspace",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings",
+  ]);
 
   // Skip the mandoc download/compile cycle when a usable sidecar already
   // exists.  Set MANT_REBUILD_SIDECAR=1 to force a rebuild after changing

@@ -1,0 +1,71 @@
+{
+  "schema": "mant.query/v1",
+  "topic": "ls",
+  "section": "1",
+  "manual": {
+    "schema": "mant.document/v1",
+    "producer": {
+      "name": "mant-native",
+      "version": "0.1.0",
+      "engine": {
+        "name": "libmandoc",
+        "version": "1.14.6"
+      }
+    },
+    "source": {
+      "format": "man",
+      "path": "/usr/share/man/man1/ls.1.gz"
+    },
+    "meta": {
+      "title": "LS",
+      "section": "1",
+      "names": ["ls"]
+    },
+    "sections": [
+      {
+        "id": "section-0",
+        "title": "NAME",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "strong",
+                "children": [
+                  { "type": "text", "value": "ls" }
+                ]
+              },
+              { "type": "text", "value": " - list directory contents; see " },
+              {
+                "type": "manual-reference",
+                "name": "dir",
+                "section": "1",
+                "children": [
+                  { "type": "text", "value": "dir(1)" }
+                ]
+              }
+            ]
+          }
+        ],
+        "children": []
+      }
+    ]
+  },
+  "tldr": {
+    "title": "ls",
+    "description": ["List directory contents."],
+    "moreInformation": "https://www.gnu.org/software/coreutils/manual/html_node/ls-invocation.html",
+    "examples": [
+      {
+        "description": "List all files:",
+        "command": "ls --all",
+        "commandParts": [
+          { "type": "text", "value": "ls --all" }
+        ]
+      }
+    ],
+    "platform": "common",
+    "language": "en",
+    "sourcePath": "/cache/tldr/pages/common/ls.md"
+  }
+}

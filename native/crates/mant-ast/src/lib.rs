@@ -1,5 +1,13 @@
 //! Versioned, renderer-neutral contracts shared by every Mant frontend.
 
+mod document;
+mod query;
+mod tldr;
+
+pub use document::*;
+pub use query::*;
+pub use tldr::*;
+
 /// Native API version negotiated independently from document schema versions.
 pub const NATIVE_API_VERSION: &str = "1";
 
