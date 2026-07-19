@@ -42,6 +42,7 @@ unsafe extern "C" {
     fn mant_mandoc_node_kind(node: *const CNode) -> i32;
     fn mant_mandoc_node_macro(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_text(node: *const CNode) -> *const c_char;
+    fn mant_mandoc_node_tag(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_line(node: *const CNode) -> i32;
     fn mant_mandoc_node_column(node: *const CNode) -> i32;
     fn mant_mandoc_node_flags(node: *const CNode) -> u32;
@@ -64,6 +65,8 @@ const NODE_GENERATED: u32 = 1 << 0;
 const NODE_SENTENCE_END: u32 = 1 << 1;
 const NODE_NO_PRINT: u32 = 1 << 2;
 const NODE_NO_FILL: u32 = 1 << 3;
+const NODE_DEEP_LINK_TARGET: u32 = 1 << 4;
+const NODE_PERMALINK: u32 = 1 << 5;
 
 struct DocumentHandle(NonNull<CDocument>);
 
@@ -183,6 +186,7 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
         kind: node_kind(unsafe { mant_mandoc_node_kind(pointer) })?,
         macro_name: unsafe { optional_string(mant_mandoc_node_macro(pointer)) },
         text: unsafe { optional_string(mant_mandoc_node_text(pointer)) },
+        tag: unsafe { optional_string(mant_mandoc_node_tag(pointer)) },
         line: unsafe { mant_mandoc_node_line(pointer) }
             .try_into()
             .unwrap_or_default(),
@@ -194,6 +198,8 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
             sentence_end: raw_flags & NODE_SENTENCE_END != 0,
             no_print: raw_flags & NODE_NO_PRINT != 0,
             no_fill: raw_flags & NODE_NO_FILL != 0,
+            deep_link_target: raw_flags & NODE_DEEP_LINK_TARGET != 0,
+            permalink: raw_flags & NODE_PERMALINK != 0,
         },
         list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,
         display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,

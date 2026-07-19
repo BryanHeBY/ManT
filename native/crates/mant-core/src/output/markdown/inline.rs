@@ -19,10 +19,13 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => output.push_str(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => {
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => {
                 output.push_str(&flatten_inline(children));
             }
+            Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),
         }
     }
@@ -96,14 +99,21 @@ fn render_inline_raw(children: &[Inline]) -> String {
                 output.push_str(&render_styled(children, "*"));
             }
             Inline::Code { value } => output.push_str(&code_span(value)),
-            Inline::Link {
-                target,
+            Inline::ExternalLink {
+                uri,
                 title,
                 children,
-            } => output.push_str(&render_link(target, title.as_deref(), children)),
+            } => output.push_str(&render_link(uri, title.as_deref(), children)),
+            Inline::EmailLink { address, children } => {
+                output.push_str(&render_link(&format!("mailto:{address}"), None, children));
+            }
             Inline::ManualReference { children, .. } => {
                 output.push_str(&render_inline_raw(children));
             }
+            Inline::SectionReference { target, children } => {
+                output.push_str(&render_link(&format!("#{target}"), None, children));
+            }
+            Inline::Anchor { id } => output.push_str(&html_anchor(id)),
             Inline::LineBreak => output.push('\n'),
         }
     }
@@ -143,6 +153,18 @@ fn render_link(target: &str, title: Option<&str>, children: &[Inline]) -> String
         || format!("[{label}]({target})"),
         |title| format!("[{label}]({target} \"{}\")", title.replace('"', "\\\"")),
     )
+}
+
+pub(super) fn html_anchor(id: &str) -> String {
+    format!("<a id=\"{}\"></a>", escape_html_attribute(id))
+}
+
+fn escape_html_attribute(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn escape_plain_text(value: &str) -> String {

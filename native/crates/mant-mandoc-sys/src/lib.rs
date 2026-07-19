@@ -88,6 +88,10 @@ pub struct NodeFlags {
     pub sentence_end: bool,
     pub no_print: bool,
     pub no_fill: bool,
+    /// libmandoc selected this node as a same-document destination.
+    pub deep_link_target: bool,
+    /// libmandoc renders a self-link for this destination.
+    pub permalink: bool,
 }
 
 /// An owned syntax node with no pointers into the C parser.
@@ -96,6 +100,8 @@ pub struct Node {
     pub kind: NodeKind,
     pub macro_name: Option<String>,
     pub text: Option<String>,
+    /// Canonical same-document tag assigned during libmandoc validation.
+    pub tag: Option<String>,
     pub line: u32,
     pub column: u32,
     pub flags: NodeFlags,
@@ -199,6 +205,14 @@ mod tests {
             node.children
                 .iter()
                 .find_map(|child| find_kind(child, kind))
+        })
+    }
+
+    fn find_node<'a>(node: &'a Node, predicate: &impl Fn(&Node) -> bool) -> Option<&'a Node> {
+        predicate(node).then_some(node).or_else(|| {
+            node.children
+                .iter()
+                .find_map(|child| find_node(child, predicate))
         })
     }
 
@@ -325,5 +339,31 @@ mod tests {
                 .as_deref()
                 .is_some_and(|value| value.contains('x'))
         );
+    }
+
+    #[test]
+    fn parser_copies_validated_same_document_navigation() {
+        let path = source_path("navigation-mandoc-session");
+        fs::write(
+            &path,
+            ".Dd July 19, 2026\n.Dt NAVIGATION 1\n.Os\n.Sh FIRST\n\
+             See\n\
+             .Sx TARGET\n\
+             for details.\n\
+             .Tg explicit-target\n\
+             .Fl x\n\
+             .Sh TARGET\nTarget text.\n",
+        )
+        .expect("write navigation mdoc source");
+
+        let document = parse_file(&path, false).expect("parse navigation mdoc source");
+        fs::remove_file(path).expect("remove navigation mdoc source");
+
+        assert!(find_macro(&document.root, "Sx").is_some());
+        let explicit_target = find_node(&document.root, &|node| {
+            node.flags.deep_link_target && node.tag.as_deref() == Some("explicit-target")
+        });
+        let explicit_target = explicit_target.expect("Tg must annotate its resolved destination");
+        assert!(explicit_target.flags.permalink);
     }
 }

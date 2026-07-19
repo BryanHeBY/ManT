@@ -238,8 +238,11 @@ fn inline_text(children: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => output.push_str(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => output.push_str(&inline_text(children)),
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => output.push_str(&inline_text(children)),
+            Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),
         }
     }

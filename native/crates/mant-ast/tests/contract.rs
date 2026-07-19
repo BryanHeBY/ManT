@@ -14,10 +14,28 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
     let manual = query.manual.as_ref().expect("manual document");
     assert_eq!(manual.source.format, SourceFormat::Man);
     assert_eq!(manual.sections[0].title, "NAME");
+    assert_eq!(manual.sections[1].id, "options-1");
     assert!(matches!(
         &manual.sections[0].blocks[0],
         Block::Paragraph { children, .. }
             if matches!(&children[0], Inline::Strong { .. })
+    ));
+    let Block::Paragraph { children, .. } = &manual.sections[0].blocks[0] else {
+        panic!("NAME starts with a paragraph");
+    };
+    assert!(children.iter().any(
+        |inline| matches!(inline, Inline::ExternalLink { uri, .. } if uri == "https://example.test/ls")
+    ));
+    assert!(children.iter().any(
+        |inline| matches!(inline, Inline::EmailLink { address, .. } if address == "docs@example.test")
+    ));
+    assert!(children.iter().any(
+        |inline| matches!(inline, Inline::SectionReference { target, .. } if target == "options-1")
+    ));
+    assert!(matches!(
+        &manual.sections[1].blocks[0],
+        Block::Paragraph { children, .. }
+            if matches!(&children[0], Inline::Anchor { id } if id == "all-option")
     ));
 
     let expected: Value = serde_json::from_str(MINIMAL_QUERY).expect("fixture JSON value");

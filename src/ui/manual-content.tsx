@@ -13,7 +13,7 @@ import type {
   TldrCommandPart,
   TldrDocument,
 } from "../native";
-import { contentBlockId, contentId, TLDR_NAV_ID } from "./ids";
+import { contentAnchorId, contentBlockId, contentId, TLDR_NAV_ID } from "./ids";
 import { Pre } from "./Pre";
 import { renderSearchHighlights } from "./search-highlight";
 
@@ -60,6 +60,7 @@ function renderBlockNodes(
   searchQuery = "",
   sectionId?: string,
   activeBlockIndex?: number,
+  onNavigateInternal?: (target: string) => void,
 ): ReactNode[] {
   const result: ReactNode[] = [];
   let inlineBuffer: ReactNode[] = [];
@@ -83,10 +84,16 @@ function renderBlockNodes(
             {renderSearchHighlights(node.value, searchQuery, `code-${key}`)}
           </span>
         );
-      case "link":
+      case "external-link":
+        return <span key={key} fg="#89b4fa"><u>{renderInlineNodes(node.children)}</u></span>;
+      case "email-link":
         return <span key={key} fg="#89b4fa"><u>{renderInlineNodes(node.children)}</u></span>;
       case "manual-reference":
         return <span key={key} fg="#89dceb">{renderInlineNodes(node.children)}</span>;
+      case "section-reference":
+        return <span key={key} fg="#89dceb"><u>{renderInlineNodes(node.children)}</u></span>;
+      case "anchor":
+        return null;
       case "line-break":
         return "\n";
     }
@@ -128,6 +135,57 @@ function renderBlockNodes(
     }
   };
 
+  /**
+   * Spans inside one OpenTUI text buffer cannot receive mouse events. Native
+   * navigation paragraphs are rare, so render only their top-level reference
+   * and anchor nodes as independent Text renderables in one wrapping row.
+   */
+  const renderNavigationParagraph = (nodes: MantInline[]): ReactNode[] => {
+    const rendered: ReactNode[] = [];
+    let ordinary: MantInline[] = [];
+    const flushOrdinary = () => {
+      if (ordinary.length === 0) return;
+      const current = ordinary;
+      ordinary = [];
+      rendered.push(
+        <text key={`navigation-text-${inlineKey++}`} fg="#a6adc8" wrapMode="word">
+          {renderInlineNodes(current)}
+        </text>,
+      );
+    };
+
+    for (const node of nodes) {
+      if (node.type === "section-reference") {
+        flushOrdinary();
+        rendered.push(
+          <text
+            key={`section-reference-${inlineKey++}`}
+            fg="#89dceb"
+            wrapMode="word"
+            selectable={false}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+              onNavigateInternal?.(node.target);
+            }}
+          >
+            <u>{renderInlineNodes(node.children)}</u>
+          </text>,
+        );
+      } else if (node.type === "anchor") {
+        flushOrdinary();
+        rendered.push(
+          <text key={`anchor-${inlineKey++}`} id={contentAnchorId(node.id)} selectable={false}>
+            {"\u200b"}
+          </text>,
+        );
+      } else {
+        ordinary.push(node);
+      }
+    }
+    flushOrdinary();
+    return rendered;
+  };
+
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!;
     const isActiveBlock = sectionId !== undefined && blockIndex === activeBlockIndex;
@@ -137,9 +195,26 @@ function renderBlockNodes(
 
     switch (block.type) {
       case "paragraph":
-        beginInlineBlock(indent, anchorId);
-        appendInlineLines(block.children);
-        if (isActiveBlock) flushInline();
+        if (block.children.some((node) =>
+          node.type === "section-reference" || node.type === "anchor"
+        )) {
+          flushInline();
+          result.push(
+            <box
+              key={`navigation-paragraph-${keyCounter++}`}
+              {...(anchorId ? { id: anchorId } : {})}
+              flexDirection="row"
+              flexWrap="wrap"
+              paddingLeft={indent}
+            >
+              {renderNavigationParagraph(block.children)}
+            </box>,
+          );
+        } else {
+          beginInlineBlock(indent, anchorId);
+          appendInlineLines(block.children);
+          if (isActiveBlock) flushInline();
+        }
         break;
 
       case "preformatted": {
@@ -176,7 +251,14 @@ function renderBlockNodes(
                 <box key={`item-${itemIndex}`} flexDirection="row" paddingLeft={indent}>
                   {marker && <text fg="#94e2d5">{marker}</text>}
                   <box flexDirection="column" flexGrow={1}>
-                    {renderBlockNodes(item.blocks, 0, searchQuery)}
+                    {renderBlockNodes(
+                      item.blocks,
+                      0,
+                      searchQuery,
+                      undefined,
+                      undefined,
+                      onNavigateInternal,
+                    )}
                   </box>
                 </box>
               );
@@ -203,7 +285,14 @@ function renderBlockNodes(
                 ))}
                 {item.description.length > 0 && (
                   <box flexDirection="column">
-                    {renderBlockNodes(item.description, indent + 4, searchQuery)}
+                    {renderBlockNodes(
+                      item.description,
+                      indent + 4,
+                      searchQuery,
+                      undefined,
+                      undefined,
+                      onNavigateInternal,
+                    )}
                   </box>
                 )}
               </box>
@@ -226,7 +315,14 @@ function renderBlockNodes(
               <box key={`row-${rowIndex}`} flexDirection="row">
                 {row.cells.map((cell, cellIndex) => (
                   <box key={`cell-${cellIndex}`} flexGrow={1} flexDirection="column">
-                    {renderBlockNodes(cell.blocks, 0, searchQuery)}
+                    {renderBlockNodes(
+                      cell.blocks,
+                      0,
+                      searchQuery,
+                      undefined,
+                      undefined,
+                      onNavigateInternal,
+                    )}
                   </box>
                 ))}
               </box>
@@ -278,6 +374,7 @@ export interface SectionContentProps {
   activeSearchSectionId?: string | undefined;
   activeBlockIndex?: number | undefined;
   headingIndent?: number;
+  onNavigateInternal?: ((target: string) => void) | undefined;
 }
 
 /** Recursively renders one section and its children in document order. */
@@ -288,6 +385,7 @@ export function SectionContent({
   activeSearchSectionId,
   activeBlockIndex,
   headingIndent = 0,
+  onNavigateInternal,
 }: SectionContentProps) {
   return (
     <box flexDirection="column" gap={0}>
@@ -302,6 +400,7 @@ export function SectionContent({
         searchQuery,
         node.id,
         activeSearchSectionId === node.id ? activeBlockIndex : undefined,
+        onNavigateInternal,
       )}
       <box flexDirection="column" gap={0}>
         {node.children.map((child) => (
@@ -313,6 +412,7 @@ export function SectionContent({
             activeSearchSectionId={activeSearchSectionId}
             activeBlockIndex={activeBlockIndex}
             headingIndent={headingIndent + 4}
+            onNavigateInternal={onNavigateInternal}
           />
         ))}
       </box>

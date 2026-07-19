@@ -36,6 +36,7 @@ struct mant_mandoc_node {
 	int			 kind;
 	char			*macro;
 	char			*text;
+	char			*tag;
 	int			 line;
 	int			 column;
 	unsigned int		 flags;
@@ -282,6 +283,7 @@ copy_node(const struct roff_node *source)
 		node->macro = copy_string(roff_name[source->tok]);
 	if (source->type == ROFFT_TEXT || source->type == ROFFT_COMMENT)
 		node->text = copy_string(source->string);
+	node->tag = copy_string(source->tag);
 	node->line = source->line;
 	node->column = source->pos + 1;
 	copy_normalized_data(node, source);
@@ -297,6 +299,10 @@ copy_node(const struct roff_node *source)
 		node->flags |= MANT_MANDOC_NODE_NO_PRINT;
 	if (source->flags & NODE_NOFILL)
 		node->flags |= MANT_MANDOC_NODE_NO_FILL;
+	if (source->flags & NODE_ID)
+		node->flags |= MANT_MANDOC_NODE_DEEP_LINK_TARGET;
+	if (source->flags & NODE_HREF)
+		node->flags |= MANT_MANDOC_NODE_PERMALINK;
 
 	next_child = &node->child;
 	for (source_child = source->child; source_child != NULL;
@@ -319,6 +325,7 @@ free_node(struct mant_mandoc_node *node)
 		free_node(node->child);
 		free(node->macro);
 		free(node->text);
+		free(node->tag);
 		free(node->offset);
 		free(node->equation);
 		free_table_cells(node->table_cells);
@@ -555,6 +562,12 @@ const char *
 mant_mandoc_node_text(const struct mant_mandoc_node *node)
 {
 	return node == NULL ? NULL : node->text;
+}
+
+const char *
+mant_mandoc_node_tag(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? NULL : node->tag;
 }
 
 int

@@ -43,7 +43,47 @@
                 "children": [
                   { "type": "text", "value": "dir(1)" }
                 ]
+              },
+              { "type": "text", "value": "; visit " },
+              {
+                "type": "external-link",
+                "uri": "https://example.test/ls",
+                "title": "Project documentation",
+                "children": [
+                  { "type": "text", "value": "the project site" }
+                ]
+              },
+              { "type": "text", "value": ", contact " },
+              {
+                "type": "email-link",
+                "address": "docs@example.test",
+                "children": [
+                  { "type": "text", "value": "the documentation team" }
+                ]
+              },
+              { "type": "text", "value": ", or read " },
+              {
+                "type": "section-reference",
+                "target": "options-1",
+                "children": [
+                  { "type": "text", "value": "OPTIONS" }
+                ]
               }
+            ]
+          }
+        ],
+        "children": []
+      },
+      {
+        "id": "options-1",
+        "title": "OPTIONS",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "anchor", "id": "all-option" },
+              { "type": "code", "value": "--all" },
+              { "type": "text", "value": " includes hidden entries." }
             ]
           }
         ],

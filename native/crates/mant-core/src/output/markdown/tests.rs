@@ -78,7 +78,7 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
     assert!(!markdown.contains("{{[-a|--all]}}"));
     assert!(markdown.contains("**More information:** <https://example.com/manual_page.html>."));
     assert!(markdown.contains("*tldr-pages · CC BY 4.0 · common · en*"));
-    assert!(markdown.contains("\n\n---\n\n## NAME"));
+    assert!(markdown.contains("\n\n---\n\n<a id=\"name\"></a>\n\n## NAME"));
     assert!(!markdown.ends_with('\n'));
 }
 
@@ -248,6 +248,13 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     assert!(markdown.contains("## TLDR"));
     assert!(markdown.contains("## NAME"));
     assert!(markdown.contains("**ls**"));
+    assert!(
+        markdown.contains("[the project site](https://example.test/ls \"Project documentation\")")
+    );
+    assert!(markdown.contains("[the documentation team](mailto:docs@example.test)"));
+    assert!(markdown.contains("[OPTIONS](#options-1)"));
+    assert!(markdown.contains("<a id=\"options-1\"></a>\n\n## OPTIONS"));
+    assert!(markdown.contains("<a id=\"all-option\"></a>"));
     assert!(!markdown.contains("mant.query/v1"));
 }
 

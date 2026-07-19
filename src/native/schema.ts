@@ -27,8 +27,11 @@ export type MantInline =
   | { type: "strong"; children: MantInline[] }
   | { type: "emphasis"; children: MantInline[] }
   | { type: "code"; value: string }
-  | { type: "link"; target: string; title?: string; children: MantInline[] }
+  | { type: "external-link"; uri: string; title?: string; children: MantInline[] }
+  | { type: "email-link"; address: string; children: MantInline[] }
   | { type: "manual-reference"; name: string; section?: string; children: MantInline[] }
+  | { type: "section-reference"; target: string; children: MantInline[] }
+  | { type: "anchor"; id: string }
   | { type: "line-break" };
 
 export interface MantListItem {
@@ -346,15 +349,26 @@ function validateInline(value: unknown, path: string): asserts value is MantInli
     case "emphasis":
       validateInlineArray(object.children, `${path}.children`);
       return;
-    case "link":
-      expectString(object.target, `${path}.target`);
+    case "external-link":
+      expectString(object.uri, `${path}.uri`);
       expectOptionalString(object.title, `${path}.title`);
+      validateInlineArray(object.children, `${path}.children`);
+      return;
+    case "email-link":
+      expectString(object.address, `${path}.address`);
       validateInlineArray(object.children, `${path}.children`);
       return;
     case "manual-reference":
       expectString(object.name, `${path}.name`);
       expectOptionalString(object.section, `${path}.section`);
       validateInlineArray(object.children, `${path}.children`);
+      return;
+    case "section-reference":
+      expectString(object.target, `${path}.target`);
+      validateInlineArray(object.children, `${path}.children`);
+      return;
+    case "anchor":
+      expectString(object.id, `${path}.id`);
       return;
     case "line-break":
       return;

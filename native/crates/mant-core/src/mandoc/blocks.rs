@@ -25,6 +25,9 @@ pub(super) fn lower_sections(root: &Node, context: &mut LoweringContext<'_>) -> 
 fn lower_section(node: &Node, context: &mut LoweringContext<'_>) -> Section {
     let heading = lower_inline_nodes(part_children(node, NodeKind::Head), context.default_name);
     let title = plain_text(&heading).trim().to_owned();
+    // Allocate IDs in visible document order. Besides being deterministic for
+    // consumers, this makes `.Sx` resolution independent of tree recursion.
+    let id = context.section_id(&title);
     let body = part_children(node, NodeKind::Body);
     let children = body
         .iter()
@@ -32,7 +35,7 @@ fn lower_section(node: &Node, context: &mut LoweringContext<'_>) -> Section {
         .map(|child| lower_section(child, context))
         .collect();
     Section {
-        id: context.section_id(&title),
+        id,
         title,
         blocks: lower_blocks(body, context, 0),
         children,

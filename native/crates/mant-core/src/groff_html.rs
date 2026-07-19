@@ -351,8 +351,8 @@ fn parse_inline_element(element: ElementRef<'_>, preserve_newlines: bool) -> Vec
                 if children.is_empty() {
                     Vec::new()
                 } else {
-                    vec![Inline::Link {
-                        target: target.to_owned(),
+                    vec![Inline::ExternalLink {
+                        uri: target.to_owned(),
                         title: element.value().attr("title").map(str::to_owned),
                         children,
                     }]
@@ -446,13 +446,15 @@ fn first_text_mut(children: &mut [Inline]) -> Option<&mut String> {
             Inline::Text { value } => return Some(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => {
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => {
                 if let Some(value) = first_text_mut(children) {
                     return Some(value);
                 }
             }
-            Inline::Code { .. } | Inline::LineBreak => {}
+            Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {}
         }
     }
     None
@@ -464,13 +466,15 @@ fn last_text_mut(children: &mut [Inline]) -> Option<&mut String> {
             Inline::Text { value } => return Some(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => {
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => {
                 if let Some(value) = last_text_mut(children) {
                     return Some(value);
                 }
             }
-            Inline::Code { .. } | Inline::LineBreak => {}
+            Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {}
         }
     }
     None
@@ -481,18 +485,25 @@ fn prune_empty_inline(children: &mut Vec<Inline>) {
         match child {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => prune_empty_inline(children),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => prune_empty_inline(children),
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Anchor { .. }
+            | Inline::LineBreak => {}
         }
     }
     children.retain(|child| match child {
         Inline::Text { value } | Inline::Code { value } => !value.is_empty(),
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::Link { children, .. }
-        | Inline::ManualReference { children, .. } => !children.is_empty(),
-        Inline::LineBreak => true,
+        | Inline::ExternalLink { children, .. }
+        | Inline::EmailLink { children, .. }
+        | Inline::ManualReference { children, .. }
+        | Inline::SectionReference { children, .. } => !children.is_empty(),
+        Inline::Anchor { .. } | Inline::LineBreak => true,
     });
 }
 
@@ -503,8 +514,11 @@ fn inline_text(children: &[Inline]) -> String {
             Inline::Text { value: text } | Inline::Code { value: text } => value.push_str(text),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => value.push_str(&inline_text(children)),
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => value.push_str(&inline_text(children)),
+            Inline::Anchor { .. } => {}
             Inline::LineBreak => value.push('\n'),
         }
     }

@@ -48,6 +48,8 @@ enum mant_mandoc_display_kind {
 #define MANT_MANDOC_NODE_SENTENCE_END (1U << 1)
 #define MANT_MANDOC_NODE_NO_PRINT (1U << 2)
 #define MANT_MANDOC_NODE_NO_FILL (1U << 3)
+#define MANT_MANDOC_NODE_DEEP_LINK_TARGET (1U << 4)
+#define MANT_MANDOC_NODE_PERMALINK (1U << 5)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(const char *, int);
 void mant_mandoc_document_free(struct mant_mandoc_document *);
@@ -74,6 +76,7 @@ const struct mant_mandoc_node *mant_mandoc_document_root(
 int mant_mandoc_node_kind(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_macro(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_text(const struct mant_mandoc_node *);
+const char *mant_mandoc_node_tag(const struct mant_mandoc_node *);
 int mant_mandoc_node_line(const struct mant_mandoc_node *);
 int mant_mandoc_node_column(const struct mant_mandoc_node *);
 unsigned int mant_mandoc_node_flags(const struct mant_mandoc_node *);

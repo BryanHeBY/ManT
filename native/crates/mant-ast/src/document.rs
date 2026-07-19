@@ -289,17 +289,42 @@ pub enum Inline {
     Code {
         value: String,
     },
-    Link {
-        target: String,
+    /// An external URI from mdoc `Lk`, man `UR`, or renderer-derived input.
+    ///
+    /// Roff section references use [`Inline::SectionReference`] instead so
+    /// consumers never have to infer navigation semantics from URI syntax.
+    ExternalLink {
+        uri: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         title: Option<String>,
         children: Vec<Inline>,
     },
+    /// An email address from mdoc `Mt` or man `MT` without a `mailto:` prefix.
+    EmailLink {
+        address: String,
+        children: Vec<Inline>,
+    },
+    /// A typed reference to another installed manual page.
     ManualReference {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         section: Option<String>,
         children: Vec<Inline>,
+    },
+    /// A reference to a section in this document, normally originating at
+    /// mdoc `Sx`.
+    ///
+    /// `target` is the document-local [`Section::id`] rather than a rendered
+    /// heading slug. This keeps navigation stable across output formats.
+    SectionReference {
+        target: String,
+        children: Vec<Inline>,
+    },
+    /// A zero-width, document-local navigation destination such as mdoc `Tg`.
+    ///
+    /// Anchor IDs and section IDs share one namespace within a document.
+    Anchor {
+        id: String,
     },
     LineBreak,
 }

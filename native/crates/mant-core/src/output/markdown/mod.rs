@@ -108,7 +108,11 @@ fn selection_context(selection: &ExcerptSelection) -> String {
 
 fn render_sections(output: &mut Vec<String>, sections: &[Section], depth: usize) {
     for section in sections {
-        output.push(heading(depth, &section.title));
+        output.push(format!(
+            "{}\n\n{}",
+            inline::html_anchor(&section.id),
+            heading(depth, &section.title)
+        ));
         output.extend(render_blocks(&section.blocks));
         render_sections(output, &section.children, depth.saturating_add(1));
     }

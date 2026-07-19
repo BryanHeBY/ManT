@@ -13,7 +13,7 @@ import {
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MantQueryBundle, MantSection } from "../native";
-import { TLDR_NAV_ID, contentId, navId } from "./ids";
+import { TLDR_NAV_ID, contentAnchorId, contentId, navId } from "./ids";
 import {
   KeyboardHelpDialog,
   MENU_BAR,
@@ -28,6 +28,7 @@ import {
   clamp,
   collectBranchIds,
   findNodeById,
+  findNodePath,
   findParentById,
   flattenVisibleNodes,
 } from "./navigation-tree";
@@ -141,6 +142,26 @@ export function App({ result, onQuit }: AppProps) {
     setSelectedId(id);
     scrollToNode(id);
     navScrollRef.current?.scrollChildIntoView(navId(id));
+  };
+
+  /** Follow a typed same-page reference without creating browser-like history. */
+  const navigateWithinPage = (target: string) => {
+    const path = findNodePath(sections, target);
+    if (!path) {
+      // Section references normally resolve to Section IDs. Keeping anchor
+      // lookup here also makes explicit `.Tg` destinations usable by future
+      // native reference forms without changing the view boundary.
+      scrollToContent(contentAnchorId(target));
+      return;
+    }
+
+    setExpanded((current) => {
+      const next = new Set(current);
+      for (const id of path.slice(0, -1)) next.add(id);
+      return next;
+    });
+    setSelectedId(target);
+    scrollToNode(target);
   };
 
   const selectSearchMatch = (index: number) => {
@@ -536,6 +557,7 @@ export function App({ result, onQuit }: AppProps) {
                   activeBlockIndex={
                     searchMatches[searchIndex]?.blockIndex
                   }
+                  onNavigateInternal={navigateWithinPage}
                 />
               ))}
               <box height={terminalHeight} flexShrink={0} />

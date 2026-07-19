@@ -78,8 +78,11 @@ pub(super) fn plain_text(nodes: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => output.push_str(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => output.push_str(&plain_text(children)),
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => output.push_str(&plain_text(children)),
+            Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),
         }
     }
@@ -96,7 +99,8 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
 
     let children = inline_children(node);
     let lowered = lower_inline_nodes(children, default_name);
-    match node.macro_name.as_deref() {
+    let anchor = navigation_anchor(node, &lowered);
+    let mut output = match node.macro_name.as_deref() {
         Some("Nm") => wrap_strong(if lowered.is_empty() {
             default_name.map_or_else(Vec::new, text_node)
         } else {
@@ -119,6 +123,13 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         Some("Xr") => lower_manual_reference(children, default_name),
         Some("Lk") => lower_link(children, default_name, false),
         Some("Mt") => lower_link(children, default_name, true),
+        // Keep the heading text as a private unresolved target until the
+        // complete section tree is available. The document post-pass replaces
+        // it with the stable Section::id or degrades it to ordinary text.
+        Some("Sx") if !lowered.is_empty() => vec![Inline::SectionReference {
+            target: plain_text(&lowered).trim().to_owned(),
+            children: lowered,
+        }],
         Some("Nd") => {
             let mut content = text_node("—");
             content.extend(lowered);
@@ -131,7 +142,27 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         Some("Brq" | "Bro") => surround("{", lowered, "}"),
         Some("Aq" | "Ao") => surround("<", lowered, ">"),
         _ => lowered,
+    };
+    if let Some(anchor) = anchor {
+        output.insert(0, anchor);
     }
+    output
+}
+
+/// Convert libmandoc's validated deep-link marker into a zero-width AST node.
+/// Explicit `.Tg` tags carry `node.tag`; automatically discovered tags fall
+/// back to the same first visible word that libmandoc uses.
+fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
+    if !node.flags.deep_link_target {
+        return None;
+    }
+    let id = node.tag.clone().or_else(|| {
+        plain_text(lowered)
+            .split_whitespace()
+            .next()
+            .map(ToOwned::to_owned)
+    })?;
+    (!id.is_empty()).then_some(Inline::Anchor { id })
 }
 
 fn inline_children(node: &Node) -> &[Node] {
@@ -172,19 +203,20 @@ fn lower_link(children: &[Node], default_name: Option<&str>, email: bool) -> Vec
         return Vec::new();
     }
     let label = lower_inline_nodes(&children[1..], default_name);
-    vec![Inline::Link {
-        target: if email {
-            format!("mailto:{address}")
-        } else {
-            address.clone()
-        },
-        title: None,
-        children: if label.is_empty() {
-            text_node(&address)
-        } else {
-            label
-        },
-    }]
+    let children = if label.is_empty() {
+        text_node(&address)
+    } else {
+        label
+    };
+    if email {
+        vec![Inline::EmailLink { address, children }]
+    } else {
+        vec![Inline::ExternalLink {
+            uri: address,
+            title: None,
+            children,
+        }]
+    }
 }
 
 fn wrap_strong(children: Vec<Inline>) -> Vec<Inline> {
@@ -343,8 +375,8 @@ fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link
         Font::Code => Inline::Code { value },
     };
     if let Some(target) = link {
-        output.push(Inline::Link {
-            target: target.to_owned(),
+        output.push(Inline::ExternalLink {
+            uri: target.to_owned(),
             title: None,
             children: vec![styled],
         });
@@ -389,6 +421,6 @@ mod tests {
             parse_roff_text("\\X'tty: link https://example.test'\\fB\\-h\\fR\\X'tty: link' FILE");
 
         assert_eq!(plain_text(&nodes), "-h FILE");
-        assert!(matches!(nodes[0], Inline::Link { .. }));
+        assert!(matches!(nodes[0], Inline::ExternalLink { .. }));
     }
 }

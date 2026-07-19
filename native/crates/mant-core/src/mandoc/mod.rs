@@ -3,6 +3,7 @@
 mod blocks;
 mod diagnostics;
 mod inline;
+mod navigation;
 
 use std::path::Path;
 
@@ -28,6 +29,10 @@ pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ParseError> {
 #[must_use]
 pub fn lower_mandoc_document(path: &Path, parsed: &ParsedDocument) -> MantDocument {
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref());
+    let mut diagnostics = diagnostics::parse_diagnostics(&parsed.diagnostics);
+    let mut sections = blocks::lower_sections(&parsed.root, &mut context);
+    let explicit_targets = navigation::explicit_targets(&parsed.root);
+    navigation::resolve_navigation(&mut sections, &explicit_targets, &mut diagnostics);
     MantDocument {
         schema: DocumentSchema::V1,
         producer: Producer {
@@ -56,8 +61,8 @@ pub fn lower_mandoc_document(path: &Path, parsed: &ParsedDocument) -> MantDocume
             names: parsed.metadata.name.iter().cloned().collect(),
             alias_target: parsed.metadata.alias_target.clone(),
         },
-        diagnostics: diagnostics::parse_diagnostics(&parsed.diagnostics),
-        sections: blocks::lower_sections(&parsed.root, &mut context),
+        diagnostics,
+        sections,
     }
 }
 
@@ -255,6 +260,10 @@ mod tests {
              .Nm mant\n\
              with\n\
              .Xr man 1\n\
+             Read\n\
+             .Lk https://example.test/docs \"the documentation\"\n\
+             or contact\n\
+             .Mt docs@example.test\n\
              .Ss Details\n\
              .Fl h\n",
         );
@@ -277,6 +286,71 @@ mod tests {
                 |inline| matches!(inline, Inline::ManualReference { name, .. } if name == "man")
             )
         );
+        assert!(children.iter().any(
+            |inline| matches!(inline, Inline::ExternalLink { uri, .. } if uri == "https://example.test/docs")
+        ));
+        assert!(children.iter().any(
+            |inline| matches!(inline, Inline::EmailLink { address, .. } if address == "docs@example.test")
+        ));
+    }
+
+    #[test]
+    fn resolves_mdoc_section_references_and_explicit_targets() {
+        let path = temporary_source(
+            "mdoc-navigation",
+            ".Dd July 19, 2026\n\
+             .Dt NAVIGATION 1\n\
+             .Os\n\
+             .Sh DESCRIPTION\n\
+             Continue with\n\
+             .Sx DETAILS\n\
+             .Tg explicit-option\n\
+             .Fl x\n\
+             .Sh DETAILS\n\
+             Target content.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower navigation mdoc source");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        assert_eq!(document.sections[0].id, "description-1");
+        assert_eq!(document.sections[1].id, "details-2");
+        let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected navigation paragraph");
+        };
+        assert!(children.iter().any(|inline| matches!(
+            inline,
+            Inline::SectionReference { target, children }
+                if target == "details-2" && inline_text(children) == "DETAILS"
+        )));
+        assert!(children.iter().any(|inline| matches!(
+            inline,
+            Inline::Anchor { id } if id == "explicit-option"
+        )));
+    }
+
+    #[test]
+    fn degrades_unresolved_mdoc_section_references_to_text() {
+        let path = temporary_source(
+            "mdoc-missing-section",
+            ".Dd July 19, 2026\n.Dt NAVIGATION 1\n.Os\n.Sh DESCRIPTION\n.Sx MISSING\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower unresolved navigation source");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected reference paragraph");
+        };
+        assert_eq!(inline_text(children), "MISSING");
+        assert!(
+            children
+                .iter()
+                .all(|inline| !matches!(inline, Inline::SectionReference { .. }))
+        );
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("unresolved-section-reference")
+        }));
     }
 
     #[test]
@@ -373,8 +447,11 @@ mod tests {
                 Inline::Text { value } | Inline::Code { value } => value.clone(),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::Link { children, .. }
-                | Inline::ManualReference { children, .. } => inline_text(children),
+                | Inline::ExternalLink { children, .. }
+                | Inline::EmailLink { children, .. }
+                | Inline::ManualReference { children, .. }
+                | Inline::SectionReference { children, .. } => inline_text(children),
+                Inline::Anchor { .. } => String::new(),
                 Inline::LineBreak => "\n".to_owned(),
             })
             .collect()

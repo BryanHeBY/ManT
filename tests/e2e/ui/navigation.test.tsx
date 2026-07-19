@@ -19,6 +19,7 @@ import {
   navLines,
   navPosition,
   renderApp,
+  waitForFrame,
 } from "./test-support";
 
 installOpenTuiWarningFilter();
@@ -90,6 +91,65 @@ describe("App navigation (e2e)", () => {
     // even the final section to be positioned at that row.
     expect(contentPosition(setup.captureCharFrame(), "LATE SECTION").y).toBe(2);
 
+    setup.renderer.destroy();
+  });
+
+  test("follows a page reference and reveals its collapsed sidebar ancestry", async () => {
+    const result = mockQuery("internal-reference", [
+      {
+        id: "introduction",
+        title: "INTRODUCTION",
+        blocks: [
+          {
+            type: "paragraph",
+            children: [
+              { type: "text", value: "Continue with " },
+              {
+                type: "section-reference",
+                target: "destination",
+                children: [{ type: "text", value: "open destination" }],
+              },
+              { type: "text", value: "." },
+            ],
+          },
+          ...Array.from({ length: 24 }, (_, index) => ({
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, value: `Introduction line ${index}` }],
+          })),
+        ],
+        children: [],
+      },
+      {
+        id: "parent",
+        title: "PARENT",
+        blocks: [],
+        children: [{
+          id: "middle",
+          title: "MIDDLE",
+          blocks: [],
+          children: [{
+            id: "destination",
+            title: "DESTINATION HEADING",
+            blocks: [{
+              type: "paragraph",
+              children: [{ type: "text", value: "Destination body" }],
+            }],
+            children: [],
+          }],
+        }],
+      },
+    ]);
+    const setup = await renderApp(result, { width: 100, height: 24 });
+    const reference = contentPosition(setup.captureCharFrame(), "open destination");
+
+    await setup.mockMouse.click(reference.x + 2, reference.y);
+    const frame = await waitForFrame(setup, (current) =>
+      current.split("\n")[2]?.slice(NAV_WIDTH).includes("DESTINATION HEADING") === true
+      && navLines(current).some((line) => line.includes("›") && line.includes("DESTINATION HEADING")),
+    );
+
+    expect(contentPosition(frame, "DESTINATION HEADING").y).toBe(2);
+    expect(navLines(frame).some((line) => line.includes("MIDDLE"))).toBe(true);
     setup.renderer.destroy();
   });
 

@@ -30,9 +30,13 @@ function inlineText(nodes: MantInline[]): string {
           return "\n";
         case "strong":
         case "emphasis":
-        case "link":
+        case "external-link":
+        case "email-link":
         case "manual-reference":
+        case "section-reference":
           return inlineText(node.children);
+        case "anchor":
+          return "";
       }
     })
     .join("");

@@ -32,6 +32,31 @@ describe("native query schema", () => {
     expect(query.schema).toBe("mant.query/v1");
     expect(query.manual?.schema).toBe("mant.document/v1");
     expect(query.manual?.sections[0]?.title).toBe("NAME");
+    expect(query.manual?.sections[0]?.blocks[0]).toMatchObject({
+      type: "paragraph",
+      children: expect.arrayContaining([
+        {
+          type: "external-link",
+          uri: "https://example.test/ls",
+          title: "Project documentation",
+          children: [{ type: "text", value: "the project site" }],
+        },
+        {
+          type: "email-link",
+          address: "docs@example.test",
+          children: [{ type: "text", value: "the documentation team" }],
+        },
+        {
+          type: "section-reference",
+          target: "options-1",
+          children: [{ type: "text", value: "OPTIONS" }],
+        },
+      ]),
+    });
+    expect(query.manual?.sections[1]?.blocks[0]).toMatchObject({
+      type: "paragraph",
+      children: expect.arrayContaining([{ type: "anchor", id: "all-option" }]),
+    });
     expect(query.tldr?.examples[0]?.commandParts[0]).toEqual({
       type: "text",
       value: "ls --all",

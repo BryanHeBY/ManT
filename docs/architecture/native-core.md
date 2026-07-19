@@ -50,6 +50,25 @@ passing a value to React.  New optional object fields may be added within a
 schema version; incompatible meaning changes and new required node variants
 require a new schema version.
 
+The initial document contract keeps navigation semantic instead of encoding
+every destination as an untyped URI:
+
+- `external-link` stores an external `uri` and its rendered label;
+- `email-link` stores an address without a synthetic `mailto:` prefix;
+- `manual-reference` identifies another manual by name and optional section;
+- `section-reference` targets a document-local section ID;
+- `anchor` marks a zero-width document-local destination such as mdoc `Tg`.
+
+Section IDs and explicit anchor IDs occupy the same namespace within one
+document. Renderers may style or activate these nodes differently, but must
+preserve their visible children in non-interactive output.
+
+The TUI activates resolved `section-reference` nodes directly: clicking one
+places the target heading at the top of the content viewport, selects it in
+the sidebar, and expands hidden ancestors. This is deliberately a stateless
+page-local jump; navigation history is not part of the current interaction
+contract.
+
 ## Native process boundary
 
 The project deliberately uses a one-shot process boundary instead of Node-API.

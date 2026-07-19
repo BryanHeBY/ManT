@@ -334,8 +334,11 @@ fn fixed_roff_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
                     Inline::Text { value } | Inline::Code { value } => value,
                     Inline::Strong { .. }
                     | Inline::Emphasis { .. }
-                    | Inline::Link { .. }
+                    | Inline::ExternalLink { .. }
+                    | Inline::EmailLink { .. }
                     | Inline::ManualReference { .. }
+                    | Inline::SectionReference { .. }
+                    | Inline::Anchor { .. }
                     | Inline::LineBreak => return,
                 };
                 assert!(
@@ -358,10 +361,10 @@ fn real_nested_manuals_support_outline_discovery_and_targeted_excerpts() {
     let outline = build_outline(&query).expect("Git outline");
     let git_diffs = &outline.nodes[15].children[3];
     assert_eq!(git_diffs.path, "16.4");
-    assert_eq!(git_diffs.id, "git-diffs-27");
+    assert_eq!(git_diffs.id, "git-diffs-28");
     assert_eq!(git_diffs.title, "Git Diffs");
 
-    let excerpt = select_excerpt(&query, &["git-diffs-27".to_owned(), "16.4".to_owned()])
+    let excerpt = select_excerpt(&query, &["git-diffs-28".to_owned(), "16.4".to_owned()])
         .expect("Git Diffs excerpt");
     assert_eq!(excerpt.selections.len(), 1);
     assert_eq!(excerpt.selections[0].path, "16.4");
@@ -503,9 +506,13 @@ fn contains_strong(children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Strong { children } => inline_text(children) == expected,
         Inline::Emphasis { children }
-        | Inline::Link { children, .. }
-        | Inline::ManualReference { children, .. } => contains_strong(children, expected),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => false,
+        | Inline::ExternalLink { children, .. }
+        | Inline::EmailLink { children, .. }
+        | Inline::ManualReference { children, .. }
+        | Inline::SectionReference { children, .. } => contains_strong(children, expected),
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
+            false
+        }
     })
 }
 
@@ -513,9 +520,13 @@ fn contains_emphasis(children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Emphasis { children } => inline_text(children) == expected,
         Inline::Strong { children }
-        | Inline::Link { children, .. }
-        | Inline::ManualReference { children, .. } => contains_emphasis(children, expected),
-        Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => false,
+        | Inline::ExternalLink { children, .. }
+        | Inline::EmailLink { children, .. }
+        | Inline::ManualReference { children, .. }
+        | Inline::SectionReference { children, .. } => contains_emphasis(children, expected),
+        Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
+            false
+        }
     })
 }
 
@@ -526,9 +537,11 @@ fn count_line_breaks(children: &[Inline]) -> usize {
             Inline::LineBreak => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => count_line_breaks(children),
-            Inline::Text { .. } | Inline::Code { .. } => 0,
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => count_line_breaks(children),
+            Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
         })
         .sum()
 }
@@ -540,8 +553,11 @@ fn inline_text(children: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => value.clone(),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => inline_text(children),
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => inline_text(children),
+            Inline::Anchor { .. } => String::new(),
             Inline::LineBreak => "\n".to_owned(),
         })
         .collect()
@@ -627,9 +643,14 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
         match inline {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. }
-            | Inline::ManualReference { children, .. } => visit_inlines(children, visitor),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => visit_inlines(children, visitor),
+            Inline::Text { .. }
+            | Inline::Code { .. }
+            | Inline::Anchor { .. }
+            | Inline::LineBreak => {}
         }
     }
 }
