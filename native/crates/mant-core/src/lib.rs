@@ -1,8 +1,10 @@
 //! Manual source, query, and output engine independent from Bun and Node-API.
 
+mod groff_html;
 mod mandoc;
 mod source;
 
+pub use groff_html::parse_groff_html;
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,
