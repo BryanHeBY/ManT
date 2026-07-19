@@ -289,11 +289,38 @@ describe("App rendering (e2e)", () => {
     };
     const setup = await renderApp(result);
     const lines = setup.captureCharFrame().split("\n");
+    const introLine = lines.findIndex((line) => line.includes("Equivalent commands:"));
+    const firstCodeLine = lines.findIndex((line) => line.includes("command one"));
     const lastCodeLine = lines.findIndex((line) => line.includes("command two"));
 
+    expect(firstCodeLine).toBe(introLine + 2);
     expect(lastCodeLine).toBeGreaterThanOrEqual(0);
     expect(lines[lastCodeLine + 1]).not.toContain("-c <name>=<value>");
     expect(lines[lastCodeLine + 2]).toContain("-c <name>=<value>");
+
+    setup.renderer.destroy();
+  });
+
+  test("does not turn formatter newlines into extra rows around pre", async () => {
+    const html = `<body><div class="manual-text"><section class="Sh">
+      <h1 class="Sh" id="EXAMPLES">EXAMPLES</h1>
+      <p class="Pp">Before the display.</p>
+      <pre>\ncommand output\n    </pre>
+      <p class="Pp">After the display.</p>
+    </section></div></body>`;
+    const setup = await renderApp(
+      { topic: "spacing", sections: parseManHtml(html) },
+      { width: 100, height: 24 },
+    );
+    const lines = setup.captureCharFrame().split("\n");
+    const beforeLine = lines.findIndex((line) => line.includes("Before the display."));
+    const codeLine = lines.findIndex((line) => line.includes("command output"));
+    const afterLine = lines.findIndex((line) => line.includes("After the display."));
+
+    expect(codeLine).toBe(beforeLine + 1);
+    // The single row below the display is the deliberate block separation,
+    // not a trailing newline painted inside the code background.
+    expect(afterLine).toBe(codeLine + 2);
 
     setup.renderer.destroy();
   });

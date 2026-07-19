@@ -32,6 +32,67 @@ export function normalizePreText(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\t/g, "        ");
 }
 
+/**
+ * Applies HTML <pre> boundary rules without disturbing intentional internal
+ * blank lines. Browsers ignore the first newline after an opening <pre>, and
+ * renderer-generated HTML commonly leaves one formatting newline before the
+ * closing tag. Mant has to normalize those explicitly because its terminal
+ * text renderer treats a final newline as an additional painted row.
+ */
+function normalizePreBoundaries(nodes: InlineNode[]): InlineNode[] {
+  const transformFirstText = (
+    current: InlineNode[],
+    transform: (content: string) => string,
+  ): boolean => {
+    for (const node of current) {
+      if (node.type === "text") {
+        node.content = transform(node.content);
+        return true;
+      }
+      if (node.type !== "break" && transformFirstText(node.children, transform)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const transformLastText = (
+    current: InlineNode[],
+    transform: (content: string) => string,
+  ): boolean => {
+    for (let index = current.length - 1; index >= 0; index--) {
+      const node = current[index]!;
+      if (node.type === "text") {
+        node.content = transform(node.content);
+        return true;
+      }
+      if (node.type !== "break" && transformLastText(node.children, transform)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const removeEmptyNodes = (current: InlineNode[]): InlineNode[] => {
+    const result: InlineNode[] = [];
+    for (const node of current) {
+      if (node.type === "text") {
+        if (node.content) result.push(node);
+      } else if (node.type === "break") {
+        result.push(node);
+      } else {
+        const children = removeEmptyNodes(node.children);
+        if (children.length > 0) result.push({ ...node, children });
+      }
+    }
+    return result;
+  };
+
+  transformFirstText(nodes, (content) => content.replace(/^\n/, ""));
+  transformLastText(nodes, (content) => content.replace(/\n[ \t]*$/, ""));
+  return removeEmptyNodes(nodes);
+}
+
 export function getHeadingText(node: HTMLElement): string {
   return trimText(node.textContent).replace(/\n/g, " ").replace(/[ \t]+/g, " ");
 }
@@ -222,8 +283,9 @@ export function parseBlockElementWithIndent(
         normalized.push(child);
       }
     }
-    if (normalized.length === 0) return null;
-    return { type: "pre", children: normalized, indent };
+    const boundaryNormalized = normalizePreBoundaries(normalized);
+    if (boundaryNormalized.length === 0) return null;
+    return { type: "pre", children: boundaryNormalized, indent };
   }
 
   if (tag === "ul" || tag === "ol") {

@@ -73,7 +73,14 @@ function renderBlockNodes(
   });
 
   const flushInline = (anchorId?: string) => {
-    if (inlineBuffer.length === 0) return;
+    // Newlines separate buffered paragraphs and list items. The final one is
+    // only a separator sentinel; leaving it at a box boundary creates a real
+    // empty terminal row, most visibly immediately above a pre block.
+    if (inlineBuffer[inlineBuffer.length - 1] === "\n") inlineBuffer.pop();
+    if (inlineBuffer.length === 0) {
+      bufferAnchorId = undefined;
+      return;
+    }
     const resolvedAnchorId = anchorId ?? bufferAnchorId;
     result.push(
       <box
@@ -103,20 +110,6 @@ function renderBlockNodes(
     }
   };
 
-  const beginDefinitionLine = (indent: number, anchorId?: string) => {
-    // Definition terms and descriptions use different indentation buffers.
-    // A trailing newline before that buffer boundary would create an extra
-    // blank row in addition to mandoc's explicit spacer.
-    if (
-      inlineBuffer.length > 0
-      && indent !== bufferIndent
-      && inlineBuffer[inlineBuffer.length - 1] === "\n"
-    ) {
-      inlineBuffer.pop();
-    }
-    beginInlineBlock(indent, anchorId);
-  };
-
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!;
     const isActiveBlock = sectionId !== undefined && blockIndex === activeBlockIndex;
@@ -144,17 +137,16 @@ function renderBlockNodes(
           : undefined;
         for (const item of block.items) {
           for (const term of item.terms) {
-            beginDefinitionLine(baseIndent + block.indent, anchorId);
+            beginInlineBlock(baseIndent + block.indent, anchorId);
             anchorId = undefined;
             appendInlineLines(term);
           }
           if (item.description.length > 0) {
-            beginDefinitionLine(baseIndent + block.indent + 4, anchorId);
+            beginInlineBlock(baseIndent + block.indent + 4, anchorId);
             anchorId = undefined;
             appendInlineLines(item.description);
           }
         }
-        if (inlineBuffer[inlineBuffer.length - 1] === "\n") inlineBuffer.pop();
         if (isActiveBlock) flushInline();
         break;
       }

@@ -160,4 +160,24 @@ describe("parser-utils — pre block newline dedup", () => {
       expect(flat).toBe("content\nmore");
     }
   });
+
+  test("removes renderer-only newlines at pre boundaries", () => {
+    const pre = firstElement(
+      "<pre>\nline one\nline two\n    </pre>",
+    );
+    const block = parseBlockElementWithIndent(pre, 0);
+    if (block?.type === "pre") {
+      expect(flattenPre(block.children)).toBe("line one\nline two");
+    }
+  });
+
+  test("preserves intentional internal and final blank lines", () => {
+    const pre = firstElement("<pre>line one\n\n</pre>");
+    const block = parseBlockElementWithIndent(pre, 0);
+    if (block?.type === "pre") {
+      // One closing-tag formatting newline is removed; the other remains as
+      // the blank line authored inside the display.
+      expect(flattenPre(block.children)).toBe("line one\n");
+    }
+  });
 });
