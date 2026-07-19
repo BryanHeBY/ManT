@@ -34,8 +34,9 @@
 #define HAVE_SANDBOX_INIT 0
 #define HAVE_STRCASESTR 1
 #define HAVE_STRINGLIST 0
-#define HAVE_STRLCAT 1
-#define HAVE_STRLCPY 1
+/* Ubuntu 22.04 ships glibc 2.35, before these BSD string APIs were added. */
+#define HAVE_STRLCAT 0
+#define HAVE_STRLCPY 0
 #define HAVE_STRNDUP 1
 #define HAVE_STRPTIME 1
 #define HAVE_STRSEP 1
@@ -57,4 +58,6 @@
 extern const char *getprogname(void);
 extern void setprogname(const char *);
 extern void *recallocarray(void *, size_t, size_t, size_t);
+extern size_t strlcat(char *, const char *, size_t);
+extern size_t strlcpy(char *, const char *, size_t);
 extern long long strtonum(const char *, long long, long long, const char **);

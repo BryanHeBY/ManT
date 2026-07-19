@@ -4,6 +4,8 @@ const LINUX_COMPAT_SOURCES: &[&str] = &[
     "compat_ohash.c",
     "compat_progname.c",
     "compat_recallocarray.c",
+    "compat_strlcat.c",
+    "compat_strlcpy.c",
     "compat_strtonum.c",
 ];
 
@@ -41,6 +43,17 @@ mod tests {
             target_configuration("macos", ""),
             ("config/macos.h", MACOS_COMPAT_SOURCES)
         );
+    }
+
+    #[test]
+    fn linux_does_not_depend_on_new_glibc_string_extensions() {
+        let (_, sources) = target_configuration("linux", "gnu");
+        let config = include_str!("../config/linux-gnu.h");
+
+        assert!(sources.contains(&"compat_strlcat.c"));
+        assert!(sources.contains(&"compat_strlcpy.c"));
+        assert!(config.contains("#define HAVE_STRLCAT 0"));
+        assert!(config.contains("#define HAVE_STRLCPY 0"));
     }
 
     #[test]
