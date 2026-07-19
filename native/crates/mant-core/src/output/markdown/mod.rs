@@ -3,9 +3,15 @@
 mod blocks;
 mod inline;
 
-use mant_ast::{QueryBundle, Section, TldrCommandPart, TldrDocument};
+use mant_ast::{
+    ExcerptSelection, ManualExcerpt, ManualOutline, OutlineNode, QueryBundle, Section,
+    TldrCommandPart, TldrDocument,
+};
 
-use self::{blocks::render_blocks, inline::escape_text};
+use self::{
+    blocks::render_blocks,
+    inline::{code_span, escape_text},
+};
 
 /// Render a complete query without a process-level trailing newline.
 #[must_use]
@@ -30,6 +36,74 @@ pub fn render_markdown(query: &QueryBundle) -> String {
         .join("\n\n")
         .trim_end()
         .to_owned()
+}
+
+/// Render a manual outline as a nested `CommonMark` list.
+#[must_use]
+pub fn render_outline_markdown(outline: &ManualOutline) -> String {
+    let mut blocks = vec![heading(
+        1,
+        &format!(
+            "{} outline",
+            document_label(&outline.topic, outline.manual_section.as_deref())
+        ),
+    )];
+    if !outline.nodes.is_empty() {
+        blocks.push(outline_list(&outline.nodes, 0));
+    }
+    blocks.join("\n\n").trim_end().to_owned()
+}
+
+/// Render selected manual section subtrees with their outline context.
+#[must_use]
+pub fn render_excerpt_markdown(excerpt: &ManualExcerpt) -> String {
+    let mut output = vec![heading(
+        1,
+        &document_label(&excerpt.topic, excerpt.manual_section.as_deref()),
+    )];
+    for (index, selection) in excerpt.selections.iter().enumerate() {
+        if index > 0 {
+            output.push("---".to_owned());
+        }
+        output.push(selection_context(selection));
+        render_sections(&mut output, std::slice::from_ref(&selection.section), 2);
+    }
+    output
+        .into_iter()
+        .filter(|block| !block.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+        .trim_end()
+        .to_owned()
+}
+
+fn outline_list(nodes: &[OutlineNode], depth: usize) -> String {
+    let mut lines = Vec::new();
+    for node in nodes {
+        lines.push(format!(
+            "{}- {} ({}) {}",
+            "  ".repeat(depth),
+            code_span(&node.path),
+            code_span(&node.id),
+            escape_text(&node.title)
+        ));
+        let children = outline_list(&node.children, depth + 1);
+        if !children.is_empty() {
+            lines.push(children);
+        }
+    }
+    lines.join("\n")
+}
+
+fn selection_context(selection: &ExcerptSelection) -> String {
+    let breadcrumb = selection
+        .breadcrumbs
+        .iter()
+        .map(|ancestor| escape_text(&ancestor.title))
+        .chain(std::iter::once(escape_text(&selection.title)))
+        .collect::<Vec<_>>()
+        .join(" → ");
+    format!("*Outline {}: {breadcrumb}*", code_span(&selection.path))
 }
 
 fn render_sections(output: &mut Vec<String>, sections: &[Section], depth: usize) {
@@ -101,6 +175,10 @@ fn render_more_information(value: &str) -> String {
 
 fn heading(depth: usize, title: &str) -> String {
     format!("{} {}", "#".repeat(depth.clamp(1, 6)), escape_text(title))
+}
+
+fn document_label(topic: &str, section: Option<&str>) -> String {
+    section.map_or_else(|| topic.to_owned(), |section| format!("{topic}({section})"))
 }
 
 #[cfg(test)]

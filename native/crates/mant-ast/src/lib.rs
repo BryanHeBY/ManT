@@ -1,10 +1,12 @@
 //! Versioned, renderer-neutral contracts shared by every Mant frontend.
 
 mod document;
+mod outline;
 mod query;
 mod tldr;
 
 pub use document::*;
+pub use outline::*;
 pub use query::*;
 pub use tldr::*;
 

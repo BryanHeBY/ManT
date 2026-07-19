@@ -8,7 +8,16 @@ use mant_ast::QueryRequest;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum QueryFormat {
     Markdown,
+    Text,
     Json,
+}
+
+/// Projection applied after the complete manual has been queried once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum QueryView {
+    Full,
+    Outline,
+    Excerpt(Vec<String>),
 }
 
 /// Where a query request comes from.
@@ -24,6 +33,7 @@ pub(crate) enum Command {
     Help,
     Query {
         source: QuerySource,
+        view: QueryView,
         format: QueryFormat,
         pretty: bool,
     },
@@ -44,8 +54,9 @@ pub(crate) struct UsageError(pub(crate) String);
 pub(crate) const HELP: &str = r#"Mant CLI — query local manual pages for scripts and agents
 
 Usage:
-  mant-cli <topic> [--section <section>] [--json | --markdown] [--compact]
-  mant-cli --request-json [--json | --markdown] [--compact]
+  mant-cli <topic> [--section <section>] [--outline | --node <node>...]
+             [--json | --markdown | --text] [--compact]
+  mant-cli --request-json [--json | --markdown | --text] [--compact]
   mant-cli update tldr [--compact]
   mant-cli protocol-version [--compact]
   mant-cli --help
@@ -53,8 +64,11 @@ Usage:
 Query options:
   -j, --json          Print the versioned query document as JSON
       --md, --markdown
-                      Print Markdown (the default)
+                      Print Markdown (the default for content)
+      --text          Print unstyled text (the default for outlines)
   -s, --section       Select a manual section, such as 1 or 3p
+      --outline       Print the manual's selectable section tree
+  -n, --node          Print one outline node by path or ID; repeatable
       --request-json  Read a mant QueryRequest object from stdin
       --compact       Omit JSON indentation; requires --json
   --                  Treat all remaining arguments as the topic
@@ -62,6 +76,8 @@ Query options:
 Examples:
   mant-cli git
   mant-cli printf --section 3 --json
+  mant-cli gcc --outline
+  mant-cli gcc --node 4.2 --markdown
   printf '%s' '{"topic":"git"}' | mant-cli --request-json --json --compact
   mant-cli update tldr"#;
 
@@ -116,11 +132,12 @@ fn parse_json_only_command(
 }
 
 fn parse_query(arguments: &[String]) -> Result<Command, UsageError> {
-    let mut format = QueryFormat::Markdown;
-    let mut explicit_format = false;
+    let mut format = None;
     let mut pretty = true;
     let mut request_json = false;
     let mut section = None;
+    let mut outline = false;
+    let mut nodes = Vec::new();
     let mut topic_parts = Vec::new();
     let mut parse_options = true;
     let mut index = 0;
@@ -130,13 +147,28 @@ fn parse_query(arguments: &[String]) -> Result<Command, UsageError> {
         if parse_options && argument == "--" {
             parse_options = false;
         } else if parse_options && (argument == "--json" || argument == "-j") {
-            select_format(&mut format, &mut explicit_format, QueryFormat::Json)?;
+            select_format(&mut format, QueryFormat::Json)?;
         } else if parse_options && (argument == "--markdown" || argument == "--md") {
-            select_format(&mut format, &mut explicit_format, QueryFormat::Markdown)?;
+            select_format(&mut format, QueryFormat::Markdown)?;
+        } else if parse_options && argument == "--text" {
+            select_format(&mut format, QueryFormat::Text)?;
         } else if parse_options && argument == "--compact" {
             pretty = false;
         } else if parse_options && argument == "--request-json" {
             request_json = true;
+        } else if parse_options && argument == "--outline" {
+            if std::mem::replace(&mut outline, true) {
+                return Err(UsageError("--outline may only be supplied once".to_owned()));
+            }
+        } else if parse_options && (argument == "--node" || argument == "-n") {
+            index += 1;
+            let value = arguments
+                .get(index)
+                .ok_or_else(|| UsageError("--node requires a value".to_owned()))?;
+            if value.trim().is_empty() {
+                return Err(UsageError("--node must not be empty".to_owned()));
+            }
+            nodes.push(value.clone());
         } else if parse_options && (argument == "--section" || argument == "-s") {
             index += 1;
             let value = arguments
@@ -153,14 +185,31 @@ fn parse_query(arguments: &[String]) -> Result<Command, UsageError> {
         index += 1;
     }
 
+    if outline && !nodes.is_empty() {
+        return Err(UsageError(
+            "--outline and --node cannot be combined".to_owned(),
+        ));
+    }
+    let view = if outline {
+        QueryView::Outline
+    } else if nodes.is_empty() {
+        QueryView::Full
+    } else {
+        QueryView::Excerpt(nodes)
+    };
+    let format = format.unwrap_or(match &view {
+        QueryView::Outline => QueryFormat::Text,
+        QueryView::Full | QueryView::Excerpt(_) => QueryFormat::Markdown,
+    });
     if !pretty && format != QueryFormat::Json {
         return Err(UsageError("--compact requires --json".to_owned()));
     }
 
     let source = if request_json {
-        if !topic_parts.is_empty() || section.is_some() {
+        if !topic_parts.is_empty() || section.is_some() || view != QueryView::Full {
             return Err(UsageError(
-                "--request-json cannot be combined with a topic or --section".to_owned(),
+                "--request-json cannot be combined with a topic, --section, --outline, or --node"
+                    .to_owned(),
             ));
         }
         QuerySource::StdinJson
@@ -174,23 +223,22 @@ fn parse_query(arguments: &[String]) -> Result<Command, UsageError> {
 
     Ok(Command::Query {
         source,
+        view,
         format,
         pretty,
     })
 }
 
 fn select_format(
-    current: &mut QueryFormat,
-    explicit: &mut bool,
+    current: &mut Option<QueryFormat>,
     requested: QueryFormat,
 ) -> Result<(), UsageError> {
-    if *explicit && *current != requested {
+    if current.is_some_and(|current| current != requested) {
         return Err(UsageError(
-            "--json and --markdown cannot be combined".to_owned(),
+            "--json, --markdown, and --text cannot be combined".to_owned(),
         ));
     }
-    *current = requested;
-    *explicit = true;
+    *current = Some(requested);
     Ok(())
 }
 
@@ -198,7 +246,7 @@ fn select_format(
 mod tests {
     use mant_ast::QueryRequest;
 
-    use super::{Command, QueryFormat, QuerySource, parse};
+    use super::{Command, QueryFormat, QuerySource, QueryView, parse};
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -213,6 +261,7 @@ mod tests {
                     topic: "git".to_owned(),
                     section: None,
                 }),
+                view: QueryView::Full,
                 format: QueryFormat::Markdown,
                 pretty: true,
             }
@@ -228,6 +277,7 @@ mod tests {
                     topic: "printf".to_owned(),
                     section: Some("3".to_owned()),
                 }),
+                view: QueryView::Full,
                 format: QueryFormat::Json,
                 pretty: false,
             }
@@ -240,8 +290,37 @@ mod tests {
             parse(&args(&["--request-json", "--json", "--compact"])).expect("stdin query"),
             Command::Query {
                 source: QuerySource::StdinJson,
+                view: QueryView::Full,
                 format: QueryFormat::Json,
                 pretty: false,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_outline_and_repeatable_node_views_with_contextual_defaults() {
+        assert_eq!(
+            parse(&args(&["gcc", "--outline"])).expect("outline"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    topic: "gcc".to_owned(),
+                    section: None,
+                }),
+                view: QueryView::Outline,
+                format: QueryFormat::Text,
+                pretty: true,
+            }
+        );
+        assert_eq!(
+            parse(&args(&["gcc", "--node", "4.2", "-n", "files-8", "--text"])).expect("excerpt"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    topic: "gcc".to_owned(),
+                    section: None,
+                }),
+                view: QueryView::Excerpt(vec!["4.2".to_owned(), "files-8".to_owned()]),
+                format: QueryFormat::Text,
+                pretty: true,
             }
         );
     }
@@ -262,9 +341,13 @@ mod tests {
     fn rejects_ambiguous_or_incompatible_query_inputs() {
         let cases = [
             vec!["--json", "--markdown", "git"],
+            vec!["--json", "--text", "git"],
             vec!["--compact", "git"],
             vec!["--request-json", "git", "--json"],
             vec!["--request-json", "--section", "1", "--json"],
+            vec!["--request-json", "--outline", "--json"],
+            vec!["git", "--outline", "--node", "1"],
+            vec!["git", "--node"],
             vec!["--section"],
             vec!["--unknown", "git"],
         ];
@@ -286,6 +369,7 @@ mod tests {
                     topic: "--help".to_owned(),
                     section: None,
                 }),
+                view: QueryView::Full,
                 format: QueryFormat::Markdown,
                 pretty: true,
             }

@@ -198,6 +198,7 @@ dependencies = [
  "mant-ast",
  "mant-mandoc-sys",
  "scraper",
+ "serde",
  "serde_json",
 ]
 

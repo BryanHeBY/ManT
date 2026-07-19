@@ -7,6 +7,8 @@ use mant_ast::{
 };
 
 use super::render_markdown;
+use super::{render_excerpt_markdown, render_outline_markdown};
+use crate::{build_outline, select_excerpt};
 
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
@@ -280,6 +282,45 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
         markdown.contains("\\- not a list  \n1\\. not an ordered list  \n\\# not a heading"),
         "{markdown}"
     );
+}
+
+#[test]
+fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
+    let query = QueryBundle {
+        schema: QuerySchema::V1,
+        topic: "demo".to_owned(),
+        section: Some("1".to_owned()),
+        manual: Some(manual(vec![section(
+            "OPTIONS",
+            vec![paragraph(vec![Inline::Text {
+                value: "parent details".to_owned(),
+            }])],
+            vec![section(
+                "Common options",
+                vec![paragraph(vec![Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "child details".to_owned(),
+                    }],
+                }])],
+                Vec::new(),
+            )],
+        )])),
+        tldr: None,
+    };
+
+    let outline = build_outline(&query).expect("outline");
+    let outline_markdown = render_outline_markdown(&outline);
+    assert!(outline_markdown.starts_with("# demo(1) outline"));
+    assert!(outline_markdown.contains("- `1` (`options`) OPTIONS"));
+    assert!(outline_markdown.contains("  - `1.1` (`common options`) Common options"));
+
+    let excerpt = select_excerpt(&query, &["1.1".to_owned()]).expect("excerpt");
+    let excerpt_markdown = render_excerpt_markdown(&excerpt);
+    assert!(excerpt_markdown.starts_with("# demo(1)"));
+    assert!(excerpt_markdown.contains("*Outline `1.1`: OPTIONS → Common options*"));
+    assert!(excerpt_markdown.contains("## Common options"));
+    assert!(excerpt_markdown.contains("**child details**"));
+    assert!(!excerpt_markdown.contains("parent details"));
 }
 
 #[test]

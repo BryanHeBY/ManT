@@ -146,6 +146,8 @@ export interface NativeCliProtocol {
   nativeApiVersion: "1";
   querySchema: "mant.query/v1";
   documentSchema: "mant.document/v1";
+  outlineSchema?: "mant.outline/v1";
+  excerptSchema?: "mant.excerpt/v1";
 }
 
 type JsonObject = Record<string, unknown>;
@@ -175,6 +177,12 @@ export function decodeNativeCliProtocol(input: string): NativeCliProtocol {
   expectLiteral(object.nativeApiVersion, "1", "$protocol.nativeApiVersion");
   expectLiteral(object.querySchema, "mant.query/v1", "$protocol.querySchema");
   expectLiteral(object.documentSchema, "mant.document/v1", "$protocol.documentSchema");
+  if (object.outlineSchema !== undefined) {
+    expectLiteral(object.outlineSchema, "mant.outline/v1", "$protocol.outlineSchema");
+  }
+  if (object.excerptSchema !== undefined) {
+    expectLiteral(object.excerptSchema, "mant.excerpt/v1", "$protocol.excerptSchema");
+  }
   return object as unknown as NativeCliProtocol;
 }
 

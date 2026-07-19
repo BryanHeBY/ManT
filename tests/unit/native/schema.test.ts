@@ -18,6 +18,8 @@ describe("native query schema", () => {
       nativeApiVersion: "1",
       querySchema: "mant.query/v1",
       documentSchema: "mant.document/v1",
+      outlineSchema: "mant.outline/v1",
+      excerptSchema: "mant.excerpt/v1",
     });
     expect(decodeNativeCliProtocol(protocol).protocol).toBe("mant.cli/v1");
     expect(() => decodeNativeCliProtocol(protocol.replace("mant.cli/v1", "mant.cli/v2")))

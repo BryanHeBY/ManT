@@ -24,6 +24,8 @@ const protocol = JSON.stringify({
   nativeApiVersion: "1",
   querySchema: "mant.query/v1",
   documentSchema: "mant.document/v1",
+  outlineSchema: "mant.outline/v1",
+  excerptSchema: "mant.excerpt/v1",
 });
 
 describe("native mant-cli client", () => {

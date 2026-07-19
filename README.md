@@ -69,11 +69,28 @@ mant-cli git
 mant-cli printf --section 3 --markdown
 ```
 
+Discover a manual's outline, then request only the section subtrees needed by
+a human or agent. Outline paths are one-based and `--node` also accepts the
+document-local ID printed in brackets:
+
+```sh
+mant-cli gcc --outline
+mant-cli gcc --outline --json
+mant-cli gcc --node 4.2 --markdown
+mant-cli gcc --node options-4 --text
+mant-cli gcc --node 4.2 --node 4.7 --json
+```
+
+Selecting a node includes all of its child sections. Repeated and overlapping
+selections are deduplicated and emitted in source order. `--section` continues
+to select the manual volume (for example `1` or `3p`), not an outline node.
+
 Use the versioned JSON contract for structured consumers:
 
 ```sh
 mant-cli git --json
 mant-cli git --json --compact
+mant-cli git --text
 mant-cli protocol-version
 ```
 

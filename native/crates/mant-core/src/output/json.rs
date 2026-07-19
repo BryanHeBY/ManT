@@ -1,6 +1,6 @@
 //! Serializes stable native contracts without a TypeScript shape conversion.
 
-use mant_ast::{QueryBundle, TldrCacheUpdate};
+use mant_ast::{ManualExcerpt, ManualOutline, QueryBundle, TldrCacheUpdate};
 
 /// Serialize a query contract in compact or human-readable form.
 ///
@@ -8,11 +8,31 @@ use mant_ast::{QueryBundle, TldrCacheUpdate};
 ///
 /// Propagates the unlikely JSON writer failure from [`serde_json`].
 pub fn render_query_json(query: &QueryBundle, pretty: bool) -> Result<String, serde_json::Error> {
-    if pretty {
-        serde_json::to_string_pretty(query)
-    } else {
-        serde_json::to_string(query)
-    }
+    render_json(query, pretty)
+}
+
+/// Serialize a manual outline in compact or human-readable form.
+///
+/// # Errors
+///
+/// Propagates the unlikely JSON writer failure from [`serde_json`].
+pub fn render_outline_json(
+    outline: &ManualOutline,
+    pretty: bool,
+) -> Result<String, serde_json::Error> {
+    render_json(outline, pretty)
+}
+
+/// Serialize selected manual subtrees in compact or human-readable form.
+///
+/// # Errors
+///
+/// Propagates the unlikely JSON writer failure from [`serde_json`].
+pub fn render_excerpt_json(
+    excerpt: &ManualExcerpt,
+    pretty: bool,
+) -> Result<String, serde_json::Error> {
+    render_json(excerpt, pretty)
 }
 
 /// Serialize the explicit tldr update result for a process boundary.
@@ -24,10 +44,14 @@ pub fn render_update_json(
     update: &TldrCacheUpdate,
     pretty: bool,
 ) -> Result<String, serde_json::Error> {
+    render_json(update, pretty)
+}
+
+fn render_json(value: &impl serde::Serialize, pretty: bool) -> Result<String, serde_json::Error> {
     if pretty {
-        serde_json::to_string_pretty(update)
+        serde_json::to_string_pretty(value)
     } else {
-        serde_json::to_string(update)
+        serde_json::to_string(value)
     }
 }
 

@@ -21,6 +21,8 @@ fn protocol_version_is_a_clean_json_document() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
     assert_eq!(value["protocol"], "mant.cli/v1");
     assert_eq!(value["querySchema"], "mant.query/v1");
+    assert_eq!(value["outlineSchema"], "mant.outline/v1");
+    assert_eq!(value["excerptSchema"], "mant.excerpt/v1");
 }
 
 #[test]

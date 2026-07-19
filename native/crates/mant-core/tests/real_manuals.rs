@@ -5,8 +5,8 @@
 
 use std::{collections::HashSet, path::PathBuf, sync::OnceLock};
 
-use mant_ast::{Block, Inline, MantDocument, Section, SourceFormat};
-use mant_core::parse_manual_source;
+use mant_ast::{Block, Inline, MantDocument, QueryBundle, QuerySchema, Section, SourceFormat};
+use mant_core::{build_outline, parse_manual_source, select_excerpt};
 
 static LS: OnceLock<MantDocument> = OnceLock::new();
 static GIT: OnceLock<MantDocument> = OnceLock::new();
@@ -352,6 +352,26 @@ fn fixed_roff_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
     }
 }
 
+#[test]
+fn real_nested_manuals_support_outline_discovery_and_targeted_excerpts() {
+    let query = manual_query("git");
+    let outline = build_outline(&query).expect("Git outline");
+    let git_diffs = &outline.nodes[15].children[3];
+    assert_eq!(git_diffs.path, "16.4");
+    assert_eq!(git_diffs.id, "git-diffs-27");
+    assert_eq!(git_diffs.title, "Git Diffs");
+
+    let excerpt = select_excerpt(&query, &["git-diffs-27".to_owned(), "16.4".to_owned()])
+        .expect("Git Diffs excerpt");
+    assert_eq!(excerpt.selections.len(), 1);
+    assert_eq!(excerpt.selections[0].path, "16.4");
+    assert_eq!(
+        excerpt.selections[0].breadcrumbs[0].title,
+        "ENVIRONMENT VARIABLES"
+    );
+    assert!(block_slice_text(&excerpt.selections[0].section.blocks).contains("GIT_EXTERNAL_DIFF"));
+}
+
 fn manual(name: &str) -> &'static MantDocument {
     let slot = match name {
         "ls" => &LS,
@@ -365,6 +385,17 @@ fn manual(name: &str) -> &'static MantDocument {
         parse_manual_source(&fixture_path(name))
             .unwrap_or_else(|error| panic!("parse {name} roff fixture: {error}"))
     })
+}
+
+fn manual_query(name: &str) -> QueryBundle {
+    let manual = manual(name).clone();
+    QueryBundle {
+        schema: QuerySchema::V1,
+        topic: name.to_owned(),
+        section: manual.meta.section.clone(),
+        manual: Some(manual),
+        tldr: None,
+    }
 }
 
 fn fixture_path(name: &str) -> PathBuf {

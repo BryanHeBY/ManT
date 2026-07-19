@@ -9,10 +9,10 @@ mod arguments;
 use std::io::{self, Read, Write};
 
 use mant_ast::{QueryBundle, QueryRequest, TldrCacheUpdate};
-use mant_core::QueryError;
+use mant_core::{ProjectionError, QueryError};
 use serde::Serialize;
 
-use arguments::{Command, HELP, QueryFormat, QuerySource, UsageError};
+use arguments::{Command, HELP, QueryFormat, QuerySource, QueryView, UsageError};
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
@@ -28,6 +28,8 @@ struct ProtocolDescription<'a> {
     native_api_version: &'a str,
     query_schema: &'a str,
     document_schema: &'a str,
+    outline_schema: &'a str,
+    excerpt_schema: &'a str,
 }
 
 // ── Host boundary ─────────────────────────────────────────────────────────
@@ -100,6 +102,8 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
                 native_api_version: mant_core::native_api_version(),
                 query_schema: "mant.query/v1",
                 document_schema: "mant.document/v1",
+                outline_schema: "mant.outline/v1",
+                excerpt_schema: "mant.excerpt/v1",
             },
             pretty,
         ),
@@ -109,19 +113,59 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
         }
         Command::Query {
             source,
+            view,
             format,
             pretty,
         } => {
             let request = read_query_request(source, input)?;
             validate_query_request(&request)?;
             let query = host.query(&request)?;
-            match format {
-                QueryFormat::Markdown => Ok(mant_core::render_markdown(&query)),
-                QueryFormat::Json => {
-                    mant_core::render_query_json(&query, pretty).map_err(Failure::operational)
+            match view {
+                QueryView::Full => render_full_query(&query, format, pretty),
+                QueryView::Outline => {
+                    let outline = mant_core::build_outline(&query).map_err(projection_failure)?;
+                    match format {
+                        QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
+                        QueryFormat::Text => Ok(mant_core::render_outline_text(&outline)),
+                        QueryFormat::Json => mant_core::render_outline_json(&outline, pretty)
+                            .map_err(Failure::operational),
+                    }
+                }
+                QueryView::Excerpt(selectors) => {
+                    let excerpt = mant_core::select_excerpt(&query, &selectors)
+                        .map_err(projection_failure)?;
+                    match format {
+                        QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown(&excerpt)),
+                        QueryFormat::Text => Ok(mant_core::render_excerpt_text(&excerpt)),
+                        QueryFormat::Json => mant_core::render_excerpt_json(&excerpt, pretty)
+                            .map_err(Failure::operational),
+                    }
                 }
             }
         }
+    }
+}
+
+fn render_full_query(
+    query: &QueryBundle,
+    format: QueryFormat,
+    pretty: bool,
+) -> Result<String, Failure> {
+    match format {
+        QueryFormat::Markdown => Ok(mant_core::render_markdown(query)),
+        QueryFormat::Text => Ok(mant_core::render_query_text(query)),
+        QueryFormat::Json => {
+            mant_core::render_query_json(query, pretty).map_err(Failure::operational)
+        }
+    }
+}
+
+fn projection_failure(error: ProjectionError) -> Failure {
+    match error {
+        ProjectionError::MissingManual { .. } => Failure::operational(error),
+        ProjectionError::EmptySelection
+        | ProjectionError::EmptySelector
+        | ProjectionError::UnknownSelector { .. } => Failure::usage(error),
     }
 }
 
@@ -226,13 +270,18 @@ fn report_failure(error: &Failure, diagnostics: &mut dyn Write) -> u8 {
 mod tests {
     use std::cell::Cell;
 
-    use mant_ast::{QueryBundle, QueryRequest, QuerySchema, TldrCacheAction, TldrCacheUpdate};
+    use mant_ast::{
+        Block, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument,
+        Producer, QueryBundle, QueryRequest, QuerySchema, Section, SourceFormat, TldrCacheAction,
+        TldrCacheUpdate,
+    };
 
     use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, run_with_host};
 
     struct FakeHost {
         query_calls: Cell<usize>,
         update_calls: Cell<usize>,
+        manual: Option<MantDocument>,
     }
 
     impl FakeHost {
@@ -240,6 +289,14 @@ mod tests {
             Self {
                 query_calls: Cell::new(0),
                 update_calls: Cell::new(0),
+                manual: None,
+            }
+        }
+
+        fn with_manual() -> Self {
+            Self {
+                manual: Some(manual()),
+                ..Self::new()
             }
         }
     }
@@ -251,7 +308,7 @@ mod tests {
                 schema: QuerySchema::V1,
                 topic: request.topic.trim().to_owned(),
                 section: request.section.clone(),
-                manual: None,
+                manual: self.manual.clone(),
                 tldr: None,
             })
         }
@@ -282,6 +339,57 @@ mod tests {
             String::from_utf8(output).expect("UTF-8 output"),
             String::from_utf8(diagnostics).expect("UTF-8 diagnostics"),
         )
+    }
+
+    fn manual() -> MantDocument {
+        MantDocument {
+            schema: DocumentSchema::V1,
+            producer: Producer {
+                name: "test".to_owned(),
+                version: "1".to_owned(),
+                engine: None,
+            },
+            source: DocumentSource {
+                format: SourceFormat::Man,
+                path: Some("/man/demo.1".to_owned()),
+                renderer: None,
+            },
+            meta: DocumentMeta {
+                section: Some("1".to_owned()),
+                ..DocumentMeta::default()
+            },
+            diagnostics: Vec::new(),
+            sections: vec![
+                section("name-1", "NAME", "demo - a test", Vec::new()),
+                section(
+                    "options-2",
+                    "OPTIONS",
+                    "all options",
+                    vec![section(
+                        "common-3",
+                        "Common options",
+                        "common details",
+                        Vec::new(),
+                    )],
+                ),
+            ],
+        }
+    }
+
+    fn section(id: &str, title: &str, text: &str, children: Vec<Section>) -> Section {
+        Section {
+            id: id.to_owned(),
+            title: title.to_owned(),
+            blocks: vec![Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: text.to_owned(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            children,
+            source: None,
+        }
     }
 
     #[test]
@@ -320,6 +428,40 @@ mod tests {
     }
 
     #[test]
+    fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
+        let host = FakeHost::with_manual();
+        let (status, output, diagnostics) = invoke(&["demo", "--outline"], b"", &host);
+        assert_eq!(status, 0);
+        assert!(output.contains("├─ 1 [name-1] NAME"));
+        assert!(output.contains("└─ 2 [options-2] OPTIONS"));
+        assert!(output.contains("└─ 2.1 [common-3] Common options"));
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["demo", "--node", "2.1", "--json", "--compact"],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
+        assert_eq!(value["schema"], "mant.excerpt/v1");
+        assert_eq!(value["selections"][0]["path"], "2.1");
+        assert_eq!(value["selections"][0]["section"]["title"], "Common options");
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn unknown_nodes_are_concise_usage_failures() {
+        let host = FakeHost::with_manual();
+        let (status, output, diagnostics) = invoke(&["demo", "--node", "9", "--text"], b"", &host);
+
+        assert_eq!(status, 2);
+        assert!(output.is_empty());
+        assert!(diagnostics.contains("manual 'demo' has no outline node '9'"));
+        assert!(diagnostics.contains("mant-cli demo --outline"));
+    }
+
+    #[test]
     fn update_and_protocol_results_are_stable_json_documents() {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(&["update", "tldr", "--compact"], b"", &host);
@@ -336,6 +478,8 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
         assert_eq!(value["nativeApiVersion"], "1");
+        assert_eq!(value["outlineSchema"], "mant.outline/v1");
+        assert_eq!(value["excerptSchema"], "mant.excerpt/v1");
         assert!(diagnostics.is_empty());
     }
 

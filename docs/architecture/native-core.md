@@ -1,6 +1,6 @@
 # Native document core
 
-Status: implemented on the `refactor/rust-native-addon` branch.
+Status: implemented.
 
 ## Context
 
@@ -59,6 +59,8 @@ rather than a mirror of parser internals:
 
 ```text
 mant-cli <topic> [--json | --markdown]  -> query JSON or CommonMark
+mant-cli <topic> --outline              -> selectable manual tree
+mant-cli <topic> --node <path-or-id>    -> selected section subtrees
 mant-cli update tldr                   -> update result JSON
 mant-cli protocol-version              -> protocol description JSON
 ```
@@ -83,6 +85,15 @@ Direct `mant-cli` queries default to Markdown for useful terminal and agent
 output.  `--json` is pretty by default and `--compact` is available to process
 clients.  Fatal native failures cross the boundary as concise errors;
 recoverable parser findings are structured diagnostics in the query result.
+
+Outline and excerpt views are projections of the same complete native
+document, so they never reimplement parsing rules. Outlines expose both a
+one-based tree path such as `4.2` and the document-local section ID. Excerpt
+selection accepts either value, includes the selected node's descendants,
+deduplicates overlaps, and preserves source order. Their JSON contracts are
+`mant.outline/v1` and `mant.excerpt/v1`; plain text and CommonMark are also
+available. The TUI's closed `--request-json` input remains `QueryRequest` and
+does not accept projection controls.
 
 ## Parsing and fallback policy
 

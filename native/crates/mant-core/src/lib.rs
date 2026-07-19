@@ -3,13 +3,19 @@
 mod groff_html;
 mod mandoc;
 mod output;
+mod projection;
 mod query;
 mod source;
 mod tldr;
 
 pub use groff_html::parse_groff_html;
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
-pub use output::{render_markdown, render_query_json, render_update_json};
+pub use output::{
+    render_excerpt_json, render_excerpt_markdown, render_excerpt_text, render_markdown,
+    render_outline_json, render_outline_markdown, render_outline_text, render_query_json,
+    render_query_text, render_update_json,
+};
+pub use projection::{ProjectionError, build_outline, select_excerpt};
 pub use query::{QueryError, query};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,

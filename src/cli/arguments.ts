@@ -1,8 +1,8 @@
 /**
  * @file Parses the interactive `mant` command line without loading the TUI.
  *
- * Non-interactive JSON, Markdown, and cache operations belong to the separate
- * Rust `mant-cli` executable, leaving this command focused on terminal UI use.
+ * Non-interactive outline, text, JSON, Markdown, and cache operations belong
+ * to the separate Rust `mant-cli`, leaving this command focused on TUI use.
  */
 
 // ── Public command model ───────────────────────────────────────────────────
@@ -34,6 +34,9 @@ Options:
 
 Agent and pipeline output:
   mant-cli <topic>              Print Markdown
+  mant-cli <topic> --outline    Print a selectable section tree
+  mant-cli <topic> --node 4.2   Print one section subtree
+  mant-cli <topic> --text       Print unstyled semantic text
   mant-cli <topic> --json       Print the versioned document as JSON
   mant-cli update tldr          Update the tldr cache
 
