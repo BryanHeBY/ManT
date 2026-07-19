@@ -59,7 +59,16 @@ describe("App search (e2e)", () => {
     await flushEscape(setup);
     frame = setup.captureCharFrame();
     expect(frame).not.toContain("Find: directory");
-    expect(frame).toContain("Find “directory” · 1 matches");
+    expect(frame).not.toContain("Find “directory” · 1 matches");
+    expect(
+      setup.captureSpans().lines
+        .flatMap((line) => line.spans)
+        .filter((span) => span.text.toLocaleLowerCase() === "directory")
+        .some((span) => {
+          const background = span.bg.toInts().slice(0, 3).join(",");
+          return background === "249,226,175" || background === "69,71,90";
+        }),
+    ).toBe(false);
 
     setup.renderer.destroy();
   });

@@ -306,8 +306,11 @@ export function App({ result, onQuit }: AppProps) {
     setIsSearchOpen(true);
   };
 
+  /** Leave search mode and remove every visual/result state owned by it. */
   const closeSearch = () => {
-    setSearchDraft(searchQuery);
+    clearAllSearchDecorations();
+    setSearchDraft("");
+    setSearch({ query: "", matches: [], activeIndex: 0 });
     setIsSearchOpen(false);
   };
 
@@ -405,7 +408,7 @@ export function App({ result, onQuit }: AppProps) {
         shortcut: "?",
         action: () => {
           setOpenMenu(null);
-          setIsSearchOpen(false);
+          closeSearch();
           setIsHelpOpen(true);
         },
       },
@@ -415,7 +418,7 @@ export function App({ result, onQuit }: AppProps) {
   const activeMenuEntries = openMenu ? menuEntries[openMenu] : [];
 
   const openMenuById = (menu: MenuId) => {
-    setIsSearchOpen(false);
+    closeSearch();
     setIsHelpOpen(false);
     setOpenMenu((current) => (current === menu ? null : menu));
     setMenuCursor(0);
