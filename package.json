@@ -3,14 +3,11 @@
   "version": "0.1.0",
   "description": "A structured document query tool with a modern TUI for man pages",
   "type": "module",
-  "main": "./src/query/index.ts",
-  "module": "./src/query/index.ts",
   "bin": {
-    "mant": "./src/cli.ts"
+    "mant": "./src/mant.ts"
   },
   "files": [
     "src",
-    "native/mandoc-json",
     "scripts",
     "native/bin"
   ],
@@ -23,7 +20,6 @@
     "rust:lint": "cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D warnings",
     "rust:test": "cargo test --manifest-path native/Cargo.toml --workspace",
     "build:mant-cli": "bun scripts/build-mant-cli.ts",
-    "build:mandoc-json": "sh scripts/build-mandoc-json.sh",
     "test": "bun test",
     "test:unit": "bun test tests/unit",
     "test:e2e": "bun test tests/e2e"
@@ -31,13 +27,10 @@
   "dependencies": {
     "@opentui/core": "0.4.5",
     "@opentui/react": "0.4.5",
-    "mdast-util-to-markdown": "2.1.2",
-    "node-html-parser": "latest",
     "react": "^19.2.7"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/mdast": "4.0.4",
     "@types/react": "^19.2.17"
   }
 }

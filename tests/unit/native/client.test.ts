@@ -11,7 +11,7 @@ import type {
   CommandOptions,
   CommandResult,
   CommandRunner,
-} from "../../../src/core/process";
+} from "../../../src/native/process";
 
 const encode = (value: string) => new TextEncoder().encode(value);
 

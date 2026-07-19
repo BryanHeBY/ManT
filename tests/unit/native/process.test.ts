@@ -1,6 +1,5 @@
 /**
- * @file Verifies that the shared process boundary turns host failures into
- * actionable, runtime-agnostic diagnostics.
+ * @file Verifies actionable diagnostics at the mant-cli subprocess boundary.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -8,10 +7,10 @@ import {
   CommandExecutionError,
   commandError,
   runCommand,
-} from "../../../src/core/process";
+} from "../../../src/native/process";
 
-describe("process boundary", () => {
-  test("runs a renderer from its requested source directory", async () => {
+describe("native process boundary", () => {
+  test("runs a command from its requested directory", async () => {
     const result = await runCommand(["/bin/pwd"], { cwd: import.meta.dir });
 
     expect(result.exitCode).toBe(0);
@@ -32,17 +31,17 @@ describe("process boundary", () => {
     );
   });
 
-  test("uses renderer diagnostics before a generic exit-code message", () => {
-    expect(commandError(["man", "missing"], {
+  test("uses native diagnostics before a generic exit-code message", () => {
+    expect(commandError(["mant-cli", "missing"], {
       stdout: new Uint8Array(),
       stderr: "No manual entry for missing\n",
-      exitCode: 16,
+      exitCode: 1,
     }).message).toBe("No manual entry for missing");
 
-    expect(commandError(["man", "missing"], {
+    expect(commandError(["mant-cli", "missing"], {
       stdout: new Uint8Array(),
       stderr: "",
-      exitCode: 16,
-    }).message).toBe("man missing failed with code 16");
+      exitCode: 1,
+    }).message).toBe("mant-cli missing failed with code 1");
   });
 });

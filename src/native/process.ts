@@ -1,9 +1,8 @@
 /**
- * @file Provides the small process boundary shared by manual renderers.
+ * @file Provides the small subprocess boundary used by the native CLI client.
  *
- * Keeping process execution, compression selection, and error messages in one
- * place makes higher-level fetchers describe renderer policy rather than pipe
- * plumbing. Command runners remain injectable for deterministic tests.
+ * Keeping process execution here lets the client focus on protocol semantics,
+ * while tests can inject a deterministic runner without spawning Rust.
  */
 
 export interface CommandResult {
@@ -49,7 +48,7 @@ export async function runCommand(
     });
 
     // Reading stdout before stderr can deadlock if diagnostics fill stderr's
-    // pipe. Start both reads before awaiting the process exit status.
+    // pipe, so start both reads before awaiting the exit status.
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(process.stdout).arrayBuffer(),
       new Response(process.stderr).text(),
@@ -60,15 +59,6 @@ export async function runCommand(
   } catch (error) {
     throw commandExecutionError(executable, error);
   }
-}
-
-/** Returns the platform decompressor for the compression suffix used by man. */
-export function getDecompressor(path: string): string | null {
-  if (path.endsWith(".zst")) return "zstdcat";
-  if (path.endsWith(".gz")) return "zcat";
-  if (path.endsWith(".bz2")) return "bzcat";
-  if (path.endsWith(".xz")) return "xzcat";
-  return null;
 }
 
 /** Builds a useful failure from a non-zero command result. */

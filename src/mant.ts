@@ -1,11 +1,10 @@
 #!/usr/bin/env bun
 /**
- * @file Provides Mant's minimal executable entry point.
+ * @file Starts the interactive `mant` TUI executable.
  *
- * Argument parsing and command execution live in testable CLI modules.  This
- * file only translates their result into a process exit code and retains one
- * last-resort boundary so an unexpected failure never exposes a Bun stack by
- * default.
+ * The separate Rust `mant-cli` executable owns querying and agent output.
+ * This file only translates the testable TUI host result into a process exit
+ * code and retains a last-resort boundary for unexpected failures.
  */
 
 import { formatUnexpectedError, runCli } from "./cli/run";

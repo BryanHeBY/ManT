@@ -13,7 +13,7 @@ interface CliProcessResult {
 }
 
 async function invokeCli(...args: string[]): Promise<CliProcessResult> {
-  const entry = join(import.meta.dir, "../../src/cli.ts");
+  const entry = join(import.meta.dir, "../../src/mant.ts");
   const process = Bun.spawn([processExecPath(), entry, ...args], {
     stdout: "pipe",
     stderr: "pipe",
@@ -52,7 +52,7 @@ describe("real CLI entry point", () => {
 
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("mant: unknown option '--definitely-unknown'");
-    expect(result.stderr).not.toContain("src/cli.ts:");
+    expect(result.stderr).not.toContain("src/mant.ts:");
     expect(result.stderr).not.toContain(" at main");
   });
 
@@ -61,7 +61,7 @@ describe("real CLI entry point", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("use mant-cli for Markdown or JSON output");
-    expect(result.stderr).not.toContain("src/core/");
+    expect(result.stderr).not.toContain("src/");
     expect(result.stderr).not.toContain("mant-cli was not found");
   });
 });

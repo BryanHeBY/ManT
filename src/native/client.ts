@@ -9,7 +9,7 @@ import {
   commandError,
   runCommand,
   type CommandRunner,
-} from "../core/process";
+} from "./process";
 import {
   decodeMantQuery,
   decodeNativeCliProtocol,

@@ -3,7 +3,7 @@
  *
  * Cargo owns compilation and dependency tracking. This wrapper applies Mant's
  * Linux/macOS C-compiler policy and atomically publishes the release artifact
- * under native/bin so Bun can embed it in the interactive executable.
+ * under native/bin so development can select it through MANT_CLI_PATH.
  */
 
 import { chmod, copyFile, mkdir, rename, rm } from "node:fs/promises";
@@ -15,7 +15,7 @@ const manifest = join(root, "native", "Cargo.toml");
 const cargoArtifact = join(root, "native", "target", "release", "mant-cli");
 const stagedArtifact = join(root, "native", "bin", "mant-cli");
 
-/** Build the native CLI and return the path consumed by Bun's asset bundler. */
+/** Build the native CLI and return the path consumed by the Bun process client. */
 export async function buildMantCli(): Promise<string> {
   assertSupportedBuildPlatform();
   const compiler = resolveCCompiler();

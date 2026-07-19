@@ -13,7 +13,7 @@ const root = new URL("..", import.meta.url).pathname;
 try {
   const nativeCli = await buildMantCli();
   const child = Bun.spawn(
-    [process.execPath, "src/cli.ts", ...process.argv.slice(2)],
+    [process.execPath, "src/mant.ts", ...process.argv.slice(2)],
     {
       cwd: root,
       env: { ...process.env, MANT_CLI_PATH: nativeCli },

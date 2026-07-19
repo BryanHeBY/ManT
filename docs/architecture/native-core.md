@@ -1,14 +1,14 @@
 # Native document core
 
-Status: accepted for the `refactor/rust-native-addon` migration.
+Status: implemented on the `refactor/rust-native-addon` branch.
 
 ## Context
 
-Mant currently obtains HTML from bundled mandoc, an installed mandoc, or
-man-db/groff and then reconstructs a document model in TypeScript.  A second,
-source-level `mant.roff-ast/v1` format exposes part of libmandoc's internal
-tree for diagnostics.  These two trees have different purposes and neither is
-an appropriate long-term boundary between the document engine and the TUI.
+Mant previously obtained HTML from bundled mandoc, an installed mandoc, or
+man-db/groff and then reconstructed a document model in TypeScript. A second
+`mant.roff-ast/v1` sidecar exposed part of libmandoc's internal tree. These
+parallel representations were removed after the native document contract
+became authoritative.
 
 Keeping parsing and serialization rules in both Rust and TypeScript would
 also allow whitespace, list, link, and fallback behavior to diverge.  The
@@ -43,11 +43,6 @@ lower a document.  It never defines Mant's public AST and never formats JSON.
 and output renderers.  `mant.query/v1` combines an optional manual document
 with an optional tldr document while preserving their different sources and
 licences.
-
-The existing `mant.roff-ast/v1` tree remains a diagnostic format during the
-migration.  It mirrors pinned libmandoc implementation details, omits some
-normalized arguments and table/equation payloads, and is not the UI contract.
-It may later be replaced by a Rust-generated debug representation.
 
 All cross-language payloads carry an exact schema identifier.  Rust structs
 are the source of truth, and TypeScript validates the JSON boundary before
@@ -97,11 +92,11 @@ compression handling and preserves the original source path and include base
 directory.  `.so` aliases and includes must work without exposing temporary
 paths in the result.
 
-The current TypeScript HTML parsers remain available until direct lowering is
-covered by deterministic fixtures and native/legacy differential tests.  A
-groff HTML compatibility parser moves into Rust before the legacy parsers are
-removed, retaining the current fallback for constructs libmandoc reports as
-unsupported.  Best-effort native output is retained together with its
+Direct lowering is covered by deterministic native fixtures and was compared
+against the former TypeScript implementation on large installed ls, git, gcc,
+clang, and tar pages before cut-over. The groff HTML compatibility parser now
+lives in Rust and retains the fallback for constructs libmandoc reports as
+unsupported. Best-effort native output is retained together with its
 diagnostics when no higher-fidelity fallback is available.
 
 Because libmandoc 1.14.6 uses process-global character, diagnostic, tag, and
@@ -137,16 +132,14 @@ Markdown escaping.
 Rust additionally owns `mant-cli` argument, stdio protocol, exit-code, and
 agent-facing output tests.  TypeScript retains process-client, interactive
 command, and UI tests.  Shared contract fixtures are decoded by TypeScript and
-generated or compared by Rust.  During migration, differential tests compare
-native results with the existing parsers for large git, gcc, clang, tar, and
-ls pages.  Implementation-specific HTML parser tests are removed only after
-equivalent source-level Rust tests exist.
+generated or compared by Rust. The one-time native/legacy differential gate
+was removed together with the old parser after the cut-over commit;
+equivalent source-level and renderer-fallback coverage remains in Rust.
 
 ## Migration rules
 
-Every migration commit must keep the repository buildable and tested.  Third-
-party mandoc sources are committed separately from Mant code.  The native
-path is introduced alongside the legacy path, made authoritative in a later
-commit, and only then followed by deletion of the TypeScript parsers, sidecar,
-and duplicate dependencies.  Behavior switches and cleanup are never combined
-in the same commit.
+The migration kept the repository buildable at every commit. Third-party
+mandoc sources were committed separately, the native path was introduced and
+tested alongside the legacy path, the TUI was switched in its own commit, and
+only then were the TypeScript parsers, sidecar, and duplicate dependencies
+deleted.
