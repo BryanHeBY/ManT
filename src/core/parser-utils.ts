@@ -3,7 +3,7 @@
  */
 
 import { parse, HTMLElement, TextNode } from "node-html-parser";
-import type { BlockNode, InlineNode } from "./types";
+import type { BlockNode, DefinitionListItem, InlineNode } from "./types";
 
 // ── Type guards ────────────────────────────────────────────
 
@@ -134,6 +134,46 @@ export function parseListItems(
   return items;
 }
 
+/**
+ * Keeps the semantic pairing of consecutive <dt> terms and their following
+ * <dd>. Treating both elements as ordinary list items loses the relationship
+ * and causes renderers to put a bullet in front of every description.
+ */
+export function parseDefinitionListItems(
+  listNode: HTMLElement,
+): DefinitionListItem[] {
+  const items: DefinitionListItem[] = [];
+  let terms: InlineNode[][] = [];
+
+  for (const child of listNode.childNodes) {
+    if (!isElement(child)) continue;
+    const tag = child.tagName.toLowerCase();
+    if (tag !== "dt" && tag !== "dd") continue;
+
+    const inline: InlineNode[] = [];
+    for (const nested of child.childNodes) {
+      if (isText(nested) || isElement(nested)) {
+        inline.push(...parseInline(nested));
+      }
+    }
+
+    if (tag === "dt") {
+      if (inline.length > 0) terms.push(inline);
+      continue;
+    }
+
+    if (inline.length > 0 || terms.length > 0) {
+      items.push({ terms, description: inline });
+    }
+    terms = [];
+  }
+
+  // Malformed or abbreviated HTML can end with a term and no description.
+  // Preserve it instead of silently discarding visible manual content.
+  if (terms.length > 0) items.push({ terms, description: [] });
+  return items;
+}
+
 export function parseBlockElementWithIndent(
   node: HTMLElement,
   indent: number
@@ -186,10 +226,16 @@ export function parseBlockElementWithIndent(
     return { type: "pre", children: normalized, indent };
   }
 
-  if (tag === "ul" || tag === "ol" || tag === "dl") {
+  if (tag === "ul" || tag === "ol") {
     const items = parseListItems(node);
     if (items.length === 0) return null;
     return { type: "list", items, indent };
+  }
+
+  if (tag === "dl") {
+    const items = parseDefinitionListItems(node);
+    if (items.length === 0) return null;
+    return { type: "definition-list", items, indent };
   }
 
   // Fallback: treat unknown block-level elements as paragraphs.

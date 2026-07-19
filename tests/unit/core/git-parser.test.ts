@@ -471,6 +471,12 @@ describe("git man page — no HTML tags in parse output", () => {
             texts.push(...extractAllText(item));
           }
           break;
+        case "definition-list":
+          for (const item of block.items) {
+            for (const term of item.terms) texts.push(...extractAllText(term));
+            texts.push(...extractAllText(item.description));
+          }
+          break;
         case "spacer":
           break;
       }

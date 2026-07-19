@@ -32,6 +32,10 @@ function blockText(block: BlockNode): string {
       return inlineText(block.children);
     case "list":
       return block.items.map(inlineText).join("\n");
+    case "definition-list":
+      return block.items
+        .flatMap((item) => [...item.terms.map(inlineText), inlineText(item.description)])
+        .join("\n");
     case "spacer":
       return "";
   }

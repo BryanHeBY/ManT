@@ -8,7 +8,10 @@ import { parseManHtml } from "../../../src/core/parser";
 import type { QueryResult } from "../../../src/query";
 import { mockLsResult, mockLsWithTldrResult } from "../../fixtures/mock-result";
 import { loadManPageFixture } from "../../fixtures/man-pages";
-import { mandocHtmlWithPreInDefinitionList } from "./manual-fixtures";
+import {
+  mandocClangOptionsHtml,
+  mandocHtmlWithPreInDefinitionList,
+} from "./manual-fixtures";
 import { installOpenTuiWarningFilter, navLines, renderApp } from "./test-support";
 
 installOpenTuiWarningFilter();
@@ -136,6 +139,37 @@ describe("App rendering (e2e)", () => {
     const codeLine = frame.split("\n").find((line) => line.includes("#define abs(n)"));
     expect(codeLine).toBeDefined();
     expect(codeLine?.includes("•")).toBe(false);
+
+    setup.renderer.destroy();
+  });
+
+  test("renders clang definition lists as indented terms and descriptions", async () => {
+    const setup = await renderApp(
+      {
+        topic: "clang",
+        sections: parseManHtml(mandocClangOptionsHtml()),
+      },
+      { width: 100, height: 28 },
+    );
+    const lines = setup.captureCharFrame().split("\n").map((line) => line.slice(32));
+    const lineIndex = (text: string) => lines.findIndex((line) => line.includes(text));
+    const optionsLine = lines[lineIndex("OPTIONS")]!;
+    const subsectionLine = lines[lineIndex("Stage Selection Options")]!;
+    const termLine = lines[lineIndex("-E")]!;
+    const descriptionIndex = lineIndex("Run the preprocessor stage.");
+    const descriptionLine = lines[descriptionIndex]!;
+    const nextTermIndex = lineIndex("-fsyntax-only");
+
+    expect(termLine).not.toContain("•");
+    expect(descriptionLine).not.toContain("•");
+    expect(subsectionLine.indexOf("Stage Selection Options")).toBeGreaterThan(
+      optionsLine.indexOf("OPTIONS"),
+    );
+    expect(descriptionLine.indexOf("Run the preprocessor stage.")).toBeGreaterThan(
+      termLine.indexOf("-E"),
+    );
+    expect(nextTermIndex).toBe(descriptionIndex + 2);
+    expect(lines[descriptionIndex + 1]?.trim()).toBe("");
 
     setup.renderer.destroy();
   });

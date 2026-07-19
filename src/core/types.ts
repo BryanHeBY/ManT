@@ -10,10 +10,17 @@ export interface SectionNode {
   children: SectionNode[];
 }
 
+/** One term/description pair from an HTML definition list. */
+export interface DefinitionListItem {
+  terms: InlineNode[][];
+  description: InlineNode[];
+}
+
 export type BlockNode =
   | { type: "paragraph"; children: InlineNode[]; indent: number }
   | { type: "pre"; children: InlineNode[]; indent: number }
   | { type: "list"; items: InlineNode[][]; indent: number }
+  | { type: "definition-list"; items: DefinitionListItem[]; indent: number }
   | { type: "spacer"; indent: number };
 
 export type InlineNode =

@@ -113,8 +113,8 @@ describe("parseManHtml", () => {
     expect(indentedParagraph?.type === "paragraph" && indentedParagraph.indent).toBe(4);
 
     const list = sections[0]?.blocks?.[2];
-    expect(list?.type).toBe("list");
-    expect(list?.type === "list" && list.indent).toBe(4);
+    expect(list?.type).toBe("definition-list");
+    expect(list?.type === "definition-list" && list.indent).toBe(4);
   });
 
   test("expands mandoc definition lists with pre blocks into separate blocks", () => {

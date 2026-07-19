@@ -114,7 +114,11 @@ describe("E2E indent - groff table parsing", () => {
     // (ls uses margin-left:9% for options, margin-left:18% for descriptions,
     // and tables with td width=9% spacer)
     for (const block of blocks) {
-      if (block.type === "paragraph" || block.type === "list") {
+      if (
+        block.type === "paragraph"
+        || block.type === "list"
+        || block.type === "definition-list"
+      ) {
         expect(block.indent).toBeGreaterThan(0);
       }
     }
@@ -214,8 +218,8 @@ describe("E2E indent - mandoc", () => {
     expect(firstBlock?.type === "paragraph" && firstBlock.indent).toBe(0);
 
     // The list (Bl-tag with inline dd) should have indent=0
-    const list = desc?.blocks.find((b) => b.type === "list");
-    expect(list?.type === "list" && list.indent).toBe(0);
+    const list = desc?.blocks.find((b) => b.type === "definition-list");
+    expect(list?.type === "definition-list" && list.indent).toBe(0);
   });
 });
 
@@ -260,12 +264,12 @@ describe("E2E indent - cross-format consistency", () => {
 
     const mandocHasBoldFlag = mandocDesc?.blocks.some(
       (b) =>
-        b.type === "list" &&
+        b.type === "definition-list" &&
         b.items.some(
           (item) =>
-            item.some(
+            item.terms.some((term) => term.some(
               (n) => n.type === "bold" && n.children.some((c) => c.type === "text")
-            )
+            ))
         )
     );
 

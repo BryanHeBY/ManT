@@ -52,6 +52,7 @@ function renderBlockNodes(
   const result: ReactNode[] = [];
   let inlineBuffer: ReactNode[] = [];
   let bufferIndent = 0;
+  let bufferAnchorId: string | undefined;
   let keyCounter = 0;
   let inlineKey = 0;
 
@@ -73,10 +74,11 @@ function renderBlockNodes(
 
   const flushInline = (anchorId?: string) => {
     if (inlineBuffer.length === 0) return;
+    const resolvedAnchorId = anchorId ?? bufferAnchorId;
     result.push(
       <box
         key={`merged-${keyCounter++}`}
-        {...(anchorId ? { id: anchorId } : {})}
+        {...(resolvedAnchorId ? { id: resolvedAnchorId } : {})}
         paddingLeft={bufferIndent}
         shouldFill={true}
       >
@@ -84,11 +86,35 @@ function renderBlockNodes(
       </box>,
     );
     inlineBuffer = [];
+    bufferAnchorId = undefined;
   };
 
-  const beginInlineBlock = (indent: number) => {
+  const beginInlineBlock = (indent: number, anchorId?: string) => {
     if (inlineBuffer.length > 0 && indent !== bufferIndent) flushInline();
-    if (inlineBuffer.length === 0) bufferIndent = indent;
+    if (inlineBuffer.length === 0) {
+      bufferIndent = indent;
+      bufferAnchorId = anchorId;
+    }
+  };
+
+  const appendInlineLines = (nodes: InlineNode[]) => {
+    for (const segment of splitByBreak(nodes)) {
+      inlineBuffer.push(...renderInlineNodes(segment), "\n");
+    }
+  };
+
+  const beginDefinitionLine = (indent: number, anchorId?: string) => {
+    // Definition terms and descriptions use different indentation buffers.
+    // A trailing newline before that buffer boundary would create an extra
+    // blank row in addition to mandoc's explicit spacer.
+    if (
+      inlineBuffer.length > 0
+      && indent !== bufferIndent
+      && inlineBuffer[inlineBuffer.length - 1] === "\n"
+    ) {
+      inlineBuffer.pop();
+    }
+    beginInlineBlock(indent, anchorId);
   };
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
@@ -99,9 +125,7 @@ function renderBlockNodes(
     switch (block.type) {
       case "paragraph": {
         beginInlineBlock(baseIndent + block.indent);
-        for (const segment of splitByBreak(block.children)) {
-          inlineBuffer.push(...renderInlineNodes(segment), "\n");
-        }
+        appendInlineLines(block.children);
         if (isActiveBlock) flushInline(contentBlockId(sectionId, blockIndex));
         break;
       }
@@ -112,6 +136,26 @@ function renderBlockNodes(
           inlineBuffer.push(...renderInlineNodes(item), "\n");
         }
         if (isActiveBlock) flushInline(contentBlockId(sectionId, blockIndex));
+        break;
+      }
+      case "definition-list": {
+        let anchorId = isActiveBlock
+          ? contentBlockId(sectionId, blockIndex)
+          : undefined;
+        for (const item of block.items) {
+          for (const term of item.terms) {
+            beginDefinitionLine(baseIndent + block.indent, anchorId);
+            anchorId = undefined;
+            appendInlineLines(term);
+          }
+          if (item.description.length > 0) {
+            beginDefinitionLine(baseIndent + block.indent + 4, anchorId);
+            anchorId = undefined;
+            appendInlineLines(item.description);
+          }
+        }
+        if (inlineBuffer[inlineBuffer.length - 1] === "\n") inlineBuffer.pop();
+        if (isActiveBlock) flushInline();
         break;
       }
       case "pre": {
@@ -153,6 +197,7 @@ export interface SectionContentProps {
   searchQuery?: string;
   activeSearchSectionId?: string | undefined;
   activeBlockIndex?: number | undefined;
+  headingIndent?: number;
 }
 
 /** Recursively renders one section and its children in document order. */
@@ -162,12 +207,15 @@ export function SectionContent({
   searchQuery = "",
   activeSearchSectionId,
   activeBlockIndex,
+  headingIndent = 0,
 }: SectionContentProps) {
   return (
     <box flexDirection="column" gap={0}>
-      <text id={contentId(node.id)} fg="#94e2d5">
-        <b>{renderSearchHighlights(node.title, searchQuery, `heading-${node.id}`)}</b>
-      </text>
+      <box paddingLeft={headingIndent}>
+        <text id={contentId(node.id)} fg="#94e2d5">
+          <b>{renderSearchHighlights(node.title, searchQuery, `heading-${node.id}`)}</b>
+        </text>
+      </box>
       {renderBlockNodes(
         node.blocks,
         baseIndent,
@@ -184,6 +232,7 @@ export function SectionContent({
             searchQuery={searchQuery}
             activeSearchSectionId={activeSearchSectionId}
             activeBlockIndex={activeBlockIndex}
+            headingIndent={headingIndent + 4}
           />
         ))}
       </box>

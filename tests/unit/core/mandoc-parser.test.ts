@@ -131,18 +131,15 @@ describe("parseMandoc - definition lists", () => {
     const sections = parseMandoc(html);
     const blocks = sections[0]?.blocks ?? [];
 
-    // When dd has only inline content, dl becomes a single list block.
-    // parseListItems selects both dt and dd, so 2 dt + 2 dd = 4 items.
+    // Terms and descriptions remain paired instead of becoming four bullets.
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]?.type).toBe("list");
-    if (blocks[0]?.type !== "list") return;
-    expect(blocks[0].items).toHaveLength(4);
-    // First item (dt) should have bold -a
-    const firstItem = blocks[0].items[0];
-    expect(firstItem?.some((n) => n.type === "bold")).toBe(true);
-    // Second item (dd) should have plain text
-    const secondItem = blocks[0].items[1];
-    expect(secondItem?.some((n) => n.type === "text" && n.content.includes("do not ignore"))).toBe(true);
+    expect(blocks[0]?.type).toBe("definition-list");
+    if (blocks[0]?.type !== "definition-list") return;
+    expect(blocks[0].items).toHaveLength(2);
+    expect(blocks[0].items[0]?.terms[0]?.some((n) => n.type === "bold")).toBe(true);
+    expect(blocks[0].items[0]?.description.some(
+      (n) => n.type === "text" && n.content.includes("do not ignore"),
+    )).toBe(true);
   });
 
   test("parses Bl-tag with block-level dd content (pre)", () => {
@@ -189,12 +186,52 @@ describe("parseMandoc - definition lists", () => {
     const sections = parseMandoc(html);
     const blocks = sections[0]?.blocks ?? [];
 
-    // Empty dt has no content, so it's filtered out by parseListItems.
-    // Only the dd content becomes a list item.
+    // Empty terms are valid continuations, so retain their description.
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]?.type).toBe("list");
-    if (blocks[0]?.type !== "list") return;
+    expect(blocks[0]?.type).toBe("definition-list");
+    if (blocks[0]?.type !== "definition-list") return;
     expect(blocks[0].items).toHaveLength(1);
+    expect(blocks[0].items[0]?.terms).toHaveLength(0);
+    expect(blocks[0].items[0]?.description).not.toHaveLength(0);
+  });
+
+  test("preserves clang option pairs and block spacing", () => {
+    const html = `<body><div class="manual-text">
+      <section class="Sh">
+        <h1 class="Sh" id="OPTIONS">OPTIONS</h1>
+        <section class="Ss">
+          <h2 class="Ss" id="Stage_Selection_Options">Stage Selection Options</h2>
+          <div class="Bd-indent"><dl class="Bl-tag">
+            <dt><b>-E</b></dt><dd>Run the preprocessor stage.</dd>
+          </dl></div>
+          <br/>
+          <div class="Bd-indent"><dl class="Bl-tag">
+            <dt><b>-fsyntax-only</b></dt>
+            <dd>Run the preprocessor, parser and semantic analysis stages.</dd>
+          </dl></div>
+          <br/>
+        </section>
+      </section>
+    </div></body>`;
+
+    const subsection = parseMandoc(html)[0]?.children[0];
+    expect(subsection?.title).toBe("Stage Selection Options");
+    expect(subsection?.blocks.map((block) => block.type)).toEqual([
+      "definition-list",
+      "spacer",
+      "definition-list",
+      "spacer",
+    ]);
+    const first = subsection?.blocks[0];
+    expect(first?.type === "definition-list" && first.indent).toBe(4);
+    if (first?.type !== "definition-list") return;
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0]?.terms[0]?.some(
+      (node) => node.type === "bold",
+    )).toBe(true);
+    expect(first.items[0]?.description.some(
+      (node) => node.type === "text" && node.content.includes("preprocessor stage"),
+    )).toBe(true);
   });
 });
 
@@ -325,15 +362,15 @@ describe("parseMandoc - fixtures", () => {
     const desc = sections.find((s) => s.title === "DESCRIPTION");
     const blocks = desc?.blocks ?? [];
 
-    // Should have paragraphs and at least one list
-    const hasList = blocks.some((b) => b.type === "list");
+    // Should have paragraphs and at least one definition list.
+    const hasList = blocks.some((b) => b.type === "definition-list");
     expect(hasList).toBe(true);
 
     // The list should contain option flags (bold text starting with -)
-    const list = blocks.find((b) => b.type === "list");
-    if (list?.type === "list") {
-      const firstItem = list.items[0];
-      const hasBoldFlag = firstItem?.some(
+    const list = blocks.find((b) => b.type === "definition-list");
+    if (list?.type === "definition-list") {
+      const firstTerm = list.items[0]?.terms[0];
+      const hasBoldFlag = firstTerm?.some(
         (n) => n.type === "bold" && n.children.some((c) => c.type === "text" && c.content.startsWith("-"))
       );
       expect(hasBoldFlag).toBe(true);
@@ -350,11 +387,11 @@ describe("parseMandoc - fixtures", () => {
     expect(exitStatus).toBeDefined();
     expect(exitStatus?.blocks.length).toBeGreaterThan(0);
 
-    // Exit status has a Bl-tag list with 3 dt + 3 dd = 6 items
-    const list = exitStatus?.blocks.find((b) => b.type === "list");
+    // Exit status has three term/description pairs.
+    const list = exitStatus?.blocks.find((b) => b.type === "definition-list");
     expect(list).toBeDefined();
-    if (list?.type === "list") {
-      expect(list.items.length).toBe(6);
+    if (list?.type === "definition-list") {
+      expect(list.items.length).toBe(3);
     }
   });
 

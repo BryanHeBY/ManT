@@ -131,7 +131,12 @@ function assertWellFormedTree(sections: SectionNode[]): void {
     for (const block of section.blocks) {
       const content = block.type === "list"
         ? block.items.map(flattenInline).join("\n")
-        : block.type === "spacer" ? "" : flattenInline(block.children);
+        : block.type === "definition-list"
+          ? block.items.flatMap((item) => [
+            ...item.terms.map(flattenInline),
+            flattenInline(item.description),
+          ]).join("\n")
+          : block.type === "spacer" ? "" : flattenInline(block.children);
       expect(content).not.toMatch(RENDERER_HTML_TAG);
     }
   }
@@ -182,7 +187,10 @@ describeLsRenderers("actual ls renderer output", () => {
         .map((section) => section.title)).toContain("Exit status:");
       expect(flattenSections(sections)
         .flatMap((section) => section.blocks)
-        .some((block) => block.type !== "list" && block.type !== "spacer" && flattenInline(block.children).includes("list directory contents")))
+        .some((block) => (
+          (block.type === "paragraph" || block.type === "pre")
+          && flattenInline(block.children).includes("list directory contents")
+        )))
         .toBe(true);
       assertWellFormedTree(sections);
     }
@@ -206,7 +214,10 @@ describeGitRenderers("actual git renderer output", () => {
     for (const sections of [groffSections, mandocSections]) {
       expect(flattenSections(sections)
         .flatMap((section) => section.blocks)
-        .some((block) => block.type !== "list" && block.type !== "spacer" && flattenInline(block.children).includes("Git is a fast")))
+        .some((block) => (
+          (block.type === "paragraph" || block.type === "pre")
+          && flattenInline(block.children).includes("Git is a fast")
+        )))
         .toBe(true);
       assertWellFormedTree(sections);
     }

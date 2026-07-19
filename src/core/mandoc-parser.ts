@@ -34,6 +34,7 @@ const MANDOC_BLOCK_TAGS = new Set([
   "h4",
   "h5",
   "h6",
+  "br",
 ]);
 
 function isMandocSection(node: HTMLElement): boolean {
@@ -137,6 +138,13 @@ function parseMandocChildren(
     flushInline();
 
     const childIndent = baseIndent + parseIndent(child);
+
+    // A direct <br> between block wrappers is mandoc's vertical spacing
+    // signal. A <br> inside a paragraph or pre remains an inline line break.
+    if (tag === "br") {
+      tree.addBlock({ type: "spacer", indent: baseIndent });
+      continue;
+    }
 
     // Bd-indent is a wrapper that adds indentation to its children.
     if (tag === "div" && child.classList.contains("Bd-indent")) {

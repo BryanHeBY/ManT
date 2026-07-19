@@ -43,4 +43,9 @@ export function parseManHtml(html: string): SectionNode[] {
 
 // Re-export shared utilities for consumers that need them.
 export { parseInline } from "./parser-utils";
-export type { InlineNode, BlockNode, SectionNode } from "./types";
+export type {
+  InlineNode,
+  BlockNode,
+  DefinitionListItem,
+  SectionNode,
+} from "./types";
