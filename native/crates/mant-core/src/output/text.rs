@@ -347,10 +347,12 @@ mod tests {
                 sections: vec![Section {
                     id: "options-1".to_owned(),
                     title: "OPTIONS".to_owned(),
+                    spacing_before_lines: 0,
                     blocks: vec![paragraph("parent details", true)],
                     children: vec![Section {
                         id: "common-2".to_owned(),
                         title: "Common options".to_owned(),
+                        spacing_before_lines: 1,
                         blocks: vec![paragraph("child details", false)],
                         children: Vec::new(),
                         source: None,

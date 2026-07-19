@@ -125,6 +125,9 @@ pub struct Section {
     /// Unique within one document; consumers must not treat it as a global ID.
     pub id: String,
     pub title: String,
+    /// Terminal rows requested before this heading by the source macro set.
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub spacing_before_lines: u16,
     pub blocks: Vec<Block>,
     pub children: Vec<Section>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,6 +140,9 @@ pub struct Section {
 pub struct LayoutHint {
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub indent_columns: u16,
+    /// Terminal rows requested before this block.
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub spacing_before_lines: u16,
 }
 
 /// A document block capable of preserving nested manual structures.
@@ -336,7 +342,7 @@ pub enum Inline {
 impl LayoutHint {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.indent_columns == 0
+        self.indent_columns == 0 && self.spacing_before_lines == 0
     }
 }
 

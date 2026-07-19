@@ -129,10 +129,14 @@ lives in Rust and retains the fallback for constructs libmandoc reports as
 unsupported. Best-effort native output is retained together with its
 diagnostics when no higher-fidelity fallback is available.
 
-List density is part of this normalization boundary. mdoc list compactness is
-stored on the list block, while man `.PD` changes are retained as optional
-per-definition spacing so a single option list can switch between normal and
-compact layout without inserting synthetic content nodes.
+Vertical layout is part of this normalization boundary rather than a TUI
+heuristic. Sections retain the distance requested before `SH`, `SS`, `Sh`, and
+`Ss`; ordinary blocks retain macro-driven leading distance in their layout;
+explicit `sp` and blank roff input lines remain vertical-space nodes. mdoc list
+compactness stays on the list block, while man `.PD` changes are also retained
+per definition item so one option list can switch between normal and compact
+layout. Renderers may adapt these row counts to their medium, but must not
+invent or discard terminal spacing at the process boundary.
 
 Because libmandoc 1.14.6 uses process-global character, diagnostic, tag, and
 recursion state, all embedded parser sessions are serialized.  Initialization

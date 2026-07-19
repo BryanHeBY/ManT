@@ -384,6 +384,7 @@ mod tests {
         Section {
             id: id.to_owned(),
             title: title.to_owned(),
+            spacing_before_lines: 0,
             blocks: vec![Block::Paragraph {
                 children: vec![Inline::Text {
                     value: text.to_owned(),

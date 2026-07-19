@@ -240,6 +240,46 @@ describe("App rendering (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("honours native spacing before section headings and block macros", async () => {
+    const result = mockQuery("clang", [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [paragraph("End of the previous option group.")],
+      children: [{
+        id: "target-selection",
+        title: "Target Selection Options",
+        spacingBeforeLines: 1,
+        blocks: [
+          paragraph("Cross compilation introduction."),
+          {
+            type: "definition-list",
+            layout: { indentColumns: 4, spacingBeforeLines: 1 },
+            compact: true,
+            items: [{
+              terms: [[text("-arch <architecture>")]],
+              description: [paragraph("Specify the architecture.")],
+              spacingBeforeLines: 0,
+            }],
+          },
+        ],
+        children: [],
+      }],
+    }]);
+    const setup = await renderApp(result, { width: 110, height: 30 });
+    const lines = setup.captureCharFrame().split("\n").map((line) => line.slice(32));
+    const lineIndex = (value: string) => lines.findIndex((line) => line.includes(value));
+    const previousBody = lineIndex("End of the previous option group.");
+    const heading = lineIndex("Target Selection Options");
+    const introduction = lineIndex("Cross compilation introduction.");
+    const firstOption = lineIndex("-arch <architecture>");
+
+    expect(heading).toBe(previousBody + 2);
+    expect(lines[previousBody + 1]?.trim()).toBe("");
+    expect(firstOption).toBe(introduction + 2);
+    expect(lines[introduction + 1]?.trim()).toBe("");
+    setup.renderer.destroy();
+  });
+
   test("renders native lists, tables, equations, and unsupported nodes", async () => {
     const result = mockQuery("structures", [{
       id: "structures",

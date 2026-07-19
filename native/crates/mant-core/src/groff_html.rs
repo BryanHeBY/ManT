@@ -67,6 +67,7 @@ fn parse_body(body: ElementRef<'_>, sections: &mut Vec<FlatSection>, next_id: &m
                     section: Section {
                         id: format!("groff-section-{}", *next_id),
                         title,
+                        spacing_before_lines: u16::from(!sections.is_empty()),
                         blocks: Vec::new(),
                         children: Vec::new(),
                         source: None,
@@ -114,6 +115,7 @@ fn nest_sections(mut flat: Vec<FlatSection>) -> Vec<Section> {
             Section {
                 id: String::new(),
                 title: String::new(),
+                spacing_before_lines: 0,
                 blocks: Vec::new(),
                 children: Vec::new(),
                 source: None,
@@ -162,7 +164,10 @@ fn parse_layout_table(table: ElementRef<'_>) -> Vec<Block> {
 }
 
 fn parse_block(element: ElementRef<'_>, indent_columns: u16) -> Option<Block> {
-    let layout = LayoutHint { indent_columns };
+    let layout = LayoutHint {
+        indent_columns,
+        ..LayoutHint::default()
+    };
     match element.value().name() {
         "p" => {
             let children = parse_inline_children(element, false);
@@ -392,7 +397,10 @@ fn percent_to_columns(percent: u16) -> u16 {
 fn paragraph(value: String, indent_columns: u16) -> Block {
     Block::Paragraph {
         children: vec![Inline::Text { value }],
-        layout: LayoutHint { indent_columns },
+        layout: LayoutHint {
+            indent_columns,
+            ..LayoutHint::default()
+        },
         source: None,
     }
 }
@@ -575,14 +583,20 @@ mod tests {
         assert!(matches!(
             blocks[0],
             Block::Paragraph {
-                layout: mant_ast::LayoutHint { indent_columns: 7 },
+                layout: mant_ast::LayoutHint {
+                    indent_columns: 7,
+                    ..
+                },
                 ..
             }
         ));
         assert!(matches!(
             blocks[1],
             Block::Paragraph {
-                layout: mant_ast::LayoutHint { indent_columns: 14 },
+                layout: mant_ast::LayoutHint {
+                    indent_columns: 14,
+                    ..
+                },
                 ..
             }
         ));
@@ -658,11 +672,17 @@ mod tests {
             document.sections[0].blocks.as_slice(),
             [
                 Block::Paragraph {
-                    layout: LayoutHint { indent_columns: 12 },
+                    layout: LayoutHint {
+                        indent_columns: 12,
+                        ..
+                    },
                     ..
                 },
                 Block::Paragraph {
-                    layout: LayoutHint { indent_columns: 20 },
+                    layout: LayoutHint {
+                        indent_columns: 20,
+                        ..
+                    },
                     ..
                 }
             ]
@@ -710,7 +730,10 @@ mod tests {
                 matches!(
                     block,
                     Block::Paragraph {
-                        layout: mant_ast::LayoutHint { indent_columns: 7 },
+                        layout: mant_ast::LayoutHint {
+                            indent_columns: 7,
+                            ..
+                        },
                         ..
                     }
                 )

@@ -273,6 +273,60 @@ fn clang_keeps_option_pairs_and_discards_rst_control_dimensions() {
         assert!(block_slice_text(&item.description).contains(description));
     }
 
+    let target_options = section(document, "Target Selection Options");
+    assert_eq!(
+        target_options.spacing_before_lines, 1,
+        "the SS macro must retain its leading paragraph distance",
+    );
+    let target_lists = target_options
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::DefinitionList { items, .. } => Some(items),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        target_lists.len(),
+        1,
+        "Sphinx INDENT wrappers must remain one semantic option list",
+    );
+    assert!(target_lists[0].len() > 5);
+    assert_eq!(target_lists[0][0].spacing_before_lines, Some(0));
+    let target_list_layout = target_options
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::DefinitionList { layout, .. } => Some(layout),
+            _ => None,
+        })
+        .expect("Target Selection definition layout");
+    assert_eq!(
+        target_list_layout.spacing_before_lines, 1,
+        "the first option must retain TP spacing after introductory prose",
+    );
+    assert!(
+        target_lists[0]
+            .iter()
+            .skip(1)
+            .all(|item| item.spacing_before_lines == Some(1)),
+        "default man(7) paragraph distance must survive INDENT wrappers",
+    );
+
+    let code_generation = section(document, "Code Generation Options");
+    let first_code_generation_layout = code_generation
+        .blocks
+        .first()
+        .and_then(|block| match block {
+            Block::DefinitionList { layout, .. } => Some(layout),
+            _ => None,
+        })
+        .expect("Code Generation starts with an option list");
+    assert_eq!(
+        first_code_generation_layout.spacing_before_lines, 0,
+        "a transparent INDENT wrapper must not add space before a section's first block",
+    );
+
     let phantom_dimensions = document_blocks(document)
         .into_iter()
         .filter_map(|block| match block {

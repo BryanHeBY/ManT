@@ -287,6 +287,78 @@ mod tests {
     }
 
     #[test]
+    fn preserves_man_paragraph_and_heading_distance_as_one_layout_model() {
+        let path = temporary_source(
+            "vertical-layout",
+            ".TH SPACING 1\n\
+             .SH FIRST\n\
+             First paragraph.\n\
+             .PP\n\
+             Second paragraph.\n\
+             .SS CHILD\n\
+             Child body.\n\
+             .PD 0\n\
+             .SS COMPACT\n\
+             Compact child.\n\
+             .SH NEXT\n\
+             Next body.\n\
+             .PD\n\
+             .SH FINAL\n\
+             Final body.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower vertical layout");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [first, next, final_section] = document.sections.as_slice() else {
+            panic!("expected three top-level sections");
+        };
+        assert_eq!(first.spacing_before_lines, 0);
+        let [Block::Paragraph { .. }, Block::Paragraph { layout, .. }] = first.blocks.as_slice()
+        else {
+            panic!("expected two semantic paragraphs");
+        };
+        assert_eq!(layout.spacing_before_lines, 1);
+
+        let [child, compact] = first.children.as_slice() else {
+            panic!("expected two subsections");
+        };
+        assert_eq!(child.spacing_before_lines, 1);
+        assert_eq!(compact.spacing_before_lines, 0);
+        assert_eq!(next.spacing_before_lines, 0);
+        assert_eq!(final_section.spacing_before_lines, 1);
+    }
+
+    #[test]
+    fn preserves_mdoc_paragraph_and_heading_distance() {
+        let path = temporary_source(
+            "mdoc-vertical-layout",
+            ".Dd July 19, 2026\n\
+             .Dt SPACING 1\n\
+             .Os\n\
+             .Sh FIRST\n\
+             First paragraph.\n\
+             .Pp\n\
+             Second paragraph.\n\
+             .Ss CHILD\n\
+             Child body.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower mdoc vertical layout");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [first] = document.sections.as_slice() else {
+            panic!("expected one top-level section");
+        };
+        assert_eq!(first.spacing_before_lines, 1);
+        assert!(matches!(
+            first.blocks.get(1),
+            Some(Block::VerticalSpace { lines: 1, .. })
+        ));
+        assert_eq!(first.children[0].spacing_before_lines, 1);
+    }
+
+    #[test]
     fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
         let path = temporary_source(
             "mdoc",

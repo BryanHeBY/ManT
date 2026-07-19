@@ -30,6 +30,12 @@ function layoutIndent(block: MantBlock): number {
     : block.layout?.indentColumns ?? 0;
 }
 
+function layoutSpacing(block: MantBlock): number {
+  return block.type === "vertical-space"
+    ? 0
+    : Math.max(0, Math.floor(block.layout?.spacingBeforeLines ?? 0));
+}
+
 /** Renders inline semantics without changing the visible source text. */
 function renderInlineContent(nodes: MantInline[], keyPrefix: string): ReactNode[] {
   let keyCounter = 0;
@@ -187,6 +193,12 @@ function renderBlockNodes(
     const blockPath = searchPath.block(parentPath, blockIndex);
     const targetId = contentSearchId(sectionId, blockPath);
     const indent = baseIndent + layoutIndent(block);
+    const spacingBefore = layoutSpacing(block);
+
+    if (spacingBefore > 0) {
+      flushInline();
+      result.push(<box key={`leading-space-${keyCounter++}`} height={spacingBefore} />);
+    }
 
     switch (block.type) {
       case "paragraph":
@@ -369,7 +381,11 @@ function SectionContentView({
   onNavigateInternal,
 }: SectionContentProps) {
   return (
-    <box flexDirection="column" gap={0}>
+    <box
+      flexDirection="column"
+      gap={0}
+      paddingTop={Math.max(0, Math.floor(node.spacingBeforeLines ?? 0))}
+    >
       <box paddingLeft={headingIndent}>
         <text id={contentId(node.id)} fg="#94e2d5"><b>{node.title}</b></text>
       </box>

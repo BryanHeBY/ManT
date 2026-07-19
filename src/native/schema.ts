@@ -20,6 +20,7 @@ export interface SourceSpan {
 
 export interface LayoutHint {
   indentColumns?: number;
+  spacingBeforeLines?: number;
 }
 
 export type MantInline =
@@ -83,6 +84,7 @@ export type MantBlock =
 export interface MantSection {
   id: string;
   title: string;
+  spacingBeforeLines?: number;
   blocks: MantBlock[];
   children: MantSection[];
   source?: SourceSpan;
@@ -251,6 +253,7 @@ function validateSection(value: unknown, path: string): asserts value is MantSec
   const object = expectObject(value, path);
   expectString(object.id, `${path}.id`);
   expectString(object.title, `${path}.title`);
+  expectOptionalNumber(object.spacingBeforeLines, `${path}.spacingBeforeLines`);
   expectArray(object.blocks, `${path}.blocks`).forEach((block, index) => {
     validateBlock(block, `${path}.blocks[${index}]`);
   });
@@ -406,6 +409,7 @@ function validateTldr(value: unknown, path: string): asserts value is TldrDocume
 function validateLayout(value: unknown, path: string): void {
   const object = expectObject(value, path);
   expectOptionalNumber(object.indentColumns, `${path}.indentColumns`);
+  expectOptionalNumber(object.spacingBeforeLines, `${path}.spacingBeforeLines`);
 }
 
 function validateSourceSpan(value: unknown, path: string): void {

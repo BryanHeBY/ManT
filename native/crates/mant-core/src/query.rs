@@ -296,6 +296,7 @@ mod tests {
                 .then_some(Section {
                     id: "name-1".to_owned(),
                     title: "NAME".to_owned(),
+                    spacing_before_lines: 0,
                     blocks: Vec::new(),
                     children: Vec::new(),
                     source: None,

@@ -46,6 +46,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     let section = Section {
         id: "common-3".to_owned(),
         title: "Common options".to_owned(),
+        spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
         source: None,
