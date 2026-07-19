@@ -182,6 +182,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mant-cli"
+version = "0.1.0"
+dependencies = [
+ "mant-ast",
+ "mant-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mant-core"
 version = "0.1.0"
 dependencies = [
@@ -196,13 +206,6 @@ name = "mant-mandoc-sys"
 version = "0.1.0"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "mant-napi"
-version = "0.1.0"
-dependencies = [
- "mant-core",
 ]
 
 [[package]]

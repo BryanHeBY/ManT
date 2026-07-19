@@ -149,7 +149,7 @@ impl std::error::Error for ParseError {}
 /// Parse one source file, optionally resolving `.so` includes relative to it.
 ///
 /// libmandoc 1.14.6 keeps diagnostics and character tables in process-global
-/// state. Serializing the entire C call ensures concurrent Node-API requests
+/// state. Serializing the entire C call ensures concurrent frontend requests
 /// cannot overwrite one another.
 ///
 /// # Errors

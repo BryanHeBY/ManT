@@ -23,14 +23,15 @@ Mant will use a Rust native core with four layers:
 mant-ast          versioned document and query contracts
 mant-mandoc-sys   pinned libmandoc build and private C shim
 mant-core         source loading, parsing, query, and output renderers
-mant-napi         thin JSON-oriented Node-API adapter
+mant-cli          standalone agent CLI and versioned stdio process boundary
 ```
 
 The TypeScript application becomes a thin host and presentation layer.  It
-owns CLI argument handling, user-facing error presentation, the OpenTUI React
-interface, navigation, search interaction, and terminal styling.  It does not
-interpret roff or renderer HTML and does not serialize JSON or Markdown
-documents.
+owns the interactive `mant` command, user-facing TUI errors, the OpenTUI React
+interface, navigation, search interaction, and terminal styling.  The native
+`mant-cli` command is independently usable by agents and scripts.  TypeScript
+does not interpret roff or renderer HTML and does not serialize JSON or
+Markdown documents.
 
 The C shim is private and deliberately small.  It hides libmandoc structure
 layouts, manages parser handles, and exposes the information Rust needs to
@@ -54,21 +55,31 @@ passing a value to React.  New optional object fields may be added within a
 schema version; incompatible meaning changes and new required node variants
 require a new schema version.
 
-## Native API boundary
+## Native process boundary
 
-The final Node-API surface is use-case oriented rather than a mirror of parser
-internals:
+The project deliberately uses a one-shot process boundary instead of Node-API.
+This avoids ABI-specific addons, isolates native failures, and makes the same
+binary directly useful outside Bun.  The public surface is use-case oriented
+rather than a mirror of parser internals:
 
 ```text
-queryJson(requestJson)       -> query JSON
-queryMarkdown(requestJson)   -> CommonMark
-updateTldr(requestJson)      -> update result JSON
-nativeVersion()              -> native API version
+mant-cli <topic> [--json | --markdown]  -> query JSON or CommonMark
+mant-cli update tldr                   -> update result JSON
+mant-cli protocol-version              -> protocol description JSON
 ```
 
-The UI requests compact query JSON.  `--json` requests pretty query JSON and
-writes the native string unchanged.  `--markdown` writes native CommonMark
-unchanged.  Fatal native failures cross the boundary as concise errors;
+For the TUI, `mant-cli --request-json --json --compact` reads one closed
+`QueryRequest` object from standard input and emits exactly one
+`mant.query/v1` object on standard output.  Standard error contains concise
+diagnostics only.  Status 0 means success, 2 means invalid invocation or
+request, and 1 means an operational failure.  The TypeScript client drains
+stdout and stderr concurrently, validates the protocol and schema, and starts
+one process per document query; interactive search and navigation never spawn
+additional native processes.
+
+Direct `mant-cli` queries default to Markdown for useful terminal and agent
+output.  `--json` is pretty by default and `--compact` is available to process
+clients.  Fatal native failures cross the boundary as concise errors;
 recoverable parser findings are structured diagnostics in the query result.
 
 ## Parsing and fallback policy
@@ -103,8 +114,8 @@ Rust owns:
 
 TypeScript owns:
 
-- CLI token parsing, TTY selection, and user-facing error presentation;
-- the native client and runtime schema/version guard;
+- the interactive `mant` command, TTY selection, and TUI error presentation;
+- the `mant-cli` process client and runtime schema/version guard;
 - OpenTUI React rendering, colors, syntax highlighting, and input state;
 - interactive search, navigation, scrolling, menus, and sidebar sizing.
 
@@ -116,11 +127,13 @@ do not require an installed manual page for normal CI.  They also cover
 repeated parser sessions, diagnostic isolation, compression, includes, and
 Markdown escaping.
 
-TypeScript retains boundary, CLI, and UI tests.  Shared contract fixtures are
-decoded by TypeScript and generated or compared by Rust.  During migration,
-differential tests compare native results with the existing parsers for large
-git, gcc, clang, tar, and ls pages.  Implementation-specific HTML parser tests
-are removed only after equivalent source-level Rust tests exist.
+Rust additionally owns `mant-cli` argument, stdio protocol, exit-code, and
+agent-facing output tests.  TypeScript retains process-client, interactive
+command, and UI tests.  Shared contract fixtures are decoded by TypeScript and
+generated or compared by Rust.  During migration, differential tests compare
+native results with the existing parsers for large git, gcc, clang, tar, and
+ls pages.  Implementation-specific HTML parser tests are removed only after
+equivalent source-level Rust tests exist.
 
 ## Migration rules
 

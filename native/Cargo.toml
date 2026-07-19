@@ -1,9 +1,9 @@
 [workspace]
 members = [
   "crates/mant-ast",
+  "crates/mant-cli",
   "crates/mant-core",
   "crates/mant-mandoc-sys",
-  "crates/mant-napi",
 ]
 resolver = "3"
 

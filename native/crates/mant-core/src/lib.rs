@@ -1,4 +1,4 @@
-//! Manual source, query, and output engine independent from Bun and Node-API.
+//! Manual source, query, and output engine independent from its process hosts.
 
 mod groff_html;
 mod mandoc;

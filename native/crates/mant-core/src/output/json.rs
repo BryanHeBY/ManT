@@ -15,13 +15,20 @@ pub fn render_query_json(query: &QueryBundle, pretty: bool) -> Result<String, se
     }
 }
 
-/// Serialize the explicit tldr update result for the Node-API boundary.
+/// Serialize the explicit tldr update result for a process boundary.
 ///
 /// # Errors
 ///
 /// Propagates the unlikely JSON writer failure from [`serde_json`].
-pub fn render_update_json(update: &TldrCacheUpdate) -> Result<String, serde_json::Error> {
-    serde_json::to_string(update)
+pub fn render_update_json(
+    update: &TldrCacheUpdate,
+    pretty: bool,
+) -> Result<String, serde_json::Error> {
+    if pretty {
+        serde_json::to_string_pretty(update)
+    } else {
+        serde_json::to_string(update)
+    }
 }
 
 #[cfg(test)]
@@ -64,8 +71,13 @@ mod tests {
         };
 
         assert_eq!(
-            render_update_json(&update).expect("update JSON"),
+            render_update_json(&update, false).expect("update JSON"),
             r#"{"action":"cloned","cacheDir":"/cache/tldr","revision":"abc123"}"#
+        );
+        assert!(
+            render_update_json(&update, true)
+                .expect("pretty update JSON")
+                .contains("\n  \"cacheDir\": \"/cache/tldr\",")
         );
     }
 }
