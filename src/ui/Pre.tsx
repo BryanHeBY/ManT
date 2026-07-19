@@ -2,13 +2,8 @@
  * @file Renders preformatted roff blocks with their intended body indentation.
  */
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type { MantInline } from "../native";
-import {
-  getSearchHighlightRanges,
-  SEARCH_HIGHLIGHT_BACKGROUND,
-  splitTextByHighlightRanges,
-} from "./search-highlight";
 
 const CODE_TOKEN_RE =
   /(\b(?:void|int|char|float|double|long|short|signed|unsigned|return|if|else|for|while|do|switch|case|break|continue|struct|union|enum|typedef|static|const|volatile|extern|inline|restrict|sizeof|NULL|true|false|null)\b)|(--?[A-Za-z][\w-]*(?:=\S+)?)|(\b\d+(?:\.\d+)?\b)|("[^"]*"|'[^']*')|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(\s+)|(\w+)|(.)/g;
@@ -36,13 +31,11 @@ function flattenInline(nodes: MantInline[]): string {
     .join("");
 }
 
-function makeCodeSpans(text: string, searchQuery: string): ReactNode[] {
+function makeCodeSpans(text: string): ReactNode[] {
   const spans: ReactNode[] = [];
-  const highlightRanges = getSearchHighlightRanges(text, searchQuery);
   let key = 0;
   for (const match of text.matchAll(CODE_TOKEN_RE)) {
     const token = match[0];
-    const tokenOffset = match.index ?? 0;
     let color = "#cdd6f4";
     let bold = false;
     let italic = false;
@@ -65,18 +58,8 @@ function makeCodeSpans(text: string, searchQuery: string): ReactNode[] {
     } else {
       color = "#cdd6f4";
     }
-    for (const fragment of splitTextByHighlightRanges(token, highlightRanges, tokenOffset)) {
-      const content = bold ? <b>{fragment.text}</b> : italic ? <i>{fragment.text}</i> : fragment.text;
-      spans.push(
-        <span
-          key={key++}
-          fg={color}
-          {...(fragment.highlighted ? { bg: SEARCH_HIGHLIGHT_BACKGROUND } : {})}
-        >
-          {content}
-        </span>
-      );
-    }
+    const content = bold ? <b>{token}</b> : italic ? <i>{token}</i> : token;
+    spans.push(<span key={key++} fg={color}>{content}</span>);
   }
   return spans;
 }
@@ -85,7 +68,6 @@ interface PreProps {
   children: MantInline[];
   block?: boolean;
   indent?: number;
-  searchQuery?: string;
 }
 
 /**
@@ -95,9 +77,9 @@ interface PreProps {
  * background therefore starts at the body indent instead of looking like a
  * full-width block glued to the content pane's left edge.
  */
-export function Pre({ children, block = false, indent = 0, searchQuery = "" }: PreProps): ReactNode {
+function PreView({ children, block = false, indent = 0 }: PreProps): ReactNode {
   const text = flattenInline(children);
-  const spans = makeCodeSpans(text, searchQuery);
+  const spans = makeCodeSpans(text);
   if (block) {
     return (
       <box shouldFill={true} flexDirection="row">
@@ -112,3 +94,6 @@ export function Pre({ children, block = false, indent = 0, searchQuery = "" }: P
   }
   return spans;
 }
+
+/** Avoid re-tokenizing every unchanged code block when a search result moves. */
+export const Pre = memo(PreView);

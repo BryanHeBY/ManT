@@ -108,6 +108,108 @@ describe("App search (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("scrolls to the wrapped row containing a late paragraph match", async () => {
+    const result = mockQuery("wrapped-search", [{
+      id: "description",
+      title: "DESCRIPTION",
+      blocks: [{
+        type: "paragraph",
+        children: [{
+          type: "text",
+          value: `${"Earlier prose fills this wrapped paragraph. ".repeat(28)}Late needle is here.`,
+        }],
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 100, height: 24 });
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("late needle");
+    await flushKeyboard(setup);
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+
+    const frame = await waitForFrame(
+      setup,
+      (candidate) => candidate.includes("Late needle is here."),
+    );
+    expect(contentPosition(frame, "Late needle is here.").y).toBe(2);
+    setup.renderer.destroy();
+  });
+
+  test("targets separate matches deep inside one large definition list", async () => {
+    const result = mockQuery("large-options", [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [{
+        type: "definition-list",
+        compact: true,
+        items: Array.from({ length: 40 }, (_, index) => ({
+          terms: [[{
+            type: "text" as const,
+            value: index === 18
+              ? "--needle-first"
+              : index === 34 ? "--needle-second" : `--option-${index}`,
+          }]],
+          description: [{
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, value: `Description ${index}.` }],
+          }],
+        })),
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 100, height: 24 });
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("needle");
+    await flushKeyboard(setup);
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+
+    let frame = await waitForFrame(setup, (candidate) => candidate.includes("--needle-first"));
+    expect(frame).toContain("1/2");
+    expect(contentPosition(frame, "--needle-first").y).toBe(2);
+
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+    frame = await waitForFrame(setup, (candidate) => candidate.includes("--needle-second"));
+    expect(frame).toContain("2/2");
+    expect(contentPosition(frame, "--needle-second").y).toBe(2);
+    setup.renderer.destroy();
+  });
+
+  test("highlights a match that crosses an inline formatting boundary", async () => {
+    const result = mockQuery("inline-search", [{
+      id: "description",
+      title: "DESCRIPTION",
+      blocks: [{
+        type: "paragraph",
+        children: [
+          { type: "text", value: "A result crosses " },
+          { type: "strong", children: [{ type: "text", value: "formatting" }] },
+          { type: "text", value: " safely." },
+        ],
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result);
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("crosses formatting");
+    await flushKeyboard(setup);
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+
+    const highlighted = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .filter((span) => span.bg.toInts().slice(0, 3).join(",") === "249,226,175")
+      .map((span) => span.text)
+      .join("");
+    expect(highlighted).toBe("crosses formatting");
+    setup.renderer.destroy();
+  });
+
   test("opens the bottom search input with Ctrl+F", async () => {
     const setup = await renderApp(mockLsResult);
 

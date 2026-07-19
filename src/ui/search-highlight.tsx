@@ -1,76 +1,86 @@
 /**
- * @file Splits rendered inline text into case-insensitive search highlights.
+ * @file Applies search decoration directly to OpenTUI text buffers.
+ *
+ * Search highlighting changes colors only. Using the buffer highlight layer
+ * avoids replacing React text nodes and triggering a full-document layout.
  */
 
-import type { ReactNode } from "react";
+import { type BaseRenderable, TextRenderable } from "@opentui/core";
+import type { SearchRange } from "./search";
 
 export const SEARCH_HIGHLIGHT_BACKGROUND = "#f9e2af";
 export const SEARCH_HIGHLIGHT_FOREGROUND = "#1e1e2e";
 
-export interface SearchHighlightRange {
-  start: number;
-  end: number;
+const SEARCH_HIGHLIGHT_NAME = "mant.search.match";
+const SEARCH_HIGHLIGHT_REF = 0x4d414e54;
+
+interface TextBufferHighlightApi {
+  addHighlightByCharRange(highlight: {
+    start: number;
+    end: number;
+    styleId: number;
+    priority: number;
+    hlRef: number;
+  }): void;
+  removeHighlightsByRef(reference: number): void;
 }
 
-export interface SearchTextFragment {
-  text: string;
-  highlighted: boolean;
+interface SyntaxStyleHighlightApi {
+  resolveStyleId(name: string): number | null;
+  registerStyle(name: string, style: { fg: string; bg: string }): number;
 }
 
-export function getSearchHighlightRanges(text: string, query: string): SearchHighlightRange[] {
-  const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return [];
+interface TextHighlightInternals {
+  textBuffer: TextBufferHighlightApi;
+  _textBufferSyntaxStyle: SyntaxStyleHighlightApi;
+}
 
-  const haystack = text.toLocaleLowerCase();
-  const ranges: SearchHighlightRange[] = [];
-  let cursor = 0;
-  while (cursor < haystack.length) {
-    const start = haystack.indexOf(needle, cursor);
-    if (start < 0) break;
-    ranges.push({ start, end: start + needle.length });
-    cursor = start + needle.length;
+function highlightInternals(renderable: TextRenderable): TextHighlightInternals {
+  // OpenTUI exposes these as protected extension points rather than public
+  // TextRenderable methods. The framework version is pinned and this adapter
+  // is the sole place coupled to that boundary.
+  return renderable as unknown as TextHighlightInternals;
+}
+
+/** Find the TextBuffer owned by a stable search target container. */
+export function firstTextRenderable(renderable: BaseRenderable): TextRenderable | undefined {
+  if (renderable instanceof TextRenderable) return renderable;
+  for (const child of renderable.getChildren()) {
+    const text = firstTextRenderable(child);
+    if (text) return text;
   }
-  return ranges;
+  return undefined;
 }
 
-/** Splits one rendered token against match ranges from its original source. */
-export function splitTextByHighlightRanges(
-  text: string,
-  ranges: SearchHighlightRange[],
-  offset = 0,
-): SearchTextFragment[] {
-  if (!text || ranges.length === 0) return text ? [{ text, highlighted: false }] : [];
-
-  const tokenEnd = offset + text.length;
-  const fragments: SearchTextFragment[] = [];
-  let cursor = offset;
-  for (const range of ranges) {
-    if (range.end <= cursor || range.start >= tokenEnd) continue;
-    const start = Math.max(range.start, cursor);
-    const end = Math.min(range.end, tokenEnd);
-    if (start > cursor) {
-      fragments.push({ text: text.slice(cursor - offset, start - offset), highlighted: false });
-    }
-    fragments.push({ text: text.slice(start - offset, end - offset), highlighted: true });
-    cursor = end;
-  }
-  if (cursor < tokenEnd) {
-    fragments.push({ text: text.slice(cursor - offset), highlighted: false });
-  }
-  return fragments;
+/** Remove Mant's decoration without touching syntax or inline styles. */
+export function clearSearchHighlight(renderable: TextRenderable | null): void {
+  if (!renderable) return;
+  highlightInternals(renderable).textBuffer.removeHighlightsByRef(SEARCH_HIGHLIGHT_REF);
+  renderable.requestRender();
 }
 
-export function renderSearchHighlights(
-  text: string,
-  query: string,
-  keyPrefix: string | number,
-  foreground = SEARCH_HIGHLIGHT_FOREGROUND,
-): ReactNode[] {
-  return splitTextByHighlightRanges(text, getSearchHighlightRanges(text, query)).map(
-    (fragment, index) => fragment.highlighted ? (
-      <span key={`${keyPrefix}-${index}`} fg={foreground} bg={SEARCH_HIGHLIGHT_BACKGROUND}>
-        {fragment.text}
-      </span>
-    ) : fragment.text,
-  );
+/** Apply a high-priority color overlay without invalidating text layout. */
+export function applySearchHighlight(
+  target: BaseRenderable,
+  range: SearchRange,
+): TextRenderable | undefined {
+  const renderable = firstTextRenderable(target);
+  if (!renderable) return undefined;
+
+  const { textBuffer, _textBufferSyntaxStyle: syntaxStyle } = highlightInternals(renderable);
+  const styleId = syntaxStyle.resolveStyleId(SEARCH_HIGHLIGHT_NAME)
+    ?? syntaxStyle.registerStyle(SEARCH_HIGHLIGHT_NAME, {
+      fg: SEARCH_HIGHLIGHT_FOREGROUND,
+      bg: SEARCH_HIGHLIGHT_BACKGROUND,
+    });
+  textBuffer.removeHighlightsByRef(SEARCH_HIGHLIGHT_REF);
+  textBuffer.addHighlightByCharRange({
+    start: range.start,
+    end: range.end,
+    styleId,
+    priority: 10_000,
+    hlRef: SEARCH_HIGHLIGHT_REF,
+  });
+  renderable.requestRender();
+  return renderable;
 }

@@ -2,10 +2,10 @@
  * @file Renders the versioned native document and optional tldr reference.
  *
  * Rust owns document semantics. This module performs presentation-only work:
- * terminal indentation, colors, wrapping, search anchors, and syntax styling.
+ * terminal indentation, colors, wrapping, stable search anchors, and styling.
  */
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type {
   MantBlock,
   MantInline,
@@ -13,34 +13,16 @@ import type {
   TldrCommandPart,
   TldrDocument,
 } from "../native";
-import { contentAnchorId, contentBlockId, contentId, TLDR_NAV_ID } from "./ids";
+import {
+  contentAnchorId,
+  contentId,
+  contentSearchId,
+  TLDR_NAV_ID,
+} from "./ids";
 import { Pre } from "./Pre";
-import { renderSearchHighlights } from "./search-highlight";
+import { searchPath, visibleInlineSegments } from "./search";
 
-// ── Inline layout ─────────────────────────────────────────────────────────
-
-function splitByBreak(nodes: MantInline[]): MantInline[][] {
-  const segments: MantInline[][] = [[]];
-  for (const node of nodes) {
-    if (node.type === "line-break") segments.push([]);
-    else segments[segments.length - 1]!.push(node);
-  }
-  return segments
-    .filter((segment) => segment.length > 0)
-    .map(trimSegmentWhitespace);
-}
-
-/** Removes formatter boundary whitespace without mutating native AST nodes. */
-function trimSegmentWhitespace(nodes: MantInline[]): MantInline[] {
-  if (nodes.length === 0) return nodes;
-
-  const trimmed = nodes.map((node) => node.type === "text" ? { ...node } : node);
-  const first = trimmed[0];
-  if (first?.type === "text") first.value = first.value.replace(/^\s+/, "");
-  const last = trimmed[trimmed.length - 1];
-  if (last?.type === "text") last.value = last.value.replace(/\s+$/, "");
-  return trimmed;
-}
+// ── Inline layout ─────────────────────────────────────────────
 
 function layoutIndent(block: MantBlock): number {
   return block.type === "vertical-space"
@@ -48,18 +30,47 @@ function layoutIndent(block: MantBlock): number {
     : block.layout?.indentColumns ?? 0;
 }
 
-// ── Native block renderer ─────────────────────────────────────────────────
+/** Renders inline semantics without changing the visible source text. */
+function renderInlineContent(nodes: MantInline[], keyPrefix: string): ReactNode[] {
+  let keyCounter = 0;
+  const renderNodes = (children: MantInline[]): ReactNode[] => children.map((node) => {
+    const key = `${keyPrefix}-${keyCounter++}`;
+    switch (node.type) {
+      case "text":
+        return node.value;
+      case "strong":
+        return <span key={key} fg="#cdd6f4"><b>{renderNodes(node.children)}</b></span>;
+      case "emphasis":
+        return <span key={key} fg="#7f849c"><u>{renderNodes(node.children)}</u></span>;
+      case "code":
+        return <span key={key} fg="#94e2d5">{node.value}</span>;
+      case "external-link":
+      case "email-link":
+        return <span key={key} fg="#89b4fa"><u>{renderNodes(node.children)}</u></span>;
+      case "manual-reference":
+        return <span key={key} fg="#89dceb">{renderNodes(node.children)}</span>;
+      case "section-reference":
+        return <span key={key} fg="#89dceb"><u>{renderNodes(node.children)}</u></span>;
+      case "anchor":
+        return null;
+      case "line-break":
+        return "\n";
+    }
+  });
+  return renderNodes(nodes);
+}
+
+// ── Native block renderer ───────────────────────────────────────
 
 /**
  * Merges adjacent prose into larger TextBuffers while retaining structural
- * blocks. Large manuals otherwise create thousands of tiny OpenTUI buffers.
+ * blocks. Search records use the same grouping and point at these stable IDs.
  */
 function renderBlockNodes(
   blocks: MantBlock[],
-  baseIndent = 0,
-  searchQuery = "",
-  sectionId?: string,
-  activeBlockIndex?: number,
+  baseIndent: number,
+  sectionId: string,
+  parentPath: string,
   onNavigateInternal?: (target: string) => void,
 ): ReactNode[] {
   const result: ReactNode[] = [];
@@ -69,48 +80,17 @@ function renderBlockNodes(
   let keyCounter = 0;
   let inlineKey = 0;
 
-  const renderInlineNodes = (nodes: MantInline[]): ReactNode[] => nodes.map((node) => {
-    const key = inlineKey++;
-    switch (node.type) {
-      case "text":
-        return renderSearchHighlights(node.value, searchQuery, `inline-${key}`);
-      case "strong":
-        return <span key={key} fg="#cdd6f4"><b>{renderInlineNodes(node.children)}</b></span>;
-      case "emphasis":
-        return <span key={key} fg="#7f849c"><u>{renderInlineNodes(node.children)}</u></span>;
-      case "code":
-        return (
-          <span key={key} fg="#94e2d5">
-            {renderSearchHighlights(node.value, searchQuery, `code-${key}`)}
-          </span>
-        );
-      case "external-link":
-        return <span key={key} fg="#89b4fa"><u>{renderInlineNodes(node.children)}</u></span>;
-      case "email-link":
-        return <span key={key} fg="#89b4fa"><u>{renderInlineNodes(node.children)}</u></span>;
-      case "manual-reference":
-        return <span key={key} fg="#89dceb">{renderInlineNodes(node.children)}</span>;
-      case "section-reference":
-        return <span key={key} fg="#89dceb"><u>{renderInlineNodes(node.children)}</u></span>;
-      case "anchor":
-        return null;
-      case "line-break":
-        return "\n";
-    }
-  });
-
-  const flushInline = (anchorId?: string) => {
+  const flushInline = () => {
     // The final newline is a separator sentinel, not an empty terminal row.
     if (inlineBuffer[inlineBuffer.length - 1] === "\n") inlineBuffer.pop();
     if (inlineBuffer.length === 0) {
       bufferAnchorId = undefined;
       return;
     }
-    const resolvedAnchorId = anchorId ?? bufferAnchorId;
     result.push(
       <box
         key={`merged-${keyCounter++}`}
-        {...(resolvedAnchorId ? { id: resolvedAnchorId } : {})}
+        {...(bufferAnchorId ? { id: bufferAnchorId } : {})}
         paddingLeft={bufferIndent}
         shouldFill={true}
       >
@@ -121,7 +101,7 @@ function renderBlockNodes(
     bufferAnchorId = undefined;
   };
 
-  const beginInlineBlock = (indent: number, anchorId?: string) => {
+  const beginInlineBlock = (indent: number, anchorId: string) => {
     if (inlineBuffer.length > 0 && indent !== bufferIndent) flushInline();
     if (inlineBuffer.length === 0) {
       bufferIndent = indent;
@@ -130,26 +110,41 @@ function renderBlockNodes(
   };
 
   const appendInlineLines = (nodes: MantInline[]) => {
-    for (const segment of splitByBreak(nodes)) {
-      inlineBuffer.push(...renderInlineNodes(segment), "\n");
+    for (const segment of visibleInlineSegments(nodes)) {
+      inlineBuffer.push(
+        ...renderInlineContent(segment, `merged-${inlineKey++}`),
+        "\n",
+      );
     }
   };
 
   /**
-   * Spans inside one OpenTUI text buffer cannot receive mouse events. Native
-   * navigation paragraphs are rare, so render only their top-level reference
-   * and anchor nodes as independent Text renderables in one wrapping row.
+   * Interactive references need separate Text renderables for mouse events.
+   * Each visible fragment therefore receives its own search record and ID.
    */
-  const renderNavigationParagraph = (nodes: MantInline[]): ReactNode[] => {
+  const renderNavigationParagraph = (
+    nodes: MantInline[],
+    blockPath: string,
+  ): ReactNode[] => {
     const rendered: ReactNode[] = [];
     let ordinary: MantInline[] = [];
+    let searchPartIndex = 0;
+    const nextSearchId = () => contentSearchId(
+      sectionId,
+      searchPath.inline(blockPath, searchPartIndex++),
+    );
     const flushOrdinary = () => {
       if (ordinary.length === 0) return;
       const current = ordinary;
       ordinary = [];
       rendered.push(
-        <text key={`navigation-text-${inlineKey++}`} fg="#a6adc8" wrapMode="word">
-          {renderInlineNodes(current)}
+        <text
+          key={`navigation-text-${inlineKey++}`}
+          id={nextSearchId()}
+          fg="#a6adc8"
+          wrapMode="word"
+        >
+          {renderInlineContent(current, `navigation-${inlineKey}`)}
         </text>,
       );
     };
@@ -160,6 +155,7 @@ function renderBlockNodes(
         rendered.push(
           <text
             key={`section-reference-${inlineKey++}`}
+            id={nextSearchId()}
             fg="#89dceb"
             wrapMode="word"
             selectable={false}
@@ -168,7 +164,7 @@ function renderBlockNodes(
               onNavigateInternal?.(node.target);
             }}
           >
-            <u>{renderInlineNodes(node.children)}</u>
+            <u>{renderInlineContent(node.children, `reference-${inlineKey}`)}</u>
           </text>,
         );
       } else if (node.type === "anchor") {
@@ -188,10 +184,9 @@ function renderBlockNodes(
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex]!;
-    const isActiveBlock = sectionId !== undefined && blockIndex === activeBlockIndex;
-    const anchorId = isActiveBlock ? contentBlockId(sectionId, blockIndex) : undefined;
+    const blockPath = searchPath.block(parentPath, blockIndex);
+    const targetId = contentSearchId(sectionId, blockPath);
     const indent = baseIndent + layoutIndent(block);
-    if (isActiveBlock) flushInline();
 
     switch (block.type) {
       case "paragraph":
@@ -202,48 +197,34 @@ function renderBlockNodes(
           result.push(
             <box
               key={`navigation-paragraph-${keyCounter++}`}
-              {...(anchorId ? { id: anchorId } : {})}
               flexDirection="row"
               flexWrap="wrap"
               paddingLeft={indent}
             >
-              {renderNavigationParagraph(block.children)}
+              {renderNavigationParagraph(block.children, blockPath)}
             </box>,
           );
         } else {
-          beginInlineBlock(indent, anchorId);
+          beginInlineBlock(indent, targetId);
           appendInlineLines(block.children);
-          if (isActiveBlock) flushInline();
         }
         break;
 
-      case "preformatted": {
+      case "preformatted":
         flushInline();
-        const pre = (
-          <Pre
-            children={block.children}
-            block
-            indent={indent}
-            searchQuery={searchQuery}
-          />
-        );
         result.push(
-          anchorId
-            ? <box key={`pre-${keyCounter++}`} id={anchorId}>{pre}</box>
-            : <box key={`pre-${keyCounter++}`}>{pre}</box>,
+          <box key={`pre-${keyCounter++}`} id={targetId}>
+            <Pre children={block.children} block indent={indent} />
+          </box>,
         );
         break;
-      }
 
-      case "list": {
+      case "list":
         flushInline();
         result.push(
-          <box
-            key={`list-${keyCounter++}`}
-            {...(anchorId ? { id: anchorId } : {})}
-            flexDirection="column"
-          >
+          <box key={`list-${keyCounter++}`} flexDirection="column">
             {block.items.map((item, itemIndex) => {
+              const itemPath = searchPath.listItem(blockPath, itemIndex);
               const marker = block.kind === "ordered"
                 ? `${(block.start ?? 1) + itemIndex}. `
                 : block.kind === "bullet" ? "• " : "";
@@ -259,9 +240,8 @@ function renderBlockNodes(
                     {renderBlockNodes(
                       item.blocks,
                       0,
-                      searchQuery,
-                      undefined,
-                      undefined,
+                      sectionId,
+                      itemPath,
                       onNavigateInternal,
                     )}
                   </box>
@@ -271,58 +251,58 @@ function renderBlockNodes(
           </box>,
         );
         break;
-      }
 
-      case "definition-list": {
+      case "definition-list":
         flushInline();
         result.push(
-          <box
-            key={`definitions-${keyCounter++}`}
-            {...(anchorId ? { id: anchorId } : {})}
-            flexDirection="column"
-          >
-            {block.items.map((item, itemIndex) => (
-              <box
-                key={`definition-${itemIndex}`}
-                flexDirection="column"
-                paddingTop={
-                  item.spacingBeforeLines
-                    ?? (itemIndex > 0 && !block.compact ? 1 : 0)
-                }
-              >
-                {item.terms.map((term, termIndex) => (
-                  <box key={`term-${termIndex}`} paddingLeft={indent}>
-                    <text fg="#cdd6f4" wrapMode="word">{renderInlineNodes(term)}</text>
-                  </box>
-                ))}
-                {item.description.length > 0 && (
-                  <box flexDirection="column">
-                    {renderBlockNodes(
-                      item.description,
-                      indent + 4,
-                      searchQuery,
-                      undefined,
-                      undefined,
-                      onNavigateInternal,
-                    )}
-                  </box>
-                )}
-              </box>
-            ))}
+          <box key={`definitions-${keyCounter++}`} flexDirection="column">
+            {block.items.map((item, itemIndex) => {
+              const itemPath = searchPath.definition(blockPath, itemIndex);
+              return (
+                <box
+                  key={`definition-${itemIndex}`}
+                  flexDirection="column"
+                  paddingTop={
+                    item.spacingBeforeLines
+                      ?? (itemIndex > 0 && !block.compact ? 1 : 0)
+                  }
+                >
+                  {item.terms.map((term, termIndex) => {
+                    const termPath = searchPath.term(itemPath, termIndex);
+                    return (
+                      <box key={`term-${termIndex}`} paddingLeft={indent}>
+                        <text
+                          id={contentSearchId(sectionId, termPath)}
+                          fg="#cdd6f4"
+                          wrapMode="word"
+                        >
+                          {renderInlineContent(term, `term-${termIndex}`)}
+                        </text>
+                      </box>
+                    );
+                  })}
+                  {item.description.length > 0 && (
+                    <box flexDirection="column">
+                      {renderBlockNodes(
+                        item.description,
+                        indent + 4,
+                        sectionId,
+                        itemPath,
+                        onNavigateInternal,
+                      )}
+                    </box>
+                  )}
+                </box>
+              );
+            })}
           </box>,
         );
         break;
-      }
 
       case "table":
         flushInline();
         result.push(
-          <box
-            key={`table-${keyCounter++}`}
-            {...(anchorId ? { id: anchorId } : {})}
-            flexDirection="column"
-            paddingLeft={indent}
-          >
+          <box key={`table-${keyCounter++}`} flexDirection="column" paddingLeft={indent}>
             {block.rows.map((row, rowIndex) => (
               <box key={`row-${rowIndex}`} flexDirection="row">
                 {row.cells.map((cell, cellIndex) => (
@@ -330,9 +310,8 @@ function renderBlockNodes(
                     {renderBlockNodes(
                       cell.blocks,
                       0,
-                      searchQuery,
-                      undefined,
-                      undefined,
+                      sectionId,
+                      searchPath.cell(searchPath.row(blockPath, rowIndex), cellIndex),
                       onNavigateInternal,
                     )}
                   </box>
@@ -346,8 +325,8 @@ function renderBlockNodes(
       case "equation":
         flushInline();
         result.push(
-          <box key={`equation-${keyCounter++}`} {...(anchorId ? { id: anchorId } : {})} paddingLeft={indent}>
-            <text fg="#f9e2af" wrapMode="char">{block.value}</text>
+          <box key={`equation-${keyCounter++}`} paddingLeft={indent}>
+            <text id={targetId} fg="#f9e2af" wrapMode="char">{block.value}</text>
           </box>,
         );
         break;
@@ -355,8 +334,8 @@ function renderBlockNodes(
       case "unsupported":
         flushInline();
         result.push(
-          <box key={`unsupported-${keyCounter++}`} {...(anchorId ? { id: anchorId } : {})} paddingLeft={indent}>
-            <text fg="#fab387" wrapMode="word">{block.text}</text>
+          <box key={`unsupported-${keyCounter++}`} paddingLeft={indent}>
+            <text id={targetId} fg="#fab387" wrapMode="word">{block.text}</text>
           </box>,
         );
         break;
@@ -364,11 +343,7 @@ function renderBlockNodes(
       case "vertical-space":
         flushInline();
         result.push(
-          <box
-            key={`space-${keyCounter++}`}
-            {...(anchorId ? { id: anchorId } : {})}
-            height={Math.max(1, Math.floor(block.lines))}
-          />,
+          <box key={`space-${keyCounter++}`} height={Math.max(1, Math.floor(block.lines))} />,
         );
         break;
     }
@@ -377,52 +352,34 @@ function renderBlockNodes(
   return result;
 }
 
-// ── Section hierarchy ─────────────────────────────────────────────────────
+// ── Section hierarchy ───────────────────────────────────────────
 
 export interface SectionContentProps {
   node: MantSection;
   baseIndent?: number;
-  searchQuery?: string;
-  activeSearchSectionId?: string | undefined;
-  activeBlockIndex?: number | undefined;
   headingIndent?: number;
   onNavigateInternal?: ((target: string) => void) | undefined;
 }
 
 /** Recursively renders one section and its children in document order. */
-export function SectionContent({
+function SectionContentView({
   node,
   baseIndent = 3,
-  searchQuery = "",
-  activeSearchSectionId,
-  activeBlockIndex,
   headingIndent = 0,
   onNavigateInternal,
 }: SectionContentProps) {
   return (
     <box flexDirection="column" gap={0}>
       <box paddingLeft={headingIndent}>
-        <text id={contentId(node.id)} fg="#94e2d5">
-          <b>{renderSearchHighlights(node.title, searchQuery, `heading-${node.id}`)}</b>
-        </text>
+        <text id={contentId(node.id)} fg="#94e2d5"><b>{node.title}</b></text>
       </box>
-      {renderBlockNodes(
-        node.blocks,
-        baseIndent,
-        searchQuery,
-        node.id,
-        activeSearchSectionId === node.id ? activeBlockIndex : undefined,
-        onNavigateInternal,
-      )}
+      {renderBlockNodes(node.blocks, baseIndent, node.id, "", onNavigateInternal)}
       <box flexDirection="column" gap={0}>
         {node.children.map((child) => (
           <SectionContent
             key={child.id}
             node={child}
             baseIndent={baseIndent + 4}
-            searchQuery={searchQuery}
-            activeSearchSectionId={activeSearchSectionId}
-            activeBlockIndex={activeBlockIndex}
             headingIndent={headingIndent + 4}
             onNavigateInternal={onNavigateInternal}
           />
@@ -432,17 +389,23 @@ export function SectionContent({
   );
 }
 
-// ── TLDR quick reference ──────────────────────────────────────────────────
+function sectionContentPropsEqual(previous: SectionContentProps, next: SectionContentProps): boolean {
+  return previous.node === next.node
+    && previous.baseIndent === next.baseIndent
+    && previous.headingIndent === next.headingIndent;
+}
 
-function TldrCommand({ parts, searchQuery }: {
-  parts: TldrCommandPart[];
-  searchQuery: string;
-}) {
+/** App state changes do not rebuild immutable manual sections. */
+export const SectionContent = memo(SectionContentView, sectionContentPropsEqual);
+
+// ── TLDR quick reference ───────────────────────────────────────
+
+function TldrCommand({ parts }: { parts: TldrCommandPart[] }) {
   return (
     <text fg="#cdd6f4" wrapMode="char">
       {parts.map((part, index) => (
         <span key={index} fg={part.type === "placeholder" ? "#f9e2af" : "#cdd6f4"}>
-          {renderSearchHighlights(part.value, searchQuery, `tldr-command-${index}`)}
+          {part.value}
         </span>
       ))}
     </text>
@@ -450,10 +413,7 @@ function TldrCommand({ parts, searchQuery }: {
 }
 
 /** Renders cached community examples before the authoritative man page. */
-export function TldrQuickReference({ page, searchQuery }: {
-  page: TldrDocument;
-  searchQuery: string;
-}) {
+function TldrQuickReferenceView({ page }: { page: TldrDocument }) {
   return (
     <box
       id={contentId(TLDR_NAV_ID)}
@@ -466,32 +426,49 @@ export function TldrQuickReference({ page, searchQuery }: {
       paddingTop={1}
       paddingBottom={1}
     >
-      <text fg="#cba6f7">
-        <b>{renderSearchHighlights(`TLDR QUICK REFERENCE · ${page.title}`, searchQuery, "tldr-title")}</b>
-      </text>
+      <text fg="#cba6f7"><b>{`TLDR QUICK REFERENCE · ${page.title}`}</b></text>
       {page.description.map((line, index) => (
-        <text key={`description-${index}`} fg="#bac2de" wrapMode="word">
-          {renderSearchHighlights(line, searchQuery, `tldr-description-${index}`)}
+        <text
+          key={`description-${index}`}
+          id={contentSearchId(TLDR_NAV_ID, searchPath.tldrDescription(index))}
+          fg="#bac2de"
+          wrapMode="word"
+        >
+          {line}
         </text>
       ))}
       {page.examples.map((example, index) => (
         <box key={`example-${index}`} flexDirection="column" paddingTop={index === 0 ? 1 : 0}>
-          <text fg="#a6e3a1" wrapMode="word">
-            {renderSearchHighlights(example.description, searchQuery, `tldr-example-${index}`)}
+          <text
+            id={contentSearchId(TLDR_NAV_ID, searchPath.tldrExampleDescription(index))}
+            fg="#a6e3a1"
+            wrapMode="word"
+          >
+            {example.description}
           </text>
           {example.command && (
-            <box paddingLeft={2}>
-              <TldrCommand parts={example.commandParts} searchQuery={searchQuery} />
+            <box
+              id={contentSearchId(TLDR_NAV_ID, searchPath.tldrExampleCommand(index))}
+              paddingLeft={2}
+            >
+              <TldrCommand parts={example.commandParts} />
             </box>
           )}
         </box>
       ))}
       {page.moreInformation && (
-        <text fg="#89b4fa" wrapMode="char">
-          {renderSearchHighlights(`More information: ${page.moreInformation}`, searchQuery, "tldr-more-information")}
+        <text
+          id={contentSearchId(TLDR_NAV_ID, searchPath.tldrMoreInformation())}
+          fg="#89b4fa"
+          wrapMode="char"
+        >
+          {`More information: ${page.moreInformation}`}
         </text>
       )}
       <text fg="#7f849c">{`tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`}</text>
     </box>
   );
 }
+
+/** TLDR is immutable for the lifetime of one page. */
+export const TldrQuickReference = memo(TldrQuickReferenceView);

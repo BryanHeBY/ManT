@@ -14,12 +14,12 @@ export function contentId(id: string): string {
   return `content-${id}`;
 }
 
+/** Identifies one stable rendered target in the immutable page-search index. */
+export function contentSearchId(sectionId: string, targetPath: string): string {
+  return `${contentId(sectionId)}-search-${targetPath}`;
+}
+
 /** Identifies a zero-width destination embedded in manual body content. */
 export function contentAnchorId(id: string): string {
   return `content-anchor-${id}`;
-}
-
-/** Identifies the one body block currently targeted by a search result. */
-export function contentBlockId(sectionId: string, blockIndex: number): string {
-  return `${contentId(sectionId)}-block-${blockIndex}`;
 }

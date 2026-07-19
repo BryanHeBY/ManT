@@ -9,6 +9,7 @@ import {
   createCliRenderer,
   type InputRenderable,
   type ScrollBoxRenderable,
+  TextRenderable,
 } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -32,7 +33,15 @@ import {
   findParentById,
   flattenVisibleNodes,
 } from "./navigation-tree";
-import { findSearchMatches } from "./search";
+import {
+  buildPageSearchIndex,
+  queryPageSearchIndex,
+  type SearchMatch,
+} from "./search";
+import {
+  applySearchHighlight,
+  clearSearchHighlight,
+} from "./search-highlight";
 import { ManualStatusBar, SearchBar } from "./status-bar";
 import { useDeferredNavigationSync } from "./use-deferred-navigation-sync";
 import { useSidebarResize } from "./use-sidebar-resize";
@@ -42,7 +51,29 @@ interface AppProps {
   onQuit: () => void;
 }
 
+interface AppliedSearch {
+  query: string;
+  matches: SearchMatch[];
+  activeIndex: number;
+}
+
 const EMPTY_SECTIONS: MantSection[] = [];
+
+/** Resolve a source offset through OpenTUI's measured word-wrapping metadata. */
+function matchVisualRow(renderable: TextRenderable, match: SearchMatch): number {
+  const prefix = match.text.slice(0, match.range.start);
+  const newlineCount = prefix.split("\n").length - 1;
+  // OpenTUI reports each visual row's offset in flattened display columns;
+  // explicit newline separators occupy one offset but no terminal width.
+  const displayOffset = Bun.stringWidth(prefix) + newlineCount;
+  const { lineStartCols } = renderable.lineInfo;
+  let visualRow = 0;
+  for (let index = 0; index < lineStartCols.length; index++) {
+    if ((lineStartCols[index] ?? 0) > displayOffset) break;
+    visualRow = index;
+  }
+  return visualRow;
+}
 
 export function App({ result, onQuit }: AppProps) {
   const sections = result.manual?.sections ?? EMPTY_SECTIONS;
@@ -62,17 +93,19 @@ export function App({ result, onQuit }: AppProps) {
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [menuCursor, setMenuCursor] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  // Keep the editing buffer separate from the applied query. Updating the
-  // latter re-renders and searches the entire manual, so it must happen only
-  // after explicit confirmation.
+  // Keep the editing buffer separate from the indexed query so typing remains
+  // free of search work and a new result set appears only after confirmation.
   const [searchDraft, setSearchDraft] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchIndex, setSearchIndex] = useState(0);
-  const [pendingSearchTarget, setPendingSearchTarget] = useState<string | null>(null);
+  const [search, setSearch] = useState<AppliedSearch>({
+    query: "",
+    matches: [],
+    activeIndex: 0,
+  });
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const searchInputRef = useRef<InputRenderable | null>(null);
+  const highlightedTextRef = useRef<TextRenderable | null>(null);
   const { width: terminalWidth, height: terminalHeight } = useTerminalDimensions();
   const {
     navigationWidth,
@@ -100,14 +133,17 @@ export function App({ result, onQuit }: AppProps) {
     ],
     [result.tldr, visibleNodes]
   );
-  const searchMatches = useMemo(
-    () => findSearchMatches(sections, result.tldr, searchQuery),
-    [sections, result.tldr, searchQuery]
+  const pageSearchIndex = useMemo(
+    () => buildPageSearchIndex(sections, result.tldr),
+    [sections, result.tldr]
   );
   const branchIds = useMemo(
     () => collectBranchIds(sections),
     [sections]
   );
+  const searchQuery = search.query;
+  const searchMatches = search.matches;
+  const searchIndex = search.activeIndex;
   // ── Section selection and scrolling ────────────────────────
 
   const scrollToContent = (targetId: string) => {
@@ -125,6 +161,22 @@ export function App({ result, onQuit }: AppProps) {
     scrollbox.scrollTo({
       x: scrollbox.scrollLeft,
       y: Math.max(0, scrollbox.scrollTop + offsetToViewportTop),
+    });
+  };
+
+  const scrollToSearchMatch = (match: SearchMatch) => {
+    const scrollbox = contentScrollRef.current;
+    if (!scrollbox) return;
+    const target = scrollbox.content.findDescendantById(match.targetId);
+    clearSearchHighlight(highlightedTextRef.current);
+    highlightedTextRef.current = null;
+    if (!target) return;
+    const text = applySearchHighlight(target, match.range);
+    highlightedTextRef.current = text ?? null;
+    const targetY = text ? text.y + matchVisualRow(text, match) : target.y;
+    scrollbox.scrollTo({
+      x: scrollbox.scrollLeft,
+      y: Math.max(0, scrollbox.scrollTop + targetY - scrollbox.viewport.y),
     });
   };
 
@@ -168,10 +220,10 @@ export function App({ result, onQuit }: AppProps) {
     if (searchMatches.length === 0) return;
     const nextIndex = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length;
     const match = searchMatches[nextIndex]!;
-    setSearchIndex(nextIndex);
+    setSearch((current) => ({ ...current, activeIndex: nextIndex }));
     setSelectedId(match.sectionId);
     navScrollRef.current?.scrollChildIntoView(navId(match.sectionId));
-    setPendingSearchTarget(match.targetId);
+    scrollToSearchMatch(match);
   };
 
   const selectRelativeSection = (offset: number) => {
@@ -205,13 +257,15 @@ export function App({ result, onQuit }: AppProps) {
       return;
     }
 
-    const matches = findSearchMatches(sections, result.tldr, searchDraft);
-    setSearchQuery(searchDraft);
-    setSearchIndex(0);
+    const matches = queryPageSearchIndex(pageSearchIndex, searchDraft);
+    setSearch({ query: searchDraft, matches, activeIndex: 0 });
     if (matches[0]) {
       setSelectedId(matches[0].sectionId);
       navScrollRef.current?.scrollChildIntoView(navId(matches[0].sectionId));
-      setPendingSearchTarget(matches[0].targetId);
+      scrollToSearchMatch(matches[0]);
+    } else {
+      clearSearchHighlight(highlightedTextRef.current);
+      highlightedTextRef.current = null;
     }
   };
 
@@ -326,18 +380,6 @@ export function App({ result, onQuit }: AppProps) {
     // commits.  Re-run the visibility adjustment after that layout change.
     if (selectedId) navScrollRef.current?.scrollChildIntoView(navId(selectedId));
   }, [selectedId, visibleNodes]);
-
-  useEffect(() => {
-    if (!pendingSearchTarget) return;
-    // The block anchor is inserted by the same commit that changes the
-    // selected match. Wait for OpenTUI to finish its next layout pass before
-    // reading its y coordinate.
-    const timer = setTimeout(() => {
-      scrollToContent(pendingSearchTarget);
-      setPendingSearchTarget(null);
-    }, 16);
-    return () => clearTimeout(timer);
-  }, [pendingSearchTarget, searchIndex, searchQuery]);
 
   // ── Sidebar mouse interactions ─────────────────────────────
 
@@ -529,7 +571,7 @@ export function App({ result, onQuit }: AppProps) {
             onMouseUp={scheduleNavigationSync}
           >
             <box flexDirection="column" gap={1}>
-              {result.tldr && <TldrQuickReference page={result.tldr} searchQuery={searchQuery} />}
+              {result.tldr && <TldrQuickReference page={result.tldr} />}
               {result.tldr && sections.length > 0 && (
                 <box height={1} border={["top"]} borderColor="#45475a" paddingLeft={1}>
                   <text fg="#6c7086">MANUAL</text>
@@ -552,11 +594,6 @@ export function App({ result, onQuit }: AppProps) {
                 <SectionContent
                   key={node.id}
                   node={node}
-                  searchQuery={searchQuery}
-                  activeSearchSectionId={searchMatches[searchIndex]?.sectionId}
-                  activeBlockIndex={
-                    searchMatches[searchIndex]?.blockIndex
-                  }
                   onNavigateInternal={navigateWithinPage}
                 />
               ))}
