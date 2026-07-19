@@ -206,7 +206,7 @@ fn text_node(value: &str) -> Vec<Inline> {
     }]
 }
 
-fn parse_roff_text(source: &str) -> Vec<Inline> {
+pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
     let characters: Vec<char> = source.chars().collect();
     let mut output = Vec::new();
     let mut buffer = String::new();

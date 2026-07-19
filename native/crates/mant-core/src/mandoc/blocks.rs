@@ -1,11 +1,16 @@
 //! Reconstructs sections and semantic blocks from the copied mandoc tree.
 
-use mant_ast::{Block, DefinitionItem, Inline, LayoutHint, ListItem, ListKind, Section};
-use mant_mandoc_sys::{DisplayKind, Node, NodeKind, NormalizedListKind};
+use mant_ast::{
+    Block, DefinitionItem, Inline, LayoutHint, ListItem, ListKind, Section,
+    TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
+};
+use mant_mandoc_sys::{
+    DisplayKind, Node, NodeKind, NormalizedListKind, TableAlignment as MandocTableAlignment,
+};
 
 use super::{
     LoweringContext,
-    inline::{InlineBuilder, lower_inline_nodes, plain_text},
+    inline::{InlineBuilder, lower_inline_nodes, parse_roff_text, plain_text},
     part_children, source_span,
 };
 
@@ -116,8 +121,16 @@ fn lower_structural_node(
             context,
             indent_columns + 4,
         )),
-        _ if matches!(node.kind, NodeKind::Table | NodeKind::Equation) => {
-            output.push(unsupported_block(node, context, indent_columns));
+        _ if node.kind == NodeKind::Table => {
+            append_table_row(output, node, indent_columns);
+        }
+        _ if node.kind == NodeKind::Equation => {
+            output.push(Block::Equation {
+                value: node.equation.clone().unwrap_or_default(),
+                display: true,
+                layout: layout(indent_columns),
+                source: source_span(node),
+            });
         }
         _ => {
             let body = part_children(node, NodeKind::Body);
@@ -131,16 +144,38 @@ fn lower_structural_node(
     }
 }
 
-fn unsupported_block(node: &Node, context: &LoweringContext<'_>, indent_columns: u16) -> Block {
-    Block::Unsupported {
-        name: Some(if node.kind == NodeKind::Table {
-            "table".to_owned()
-        } else {
-            "equation".to_owned()
-        }),
-        text: plain_text(&lower_inline_nodes(&node.children, context.default_name)),
-        layout: layout(indent_columns),
-        source: source_span(node),
+fn append_table_row(output: &mut Vec<Block>, node: &Node, indent_columns: u16) {
+    if node.table_cells.is_empty() {
+        return;
+    }
+    let row = TableRow {
+        cells: node
+            .table_cells
+            .iter()
+            .map(|cell| AstTableCell {
+                blocks: vec![Block::Paragraph {
+                    children: cell.text.as_deref().map_or_else(Vec::new, parse_roff_text),
+                    layout: LayoutHint::default(),
+                    source: source_span(node),
+                }],
+                column_span: cell.column_span,
+                row_span: cell.row_span,
+                alignment: Some(match cell.alignment {
+                    MandocTableAlignment::Left => AstTableAlignment::Left,
+                    MandocTableAlignment::Center => AstTableAlignment::Center,
+                    MandocTableAlignment::Right => AstTableAlignment::Right,
+                }),
+            })
+            .collect(),
+    };
+    if let Some(Block::Table { rows, .. }) = output.last_mut() {
+        rows.push(row);
+    } else {
+        output.push(Block::Table {
+            rows: vec![row],
+            layout: layout(indent_columns),
+            source: source_span(node),
+        });
     }
 }
 

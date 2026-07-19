@@ -275,4 +275,25 @@ mod tests {
                 .all(|section| !section.blocks.is_empty() || !section.children.is_empty())
         );
     }
+
+    #[test]
+    fn lowers_tbl_and_eqn_payloads_into_structured_blocks() {
+        let path = temporary_source(
+            "table-equation",
+            ".TH PAYLOAD 1\n.SH TABLE\n.TS\ntab(|);\nl r.\nleft|right\n.TE\n\
+             .SH EQUATION\n.EQ\nx sup 2\n.EN\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower table and equation");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        assert!(matches!(
+            document.sections[0].blocks[0],
+            Block::Table { ref rows, .. } if rows.len() == 1 && rows[0].cells.len() == 2
+        ));
+        assert!(matches!(
+            document.sections[1].blocks[0],
+            Block::Equation { ref value, .. } if value.contains('x')
+        ));
+    }
 }
