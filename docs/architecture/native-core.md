@@ -4,7 +4,7 @@ Status: implemented.
 
 ## Context
 
-Mant previously obtained HTML from bundled mandoc, an installed mandoc, or
+ManT previously obtained HTML from bundled mandoc, an installed mandoc, or
 man-db/groff and then reconstructed a document model in TypeScript. A second
 `mant.roff-ast/v1` sidecar exposed part of libmandoc's internal tree. These
 parallel representations were removed after the native document contract
@@ -17,7 +17,7 @@ and makes Rust the sole owner of document interpretation.
 
 ## Decision
 
-Mant will use a Rust native core with four layers:
+ManT will use a Rust native core with four layers:
 
 ```text
 mant-ast          versioned document and query contracts
@@ -35,7 +35,7 @@ Markdown documents.
 
 The C shim is private and deliberately small.  It hides libmandoc structure
 layouts, manages parser handles, and exposes the information Rust needs to
-lower a document.  It never defines Mant's public AST and never formats JSON.
+lower a document.  It never defines ManT's public AST and never formats JSON.
 
 ## Stable and unstable models
 

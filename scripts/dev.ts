@@ -1,5 +1,5 @@
 /**
- * @file Connects the incremental Cargo build to Mant's Bun development entry.
+ * @file Connects the incremental Cargo build to ManT's Bun development entry.
  *
  * Development never relies on a globally installed native CLI. The freshly
  * staged artifact is selected explicitly, while release installations use

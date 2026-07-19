@@ -1,7 +1,7 @@
 /**
  * @file Selects and validates the host C compiler used to build libmandoc.
  *
- * Native Mant packages target Linux and macOS. Windows users build and run
+ * Native ManT packages target Linux and macOS. Windows users build and run
  * the Linux target under WSL, where the ordinary Linux compiler policy applies.
  */
 
@@ -16,14 +16,14 @@ export interface CCompilerSelection {
 type SupportedBuildPlatform = "linux" | "darwin";
 type Which = (command: string) => string | null;
 
-/** Rejects hosts for which Mant cannot provide a usable native man toolchain. */
+/** Rejects hosts for which ManT cannot provide a usable native man toolchain. */
 export function assertSupportedBuildPlatform(
   platform: string = process.platform,
 ): asserts platform is SupportedBuildPlatform {
   if (platform !== "linux" && platform !== "darwin") {
     const windowsHint = platform === "win32" ? "; use WSL on Windows" : "";
     throw new Error(
-      `native Mant builds support Linux and macOS only${windowsHint}`,
+      `native ManT builds support Linux and macOS only${windowsHint}`,
     );
   }
 }

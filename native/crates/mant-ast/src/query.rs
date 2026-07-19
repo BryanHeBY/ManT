@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{MantDocument, TldrDocument};
 
-/// Exact schema marker for a complete Mant query result.
+/// Exact schema marker for a complete `ManT` query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QuerySchema {
     /// First query envelope built around `mant.document/v1`.

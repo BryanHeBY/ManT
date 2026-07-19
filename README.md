@@ -1,8 +1,8 @@
-# Mant
+# ManT
 
 [![CI](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-Mant is a structured terminal UI for local Unix manual pages. It combines a
+ManT is a structured terminal UI for local Unix manual pages. It combines a
 native document engine with an OpenTUI React interface and can show an optional
 tldr quick reference before the full manual.
 
@@ -120,7 +120,7 @@ mant-cli --protocol-version
 ```
 
 Update tldr data through its installed client when available, otherwise through
-Mant's private cache:
+ManT's private cache:
 
 ```sh
 mant-cli --update-tldr
@@ -153,4 +153,4 @@ bun run rust:lint
 
 ## License
 
-Mant is licensed under the [Apache License 2.0](LICENSE).
+ManT is licensed under the [Apache License 2.0](LICENSE).

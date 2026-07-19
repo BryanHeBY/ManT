@@ -1,5 +1,5 @@
 /**
- * @file Runs Mant's local cross-platform build and test verification sequence.
+ * @file Runs ManT's local cross-platform build and test verification sequence.
  */
 
 import {

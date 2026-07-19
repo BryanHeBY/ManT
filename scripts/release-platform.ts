@@ -1,5 +1,5 @@
 /**
- * @file Maps a native build host to Mant's public release target names.
+ * @file Maps a native build host to ManT's public release target names.
  *
  * Rust/libmandoc and the Bun executable must describe the same operating
  * system and architecture. Keeping that mapping in one place prevents a
@@ -47,7 +47,7 @@ export function resolveReleasePlatform(
   }
 
   throw new Error(
-    `Mant releases do not support ${platform}/${architecture}; `
+    `ManT releases do not support ${platform}/${architecture}; `
     + "use Linux or macOS on x64 or arm64",
   );
 }

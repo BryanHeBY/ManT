@@ -21,7 +21,7 @@ use super::cache::{HostPlatform, TldrCacheError, get_tldr_cache_dir};
 const DEFAULT_REPOSITORY: &str = "https://github.com/tldr-pages/tldr.git";
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-/// Failure to refresh an installed client or Mant's private checkout.
+/// Failure to refresh an installed client or `ManT`'s private checkout.
 #[derive(Debug)]
 pub enum TldrUpdateError {
     Cache(TldrCacheError),
@@ -96,7 +96,7 @@ impl From<TldrCacheError> for TldrUpdateError {
     }
 }
 
-/// Refresh tldr through an installed client or Mant's private Git checkout.
+/// Refresh tldr through an installed client or `ManT`'s private Git checkout.
 ///
 /// # Errors
 ///

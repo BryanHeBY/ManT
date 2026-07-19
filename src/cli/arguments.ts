@@ -21,7 +21,7 @@ export class CliUsageError extends Error {
 
 // ── Help text ──────────────────────────────────────────────────────────────
 
-export const CLI_HELP = `Mant — browse local man pages in a structured terminal UI
+export const CLI_HELP = `ManT — browse local man pages in a structured terminal UI
 
 Usage:
   mant <topic> [--section <section>]

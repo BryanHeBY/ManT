@@ -6,7 +6,7 @@ use mant_ast::{
 };
 use scraper::{ElementRef, Html, Selector};
 
-/// Normalize one complete `man -Thtml` document into Mant's stable AST.
+/// Normalize one complete `man -Thtml` document into `ManT`'s stable AST.
 #[must_use]
 pub fn parse_groff_html(html: &str, source_path: Option<String>) -> MantDocument {
     let document = Html::parse_document(html);

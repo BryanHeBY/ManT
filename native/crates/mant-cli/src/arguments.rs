@@ -91,7 +91,7 @@ struct Cli {
     #[arg(long, conflicts_with_all = ["section", "outline", "node"])]
     request_json: bool,
 
-    /// Update tldr data through the installed client or Mant cache.
+    /// Update tldr data through the installed client or `ManT` cache.
     #[arg(long, conflicts_with_all = ["section", "outline", "node", "format"])]
     update_tldr: bool,
 

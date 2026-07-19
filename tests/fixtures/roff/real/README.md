@@ -2,7 +2,7 @@
 
 These compressed files are byte-for-byte snapshots of manual pages shipped by
 the official Arch Linux x86_64 packages listed below. They were acquired on
-2026-07-19 from `/usr/share/man/man1` and are parsed directly through Mant's
+2026-07-19 from `/usr/share/man/man1` and are parsed directly through ManT's
 bundled libmandoc; tests never consult the host manual database for them.
 
 The snapshots replace the former renderer-specific HTML fixtures. Keeping the
@@ -28,7 +28,7 @@ the local GFDL file supplies the complete license text it references.
 package. It contains the Apache License 2.0, the LLVM exception, and LLVM's
 legacy license notice rather than silently narrowing the upstream terms.
 
-These licenses govern only their respective third-party fixtures. Mant's own
+These licenses govern only their respective third-party fixtures. ManT's own
 source remains under the repository-level Apache-2.0 license.
 
 ## Updating a fixture

@@ -1,4 +1,4 @@
-//! Safe ownership boundary around Mant's pinned libmandoc parser.
+//! Safe ownership boundary around `ManT`'s pinned libmandoc parser.
 //!
 //! The C shim completes and copies a parse before returning. Rust therefore
 //! never observes libmandoc's private `roff_node` layout, and the global C

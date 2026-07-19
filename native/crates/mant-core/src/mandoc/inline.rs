@@ -15,7 +15,7 @@ enum Font {
 
 // libmandoc stores line-breaking semantics in otherwise non-printing ASCII
 // bytes inside text nodes. They are parser-internal markers, not document
-// characters, so translate them before they cross the Mant AST boundary.
+// characters, so translate them before they cross the ManT AST boundary.
 const ASCII_BREAK: char = '\u{1d}';
 const ASCII_HYPH: char = '\u{1e}';
 const ASCII_NBRSP: char = '\u{1f}';

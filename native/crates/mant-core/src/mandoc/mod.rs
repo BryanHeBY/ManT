@@ -1,4 +1,4 @@
-//! Lowers the owned libmandoc syntax tree into Mant's stable document model.
+//! Lowers the owned libmandoc syntax tree into `ManT`'s stable document model.
 
 mod blocks;
 mod diagnostics;

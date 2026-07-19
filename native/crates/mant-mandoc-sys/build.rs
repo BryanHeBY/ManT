@@ -2,7 +2,7 @@
 //!
 //! Upstream's `configure` script probes the build host by compiling and
 //! executing binaries. That is useful for a system installation, but it makes
-//! cross compilation non-deterministic. Mant instead checks in the small
+//! cross compilation non-deterministic. `ManT` instead checks in the small
 //! target-family configurations that its release matrix supports.
 
 use std::{env, fs, path::PathBuf};

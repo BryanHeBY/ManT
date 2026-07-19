@@ -23,7 +23,7 @@ pub struct MantDocument {
     pub sections: Vec<Section>,
 }
 
-/// Identifies Mant and the parsing engine used to build the document.
+/// Identifies `ManT` and the parsing engine used to build the document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Producer {
@@ -33,7 +33,7 @@ pub struct Producer {
     pub engine: Option<Engine>,
 }
 
-/// Pinned parser implementation behind the stable Mant contract.
+/// Pinned parser implementation behind the stable `ManT` contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Engine {

@@ -1,4 +1,4 @@
-//! Versioned, renderer-neutral contracts shared by every Mant frontend.
+//! Versioned, renderer-neutral contracts shared by every `ManT` frontend.
 
 mod document;
 mod outline;

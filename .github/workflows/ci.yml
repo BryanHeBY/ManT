@@ -1,4 +1,4 @@
-# Verifies every source boundary used by Mant without publishing artifacts.
+# Verifies every source boundary used by ManT without publishing artifacts.
 name: CI
 
 on:

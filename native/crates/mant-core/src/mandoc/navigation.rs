@@ -1,7 +1,7 @@
 //! Resolves same-document references after the full section tree is known.
 //!
 //! libmandoc validates `.Sx` syntax but represents its target as display text.
-//! This pass converts that temporary title into Mant's stable section ID and
+//! This pass converts that temporary title into `ManT`'s stable section ID and
 //! downgrades invalid or ambiguous references without emitting broken links.
 
 use std::collections::{HashMap, HashSet};

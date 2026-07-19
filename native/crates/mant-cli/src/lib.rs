@@ -1,4 +1,4 @@
-//! Public process boundary for Mant's native document CLI.
+//! Public process boundary for `ManT`'s native document CLI.
 //!
 //! `mant-cli` is both an agent-friendly command and the versioned stdio
 //! backend used by the interactive TypeScript application. Standard output is

@@ -29,7 +29,7 @@ const ALL_PLATFORMS: &[&str] = &[
     "dos",
 ];
 
-/// Native host families supported by Mant distributions.
+/// Native host families supported by `ManT` distributions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HostPlatform {
     Linux,
@@ -105,7 +105,7 @@ impl Error for TldrCacheError {
     }
 }
 
-/// Resolve the Mant-owned fallback checkout for an explicit environment.
+/// Resolve the `ManT`-owned fallback checkout for an explicit environment.
 ///
 /// # Errors
 ///
@@ -180,7 +180,7 @@ pub fn get_system_tldr_cache_dirs(
     Ok(deduplicate_paths(candidates))
 }
 
-/// Select installed-client caches or Mant's private fallback checkout.
+/// Select installed-client caches or `ManT`'s private fallback checkout.
 ///
 /// # Errors
 ///

@@ -1,7 +1,7 @@
 //! Regression coverage migrated from the former TypeScript HTML parsers.
 //!
 //! These tests consume fixed compressed roff sources through libmandoc. They
-//! protect source semantics and Mant's stable AST instead of renderer markup.
+//! protect source semantics and `ManT`'s stable AST instead of renderer markup.
 
 use std::{collections::HashSet, path::PathBuf, sync::OnceLock};
 
