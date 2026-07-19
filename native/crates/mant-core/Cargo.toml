@@ -9,6 +9,7 @@ publish.workspace = true
 mant-ast = { path = "../mant-ast" }
 mant-mandoc-sys = { path = "../mant-mandoc-sys" }
 scraper = "0.24.0"
+serde_json.workspace = true
 
 [lints]
 workspace = true
