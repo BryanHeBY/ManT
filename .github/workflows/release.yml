@@ -34,9 +34,9 @@ jobs:
             os: ubuntu-22.04
           - target: linux-arm64
             os: ubuntu-24.04-arm
-          # macOS remains covered by CI and source builds. Public macOS
-          # archives stay disabled until they can be Developer ID-signed and
-          # notarized, otherwise Gatekeeper rejects browser downloads.
+          # macOS remains available as a local source build. Public macOS
+          # archives and hosted CI stay disabled until releases can be
+          # Developer ID-signed and notarized for Gatekeeper.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
 

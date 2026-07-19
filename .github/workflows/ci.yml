@@ -23,16 +23,8 @@ env:
 
 jobs:
   build:
-    name: Build (${{ matrix.name }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux x64
-            os: ubuntu-24.04
-          - name: macOS arm64
-            os: macos-15
-    runs-on: ${{ matrix.os }}
+    name: Build (Linux x64)
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -41,8 +33,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Linux native dependencies
-        if: runner.os == 'Linux'
+      - name: Install native dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
@@ -63,9 +54,9 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             native/target
-          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('native/Cargo.lock') }}
+          key: cargo-v1-linux-x64-stable-${{ hashFiles('native/Cargo.lock') }}
           restore-keys: |
-            cargo-v1-${{ runner.os }}-${{ runner.arch }}-stable-
+            cargo-v1-linux-x64-stable-
 
       - name: Install Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
