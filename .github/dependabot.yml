@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: /native
+    schedule:
+      interval: weekly
+    groups:
+      rust-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      bun-dependencies:
+        patterns:
+          - "*"

@@ -1,5 +1,7 @@
 # Mant
 
+[![CI](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml)
+
 Mant is a structured terminal UI for local Unix manual pages. It combines a
 native document engine with an OpenTUI React interface and can show an optional
 tldr quick reference before the full manual.
@@ -59,6 +61,23 @@ build directly, either add `dist` to `PATH` or select the CLI explicitly:
 PATH="$PWD/dist:$PATH" ./dist/mant git
 MANT_CLI_PATH="$PWD/dist/mant-cli" ./dist/mant git
 ```
+
+Tagged releases build paired, standalone executables for Linux and macOS on
+x64 and arm64. Each archive is accompanied by a SHA-256 checksum and includes
+the licenses needed by the bundled libmandoc parser. A release tag must match
+the version in both `package.json` and `native/Cargo.toml`:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub Actions builds each archive on its target architecture rather than
+cross-compiling the Rust/C native core. Linux x64 uses Bun's baseline target so
+the TUI does not require AVX2. After all four builds pass, the workflow creates
+a draft GitHub Release with generated notes and every asset. Review or edit the
+notes in GitHub, then publish the draft manually; publishing does not rebuild
+the binaries.
 
 ## Agent and script usage
 
@@ -129,3 +148,7 @@ bun run lint
 bun run rust:test
 bun run rust:lint
 ```
+
+## License
+
+Mant is licensed under the [Apache License 2.0](LICENSE).

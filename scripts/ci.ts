@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { assertSupportedBuildPlatform } from "./c-compiler";
+import { resolveReleasePlatform } from "./release-platform";
 
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
@@ -96,6 +97,7 @@ async function verifyPackagedExecutable(): Promise<void> {
 
 async function main(): Promise<void> {
   assertSupportedBuildPlatform();
+  const releasePlatform = resolveReleasePlatform();
 
   await run("install locked dependencies", [process.execPath, "install", "--frozen-lockfile"]);
   await run("type check", [process.execPath, "run", "lint"]);
@@ -138,6 +140,8 @@ async function main(): Promise<void> {
     process.execPath,
     "build",
     "--compile",
+    "--target",
+    releasePlatform.bunCompileTarget,
     "--define",
     "MANT_COMPILED=true",
     "--outfile",

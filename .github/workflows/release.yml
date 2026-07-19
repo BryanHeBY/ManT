@@ -1,0 +1,132 @@
+# Builds native distributions and assembles a reviewable draft release.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: 1.3.14
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Package (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-22.04
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+          - target: macos-x64
+            os: macos-15-intel
+          - target: macos-arm64
+            os: macos-15
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            man-db \
+            zlib1g-dev
+
+      - name: Install stable Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      # Rebuild and test natively on every target. This covers libmandoc's C
+      # configuration and prevents an archive from containing cross-ABI files.
+      - name: Build and test release binaries
+        run: bun run build
+
+      - name: Package release archive
+        run: bun run release:pack
+        env:
+          MANT_RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          MANT_RELEASE_TARGET: ${{ matrix.target }}
+
+      - name: Upload packaged distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mant-${{ matrix.target }}
+          path: |
+            dist/mant-*.tar.gz
+            dist/mant-*.tar.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  draft:
+    name: Create draft GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download every platform archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: mant-*
+          path: release
+          merge-multiple: true
+
+      - name: Assemble checksum manifest
+        shell: bash
+        run: cat release/*.sha256 > release/SHA256SUMS
+
+      # Keep the release private until its generated notes and complete asset
+      # set have been reviewed in the GitHub UI. Publishing is a deliberate
+      # human action and does not require rebuilding any artifact.
+      - name: Create draft release
+        shell: bash
+        run: |
+          prerelease=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            prerelease+=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" \
+            release/*.tar.gz \
+            release/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "$RELEASE_TAG" \
+            --draft \
+            "${prerelease[@]}"
+        env:
+          GH_TOKEN: ${{ github.token }}
