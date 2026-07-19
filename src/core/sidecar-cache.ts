@@ -16,6 +16,8 @@ const SIDECAR_FILENAME = SIDECAR_ASSET_BASENAME;
 
 let materializedSidecar: Promise<string> | null = null;
 
+declare const MANT_COMPILED: boolean;
+
 // Bun's declaration uses Blob, while compiled-file assets additionally carry
 // their generated asset name at runtime (as documented by Bun.embeddedFiles).
 interface EmbeddedAsset extends Blob {
@@ -42,6 +44,17 @@ export function getSidecarCacheDir(
     "mant",
     "sidecars",
   );
+}
+
+/** Resolves the override, embedded asset, or development sidecar path. */
+export function getBundledSidecarPath(): string | Promise<string> {
+  if (process.env.MANT_MANDOC_JSON_BIN) {
+    return process.env.MANT_MANDOC_JSON_BIN;
+  }
+  if (typeof MANT_COMPILED !== "undefined" && MANT_COMPILED) {
+    return materializeEmbeddedSidecar();
+  }
+  return new URL("../../native/bin/mant-mandoc-json", import.meta.url).pathname;
 }
 
 function findEmbeddedSidecar(): EmbeddedAsset {

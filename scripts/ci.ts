@@ -56,7 +56,7 @@ async function run(
 }
 
 async function verifyPackagedExecutable(): Promise<void> {
-  console.log("\n==> packaged AST smoke test");
+  console.log("\n==> packaged sidecar smoke tests");
   const sidecarCache = join(distDirectory, ".sidecar-cache");
   await rm(sidecarCache, { recursive: true, force: true });
   try {
@@ -88,6 +88,28 @@ async function verifyPackagedExecutable(): Promise<void> {
     const cachedFiles = await readdir(sidecarCache, { recursive: true });
     if (!cachedFiles.some((path) => path.endsWith(sidecarName))) {
       throw new Error("packaged executable did not materialize its embedded mandoc sidecar");
+    }
+
+    // Exercise the ordinary query pipeline too. The AST check above proves
+    // extraction works; this check proves the embedded sidecar's HTML mode is
+    // wired into the parser used by end users.
+    const queryProcess = Bun.spawn([executablePath, "ls", "--json"], {
+      cwd: distDirectory,
+      env: { ...process.env, MANT_SIDECAR_DIR: sidecarCache },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [queryOutput, queryStderr, queryExitCode] = await Promise.all([
+      new Response(queryProcess.stdout).text(),
+      new Response(queryProcess.stderr).text(),
+      queryProcess.exited,
+    ]);
+    if (queryExitCode !== 0) {
+      throw new Error(`packaged HTML smoke test failed: ${queryStderr.trim()}`);
+    }
+    const queryResult = JSON.parse(queryOutput) as { sections?: unknown[] };
+    if (!queryResult.sections?.length) {
+      throw new Error("packaged HTML smoke test returned no manual sections");
     }
   } finally {
     await rm(sidecarCache, { recursive: true, force: true });

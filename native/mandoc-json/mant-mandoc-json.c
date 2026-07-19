@@ -16,10 +16,18 @@
 #include "mandoc.h"
 #include "roff.h"
 #include "mandoc_parse.h"
+#include "manconf.h"
+#include "main.h"
 
 #define MANT_MANDOC_VERSION "1.14.6"
 
+enum output_mode {
+	OUTPUT_JSON,
+	OUTPUT_HTML
+};
+
 static void emit_document(const char *, const struct roff_meta *);
+static void emit_html(const struct roff_meta *);
 static void emit_node(const struct roff_node *);
 static void emit_json_string(const char *);
 static void usage(const char *);
@@ -35,9 +43,11 @@ main(int argc, char *argv[])
 	const char		*path;
 	struct mparse		*parser;
 	struct roff_meta	*meta;
-	int			 options, fd;
+	enum output_mode	 output;
+	int			 options, fd, status;
 
 	options = MPARSE_UTF8 | MPARSE_LATIN1 | MPARSE_VALIDATE | MPARSE_COMMENT;
+	output = OUTPUT_JSON;
 	path = NULL;
 
 	if (argc == 2 && strcmp(argv[1], "--help") == 0) {
@@ -46,6 +56,10 @@ main(int argc, char *argv[])
 	}
 	if (argc == 3 && strcmp(argv[1], "--allow-include") == 0) {
 		options |= MPARSE_SO;
+		path = argv[2];
+	} else if (argc == 3 && strcmp(argv[1], "--html") == 0) {
+		options |= MPARSE_SO;
+		output = OUTPUT_HTML;
 		path = argv[2];
 	} else if (argc == 2) {
 		path = argv[1];
@@ -72,19 +86,39 @@ main(int argc, char *argv[])
 	mparse_readfd(parser, fd, path);
 	close(fd);
 	meta = mparse_result(parser);
-	emit_document(path, meta);
+	if (output == OUTPUT_HTML)
+		emit_html(meta);
+	else
+		emit_document(path, meta);
+	status = output == OUTPUT_HTML ? mandoc_msg_getrc() : 0;
 
 	mparse_free(parser);
 	mchars_free();
 	/* Parsing problems are represented in JSON and stderr, not as a protocol
 	 * failure.  Only argument and file-open errors use non-zero exit codes. */
-	return 0;
+	return status;
 }
 
 static void
 usage(const char *program)
 {
-	fprintf(stderr, "usage: %s [--allow-include] file\n", program);
+	fprintf(stderr, "usage: %s [--allow-include | --html] file\n", program);
+}
+
+/* Render through the formatter built from the same pinned mandoc sources. */
+static void
+emit_html(const struct roff_meta *meta)
+{
+	struct manoutput	 options;
+	void			*formatter;
+
+	memset(&options, 0, sizeof(options));
+	formatter = html_alloc(&options);
+	if (meta->macroset == MACROSET_MDOC)
+		html_mdoc(formatter, meta);
+	else if (meta->macroset == MACROSET_MAN)
+		html_man(formatter, meta);
+	html_free(formatter);
 }
 
 static void

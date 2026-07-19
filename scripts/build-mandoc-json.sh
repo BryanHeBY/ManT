@@ -33,6 +33,7 @@ CC_BIN=${CC:-$DEFAULT_CC}
 # retaining the upstream warning set. Callers can still override CFLAGS.
 DEFAULT_CFLAGS="-O2 -W -Wall -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter"
 BUILD_CFLAGS=${CFLAGS:-$DEFAULT_CFLAGS}
+HTML_OBJECTS="eqn_html.o html.o man_html.o mdoc_html.o out.o roff_html.o tbl_html.o"
 
 if ! command -v "$CC_BIN" >/dev/null 2>&1; then
   echo "C compiler '$CC_BIN' was not found; install it or set CC explicitly" >&2
@@ -100,16 +101,19 @@ shell_quote() {
     printf "CFLAGS='%s'\n" "$(shell_quote "$BUILD_CFLAGS")"
   } > configure.local
   ./configure
-  make CC="$CC_BIN" CFLAGS="$BUILD_CFLAGS" libmandoc.a
+  make CC="$CC_BIN" CFLAGS="$BUILD_CFLAGS" libmandoc.a $HTML_OBJECTS
 )
 
 mkdir -p "$OUTPUT_DIR"
 # BUILD_CFLAGS intentionally undergoes shell word splitting into compiler
 # arguments; CC_BIN remains one validated executable path.
-"$CC_BIN" $BUILD_CFLAGS -I"$SOURCE_DIR" \
-  "$ROOT/native/mandoc-json/mant-mandoc-json.c" \
-  "$SOURCE_DIR/libmandoc.a" -lz -lm \
-  -o "$OUTPUT.tmp"
+(
+  cd "$SOURCE_DIR"
+  "$CC_BIN" $BUILD_CFLAGS -I"$SOURCE_DIR" \
+    "$ROOT/native/mandoc-json/mant-mandoc-json.c" \
+    $HTML_OBJECTS libmandoc.a -lz -lm \
+    -o "$OUTPUT.tmp"
+)
 mv "$OUTPUT.tmp" "$OUTPUT"
 chmod 755 "$OUTPUT"
 

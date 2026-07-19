@@ -11,6 +11,13 @@ import {
 } from "../../../src/core/process";
 
 describe("process boundary", () => {
+  test("runs a renderer from its requested source directory", async () => {
+    const result = await runCommand(["/bin/pwd"], { cwd: import.meta.dir });
+
+    expect(result.exitCode).toBe(0);
+    expect(new TextDecoder().decode(result.stdout).trim()).toBe(import.meta.dir);
+  });
+
   test("rejects empty commands before reaching the runtime", async () => {
     await expect(runCommand([])).rejects.toThrow("cannot run an empty command");
   });

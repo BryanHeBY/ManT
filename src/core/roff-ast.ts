@@ -14,9 +14,7 @@ import {
   runCommand,
   type CommandRunner,
 } from "./process";
-import { materializeEmbeddedSidecar } from "./sidecar-cache";
-
-declare const MANT_COMPILED: boolean;
+import { getBundledSidecarPath } from "./sidecar-cache";
 
 export type RoffAstResultLevel =
   | "ok"
@@ -78,13 +76,7 @@ export interface RoffAstFetcherDependencies {
 const decoder = new TextDecoder();
 
 function defaultSidecarPath(): string | Promise<string> {
-  if (process.env.MANT_MANDOC_JSON_BIN) {
-    return process.env.MANT_MANDOC_JSON_BIN;
-  }
-  if (typeof MANT_COMPILED !== "undefined" && MANT_COMPILED) {
-    return materializeEmbeddedSidecar();
-  }
-  return new URL("../../native/bin/mant-mandoc-json", import.meta.url).pathname;
+  return getBundledSidecarPath();
 }
 
 async function defaultIsSidecarAvailable(path: string): Promise<boolean> {

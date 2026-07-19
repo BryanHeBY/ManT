@@ -1,16 +1,19 @@
 /**
  * @file Selects the most faithful available HTML renderer for a local man page.
  *
- * It prefers source-fed mandoc, falls back to man-db/groff when source features
- * are unsupported, and leaves all OS process work to the shared process layer.
+ * It prefers the bundled libmandoc HTML renderer, falls back to man-db/groff
+ * for unsupported source features, and leaves process work to the shared
+ * boundary. Development checkouts can use a system mandoc before the sidecar
+ * has been built.
  */
 
+import { basename, dirname } from "node:path";
 import {
   commandError,
-  getDecompressor,
   runCommand,
   type CommandRunner,
 } from "./process";
+import { getBundledSidecarPath } from "./sidecar-cache";
 
 // Kept as a public re-export so existing callers can type injected runners
 // without learning about the internal process module.
@@ -18,8 +21,10 @@ export type { CommandResult } from "./process";
 
 export interface FetchManHtmlDependencies {
   runCommand?: CommandRunner;
-  readFile?: (path: string) => Promise<Uint8Array>;
+  getSidecarPath?: () => string | Promise<string>;
+  isSidecarAvailable?: (path: string) => Promise<boolean>;
   isMandocAvailable?: () => boolean;
+  isManHtmlAvailable?: () => boolean;
   onMandocFallback?: (topic: string, error: Error) => void;
 }
 
@@ -27,21 +32,6 @@ const decoder = new TextDecoder();
 
 function decode(bytes: Uint8Array): string {
   return decoder.decode(bytes);
-}
-
-async function readFile(path: string): Promise<Uint8Array> {
-  return new Uint8Array(await Bun.file(path).arrayBuffer());
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
-
-function hasSourceInclude(source: Uint8Array): boolean {
-  // mandoc resolves .so relative to its current working directory.  Feeding a
-  // page through stdin loses the source file's location, so delegate these
-  // pages to man-db/groff, which resolves the include in the man hierarchy.
-  return /^(?:\.|')so[\t ]+/m.test(decode(source));
 }
 
 async function locateManPage(
@@ -56,34 +46,44 @@ async function locateManPage(
   return firstPath || null;
 }
 
-async function loadManSource(
-  path: string,
-  commandRunner: CommandRunner,
-  fileReader: (path: string) => Promise<Uint8Array>,
-): Promise<Uint8Array> {
-  const decompressor = getDecompressor(path);
-  if (!decompressor) return fileReader(path);
-
-  const command = [decompressor, path];
-  const result = await commandRunner(command);
-  if (result.exitCode !== 0) throw commandError(command, result);
-  return result.stdout;
+async function defaultIsSidecarAvailable(path: string): Promise<boolean> {
+  return Bun.file(path).exists();
 }
 
-async function renderWithMandoc(
-  source: Uint8Array,
-  commandRunner: CommandRunner,
-): Promise<string> {
-  // -Wunsupp turns mandoc's known GNU roff incompatibilities into a non-zero
-  // exit code.  That lets us fall back to groff instead of silently returning
-  // incomplete HTML for pages mandoc cannot faithfully render.
-  const command = ["mandoc", "-Wunsupp", "-Thtml"];
-  const result = await commandRunner(command, { stdin: source });
-  if (result.exitCode !== 0) throw commandError(command, result);
+function defaultIsManHtmlAvailable(): boolean {
+  const man = Bun.which("man");
+  // Apple's BSD man rejects -T. A separately installed man-db remains a valid
+  // high-fidelity fallback and normally resolves outside /usr/bin.
+  return man !== null && !(process.platform === "darwin" && man === "/usr/bin/man");
+}
 
+interface HtmlAttempt {
+  /** HTML is retained even when strict unsupported-feature checks fail. */
+  html: string | null;
+  error: Error | null;
+}
+
+/** Returns the cwd mandoc expects for conventional `.so man1/target.1` paths. */
+function manualTreeRoot(path: string): string {
+  const sourceDirectory = dirname(path);
+  return /^(?:man|cat)[^/]*$/.test(basename(sourceDirectory))
+    ? dirname(sourceDirectory)
+    : sourceDirectory;
+}
+
+async function attemptHtmlRender(
+  command: string[],
+  commandRunner: CommandRunner,
+  cwd?: string,
+): Promise<HtmlAttempt> {
+  const result = await commandRunner(command, cwd ? { cwd } : {});
   const html = decode(result.stdout);
-  if (!html.trim()) throw new Error("mandoc produced no HTML");
-  return html;
+  if (result.exitCode === 0 && html.trim()) return { html, error: null };
+
+  const error = result.exitCode === 0
+    ? new Error(`${command[0]} produced no HTML`)
+    : commandError(command, result);
+  return { html: html.trim() ? html : null, error };
 }
 
 async function renderWithMan(
@@ -102,41 +102,111 @@ async function renderWithMan(
 
 function defaultMandocFallback(topic: string, error: Error): void {
   if (process.env.MANT_DEBUG) {
-    console.warn(`mandoc failed for ${topic}, falling back to man: ${error.message}`);
+    console.warn(`strict mandoc rendering failed for ${topic}: ${error.message}`);
   }
 }
 
+function errorSummary(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.trim().split(/\r?\n/, 1)[0] || "unknown renderer error";
+}
+
+function rendererError(topic: string, mandocError: Error, manError: unknown): Error {
+  return new Error(
+    `no HTML renderer could render '${topic}': `
+    + `mandoc: ${errorSummary(mandocError)}; `
+    + `man/groff: ${errorSummary(manError)}`,
+  );
+}
+
 /**
- * Creates a man-page HTML fetcher.  The injectable process and file adapters
- * keep the renderer selection deterministic in tests without requiring the
- * host to have man-db, mandoc, or compression utilities installed.
+ * Creates a man-page HTML fetcher. Injectable process and sidecar adapters
+ * keep renderer selection deterministic without requiring host renderers in
+ * unit tests.
  */
 export function createManHtmlFetcher(
   dependencies: FetchManHtmlDependencies = {},
 ): (topic: string) => Promise<string> {
   const commandRunner = dependencies.runCommand ?? runCommand;
-  const fileReader = dependencies.readFile ?? readFile;
+  const getSidecarPath = dependencies.getSidecarPath ?? getBundledSidecarPath;
+  const isSidecarAvailable = dependencies.isSidecarAvailable ?? defaultIsSidecarAvailable;
   const isMandocAvailable = dependencies.isMandocAvailable ?? (() => Bun.which("mandoc") !== null);
+  const isManHtmlAvailable = dependencies.isManHtmlAvailable ?? defaultIsManHtmlAvailable;
   const onMandocFallback = dependencies.onMandocFallback ?? defaultMandocFallback;
 
   return async function fetchManHtml(topic: string): Promise<string> {
-    if (isMandocAvailable()) {
-      const path = await locateManPage(topic, commandRunner);
+    const path = await locateManPage(topic, commandRunner);
+    if (path) {
+      let attempt: HtmlAttempt | null = null;
 
-      if (path) {
+      try {
+        const sidecarPath = await getSidecarPath();
+        if (await isSidecarAvailable(sidecarPath)) {
+          attempt = await attemptHtmlRender(
+            [sidecarPath, "--html", path],
+            commandRunner,
+            manualTreeRoot(path),
+          );
+        }
+      } catch (error) {
+        if (process.env.MANT_DEBUG) {
+          console.warn(`bundled mandoc sidecar is unavailable: ${errorSummary(error)}`);
+        }
+      }
+
+      // Keep source paths intact: mandoc can read gzip itself and needs the
+      // original location to resolve .so includes. This path is primarily for
+      // development before the bundled sidecar has been built.
+      if (attempt === null && isMandocAvailable()) {
+        attempt = await attemptHtmlRender(
+          ["mandoc", "-Wunsupp", "-Thtml", path],
+          commandRunner,
+          manualTreeRoot(path),
+        );
+      }
+
+      if (attempt?.error === null && attempt.html !== null) return attempt.html;
+
+      if (attempt?.error) {
+        onMandocFallback(topic, attempt.error);
+        if (!isManHtmlAvailable()) {
+          if (attempt.html !== null) return attempt.html;
+          throw rendererError(
+            topic,
+            attempt.error,
+            new Error("the installed man implementation has no HTML device"),
+          );
+        }
         try {
-          const source = await loadManSource(path, commandRunner, fileReader);
-          if (hasSourceInclude(source)) {
-            throw new Error("manual source contains a .so include");
+          return await renderWithMan(topic, commandRunner);
+        } catch (manError) {
+          // Strict mandoc still emits its best-effort document. On hosts such
+          // as macOS where BSD man has no HTML device, that usable output is a
+          // better final fallback than rejecting the page entirely.
+          if (attempt.html !== null) {
+            if (process.env.MANT_DEBUG) {
+              console.warn(
+                `man/groff fallback failed for ${topic}; using best-effort bundled HTML: `
+                + errorSummary(manError),
+              );
+            }
+            return attempt.html;
           }
-          return await renderWithMandoc(source, commandRunner);
-        } catch (error) {
-          onMandocFallback(topic, asError(error));
+          throw rendererError(topic, attempt.error, manError);
         }
       }
     }
 
-    return renderWithMan(topic, commandRunner);
+    if (!isManHtmlAvailable()) {
+      throw new Error(
+        `could not render manual '${topic}': the installed man implementation has no HTML device`,
+      );
+    }
+    try {
+      return await renderWithMan(topic, commandRunner);
+    } catch (error) {
+      throw new Error(`could not render manual '${topic}': ${errorSummary(error)}`);
+    }
   };
 }
 

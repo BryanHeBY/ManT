@@ -1,8 +1,9 @@
 # Bundled libmandoc sidecar
 
 `mant-mandoc-json` converts a local man-page source into the stable
-`mant.roff-ast/v1` JSON protocol.  It is built from the pinned mandoc 1.14.6
-source archive rather than linking the host's `libmandoc`.
+`mant.roff-ast/v1` JSON protocol or renders it as HTML. It is built from the
+pinned mandoc 1.14.6 source archive rather than linking the host's
+`libmandoc`.
 
 Build it with:
 
@@ -39,10 +40,14 @@ Inspect a real source AST with:
 mant git --roff-ast
 ```
 
+The ordinary TUI query path uses the sidecar's `--html` mode first. If strict
+unsupported-feature detection rejects a page, Mant prefers man-db/groff when
+available and otherwise keeps mandoc's best-effort HTML. This makes packaged
+macOS binaries independent of BSD `man`, which does not support `-Thtml`.
+
 By default, `.so` requests are kept as `meta.aliasTarget` rather than being
 expanded.  `--allow-include` enables libmandoc's source inclusion and should
 only be used after the caller has enforced an allowed source-root policy.
 
-This sidecar removes the runtime need for the system `mandoc` package.  The
-normal TUI currently remains on the HTML renderer pipeline; it still uses
-system `mandoc` when available until an AST-to-`SectionNode` adapter is ready.
+This sidecar removes the runtime need for the system `mandoc` package while
+keeping libmandoc's unstable C ABI outside the Bun process.

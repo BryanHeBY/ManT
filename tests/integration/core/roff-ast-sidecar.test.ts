@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { dirname } from "node:path";
 import { fetchRoffAst } from "../../../src/core";
 
 const sidecarPath = new URL(
@@ -11,6 +12,14 @@ const sidecarPath = new URL(
 ).pathname;
 const mdocFixturePath = new URL(
   "../../fixtures/roff/minimal-mdoc.1",
+  import.meta.url,
+).pathname;
+const mdocAliasFixturePath = new URL(
+  "../../fixtures/roff/alias-mdoc.1",
+  import.meta.url,
+).pathname;
+const unsupportedMdocFixturePath = new URL(
+  "../../fixtures/roff/unsupported-mdoc.1",
   import.meta.url,
 ).pathname;
 
@@ -30,6 +39,58 @@ const describeSidecar = canRunSidecar ? describe : describe.skip;
 const describeRealManPage = canParseRealManPage ? describe : describe.skip;
 
 describeSidecar("bundled libmandoc AST sidecar", () => {
+  test("renders HTML without invoking a system mandoc", async () => {
+    const process = Bun.spawn([sidecarPath, "--html", mdocFixturePath], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(process.stdout).text(),
+      new Response(process.stderr).text(),
+      process.exited,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toContain("<!DOCTYPE html>");
+    expect(stdout).toContain('class="manual-text"');
+    expect(stdout).toContain("exercise mdoc AST serialization");
+  });
+
+  test("resolves an mdoc .so include from the manual source directory", async () => {
+    const process = Bun.spawn([sidecarPath, "--html", mdocAliasFixturePath], {
+      cwd: dirname(mdocAliasFixturePath),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(process.stdout).text(),
+      new Response(process.stderr).text(),
+      process.exited,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    expect(stdout).toContain("exercise mdoc AST serialization");
+  });
+
+  test("retains best-effort HTML when strict rendering reports unsupported roff", async () => {
+    const process = Bun.spawn([sidecarPath, "--html", unsupportedMdocFixturePath], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(process.stdout).text(),
+      new Response(process.stderr).text(),
+      process.exited,
+    ]);
+
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("unsupported roff request");
+    expect(stdout).toContain('class="manual-text"');
+    expect(stdout).toContain("best-effort HTML remains usable");
+  });
+
   test("derives hasBody from an mdoc syntax tree", async () => {
     const process = Bun.spawn([sidecarPath, mdocFixturePath], {
       stdout: "pipe",

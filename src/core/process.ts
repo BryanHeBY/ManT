@@ -14,6 +14,7 @@ export interface CommandResult {
 
 export interface CommandOptions {
   stdin?: Uint8Array;
+  cwd?: string;
 }
 
 export type CommandRunner = (
@@ -41,6 +42,7 @@ export async function runCommand(
 
   try {
     const process = Bun.spawn(command, {
+      ...(options.cwd ? { cwd: options.cwd } : {}),
       stdin: options.stdin ?? "ignore",
       stdout: "pipe",
       stderr: "pipe",
