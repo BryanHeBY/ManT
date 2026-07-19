@@ -175,6 +175,39 @@ mod tests {
     }
 
     #[test]
+    fn suppresses_pod_font_requests_around_verbatim_blocks() {
+        let path = temporary_source(
+            "pod-verbatim-fonts",
+            ".de Vb\n\
+             .ft CW\n\
+             .nf\n\
+             ..\n\
+             .de Ve\n\
+             .ft R\n\
+             .fi\n\
+             ..\n\
+             .TH POD 1\n\
+             .SH EXAMPLES\n\
+             .Vb 2\n\
+             \\&struct A { int a; };\n\
+             \\&struct B : A {};\n\
+             .Ve\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower Pod::Man verbatim source");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        assert_eq!(document.sections[0].blocks.len(), 1);
+        let Block::Preformatted { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected one preformatted block");
+        };
+        assert_eq!(
+            inline_text(children),
+            "struct A { int a; };\nstruct B : A {};"
+        );
+    }
+
+    #[test]
     fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
         let path = temporary_source(
             "mdoc",
@@ -295,5 +328,19 @@ mod tests {
             document.sections[1].blocks[0],
             Block::Equation { ref value, .. } if value.contains('x')
         ));
+    }
+
+    fn inline_text(children: &[Inline]) -> String {
+        children
+            .iter()
+            .map(|child| match child {
+                Inline::Text { value } | Inline::Code { value } => value.clone(),
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. }
+                | Inline::ManualReference { children, .. } => inline_text(children),
+                Inline::LineBreak => "\n".to_owned(),
+            })
+            .collect()
     }
 }

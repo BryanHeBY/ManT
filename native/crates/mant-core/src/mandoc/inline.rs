@@ -51,7 +51,12 @@ pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> 
     for node in nodes {
         match node.macro_name.as_deref() {
             Some("Ns" | "Pf") => builder.suppress_next_space(),
-            Some("Sm") => {}
+            // Formatting requests carry control arguments such as `CW` and
+            // `R`. They change renderer state and are never document text.
+            // Verbatim regions already retain their semantics through
+            // libmandoc's no-fill flag, so leaking these arguments would only
+            // create phantom paragraphs around preformatted blocks.
+            Some("Sm" | "ft") => {}
             Some("Ap") => {
                 builder.suppress_next_space();
                 builder.append(vec![Inline::Text { value: "'".into() }]);
