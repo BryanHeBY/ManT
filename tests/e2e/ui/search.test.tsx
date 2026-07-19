@@ -283,6 +283,44 @@ describe("App search (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("highlights the exact GCC diagnostic text inside a multiline code block", async () => {
+    const result = mockQuery("gcc", [{
+      id: "diagnostic-message-formatting-options",
+      title: "Diagnostic Message Formatting Options",
+      blocks: [{
+        type: "preformatted",
+        children: [{
+          type: "text",
+          value: [
+            "        demo.c: In function `test_bad_format_string_args':",
+            "        ../../src/demo.c:25:18: warning: format `%i' expects argument of type `int', but argument 2 has type `const char *' [-Wformat=]",
+            "           25 |   printf(\"hello %i\", msg);",
+            "              |                 ~^   ~~~",
+            "              |                  |   |",
+            "              |                  int const char *",
+            "              |                 %s",
+          ].join("\n"),
+        }],
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 140, height: 24 });
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("hello");
+    await flushKeyboard(setup);
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+
+    const highlighted = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .filter((span) => span.bg.toInts().slice(0, 3).join(",") === "249,226,175")
+      .map((span) => span.text)
+      .join("");
+    expect(highlighted).toBe("hello");
+    setup.renderer.destroy();
+  });
+
   test("opens the bottom search input with Ctrl+F", async () => {
     const setup = await renderApp(mockLsResult);
 

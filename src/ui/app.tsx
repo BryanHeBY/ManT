@@ -44,6 +44,7 @@ import {
   applySearchMatchHighlights,
   clearActiveSearchHighlight,
   clearSearchHighlights,
+  toTextBufferRange,
 } from "./search-highlight";
 import { ManualStatusBar, SearchBar } from "./status-bar";
 import { useDeferredNavigationSync } from "./use-deferred-navigation-sync";
@@ -209,7 +210,7 @@ export function App({ result, onQuit }: AppProps) {
       if (!target) continue;
       const text = applySearchMatchHighlights(
         target,
-        group.map((match) => match.range),
+        group.map((match) => toTextBufferRange(match.text, match.range)),
       );
       if (!text) continue;
       highlightedTextsRef.current.add(text);
@@ -226,12 +227,14 @@ export function App({ result, onQuit }: AppProps) {
     if (!text) {
       const target = scrollbox.content.findDescendantById(match.targetId);
       if (!target) return;
-      text = applySearchMatchHighlights(target, [match.range]);
+      text = applySearchMatchHighlights(target, [
+        toTextBufferRange(match.text, match.range),
+      ]);
       if (!text) return;
       highlightedTextsRef.current.add(text);
       searchTargetTextsRef.current.set(match.targetId, text);
     }
-    applyActiveSearchHighlight(text, match.range);
+    applyActiveSearchHighlight(text, toTextBufferRange(match.text, match.range));
     activeHighlightedTextRef.current = text;
     const targetY = text.y + matchVisualRow(text, match);
     scrollbox.scrollTo({

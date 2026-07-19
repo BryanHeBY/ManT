@@ -20,6 +20,28 @@ const SEARCH_ACTIVE_NAME = "mant.search.active";
 const SEARCH_MATCH_REF = 0x4d01;
 const SEARCH_ACTIVE_REF = 0x4d02;
 
+/**
+ * Convert a source-string range to OpenTUI's flattened TextBuffer positions.
+ *
+ * Search records retain `\n` so matching and row selection see the same lines
+ * as the AST. OpenTUI's highlight API addresses visible characters across
+ * those lines and excludes the newline separators themselves. Without this
+ * conversion, a match on line N shifts right by the preceding N - 1 breaks.
+ */
+export function toTextBufferRange(text: string, range: SearchRange): SearchRange {
+  let breaksBeforeStart = 0;
+  let breaksBeforeEnd = 0;
+  for (let index = 0; index < range.end; index++) {
+    if (text[index] !== "\n") continue;
+    if (index < range.start) breaksBeforeStart++;
+    breaksBeforeEnd++;
+  }
+  return {
+    start: range.start - breaksBeforeStart,
+    end: range.end - breaksBeforeEnd,
+  };
+}
+
 interface TextBufferHighlightApi {
   addHighlightByCharRange(highlight: {
     start: number;
