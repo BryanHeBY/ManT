@@ -513,19 +513,9 @@ fn inline_text(children: &[Inline]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path};
-
-    use mant_ast::{Block, Inline, SourceFormat};
+    use mant_ast::{Block, Inline, LayoutHint, SourceFormat};
 
     use super::{inline_text, parse_groff_html};
-
-    fn fixture(name: &str) -> String {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../..")
-            .join("tests/fixtures/man-pages")
-            .join(format!("{name}.html"));
-        fs::read_to_string(path).expect("real renderer fixture should be readable")
-    }
 
     #[test]
     fn parses_sections_indentation_and_inline_formatting() {
@@ -596,35 +586,108 @@ mod tests {
     }
 
     #[test]
-    fn parses_real_groff_fixtures_without_document_chrome() {
-        for name in ["ls", "groff-git", "gcc"] {
-            let document = parse_groff_html(&fixture(name), Some(format!("{name}.html")));
-            assert!(!document.sections.is_empty(), "fixture {name}");
-            assert!(
-                document
-                    .sections
-                    .iter()
-                    .any(|section| section.title == "NAME"),
-                "fixture {name}"
-            );
-            assert!(
-                document
-                    .sections
-                    .iter()
-                    .all(|section| section.title != "Table of Contents")
-            );
-        }
+    fn normalizes_inline_whitespace_and_preserves_breaks_through_transparent_tags() {
+        let document = parse_groff_html(
+            "<body><h2>TEXT</h2><p>alpha\n<font color=red><b>beta</b></font>\t<i>gamma</i><br>delta</p></body>",
+            None,
+        );
+        let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected paragraph");
+        };
+
+        assert_eq!(inline_text(children), "alpha beta gamma\ndelta");
+        assert!(matches!(children[1], Inline::Strong { .. }));
+        assert!(matches!(children[3], Inline::Emphasis { .. }));
+        assert!(matches!(children[4], Inline::LineBreak));
     }
 
     #[test]
-    fn preserves_real_ls_table_indentation() {
-        let document = parse_groff_html(&fixture("ls"), None);
-        let description = document
-            .sections
-            .iter()
-            .find(|section| section.title == "DESCRIPTION")
-            .expect("DESCRIPTION section");
-        let indented = description
+    fn parses_native_html_lists_and_definition_lists() {
+        let document = parse_groff_html(
+            r"<body><h2>OPTIONS</h2>
+              <ul><li>first</li><li><p>second</p></li></ul>
+              <dl><dt><b>-a</b></dt><dt><b>--all</b></dt>
+                  <dd><p>Show all entries.</p><pre>ls -a</pre></dd></dl>
+            </body>",
+            None,
+        );
+
+        assert!(matches!(
+            document.sections[0].blocks[0],
+            Block::List { ref items, .. } if items.len() == 2
+        ));
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[1] else {
+            panic!("expected definition list");
+        };
+        assert_eq!(items[0].terms.len(), 2);
+        assert_eq!(items[0].description.len(), 2);
+        assert!(matches!(
+            items[0].description[1],
+            Block::Preformatted { .. }
+        ));
+    }
+
+    #[test]
+    fn ignores_empty_table_rows_and_restarts_widths_for_each_row() {
+        let document = parse_groff_html(
+            r#"<body><h2>TABLE</h2><table>
+              <tr><td width="100%"></td></tr>
+              <tr><td width="15%"></td><td width="85%"><p>twelve</p></td></tr>
+              <tr><td width="25%"></td><td width="75%"><p>twenty</p></td></tr>
+            </table></body>"#,
+            None,
+        );
+
+        assert!(matches!(
+            document.sections[0].blocks.as_slice(),
+            [
+                Block::Paragraph {
+                    layout: LayoutHint { indent_columns: 12 },
+                    ..
+                },
+                Block::Paragraph {
+                    layout: LayoutHint { indent_columns: 20 },
+                    ..
+                }
+            ]
+        ));
+    }
+
+    #[test]
+    fn excludes_groff_document_chrome_from_sections() {
+        let document = parse_groff_html(
+            r##"<body>
+              <h1>LS(1)</h1><a href="#NAME">NAME</a><br><hr>
+              generated renderer text
+              <h2>NAME<a name="NAME"></a></h2><p>ls - list files</p>
+              <h2>DESCRIPTION</h2><p>List directory contents.</p>
+            </body>"##,
+            Some("ls.html".to_owned()),
+        );
+
+        assert_eq!(
+            document
+                .sections
+                .iter()
+                .map(|section| section.title.as_str())
+                .collect::<Vec<_>>(),
+            ["NAME", "DESCRIPTION"]
+        );
+        assert_eq!(document.source.path.as_deref(), Some("ls.html"));
+        assert_eq!(document.sections[0].blocks.len(), 1);
+    }
+
+    #[test]
+    fn preserves_indentation_across_repeated_layout_table_rows() {
+        let document = parse_groff_html(
+            r#"<body><h2>DESCRIPTION</h2><table>
+              <tr><td width="9%"></td><td width="91%"><p>first</p></td></tr>
+              <tr><td width="9%"></td><td width="91%"><p>second</p></td></tr>
+              <tr><td width="9%"></td><td width="91%"><p>third</p></td></tr>
+            </table></body>"#,
+            None,
+        );
+        let indented = document.sections[0]
             .blocks
             .iter()
             .filter(|block| {
@@ -637,6 +700,6 @@ mod tests {
                 )
             })
             .count();
-        assert!(indented > 5);
+        assert_eq!(indented, 3);
     }
 }
