@@ -9,12 +9,10 @@
 import { rmSync } from "node:fs";
 import { access, chmod, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, win32 } from "node:path";
+import { dirname, join } from "node:path";
 
 const SIDECAR_ASSET_BASENAME = "mant-mandoc-json";
-const SIDECAR_FILENAME = process.platform === "win32"
-  ? "mant-mandoc-json.exe"
-  : SIDECAR_ASSET_BASENAME;
+const SIDECAR_FILENAME = SIDECAR_ASSET_BASENAME;
 
 let materializedSidecar: Promise<string> | null = null;
 
@@ -36,15 +34,11 @@ export function getSidecarCacheDir(
   if (env.MANT_SIDECAR_DIR) return env.MANT_SIDECAR_DIR;
 
   const home = env.HOME ?? homedir();
-  const path = platform === "win32" ? win32 : { join };
   if (platform === "darwin") {
-    return path.join(home, "Library", "Caches", "mant", "sidecars");
+    return join(home, "Library", "Caches", "mant", "sidecars");
   }
-  if (platform === "win32") {
-    return path.join(env.LOCALAPPDATA ?? env.APPDATA ?? home, "mant", "sidecars");
-  }
-  return path.join(
-    env.XDG_CACHE_HOME ?? path.join(home, ".cache"),
+  return join(
+    env.XDG_CACHE_HOME ?? join(home, ".cache"),
     "mant",
     "sidecars",
   );

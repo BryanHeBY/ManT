@@ -16,15 +16,20 @@ For the full local verification and current-platform package, use:
 bun run build
 ```
 
-It runs a frozen dependency install, type check, GCC sidecar build, all tests,
-and a Bun standalone build.  The resulting `dist/mant` and adjacent
-`dist/mant-mandoc-json` are smoke-tested together.  This is a native Linux or
-macOS build, not cross-compilation; Windows users should use WSL for now.
+It runs a frozen dependency install, type check, sidecar build, all tests, and
+a Bun standalone build.  `CC` takes precedence when set; otherwise Linux uses
+`gcc` and macOS uses `clang`.  The sidecar is embedded into the resulting
+`dist/mant` executable and smoke-tested after extraction.
+
+Native packages target Linux and macOS only. Windows users should build and
+run Mant under WSL, which follows the Linux `gcc` default. Native Windows and
+cross-compilation are intentionally unsupported because Mant depends on the
+Unix man-page and roff toolchain at runtime.
 
 The build requires `curl`, a C compiler, `make`, and zlib development files.
 The output is `native/bin/mant-mandoc-json`; it is intentionally ignored by
-Git because it is platform-specific.  Release builds should build and package
-one binary per target platform.
+Git because it is platform-specific. Release builds should build and package
+one binary per supported target platform.
 
 Inspect a real source AST with:
 

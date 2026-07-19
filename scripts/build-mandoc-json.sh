@@ -10,17 +10,33 @@ MANDOC_URL="https://mandoc.bsd.lv/snapshots/mandoc-${MANDOC_VERSION}.tar.gz"
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OUTPUT_DIR="$ROOT/native/bin"
 OUTPUT="$OUTPUT_DIR/mant-mandoc-json"
-WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/mant-mandoc.XXXXXX")
-CC_BIN=${CC:-cc}
 
+# Keep direct `bun run build:mandoc-json` calls consistent with scripts/ci.ts.
+HOST_SYSTEM=$(uname -s)
+case "$HOST_SYSTEM" in
+  Linux*) DEFAULT_CC=gcc ;;
+  Darwin*) DEFAULT_CC=clang ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "native Windows builds are not supported; use WSL" >&2
+    exit 1
+    ;;
+  *)
+    echo "native Mant builds support Linux and macOS only" >&2
+    exit 1
+    ;;
+esac
+CC_BIN=${CC:-$DEFAULT_CC}
+
+if ! command -v "$CC_BIN" >/dev/null 2>&1; then
+  echo "C compiler '$CC_BIN' was not found; install it or set CC explicitly" >&2
+  exit 1
+fi
+
+WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/mant-mandoc.XXXXXX")
 cleanup() {
   rm -rf "$WORKDIR"
 }
 trap cleanup EXIT HUP INT TERM
-
-if [ "$CC_BIN" = cc ] && [ -x /usr/bin/cc ]; then
-  CC_BIN=/usr/bin/cc
-fi
 
 MANDOC_TARBALL="$WORKDIR/mandoc.tar.gz"
 
@@ -34,8 +50,9 @@ for attempt in 1 2 3; do
           --continue-at - \
           "$MANDOC_URL" --output "$MANDOC_TARBALL"; then
     break
+  else
+    curl_exit=$?
   fi
-  curl_exit=$?
   if [ "$attempt" -eq 3 ]; then
     echo "failed to download mandoc source (curl exit ${curl_exit})" >&2
     exit 1

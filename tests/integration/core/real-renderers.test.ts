@@ -20,13 +20,27 @@ function hasManPage(topic: string): boolean {
   }).exitCode === 0;
 }
 
-const canRenderLs =
+function canRenderManHtml(topic: string): boolean {
+  // GNU man-db forwards -Thtml to groff, while the BSD man implementation
+  // shipped by macOS rejects -T. These tests compare the two HTML renderers,
+  // so the presence of `man` alone is not a sufficient capability check.
+  return Bun.spawnSync(["man", "-Thtml", topic], {
+    stdout: "ignore",
+    stderr: "ignore",
+  }).exitCode === 0;
+}
+
+const canRenderLsWithMandoc =
   commandExists("man") &&
   commandExists("mandoc") &&
   commandExists("zcat") &&
   hasManPage("ls");
 
-const canRenderGit = canRenderLs && hasManPage("git");
+const canRenderLsWithManDb = canRenderLsWithMandoc && canRenderManHtml("ls");
+
+const canRenderGitWithManDb = canRenderLsWithManDb
+  && hasManPage("git")
+  && canRenderManHtml("git");
 
 interface ProcessResult {
   stdout: Uint8Array;
@@ -123,7 +137,27 @@ function assertWellFormedTree(sections: SectionNode[]): void {
   }
 }
 
-const describeLsRenderers = canRenderLs ? describe : describe.skip;
+const describeNativeMandoc = canRenderLsWithMandoc ? describe : describe.skip;
+
+describeNativeMandoc("actual platform mandoc output", () => {
+  test("parses the installed ls manual regardless of its man or mdoc macro set", async () => {
+    const source = await loadManSource("ls");
+    const rendered = await run(["mandoc", "-Wunsupp", "-Thtml"], source);
+    const html = decoder.decode(rendered.stdout);
+    const sections = parseManHtml(html);
+
+    expect(html).toContain("manual-text");
+    expect(sections).toEqual(parseMandoc(html));
+    expect(sectionTitles(sections)).toEqual(expect.arrayContaining([
+      "NAME",
+      "SYNOPSIS",
+      "DESCRIPTION",
+    ]));
+    assertWellFormedTree(sections);
+  });
+});
+
+const describeLsRenderers = canRenderLsWithManDb ? describe : describe.skip;
 
 describeLsRenderers("actual ls renderer output", () => {
   test("parses the current man-db and mandoc HTML into the same section hierarchy", async () => {
@@ -155,7 +189,7 @@ describeLsRenderers("actual ls renderer output", () => {
   });
 });
 
-const describeGitRenderers = canRenderGit ? describe : describe.skip;
+const describeGitRenderers = canRenderGitWithManDb ? describe : describe.skip;
 
 describeGitRenderers("actual git renderer output", () => {
   test("keeps the large document's section topology and inline content intact", async () => {

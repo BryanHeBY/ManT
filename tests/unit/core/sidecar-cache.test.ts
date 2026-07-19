@@ -18,10 +18,8 @@ describe("getSidecarCacheDir", () => {
       .toBe("/home/me/.cache/mant/sidecars");
   });
 
-  test("uses platform cache conventions on macOS and Windows", () => {
+  test("uses the macOS cache convention", () => {
     expect(getSidecarCacheDir({ HOME: "/Users/me" }, "darwin"))
       .toBe("/Users/me/Library/Caches/mant/sidecars");
-    expect(getSidecarCacheDir({ LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local" }, "win32"))
-      .toBe("C:\\Users\\me\\AppData\\Local\\mant\\sidecars");
   });
 });

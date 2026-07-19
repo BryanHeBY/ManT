@@ -4,11 +4,13 @@
 
 import { access, constants, mkdir, readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { assertSupportedBuildPlatform, resolveCCompiler } from "./c-compiler";
 
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
-const sidecarSource = join(root, "native", "bin", "mant-mandoc-json");
-const executableName = process.platform === "win32" ? "mant.exe" : "mant";
+const sidecarName = "mant-mandoc-json";
+const sidecarSource = join(root, "native", "bin", sidecarName);
+const executableName = "mant";
 const executablePath = join(distDirectory, executableName);
 const compiledEntrypoint = join(distDirectory, ".mant-compile-entry.ts");
 
@@ -71,7 +73,7 @@ async function verifyPackagedExecutable(): Promise<void> {
     }
 
     const cachedFiles = await readdir(sidecarCache, { recursive: true });
-    if (!cachedFiles.some((path) => path.endsWith("mant-mandoc-json"))) {
+    if (!cachedFiles.some((path) => path.endsWith(sidecarName))) {
       throw new Error("packaged executable did not materialize its embedded mandoc sidecar");
     }
   } finally {
@@ -87,21 +89,14 @@ async function writeCompiledEntrypoint(): Promise<void> {
     compiledEntrypoint,
     [
       'import "../src/cli.ts";',
-      'import "../native/bin/mant-mandoc-json" with { type: "file" };',
+      `import "../native/bin/${sidecarName}" with { type: "file" };`,
       "",
     ].join("\n"),
   );
 }
 
 async function main(): Promise<void> {
-  if ((process.platform as string) === "win32") {
-    throw new Error("local GCC build is supported on Linux and macOS; use WSL on Windows");
-  }
-
-  const gcc = Bun.which("gcc");
-  if (!gcc) {
-    throw new Error("gcc is required: install GCC before running bun run build");
-  }
+  assertSupportedBuildPlatform();
 
   await run("install locked dependencies", [process.execPath, "install", "--frozen-lockfile"]);
   await run("type check", [process.execPath, "run", "lint"]);
@@ -115,18 +110,25 @@ async function main(): Promise<void> {
     console.log("\n==> libmandoc sidecar already present; skipping build:mandoc-json");
     console.log("    (set MANT_REBUILD_SIDECAR=1 to force a rebuild)");
   } else {
+    // Resolve the compiler only when native code actually needs rebuilding.
+    // A packaged/prebuilt sidecar therefore remains usable on hosts without a
+    // development toolchain.
+    const compiler = resolveCCompiler();
+    const compilerOrigin = compiler.source === "environment"
+      ? "CC environment variable"
+      : `${process.platform} default`;
+    console.log(`\n    C compiler: ${compiler.path} (${compilerOrigin})`);
     const label = rebuildSidecar
-      ? "rebuild libmandoc sidecar with GCC"
-      : "build libmandoc sidecar with GCC";
+      ? `rebuild libmandoc sidecar with ${compiler.command}`
+      : `build libmandoc sidecar with ${compiler.command}`;
     await run(label, [process.execPath, "run", "build:mandoc-json"], {
-      CC: gcc,
+      CC: compiler.path,
     });
   }
 
   await run("test", [process.execPath, "test"]);
   await mkdir(distDirectory, { recursive: true });
   await rm(join(distDirectory, "mant-mandoc-json"), { force: true });
-  await rm(join(distDirectory, "mant-mandoc-json.exe"), { force: true });
   await writeCompiledEntrypoint();
   try {
     await run("compile current-platform executable", [

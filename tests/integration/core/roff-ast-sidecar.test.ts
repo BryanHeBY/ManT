@@ -28,11 +28,14 @@ describeSidecar("bundled libmandoc AST sidecar", () => {
 
     expect(document.schema).toBe("mant.roff-ast/v1");
     expect(document.engine).toEqual({ name: "libmandoc", version: "1.14.6" });
-    expect(document.macroSet).toBe("man");
-    // Distros may intentionally leave TH's title argument empty; structure,
+    // GNU/Linux commonly ships ls(1) in man(7), while macOS ships it in
+    // mdoc(7). Both are valid inputs to the sidecar protocol.
+    expect(["man", "mdoc"]).toContain(document.macroSet);
+    // Distros may intentionally leave the document title empty; structure,
     // not a distribution-specific metadata fallback, is the contract here.
     expect(document.meta.hasBody).toBe(true);
-    expect(document.root?.children.some((node) => node.macro === "SH")).toBe(true);
+    const sectionMacro = document.macroSet === "mdoc" ? "Sh" : "SH";
+    expect(document.root?.children.some((node) => node.macro === sectionMacro)).toBe(true);
     expect(diagnostics).toEqual(expect.any(Array));
   });
 });
