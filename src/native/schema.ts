@@ -141,6 +141,13 @@ export interface MantQueryBundle {
   tldr?: TldrDocument;
 }
 
+export interface NativeCliProtocol {
+  protocol: "mant.cli/v1";
+  nativeApiVersion: "1";
+  querySchema: "mant.query/v1";
+  documentSchema: "mant.document/v1";
+}
+
 type JsonObject = Record<string, unknown>;
 
 /** Parses and recursively validates one native query response. */
@@ -153,6 +160,22 @@ export function decodeMantQuery(input: string): MantQueryBundle {
   }
   validateQuery(value, "$native");
   return value;
+}
+
+/** Parses and validates the native executable before sending it requests. */
+export function decodeNativeCliProtocol(input: string): NativeCliProtocol {
+  let value: unknown;
+  try {
+    value = JSON.parse(input);
+  } catch (error) {
+    throw new Error(`mant-cli protocol probe returned invalid JSON: ${String(error)}`);
+  }
+  const object = expectObject(value, "$protocol");
+  expectLiteral(object.protocol, "mant.cli/v1", "$protocol.protocol");
+  expectLiteral(object.nativeApiVersion, "1", "$protocol.nativeApiVersion");
+  expectLiteral(object.querySchema, "mant.query/v1", "$protocol.querySchema");
+  expectLiteral(object.documentSchema, "mant.document/v1", "$protocol.documentSchema");
+  return object as unknown as NativeCliProtocol;
 }
 
 function validateQuery(value: unknown, path: string): asserts value is MantQueryBundle {

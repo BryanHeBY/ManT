@@ -77,6 +77,13 @@ stdout and stderr concurrently, validates the protocol and schema, and starts
 one process per document query; interactive search and navigation never spawn
 additional native processes.
 
+`mant` and `mant-cli` are separate installed executables.  The TUI resolves
+`MANT_CLI_PATH` first and otherwise looks up `mant-cli` on `PATH`; it never
+embeds or extracts the Rust binary.  Local `bun run dev` performs an
+incremental Cargo release build and supplies the staged binary through
+`MANT_CLI_PATH`.  Release builds place both executables beside each other in
+`dist/`, ready for an installer to put them on the same `PATH`.
+
 Direct `mant-cli` queries default to Markdown for useful terminal and agent
 output.  `--json` is pretty by default and `--compact` is available to process
 clients.  Fatal native failures cross the boundary as concise errors;
