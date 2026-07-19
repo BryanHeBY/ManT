@@ -92,6 +92,11 @@ pub struct NodeFlags {
     pub deep_link_target: bool,
     /// libmandoc renders a self-link for this destination.
     pub permalink: bool,
+    /// This node begins a roff input line (`NODE_LINE`).
+    ///
+    /// Some man macros keep same-line layout arguments and next-line visible
+    /// content in one syntax head, so source-line role is semantic data.
+    pub line_start: bool,
 }
 
 /// An owned syntax node with no pointers into the C parser.
@@ -239,6 +244,30 @@ mod tests {
         assert!(document.metadata.has_body);
         assert_eq!(document.root.kind, NodeKind::Root);
         assert!(!document.root.children.is_empty());
+    }
+
+    #[test]
+    fn parser_preserves_same_line_layout_and_next_line_content_roles() {
+        let path = source_path("line-role-mandoc-session");
+        fs::write(
+            &path,
+            ".TH LINE-ROLE 1\n.SH EXAMPLES\n.TP \\w'man\\ 'u\n.BI man \\ ls\nBody.\n",
+        )
+        .expect("write tagged paragraph source");
+
+        let document = parse_file(&path, false).expect("parse tagged paragraph source");
+        fs::remove_file(path).expect("remove tagged paragraph source");
+
+        let tagged_paragraph = find_macro(&document.root, "TP").expect("TP block");
+        let head = tagged_paragraph
+            .children
+            .iter()
+            .find(|child| child.kind == NodeKind::Head)
+            .expect("TP head");
+        assert_eq!(head.children[0].text.as_deref(), Some("96u"));
+        assert!(!head.children[0].flags.line_start);
+        assert_eq!(head.children[1].macro_name.as_deref(), Some("BI"));
+        assert!(head.children[1].flags.line_start);
     }
 
     #[test]

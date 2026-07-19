@@ -224,7 +224,7 @@ fn lower_structural_node(
             );
             extend_blocks_with_spacing(output, nested, spacing_before);
         }
-        Some("TP") => {
+        Some("TP" | "IP") => {
             let spacing_before = *paragraph_distance;
             let item = definition_item(node, context, indent_columns, paragraph_distance);
             append_definition(
@@ -235,16 +235,9 @@ fn lower_structural_node(
                 source_span(node),
             );
         }
-        Some("IP") => {
-            let spacing_before = *paragraph_distance;
-            let item = indented_paragraph_item(node, context, indent_columns, paragraph_distance);
-            append_definition(
-                output,
-                item,
-                indent_columns,
-                spacing_before,
-                source_span(node),
-            );
+        Some("TQ") => {
+            let item = definition_item(node, context, indent_columns, paragraph_distance);
+            append_definition(output, item, indent_columns, 0, source_span(node));
         }
         Some("Bl") => {
             let mut block = lower_mdoc_list(node, context, indent_columns, paragraph_distance);
@@ -489,7 +482,7 @@ fn definition_item(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) -> DefinitionItem {
-    let term = lower_inline_nodes(part_children(node, NodeKind::Head), context.default_name);
+    let term = lower_inline_nodes(visible_definition_head(node), context.default_name);
     DefinitionItem {
         terms: (!term.is_empty()).then_some(term).into_iter().collect(),
         description: lower_blocks(
@@ -502,28 +495,22 @@ fn definition_item(
     }
 }
 
-fn indented_paragraph_item(
-    node: &Node,
-    context: &LoweringContext<'_>,
-    indent_columns: u16,
-    paragraph_distance: &mut u16,
-) -> DefinitionItem {
+/// Return only document content from a definition macro's mixed-purpose head.
+///
+/// This follows mandoc's own HTML and terminal renderers: `.IP` prints its
+/// first head node and treats later arguments as layout, while `.TP`/`.TQ`
+/// print only nodes beginning on the following input line. The distinction is
+/// structural; inspecting strings such as `96u` would incorrectly remove a
+/// numeric term while still leaking non-numeric width expressions.
+fn visible_definition_head(node: &Node) -> &[Node] {
     let head = part_children(node, NodeKind::Head);
-    let term_nodes = head
-        .last()
-        .filter(|_| head.len() > 1)
-        .filter(|node| node.text.as_deref().is_some_and(is_roff_measurement))
-        .map_or(head, |_| &head[..head.len() - 1]);
-    let term = lower_inline_nodes(term_nodes, context.default_name);
-    DefinitionItem {
-        terms: (!term.is_empty()).then_some(term).into_iter().collect(),
-        description: lower_blocks(
-            part_children(node, NodeKind::Body),
-            context,
-            indent_columns + 4,
-            paragraph_distance,
-        ),
-        spacing_before_lines: None,
+    match node.macro_name.as_deref() {
+        Some("IP") => head.first().map_or(&[], std::slice::from_ref),
+        Some("TP" | "TQ") => head
+            .iter()
+            .position(|child| child.flags.line_start)
+            .map_or(&[], |visible_start| &head[visible_start..]),
+        _ => head,
     }
 }
 
@@ -818,18 +805,6 @@ fn first_text(node: &Node) -> Option<&str> {
         return node.text.as_deref();
     }
     node.children.iter().find_map(first_text)
-}
-
-fn is_roff_measurement(value: &str) -> bool {
-    let value = value.trim();
-    let numeric = value
-        .trim_start_matches(['+', '-'])
-        .trim_end_matches(|character: char| character.is_ascii_alphabetic());
-    !numeric.is_empty()
-        && numeric
-            .chars()
-            .all(|character| character.is_ascii_digit() || character == '.')
-        && numeric.chars().any(|character| character.is_ascii_digit())
 }
 
 const fn layout(indent_columns: u16) -> LayoutHint {

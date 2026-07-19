@@ -180,6 +180,48 @@ mod tests {
     }
 
     #[test]
+    fn separates_definition_layout_arguments_from_visible_terms() {
+        let path = temporary_source(
+            "definition-head-roles",
+            ".TH HEAD-ROLES 1\n\
+             .SH EXAMPLES\n\
+             .TP \\w'man\\ 'u\n\
+             .BI man \\ ls\n\
+             Display ls.\n\
+             .TP 4\n\
+             4\n\
+             A numeric term remains visible.\n\
+             .IP \"1\" 8n\n\
+             An IP width remains layout-only.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower definition head roles");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(
+            items
+                .iter()
+                .flat_map(|item| item.terms.iter())
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>(),
+            ["man ls", "4", "1"]
+        );
+        assert!(matches!(
+            items[0].terms[0].as_slice(),
+            [Inline::Strong { .. }, Inline::Emphasis { .. }]
+        ));
+        assert!(
+            items
+                .iter()
+                .flat_map(|item| item.terms.iter())
+                .all(|term| !inline_text(term).contains("96u"))
+        );
+    }
+
+    #[test]
     fn preserves_man_synopsis_flow_and_alternating_fonts() {
         let path = temporary_source(
             "man-synopsis-flow",

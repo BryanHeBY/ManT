@@ -47,7 +47,7 @@ function renderInlineContent(nodes: MantInline[], keyPrefix: string): ReactNode[
       case "strong":
         return <span key={key} fg="#cdd6f4"><b>{renderNodes(node.children)}</b></span>;
       case "emphasis":
-        return <span key={key} fg="#7f849c"><u>{renderNodes(node.children)}</u></span>;
+        return <span key={key} fg="#7f849c"><i>{renderNodes(node.children)}</i></span>;
       case "code":
         return <span key={key} fg="#94e2d5">{node.value}</span>;
       case "external-link":

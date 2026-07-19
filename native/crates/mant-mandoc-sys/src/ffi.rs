@@ -67,6 +67,7 @@ const NODE_NO_PRINT: u32 = 1 << 2;
 const NODE_NO_FILL: u32 = 1 << 3;
 const NODE_DEEP_LINK_TARGET: u32 = 1 << 4;
 const NODE_PERMALINK: u32 = 1 << 5;
+const NODE_LINE_START: u32 = 1 << 6;
 
 struct DocumentHandle(NonNull<CDocument>);
 
@@ -200,6 +201,7 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
             no_fill: raw_flags & NODE_NO_FILL != 0,
             deep_link_target: raw_flags & NODE_DEEP_LINK_TARGET != 0,
             permalink: raw_flags & NODE_PERMALINK != 0,
+            line_start: raw_flags & NODE_LINE_START != 0,
         },
         list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,
         display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,

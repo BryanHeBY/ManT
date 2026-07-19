@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { TextAttributes } from "@opentui/core";
 import type { MantSection } from "../../../src/native";
 import {
   mockLsResult,
@@ -113,6 +114,12 @@ describe("App rendering (e2e)", () => {
     expect(
       navLines(frame).some((line) => line.includes("Options") && line.includes("Kind")),
     ).toBe(true);
+    const emphasisSpan = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .find((span) => span.text.includes("outfile"));
+    expect(emphasisSpan).toBeDefined();
+    expect(emphasisSpan!.attributes & TextAttributes.ITALIC).toBe(TextAttributes.ITALIC);
+    expect(emphasisSpan!.attributes & TextAttributes.UNDERLINE).toBe(0);
     setup.renderer.destroy();
   });
 

@@ -303,6 +303,8 @@ copy_node(const struct roff_node *source)
 		node->flags |= MANT_MANDOC_NODE_DEEP_LINK_TARGET;
 	if (source->flags & NODE_HREF)
 		node->flags |= MANT_MANDOC_NODE_PERMALINK;
+	if (source->flags & NODE_LINE)
+		node->flags |= MANT_MANDOC_NODE_LINE_START;
 
 	next_child = &node->child;
 	for (source_child = source->child; source_child != NULL;
