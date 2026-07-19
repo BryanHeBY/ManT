@@ -52,7 +52,7 @@ describe("native mant-cli client", () => {
     }> = [];
     const runCommand: CommandRunner = async (command, options) => {
       calls.push({ command, options });
-      if (command.includes("protocol-version")) return result(protocol);
+      if (command.includes("--protocol-version")) return result(protocol);
       return result(JSON.stringify({
         schema: "mant.query/v1",
         topic: "git",
@@ -72,9 +72,9 @@ describe("native mant-cli client", () => {
     expect(first.schema).toBe("mant.query/v1");
     expect(second.topic).toBe("git");
     expect(calls.map((call) => call.command)).toEqual([
-      ["/tools/mant-cli", "protocol-version", "--compact"],
-      ["/tools/mant-cli", "--request-json", "--json", "--compact"],
-      ["/tools/mant-cli", "--request-json", "--json", "--compact"],
+      ["/tools/mant-cli", "--protocol-version", "--compact"],
+      ["/tools/mant-cli", "--request-json", "--format", "json", "--compact"],
+      ["/tools/mant-cli", "--request-json", "--format", "json", "--compact"],
     ]);
     expect(new TextDecoder().decode(calls[1]?.options?.stdin))
       .toBe('{"topic":"git","section":"1"}');
@@ -98,7 +98,7 @@ describe("native mant-cli client", () => {
   test("turns native stderr into a concise host error", async () => {
     const client = createNativeCliClient({
       env: { MANT_CLI_PATH: "/tools/mant-cli" },
-      runCommand: async (command) => command.includes("protocol-version")
+      runCommand: async (command) => command.includes("--protocol-version")
         ? result(protocol)
         : result("", "mant-cli: no readable manual content was found for 'missing'\n", 1),
     });

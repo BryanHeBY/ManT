@@ -33,12 +33,12 @@ Options:
   --                      Treat all remaining arguments as the topic
 
 Agent and pipeline output:
-  mant-cli <topic>              Print Markdown
-  mant-cli <topic> --outline    Print a selectable section tree
-  mant-cli <topic> --node 4.2   Print one section subtree
-  mant-cli <topic> --text       Print unstyled semantic text
-  mant-cli <topic> --json       Print the versioned document as JSON
-  mant-cli update tldr          Update the tldr cache
+  mant-cli <topic>                         Print Markdown
+  mant-cli <topic> --outline               Print a selectable section tree
+  mant-cli <topic> --node 4.2              Print one section subtree
+  mant-cli <topic> --format text           Print unstyled semantic text
+  mant-cli <topic> --format json           Print the versioned document as JSON
+  mant-cli --update-tldr                   Update the tldr cache
 
 Examples:
   mant git

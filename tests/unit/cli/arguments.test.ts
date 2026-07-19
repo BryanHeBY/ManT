@@ -43,7 +43,7 @@ describe("interactive CLI argument parsing", () => {
   });
 
   test("routes non-interactive options to mant-cli", () => {
-    expect(() => parseCliArguments(["git", "--json"]))
+    expect(() => parseCliArguments(["git", "--format", "json"]))
       .toThrow("non-interactive output is provided by mant-cli");
     expect(() => parseCliArguments(["--update-tldr"]))
       .toThrow("non-interactive output is provided by mant-cli");

@@ -7,7 +7,7 @@ import { createNativeCliClient } from "../../src/native/client";
 
 const nativeCliPath = new URL("../../native/bin/mant-cli", import.meta.url).pathname;
 const nativeCliAvailable = Bun.spawnSync(
-  [nativeCliPath, "protocol-version", "--compact"],
+  [nativeCliPath, "--protocol-version", "--compact"],
   { stdout: "ignore", stderr: "ignore" },
 ).exitCode === 0;
 const localManualAvailable = nativeCliAvailable

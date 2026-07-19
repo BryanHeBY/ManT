@@ -10,9 +10,27 @@ fn executable() -> &'static str {
 }
 
 #[test]
+fn help_exposes_one_positional_topic_and_long_options_only() {
+    let output = Command::new(executable())
+        .arg("--help")
+        .output()
+        .expect("run mant-cli");
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let help = String::from_utf8(output.stdout).expect("UTF-8 help");
+    assert!(help.contains("mant-cli <TOPIC> [OPTIONS]"));
+    assert!(help.contains("--format <FORMAT>"));
+    assert!(help.contains("--update-tldr"));
+    assert!(help.contains("--protocol-version"));
+    assert!(!help.contains("--json"));
+    assert!(!help.contains("update tldr"));
+}
+
+#[test]
 fn protocol_version_is_a_clean_json_document() {
     let output = Command::new(executable())
-        .args(["protocol-version", "--compact"])
+        .args(["--protocol-version", "--compact"])
         .output()
         .expect("run mant-cli");
 
@@ -28,7 +46,7 @@ fn protocol_version_is_a_clean_json_document() {
 #[test]
 fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
     let mut child = Command::new(executable())
-        .args(["--request-json", "--json", "--compact"])
+        .args(["--request-json", "--format", "json", "--compact"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -59,8 +77,8 @@ fn unknown_options_do_not_expose_rust_source_excerpts() {
 
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
-    assert_eq!(
-        String::from_utf8(output.stderr).expect("UTF-8 diagnostic"),
-        "mant-cli: unknown option '--not-an-option'\nTry 'mant-cli --help' for more information.\n"
-    );
+    let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+    assert!(diagnostic.starts_with("error: unexpected argument '--not-an-option'"));
+    assert!(diagnostic.contains("Usage: mant-cli"));
+    assert!(diagnostic.contains("For more information, try '--help'."));
 }

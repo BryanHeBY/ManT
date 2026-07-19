@@ -71,9 +71,9 @@ export function createNativeCliClient(
 
   async function verify(): Promise<{ path: string; protocol: NativeCliProtocol }> {
     const path = resolveMantCliPath(environment, which);
-    const result = await execute([path, "protocol-version", "--compact"]);
+    const result = await execute([path, "--protocol-version", "--compact"]);
     if (result.exitCode !== 0) {
-      throw nativeCliFailure([path, "protocol-version", "--compact"], result);
+      throw nativeCliFailure([path, "--protocol-version", "--compact"], result);
     }
     const protocol = decodeNativeCliProtocol(decoder.decode(result.stdout));
     return { path, protocol };
@@ -96,7 +96,7 @@ export function createNativeCliClient(
 
     async query(request) {
       const { path } = await getVerified();
-      const command = [path, "--request-json", "--json", "--compact"];
+      const command = [path, "--request-json", "--format", "json", "--compact"];
       const result = await execute(command, {
         stdin: encoder.encode(JSON.stringify(request)),
       });

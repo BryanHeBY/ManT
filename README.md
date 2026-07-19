@@ -66,8 +66,12 @@ Direct queries default to Markdown:
 
 ```sh
 mant-cli git
-mant-cli printf --section 3 --markdown
+mant-cli printf --section 3 --format markdown
 ```
+
+`--format` is the sole output selector and accepts `markdown`, `text`, or
+`json`. Apart from the topic itself, every public argument uses a `--long`
+option name.
 
 Discover a manual's outline, then request only the section subtrees needed by
 a human or agent. Outline paths are one-based and `--node` also accepts the
@@ -75,10 +79,10 @@ document-local ID printed in brackets:
 
 ```sh
 mant-cli gcc --outline
-mant-cli gcc --outline --json
-mant-cli gcc --node 4.2 --markdown
-mant-cli gcc --node options-4 --text
-mant-cli gcc --node 4.2 --node 4.7 --json
+mant-cli gcc --outline --format json
+mant-cli gcc --node 4.2 --format markdown
+mant-cli gcc --node options-4 --format text
+mant-cli gcc --node 4.2 --node 4.7 --format json
 ```
 
 Selecting a node includes all of its child sections. Repeated and overlapping
@@ -88,17 +92,17 @@ to select the manual volume (for example `1` or `3p`), not an outline node.
 Use the versioned JSON contract for structured consumers:
 
 ```sh
-mant-cli git --json
-mant-cli git --json --compact
-mant-cli git --text
-mant-cli protocol-version
+mant-cli git --format json
+mant-cli git --format json --compact
+mant-cli git --format text
+mant-cli --protocol-version
 ```
 
 Update tldr data through its installed client when available, otherwise through
 Mant's private cache:
 
 ```sh
-mant-cli update tldr
+mant-cli --update-tldr
 ```
 
 ## Architecture

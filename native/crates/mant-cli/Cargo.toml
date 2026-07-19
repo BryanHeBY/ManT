@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+clap.workspace = true
 mant-ast = { path = "../mant-ast" }
 mant-core = { path = "../mant-core" }
 serde.workspace = true

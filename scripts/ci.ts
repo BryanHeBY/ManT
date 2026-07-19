@@ -65,11 +65,14 @@ async function verifyPackagedExecutable(): Promise<void> {
     throw new Error(`packaged TUI help smoke test failed: ${helpStderr.trim()}`);
   }
 
-  const queryProcess = Bun.spawn([nativeCliPath, "ls", "--json", "--compact"], {
+  const queryProcess = Bun.spawn(
+    [nativeCliPath, "ls", "--format", "json", "--compact"],
+    {
     cwd: distDirectory,
     stdout: "pipe",
     stderr: "pipe",
-  });
+    },
+  );
   const [queryOutput, queryStderr, queryExitCode] = await Promise.all([
     new Response(queryProcess.stdout).text(),
     new Response(queryProcess.stderr).text(),

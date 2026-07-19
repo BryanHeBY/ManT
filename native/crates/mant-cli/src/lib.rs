@@ -12,7 +12,7 @@ use mant_ast::{QueryBundle, QueryRequest, TldrCacheUpdate};
 use mant_core::{ProjectionError, QueryError};
 use serde::Serialize;
 
-use arguments::{Command, HELP, QueryFormat, QuerySource, QueryView, UsageError};
+use arguments::{Command, QueryFormat, QuerySource, QueryView};
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ fn run_with_host(
 ) -> u8 {
     let command = match arguments::parse(arguments) {
         Ok(command) => command,
-        Err(error) => return report_failure(&error.into(), diagnostics),
+        Err(error) => return report_argument_error(&error, diagnostics),
     };
 
     let rendered = match execute(command, input, host) {
@@ -95,7 +95,7 @@ fn run_with_host(
 
 fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result<String, Failure> {
     match command {
-        Command::Help => Ok(HELP.to_owned()),
+        Command::Help(help) => Ok(help),
         Command::ProtocolVersion { pretty } => render_json(
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
@@ -250,12 +250,6 @@ impl Failure {
     }
 }
 
-impl From<UsageError> for Failure {
-    fn from(error: UsageError) -> Self {
-        Self::usage(error.0)
-    }
-}
-
 fn report_failure(error: &Failure, diagnostics: &mut dyn Write) -> u8 {
     let _ = writeln!(diagnostics, "mant-cli: {}", error.message);
     if error.kind == FailureKind::Usage {
@@ -264,6 +258,16 @@ fn report_failure(error: &Failure, diagnostics: &mut dyn Write) -> u8 {
     } else {
         1
     }
+}
+
+/** Preserve clap's actionable usage and suggestion text on the injected stream. */
+fn report_argument_error(error: &clap::Error, diagnostics: &mut dyn Write) -> u8 {
+    let rendered = error.to_string();
+    let _ = diagnostics.write_all(rendered.as_bytes());
+    if !rendered.ends_with('\n') {
+        let _ = diagnostics.write_all(b"\n");
+    }
+    2
 }
 
 #[cfg(test)]
@@ -396,7 +400,7 @@ mod tests {
     fn stdin_protocol_emits_only_compact_query_json() {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
-            &["--request-json", "--json", "--compact"],
+            &["--request-json", "--format", "json", "--compact"],
             br#"{"topic":"git","section":"1"}"#,
             &host,
         );
@@ -418,8 +422,11 @@ mod tests {
             br#"{"topic":"   "}"#.as_slice(),
         ] {
             let host = FakeHost::new();
-            let (status, output, diagnostics) =
-                invoke(&["--request-json", "--json", "--compact"], input, &host);
+            let (status, output, diagnostics) = invoke(
+                &["--request-json", "--format", "json", "--compact"],
+                input,
+                &host,
+            );
             assert_eq!(status, 2);
             assert!(output.is_empty());
             assert!(diagnostics.starts_with("mant-cli: "));
@@ -438,7 +445,7 @@ mod tests {
         assert!(diagnostics.is_empty());
 
         let (status, output, diagnostics) = invoke(
-            &["demo", "--node", "2.1", "--json", "--compact"],
+            &["demo", "--node", "2.1", "--format", "json", "--compact"],
             b"",
             &host,
         );
@@ -453,7 +460,8 @@ mod tests {
     #[test]
     fn unknown_nodes_are_concise_usage_failures() {
         let host = FakeHost::with_manual();
-        let (status, output, diagnostics) = invoke(&["demo", "--node", "9", "--text"], b"", &host);
+        let (status, output, diagnostics) =
+            invoke(&["demo", "--node", "9", "--format", "text"], b"", &host);
 
         assert_eq!(status, 2);
         assert!(output.is_empty());
@@ -464,7 +472,7 @@ mod tests {
     #[test]
     fn update_and_protocol_results_are_stable_json_documents() {
         let host = FakeHost::new();
-        let (status, output, diagnostics) = invoke(&["update", "tldr", "--compact"], b"", &host);
+        let (status, output, diagnostics) = invoke(&["--update-tldr", "--compact"], b"", &host);
         assert_eq!(status, 0);
         assert_eq!(
             output,
@@ -473,7 +481,8 @@ mod tests {
         assert!(diagnostics.is_empty());
         assert_eq!(host.update_calls.get(), 1);
 
-        let (status, output, diagnostics) = invoke(&["protocol-version", "--compact"], b"", &host);
+        let (status, output, diagnostics) =
+            invoke(&["--protocol-version", "--compact"], b"", &host);
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
@@ -489,10 +498,9 @@ mod tests {
         let (status, output, diagnostics) = invoke(&["--unknown"], b"", &host);
         assert_eq!(status, 2);
         assert!(output.is_empty());
-        assert_eq!(
-            diagnostics,
-            "mant-cli: unknown option '--unknown'\nTry 'mant-cli --help' for more information.\n"
-        );
+        assert!(diagnostics.starts_with("error: unexpected argument '--unknown'"));
+        assert!(diagnostics.contains("Usage: mant-cli"));
+        assert!(diagnostics.contains("For more information, try '--help'."));
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);
     }

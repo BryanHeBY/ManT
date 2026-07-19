@@ -77,14 +77,14 @@ binary directly useful outside Bun.  The public surface is use-case oriented
 rather than a mirror of parser internals:
 
 ```text
-mant-cli <topic> [--json | --markdown]  -> query JSON or CommonMark
-mant-cli <topic> --outline              -> selectable manual tree
-mant-cli <topic> --node <path-or-id>    -> selected section subtrees
-mant-cli update tldr                   -> update result JSON
-mant-cli protocol-version              -> protocol description JSON
+mant-cli <topic> [--format <format>]   -> query Markdown, text, or JSON
+mant-cli <topic> --outline             -> selectable manual tree
+mant-cli <topic> --node <path-or-id>   -> selected section subtrees
+mant-cli --update-tldr                 -> update result JSON
+mant-cli --protocol-version            -> protocol description JSON
 ```
 
-For the TUI, `mant-cli --request-json --json --compact` reads one closed
+For the TUI, `mant-cli --request-json --format json --compact` reads one closed
 `QueryRequest` object from standard input and emits exactly one
 `mant.query/v1` object on standard output.  Standard error contains concise
 diagnostics only.  Status 0 means success, 2 means invalid invocation or
@@ -101,8 +101,8 @@ incremental Cargo release build and supplies the staged binary through
 `dist/`, ready for an installer to put them on the same `PATH`.
 
 Direct `mant-cli` queries default to Markdown for useful terminal and agent
-output.  `--json` is pretty by default and `--compact` is available to process
-clients.  Fatal native failures cross the boundary as concise errors;
+output. `--format json` is pretty by default and `--compact` is available to
+process clients. Fatal native failures cross the boundary as concise errors;
 recoverable parser findings are structured diagnostics in the query result.
 
 Outline and excerpt views are projections of the same complete native
