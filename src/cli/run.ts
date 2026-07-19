@@ -16,6 +16,7 @@ type OutputWriter = (message: string) => void;
 
 export interface CliDependencies {
   query?: (options: { topic: string }) => Promise<QueryResult>;
+  renderMarkdown?: (result: QueryResult) => string;
   fetchRoffAst?: (topic: string) => Promise<RoffAstResult>;
   updateTldrCache?: () => Promise<TldrCacheUpdate>;
   runTui?: (result: QueryResult) => Promise<void>;
@@ -70,7 +71,7 @@ export async function runCli(
         ?? (() => Boolean(process.stdin.isTTY && process.stdout.isTTY));
       if (!isInteractive()) {
         throw new Error(
-          "interactive view requires a terminal; use --json for redirected or scripted output",
+          "interactive view requires a terminal; use --markdown or --json for redirected output",
         );
       }
     }
@@ -80,6 +81,13 @@ export async function runCli(
 
     if (command.output === "json") {
       stdout(JSON.stringify(result, null, 2));
+      return 0;
+    }
+
+    if (command.output === "markdown") {
+      const renderMarkdown = dependencies.renderMarkdown
+        ?? (await import("../output")).renderMarkdown;
+      stdout(renderMarkdown(result));
       return 0;
     }
 

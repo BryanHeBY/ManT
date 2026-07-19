@@ -8,7 +8,6 @@ import type { TldrPage } from "../tldr";
 export interface QueryOptions {
   topic: string;
   section?: number;
-  format?: "structured" | "markdown" | "text";
 }
 
 export interface QueryResult {

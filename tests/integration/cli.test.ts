@@ -42,6 +42,8 @@ describe("real CLI entry point", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Usage:");
+    expect(result.stdout).toContain("--md");
+    expect(result.stdout).toContain("--markdown");
     expect(result.stderr).toBe("");
   });
 

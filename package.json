@@ -27,11 +27,13 @@
   "dependencies": {
     "@opentui/core": "0.4.5",
     "@opentui/react": "0.4.5",
+    "mdast-util-to-markdown": "2.1.2",
     "node-html-parser": "latest",
     "react": "^19.2.7"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/mdast": "4.0.4",
     "@types/react": "^19.2.17"
   }
 }

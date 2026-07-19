@@ -7,7 +7,7 @@
 
 // ── Public command model ────────────────────────────────────
 
-export type CliOutputMode = "tui" | "json" | "roff-ast";
+export type CliOutputMode = "tui" | "json" | "markdown" | "roff-ast";
 
 export type CliCommand =
   | { kind: "help" }
@@ -27,13 +27,15 @@ export class CliUsageError extends Error {
 export const CLI_HELP = `Mant — browse local man pages in a structured terminal UI
 
 Usage:
-  mant <topic> [--json | --roff-ast]
+  mant <topic> [--json | --markdown | --roff-ast]
   mant --update-tldr
   mant --help
 
 Options:
   -h, --help       Show this help and exit
   -j, --json       Print the parsed manual as JSON
+      --md, --markdown
+                   Print the combined TLDR and man page as Markdown
       --roff-ast   Print the source-level libmandoc AST as JSON
       --update-tldr
                    Update the installed TLDR client or Mant fallback cache
@@ -41,6 +43,7 @@ Options:
 
 Examples:
   mant git
+  mant git --markdown
   mant printf --json
   mant --update-tldr`;
 
@@ -61,6 +64,8 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
       showHelp = true;
     } else if (parseOptions && (arg === "--json" || arg === "-j")) {
       output = mergeOutputMode(output, "json");
+    } else if (parseOptions && (arg === "--markdown" || arg === "--md")) {
+      output = mergeOutputMode(output, "markdown");
     } else if (parseOptions && arg === "--roff-ast") {
       output = mergeOutputMode(output, "roff-ast");
     } else if (parseOptions && arg === "--update-tldr") {
@@ -95,7 +100,13 @@ function mergeOutputMode(
   requested: Exclude<CliOutputMode, "tui">,
 ): CliOutputMode {
   if (current !== "tui" && current !== requested) {
-    throw new CliUsageError("--json and --roff-ast cannot be used together");
+    throw new CliUsageError(
+      `output options '${outputOption(current)}' and '${outputOption(requested)}' cannot be combined`,
+    );
   }
   return requested;
+}
+
+function outputOption(mode: Exclude<CliOutputMode, "tui">): string {
+  return mode === "roff-ast" ? "--roff-ast" : `--${mode}`;
 }

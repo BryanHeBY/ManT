@@ -98,6 +98,22 @@ describe("CLI execution", () => {
     expect(tuiStarted).toBeFalse();
   });
 
+  test("writes Markdown query results without starting the TUI", async () => {
+    const output = captureOutput();
+    let tuiStarted = false;
+    const exitCode = await runCli(["git", "--markdown"], {
+      ...output.dependencies,
+      query: async () => result,
+      renderMarkdown: (queryResult) => `# ${queryResult.topic}`,
+      runTui: async () => { tuiStarted = true; },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(output.stdout).toEqual(["# git"]);
+    expect(output.stderr).toEqual([]);
+    expect(tuiStarted).toBeFalse();
+  });
+
   test("explains how to use Mant when no interactive terminal is available", async () => {
     const output = captureOutput();
     let tuiStarted = false;
@@ -113,7 +129,7 @@ describe("CLI execution", () => {
     expect(queried).toBeFalse();
     expect(tuiStarted).toBeFalse();
     expect(output.stderr[0]).toBe(
-      "mant: interactive view requires a terminal; use --json for redirected or scripted output",
+      "mant: interactive view requires a terminal; use --markdown or --json for redirected output",
     );
   });
 
