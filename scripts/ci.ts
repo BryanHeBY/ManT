@@ -2,7 +2,16 @@
  * @file Runs Mant's local cross-platform build and test verification sequence.
  */
 
-import { access, constants, mkdir, readdir, rm, stat } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  constants,
+  copyFile,
+  mkdir,
+  readdir,
+  rm,
+  stat,
+} from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { assertSupportedBuildPlatform, resolveCCompiler } from "./c-compiler";
 
@@ -10,6 +19,9 @@ const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const sidecarName = "mant-mandoc-json";
 const sidecarSource = join(root, "native", "bin", sidecarName);
+const nativeCliName = "mant-cli";
+const nativeCliSource = join(root, "native", "bin", nativeCliName);
+const nativeCliPath = join(distDirectory, nativeCliName);
 const sidecarBuildInputs = [
   join(root, "native", "mandoc-json", "mant-mandoc-json.c"),
   join(root, "scripts", "build-mandoc-json.sh"),
@@ -161,6 +173,10 @@ async function main(): Promise<void> {
     "-D",
     "warnings",
   ]);
+  await run("build native mant-cli", [process.execPath, "run", "build:mant-cli"]);
+  if (!(await isExecutable(nativeCliSource))) {
+    throw new Error("build:mant-cli did not stage an executable native/bin/mant-cli");
+  }
 
   // Skip the mandoc download/compile cycle when a usable sidecar already
   // exists.  Set MANT_REBUILD_SIDECAR=1 to force a rebuild after changing
@@ -193,6 +209,8 @@ async function main(): Promise<void> {
 
   await run("test", [process.execPath, "test"]);
   await mkdir(distDirectory, { recursive: true });
+  await copyFile(nativeCliSource, nativeCliPath);
+  await chmod(nativeCliPath, 0o755);
   await rm(join(distDirectory, "mant-mandoc-json"), { force: true });
   await writeCompiledEntrypoint();
   try {
@@ -212,6 +230,8 @@ async function main(): Promise<void> {
   await verifyPackagedExecutable();
 
   console.log(`\nlocal CI succeeded: ${dirname(executablePath)}`);
+  console.log(`  TUI:        ${executablePath}`);
+  console.log(`  agent CLI:  ${nativeCliPath}`);
 }
 
 await main();

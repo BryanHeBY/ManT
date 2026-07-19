@@ -65,6 +65,10 @@ fn main() {
         .flag_if_supported("-Wstrict-prototypes")
         .flag_if_supported("-Wwrite-strings")
         .flag_if_supported("-Wno-discarded-qualifiers")
+        // GCC's optimizer reports a false positive in pinned upstream roff.c
+        // on every incremental Cargo invocation. Clang ignores this through
+        // flag_if_supported, while GCC development output remains readable.
+        .flag_if_supported("-Wno-maybe-uninitialized")
         .flag_if_supported("-Wno-unused-parameter")
         // Only read.c calls open() in the selected parser sources. Redirecting
         // it avoids a process-wide chdir while preserving source-relative .so.

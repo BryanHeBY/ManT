@@ -15,13 +15,14 @@
     "native/bin"
   ],
   "scripts": {
-    "dev": "bun src/cli.ts",
+    "dev": "bun scripts/dev.ts",
     "build": "bun scripts/ci.ts",
     "ci": "bun run build",
     "lint": "tsc --noEmit",
     "rust:fmt": "cargo fmt --manifest-path native/Cargo.toml --all --check",
     "rust:lint": "cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D warnings",
     "rust:test": "cargo test --manifest-path native/Cargo.toml --workspace",
+    "build:mant-cli": "bun scripts/build-mant-cli.ts",
     "build:mandoc-json": "sh scripts/build-mandoc-json.sh",
     "test": "bun test",
     "test:unit": "bun test tests/unit",
