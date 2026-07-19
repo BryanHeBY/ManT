@@ -70,11 +70,13 @@ fn main() {
     for source in LIBMANDOC_SOURCES.iter().chain(compat_sources.iter()) {
         build.file(vendor_dir.join(source));
     }
+    build.file(crate_dir.join("shim/mant_mandoc_shim.c"));
     build.compile("mant_mandoc");
 
     // read.c transparently handles compressed manual sources through zlib.
     println!("cargo:rustc-link-lib=z");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=config");
+    println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
 }
