@@ -180,6 +180,60 @@ mod tests {
     }
 
     #[test]
+    fn preserves_man_synopsis_flow_and_alternating_fonts() {
+        let path = temporary_source(
+            "man-synopsis-flow",
+            ".TH MAN 1\n\
+             .SH SYNOPSIS\n\
+             .B man\n\
+             .RI [\\| \"man options\" \\|]\n\
+             .RI [\\|[\\| section \\|]\n\
+             .IR page \\ \\|.\\|.\\|.\\|]\\ \\.\\|.\\|.\\&\n\
+             .br\n\
+             .B man\n\
+             .B \\-k\n\
+             .RI [\\| \"apropos options\" \\|]\n\
+             .I regexp\n\
+             \\&.\\|.\\|.\\&\n\
+             .br\n\
+             .B man\n\
+             .BR \\-w \\||\\| \\-W\n\
+             .RI [\\| \"man options\" \\|]\n\
+             .I page\n\
+             \\&.\\|.\\|.\\&\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower man synopsis");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one synopsis paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "man [man options] [[section] page ...] ...\n\
+             man -k [apropos options] regexp ...\n\
+             man -w|-W [man options] page ..."
+        );
+        assert_eq!(
+            children
+                .iter()
+                .filter(|node| matches!(node, Inline::LineBreak))
+                .count(),
+            2
+        );
+        assert!(children.iter().any(
+            |node| matches!(node, Inline::Emphasis { children } if inline_text(children) == "man options")
+        ));
+        assert!(children.iter().any(
+            |node| matches!(node, Inline::Strong { children } if inline_text(children) == "-w")
+        ));
+        assert!(children.iter().any(
+            |node| matches!(node, Inline::Strong { children } if inline_text(children) == "-W")
+        ));
+    }
+
+    #[test]
     fn suppresses_pod_font_requests_around_verbatim_blocks() {
         let path = temporary_source(
             "pod-verbatim-fonts",

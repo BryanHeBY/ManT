@@ -37,18 +37,52 @@ impl InlineBuilder {
         self.suppress_space = true;
     }
 
+    /// Preserve a formatter-requested line boundary without creating empty
+    /// leading, repeated, or trailing rows around the paragraph.
+    pub(super) fn hard_break(&mut self) {
+        self.suppress_space = false;
+        if plain_text(&self.nodes)
+            .chars()
+            .any(|character| character != '\n')
+            && !matches!(self.nodes.last(), Some(Inline::LineBreak))
+        {
+            self.nodes.push(Inline::LineBreak);
+        }
+    }
+
     pub(super) fn append(&mut self, mut incoming: Vec<Inline>) {
+        self.append_at_boundary(&mut incoming, false);
+    }
+
+    /// Append content beginning on a later filled roff input line.
+    ///
+    /// Filled lines contribute a word boundary even when the next visible
+    /// character is punctuation. Macro arguments do not use this path because
+    /// their own concatenation rules are authoritative.
+    pub(super) fn append_across_source_line(&mut self, mut incoming: Vec<Inline>) {
+        self.append_at_boundary(&mut incoming, true);
+    }
+
+    fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>, source_line_changed: bool) {
         if incoming.is_empty() {
             return;
         }
-        if !self.suppress_space && needs_space(&self.nodes, &incoming) {
+        let add_space = if source_line_changed {
+            needs_filled_line_space(&self.nodes, incoming)
+        } else {
+            needs_space(&self.nodes, incoming)
+        };
+        if !self.suppress_space && add_space {
             push_text(&mut self.nodes, " ".to_owned());
         }
         self.suppress_space = false;
-        self.nodes.append(&mut incoming);
+        self.nodes.append(incoming);
     }
 
-    pub(super) fn finish(self) -> Vec<Inline> {
+    pub(super) fn finish(mut self) -> Vec<Inline> {
+        while matches!(self.nodes.last(), Some(Inline::LineBreak)) {
+            self.nodes.pop();
+        }
         self.nodes
     }
 }
@@ -58,6 +92,9 @@ pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> 
     for node in nodes {
         match node.macro_name.as_deref() {
             Some("Ns" | "Pf") => builder.suppress_next_space(),
+            // A roff break ends the current output line, not the paragraph.
+            // Keeping it inline lets every renderer preserve the same flow.
+            Some("br") => builder.hard_break(),
             // Formatting requests carry control arguments such as `CW` and
             // `R`. They change renderer state and are never document text.
             // Verbatim regions already retain their semantics through
@@ -104,10 +141,16 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         return parse_roff_text(node.text.as_deref().unwrap_or_default());
     }
 
+    let macro_name = node.macro_name.as_deref();
     let children = inline_children(node);
-    let lowered = lower_inline_nodes(children, default_name);
+    // man(7) alternating-font macros concatenate their arguments without
+    // inserting spaces. Each argument switches to the next named font.
+    let lowered = alternating_font_pair(macro_name).map_or_else(
+        || lower_inline_nodes(children, default_name),
+        |(first, second)| lower_alternating_fonts(children, default_name, first, second),
+    );
     let anchor = navigation_anchor(node, &lowered);
-    let mut output = match node.macro_name.as_deref() {
+    let mut output = match macro_name {
         Some("Nm") => wrap_strong(if lowered.is_empty() {
             default_name.map_or_else(Vec::new, text_node)
         } else {
@@ -240,6 +283,49 @@ fn wrap_emphasis(children: Vec<Inline>) -> Vec<Inline> {
         .collect()
 }
 
+fn lower_alternating_fonts(
+    children: &[Node],
+    default_name: Option<&str>,
+    first: Font,
+    second: Font,
+) -> Vec<Inline> {
+    let mut output = Vec::new();
+    for (index, child) in children.iter().enumerate() {
+        let lowered = lower_inline_node(child, default_name);
+        output.extend(apply_font(
+            lowered,
+            if index % 2 == 0 { first } else { second },
+        ));
+    }
+    output
+}
+
+fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {
+    match macro_name {
+        Some("BI") => Some((Font::Strong, Font::Emphasis)),
+        Some("BR") => Some((Font::Strong, Font::Regular)),
+        Some("IB") => Some((Font::Emphasis, Font::Strong)),
+        Some("IR") => Some((Font::Emphasis, Font::Regular)),
+        Some("RB") => Some((Font::Regular, Font::Strong)),
+        Some("RI") => Some((Font::Regular, Font::Emphasis)),
+        _ => None,
+    }
+}
+
+fn apply_font(children: Vec<Inline>, font: Font) -> Vec<Inline> {
+    match font {
+        Font::Regular => children,
+        Font::Strong => wrap_strong(children),
+        Font::Emphasis => wrap_emphasis(children),
+        Font::Code => (!children.is_empty())
+            .then(|| Inline::Code {
+                value: plain_text(&children),
+            })
+            .into_iter()
+            .collect(),
+    }
+}
+
 fn surround(open: &str, mut children: Vec<Inline>, close: &str) -> Vec<Inline> {
     let mut result = text_node(open);
     result.append(&mut children);
@@ -316,7 +402,10 @@ pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
             '-' => buffer.push('-'),
             'e' | '\\' => buffer.push('\\'),
             ' ' | '~' | '0' => buffer.push(' '),
-            '&' | '/' | ',' | '^' | ':' | 'c' => {}
+            // These requests affect formatter state or introduce zero-width
+            // hints. They are not printable versions of their trigger byte.
+            '!' | '?' | '%' | '&' | ')' | ',' | '/' | '^' | ':' | 'a' | 'c' | 'd' | 'r' | 't'
+            | 'u' | '{' | '|' | '}' => {}
             other => buffer.push(other),
         }
     }
@@ -415,6 +504,16 @@ fn needs_space(existing: &[Inline], incoming: &[Inline]) -> bool {
     }
 }
 
+fn needs_filled_line_space(existing: &[Inline], incoming: &[Inline]) -> bool {
+    matches!(
+        (
+            plain_text(existing).chars().next_back(),
+            plain_text(incoming).chars().next(),
+        ),
+        (Some(left), Some(right)) if !left.is_whitespace() && !right.is_whitespace()
+    )
+}
+
 fn push_text(nodes: &mut Vec<Inline>, value: String) {
     if let Some(Inline::Text { value: previous }) = nodes.last_mut() {
         previous.push_str(&value);
@@ -442,5 +541,12 @@ mod tests {
         let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next");
 
         assert_eq!(plain_text(&parse_roff_text(&source)), "git-config (1)next");
+    }
+
+    #[test]
+    fn removes_roff_layout_escapes_without_hiding_literal_punctuation() {
+        let source = r"[\|optional\|]\&.\|.\|. \||\|";
+
+        assert_eq!(plain_text(&parse_roff_text(source)), "[optional]... |");
     }
 }

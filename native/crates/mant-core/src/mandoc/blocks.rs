@@ -181,6 +181,8 @@ fn lower_blocks(
                     source: source_span(node),
                 });
             }
+        } else if node.macro_name.as_deref() == Some("br") {
+            state.hard_break();
         } else if is_inline(node) {
             state.push_inline(
                 lower_inline_nodes(std::slice::from_ref(node), context.default_name),
@@ -345,6 +347,7 @@ struct BlockState {
     output: Vec<Block>,
     paragraph: InlineBuilder,
     paragraph_source: Option<mant_ast::SourceSpan>,
+    paragraph_last_line: Option<u32>,
     preformatted: Vec<Inline>,
     pre_source: Option<mant_ast::SourceSpan>,
     indent_columns: u16,
@@ -356,6 +359,7 @@ impl BlockState {
             output: Vec::new(),
             paragraph: InlineBuilder::new(),
             paragraph_source: None,
+            paragraph_last_line: None,
             preformatted: Vec::new(),
             pre_source: None,
             indent_columns,
@@ -363,10 +367,29 @@ impl BlockState {
     }
 
     fn push_inline(&mut self, nodes: Vec<Inline>, source: Option<mant_ast::SourceSpan>) {
+        if nodes.is_empty() {
+            return;
+        }
         if self.paragraph_source.is_none() {
             self.paragraph_source = source;
         }
-        self.paragraph.append(nodes);
+        let source_line = source.map(|span| span.line);
+        if self
+            .paragraph_last_line
+            .zip(source_line)
+            .is_some_and(|(previous, current)| current > previous)
+        {
+            self.paragraph.append_across_source_line(nodes);
+        } else {
+            self.paragraph.append(nodes);
+        }
+        if source_line.is_some() {
+            self.paragraph_last_line = source_line;
+        }
+    }
+
+    fn hard_break(&mut self) {
+        self.paragraph.hard_break();
     }
 
     fn push_preformatted(&mut self, nodes: Vec<Inline>, source: Option<mant_ast::SourceSpan>) {
@@ -387,6 +410,7 @@ impl BlockState {
             &mut self.paragraph_source,
             self.indent_columns,
         );
+        self.paragraph_last_line = None;
     }
 
     fn flush_preformatted(&mut self) {

@@ -138,6 +138,14 @@ per definition item so one option list can switch between normal and compact
 layout. Renderers may adapt these row counts to their medium, but must not
 invent or discard terminal spacing at the process boundary.
 
+Filled inline flow is normalized at the same boundary. A roff `.br` becomes an
+inline hard break, later filled source lines contribute word boundaries, and
+man alternating-font macros concatenate their arguments according to man(7)
+rather than punctuation heuristics. Non-printing width and break-hint escapes
+never become visible characters. Consequently, the TUI, text, and CommonMark
+renderers consume the same line and spacing semantics instead of reconstructing
+them independently.
+
 Because libmandoc 1.14.6 uses process-global character, diagnostic, tag, and
 recursion state, all embedded parser sessions are serialized.  Initialization
 happens once, and the private shim provides per-request diagnostic reset and
