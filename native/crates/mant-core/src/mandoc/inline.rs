@@ -56,7 +56,10 @@ pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> 
             // Verbatim regions already retain their semantics through
             // libmandoc's no-fill flag, so leaking these arguments would only
             // create phantom paragraphs around preformatted blocks.
-            Some("Sm" | "ft") => {}
+            Some(
+                "Sm" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr"
+                | "ta",
+            ) => {}
             Some("Ap") => {
                 builder.suppress_next_space();
                 builder.append(vec![Inline::Text { value: "'".into() }]);

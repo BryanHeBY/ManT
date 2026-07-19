@@ -51,7 +51,11 @@ fn lower_blocks(nodes: &[Node], context: &LoweringContext<'_>, indent_columns: u
     let mut state = BlockState::new(indent_columns);
 
     for node in nodes {
-        if node.flags.no_print || node.kind == NodeKind::Comment || is_section(node, false) {
+        if node.flags.no_print
+            || node.kind == NodeKind::Comment
+            || is_section(node, false)
+            || is_nonprinting_request(node)
+        {
             continue;
         }
         if node.flags.no_fill && is_inline(node) {
@@ -98,6 +102,12 @@ fn lower_structural_node(
         Some("TP") => append_definition(
             output,
             definition_item(node, context, indent_columns),
+            indent_columns,
+            source_span(node),
+        ),
+        Some("IP") => append_definition(
+            output,
+            indented_paragraph_item(node, context, indent_columns),
             indent_columns,
             source_span(node),
         ),
@@ -303,13 +313,44 @@ fn definition_item(
     }
 }
 
+fn indented_paragraph_item(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+) -> DefinitionItem {
+    let head = part_children(node, NodeKind::Head);
+    let term_nodes = head
+        .last()
+        .filter(|_| head.len() > 1)
+        .filter(|node| node.text.as_deref().is_some_and(is_roff_measurement))
+        .map_or(head, |_| &head[..head.len() - 1]);
+    let term = lower_inline_nodes(term_nodes, context.default_name);
+    DefinitionItem {
+        terms: (!term.is_empty()).then_some(term).into_iter().collect(),
+        description: lower_blocks(
+            part_children(node, NodeKind::Body),
+            context,
+            indent_columns + 4,
+        ),
+    }
+}
+
 fn append_definition(
     output: &mut Vec<Block>,
-    item: DefinitionItem,
+    mut item: DefinitionItem,
     indent_columns: u16,
     source: Option<mant_ast::SourceSpan>,
 ) {
     if let Some(Block::DefinitionList { items, .. }) = output.last_mut() {
+        if !item.description.is_empty() {
+            let first_pending = items
+                .iter()
+                .rposition(|previous| !previous.description.is_empty())
+                .map_or(0, |index| index + 1);
+            for pending in items.drain(first_pending..) {
+                item.terms.splice(0..0, pending.terms);
+            }
+        }
         items.push(item);
     } else {
         output.push(Block::DefinitionList {
@@ -402,6 +443,25 @@ fn is_inline(node: &Node) -> bool {
             node.macro_name.as_deref(),
             Some("Nm" | "Nd" | "Op" | "Oo" | "Dq" | "Sq" | "Pq" | "Bq" | "Brq" | "Aq")
         )
+}
+
+fn is_nonprinting_request(node: &Node) -> bool {
+    matches!(
+        node.macro_name.as_deref(),
+        Some("PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta")
+    )
+}
+
+fn is_roff_measurement(value: &str) -> bool {
+    let value = value.trim();
+    let numeric = value
+        .trim_start_matches(['+', '-'])
+        .trim_end_matches(|character: char| character.is_ascii_alphabetic());
+    !numeric.is_empty()
+        && numeric
+            .chars()
+            .all(|character| character.is_ascii_digit() || character == '.')
+        && numeric.chars().any(|character| character.is_ascii_digit())
 }
 
 const fn layout(indent_columns: u16) -> LayoutHint {

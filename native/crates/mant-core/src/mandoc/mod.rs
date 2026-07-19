@@ -208,6 +208,42 @@ mod tests {
     }
 
     #[test]
+    fn lowers_indented_aliases_without_roff_layout_arguments() {
+        let path = temporary_source(
+            "indented-aliases",
+            ".TH CONTROL 1\n\
+             .SH OPTIONS\n\
+             .PD 0\n\
+             .IP \"\\fB-a\\fR\" 4\n\
+             .IP \"\\fB--all\\fR\" 4\n\
+             Show all entries.\n\
+             .PD\n\
+             .in 168u\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower indented aliases");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0]
+                .terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>(),
+            ["-a", "--all"]
+        );
+        assert_eq!(items[0].description.len(), 1);
+        let Block::Paragraph { children, .. } = &items[0].description[0] else {
+            panic!("expected alias description paragraph");
+        };
+        assert_eq!(inline_text(children), "Show all entries.");
+    }
+
+    #[test]
     fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
         let path = temporary_source(
             "mdoc",
