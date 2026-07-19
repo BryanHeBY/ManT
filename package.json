@@ -25,8 +25,8 @@
     "test:e2e": "bun test tests/e2e"
   },
   "dependencies": {
-    "@opentui/core": "latest",
-    "@opentui/react": "^0.4.3",
+    "@opentui/core": "0.4.5",
+    "@opentui/react": "0.4.5",
     "node-html-parser": "latest",
     "react": "^19.2.7"
   },
