@@ -9,20 +9,50 @@ const sidecarPath = new URL(
   "../../../native/bin/mant-mandoc-json",
   import.meta.url,
 ).pathname;
+const mdocFixturePath = new URL(
+  "../../fixtures/roff/minimal-mdoc.1",
+  import.meta.url,
+).pathname;
 
-const canRunSidecar = Bun.which("man") !== null
-  && Bun.spawnSync([sidecarPath, "--help"], {
-    stdout: "ignore",
-    stderr: "ignore",
-  }).exitCode === 0
+const canRunSidecar = Bun.spawnSync([sidecarPath, "--help"], {
+  stdout: "ignore",
+  stderr: "ignore",
+}).exitCode === 0;
+
+const canParseRealManPage = canRunSidecar
+  && Bun.which("man") !== null
   && Bun.spawnSync(["man", "-w", "ls"], {
     stdout: "ignore",
     stderr: "ignore",
   }).exitCode === 0;
 
 const describeSidecar = canRunSidecar ? describe : describe.skip;
+const describeRealManPage = canParseRealManPage ? describe : describe.skip;
 
 describeSidecar("bundled libmandoc AST sidecar", () => {
+  test("derives hasBody from an mdoc syntax tree", async () => {
+    const process = Bun.spawn([sidecarPath, mdocFixturePath], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(process.stdout).text(),
+      new Response(process.stderr).text(),
+      process.exited,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    const document = JSON.parse(stdout);
+    expect(document.macroSet).toBe("mdoc");
+    expect(document.meta.hasBody).toBe(true);
+    expect(document.root.children.some(
+      (node: { macro?: string }) => node.macro === "Sh",
+    )).toBe(true);
+  });
+});
+
+describeRealManPage("bundled libmandoc AST sidecar with an installed page", () => {
   test("parses a compressed real man page without invoking system mandoc", async () => {
     const { document, diagnostics } = await fetchRoffAst("ls");
 

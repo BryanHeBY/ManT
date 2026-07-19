@@ -19,17 +19,17 @@ describe("C compiler selection", () => {
 
   test("uses clang by default on macOS", () => {
     expect(requestedCCompiler("darwin", {})).toEqual({
-      command: "clang",
+      command: "/usr/bin/clang",
       source: "platform-default",
     });
   });
 
   test("resolves the macOS default to the clang executable", () => {
     expect(resolveCCompiler("darwin", {}, (command) => {
-      expect(command).toBe("clang");
+      expect(command).toBe("/usr/bin/clang");
       return "/usr/bin/clang";
     })).toEqual({
-      command: "clang",
+      command: "/usr/bin/clang",
       path: "/usr/bin/clang",
       source: "platform-default",
     });
@@ -67,7 +67,7 @@ describe("C compiler selection", () => {
 
   test("reports a missing compiler without leaking a Bun spawn error", () => {
     expect(() => resolveCCompiler("darwin", {}, () => null)).toThrow(
-      "C compiler 'clang' (required by the darwin default) was not found",
+      "C compiler '/usr/bin/clang' (required by the darwin default) was not found",
     );
   });
 });

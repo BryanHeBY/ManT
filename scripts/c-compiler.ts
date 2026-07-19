@@ -41,7 +41,11 @@ export function requestedCCompiler(
   if (platform === "linux") {
     return { command: "gcc", source: "platform-default" };
   }
-  return { command: "clang", source: "platform-default" };
+  // Prefer the Apple toolchain as a coherent compiler/linker/SDK unit. A
+  // Homebrew LLVM installation may appear earlier on PATH but still invoke
+  // Apple's linker, which can reject its newer DWARF format. Users who need a
+  // different LLVM build can continue to select it explicitly through CC.
+  return { command: "/usr/bin/clang", source: "platform-default" };
 }
 
 /** Applies host policy, then verifies that the selected executable exists. */

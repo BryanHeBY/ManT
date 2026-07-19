@@ -2,14 +2,18 @@
  * @file Runs Mant's local cross-platform build and test verification sequence.
  */
 
-import { access, constants, mkdir, readdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { access, constants, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { assertSupportedBuildPlatform, resolveCCompiler } from "./c-compiler";
 
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const sidecarName = "mant-mandoc-json";
 const sidecarSource = join(root, "native", "bin", sidecarName);
+const sidecarBuildInputs = [
+  join(root, "native", "mandoc-json", "mant-mandoc-json.c"),
+  join(root, "scripts", "build-mandoc-json.sh"),
+];
 const executableName = "mant";
 const executablePath = join(distDirectory, executableName);
 const compiledEntrypoint = join(distDirectory, ".mant-compile-entry.ts");
@@ -21,6 +25,15 @@ async function isExecutable(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Returns false when a tracked native input is newer than the local binary. */
+async function isCurrentSidecar(path: string): Promise<boolean> {
+  if (!(await isExecutable(path))) return false;
+
+  const outputModifiedAt = (await stat(path)).mtimeMs;
+  const inputStats = await Promise.all(sidecarBuildInputs.map((input) => stat(input)));
+  return inputStats.every((input) => input.mtimeMs <= outputModifiedAt);
 }
 
 async function run(
@@ -105,7 +118,10 @@ async function main(): Promise<void> {
   // exists.  Set MANT_REBUILD_SIDECAR=1 to force a rebuild after changing
   // native/mandoc-json/mant-mandoc-json.c or the pinned mandoc version.
   const rebuildSidecar = process.env.MANT_REBUILD_SIDECAR === "1";
-  const sidecarReady = !rebuildSidecar && await isExecutable(sidecarSource);
+  const sidecarExists = await isExecutable(sidecarSource);
+  const sidecarReady = !rebuildSidecar
+    && sidecarExists
+    && await isCurrentSidecar(sidecarSource);
   if (sidecarReady) {
     console.log("\n==> libmandoc sidecar already present; skipping build:mandoc-json");
     console.log("    (set MANT_REBUILD_SIDECAR=1 to force a rebuild)");
@@ -118,9 +134,10 @@ async function main(): Promise<void> {
       ? "CC environment variable"
       : `${process.platform} default`;
     console.log(`\n    C compiler: ${compiler.path} (${compilerOrigin})`);
-    const label = rebuildSidecar
-      ? `rebuild libmandoc sidecar with ${compiler.command}`
-      : `build libmandoc sidecar with ${compiler.command}`;
+    const compilerName = basename(compiler.path);
+    const label = sidecarExists
+      ? `rebuild libmandoc sidecar with ${compilerName}`
+      : `build libmandoc sidecar with ${compilerName}`;
     await run(label, [process.execPath, "run", "build:mandoc-json"], {
       CC: compiler.path,
     });

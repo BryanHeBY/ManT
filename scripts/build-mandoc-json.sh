@@ -15,7 +15,7 @@ OUTPUT="$OUTPUT_DIR/mant-mandoc-json"
 HOST_SYSTEM=$(uname -s)
 case "$HOST_SYSTEM" in
   Linux*) DEFAULT_CC=gcc ;;
-  Darwin*) DEFAULT_CC=clang ;;
+  Darwin*) DEFAULT_CC=/usr/bin/clang ;;
   MINGW*|MSYS*|CYGWIN*)
     echo "native Windows builds are not supported; use WSL" >&2
     exit 1
@@ -26,6 +26,13 @@ case "$HOST_SYSTEM" in
     ;;
 esac
 CC_BIN=${CC:-$DEFAULT_CC}
+
+# The upstream default includes -g. Homebrew LLVM can emit a newer DWARF
+# format than the Apple linker understands, producing one warning per archive
+# member on macOS. This sidecar is a release artifact, so omit debug data while
+# retaining the upstream warning set. Callers can still override CFLAGS.
+DEFAULT_CFLAGS="-O2 -W -Wall -Wmissing-prototypes -Wstrict-prototypes -Wwrite-strings -Wno-unused-parameter"
+BUILD_CFLAGS=${CFLAGS:-$DEFAULT_CFLAGS}
 
 if ! command -v "$CC_BIN" >/dev/null 2>&1; then
   echo "C compiler '$CC_BIN' was not found; install it or set CC explicitly" >&2
@@ -78,14 +85,28 @@ fi
 tar -xzf "$WORKDIR/mandoc.tar.gz" -C "$WORKDIR"
 SOURCE_DIR="$WORKDIR/mandoc-$MANDOC_VERSION"
 
+# mandoc's configure script deliberately clears environment variables before
+# probing the host, so pass our compiler policy through its supported local
+# configuration file. Quote values as shell literals because configure sources
+# this file directly.
+shell_quote() {
+  printf "%s" "$1" | sed "s/'/'\\\\''/g"
+}
+
 (
   cd "$SOURCE_DIR"
-  CC="$CC_BIN" ./configure
-  make CC="$CC_BIN" libmandoc.a
+  {
+    printf "CC='%s'\n" "$(shell_quote "$CC_BIN")"
+    printf "CFLAGS='%s'\n" "$(shell_quote "$BUILD_CFLAGS")"
+  } > configure.local
+  ./configure
+  make CC="$CC_BIN" CFLAGS="$BUILD_CFLAGS" libmandoc.a
 )
 
 mkdir -p "$OUTPUT_DIR"
-"$CC_BIN" -I"$SOURCE_DIR" \
+# BUILD_CFLAGS intentionally undergoes shell word splitting into compiler
+# arguments; CC_BIN remains one validated executable path.
+"$CC_BIN" $BUILD_CFLAGS -I"$SOURCE_DIR" \
   "$ROOT/native/mandoc-json/mant-mandoc-json.c" \
   "$SOURCE_DIR/libmandoc.a" -lz -lm \
   -o "$OUTPUT.tmp"

@@ -18,7 +18,8 @@ bun run build
 
 It runs a frozen dependency install, type check, sidecar build, all tests, and
 a Bun standalone build.  `CC` takes precedence when set; otherwise Linux uses
-`gcc` and macOS uses `clang`.  The sidecar is embedded into the resulting
+`gcc` and macOS uses Apple `/usr/bin/clang`. `CFLAGS` can override the release
+flags used for native compilation. The sidecar is embedded into the resulting
 `dist/mant` executable and smoke-tested after extraction.
 
 Native packages target Linux and macOS only. Windows users should build and
@@ -29,7 +30,8 @@ Unix man-page and roff toolchain at runtime.
 The build requires `curl`, a C compiler, `make`, and zlib development files.
 The output is `native/bin/mant-mandoc-json`; it is intentionally ignored by
 Git because it is platform-specific. Release builds should build and package
-one binary per supported target platform.
+one binary per supported target platform. `bun run build` automatically
+rebuilds an existing sidecar when its native source or build script is newer.
 
 Inspect a real source AST with:
 

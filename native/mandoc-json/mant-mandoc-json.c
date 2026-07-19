@@ -23,6 +23,7 @@ static void emit_document(const char *, const struct roff_meta *);
 static void emit_node(const struct roff_node *);
 static void emit_json_string(const char *);
 static void usage(const char *);
+static int document_has_body(const struct roff_meta *);
 
 static const char *node_type_name(enum roff_type);
 static const char *macroset_name(enum roff_macroset);
@@ -109,9 +110,29 @@ emit_document(const char *path, const struct roff_meta *meta)
 	emit_json_string(meta->name);
 	fputs(",\"aliasTarget\":", stdout);
 	emit_json_string(meta->sodest);
-	fprintf(stdout, ",\"hasBody\":%s},\"root\":", meta->hasbody ? "true" : "false");
+	fprintf(stdout, ",\"hasBody\":%s},\"root\":",
+	    document_has_body(meta) ? "true" : "false");
 	emit_node(meta->first);
 	fputs("}\n", stdout);
+}
+
+/*
+ * roff_meta.hasbody is populated by man_validate() but not by
+ * mdoc_validate() in mandoc 1.14.6.  Derive the protocol field from the
+ * renderer-neutral root instead, so equivalent man(7) and mdoc(7) documents
+ * report the same value.
+ */
+static int
+document_has_body(const struct roff_meta *meta)
+{
+	const struct roff_node	*node;
+
+	if (meta == NULL || meta->first == NULL)
+		return 0;
+	for (node = meta->first->child; node != NULL; node = node->next)
+		if (node->type != ROFFT_COMMENT)
+			return 1;
+	return 0;
 }
 
 static void
