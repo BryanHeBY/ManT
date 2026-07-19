@@ -1,7 +1,9 @@
 //! Manual source, query, and output engine independent from Bun and Node-API.
 
+mod mandoc;
 mod source;
 
+pub use mandoc::{lower_mandoc_document, parse_manual_source};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,
     locate_manual_source, locate_manual_source_with,
