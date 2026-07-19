@@ -6,6 +6,7 @@
  */
 
 import {
+  type BaseRenderable,
   createCliRenderer,
   type InputRenderable,
   type ScrollBoxRenderable,
@@ -39,8 +40,10 @@ import {
   type SearchMatch,
 } from "./search";
 import {
-  applySearchHighlight,
-  clearSearchHighlight,
+  applyActiveSearchHighlight,
+  applySearchMatchHighlights,
+  clearActiveSearchHighlight,
+  clearSearchHighlights,
 } from "./search-highlight";
 import { ManualStatusBar, SearchBar } from "./status-bar";
 import { useDeferredNavigationSync } from "./use-deferred-navigation-sync";
@@ -58,6 +61,21 @@ interface AppliedSearch {
 }
 
 const EMPTY_SECTIONS: MantSection[] = [];
+
+/** Resolve many stable IDs in one tree walk instead of one walk per match. */
+function collectSearchTargets(
+  root: BaseRenderable,
+  targetIds: ReadonlySet<string>,
+): Map<string, BaseRenderable> {
+  const targets = new Map<string, BaseRenderable>();
+  const pending = [root];
+  while (pending.length > 0 && targets.size < targetIds.size) {
+    const current = pending.pop()!;
+    if (targetIds.has(current.id)) targets.set(current.id, current);
+    pending.push(...current.getChildren());
+  }
+  return targets;
+}
 
 /** Resolve a source offset through OpenTUI's measured word-wrapping metadata. */
 function matchVisualRow(renderable: TextRenderable, match: SearchMatch): number {
@@ -105,7 +123,9 @@ export function App({ result, onQuit }: AppProps) {
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const searchInputRef = useRef<InputRenderable | null>(null);
-  const highlightedTextRef = useRef<TextRenderable | null>(null);
+  const highlightedTextsRef = useRef<Set<TextRenderable>>(new Set());
+  const searchTargetTextsRef = useRef<Map<string, TextRenderable>>(new Map());
+  const activeHighlightedTextRef = useRef<TextRenderable | null>(null);
   const { width: terminalWidth, height: terminalHeight } = useTerminalDimensions();
   const {
     navigationWidth,
@@ -164,16 +184,56 @@ export function App({ result, onQuit }: AppProps) {
     });
   };
 
+  const clearAllSearchDecorations = () => {
+    clearSearchHighlights(highlightedTextsRef.current);
+    highlightedTextsRef.current = new Set();
+    searchTargetTextsRef.current = new Map();
+    activeHighlightedTextRef.current = null;
+  };
+
+  /** Add the low-priority layer once per target TextBuffer for a new query. */
+  const decorateSearchMatches = (matches: readonly SearchMatch[]) => {
+    clearAllSearchDecorations();
+    const content = contentScrollRef.current?.content;
+    if (!content || matches.length === 0) return;
+
+    const grouped = new Map<string, SearchMatch[]>();
+    for (const match of matches) {
+      const group = grouped.get(match.targetId);
+      if (group) group.push(match);
+      else grouped.set(match.targetId, [match]);
+    }
+    const targets = collectSearchTargets(content, new Set(grouped.keys()));
+    for (const [targetId, group] of grouped) {
+      const target = targets.get(targetId);
+      if (!target) continue;
+      const text = applySearchMatchHighlights(
+        target,
+        group.map((match) => match.range),
+      );
+      if (!text) continue;
+      highlightedTextsRef.current.add(text);
+      searchTargetTextsRef.current.set(targetId, text);
+    }
+  };
+
+  /** Move only the high-priority active layer, retaining every other match. */
   const scrollToSearchMatch = (match: SearchMatch) => {
     const scrollbox = contentScrollRef.current;
     if (!scrollbox) return;
-    const target = scrollbox.content.findDescendantById(match.targetId);
-    clearSearchHighlight(highlightedTextRef.current);
-    highlightedTextRef.current = null;
-    if (!target) return;
-    const text = applySearchHighlight(target, match.range);
-    highlightedTextRef.current = text ?? null;
-    const targetY = text ? text.y + matchVisualRow(text, match) : target.y;
+    clearActiveSearchHighlight(activeHighlightedTextRef.current);
+    let text = searchTargetTextsRef.current.get(match.targetId);
+    if (!text) {
+      const target = scrollbox.content.findDescendantById(match.targetId);
+      if (!target) return;
+      text = applySearchMatchHighlights(target, [match.range]);
+      if (!text) return;
+      highlightedTextsRef.current.add(text);
+      searchTargetTextsRef.current.set(match.targetId, text);
+    }
+    applyActiveSearchHighlight(text, match.range);
+    activeHighlightedTextRef.current = text;
+    const targetY = text.y + matchVisualRow(text, match);
     scrollbox.scrollTo({
       x: scrollbox.scrollLeft,
       y: Math.max(0, scrollbox.scrollTop + targetY - scrollbox.viewport.y),
@@ -259,13 +319,11 @@ export function App({ result, onQuit }: AppProps) {
 
     const matches = queryPageSearchIndex(pageSearchIndex, searchDraft);
     setSearch({ query: searchDraft, matches, activeIndex: 0 });
+    decorateSearchMatches(matches);
     if (matches[0]) {
       setSelectedId(matches[0].sectionId);
       navScrollRef.current?.scrollChildIntoView(navId(matches[0].sectionId));
       scrollToSearchMatch(matches[0]);
-    } else {
-      clearSearchHighlight(highlightedTextRef.current);
-      highlightedTextRef.current = null;
     }
   };
 

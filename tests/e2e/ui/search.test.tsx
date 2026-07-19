@@ -36,7 +36,10 @@ describe("App search (e2e)", () => {
     expect(
       setup.captureSpans().lines
         .flatMap((line) => line.spans)
-        .some((span) => span.bg.toInts().slice(0, 3).join(",") === "249,226,175"),
+        .some((span) => {
+          const background = span.bg.toInts().slice(0, 3).join(",");
+          return background === "249,226,175" || background === "69,71,90";
+        }),
     ).toBe(false);
 
     setup.mockInput.pressEnter();
@@ -58,6 +61,40 @@ describe("App search (e2e)", () => {
     expect(frame).not.toContain("Find: directory");
     expect(frame).toContain("Find “directory” · 1 matches");
 
+    setup.renderer.destroy();
+  });
+
+  test("shows every result while distinguishing the active result", async () => {
+    const result = mockQuery("layered-search", [{
+      id: "description",
+      title: "DESCRIPTION",
+      blocks: [{
+        type: "paragraph",
+        children: [{ type: "text", value: "Needle first, then needle second." }],
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result);
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("needle");
+    await flushKeyboard(setup);
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+
+    const resultBackgrounds = () => setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .filter((span) => span.text.toLocaleLowerCase() === "needle")
+      .map((span) => span.bg.toInts().slice(0, 3).join(","))
+      // The open search field also contains the query; only the two content
+      // decoration colours belong to search results.
+      .filter((background) => background === "249,226,175" || background === "69,71,90");
+
+    expect(resultBackgrounds()).toEqual(["249,226,175", "69,71,90"]);
+
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+    expect(resultBackgrounds()).toEqual(["69,71,90", "249,226,175"]);
     setup.renderer.destroy();
   });
 

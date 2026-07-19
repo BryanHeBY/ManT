@@ -10,9 +10,15 @@ import type { SearchRange } from "./search";
 
 export const SEARCH_HIGHLIGHT_BACKGROUND = "#f9e2af";
 export const SEARCH_HIGHLIGHT_FOREGROUND = "#1e1e2e";
+export const SEARCH_MATCH_BACKGROUND = "#45475a";
 
-const SEARCH_HIGHLIGHT_NAME = "mant.search.match";
-const SEARCH_HIGHLIGHT_REF = 0x4d414e54;
+const SEARCH_MATCH_NAME = "mant.search.match";
+const SEARCH_ACTIVE_NAME = "mant.search.active";
+// OpenTUI's native Highlight struct stores references as u16. Values outside
+// that range are truncated on insertion and can no longer be removed by the
+// original JS number.
+const SEARCH_MATCH_REF = 0x4d01;
+const SEARCH_ACTIVE_REF = 0x4d02;
 
 interface TextBufferHighlightApi {
   addHighlightByCharRange(highlight: {
@@ -27,7 +33,7 @@ interface TextBufferHighlightApi {
 
 interface SyntaxStyleHighlightApi {
   resolveStyleId(name: string): number | null;
-  registerStyle(name: string, style: { fg: string; bg: string }): number;
+  registerStyle(name: string, style: { fg?: string; bg?: string }): number;
 }
 
 interface TextHighlightInternals {
@@ -52,35 +58,78 @@ export function firstTextRenderable(renderable: BaseRenderable): TextRenderable 
   return undefined;
 }
 
-/** Remove Mant's decoration without touching syntax or inline styles. */
-export function clearSearchHighlight(renderable: TextRenderable | null): void {
+function resolveStyle(
+  renderable: TextRenderable,
+  name: string,
+  definition: { fg?: string; bg?: string },
+): number {
+  const syntaxStyle = highlightInternals(renderable)._textBufferSyntaxStyle;
+  return syntaxStyle.resolveStyleId(name)
+    ?? syntaxStyle.registerStyle(name, definition);
+}
+
+/** Remove only the high-priority current-result decoration. */
+export function clearActiveSearchHighlight(renderable: TextRenderable | null): void {
   if (!renderable) return;
-  highlightInternals(renderable).textBuffer.removeHighlightsByRef(SEARCH_HIGHLIGHT_REF);
+  highlightInternals(renderable).textBuffer.removeHighlightsByRef(SEARCH_ACTIVE_REF);
   renderable.requestRender();
 }
 
-/** Apply a high-priority color overlay without invalidating text layout. */
-export function applySearchHighlight(
+/** Remove every search decoration from the buffers touched by the last query. */
+export function clearSearchHighlights(renderables: Iterable<TextRenderable>): void {
+  for (const renderable of renderables) {
+    const { textBuffer } = highlightInternals(renderable);
+    textBuffer.removeHighlightsByRef(SEARCH_MATCH_REF);
+    textBuffer.removeHighlightsByRef(SEARCH_ACTIVE_REF);
+    renderable.requestRender();
+  }
+}
+
+/** Apply all ordinary matches in one TextBuffer without invalidating layout. */
+export function applySearchMatchHighlights(
   target: BaseRenderable,
-  range: SearchRange,
+  ranges: readonly SearchRange[],
 ): TextRenderable | undefined {
   const renderable = firstTextRenderable(target);
   if (!renderable) return undefined;
 
-  const { textBuffer, _textBufferSyntaxStyle: syntaxStyle } = highlightInternals(renderable);
-  const styleId = syntaxStyle.resolveStyleId(SEARCH_HIGHLIGHT_NAME)
-    ?? syntaxStyle.registerStyle(SEARCH_HIGHLIGHT_NAME, {
-      fg: SEARCH_HIGHLIGHT_FOREGROUND,
-      bg: SEARCH_HIGHLIGHT_BACKGROUND,
+  const { textBuffer } = highlightInternals(renderable);
+  const styleId = resolveStyle(renderable, SEARCH_MATCH_NAME, {
+    bg: SEARCH_MATCH_BACKGROUND,
+  });
+  textBuffer.removeHighlightsByRef(SEARCH_MATCH_REF);
+  for (const range of ranges) {
+    textBuffer.addHighlightByCharRange({
+      start: range.start,
+      end: range.end,
+      styleId,
+      // OpenTUI stores this field as an unsigned byte. Keep both search
+      // priorities within 0..255 so the active layer reliably sorts last.
+      priority: 100,
+      hlRef: SEARCH_MATCH_REF,
     });
-  textBuffer.removeHighlightsByRef(SEARCH_HIGHLIGHT_REF);
+  }
+  renderable.requestRender();
+  return renderable;
+}
+
+/** Overlay the currently selected result above the ordinary match layer. */
+export function applyActiveSearchHighlight(
+  renderable: TextRenderable,
+  range: SearchRange,
+): void {
+  const { textBuffer } = highlightInternals(renderable);
+  const styleId = resolveStyle(renderable, SEARCH_ACTIVE_NAME, {
+    fg: SEARCH_HIGHLIGHT_FOREGROUND,
+    bg: SEARCH_HIGHLIGHT_BACKGROUND,
+  });
+  textBuffer.removeHighlightsByRef(SEARCH_ACTIVE_REF);
   textBuffer.addHighlightByCharRange({
     start: range.start,
     end: range.end,
     styleId,
-    priority: 10_000,
-    hlRef: SEARCH_HIGHLIGHT_REF,
+    priority: 200,
+    hlRef: SEARCH_ACTIVE_REF,
   });
   renderable.requestRender();
-  return renderable;
 }
