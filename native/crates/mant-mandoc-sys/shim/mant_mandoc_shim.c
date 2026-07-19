@@ -17,10 +17,20 @@
 
 #include "mandoc.h"
 #include "mdoc.h"
+#include "eqn.h"
 #include "roff.h"
+#include "tbl.h"
 #include "mandoc_parse.h"
 
 #include "mant_mandoc_shim.h"
+
+struct mant_mandoc_table_cell {
+	char			*text;
+	unsigned int		 column_span;
+	unsigned int		 row_span;
+	int			 alignment;
+	struct mant_mandoc_table_cell *next;
+};
 
 struct mant_mandoc_node {
 	int			 kind;
@@ -33,6 +43,8 @@ struct mant_mandoc_node {
 	int			 display_kind;
 	int			 compact;
 	char			*offset;
+	char			*equation;
+	struct mant_mandoc_table_cell *table_cells;
 	struct mant_mandoc_node	*child;
 	struct mant_mandoc_node	*next;
 };
@@ -64,6 +76,10 @@ static int document_has_body(const struct roff_meta *);
 static void set_source_root(const char *);
 static void copy_normalized_data(struct mant_mandoc_node *,
     const struct roff_node *);
+static struct mant_mandoc_table_cell *copy_table_cells(
+    const struct tbl_span *);
+static void free_table_cells(struct mant_mandoc_table_cell *);
+static char *copy_equation(const struct eqn_box *);
 
 struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, int allow_include)
@@ -269,6 +285,10 @@ copy_node(const struct roff_node *source)
 	node->line = source->line;
 	node->column = source->pos + 1;
 	copy_normalized_data(node, source);
+	if (source->type == ROFFT_TBL)
+		node->table_cells = copy_table_cells(source->span);
+	else if (source->type == ROFFT_EQN)
+		node->equation = copy_equation(source->eqn);
 	if (source->flags & NODE_NOSRC)
 		node->flags |= MANT_MANDOC_NODE_GENERATED;
 	if (source->flags & NODE_EOS)
@@ -300,9 +320,128 @@ free_node(struct mant_mandoc_node *node)
 		free(node->macro);
 		free(node->text);
 		free(node->offset);
+		free(node->equation);
+		free_table_cells(node->table_cells);
 		free(node);
 		node = next;
 	}
+}
+
+static struct mant_mandoc_table_cell *
+copy_table_cells(const struct tbl_span *span)
+{
+	const struct tbl_dat		*source;
+	struct mant_mandoc_table_cell	*first, **next;
+
+	if (span == NULL || span->pos != TBL_SPAN_DATA)
+		return NULL;
+	first = NULL;
+	next = &first;
+	for (source = span->first; source != NULL; source = source->next) {
+		*next = calloc(1, sizeof(**next));
+		if (*next == NULL)
+			break;
+		(*next)->text = copy_string(source->string);
+		(*next)->column_span = source->hspans < 0 ? 1U :
+		    (unsigned int)source->hspans + 1U;
+		(*next)->row_span = source->vspans < 0 ? 1U :
+		    (unsigned int)source->vspans + 1U;
+		if (source->layout != NULL &&
+		    source->layout->pos == TBL_CELL_CENTRE)
+			(*next)->alignment = 1;
+		else if (source->layout != NULL &&
+		    (source->layout->pos == TBL_CELL_RIGHT ||
+		     source->layout->pos == TBL_CELL_NUMBER))
+			(*next)->alignment = 2;
+		next = &(*next)->next;
+	}
+	return first;
+}
+
+static void
+free_table_cells(struct mant_mandoc_table_cell *cell)
+{
+	struct mant_mandoc_table_cell	*next;
+
+	while (cell != NULL) {
+		next = cell->next;
+		free(cell->text);
+		free(cell);
+		cell = next;
+	}
+}
+
+struct text_buffer {
+	char	*data;
+	size_t	 length;
+	size_t	 capacity;
+};
+
+static int append_text(struct text_buffer *, const char *);
+static int append_equation(struct text_buffer *, const struct eqn_box *);
+
+static char *
+copy_equation(const struct eqn_box *box)
+{
+	struct text_buffer	buffer;
+
+	memset(&buffer, 0, sizeof(buffer));
+	if (!append_equation(&buffer, box)) {
+		free(buffer.data);
+		return NULL;
+	}
+	return buffer.data;
+}
+
+static int
+append_equation(struct text_buffer *buffer, const struct eqn_box *box)
+{
+	const struct eqn_box	*child;
+
+	if (box == NULL)
+		return append_text(buffer, "");
+	if (box->pos == EQNPOS_SQRT && !append_text(buffer, "sqrt("))
+		return 0;
+	if (!append_text(buffer, box->left) || !append_text(buffer, box->text))
+		return 0;
+	for (child = box->first; child != NULL; child = child->next) {
+		if (child != box->first && !append_text(buffer, " "))
+			return 0;
+		if (!append_equation(buffer, child))
+			return 0;
+	}
+	if (!append_text(buffer, box->right))
+		return 0;
+	if (box->pos == EQNPOS_SQRT)
+		return append_text(buffer, ")");
+	if (box->pos == EQNPOS_OVER)
+		return append_text(buffer, " / ");
+	return 1;
+}
+
+static int
+append_text(struct text_buffer *buffer, const char *text)
+{
+	size_t	length, capacity;
+	char	*data;
+
+	if (text == NULL)
+		return 1;
+	length = strlen(text);
+	if (buffer->length + length + 1 > buffer->capacity) {
+		capacity = buffer->capacity == 0 ? 64 : buffer->capacity;
+		while (capacity < buffer->length + length + 1)
+			capacity *= 2;
+		data = realloc(buffer->data, capacity);
+		if (data == NULL)
+			return 0;
+		buffer->data = data;
+		buffer->capacity = capacity;
+	}
+	memcpy(buffer->data + buffer->length, text, length);
+	buffer->length += length;
+	buffer->data[buffer->length] = '\0';
+	return 1;
 }
 
 static void
@@ -458,6 +597,48 @@ const char *
 mant_mandoc_node_offset(const struct mant_mandoc_node *node)
 {
 	return node == NULL ? NULL : node->offset;
+}
+
+const char *
+mant_mandoc_node_equation(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? NULL : node->equation;
+}
+
+const struct mant_mandoc_table_cell *
+mant_mandoc_node_table_cells(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? NULL : node->table_cells;
+}
+
+const char *
+mant_mandoc_table_cell_text(const struct mant_mandoc_table_cell *cell)
+{
+	return cell == NULL ? NULL : cell->text;
+}
+
+unsigned int
+mant_mandoc_table_cell_column_span(const struct mant_mandoc_table_cell *cell)
+{
+	return cell == NULL ? 1U : cell->column_span;
+}
+
+unsigned int
+mant_mandoc_table_cell_row_span(const struct mant_mandoc_table_cell *cell)
+{
+	return cell == NULL ? 1U : cell->row_span;
+}
+
+int
+mant_mandoc_table_cell_alignment(const struct mant_mandoc_table_cell *cell)
+{
+	return cell == NULL ? 0 : cell->alignment;
+}
+
+const struct mant_mandoc_table_cell *
+mant_mandoc_table_cell_next(const struct mant_mandoc_table_cell *cell)
+{
+	return cell == NULL ? NULL : cell->next;
 }
 
 const struct mant_mandoc_node *

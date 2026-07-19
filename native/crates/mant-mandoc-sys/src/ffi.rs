@@ -4,6 +4,7 @@ use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
 
 use super::{
     DisplayKind, MacroSet, Metadata, Node, NodeFlags, NodeKind, NormalizedListKind, ParsedDocument,
+    TableAlignment, TableCell,
 };
 
 #[repr(C)]
@@ -13,6 +14,11 @@ struct CDocument {
 
 #[repr(C)]
 struct CNode {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+struct CTableCell {
     _private: [u8; 0],
 }
 
@@ -43,6 +49,13 @@ unsafe extern "C" {
     fn mant_mandoc_node_display_kind(node: *const CNode) -> i32;
     fn mant_mandoc_node_compact(node: *const CNode) -> i32;
     fn mant_mandoc_node_offset(node: *const CNode) -> *const c_char;
+    fn mant_mandoc_node_equation(node: *const CNode) -> *const c_char;
+    fn mant_mandoc_node_table_cells(node: *const CNode) -> *const CTableCell;
+    fn mant_mandoc_table_cell_text(cell: *const CTableCell) -> *const c_char;
+    fn mant_mandoc_table_cell_column_span(cell: *const CTableCell) -> u32;
+    fn mant_mandoc_table_cell_row_span(cell: *const CTableCell) -> u32;
+    fn mant_mandoc_table_cell_alignment(cell: *const CTableCell) -> i32;
+    fn mant_mandoc_table_cell_next(cell: *const CTableCell) -> *const CTableCell;
     fn mant_mandoc_node_child(node: *const CNode) -> *const CNode;
     fn mant_mandoc_node_next(node: *const CNode) -> *const CNode;
 }
@@ -186,6 +199,30 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
         display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,
         compact: unsafe { mant_mandoc_node_compact(pointer) } != 0,
         offset: unsafe { optional_string(mant_mandoc_node_offset(pointer)) },
+        table_cells: unsafe { copy_table_cells(mant_mandoc_node_table_cells(pointer)) },
+        equation: unsafe { optional_string(mant_mandoc_node_equation(pointer)) },
         children,
     })
+}
+
+unsafe fn copy_table_cells(mut pointer: *const CTableCell) -> Vec<TableCell> {
+    let mut cells = Vec::new();
+    while !pointer.is_null() {
+        cells.push(TableCell {
+            text: unsafe { optional_string(mant_mandoc_table_cell_text(pointer)) },
+            column_span: unsafe { mant_mandoc_table_cell_column_span(pointer) }
+                .try_into()
+                .unwrap_or(u16::MAX),
+            row_span: unsafe { mant_mandoc_table_cell_row_span(pointer) }
+                .try_into()
+                .unwrap_or(u16::MAX),
+            alignment: match unsafe { mant_mandoc_table_cell_alignment(pointer) } {
+                1 => TableAlignment::Center,
+                2 => TableAlignment::Right,
+                _ => TableAlignment::Left,
+            },
+        });
+        pointer = unsafe { mant_mandoc_table_cell_next(pointer) };
+    }
+    cells
 }

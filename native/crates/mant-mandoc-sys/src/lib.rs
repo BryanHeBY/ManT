@@ -63,6 +63,23 @@ pub enum DisplayKind {
     Filled,
 }
 
+/// Horizontal alignment retained for one parsed tbl(7) cell.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TableAlignment {
+    Left,
+    Center,
+    Right,
+}
+
+/// Owned payload of one cell in a libmandoc table row.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TableCell {
+    pub text: Option<String>,
+    pub column_span: u16,
+    pub row_span: u16,
+    pub alignment: TableAlignment,
+}
+
 /// Source and renderer flags needed by the future AST lowering pass.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -86,6 +103,8 @@ pub struct Node {
     pub display_kind: Option<DisplayKind>,
     pub compact: bool,
     pub offset: Option<String>,
+    pub table_cells: Vec<TableCell>,
+    pub equation: Option<String>,
     pub children: Vec<Self>,
 }
 
@@ -157,7 +176,9 @@ pub fn parse_file(path: &Path, allow_includes: bool) -> Result<ParsedDocument, P
 mod tests {
     use std::{fs, process};
 
-    use super::{DisplayKind, MacroSet, Node, NodeKind, NormalizedListKind, parse_file};
+    use super::{
+        DisplayKind, MacroSet, Node, NodeKind, NormalizedListKind, TableAlignment, parse_file,
+    };
 
     fn source_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-{label}-{}.1", process::id()))
@@ -171,6 +192,14 @@ mod tests {
                     .iter()
                     .find_map(|child| find_macro(child, name))
             })
+    }
+
+    fn find_kind(node: &Node, kind: NodeKind) -> Option<&Node> {
+        (node.kind == kind).then_some(node).or_else(|| {
+            node.children
+                .iter()
+                .find_map(|child| find_kind(child, kind))
+        })
     }
 
     #[test]
@@ -270,5 +299,31 @@ mod tests {
         let display = find_macro(&document.root, "Bd").expect("normalized display node");
         assert_eq!(display.display_kind, Some(DisplayKind::Literal));
         assert_eq!(display.offset.as_deref(), Some("indent"));
+    }
+
+    #[test]
+    fn parser_copies_table_cells_and_equation_text() {
+        let path = source_path("structured-payload-mandoc-session");
+        fs::write(
+            &path,
+            ".TH PAYLOAD 1\n.SH TABLE\n.TS\ntab(|);\nl r.\nleft|right\n.TE\n\
+             .SH EQUATION\n.EQ\nx sup 2\n.EN\n",
+        )
+        .expect("write table and equation source");
+
+        let document = parse_file(&path, false).expect("parse table and equation source");
+        fs::remove_file(path).expect("remove table and equation source");
+
+        let table = find_kind(&document.root, NodeKind::Table).expect("table row node");
+        assert_eq!(table.table_cells.len(), 2);
+        assert_eq!(table.table_cells[0].text.as_deref(), Some("left"));
+        assert_eq!(table.table_cells[1].alignment, TableAlignment::Right);
+        let equation = find_kind(&document.root, NodeKind::Equation).expect("equation node");
+        assert!(
+            equation
+                .equation
+                .as_deref()
+                .is_some_and(|value| value.contains('x'))
+        );
     }
 }

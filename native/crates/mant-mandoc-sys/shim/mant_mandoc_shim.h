@@ -8,6 +8,7 @@ extern "C" {
 
 struct mant_mandoc_document;
 struct mant_mandoc_node;
+struct mant_mandoc_table_cell;
 
 enum mant_mandoc_macroset {
 	MANT_MANDOC_MACROSET_NONE = 0,
@@ -80,6 +81,19 @@ int mant_mandoc_node_list_kind(const struct mant_mandoc_node *);
 int mant_mandoc_node_display_kind(const struct mant_mandoc_node *);
 int mant_mandoc_node_compact(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_offset(const struct mant_mandoc_node *);
+const char *mant_mandoc_node_equation(const struct mant_mandoc_node *);
+const struct mant_mandoc_table_cell *mant_mandoc_node_table_cells(
+    const struct mant_mandoc_node *);
+const char *mant_mandoc_table_cell_text(
+    const struct mant_mandoc_table_cell *);
+unsigned int mant_mandoc_table_cell_column_span(
+    const struct mant_mandoc_table_cell *);
+unsigned int mant_mandoc_table_cell_row_span(
+    const struct mant_mandoc_table_cell *);
+int mant_mandoc_table_cell_alignment(
+    const struct mant_mandoc_table_cell *);
+const struct mant_mandoc_table_cell *mant_mandoc_table_cell_next(
+    const struct mant_mandoc_table_cell *);
 const struct mant_mandoc_node *mant_mandoc_node_child(
     const struct mant_mandoc_node *);
 const struct mant_mandoc_node *mant_mandoc_node_next(
