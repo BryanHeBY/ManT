@@ -438,7 +438,7 @@ function TldrQuickReferenceView({ page }: { page: TldrDocument }) {
         </text>
       ))}
       {page.examples.map((example, index) => (
-        <box key={`example-${index}`} flexDirection="column" paddingTop={index === 0 ? 1 : 0}>
+        <box key={`example-${index}`} flexDirection="column" paddingTop={1}>
           <text
             id={contentSearchId(TLDR_NAV_ID, searchPath.tldrExampleDescription(index))}
             fg="#a6e3a1"
@@ -457,13 +457,15 @@ function TldrQuickReferenceView({ page }: { page: TldrDocument }) {
         </box>
       ))}
       {page.moreInformation && (
-        <text
-          id={contentSearchId(TLDR_NAV_ID, searchPath.tldrMoreInformation())}
-          fg="#89b4fa"
-          wrapMode="char"
-        >
-          {`More information: ${page.moreInformation}`}
-        </text>
+        <box paddingTop={1}>
+          <text
+            id={contentSearchId(TLDR_NAV_ID, searchPath.tldrMoreInformation())}
+            fg="#89b4fa"
+            wrapMode="char"
+          >
+            {`More information: ${page.moreInformation}`}
+          </text>
+        </box>
       )}
       <text fg="#7f849c">{`tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`}</text>
     </box>

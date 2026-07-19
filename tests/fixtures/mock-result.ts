@@ -66,14 +66,25 @@ export const mockLsWithTldrResult: MantQueryBundle = {
   tldr: {
     title: "ls",
     description: ["List directory contents."],
-    examples: [{
-      description: "List files, including hidden entries",
-      command: "ls {{[-a|--all]}}",
-      commandParts: [
-        { type: "text", value: "ls " },
-        { type: "placeholder", value: "--all" },
-      ],
-    }],
+    examples: [
+      {
+        description: "List files, including hidden entries",
+        command: "ls {{[-a|--all]}}",
+        commandParts: [
+          { type: "text", value: "ls " },
+          { type: "placeholder", value: "--all" },
+        ],
+      },
+      {
+        description: "List files in long format",
+        command: "ls {{[-l|--format=long]}}",
+        commandParts: [
+          { type: "text", value: "ls " },
+          { type: "placeholder", value: "--format=long" },
+        ],
+      },
+    ],
+    moreInformation: "https://www.gnu.org/software/coreutils/ls",
     platform: "common",
     language: "en",
     sourcePath: "/cache/mant/tldr-pages/pages/common/ls.md",

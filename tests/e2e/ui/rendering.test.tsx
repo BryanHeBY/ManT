@@ -295,6 +295,15 @@ describe("App rendering (e2e)", () => {
     expect(navLines(frame).some((line) => line.includes("◆ TLDR QUICK REFERENCE"))).toBe(true);
     expect(frame).toContain("tldr-pages · CC BY 4.0 · common · en");
     expect(frame).toContain("List files, including hidden entries");
+    const lines = frame.split("\n");
+    const firstCommandRow = lines.findIndex((line) => line.includes("ls --all"));
+    const secondExampleRow = lines.findIndex((line) => line.includes("List files in long format"));
+    const secondCommandRow = lines.findIndex((line) => line.includes("ls --format=long"));
+    const moreInformationRow = lines.findIndex((line) => line.includes("More information:"));
+    expect(firstCommandRow).toBeGreaterThanOrEqual(0);
+    expect(secondExampleRow - firstCommandRow).toBe(2);
+    expect(secondCommandRow).toBeGreaterThanOrEqual(0);
+    expect(moreInformationRow - secondCommandRow).toBe(2);
     expect(tldrPosition).toBeGreaterThanOrEqual(0);
     expect(manualPosition).toBeGreaterThan(tldrPosition);
     expect(frame).toContain("› ◆ TLDR QUICK REFERENCE");
