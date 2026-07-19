@@ -2,11 +2,13 @@
 
 mod groff_html;
 mod mandoc;
+mod query;
 mod source;
 mod tldr;
 
 pub use groff_html::parse_groff_html;
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
+pub use query::{QueryError, query};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,
     locate_manual_source, locate_manual_source_with,

@@ -12,6 +12,15 @@ pub enum QuerySchema {
     V1,
 }
 
+/// Validated use-case input accepted by the native query boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct QueryRequest {
+    pub topic: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
+}
+
 /// Native result consumed by JSON, Markdown, and interactive frontends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
