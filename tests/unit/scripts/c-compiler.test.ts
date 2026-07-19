@@ -1,5 +1,5 @@
 /**
- * @file Verifies host defaults and CC overrides for native sidecar builds.
+ * @file Verifies host defaults and CC overrides for native Rust builds.
  */
 
 import { describe, expect, test } from "bun:test";
