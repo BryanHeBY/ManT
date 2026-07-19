@@ -155,6 +155,12 @@ pub fn get_system_tldr_cache_dirs(
         portable_cache.join("tlrc"),
         native_cache.join("tealdeer").join("tldr-pages"),
         portable_cache.join("tealdeer").join("tldr-pages"),
+        // Homebrew's `tldr` formula installs tldr-c-client, which extracts
+        // the upstream repository below this root on every supported host.
+        home.join(".tldrc").join("tldr"),
+        // The official Node client adds one private `cache` layer beneath its
+        // configured root (which defaults to ~/.tldr).
+        home.join(".tldr").join("cache"),
         home.join(".tldr"),
     ];
 
@@ -441,6 +447,8 @@ mod tests {
                 "/cache/tldr",
                 "/cache/tlrc",
                 "/cache/tealdeer/tldr-pages",
+                "/home/test/.tldrc/tldr",
+                "/home/test/.tldr/cache",
                 "/home/test/.tldr",
                 "/usr/local/share/tldr",
                 "/usr/share/tldr",
@@ -452,6 +460,33 @@ mod tests {
                 .expect("fallback cache"),
             [PathBuf::from("/cache/mant/tldr-pages")]
         );
+    }
+
+    #[test]
+    fn reads_homebrew_c_client_and_node_client_cache_layouts_on_macos() {
+        let environment = env(&[("HOME", "/Users/test")]);
+        let cache_dirs = get_system_tldr_cache_dirs(&environment, HostPlatform::Macos)
+            .expect("macOS client caches");
+
+        for source in [
+            PathBuf::from("/Users/test/.tldrc/tldr/pages/common/tar.md"),
+            PathBuf::from("/Users/test/.tldr/cache/pages/common/tar.md"),
+        ] {
+            let files = MemoryFiles {
+                files: [(source.clone(), PAGE.to_owned())].into_iter().collect(),
+            };
+            let page = read_cached_tldr_page_with(
+                "tar",
+                &cache_dirs,
+                &["en".to_owned()],
+                &["osx".to_owned(), "common".to_owned()],
+                &files,
+            )
+            .expect("cache read")
+            .expect("page");
+
+            assert_eq!(page.source_path, source.to_string_lossy());
+        }
     }
 
     #[test]
