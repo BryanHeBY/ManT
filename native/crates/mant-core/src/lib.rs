@@ -12,9 +12,10 @@ pub use source::{
     locate_manual_source, locate_manual_source_with,
 };
 pub use tldr::{
-    HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, get_system_tldr_cache_dirs,
-    get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs,
-    normalize_tldr_topic, parse_tldr_command, parse_tldr_page, read_cached_tldr_page,
+    HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, TldrUpdateError,
+    get_system_tldr_cache_dirs, get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms,
+    get_tldr_read_cache_dirs, normalize_tldr_topic, parse_tldr_command, parse_tldr_page,
+    read_cached_tldr_page, update_tldr_cache,
 };
 
 /// Reports the native contract version through the engine layer.

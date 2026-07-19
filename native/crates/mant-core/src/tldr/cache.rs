@@ -6,6 +6,7 @@ use std::{
     error::Error,
     ffi::OsStr,
     fmt, fs, io,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
@@ -359,7 +360,11 @@ fn find_executable(name: &str, environment: &BTreeMap<String, String>) -> Option
     let path = environment.get("PATH")?;
     env::split_paths(OsStr::new(path))
         .map(|directory| directory.join(name))
-        .find(|candidate| candidate.is_file())
+        .find(|candidate| {
+            candidate.metadata().is_ok_and(|metadata| {
+                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+            })
+        })
 }
 
 fn deduplicate_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {

@@ -2,6 +2,7 @@
 
 mod cache;
 mod parser;
+mod update;
 
 pub use cache::{
     HostPlatform, TldrCacheError, get_system_tldr_cache_dirs, get_tldr_cache_dir,
@@ -9,3 +10,4 @@ pub use cache::{
     read_cached_tldr_page,
 };
 pub use parser::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
+pub use update::{TldrUpdateError, update_tldr_cache};
