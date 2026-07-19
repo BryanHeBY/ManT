@@ -93,11 +93,11 @@ pub fn parse_tldr_page(
             continue;
         }
 
-        if title.is_empty()
-            && let Some(heading) = trimmed.strip_prefix("# ")
-        {
-            title = flatten_markdown(heading);
-            continue;
+        if title.is_empty() {
+            if let Some(heading) = trimmed.strip_prefix("# ") {
+                title = flatten_markdown(heading);
+                continue;
+            }
         }
 
         if let Some(quote) = trimmed.strip_prefix('>') {
@@ -126,10 +126,10 @@ pub fn parse_tldr_page(
             continue;
         }
 
-        if let Some(command) = standalone_code(trimmed)
-            && let Some(example_description) = pending_description.take()
-        {
-            examples.push(make_example(example_description, command.to_owned()));
+        if let Some(command) = standalone_code(trimmed) {
+            if let Some(example_description) = pending_description.take() {
+                examples.push(make_example(example_description, command.to_owned()));
+            }
         }
     }
 

@@ -197,18 +197,18 @@ fn update_tldr_cache_with(
     repository: &str,
     host: &dyn TldrUpdateHost,
 ) -> Result<TldrCacheUpdate, TldrUpdateError> {
-    if !environment.contains_key("MANT_TLDR_DIR")
-        && let Some(client) = host.find_executable("tldr", environment)
-    {
-        let output = run_checked(host, &client, &[OsString::from("--update")])?;
-        let rendered_output = combined_output(&output);
-        return Ok(TldrCacheUpdate {
-            action: TldrCacheAction::Updated,
-            cache_dir: None,
-            client: Some(client.to_string_lossy().into_owned()),
-            output: (!rendered_output.is_empty()).then_some(rendered_output),
-            revision: None,
-        });
+    if !environment.contains_key("MANT_TLDR_DIR") {
+        if let Some(client) = host.find_executable("tldr", environment) {
+            let output = run_checked(host, &client, &[OsString::from("--update")])?;
+            let rendered_output = combined_output(&output);
+            return Ok(TldrCacheUpdate {
+                action: TldrCacheAction::Updated,
+                cache_dir: None,
+                client: Some(client.to_string_lossy().into_owned()),
+                output: (!rendered_output.is_empty()).then_some(rendered_output),
+                revision: None,
+            });
+        }
     }
 
     let git = host

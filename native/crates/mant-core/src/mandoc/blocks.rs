@@ -453,10 +453,7 @@ fn preformatted_inlines(nodes: &[Node], default_name: Option<&str>) -> Vec<Inlin
         if node.kind == NodeKind::Comment || node.flags.no_print {
             continue;
         }
-        if let Some(line) = previous_line
-            && node.line > line
-            && !output.is_empty()
-        {
+        if previous_line.is_some_and(|line| node.line > line) && !output.is_empty() {
             output.push(Inline::LineBreak);
         }
         let children = if node.kind == NodeKind::Text || node.macro_name.is_some() {
