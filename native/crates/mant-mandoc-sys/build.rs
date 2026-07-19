@@ -65,7 +65,10 @@ fn main() {
         .flag_if_supported("-Wstrict-prototypes")
         .flag_if_supported("-Wwrite-strings")
         .flag_if_supported("-Wno-discarded-qualifiers")
-        .flag_if_supported("-Wno-unused-parameter");
+        .flag_if_supported("-Wno-unused-parameter")
+        // Only read.c calls open() in the selected parser sources. Redirecting
+        // it avoids a process-wide chdir while preserving source-relative .so.
+        .define("open", "mant_mandoc_source_open");
 
     for source in LIBMANDOC_SOURCES.iter().chain(compat_sources.iter()) {
         build.file(vendor_dir.join(source));

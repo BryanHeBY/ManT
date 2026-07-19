@@ -198,4 +198,23 @@ mod tests {
 
         fs::remove_file(path).expect("remove temporary manual source");
     }
+
+    #[test]
+    fn source_relative_includes_do_not_change_process_cwd() {
+        let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        let alias = repository.join("tests/fixtures/roff/alias-mdoc.1");
+        let cwd = std::env::current_dir().expect("current directory before parse");
+
+        let document = parse_file(&alias, true).expect("resolve source-relative include");
+
+        assert_eq!(document.macro_set, MacroSet::Mdoc);
+        assert_eq!(
+            document.metadata.title.as_deref(),
+            Some("MANT-MDOC-FIXTURE")
+        );
+        assert_eq!(
+            std::env::current_dir().expect("current directory after parse"),
+            cwd
+        );
+    }
 }

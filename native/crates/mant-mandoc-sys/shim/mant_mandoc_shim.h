@@ -36,6 +36,9 @@ enum mant_mandoc_node_kind {
 struct mant_mandoc_document *mant_mandoc_parse_file(const char *, int);
 void mant_mandoc_document_free(struct mant_mandoc_document *);
 
+/* Internal target of the parser-only open() compile redirect. */
+int mant_mandoc_source_open(const char *, int, ...);
+
 int mant_mandoc_document_ok(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_error(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_diagnostics(const struct mant_mandoc_document *);

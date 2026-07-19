@@ -8,7 +8,9 @@
 #include "config.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -47,11 +49,14 @@ struct mant_mandoc_document {
 	struct mant_mandoc_node	*root;
 };
 
+static char *source_root;
+
 static char *copy_string(const char *);
 static char *read_diagnostics(FILE *);
 static struct mant_mandoc_node *copy_node(const struct roff_node *);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
+static void set_source_root(const char *);
 
 struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, int allow_include)
@@ -78,6 +83,7 @@ mant_mandoc_parse_file(const char *path, int allow_include)
 	setprogname("mant");
 	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
+	set_source_root(path);
 	mchars_alloc();
 	parser = mparse_alloc(options, MANDOC_OS_OTHER, NULL);
 	fd = mparse_open(parser, path);
@@ -114,7 +120,43 @@ cleanup:
 	}
 	mparse_free(parser);
 	mchars_free();
+	free(source_root);
+	source_root = NULL;
 	return document;
+}
+
+/* Resolve includes against the original source tree without changing cwd. */
+int
+mant_mandoc_source_open(const char *path, int flags, ...)
+{
+	char		*resolved;
+	int		 fd, saved_errno;
+	mode_t		 mode;
+	va_list		 arguments;
+
+	mode = 0;
+	if (flags & O_CREAT) {
+		va_start(arguments, flags);
+		mode = (mode_t)va_arg(arguments, int);
+		va_end(arguments);
+	}
+	if (*path == '/' || source_root == NULL)
+		return openat(AT_FDCWD, path, flags, mode);
+	resolved = malloc(strlen(source_root) + strlen(path) + 2);
+	if (resolved == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	sprintf(resolved, "%s/%s", source_root, path);
+	fd = openat(AT_FDCWD, resolved, flags, mode);
+	saved_errno = errno;
+	free(resolved);
+	if (fd != -1)
+		return fd;
+	fd = openat(AT_FDCWD, path, flags, mode);
+	if (fd == -1)
+		errno = saved_errno;
+	return fd;
 }
 
 void
@@ -149,6 +191,36 @@ copy_string(const char *source)
 	if (copy != NULL)
 		memcpy(copy, source, length);
 	return copy;
+}
+
+static void
+set_source_root(const char *path)
+{
+	char	*last_slash, *directory_name;
+
+	free(source_root);
+	source_root = copy_string(path);
+	if (source_root == NULL)
+		return;
+	last_slash = strrchr(source_root, '/');
+	if (last_slash == NULL) {
+		free(source_root);
+		source_root = copy_string(".");
+		return;
+	}
+	if (last_slash == source_root)
+		last_slash[1] = '\0';
+	else
+		*last_slash = '\0';
+
+	directory_name = strrchr(source_root, '/');
+	directory_name = directory_name == NULL ? source_root : directory_name + 1;
+	if (strncmp(directory_name, "man", 3) == 0 ||
+	    strncmp(directory_name, "cat", 3) == 0) {
+		last_slash = strrchr(source_root, '/');
+		if (last_slash != NULL && last_slash != source_root)
+			*last_slash = '\0';
+	}
 }
 
 static char *
