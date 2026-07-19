@@ -139,10 +139,15 @@ function parseMandocChildren(
 
     const childIndent = baseIndent + parseIndent(child);
 
-    // A direct <br> between block wrappers is mandoc's vertical spacing
-    // signal. A <br> inside a paragraph or pre remains an inline line break.
+    // A direct <br> between section-level block wrappers is mandoc's vertical
+    // spacing signal. Inside Bd-indent wrappers, mandoc also emits <br> merely
+    // to close nested display layout; counting those creates duplicate blank
+    // rows in structures such as clang's language-standard table. A <br>
+    // inside a paragraph or pre remains an inline line break.
     if (tag === "br") {
-      tree.addBlock({ type: "spacer", indent: baseIndent });
+      if (isMandocSection(parent)) {
+        tree.addBlock({ type: "spacer", indent: baseIndent });
+      }
       continue;
     }
 

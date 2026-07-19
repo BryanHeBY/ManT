@@ -10,6 +10,7 @@ import { mockLsResult, mockLsWithTldrResult } from "../../fixtures/mock-result";
 import { loadManPageFixture } from "../../fixtures/man-pages";
 import {
   mandocClangOptionsHtml,
+  mandocClangStandardsHtml,
   mandocHtmlWithPreInDefinitionList,
 } from "./manual-fixtures";
 import { installOpenTuiWarningFilter, navLines, renderApp } from "./test-support";
@@ -170,6 +171,29 @@ describe("App rendering (e2e)", () => {
     );
     expect(nextTermIndex).toBe(descriptionIndex + 2);
     expect(lines[descriptionIndex + 1]?.trim()).toBe("");
+
+    setup.renderer.destroy();
+  });
+
+  test("does not render nested clang display breaks as blank rows", async () => {
+    const setup = await renderApp(
+      {
+        topic: "clang",
+        sections: parseManHtml(mandocClangStandardsHtml()),
+      },
+      { width: 100, height: 28 },
+    );
+    const lines = setup.captureCharFrame().split("\n");
+    const firstAliasesEnd = lines.findIndex((line) => line.includes("iso9899:1990"));
+    const firstDescription = lines.findIndex((line) => line.includes("ISO C 1990"));
+    const secondAliases = lines.findIndex((line) => line.includes("iso9899:199409"));
+    const secondDescription = lines.findIndex(
+      (line) => line.includes("ISO C 1990 with amendment 1"),
+    );
+
+    expect(firstDescription).toBe(firstAliasesEnd + 2);
+    expect(secondAliases).toBe(firstDescription + 1);
+    expect(secondDescription).toBe(secondAliases + 2);
 
     setup.renderer.destroy();
   });

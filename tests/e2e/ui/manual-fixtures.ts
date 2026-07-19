@@ -56,3 +56,30 @@ export function mandocClangOptionsHtml(): string {
     </html>
   `;
 }
+
+/** Nested display shape used for clang's language-standard aliases. */
+export function mandocClangStandardsHtml(): string {
+  return `
+    <html><body><div class="manual-text">
+      <section class="Sh">
+        <h1 class="Sh" id="OPTIONS">OPTIONS</h1>
+        <section class="Ss">
+          <h2 class="Ss" id="Language_Selection">Language Selection</h2>
+          <div class="Bd-indent">
+            <pre><b>c89</b>\n<b>c90</b>\n<b>iso9899:1990</b></pre>
+            <p class="Pp"></p>
+            <div class="Bd-indent">
+              <div class="Bd-indent">ISO C 1990</div><br/>
+            </div>
+            <br/>
+            <pre><b>iso9899:199409</b></pre>
+            <p class="Pp"></p>
+            <div class="Bd-indent">
+              <div class="Bd-indent">ISO C 1990 with amendment 1</div><br/>
+            </div>
+          </div>
+        </section>
+      </section>
+    </div></body></html>
+  `;
+}
