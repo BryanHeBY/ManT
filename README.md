@@ -6,6 +6,8 @@ ManT is a structured terminal UI for local Unix manual pages. It combines a
 native document engine with an OpenTUI React interface and can show an optional
 tldr quick reference before the full manual.
 
+![ManT displaying a tldr quick reference and the structured man(1) page](docs/assets/screenshots/mant-man.png)
+
 The project installs two separate executables:
 
 - `mant` is the interactive TUI.
