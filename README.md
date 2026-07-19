@@ -62,8 +62,10 @@ PATH="$PWD/dist:$PATH" ./dist/mant git
 MANT_CLI_PATH="$PWD/dist/mant-cli" ./dist/mant git
 ```
 
-Tagged releases build paired, standalone executables for Linux and macOS on
-x64 and arm64. Each archive is accompanied by a SHA-256 checksum and includes
+Official tagged releases currently provide paired, standalone executables for
+Linux on x64 and arm64. macOS remains supported when building from source, but
+prebuilt macOS archives are withheld until they can be Developer ID-signed and
+notarized. Each Linux archive is accompanied by a SHA-256 checksum and includes
 the licenses needed by the bundled libmandoc parser. A release tag must match
 the version in both `package.json` and `native/Cargo.toml`:
 
@@ -74,7 +76,7 @@ git push origin v0.1.0
 
 GitHub Actions builds each archive on its target architecture rather than
 cross-compiling the Rust/C native core. Linux x64 uses Bun's baseline target so
-the TUI does not require AVX2. After all four builds pass, the workflow creates
+the TUI does not require AVX2. After both builds pass, the workflow creates
 a draft GitHub Release with generated notes and every asset. Review or edit the
 notes in GitHub, then publish the draft manually; publishing does not rebuild
 the binaries.

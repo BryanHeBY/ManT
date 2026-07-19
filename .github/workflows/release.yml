@@ -34,10 +34,9 @@ jobs:
             os: ubuntu-22.04
           - target: linux-arm64
             os: ubuntu-24.04-arm
-          - target: macos-x64
-            os: macos-15-intel
-          - target: macos-arm64
-            os: macos-15
+          # macOS remains covered by CI and source builds. Public macOS
+          # archives stay disabled until they can be Developer ID-signed and
+          # notarized, otherwise Gatekeeper rejects browser downloads.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
 
@@ -67,8 +66,8 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # Rebuild and test natively on every target. This covers libmandoc's C
-      # configuration and prevents an archive from containing cross-ABI files.
+      # Rebuild and test natively on every release target. This covers
+      # libmandoc's C configuration and prevents cross-ABI archives.
       - name: Build and test release binaries
         run: bun run build
 
