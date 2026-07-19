@@ -4,8 +4,12 @@
  * layout and can target a precise body block.
  */
 
-import type { BlockNode, InlineNode, SectionNode } from "../core";
-import { tldrPageText, type TldrPage } from "../tldr";
+import type {
+  MantBlock,
+  MantInline,
+  MantSection,
+  TldrDocument,
+} from "../native";
 import { contentBlockId, contentId, TLDR_NAV_ID } from "./ids";
 
 export interface SearchMatch {
@@ -15,42 +19,70 @@ export interface SearchMatch {
   blockIndex?: number;
 }
 
-function inlineText(nodes: InlineNode[]): string {
+function inlineText(nodes: MantInline[]): string {
   return nodes
     .map((node) => {
-      if (node.type === "text") return node.content;
-      if (node.type === "break") return "\n";
-      return inlineText(node.children);
+      switch (node.type) {
+        case "text":
+        case "code":
+          return node.value;
+        case "line-break":
+          return "\n";
+        case "strong":
+        case "emphasis":
+        case "link":
+        case "manual-reference":
+          return inlineText(node.children);
+      }
     })
     .join("");
 }
 
-function blockText(block: BlockNode): string {
+function blockText(block: MantBlock): string {
   switch (block.type) {
     case "paragraph":
-    case "pre":
+    case "preformatted":
       return inlineText(block.children);
     case "list":
-      return block.items.map(inlineText).join("\n");
+      return block.items.flatMap((item) => item.blocks.map(blockText)).join("\n");
     case "definition-list":
       return block.items
-        .flatMap((item) => [...item.terms.map(inlineText), inlineText(item.description)])
+        .flatMap((item) => [
+          ...item.terms.map(inlineText),
+          ...item.description.map(blockText),
+        ])
         .join("\n");
-    case "spacer":
+    case "table":
+      return block.rows.flatMap((row) => row.cells)
+        .flatMap((cell) => cell.blocks.map(blockText)).join("\n");
+    case "equation":
+      return block.value;
+    case "unsupported":
+      return block.text;
+    case "vertical-space":
       return "";
   }
 }
 
+function tldrText(page: TldrDocument): string {
+  return [
+    page.title,
+    ...page.description,
+    page.moreInformation ?? "",
+    ...page.examples.flatMap((example) => [example.description, example.command]),
+  ].join("\n");
+}
+
 export function findSearchMatches(
-  nodes: SectionNode[],
-  tldr: TldrPage | undefined,
+  nodes: MantSection[],
+  tldr: TldrDocument | undefined,
   query: string,
 ): SearchMatch[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) return [];
 
   const matches: SearchMatch[] = [];
-  if (tldr && tldrPageText(tldr).toLocaleLowerCase().includes(normalizedQuery)) {
+  if (tldr && tldrText(tldr).toLocaleLowerCase().includes(normalizedQuery)) {
     matches.push({
       targetId: contentId(TLDR_NAV_ID),
       sectionId: TLDR_NAV_ID,
@@ -58,7 +90,7 @@ export function findSearchMatches(
     });
   }
 
-  const visit = (node: SectionNode) => {
+  const visit = (node: MantSection) => {
     if (node.title.toLocaleLowerCase().includes(normalizedQuery)) {
       matches.push({
         targetId: contentId(node.id),

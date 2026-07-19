@@ -12,7 +12,7 @@ import {
 } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { QueryResult } from "../query";
+import type { MantQueryBundle, MantSection } from "../native";
 import { TLDR_NAV_ID, contentId, navId } from "./ids";
 import {
   KeyboardHelpDialog,
@@ -37,19 +37,22 @@ import { useDeferredNavigationSync } from "./use-deferred-navigation-sync";
 import { useSidebarResize } from "./use-sidebar-resize";
 
 interface AppProps {
-  result: QueryResult;
+  result: MantQueryBundle;
   onQuit: () => void;
 }
 
+const EMPTY_SECTIONS: MantSection[] = [];
+
 export function App({ result, onQuit }: AppProps) {
+  const sections = result.manual?.sections ?? EMPTY_SECTIONS;
   // ── View state and render references ──────────────────────
 
   const [selectedId, setSelectedId] = useState<string>(
-    result.tldr ? TLDR_NAV_ID : result.sections[0]?.id ?? ""
+    result.tldr ? TLDR_NAV_ID : sections[0]?.id ?? ""
   );
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const initial = new Set<string>();
-    for (const section of result.sections) {
+    for (const section of sections) {
       initial.add(section.id);
     }
     return initial;
@@ -84,8 +87,8 @@ export function App({ result, onQuit }: AppProps) {
   // ── Derived document model ─────────────────────────────────
 
   const visibleNodes = useMemo(
-    () => flattenVisibleNodes(result.sections, expanded),
-    [result.sections, expanded]
+    () => flattenVisibleNodes(sections, expanded),
+    [sections, expanded]
   );
   const navigationItems = useMemo(
     () => [
@@ -97,12 +100,12 @@ export function App({ result, onQuit }: AppProps) {
     [result.tldr, visibleNodes]
   );
   const searchMatches = useMemo(
-    () => findSearchMatches(result.sections, result.tldr, searchQuery),
-    [result.sections, result.tldr, searchQuery]
+    () => findSearchMatches(sections, result.tldr, searchQuery),
+    [sections, result.tldr, searchQuery]
   );
   const branchIds = useMemo(
-    () => collectBranchIds(result.sections),
-    [result.sections]
+    () => collectBranchIds(sections),
+    [sections]
   );
   // ── Section selection and scrolling ────────────────────────
 
@@ -127,7 +130,7 @@ export function App({ result, onQuit }: AppProps) {
   const scrollToNode = (id: string) => scrollToContent(contentId(id));
 
   const scheduleNavigationSync = useDeferredNavigationSync({
-    sections: result.sections,
+    sections,
     hasTldr: Boolean(result.tldr),
     contentScrollRef,
     setSelectedId,
@@ -181,7 +184,7 @@ export function App({ result, onQuit }: AppProps) {
       return;
     }
 
-    const matches = findSearchMatches(result.sections, result.tldr, searchDraft);
+    const matches = findSearchMatches(sections, result.tldr, searchDraft);
     setSearchQuery(searchDraft);
     setSearchIndex(0);
     if (matches[0]) {
@@ -197,23 +200,23 @@ export function App({ result, onQuit }: AppProps) {
   const collapseAll = () => setExpanded(new Set());
 
   const navigateToParent = () => {
-    const parent = findParentById(result.sections, selectedId);
+    const parent = findParentById(sections, selectedId);
     if (parent) selectSection(parent.id);
   };
 
   const navigateToFirstChild = () => {
-    const node = findNodeById(result.sections, selectedId);
+    const node = findNodeById(sections, selectedId);
     if (node?.children[0]) selectSection(node.children[0].id);
   };
 
   const expandCurrentSection = () => {
-    const node = findNodeById(result.sections, selectedId);
+    const node = findNodeById(sections, selectedId);
     if (!node?.children.length) return;
     setExpanded((current) => new Set(current).add(node.id));
   };
 
   const collapseCurrentSection = () => {
-    const node = findNodeById(result.sections, selectedId);
+    const node = findNodeById(sections, selectedId);
     if (!node?.children.length) return;
     setExpanded((current) => {
       const next = new Set(current);
@@ -419,14 +422,14 @@ export function App({ result, onQuit }: AppProps) {
     } else if (e.name === "k" || e.name === "up") {
       selectRelativeSection(-1);
     } else if (e.name === "h" || e.name === "left") {
-      const node = findNodeById(result.sections, selectedId);
+      const node = findNodeById(sections, selectedId);
       if (node && expanded.has(node.id) && node.children.length > 0) {
         collapseCurrentSection();
       } else {
         navigateToParent();
       }
     } else if (e.name === "l" || e.name === "right") {
-      const node = findNodeById(result.sections, selectedId);
+      const node = findNodeById(sections, selectedId);
       if (node && node.children.length > 0) {
         if (!expanded.has(node.id)) {
           expandCurrentSection();
@@ -435,7 +438,7 @@ export function App({ result, onQuit }: AppProps) {
         }
       }
     } else if (e.name === "return" || e.name === "enter" || e.name === "space") {
-      const node = findNodeById(result.sections, selectedId);
+      const node = findNodeById(sections, selectedId);
       if (node?.children.length) {
         toggleExpanded(node.id);
       }
@@ -506,12 +509,12 @@ export function App({ result, onQuit }: AppProps) {
           >
             <box flexDirection="column" gap={1}>
               {result.tldr && <TldrQuickReference page={result.tldr} searchQuery={searchQuery} />}
-              {result.tldr && result.sections.length > 0 && (
+              {result.tldr && sections.length > 0 && (
                 <box height={1} border={["top"]} borderColor="#45475a" paddingLeft={1}>
                   <text fg="#6c7086">MANUAL</text>
                 </box>
               )}
-              {result.tldr && result.sections.length === 0 && (
+              {result.tldr && sections.length === 0 && (
                 <box
                   backgroundColor="#1e1e2e"
                   border={["top"]}
@@ -524,7 +527,7 @@ export function App({ result, onQuit }: AppProps) {
                   </text>
                 </box>
               )}
-              {result.sections.map((node) => (
+              {sections.map((node) => (
                 <SectionContent
                   key={node.id}
                   node={node}
@@ -576,7 +579,7 @@ export function App({ result, onQuit }: AppProps) {
   );
 }
 
-export async function runTui(result: QueryResult): Promise<void> {
+export async function runTui(result: MantQueryBundle): Promise<void> {
   let resolveDestroyed: () => void = () => {};
   const destroyed = new Promise<void>((resolve) => {
     resolveDestroyed = resolve;

@@ -1,20 +1,17 @@
 /**
- * @file Parses command-line tokens into Mant's small command model.
+ * @file Parses the interactive `mant` command line without loading the TUI.
  *
- * This module has no process or UI dependencies, keeping usage validation
- * deterministic and allowing help/error behavior to be tested in isolation.
+ * Non-interactive JSON, Markdown, and cache operations belong to the separate
+ * Rust `mant-cli` executable, leaving this command focused on terminal UI use.
  */
 
-// ── Public command model ────────────────────────────────────
-
-export type CliOutputMode = "tui" | "json" | "markdown" | "roff-ast";
+// ── Public command model ───────────────────────────────────────────────────
 
 export type CliCommand =
   | { kind: "help" }
-  | { kind: "update-tldr" }
-  | { kind: "query"; topic: string; output: CliOutputMode };
+  | { kind: "query"; topic: string; section?: string };
 
-/** An invalid invocation; callers should report these with exit code 2. */
+/** An invalid invocation; callers report these with exit code 2. */
 export class CliUsageError extends Error {
   constructor(message: string) {
     super(message);
@@ -22,91 +19,70 @@ export class CliUsageError extends Error {
   }
 }
 
-// ── Help text ───────────────────────────────────────────────
+// ── Help text ──────────────────────────────────────────────────────────────
 
 export const CLI_HELP = `Mant — browse local man pages in a structured terminal UI
 
 Usage:
-  mant <topic> [--json | --markdown | --roff-ast]
-  mant --update-tldr
+  mant <topic> [--section <section>]
   mant --help
 
 Options:
-  -h, --help       Show this help and exit
-  -j, --json       Print the parsed manual as JSON
-      --md, --markdown
-                   Print the combined TLDR and man page as Markdown
-      --roff-ast   Print the source-level libmandoc AST as JSON
-      --update-tldr
-                   Update the installed TLDR client or Mant fallback cache
-  --               Treat all remaining arguments as the topic
+  -h, --help              Show this help and exit
+  -s, --section <value>   Select a manual section, such as 1 or 3p
+  --                      Treat all remaining arguments as the topic
+
+Agent and pipeline output:
+  mant-cli <topic>              Print Markdown
+  mant-cli <topic> --json       Print the versioned document as JSON
+  mant-cli update tldr          Update the tldr cache
 
 Examples:
   mant git
-  mant git --markdown
-  mant printf --json
-  mant --update-tldr`;
+  mant printf --section 3`;
 
-// ── Parser ──────────────────────────────────────────────────
+// ── Parser ─────────────────────────────────────────────────────────────────
 
-/** Converts raw argv tokens into one validated command. */
+/** Converts raw argv tokens into one validated interactive command. */
 export function parseCliArguments(args: readonly string[]): CliCommand {
-  let output: CliOutputMode = "tui";
-  let updateTldr = false;
   let showHelp = false;
   let parseOptions = true;
+  let section: string | undefined;
   const topicParts: string[] = [];
 
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!;
     if (parseOptions && arg === "--") {
       parseOptions = false;
     } else if (parseOptions && (arg === "--help" || arg === "-h")) {
       showHelp = true;
-    } else if (parseOptions && (arg === "--json" || arg === "-j")) {
-      output = mergeOutputMode(output, "json");
-    } else if (parseOptions && (arg === "--markdown" || arg === "--md")) {
-      output = mergeOutputMode(output, "markdown");
-    } else if (parseOptions && arg === "--roff-ast") {
-      output = mergeOutputMode(output, "roff-ast");
-    } else if (parseOptions && arg === "--update-tldr") {
-      updateTldr = true;
+    } else if (parseOptions && (arg === "--section" || arg === "-s")) {
+      const value = args[++index];
+      if (value === undefined) throw new CliUsageError("--section requires a value");
+      if (section !== undefined) {
+        throw new CliUsageError("--section may only be supplied once");
+      }
+      section = value;
     } else if (parseOptions && arg.startsWith("-")) {
-      throw new CliUsageError(`unknown option '${arg}'`);
+      throw new CliUsageError(
+        `unknown option '${arg}'; non-interactive output is provided by mant-cli`,
+      );
     } else {
       topicParts.push(arg);
     }
   }
 
-  // Help is intentionally side-effect free even when a topic or action was
-  // also supplied, matching the forgiving behavior of established CLI tools.
+  // Help stays side-effect free even when another token was supplied.
   if (showHelp) return { kind: "help" };
-
-  if (updateTldr) {
-    if (topicParts.length > 0 || output !== "tui") {
-      throw new CliUsageError(
-        "--update-tldr cannot be combined with a topic or output option",
-      );
-    }
-    return { kind: "update-tldr" };
-  }
 
   const topic = topicParts.join(" ").trim();
   if (!topic) throw new CliUsageError("a manual topic is required");
-  return { kind: "query", topic, output };
-}
-
-function mergeOutputMode(
-  current: CliOutputMode,
-  requested: Exclude<CliOutputMode, "tui">,
-): CliOutputMode {
-  if (current !== "tui" && current !== requested) {
-    throw new CliUsageError(
-      `output options '${outputOption(current)}' and '${outputOption(requested)}' cannot be combined`,
-    );
+  if (section !== undefined && !section.trim()) {
+    throw new CliUsageError("manual section must not be empty");
   }
-  return requested;
-}
-
-function outputOption(mode: Exclude<CliOutputMode, "tui">): string {
-  return mode === "roff-ast" ? "--roff-ast" : `--${mode}`;
+  return {
+    kind: "query",
+    topic,
+    ...(section === undefined ? {} : { section: section.trim() }),
+  };
 }

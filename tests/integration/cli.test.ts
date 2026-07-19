@@ -42,8 +42,8 @@ describe("real CLI entry point", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Usage:");
-    expect(result.stdout).toContain("--md");
-    expect(result.stdout).toContain("--markdown");
+    expect(result.stdout).toContain("mant-cli <topic>");
+    expect(result.stdout).not.toContain("--roff-ast");
     expect(result.stderr).toBe("");
   });
 
@@ -56,12 +56,12 @@ describe("real CLI entry point", () => {
     expect(result.stderr).not.toContain(" at main");
   });
 
-  test("reports an unknown topic without a renderer stack", async () => {
-    const result = await invokeCli("__mant_missing_topic_7f93c1__", "--json");
+  test("redirected TUI use points callers to mant-cli without loading native code", async () => {
+    const result = await invokeCli("__mant_missing_topic_7f93c1__");
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toStartWith("mant: ");
+    expect(result.stderr).toContain("use mant-cli for Markdown or JSON output");
     expect(result.stderr).not.toContain("src/core/");
-    expect(result.stderr).not.toContain(" at renderWithMan");
+    expect(result.stderr).not.toContain("mant-cli was not found");
   });
 });

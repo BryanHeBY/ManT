@@ -4,8 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { QueryResult } from "../../../src/query";
-import { mockLsResult } from "../../fixtures/mock-result";
+import { mockLsResult, mockQuery } from "../../fixtures/mock-result";
 import {
   contentPosition,
   flushEscape,
@@ -63,40 +62,32 @@ describe("App search (e2e)", () => {
   });
 
   test("scrolls confirmed body matches to their paragraph", async () => {
-    const result: QueryResult = {
-      topic: "anchored-search",
-      sections: [
+    const result = mockQuery("anchored-search", [
         {
           id: "section-0",
           title: "INTRODUCTION",
-          level: 2,
           blocks: Array.from({ length: 24 }, (_, index) => ({
             type: "paragraph" as const,
-            children: [{ type: "text" as const, content: `Filler line ${index}` }],
-            indent: 0,
+            children: [{ type: "text" as const, value: `Filler line ${index}` }],
           })),
           children: [],
         },
         {
           id: "section-1",
           title: "TARGET SECTION",
-          level: 2,
           blocks: [
             {
               type: "paragraph",
-              children: [{ type: "text", content: "Context before the result." }],
-              indent: 0,
+              children: [{ type: "text", value: "Context before the result." }],
             },
             {
               type: "paragraph",
-              children: [{ type: "text", content: "Needle result is here." }],
-              indent: 0,
+              children: [{ type: "text", value: "Needle result is here." }],
             },
           ],
           children: [],
         },
-      ],
-    };
+      ]);
     const setup = await renderApp(result);
     setup.mockInput.pressKey("/");
     await flushKeyboard(setup);

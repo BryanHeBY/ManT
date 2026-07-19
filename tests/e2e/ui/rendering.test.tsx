@@ -1,24 +1,89 @@
 /**
- * @file Verifies that representative man and tldr documents render intact in
- * the terminal interface, including roff formatting and spacing regressions.
+ * @file Verifies native document and tldr rendering in terminal frames.
  */
 
 import { describe, expect, test } from "bun:test";
-import { parseManHtml } from "../../../src/core/parser";
-import type { QueryResult } from "../../../src/query";
-import { mockLsResult, mockLsWithTldrResult } from "../../fixtures/mock-result";
-import { loadManPageFixture } from "../../fixtures/man-pages";
+import type { MantSection } from "../../../src/native";
 import {
-  mandocClangOptionsHtml,
-  mandocClangStandardsHtml,
-  mandocHtmlWithPreInDefinitionList,
-} from "./manual-fixtures";
+  mockLsResult,
+  mockLsWithTldrResult,
+  mockQuery,
+} from "../../fixtures/mock-result";
 import { installOpenTuiWarningFilter, navLines, renderApp } from "./test-support";
 
 installOpenTuiWarningFilter();
 
+const text = (value: string) => ({ type: "text" as const, value });
+const paragraph = (value: string) => ({
+  type: "paragraph" as const,
+  children: [text(value)],
+});
+
+function gccResult() {
+  return mockQuery("gcc", [
+    { id: "name", title: "NAME", blocks: [paragraph("gcc - GNU C compiler")], children: [] },
+    {
+      id: "synopsis",
+      title: "SYNOPSIS",
+      blocks: [{
+        type: "paragraph",
+        children: [
+          { type: "strong", children: [text("gcc")] },
+          text(" [options] "),
+          { type: "emphasis", children: [text("outfile")] },
+        ],
+      }],
+      children: [],
+    },
+    { id: "description", title: "DESCRIPTION", blocks: [paragraph("Compile a standard program.")], children: [] },
+    {
+      id: "options",
+      title: "OPTIONS",
+      blocks: [],
+      children: [
+        { id: "summary", title: "Option Summary", blocks: [], children: [] },
+        {
+          id: "kind",
+          title: "Options Controlling the Kind of Output",
+          blocks: [paragraph("Choose an output kind.")],
+          children: [],
+        },
+      ],
+    },
+  ]);
+}
+
+function clangDefinitionSections(): MantSection[] {
+  return [{
+    id: "options",
+    title: "OPTIONS",
+    blocks: [],
+    children: [{
+      id: "stage-selection",
+      title: "Stage Selection Options",
+      blocks: [{
+        type: "definition-list",
+        items: [
+          {
+            terms: [[text("-E")]],
+            description: [paragraph("Run the preprocessor stage."), {
+              type: "vertical-space",
+              lines: 1,
+            }],
+          },
+          {
+            terms: [[text("-fsyntax-only")]],
+            description: [paragraph("Run parser and semantic analysis stages.")],
+          },
+        ],
+      }],
+      children: [],
+    }],
+  }];
+}
+
 describe("App rendering (e2e)", () => {
-  test("renders topic and section titles", async () => {
+  test("renders topic, section titles, and all manual content", async () => {
     const setup = await renderApp(mockLsResult);
     const frame = setup.captureCharFrame();
 
@@ -27,200 +92,163 @@ describe("App rendering (e2e)", () => {
     expect(frame).toContain("NAME");
     expect(frame).toContain("SYNOPSIS");
     expect(frame).toContain("DESCRIPTION");
-
-    setup.renderer.destroy();
-  });
-
-  test("renders full manual content, not just selected section", async () => {
-    const setup = await renderApp(mockLsResult);
-    const frame = setup.captureCharFrame();
-
     expect(frame).toContain("list directory contents");
     expect(frame).toContain("[OPTION]");
     expect(frame).toContain("List information about files.");
-
     setup.renderer.destroy();
   });
 
-  test("renders gcc full manual with bold and italic parameters", async () => {
-    const setup = await renderApp(
-      { topic: "gcc", sections: parseManHtml(loadManPageFixture("gcc")) },
-      { width: 100, height: 40 },
-    );
+  test("renders native strong, emphasis, and hierarchical sections", async () => {
+    const setup = await renderApp(gccResult(), { width: 100, height: 40 });
     const frame = setup.captureCharFrame();
 
-    expect(frame).toContain("MANUAL");
-    expect(frame).toContain("gcc");
-    expect(frame).toContain("NAME");
-    expect(frame).toContain("SYNOPSIS");
-    expect(frame).toContain("DESCRIPTION");
-    expect(frame).toContain("OPTIONS");
-    expect(frame).toContain("standard");
-    expect(frame).toContain("outfile");
-
-    setup.renderer.destroy();
-  });
-
-  test("renders hierarchical subsections", async () => {
-    const setup = await renderApp(
-      { topic: "gcc", sections: parseManHtml(loadManPageFixture("gcc")) },
-      { width: 100, height: 40 },
-    );
-    const frame = setup.captureCharFrame();
-
-    expect(frame).toContain("Option Summary");
+    for (const value of [
+      "gcc",
+      "NAME",
+      "SYNOPSIS",
+      "DESCRIPTION",
+      "OPTIONS",
+      "standard",
+      "outfile",
+      "Option Summary",
+    ]) expect(frame).toContain(value);
     expect(
-      navLines(frame).some(
-        (line) => line.includes("Options") && line.includes("Kind"),
-      ),
+      navLines(frame).some((line) => line.includes("Options") && line.includes("Kind")),
     ).toBe(true);
-
     setup.renderer.destroy();
   });
 
-  test("renders inline code and pre blocks", async () => {
-    const result: QueryResult = {
-      topic: "smoke",
-      sections: [{
-        id: "section-0",
-        title: "CODE",
-        level: 2,
-        blocks: [
-          {
-            type: "paragraph",
-            children: [
-              { type: "text", content: "Run " },
-              { type: "code", children: [{ type: "text", content: "ls -la" }] },
-              { type: "text", content: " to list files." },
-            ],
-            indent: 0,
-          },
-          {
-            type: "pre",
-            children: [
-              { type: "text", content: "int main() {" },
-              { type: "break" },
-              { type: "text", content: "    return 0;" },
-              { type: "break" },
-              { type: "text", content: "}" },
-            ],
-            indent: 0,
-          },
-        ],
-        children: [],
-      }],
-    };
+  test("renders inline code and preformatted blocks", async () => {
+    const result = mockQuery("smoke", [{
+      id: "code",
+      title: "CODE",
+      blocks: [
+        {
+          type: "paragraph",
+          children: [
+            text("Run "),
+            { type: "code", value: "ls -la" },
+            text(" to list files."),
+          ],
+        },
+        {
+          type: "preformatted",
+          children: [
+            text("int main() {"),
+            { type: "line-break" },
+            text("    return 0;"),
+            { type: "line-break" },
+            text("}"),
+          ],
+        },
+      ],
+      children: [],
+    }]);
     const setup = await renderApp(result);
     const frame = setup.captureCharFrame();
 
-    expect(frame).toContain("MANUAL");
-    expect(frame).toContain("smoke");
-    expect(frame).toContain("CODE");
     expect(frame).toContain("ls -la");
     expect(frame).toContain("int main()");
     expect(frame).toContain("return 0;");
-
     setup.renderer.destroy();
   });
 
-  test("renders a mandoc pre block in a definition list as code", async () => {
-    const setup = await renderApp(
-      {
-        topic: "gcc",
-        sections: parseManHtml(mandocHtmlWithPreInDefinitionList()),
-      },
-      { width: 100, height: 40 },
-    );
+  test("renders nested native definition blocks without bullet corruption", async () => {
+    const result = mockQuery("gcc", [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [{
+        type: "definition-list",
+        items: [{
+          terms: [[text("-fcond-mismatch")]],
+          description: [
+            paragraph("Allow conditional expressions"),
+            {
+              type: "preformatted",
+              children: [text("#define abs(n) __builtin_strcpy")],
+            },
+          ],
+        }],
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 100, height: 40 });
     const frame = setup.captureCharFrame();
 
     expect(frame).toContain("-fcond-mismatch");
     expect(frame).toContain("Allow conditional expressions");
     expect(frame).toContain("#define abs(n)");
-    expect(frame).toContain("__builtin_strcpy");
     const codeLine = frame.split("\n").find((line) => line.includes("#define abs(n)"));
-    expect(codeLine).toBeDefined();
     expect(codeLine?.includes("•")).toBe(false);
-
     setup.renderer.destroy();
   });
 
-  test("renders clang definition lists as indented terms and descriptions", async () => {
+  test("indents native definition terms, descriptions, and explicit spacing", async () => {
     const setup = await renderApp(
-      {
-        topic: "clang",
-        sections: parseManHtml(mandocClangOptionsHtml()),
-      },
+      mockQuery("clang", clangDefinitionSections()),
       { width: 100, height: 28 },
     );
     const lines = setup.captureCharFrame().split("\n").map((line) => line.slice(32));
-    const lineIndex = (text: string) => lines.findIndex((line) => line.includes(text));
+    const lineIndex = (value: string) => lines.findIndex((line) => line.includes(value));
     const optionsLine = lines[lineIndex("OPTIONS")]!;
     const subsectionLine = lines[lineIndex("Stage Selection Options")]!;
     const termLine = lines[lineIndex("-E")]!;
     const descriptionIndex = lineIndex("Run the preprocessor stage.");
-    const descriptionLine = lines[descriptionIndex]!;
     const nextTermIndex = lineIndex("-fsyntax-only");
 
     expect(termLine).not.toContain("•");
-    expect(descriptionLine).not.toContain("•");
-    expect(subsectionLine.indexOf("Stage Selection Options")).toBeGreaterThan(
-      optionsLine.indexOf("OPTIONS"),
-    );
-    expect(descriptionLine.indexOf("Run the preprocessor stage.")).toBeGreaterThan(
-      termLine.indexOf("-E"),
-    );
+    expect(subsectionLine.indexOf("Stage Selection Options"))
+      .toBeGreaterThan(optionsLine.indexOf("OPTIONS"));
+    expect(lines[descriptionIndex]!.indexOf("Run the preprocessor stage."))
+      .toBeGreaterThan(termLine.indexOf("-E"));
     expect(nextTermIndex).toBe(descriptionIndex + 2);
     expect(lines[descriptionIndex + 1]?.trim()).toBe("");
-
     setup.renderer.destroy();
   });
 
-  test("does not render nested clang display breaks as blank rows", async () => {
-    const setup = await renderApp(
-      {
-        topic: "clang",
-        sections: parseManHtml(mandocClangStandardsHtml()),
-      },
-      { width: 100, height: 28 },
-    );
-    const lines = setup.captureCharFrame().split("\n");
-    const firstAliasesEnd = lines.findIndex((line) => line.includes("iso9899:1990"));
-    const firstDescription = lines.findIndex((line) => line.includes("ISO C 1990"));
-    const secondAliases = lines.findIndex((line) => line.includes("iso9899:199409"));
-    const secondDescription = lines.findIndex(
-      (line) => line.includes("ISO C 1990 with amendment 1"),
-    );
+  test("renders native lists, tables, equations, and unsupported nodes", async () => {
+    const result = mockQuery("structures", [{
+      id: "structures",
+      title: "STRUCTURES",
+      blocks: [
+        {
+          type: "list",
+          kind: "bullet",
+          items: [{ blocks: [paragraph("first item")] }],
+        },
+        {
+          type: "table",
+          rows: [{ cells: [
+            { blocks: [paragraph("left cell")] },
+            { blocks: [paragraph("right cell")] },
+          ] }],
+        },
+        { type: "equation", value: "x = y + 1", display: true },
+        { type: "unsupported", name: "custom", text: "unrendered custom macro" },
+      ],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 100, height: 28 });
+    const frame = setup.captureCharFrame();
 
-    expect(firstDescription).toBe(firstAliasesEnd + 2);
-    expect(secondAliases).toBe(firstDescription + 1);
-    expect(secondDescription).toBe(secondAliases + 2);
-
+    expect(frame).toContain("• first item");
+    expect(frame).toContain("left cell");
+    expect(frame).toContain("right cell");
+    expect(frame).toContain("x = y + 1");
+    expect(frame).toContain("unrendered custom macro");
     setup.renderer.destroy();
   });
 
-  test("produces a non-empty frame", async () => {
+  test("produces a non-empty frame with menu and compact status bars", async () => {
     const setup = await renderApp(mockLsResult);
     const frame = setup.captureCharFrame();
 
     expect(frame.trim().length).toBeGreaterThan(0);
-    expect(frame).toContain("MANUAL");
-    expect(frame).toContain("ls");
-
-    setup.renderer.destroy();
-  });
-
-  test("exposes the classic menu bar and compact status bar", async () => {
-    const setup = await renderApp(mockLsResult);
-    const frame = setup.captureCharFrame();
-
-    expect(frame.split("\n")[0]).toContain("File");
-    expect(frame.split("\n")[0]).toContain("View");
-    expect(frame.split("\n")[0]).toContain("Navigate");
-    expect(frame.split("\n")[0]).toContain("Search");
-    expect(frame.split("\n")[0]).toContain("Help");
+    for (const label of ["File", "View", "Navigate", "Search", "Help"]) {
+      expect(frame.split("\n")[0]).toContain(label);
+    }
     expect(frame).toContain("1/3 · NAME");
     expect(frame).toContain("3 visible manual sections");
-
     setup.renderer.destroy();
   });
 
@@ -236,81 +264,67 @@ describe("App rendering (e2e)", () => {
     expect(tldrPosition).toBeGreaterThanOrEqual(0);
     expect(manualPosition).toBeGreaterThan(tldrPosition);
     expect(frame).toContain("› ◆ TLDR QUICK REFERENCE");
-
     setup.renderer.destroy();
   });
 
   test("keeps cached tldr content usable without a local man page", async () => {
-    const setup = await renderApp(
-      { ...mockLsWithTldrResult, sections: [] },
-      { width: 100, height: 28 },
-    );
+    const { manual: _, ...tldrOnly } = mockLsWithTldrResult;
+    const setup = await renderApp(tldrOnly, { width: 100, height: 28 });
     const frame = setup.captureCharFrame();
 
     expect(frame).toContain("TLDR QUICK REFERENCE · ls");
     expect(frame).toContain("No local man page was found");
     expect(navLines(frame).some((line) => line.includes("◆ TLDR QUICK REFERENCE"))).toBe(true);
-
     setup.renderer.destroy();
   });
 
-  test("indents SYNOPSIS pre blocks to the section body", async () => {
-    // Regression: OpenTUI ignores paddingLeft on <text>, so Pre applies
-    // indentation to its wrapping box instead.
-    const setup = await renderApp(
-      { topic: "git", sections: parseManHtml(loadManPageFixture("mandoc-git")) },
-      { width: 100, height: 40 },
-    );
-    const frame = setup.captureCharFrame();
-    const columnOf = (needle: string): number => {
-      for (const line of frame.split("\n")) {
-        const column = line.indexOf(needle);
-        if (column >= 0) return column;
-      }
-      return -1;
-    };
-
-    const synopsisPreColumn = columnOf("git [-v | --version]");
-    const descriptionColumn = columnOf("Git is a fast");
-    expect(synopsisPreColumn).toBeGreaterThan(0);
-    expect(descriptionColumn).toBeGreaterThan(0);
-    expect(synopsisPreColumn).toBe(descriptionColumn);
-
-    setup.renderer.destroy();
-  });
-
-  test("keeps a blank row between a pre block and the following option", async () => {
-    const result: QueryResult = {
-      topic: "spacing",
-      sections: [{
-        id: "section-0",
-        title: "OPTIONS",
-        level: 2,
-        blocks: [
-          {
-            type: "paragraph",
-            children: [{ type: "text", content: "Equivalent commands:" }],
-            indent: 0,
-          },
-          { type: "spacer", indent: 0 },
-          {
-            type: "pre",
-            children: [
-              { type: "text", content: "command one" },
-              { type: "break" },
-              { type: "text", content: "command two" },
-            ],
-            indent: 0,
-          },
-          {
-            type: "paragraph",
-            children: [{ type: "text", content: "-c <name>=<value>" }],
-            indent: 0,
-          },
-        ],
+  test("indents preformatted blocks to the native section body level", async () => {
+    const result = mockQuery("git", [
+      {
+        id: "synopsis",
+        title: "SYNOPSIS",
+        blocks: [{
+          type: "preformatted",
+          children: [text("git [-v | --version]")],
+        }],
         children: [],
-      }],
-    };
+      },
+      {
+        id: "description",
+        title: "DESCRIPTION",
+        blocks: [paragraph("Git is a fast version control system.")],
+        children: [],
+      },
+    ]);
+    const setup = await renderApp(result, { width: 100, height: 40 });
+    const frame = setup.captureCharFrame();
+    const columnOf = (needle: string): number => frame.split("\n")
+      .map((line) => line.indexOf(needle)).find((column) => column >= 0) ?? -1;
+
+    expect(columnOf("git [-v | --version]")).toBe(columnOf("Git is a fast"));
+    setup.renderer.destroy();
+  });
+
+  test("honours explicit vertical space around a preformatted block", async () => {
+    const result = mockQuery("spacing", [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [
+        paragraph("Equivalent commands:"),
+        { type: "vertical-space", lines: 1 },
+        {
+          type: "preformatted",
+          children: [
+            text("command one"),
+            { type: "line-break" },
+            text("command two"),
+          ],
+        },
+        { type: "vertical-space", lines: 1 },
+        paragraph("-c <name>=<value>"),
+      ],
+      children: [],
+    }]);
     const setup = await renderApp(result);
     const lines = setup.captureCharFrame().split("\n");
     const introLine = lines.findIndex((line) => line.includes("Equivalent commands:"));
@@ -318,34 +332,30 @@ describe("App rendering (e2e)", () => {
     const lastCodeLine = lines.findIndex((line) => line.includes("command two"));
 
     expect(firstCodeLine).toBe(introLine + 2);
-    expect(lastCodeLine).toBeGreaterThanOrEqual(0);
     expect(lines[lastCodeLine + 1]).not.toContain("-c <name>=<value>");
     expect(lines[lastCodeLine + 2]).toContain("-c <name>=<value>");
-
     setup.renderer.destroy();
   });
 
-  test("does not turn formatter newlines into extra rows around pre", async () => {
-    const html = `<body><div class="manual-text"><section class="Sh">
-      <h1 class="Sh" id="EXAMPLES">EXAMPLES</h1>
-      <p class="Pp">Before the display.</p>
-      <pre>\ncommand output\n    </pre>
-      <p class="Pp">After the display.</p>
-    </section></div></body>`;
-    const setup = await renderApp(
-      { topic: "spacing", sections: parseManHtml(html) },
-      { width: 100, height: 24 },
-    );
+  test("does not invent blank rows around adjacent native display blocks", async () => {
+    const result = mockQuery("spacing", [{
+      id: "examples",
+      title: "EXAMPLES",
+      blocks: [
+        paragraph("Before the display."),
+        { type: "preformatted", children: [text("command output")] },
+        paragraph("After the display."),
+      ],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 100, height: 24 });
     const lines = setup.captureCharFrame().split("\n");
     const beforeLine = lines.findIndex((line) => line.includes("Before the display."));
     const codeLine = lines.findIndex((line) => line.includes("command output"));
     const afterLine = lines.findIndex((line) => line.includes("After the display."));
 
     expect(codeLine).toBe(beforeLine + 1);
-    // The single row below the display is the deliberate block separation,
-    // not a trailing newline painted inside the code background.
-    expect(afterLine).toBe(codeLine + 2);
-
+    expect(afterLine).toBe(codeLine + 1);
     setup.renderer.destroy();
   });
 });

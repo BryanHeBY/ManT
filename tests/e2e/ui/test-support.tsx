@@ -7,13 +7,13 @@
  */
 
 import { testRender } from "@opentui/react/test-utils";
-import type { QueryResult } from "../../../src/query";
+import type { MantQueryBundle } from "../../../src/native";
 import { App } from "../../../src/ui/app";
 
 export const NAV_WIDTH = 32;
 
 export async function renderApp(
-  result: QueryResult,
+  result: MantQueryBundle,
   options: { width?: number; height?: number; onQuit?: () => void } = {},
 ) {
   const setup = await testRender(

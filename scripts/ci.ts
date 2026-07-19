@@ -8,7 +8,6 @@ import {
   constants,
   copyFile,
   mkdir,
-  readdir,
   rm,
   stat,
 } from "node:fs/promises";
@@ -68,63 +67,44 @@ async function run(
 }
 
 async function verifyPackagedExecutable(): Promise<void> {
-  console.log("\n==> packaged sidecar smoke tests");
-  const sidecarCache = join(distDirectory, ".sidecar-cache");
-  await rm(sidecarCache, { recursive: true, force: true });
-  try {
-    const child = Bun.spawn([executablePath, "ls", "--roff-ast"], {
-      cwd: distDirectory,
-      env: { ...process.env, MANT_SIDECAR_DIR: sidecarCache },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const [output, stderr, exitCode] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.exited,
-    ]);
-    if (exitCode !== 0) {
-      throw new Error(`packaged AST smoke test failed: ${stderr.trim()}`);
-    }
+  console.log("\n==> packaged executable smoke tests");
+  const helpProcess = Bun.spawn([executablePath, "--help"], {
+    cwd: distDirectory,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [helpOutput, helpStderr, helpExitCode] = await Promise.all([
+    new Response(helpProcess.stdout).text(),
+    new Response(helpProcess.stderr).text(),
+    helpProcess.exited,
+  ]);
+  if (helpExitCode !== 0 || !helpOutput.includes("mant-cli <topic>")) {
+    throw new Error(`packaged TUI help smoke test failed: ${helpStderr.trim()}`);
+  }
 
-    const result = JSON.parse(output) as {
-      document?: { schema?: string; engine?: { name?: string } };
-    };
-    if (
-      result.document?.schema !== "mant.roff-ast/v1"
-      || result.document.engine?.name !== "libmandoc"
-    ) {
-      throw new Error("packaged executable did not use the embedded mandoc sidecar");
-    }
-
-    const cachedFiles = await readdir(sidecarCache, { recursive: true });
-    if (!cachedFiles.some((path) => path.endsWith(sidecarName))) {
-      throw new Error("packaged executable did not materialize its embedded mandoc sidecar");
-    }
-
-    // Exercise the ordinary query pipeline too. The AST check above proves
-    // extraction works; this check proves the embedded sidecar's HTML mode is
-    // wired into the parser used by end users.
-    const queryProcess = Bun.spawn([executablePath, "ls", "--json"], {
-      cwd: distDirectory,
-      env: { ...process.env, MANT_SIDECAR_DIR: sidecarCache },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const [queryOutput, queryStderr, queryExitCode] = await Promise.all([
-      new Response(queryProcess.stdout).text(),
-      new Response(queryProcess.stderr).text(),
-      queryProcess.exited,
-    ]);
-    if (queryExitCode !== 0) {
-      throw new Error(`packaged HTML smoke test failed: ${queryStderr.trim()}`);
-    }
-    const queryResult = JSON.parse(queryOutput) as { sections?: unknown[] };
-    if (!queryResult.sections?.length) {
-      throw new Error("packaged HTML smoke test returned no manual sections");
-    }
-  } finally {
-    await rm(sidecarCache, { recursive: true, force: true });
+  const queryProcess = Bun.spawn([nativeCliPath, "ls", "--json", "--compact"], {
+    cwd: distDirectory,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [queryOutput, queryStderr, queryExitCode] = await Promise.all([
+    new Response(queryProcess.stdout).text(),
+    new Response(queryProcess.stderr).text(),
+    queryProcess.exited,
+  ]);
+  if (queryExitCode !== 0) {
+    throw new Error(`packaged mant-cli smoke test failed: ${queryStderr.trim()}`);
+  }
+  const query = JSON.parse(queryOutput) as {
+    schema?: string;
+    manual?: { schema?: string; sections?: unknown[] };
+  };
+  if (
+    query.schema !== "mant.query/v1"
+    || query.manual?.schema !== "mant.document/v1"
+    || !query.manual.sections?.length
+  ) {
+    throw new Error("packaged mant-cli did not return a readable native document");
   }
 }
 

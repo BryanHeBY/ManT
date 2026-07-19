@@ -6,7 +6,7 @@
  */
 
 import type { ScrollBoxRenderable } from "@opentui/core";
-import type { QueryResult } from "../query";
+import type { MantQueryBundle } from "../native";
 import { navId, TLDR_NAV_ID } from "./ids";
 import {
   terminalColumnWidth,
@@ -17,7 +17,7 @@ import {
 } from "./navigation-tree";
 
 export interface ManualSidebarProps {
-  result: QueryResult;
+  result: MantQueryBundle;
   visibleNodes: FlatNode[];
   selectedId: string;
   expanded: ReadonlySet<string>;
@@ -53,7 +53,7 @@ export function ManualSidebar({
           {`MANUAL · ${result.topic}`}
         </text>
         <text height={1} fg="#7f849c" selectable={false}>
-          {`${result.sections.length} top-level · ${visibleNodes.length} manual${result.tldr ? " · TLDR" : ""}`}
+          {`${result.manual?.sections.length ?? 0} top-level · ${visibleNodes.length} manual${result.tldr ? " · TLDR" : ""}`}
         </text>
       </box>
       <box height={1} paddingLeft={1} paddingRight={1}>

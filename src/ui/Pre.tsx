@@ -3,7 +3,7 @@
  */
 
 import type { ReactNode } from "react";
-import type { InlineNode } from "../core";
+import type { MantInline } from "../native";
 import {
   getSearchHighlightRanges,
   SEARCH_HIGHLIGHT_BACKGROUND,
@@ -13,15 +13,19 @@ import {
 const CODE_TOKEN_RE =
   /(\b(?:void|int|char|float|double|long|short|signed|unsigned|return|if|else|for|while|do|switch|case|break|continue|struct|union|enum|typedef|static|const|volatile|extern|inline|restrict|sizeof|NULL|true|false|null)\b)|(--?[A-Za-z][\w-]*(?:=\S+)?)|(\b\d+(?:\.\d+)?\b)|("[^"]*"|'[^']*')|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(\s+)|(\w+)|(.)/g;
 
-function flattenInline(nodes: InlineNode[]): string {
+function flattenInline(nodes: MantInline[]): string {
   return nodes
     .map((node) => {
       switch (node.type) {
         case "text":
-          return node.content;
-        case "break":
+        case "code":
+          return node.value;
+        case "line-break":
           return "\n";
-        default:
+        case "strong":
+        case "emphasis":
+        case "link":
+        case "manual-reference":
           return flattenInline(node.children);
       }
     })
@@ -74,7 +78,7 @@ function makeCodeSpans(text: string, searchQuery: string): ReactNode[] {
 }
 
 interface PreProps {
-  children: InlineNode[];
+  children: MantInline[];
   block?: boolean;
   indent?: number;
   searchQuery?: string;

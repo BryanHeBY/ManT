@@ -23,7 +23,7 @@ export interface MenuEntry {
 
 export interface MenuBarProps {
   topic: string;
-  section: number | undefined;
+  section: string | undefined;
   openMenu: MenuId | null;
   onToggleMenu: (menu: MenuId) => void;
 }

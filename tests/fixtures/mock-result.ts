@@ -1,78 +1,89 @@
 /**
- * @file Defines compact query results shared by terminal UI test scenarios.
+ * @file Defines compact native query contracts shared by terminal UI tests.
  */
 
-import type { QueryResult } from "../../src/query";
+import type {
+  MantDocument,
+  MantQueryBundle,
+  MantSection,
+} from "../../src/native";
 
-export const mockLsResult: QueryResult = {
+function manual(sections: MantSection[]): MantDocument {
+  return {
+    schema: "mant.document/v1",
+    producer: {
+      name: "mant",
+      version: "0.1.0",
+      engine: { name: "libmandoc", version: "1.14.6" },
+    },
+    source: { format: "man", path: "/fixtures/manual.1" },
+    meta: {},
+    sections,
+  };
+}
+
+export const mockLsSections: MantSection[] = [
+  {
+    id: "section-0",
+    title: "NAME",
+    blocks: [{
+      type: "paragraph",
+      children: [{ type: "text", value: "ls − list directory contents" }],
+    }],
+    children: [],
+  },
+  {
+    id: "section-1",
+    title: "SYNOPSIS",
+    blocks: [{
+      type: "paragraph",
+      children: [
+        { type: "strong", children: [{ type: "text", value: "ls" }] },
+        { type: "text", value: " [OPTION]... [FILE]..." },
+      ],
+    }],
+    children: [],
+  },
+  {
+    id: "section-2",
+    title: "DESCRIPTION",
+    blocks: [{
+      type: "paragraph",
+      children: [{ type: "text", value: "List information about files." }],
+    }],
+    children: [],
+  },
+];
+
+export const mockLsResult: MantQueryBundle = {
+  schema: "mant.query/v1",
   topic: "ls",
-  sections: [
-    {
-      id: "section-0",
-      title: "NAME",
-      level: 2,
-      blocks: [
-        {
-          type: "paragraph",
-          children: [
-            { type: "text", content: "ls − list directory contents" },
-          ],
-          indent: 0,
-        },
-      ],
-      children: [],
-    },
-    {
-      id: "section-1",
-      title: "SYNOPSIS",
-      level: 2,
-      blocks: [
-        {
-          type: "paragraph",
-          children: [
-            { type: "bold", children: [{ type: "text", content: "ls" }] },
-            { type: "text", content: " [OPTION]... [FILE]..." },
-          ],
-          indent: 0,
-        },
-      ],
-      children: [],
-    },
-    {
-      id: "section-2",
-      title: "DESCRIPTION",
-      level: 2,
-      blocks: [
-        {
-          type: "paragraph",
-          children: [
-            { type: "text", content: "List information about files." },
-          ],
-          indent: 0,
-        },
-      ],
-      children: [],
-    },
-  ],
+  manual: manual(mockLsSections),
 };
 
-export const mockLsWithTldrResult: QueryResult = {
+export const mockLsWithTldrResult: MantQueryBundle = {
   ...mockLsResult,
   tldr: {
     title: "ls",
     description: ["List directory contents."],
-    examples: [
-      {
-        description: "List files, including hidden entries",
-        command: "ls {{[-a|--all]}}",
-        commandParts: [
-          { type: "text", content: "ls " },
-          { type: "placeholder", content: "--all" },
-        ],
-      },
-    ],
+    examples: [{
+      description: "List files, including hidden entries",
+      command: "ls {{[-a|--all]}}",
+      commandParts: [
+        { type: "text", value: "ls " },
+        { type: "placeholder", value: "--all" },
+      ],
+    }],
     platform: "common",
     language: "en",
     sourcePath: "/cache/mant/tldr-pages/pages/common/ls.md",
   },
 };
+
+export function mockQuery(topic: string, sections: MantSection[]): MantQueryBundle {
+  return {
+    schema: "mant.query/v1",
+    topic,
+    manual: manual(sections),
+  };
+}

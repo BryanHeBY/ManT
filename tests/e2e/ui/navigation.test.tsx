@@ -4,10 +4,12 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { parseManHtml } from "../../../src/core/parser";
-import type { QueryResult } from "../../../src/query";
-import { mockLsResult, mockLsWithTldrResult } from "../../fixtures/mock-result";
-import { loadManPageFixture } from "../../fixtures/man-pages";
+import type { MantQueryBundle } from "../../../src/native";
+import {
+  mockLsResult,
+  mockLsWithTldrResult,
+  mockQuery,
+} from "../../fixtures/mock-result";
 import {
   contentPosition,
   flushKeyboard,
@@ -21,31 +23,24 @@ import {
 
 installOpenTuiWarningFilter();
 
-function parentTreeResult(): QueryResult {
-  return {
-    topic: "parent",
-    sections: [{
+function parentTreeResult(): MantQueryBundle {
+  return mockQuery("parent", [{
       id: "section-0",
       title: "PARENT",
-      level: 2,
       blocks: [{
         type: "paragraph",
-        children: [{ type: "text", content: "Parent content" }],
-        indent: 0,
+        children: [{ type: "text", value: "Parent content" }],
       }],
       children: [{
         id: "section-0-0",
         title: "CHILD",
-        level: 3,
         blocks: [{
           type: "paragraph",
-          children: [{ type: "text", content: "Child content" }],
-          indent: 0,
+          children: [{ type: "text", value: "Child content" }],
         }],
         children: [],
       }],
-    }],
-  };
+    }]);
 }
 
 describe("App navigation (e2e)", () => {
@@ -66,33 +61,26 @@ describe("App navigation (e2e)", () => {
   });
 
   test("places a clicked section heading at the top of the content viewport", async () => {
-    const result: QueryResult = {
-      topic: "scrolling",
-      sections: [
+    const result = mockQuery("scrolling", [
         {
           id: "section-0",
           title: "INTRODUCTION",
-          level: 2,
           blocks: Array.from({ length: 28 }, (_, index) => ({
             type: "paragraph" as const,
-            children: [{ type: "text" as const, content: `Intro line ${index}` }],
-            indent: 0,
+            children: [{ type: "text" as const, value: `Intro line ${index}` }],
           })),
           children: [],
         },
         {
           id: "section-1",
           title: "LATE SECTION",
-          level: 2,
           blocks: [{
             type: "paragraph",
-            children: [{ type: "text", content: "Late section body" }],
-            indent: 0,
+            children: [{ type: "text", value: "Late section body" }],
           }],
           children: [],
         },
-      ],
-    };
+      ]);
     const setup = await renderApp(result);
     const lateSection = navPosition(setup.captureCharFrame(), "LATE SECTION");
     await setup.mockMouse.click(NAV_WIDTH - 3, lateSection.y);
@@ -106,33 +94,26 @@ describe("App navigation (e2e)", () => {
   });
 
   test("updates navigation only after content scrolling becomes idle", async () => {
-    const result: QueryResult = {
-      topic: "scroll-spy",
-      sections: [
+    const result = mockQuery("scroll-spy", [
         {
           id: "section-0",
           title: "INTRODUCTION",
-          level: 2,
           blocks: Array.from({ length: 28 }, (_, index) => ({
             type: "paragraph" as const,
-            children: [{ type: "text" as const, content: `Intro line ${index}` }],
-            indent: 0,
+            children: [{ type: "text" as const, value: `Intro line ${index}` }],
           })),
           children: [],
         },
         {
           id: "section-1",
           title: "CURRENT SECTION",
-          level: 2,
           blocks: Array.from({ length: 28 }, (_, index) => ({
             type: "paragraph" as const,
-            children: [{ type: "text" as const, content: `Current line ${index}` }],
-            indent: 0,
+            children: [{ type: "text" as const, value: `Current line ${index}` }],
           })),
           children: [],
         },
-      ],
-    };
+      ]);
     const setup = await renderApp(result);
     for (let index = 0; index < 4; index++) {
       setup.mockInput.pressKey("d");
@@ -283,25 +264,20 @@ describe("App navigation (e2e)", () => {
   });
 
   test("keeps wrapped selected navigation titles visually continuous", async () => {
-    const result: QueryResult = {
-      topic: "long-title",
-      sections: [
+    const result = mockQuery("long-title", [
         {
           id: "section-0",
           title: "PARENT",
-          level: 2,
           blocks: [],
           children: [{
             id: "section-0-0",
             title: "FIRSTMARKERABCDEFGHI SECONDMARKERABCDEFGH THIRDMARKERABCDEFGHI",
-            level: 3,
             blocks: [],
             children: [],
           }],
         },
-        { id: "section-1", title: "SIBLING", level: 2, blocks: [], children: [] },
-      ],
-    };
+        { id: "section-1", title: "SIBLING", blocks: [], children: [] },
+      ]);
     const setup = await renderApp(result);
     setup.mockInput.pressKey("j");
     await flushKeyboard(setup);
@@ -342,13 +318,19 @@ describe("App navigation (e2e)", () => {
   });
 
   test("uses only the item background for searched GCC navigation titles", async () => {
-    const setup = await renderApp(
-      { topic: "gcc", sections: parseManHtml(loadManPageFixture("gcc")) },
-    );
-    for (let index = 0; index < 5; index++) {
-      setup.mockInput.pressKey("j");
-      await flushKeyboard(setup);
-    }
+    const setup = await renderApp(mockQuery("gcc", [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [],
+      children: [{
+        id: "kind-of-output",
+        title: "Options Controlling the Kind of Output",
+        blocks: [],
+        children: [],
+      }],
+    }]));
+    setup.mockInput.pressKey("j");
+    await flushKeyboard(setup);
     setup.mockInput.pressKey("/");
     await flushKeyboard(setup);
     setup.mockInput.typeText("kind of output");

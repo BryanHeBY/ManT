@@ -1,25 +1,18 @@
 /**
- * @file Executes parsed CLI commands and owns Mant's user-facing error boundary.
+ * @file Executes the interactive `mant` command and owns its error boundary.
  *
- * Heavy query and TUI modules are loaded only for commands that need them, so
- * `mant --help` remains usable even when an optional runtime component fails.
+ * Query semantics live in Rust's `mant-cli`; this module only checks terminal
+ * suitability, invokes the versioned process client, and starts OpenTUI.
  */
 
-import type { RoffAstResult } from "../core";
-import type { QueryResult } from "../query";
-import type { TldrCacheUpdate } from "../tldr";
+import type { MantQueryBundle, NativeQueryRequest } from "../native";
 import { CLI_HELP, CliUsageError, parseCliArguments } from "./arguments";
-
-// ── Injectable host boundary ────────────────────────────────
 
 type OutputWriter = (message: string) => void;
 
 export interface CliDependencies {
-  query?: (options: { topic: string }) => Promise<QueryResult>;
-  renderMarkdown?: (result: QueryResult) => string;
-  fetchRoffAst?: (topic: string) => Promise<RoffAstResult>;
-  updateTldrCache?: () => Promise<TldrCacheUpdate>;
-  runTui?: (result: QueryResult) => Promise<void>;
+  query?: (request: NativeQueryRequest) => Promise<MantQueryBundle>;
+  runTui?: (result: MantQueryBundle) => Promise<void>;
   isInteractive?: () => boolean;
   stdout?: OutputWriter;
   stderr?: OutputWriter;
@@ -29,7 +22,7 @@ export interface CliDependencies {
 const writeStdout: OutputWriter = (message) => console.log(message);
 const writeStderr: OutputWriter = (message) => console.error(message);
 
-// ── Public execution boundary ───────────────────────────────
+// ── Public execution boundary ──────────────────────────────────────────────
 
 /** Runs one invocation and returns a conventional process exit code. */
 export async function runCli(
@@ -41,56 +34,25 @@ export async function runCli(
 
   try {
     const command = parseCliArguments(args);
-
     if (command.kind === "help") {
       stdout(CLI_HELP);
       return 0;
     }
 
-    if (command.kind === "update-tldr") {
-      const update = dependencies.updateTldrCache
-        ?? (await import("../tldr")).updateTldrCache;
-      const result = await update();
-      const revision = result.revision ? ` (${result.revision})` : "";
-      const provider = result.client ? ` via ${result.client}` : "";
-      const location = result.cacheDir ? `: ${result.cacheDir}` : "";
-      const summary = `tldr cache ${result.action}${provider}${location}${revision}`;
-      stdout(result.output ? `${result.output}\n${summary}` : summary);
-      return 0;
+    const isInteractive = dependencies.isInteractive
+      ?? (() => Boolean(process.stdin.isTTY && process.stdout.isTTY));
+    if (!isInteractive()) {
+      throw new Error(
+        "interactive view requires a terminal; use mant-cli for Markdown or JSON output",
+      );
     }
 
-    if (command.output === "roff-ast") {
-      const fetchAst = dependencies.fetchRoffAst
-        ?? (await import("../core")).fetchRoffAst;
-      stdout(JSON.stringify(await fetchAst(command.topic), null, 2));
-      return 0;
-    }
-
-    if (command.output === "tui") {
-      const isInteractive = dependencies.isInteractive
-        ?? (() => Boolean(process.stdin.isTTY && process.stdout.isTTY));
-      if (!isInteractive()) {
-        throw new Error(
-          "interactive view requires a terminal; use --markdown or --json for redirected output",
-        );
-      }
-    }
-
-    const executeQuery = dependencies.query ?? (await import("../query")).query;
-    const result = await executeQuery({ topic: command.topic });
-
-    if (command.output === "json") {
-      stdout(JSON.stringify(result, null, 2));
-      return 0;
-    }
-
-    if (command.output === "markdown") {
-      const renderMarkdown = dependencies.renderMarkdown
-        ?? (await import("../output")).renderMarkdown;
-      stdout(renderMarkdown(result));
-      return 0;
-    }
-
+    const executeQuery = dependencies.query
+      ?? (await import("../native")).nativeCli.query;
+    const result = await executeQuery({
+      topic: command.topic,
+      ...(command.section === undefined ? {} : { section: command.section }),
+    });
     const startTui = dependencies.runTui ?? (await import("../ui/app")).runTui;
     await startTui(result);
     return 0;
@@ -101,9 +63,9 @@ export async function runCli(
   }
 }
 
-// ── Error presentation ──────────────────────────────────────
+// ── Error presentation ────────────────────────────────────────────────────
 
-/** Formats expected CLI failures without leaking runtime stack traces. */
+/** Formats expected failures without leaking runtime stack traces. */
 export function formatCliError(error: unknown, debug = false): string {
   if (debug && error instanceof Error && error.stack) return error.stack;
 

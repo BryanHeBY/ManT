@@ -7,14 +7,52 @@ import { join } from "node:path";
 import { parseManHtml } from "../../../src/core";
 import { renderMarkdown } from "../../../src/output";
 import type { QueryResult } from "../../../src/query";
-import { mockLsWithTldrResult } from "../../fixtures/mock-result";
 
 describe("Markdown output", () => {
   test("renders the combined TLDR and man page in document order", () => {
     const markdown = renderMarkdown({
-      ...mockLsWithTldrResult,
+      topic: "ls",
+      sections: [
+        {
+          id: "name",
+          title: "NAME",
+          level: 2,
+          blocks: [{
+            type: "paragraph",
+            indent: 0,
+            children: [{ type: "text", content: "ls - list files" }],
+          }],
+          children: [],
+        },
+        {
+          id: "synopsis",
+          title: "SYNOPSIS",
+          level: 2,
+          blocks: [{
+            type: "paragraph",
+            indent: 0,
+            children: [{
+              type: "bold",
+              children: [{ type: "text", content: "ls" }],
+            }],
+          }],
+          children: [],
+        },
+      ],
       tldr: {
-        ...mockLsWithTldrResult.tldr!,
+        title: "ls",
+        description: ["List directory contents."],
+        examples: [{
+          description: "List hidden entries",
+          command: "ls {{[-a|--all]}}",
+          commandParts: [
+            { type: "text", content: "ls " },
+            { type: "placeholder", content: "--all" },
+          ],
+        }],
+        platform: "common",
+        language: "en",
+        sourcePath: "/cache/tldr/ls.md",
         moreInformation: "https://example.com/manual_page.html.",
       },
     });

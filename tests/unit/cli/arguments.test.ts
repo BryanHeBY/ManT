@@ -1,5 +1,5 @@
 /**
- * @file Verifies Mant's pure CLI grammar and incompatible-option validation.
+ * @file Verifies the intentionally small interactive `mant` grammar.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -8,37 +8,26 @@ import {
   parseCliArguments,
 } from "../../../src/cli/arguments";
 
-describe("CLI argument parsing", () => {
+describe("interactive CLI argument parsing", () => {
   test("recognises both help aliases without requiring a topic", () => {
     expect(parseCliArguments(["--help"])).toEqual({ kind: "help" });
     expect(parseCliArguments(["-h"])).toEqual({ kind: "help" });
   });
 
-  test("parses TUI, Markdown, JSON, and roff AST queries", () => {
+  test("parses a topic and optional manual section", () => {
     expect(parseCliArguments(["git"])).toEqual({
       kind: "query",
       topic: "git",
-      output: "tui",
     });
-    expect(parseCliArguments(["git", "--json"])).toEqual({
-      kind: "query",
-      topic: "git",
-      output: "json",
-    });
-    expect(parseCliArguments(["git", "--markdown"])).toEqual({
-      kind: "query",
-      topic: "git",
-      output: "markdown",
-    });
-    expect(parseCliArguments(["git", "--md"])).toEqual({
-      kind: "query",
-      topic: "git",
-      output: "markdown",
-    });
-    expect(parseCliArguments(["printf", "--roff-ast"])).toEqual({
+    expect(parseCliArguments(["printf", "--section", " 3p "])).toEqual({
       kind: "query",
       topic: "printf",
-      output: "roff-ast",
+      section: "3p",
+    });
+    expect(parseCliArguments(["-s", "1", "git"])).toEqual({
+      kind: "query",
+      topic: "git",
+      section: "1",
     });
   });
 
@@ -46,34 +35,26 @@ describe("CLI argument parsing", () => {
     expect(parseCliArguments(["git", "commit"])).toEqual({
       kind: "query",
       topic: "git commit",
-      output: "tui",
     });
     expect(parseCliArguments(["--", "--help"])).toEqual({
       kind: "query",
       topic: "--help",
-      output: "tui",
     });
   });
 
-  test("accepts the standalone tldr cache action", () => {
-    expect(parseCliArguments(["--update-tldr"])).toEqual({
-      kind: "update-tldr",
-    });
+  test("routes non-interactive options to mant-cli", () => {
+    expect(() => parseCliArguments(["git", "--json"]))
+      .toThrow("non-interactive output is provided by mant-cli");
+    expect(() => parseCliArguments(["--update-tldr"]))
+      .toThrow("non-interactive output is provided by mant-cli");
   });
 
-  test("rejects missing topics, unknown options, and conflicting actions", () => {
+  test("rejects missing topics and malformed section options", () => {
     expect(() => parseCliArguments([])).toThrow(CliUsageError);
-    expect(() => parseCliArguments(["--unknown"])).toThrow("unknown option '--unknown'");
-    expect(() => parseCliArguments(["git", "--json", "--markdown"]))
-      .toThrow("output options '--json' and '--markdown' cannot be combined");
-    expect(() => parseCliArguments(["git", "--markdown", "--roff-ast"]))
-      .toThrow("output options '--markdown' and '--roff-ast' cannot be combined");
-    expect(parseCliArguments(["git", "--md", "--markdown"])).toEqual({
-      kind: "query",
-      topic: "git",
-      output: "markdown",
-    });
-    expect(() => parseCliArguments(["git", "--update-tldr"]))
-      .toThrow("--update-tldr cannot be combined");
+    expect(() => parseCliArguments(["--section"])).toThrow("requires a value");
+    expect(() => parseCliArguments(["git", "-s", "1", "-s", "2"]))
+      .toThrow("only be supplied once");
+    expect(() => parseCliArguments(["git", "-s", " "]))
+      .toThrow("must not be empty");
   });
 });

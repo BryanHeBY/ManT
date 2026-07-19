@@ -4,10 +4,10 @@
  * to test and reuse from stateful UI code.
  */
 
-import type { SectionNode } from "../core";
+import type { MantSection } from "../native";
 
 export interface FlatNode {
-  node: SectionNode;
+  node: MantSection;
   depth: number;
   hasChildren: boolean;
   isLast: boolean;
@@ -16,7 +16,7 @@ export interface FlatNode {
 }
 
 export function flattenVisibleNodes(
-  nodes: SectionNode[],
+  nodes: MantSection[],
   expanded: ReadonlySet<string>,
   depth = 0,
   ancestorHasNext: boolean[] = [],
@@ -39,7 +39,7 @@ export function flattenVisibleNodes(
   return result;
 }
 
-export function findNodeById(nodes: SectionNode[], id: string): SectionNode | null {
+export function findNodeById(nodes: MantSection[], id: string): MantSection | null {
   for (const node of nodes) {
     if (node.id === id) return node;
     const found = findNodeById(node.children, id);
@@ -49,10 +49,10 @@ export function findNodeById(nodes: SectionNode[], id: string): SectionNode | nu
 }
 
 export function findParentById(
-  nodes: SectionNode[],
+  nodes: MantSection[],
   id: string,
-  parent: SectionNode | null = null,
-): SectionNode | null {
+  parent: MantSection | null = null,
+): MantSection | null {
   for (const node of nodes) {
     if (node.id === id) return parent;
     const found = findParentById(node.children, id, node);
@@ -63,7 +63,7 @@ export function findParentById(
 
 /** Returns a node's ancestry in document order, including the node itself. */
 export function findNodePath(
-  nodes: SectionNode[],
+  nodes: MantSection[],
   id: string,
   path: string[] = [],
 ): string[] | null {
@@ -76,9 +76,9 @@ export function findNodePath(
   return null;
 }
 
-export function sectionIdsInDocumentOrder(nodes: SectionNode[]): string[] {
+export function sectionIdsInDocumentOrder(nodes: MantSection[]): string[] {
   const ids: string[] = [];
-  const visit = (node: SectionNode) => {
+  const visit = (node: MantSection) => {
     ids.push(node.id);
     for (const child of node.children) visit(child);
   };
@@ -86,9 +86,9 @@ export function sectionIdsInDocumentOrder(nodes: SectionNode[]): string[] {
   return ids;
 }
 
-export function collectBranchIds(nodes: SectionNode[]): Set<string> {
+export function collectBranchIds(nodes: MantSection[]): Set<string> {
   const ids = new Set<string>();
-  const visit = (node: SectionNode) => {
+  const visit = (node: MantSection) => {
     if (node.children.length > 0) ids.add(node.id);
     for (const child of node.children) visit(child);
   };

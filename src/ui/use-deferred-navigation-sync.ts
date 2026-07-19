@@ -8,14 +8,14 @@
 
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
-import type { SectionNode } from "../core";
+import type { MantSection } from "../native";
 import { TLDR_NAV_ID, contentId } from "./ids";
 import { findNodePath, sectionIdsInDocumentOrder } from "./navigation-tree";
 
 const NAVIGATION_SYNC_DELAY_MS = 180;
 
 export interface DeferredNavigationSyncOptions {
-  sections: SectionNode[];
+  sections: MantSection[];
   hasTldr: boolean;
   contentScrollRef: { current: ScrollBoxRenderable | null };
   setSelectedId: Dispatch<SetStateAction<string>>;
