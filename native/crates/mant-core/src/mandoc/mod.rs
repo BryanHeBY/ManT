@@ -249,6 +249,44 @@ mod tests {
     }
 
     #[test]
+    fn preserves_man_paragraph_distance_between_indented_paragraphs() {
+        let path = temporary_source(
+            "paragraph-distance",
+            ".TH SPACING 1\n\
+             .SH OPTIONS\n\
+             .IP \"\\fB-a\\fR\" 4\n\
+             First.\n\
+             .IP \"\\fB-b\\fR\" 4\n\
+             Second.\n\
+             .PD 0\n\
+             .IP \"\\fB-c\\fR\" 4\n\
+             Third.\n\
+             .IP \"\\fB-d\\fR\" 4\n\
+             Fourth.\n\
+             .PD\n\
+             .IP \"\\fB-e\\fR\" 4\n\
+             Fifth.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower paragraph distance");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [Block::DefinitionList { items, compact, .. }] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("expected one definition list");
+        };
+        assert!(!compact);
+        assert_eq!(items.len(), 5);
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.spacing_before_lines)
+                .collect::<Vec<_>>(),
+            [Some(0), Some(1), Some(0), Some(0), Some(1)]
+        );
+    }
+
+    #[test]
     fn lowers_mdoc_semantic_inline_nodes_and_nested_sections() {
         let path = temporary_source(
             "mdoc",

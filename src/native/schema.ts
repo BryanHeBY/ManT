@@ -41,6 +41,7 @@ export interface MantListItem {
 export interface MantDefinitionItem {
   terms: MantInline[][];
   description: MantBlock[];
+  spacingBeforeLines?: number;
 }
 
 export interface MantTableRow {
@@ -289,6 +290,7 @@ function validateBlock(value: unknown, path: string): asserts value is MantBlock
       expectArray(object.items, `${path}.items`).forEach((item, index) => {
         const itemPath = `${path}.items[${index}]`;
         const itemObject = expectObject(item, itemPath);
+        expectOptionalNumber(itemObject.spacingBeforeLines, `${itemPath}.spacingBeforeLines`);
         expectArray(itemObject.terms, `${itemPath}.terms`).forEach((term, termIndex) => {
           validateInlineArray(term, `${itemPath}.terms[${termIndex}]`);
         });

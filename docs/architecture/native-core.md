@@ -129,6 +129,11 @@ lives in Rust and retains the fallback for constructs libmandoc reports as
 unsupported. Best-effort native output is retained together with its
 diagnostics when no higher-fidelity fallback is available.
 
+List density is part of this normalization boundary. mdoc list compactness is
+stored on the list block, while man `.PD` changes are retained as optional
+per-definition spacing so a single option list can switch between normal and
+compact layout without inserting synthetic content nodes.
+
 Because libmandoc 1.14.6 uses process-global character, diagnostic, tag, and
 recursion state, all embedded parser sessions are serialized.  Initialization
 happens once, and the private shim provides per-request diagnostic reset and

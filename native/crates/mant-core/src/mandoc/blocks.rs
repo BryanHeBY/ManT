@@ -34,10 +34,11 @@ fn lower_section(node: &Node, context: &mut LoweringContext<'_>) -> Section {
         .filter(|child| is_section(child, false))
         .map(|child| lower_section(child, context))
         .collect();
+    let mut paragraph_distance = 1;
     Section {
         id,
         title,
-        blocks: lower_blocks(body, context, 0),
+        blocks: lower_blocks(body, context, 0, &mut paragraph_distance),
         children,
         source: source_span(node),
     }
@@ -50,10 +51,21 @@ fn is_section(node: &Node, top_level: bool) -> bool {
     )
 }
 
-fn lower_blocks(nodes: &[Node], context: &LoweringContext<'_>, indent_columns: u16) -> Vec<Block> {
+fn lower_blocks(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+) -> Vec<Block> {
     let mut state = BlockState::new(indent_columns);
 
     for node in nodes {
+        if node.macro_name.as_deref() == Some("PD") {
+            if let Some(lines) = paragraph_distance_lines(node) {
+                *paragraph_distance = lines;
+            }
+            continue;
+        }
         if node.flags.no_print
             || node.kind == NodeKind::Comment
             || is_section(node, false)
@@ -84,7 +96,13 @@ fn lower_blocks(nodes: &[Node], context: &LoweringContext<'_>, indent_columns: u
             );
         } else {
             state.flush_paragraph();
-            lower_structural_node(node, context, indent_columns, &mut state.output);
+            lower_structural_node(
+                node,
+                context,
+                indent_columns,
+                paragraph_distance,
+                &mut state.output,
+            );
         }
     }
     state.finish()
@@ -94,6 +112,7 @@ fn lower_structural_node(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
+    paragraph_distance: &mut u16,
     output: &mut Vec<Block>,
 ) {
     match node.macro_name.as_deref() {
@@ -101,25 +120,42 @@ fn lower_structural_node(
             part_children(node, NodeKind::Body),
             context,
             indent_columns,
+            paragraph_distance,
         )),
-        Some("TP") => append_definition(
-            output,
-            definition_item(node, context, indent_columns),
+        Some("TP") => {
+            let spacing_before = *paragraph_distance;
+            let item = definition_item(node, context, indent_columns, paragraph_distance);
+            append_definition(
+                output,
+                item,
+                indent_columns,
+                spacing_before,
+                source_span(node),
+            );
+        }
+        Some("IP") => {
+            let spacing_before = *paragraph_distance;
+            let item = indented_paragraph_item(node, context, indent_columns, paragraph_distance);
+            append_definition(
+                output,
+                item,
+                indent_columns,
+                spacing_before,
+                source_span(node),
+            );
+        }
+        Some("Bl") => output.push(lower_mdoc_list(
+            node,
+            context,
             indent_columns,
-            source_span(node),
-        ),
-        Some("IP") => append_definition(
-            output,
-            indented_paragraph_item(node, context, indent_columns),
-            indent_columns,
-            source_span(node),
-        ),
-        Some("Bl") => output.push(lower_mdoc_list(node, context, indent_columns)),
+            paragraph_distance,
+        )),
         Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
             output.extend(lower_blocks(
                 part_children(node, NodeKind::Body),
                 context,
                 indent_columns + display_indent(node),
+                paragraph_distance,
             ));
         }
         Some("Bd" | "D1" | "Dl") => {
@@ -133,6 +169,7 @@ fn lower_structural_node(
             part_children(node, NodeKind::Body),
             context,
             indent_columns + 4,
+            paragraph_distance,
         )),
         _ if node.kind == NodeKind::Table => {
             append_table_row(output, node, indent_columns);
@@ -152,7 +189,12 @@ fn lower_structural_node(
             } else {
                 body
             };
-            output.extend(lower_blocks(children, context, indent_columns));
+            output.extend(lower_blocks(
+                children,
+                context,
+                indent_columns,
+                paragraph_distance,
+            ));
         }
     }
 }
@@ -256,7 +298,12 @@ impl BlockState {
     }
 }
 
-fn lower_mdoc_list(node: &Node, context: &LoweringContext<'_>, indent_columns: u16) -> Block {
+fn lower_mdoc_list(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+) -> Block {
     let items: Vec<&Node> = part_children(node, NodeKind::Body)
         .iter()
         .filter(|child| child.macro_name.as_deref() == Some("It"))
@@ -273,7 +320,7 @@ fn lower_mdoc_list(node: &Node, context: &LoweringContext<'_>, indent_columns: u
         Block::DefinitionList {
             items: items
                 .into_iter()
-                .map(|item| definition_item(item, context, list_indent))
+                .map(|item| definition_item(item, context, list_indent, paragraph_distance))
                 .collect(),
             compact: node.compact,
             layout: layout(indent_columns),
@@ -291,7 +338,12 @@ fn lower_mdoc_list(node: &Node, context: &LoweringContext<'_>, indent_columns: u
             items: items
                 .into_iter()
                 .map(|item| ListItem {
-                    blocks: lower_blocks(part_children(item, NodeKind::Body), context, list_indent),
+                    blocks: lower_blocks(
+                        part_children(item, NodeKind::Body),
+                        context,
+                        list_indent,
+                        paragraph_distance,
+                    ),
                 })
                 .collect(),
             layout: layout(indent_columns),
@@ -304,6 +356,7 @@ fn definition_item(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
+    paragraph_distance: &mut u16,
 ) -> DefinitionItem {
     let term = lower_inline_nodes(part_children(node, NodeKind::Head), context.default_name);
     DefinitionItem {
@@ -312,7 +365,9 @@ fn definition_item(
             part_children(node, NodeKind::Body),
             context,
             indent_columns + 4,
+            paragraph_distance,
         ),
+        spacing_before_lines: None,
     }
 }
 
@@ -320,6 +375,7 @@ fn indented_paragraph_item(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
+    paragraph_distance: &mut u16,
 ) -> DefinitionItem {
     let head = part_children(node, NodeKind::Head);
     let term_nodes = head
@@ -334,7 +390,9 @@ fn indented_paragraph_item(
             part_children(node, NodeKind::Body),
             context,
             indent_columns + 4,
+            paragraph_distance,
         ),
+        spacing_before_lines: None,
     }
 }
 
@@ -342,9 +400,10 @@ fn append_definition(
     output: &mut Vec<Block>,
     mut item: DefinitionItem,
     indent_columns: u16,
+    paragraph_distance: u16,
     source: Option<mant_ast::SourceSpan>,
 ) {
-    if let Some(Block::DefinitionList { items, .. }) = output.last_mut() {
+    if let Some(Block::DefinitionList { items, compact, .. }) = output.last_mut() {
         if !item.description.is_empty() {
             let first_pending = items
                 .iter()
@@ -354,11 +413,18 @@ fn append_definition(
                 item.terms.splice(0..0, pending.terms);
             }
         }
+        item.spacing_before_lines = Some(if items.is_empty() {
+            0
+        } else {
+            paragraph_distance
+        });
+        *compact = *compact && paragraph_distance == 0;
         items.push(item);
     } else {
+        item.spacing_before_lines = Some(0);
         output.push(Block::DefinitionList {
             items: vec![item],
-            compact: false,
+            compact: paragraph_distance == 0,
             layout: layout(indent_columns),
             source,
         });
@@ -451,8 +517,53 @@ fn is_inline(node: &Node) -> bool {
 fn is_nonprinting_request(node: &Node) -> bool {
     matches!(
         node.macro_name.as_deref(),
-        Some("PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta")
+        Some("ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta")
     )
+}
+
+/// Convert a `.PD` measurement to terminal rows using mandoc's unit ratios.
+/// Missing arguments restore man(7)'s one-row default; invalid values retain
+/// the previous state.
+fn paragraph_distance_lines(node: &Node) -> Option<u16> {
+    let Some(argument) = first_text(node) else {
+        return Some(1);
+    };
+    let argument = argument.trim();
+    let number_end = argument
+        .find(|character: char| character.is_ascii_alphabetic())
+        .unwrap_or(argument.len());
+    let scale = argument[..number_end].parse::<f64>().ok()?;
+    if !scale.is_finite() {
+        return None;
+    }
+    let unit = argument[number_end..].trim();
+    let vertical_rows = match unit {
+        "u" => scale / 40.0,
+        "c" => scale * 6.0 / 2.54,
+        "f" => scale * 65_536.0 / 40.0,
+        "i" => scale * 6.0,
+        "M" => scale * 0.006,
+        "p" => scale / 12.0,
+        "m" | "n" => scale * 0.6,
+        // `P`, `v`, no suffix, and unknown suffixes retain the vertical scale.
+        _ => scale,
+    };
+
+    // Equivalent to mandoc's positive rounding in term_vspan(), without a
+    // lossy float cast, including its fallback for unusually large values.
+    for lines in 0_u16..66 {
+        if vertical_rows < f64::from(lines) + 0.5005 {
+            return Some(lines);
+        }
+    }
+    Some(1)
+}
+
+fn first_text(node: &Node) -> Option<&str> {
+    if node.kind == NodeKind::Text {
+        return node.text.as_deref();
+    }
+    node.children.iter().find_map(first_text)
 }
 
 fn is_roff_measurement(value: &str) -> bool {

@@ -232,6 +232,21 @@ fn gcc_keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
         phantom_paragraphs, 0,
         "roff request arguments leaked as text"
     );
+
+    let cxx_options = section(document, "Options Controlling C++ Dialect");
+    let suggest_final_methods = nested_definition_items(cxx_options)
+        .into_iter()
+        .find(|item| {
+            item.terms
+                .iter()
+                .any(|term| inline_text(term).contains("-Wsuggest-final-methods"))
+        })
+        .expect("GCC -Wsuggest-final-methods option");
+    assert_eq!(
+        suggest_final_methods.spacing_before_lines,
+        Some(1),
+        "default man(7) paragraph distance must separate adjacent GCC options",
+    );
 }
 
 #[test]
@@ -469,6 +484,17 @@ fn definition_items(section: &Section) -> Vec<&mant_ast::DefinitionItem> {
     section
         .blocks
         .iter()
+        .filter_map(|block| match block {
+            Block::DefinitionList { items, .. } => Some(items.iter()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+fn nested_definition_items(section: &Section) -> Vec<&mant_ast::DefinitionItem> {
+    document_blocks_from_sections(std::slice::from_ref(section))
+        .into_iter()
         .filter_map(|block| match block {
             Block::DefinitionList { items, .. } => Some(items.iter()),
             _ => None,

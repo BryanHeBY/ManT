@@ -87,10 +87,23 @@ fn render_definition_list(items: &[DefinitionItem], compact: bool) -> Option<Str
                 (true, false) => description,
                 (true, true) => return None,
             };
-            prefix_item(&content, "- ")
+            prefix_item(&content, "- ").map(|content| (content, item.spacing_before_lines))
         })
         .collect::<Vec<_>>();
-    (!rendered.is_empty()).then(|| rendered.join(if compact { "\n" } else { "\n\n" }))
+    join_definition_items(rendered, compact)
+}
+
+/// Preserve a man(7) `.PD` override when one is present, otherwise fall back
+/// to the list-wide compactness used by mdoc(7) and HTML inputs.
+fn join_definition_items(items: Vec<(String, Option<u16>)>, compact: bool) -> Option<String> {
+    let mut items = items.into_iter();
+    let (mut output, _) = items.next()?;
+    for (item, spacing_before_lines) in items {
+        let blank_lines = spacing_before_lines.unwrap_or(u16::from(!compact));
+        output.push_str(&"\n".repeat(usize::from(blank_lines) + 1));
+        output.push_str(&item);
+    }
+    Some(output)
 }
 
 fn render_table(rows: &[TableRow]) -> Option<String> {

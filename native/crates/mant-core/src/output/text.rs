@@ -149,8 +149,13 @@ fn render_block(block: &Block, base_indent: usize) -> Option<String> {
             render_list(*kind, *start, items, base_indent),
             usize::from(layout.indent_columns),
         ),
-        Block::DefinitionList { items, layout, .. } => (
-            render_definitions(items, base_indent),
+        Block::DefinitionList {
+            items,
+            compact,
+            layout,
+            ..
+        } => (
+            render_definitions(items, *compact, base_indent),
             usize::from(layout.indent_columns),
         ),
         Block::Table { rows, layout, .. } => (
@@ -204,8 +209,8 @@ fn render_list(
         .join("\n")
 }
 
-fn render_definitions(items: &[DefinitionItem], base_indent: usize) -> String {
-    items
+fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usize) -> String {
+    let rendered = items
         .iter()
         .filter_map(|item| {
             let terms = item
@@ -216,15 +221,26 @@ fn render_definitions(items: &[DefinitionItem], base_indent: usize) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             let description = render_blocks(&item.description, base_indent);
-            match (terms.is_empty(), description.is_empty()) {
+            let value = match (terms.is_empty(), description.is_empty()) {
                 (false, false) => Some(format!("{terms}\n{}", indent_lines(&description, 2))),
                 (false, true) => Some(terms),
                 (true, false) => Some(description),
                 (true, true) => None,
-            }
+            }?;
+            Some((value, item.spacing_before_lines))
         })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .collect::<Vec<_>>();
+
+    let Some((first, rest)) = rendered.split_first() else {
+        return String::new();
+    };
+    let mut output = first.0.clone();
+    for (item, spacing_before_lines) in rest {
+        let blank_lines = spacing_before_lines.unwrap_or(u16::from(!compact));
+        output.push_str(&"\n".repeat(usize::from(blank_lines) + 1));
+        output.push_str(item);
+    }
+    output
 }
 
 fn cell_text(cell: &TableCell) -> String {

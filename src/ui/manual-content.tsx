@@ -248,7 +248,12 @@ function renderBlockNodes(
                 ? `${(block.start ?? 1) + itemIndex}. `
                 : block.kind === "bullet" ? "• " : "";
               return (
-                <box key={`item-${itemIndex}`} flexDirection="row" paddingLeft={indent}>
+                <box
+                  key={`item-${itemIndex}`}
+                  flexDirection="row"
+                  paddingLeft={indent}
+                  paddingTop={itemIndex > 0 && !block.compact ? 1 : 0}
+                >
                   {marker && <text fg="#94e2d5">{marker}</text>}
                   <box flexDirection="column" flexGrow={1}>
                     {renderBlockNodes(
@@ -277,7 +282,14 @@ function renderBlockNodes(
             flexDirection="column"
           >
             {block.items.map((item, itemIndex) => (
-              <box key={`definition-${itemIndex}`} flexDirection="column">
+              <box
+                key={`definition-${itemIndex}`}
+                flexDirection="column"
+                paddingTop={
+                  item.spacingBeforeLines
+                    ?? (itemIndex > 0 && !block.compact ? 1 : 0)
+                }
+              >
                 {item.terms.map((term, termIndex) => (
                   <box key={`term-${termIndex}`} paddingLeft={indent}>
                     <text fg="#cdd6f4" wrapMode="word">{renderInlineNodes(term)}</text>

@@ -285,6 +285,7 @@ fn parse_definition_list(element: ElementRef<'_>, layout: LayoutHint) -> Option<
                     items.push(DefinitionItem {
                         terms: std::mem::take(&mut terms),
                         description,
+                        spacing_before_lines: None,
                     });
                 }
             }
@@ -295,6 +296,7 @@ fn parse_definition_list(element: ElementRef<'_>, layout: LayoutHint) -> Option<
         items.push(DefinitionItem {
             terms,
             description: Vec::new(),
+            spacing_before_lines: None,
         });
     }
 

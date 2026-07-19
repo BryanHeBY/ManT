@@ -138,6 +138,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
             description: vec![paragraph(vec![Inline::Text {
                 value: "Show all entries.".to_owned(),
             }])],
+            spacing_before_lines: None,
         }],
         compact: false,
         layout: LayoutHint::default(),

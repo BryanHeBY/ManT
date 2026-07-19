@@ -66,16 +66,14 @@ function clangDefinitionSections(): MantSection[] {
         items: [
           {
             terms: [[text("-E")]],
-            description: [paragraph("Run the preprocessor stage."), {
-              type: "vertical-space",
-              lines: 1,
-            }],
+            description: [paragraph("Run the preprocessor stage.")],
           },
           {
             terms: [[text("-fsyntax-only")]],
             description: [paragraph("Run parser and semantic analysis stages.")],
           },
         ],
+        compact: false,
       }],
       children: [],
     }],
@@ -183,7 +181,7 @@ describe("App rendering (e2e)", () => {
     setup.renderer.destroy();
   });
 
-  test("indents native definition terms, descriptions, and explicit spacing", async () => {
+  test("indents and spaces non-compact native definitions", async () => {
     const setup = await renderApp(
       mockQuery("clang", clangDefinitionSections()),
       { width: 100, height: 28 },
@@ -201,6 +199,42 @@ describe("App rendering (e2e)", () => {
       .toBeGreaterThan(optionsLine.indexOf("OPTIONS"));
     expect(lines[descriptionIndex]!.indexOf("Run the preprocessor stage."))
       .toBeGreaterThan(termLine.indexOf("-E"));
+    expect(nextTermIndex).toBe(descriptionIndex + 2);
+    expect(lines[descriptionIndex + 1]?.trim()).toBe("");
+    setup.renderer.destroy();
+  });
+
+  test("keeps compact native definitions adjacent", async () => {
+    const sections = clangDefinitionSections();
+    const definitionList = sections[0]!.children[0]!.blocks[0]!;
+    if (definitionList.type !== "definition-list") {
+      throw new Error("expected definition-list fixture");
+    }
+    definitionList.compact = true;
+
+    const setup = await renderApp(mockQuery("clang", sections), { width: 100, height: 28 });
+    const lines = setup.captureCharFrame().split("\n").map((line) => line.slice(32));
+    const descriptionIndex = lines.findIndex((line) => line.includes("Run the preprocessor stage."));
+    const nextTermIndex = lines.findIndex((line) => line.includes("-fsyntax-only"));
+
+    expect(nextTermIndex).toBe(descriptionIndex + 1);
+    setup.renderer.destroy();
+  });
+
+  test("honours per-item man paragraph spacing inside a compact definition list", async () => {
+    const sections = clangDefinitionSections();
+    const definitionList = sections[0]!.children[0]!.blocks[0]!;
+    if (definitionList.type !== "definition-list") {
+      throw new Error("expected definition-list fixture");
+    }
+    definitionList.compact = true;
+    definitionList.items[1]!.spacingBeforeLines = 1;
+
+    const setup = await renderApp(mockQuery("clang", sections), { width: 100, height: 28 });
+    const lines = setup.captureCharFrame().split("\n").map((line) => line.slice(32));
+    const descriptionIndex = lines.findIndex((line) => line.includes("Run the preprocessor stage."));
+    const nextTermIndex = lines.findIndex((line) => line.includes("-fsyntax-only"));
+
     expect(nextTermIndex).toBe(descriptionIndex + 2);
     expect(lines[descriptionIndex + 1]?.trim()).toBe("");
     setup.renderer.destroy();

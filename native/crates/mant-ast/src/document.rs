@@ -238,6 +238,10 @@ pub struct ListItem {
 pub struct DefinitionItem {
     pub terms: Vec<Vec<Inline>>,
     pub description: Vec<Block>,
+    /// Terminal rows requested before this item when man(7) changes `.PD`.
+    /// `None` inherits the containing list's compactness policy.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spacing_before_lines: Option<u16>,
 }
 
 /// One logical table row.
