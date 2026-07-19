@@ -2,7 +2,9 @@
 
 use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
 
-use super::{MacroSet, Metadata, Node, NodeFlags, NodeKind, ParsedDocument};
+use super::{
+    DisplayKind, MacroSet, Metadata, Node, NodeFlags, NodeKind, NormalizedListKind, ParsedDocument,
+};
 
 #[repr(C)]
 struct CDocument {
@@ -37,6 +39,10 @@ unsafe extern "C" {
     fn mant_mandoc_node_line(node: *const CNode) -> i32;
     fn mant_mandoc_node_column(node: *const CNode) -> i32;
     fn mant_mandoc_node_flags(node: *const CNode) -> u32;
+    fn mant_mandoc_node_list_kind(node: *const CNode) -> i32;
+    fn mant_mandoc_node_display_kind(node: *const CNode) -> i32;
+    fn mant_mandoc_node_compact(node: *const CNode) -> i32;
+    fn mant_mandoc_node_offset(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_child(node: *const CNode) -> *const CNode;
     fn mant_mandoc_node_next(node: *const CNode) -> *const CNode;
 }
@@ -130,6 +136,27 @@ fn node_kind(value: i32) -> Result<NodeKind, String> {
     }
 }
 
+fn list_kind(value: i32) -> Result<Option<NormalizedListKind>, String> {
+    match value {
+        0 => Ok(None),
+        1 => Ok(Some(NormalizedListKind::Bullet)),
+        2 => Ok(Some(NormalizedListKind::Ordered)),
+        3 => Ok(Some(NormalizedListKind::Definition)),
+        4 => Ok(Some(NormalizedListKind::Column)),
+        5 => Ok(Some(NormalizedListKind::Plain)),
+        _ => Err("libmandoc returned an unknown list kind".to_owned()),
+    }
+}
+
+fn display_kind(value: i32) -> Result<Option<DisplayKind>, String> {
+    match value {
+        0 => Ok(None),
+        1 => Ok(Some(DisplayKind::Literal)),
+        2 => Ok(Some(DisplayKind::Filled)),
+        _ => Err("libmandoc returned an unknown display kind".to_owned()),
+    }
+}
+
 unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
     let raw_flags = unsafe { mant_mandoc_node_flags(pointer) };
     let mut children = Vec::new();
@@ -155,6 +182,10 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
             no_print: raw_flags & NODE_NO_PRINT != 0,
             no_fill: raw_flags & NODE_NO_FILL != 0,
         },
+        list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,
+        display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,
+        compact: unsafe { mant_mandoc_node_compact(pointer) } != 0,
+        offset: unsafe { optional_string(mant_mandoc_node_offset(pointer)) },
         children,
     })
 }

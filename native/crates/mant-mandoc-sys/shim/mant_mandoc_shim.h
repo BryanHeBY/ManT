@@ -28,6 +28,21 @@ enum mant_mandoc_node_kind {
 	MANT_MANDOC_EQUATION = 9
 };
 
+enum mant_mandoc_list_kind {
+	MANT_MANDOC_LIST_NONE = 0,
+	MANT_MANDOC_LIST_BULLET = 1,
+	MANT_MANDOC_LIST_ORDERED = 2,
+	MANT_MANDOC_LIST_DEFINITION = 3,
+	MANT_MANDOC_LIST_COLUMN = 4,
+	MANT_MANDOC_LIST_PLAIN = 5
+};
+
+enum mant_mandoc_display_kind {
+	MANT_MANDOC_DISPLAY_NONE = 0,
+	MANT_MANDOC_DISPLAY_LITERAL = 1,
+	MANT_MANDOC_DISPLAY_FILLED = 2
+};
+
 #define MANT_MANDOC_NODE_GENERATED (1U << 0)
 #define MANT_MANDOC_NODE_SENTENCE_END (1U << 1)
 #define MANT_MANDOC_NODE_NO_PRINT (1U << 2)
@@ -61,6 +76,10 @@ const char *mant_mandoc_node_text(const struct mant_mandoc_node *);
 int mant_mandoc_node_line(const struct mant_mandoc_node *);
 int mant_mandoc_node_column(const struct mant_mandoc_node *);
 unsigned int mant_mandoc_node_flags(const struct mant_mandoc_node *);
+int mant_mandoc_node_list_kind(const struct mant_mandoc_node *);
+int mant_mandoc_node_display_kind(const struct mant_mandoc_node *);
+int mant_mandoc_node_compact(const struct mant_mandoc_node *);
+const char *mant_mandoc_node_offset(const struct mant_mandoc_node *);
 const struct mant_mandoc_node *mant_mandoc_node_child(
     const struct mant_mandoc_node *);
 const struct mant_mandoc_node *mant_mandoc_node_next(

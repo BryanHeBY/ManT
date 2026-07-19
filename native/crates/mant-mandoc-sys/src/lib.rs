@@ -46,6 +46,23 @@ pub enum NodeKind {
     Equation,
 }
 
+/// Normalized mdoc list behavior copied independently of upstream enum values.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NormalizedListKind {
+    Bullet,
+    Ordered,
+    Definition,
+    Column,
+    Plain,
+}
+
+/// Whether an mdoc display preserves source line layout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DisplayKind {
+    Literal,
+    Filled,
+}
+
 /// Source and renderer flags needed by the future AST lowering pass.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -65,6 +82,10 @@ pub struct Node {
     pub line: u32,
     pub column: u32,
     pub flags: NodeFlags,
+    pub list_kind: Option<NormalizedListKind>,
+    pub display_kind: Option<DisplayKind>,
+    pub compact: bool,
+    pub offset: Option<String>,
     pub children: Vec<Self>,
 }
 
@@ -136,10 +157,20 @@ pub fn parse_file(path: &Path, allow_includes: bool) -> Result<ParsedDocument, P
 mod tests {
     use std::{fs, process};
 
-    use super::{MacroSet, NodeKind, parse_file};
+    use super::{DisplayKind, MacroSet, Node, NodeKind, NormalizedListKind, parse_file};
 
     fn source_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-{label}-{}.1", process::id()))
+    }
+
+    fn find_macro<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
+        (node.macro_name.as_deref() == Some(name))
+            .then_some(node)
+            .or_else(|| {
+                node.children
+                    .iter()
+                    .find_map(|child| find_macro(child, name))
+            })
     }
 
     #[test]
@@ -216,5 +247,28 @@ mod tests {
             std::env::current_dir().expect("current directory after parse"),
             cwd
         );
+    }
+
+    #[test]
+    fn parser_copies_normalized_list_and_display_attributes() {
+        let path = source_path("normalized-mandoc-session");
+        fs::write(
+            &path,
+            ".Dd July 19, 2026\n.Dt NORMALIZED 1\n.Os\n.Sh ITEMS\n\
+             .Bl -enum -compact -offset indent\n.It\nfirst\n.El\n\
+             .Bd -literal -offset indent\ncode line\n.Ed\n",
+        )
+        .expect("write normalized mdoc source");
+
+        let document = parse_file(&path, false).expect("parse normalized mdoc source");
+        fs::remove_file(path).expect("remove normalized mdoc source");
+
+        let list = find_macro(&document.root, "Bl").expect("normalized list node");
+        assert_eq!(list.list_kind, Some(NormalizedListKind::Ordered));
+        assert!(list.compact);
+        assert_eq!(list.offset.as_deref(), Some("indent"));
+        let display = find_macro(&document.root, "Bd").expect("normalized display node");
+        assert_eq!(display.display_kind, Some(DisplayKind::Literal));
+        assert_eq!(display.offset.as_deref(), Some("indent"));
     }
 }

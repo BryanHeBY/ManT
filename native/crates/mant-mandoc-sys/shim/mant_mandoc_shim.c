@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "mandoc.h"
+#include "mdoc.h"
 #include "roff.h"
 #include "mandoc_parse.h"
 
@@ -28,6 +29,10 @@ struct mant_mandoc_node {
 	int			 line;
 	int			 column;
 	unsigned int		 flags;
+	int			 list_kind;
+	int			 display_kind;
+	int			 compact;
+	char			*offset;
 	struct mant_mandoc_node	*child;
 	struct mant_mandoc_node	*next;
 };
@@ -57,6 +62,8 @@ static struct mant_mandoc_node *copy_node(const struct roff_node *);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
 static void set_source_root(const char *);
+static void copy_normalized_data(struct mant_mandoc_node *,
+    const struct roff_node *);
 
 struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, int allow_include)
@@ -261,6 +268,7 @@ copy_node(const struct roff_node *source)
 		node->text = copy_string(source->string);
 	node->line = source->line;
 	node->column = source->pos + 1;
+	copy_normalized_data(node, source);
 	if (source->flags & NODE_NOSRC)
 		node->flags |= MANT_MANDOC_NODE_GENERATED;
 	if (source->flags & NODE_EOS)
@@ -291,8 +299,63 @@ free_node(struct mant_mandoc_node *node)
 		free_node(node->child);
 		free(node->macro);
 		free(node->text);
+		free(node->offset);
 		free(node);
 		node = next;
+	}
+}
+
+static void
+copy_normalized_data(struct mant_mandoc_node *node,
+    const struct roff_node *source)
+{
+	if (source->norm == NULL)
+		return;
+	if (source->tok == MDOC_Bl) {
+		node->compact = source->norm->Bl.comp;
+		node->offset = copy_string(source->norm->Bl.offs);
+		switch (source->norm->Bl.type) {
+		case LIST_bullet:
+		case LIST_dash:
+		case LIST_hyphen:
+			node->list_kind = MANT_MANDOC_LIST_BULLET;
+			break;
+		case LIST_enum:
+			node->list_kind = MANT_MANDOC_LIST_ORDERED;
+			break;
+		case LIST_diag:
+		case LIST_hang:
+		case LIST_inset:
+		case LIST_ohang:
+		case LIST_tag:
+			node->list_kind = MANT_MANDOC_LIST_DEFINITION;
+			break;
+		case LIST_column:
+			node->list_kind = MANT_MANDOC_LIST_COLUMN;
+			break;
+		case LIST_item:
+			node->list_kind = MANT_MANDOC_LIST_PLAIN;
+			break;
+		case LIST__NONE:
+		case LIST_MAX:
+			break;
+		}
+	} else if (source->tok == MDOC_Bd) {
+		node->compact = source->norm->Bd.comp;
+		node->offset = copy_string(source->norm->Bd.offs);
+		switch (source->norm->Bd.type) {
+		case DISP_unfilled:
+		case DISP_literal:
+			node->display_kind = MANT_MANDOC_DISPLAY_LITERAL;
+			break;
+		case DISP_centered:
+		case DISP_ragged:
+		case DISP_filled:
+			node->display_kind = MANT_MANDOC_DISPLAY_FILLED;
+			break;
+		case DISP__NONE:
+			break;
+		}
 	}
 }
 
@@ -371,6 +434,30 @@ unsigned int
 mant_mandoc_node_flags(const struct mant_mandoc_node *node)
 {
 	return node == NULL ? 0 : node->flags;
+}
+
+int
+mant_mandoc_node_list_kind(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? MANT_MANDOC_LIST_NONE : node->list_kind;
+}
+
+int
+mant_mandoc_node_display_kind(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? MANT_MANDOC_DISPLAY_NONE : node->display_kind;
+}
+
+int
+mant_mandoc_node_compact(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? 0 : node->compact;
+}
+
+const char *
+mant_mandoc_node_offset(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? NULL : node->offset;
 }
 
 const struct mant_mandoc_node *
