@@ -26,6 +26,9 @@ export function SearchBar({
   onDraftChange,
   onSubmit,
 }: SearchBarProps) {
+  const hasAppliedQuery = appliedQuery.length > 0 && draft === appliedQuery;
+  const hasNoMatches = hasAppliedQuery && matchCount === 0;
+
   return (
     <box height={1} flexDirection="row" backgroundColor="#181825" paddingLeft={1} paddingRight={1}>
       <text fg="#f9e2af">Find:</text>
@@ -45,13 +48,20 @@ export function SearchBar({
         onSubmit={onSubmit}
       />
       <box width={1} />
-      <text fg="#7f849c">
-        {draft !== appliedQuery
-          ? "Enter search · Esc cancel"
-          : matchCount > 0
-            ? `${matchIndex + 1}/${matchCount}  Enter next · Esc close`
-            : "0 matches  Esc close"}
-      </text>
+      {hasNoMatches ? (
+        <box flexDirection="row">
+          <box backgroundColor="#f38ba8" paddingLeft={1} paddingRight={1}>
+            <text fg="#11111b"><b>No matches</b></text>
+          </box>
+          <text fg="#f38ba8">  Edit query · Esc close</text>
+        </box>
+      ) : (
+        <text fg="#7f849c">
+          {draft !== appliedQuery || !hasAppliedQuery
+            ? "Enter search · Esc cancel"
+            : `${matchIndex + 1}/${matchCount}  Enter next · Esc close`}
+        </text>
+      )}
     </box>
   );
 }

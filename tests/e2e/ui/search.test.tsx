@@ -73,6 +73,33 @@ describe("App search (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("shows a prominent no-match result until the query is edited", async () => {
+    const setup = await renderApp(mockLsResult);
+
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("definitely-not-in-this-manual");
+    await flushKeyboard(setup);
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+
+    let frame = setup.captureCharFrame();
+    expect(frame).toContain("No matches");
+    expect(frame).toContain("Edit query · Esc close");
+    const noMatchSpan = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .find((span) => span.text === "No matches");
+    expect(noMatchSpan?.bg.toInts().slice(0, 3).join(",")).toBe("243,139,168");
+
+    setup.mockInput.typeText("x");
+    await flushKeyboard(setup);
+    frame = setup.captureCharFrame();
+    expect(frame).not.toContain("No matches");
+    expect(frame).toContain("Enter search · Esc cancel");
+
+    setup.renderer.destroy();
+  });
+
   test("shows every result while distinguishing the active result", async () => {
     const result = mockQuery("layered-search", [{
       id: "description",
