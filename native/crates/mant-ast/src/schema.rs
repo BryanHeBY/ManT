@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use schemars::{JsonSchema, Schema, generate::SchemaSettings};
 
-use crate::{QueryBundle, QueryExcerpt, QueryOutline, QueryRequest};
+use crate::{QueryBundle, QueryExcerpt, QueryOutline, QueryRequest, QuerySearch};
 
 /// Generate the JSON representation accepted when deserializing a request.
 #[must_use]
@@ -30,6 +30,12 @@ pub fn query_excerpt_json_schema() -> Schema {
     serialize_schema::<QueryExcerpt>()
 }
 
+/// Generate the structure-aware search result emitted by `mant-cli`.
+#[must_use]
+pub fn query_search_json_schema() -> Schema {
+    serialize_schema::<QuerySearch>()
+}
+
 /// Generate every public request and query-response contract in stable order.
 #[must_use]
 pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
@@ -38,6 +44,7 @@ pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
         ("outline", query_outline_json_schema()),
         ("query", query_bundle_json_schema()),
         ("request", query_request_json_schema()),
+        ("search", query_search_json_schema()),
     ])
 }
 

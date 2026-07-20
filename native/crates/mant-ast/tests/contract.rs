@@ -2,7 +2,7 @@
 
 use mant_ast::{
     Block, Inline, OutlineDetail, QueryBundle, QueryRequest, QuerySchema, QueryView, RequestSchema,
-    SourceFormat,
+    SearchCase, SearchScope, SearchSyntax, SourceFormat,
 };
 use serde_json::Value;
 
@@ -84,6 +84,42 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
         excerpt.view,
         QueryView::Excerpt {
             nodes: vec!["acls".to_owned()],
+        }
+    );
+
+    let search: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
+    )
+    .expect("valid search request");
+    assert_eq!(
+        search.view,
+        QueryView::Search {
+            pattern: "--acls".to_owned(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Insensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 2,
+            limit: 20,
+            offset: 0,
+        }
+    );
+
+    let search_defaults: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"search","pattern":"acls"}}"#,
+    )
+    .expect("search defaults");
+    assert_eq!(
+        search_defaults.view,
+        QueryView::Search {
+            pattern: "acls".to_owned(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Insensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 100,
+            offset: 0,
         }
     );
 

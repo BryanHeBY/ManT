@@ -2,7 +2,7 @@
 
 use mant_ast::{
     query_bundle_json_schema, query_excerpt_json_schema, query_json_schema_catalog,
-    query_outline_json_schema, query_request_json_schema,
+    query_outline_json_schema, query_request_json_schema, query_search_json_schema,
 };
 use serde_json::Value;
 
@@ -38,6 +38,7 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
     assert!(encoded.contains("mant.request/v2"));
     assert!(encoded.contains("outline"));
     assert!(encoded.contains("excerpt"));
+    assert!(encoded.contains("search"));
 }
 
 #[test]
@@ -46,6 +47,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
         (query_bundle_json_schema(), "mant.query/v2"),
         (query_outline_json_schema(), "mant.outline/v2"),
         (query_excerpt_json_schema(), "mant.excerpt/v2"),
+        (query_search_json_schema(), "mant.search/v1"),
     ] {
         let encoded = serde_json::to_string(&schema).expect("schema JSON");
         assert!(encoded.contains(marker), "missing marker {marker}");
@@ -64,6 +66,11 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     let outline = serde_json::to_string(&query_outline_json_schema()).expect("outline schema JSON");
     assert!(outline.contains("manual-entry"));
     assert!(outline.contains("options"));
+
+    let search = serde_json::to_string(&query_search_json_schema()).expect("search schema JSON");
+    assert!(search.contains("startLine"));
+    assert!(search.contains("manual-entry"));
+    assert!(search.contains("nextOffset"));
 }
 
 #[test]
@@ -71,6 +78,6 @@ fn schema_catalog_exposes_every_public_query_contract() {
     let catalog = query_json_schema_catalog();
     assert_eq!(
         catalog.keys().copied().collect::<Vec<_>>(),
-        ["excerpt", "outline", "query", "request"]
+        ["excerpt", "outline", "query", "request", "search"]
     );
 }

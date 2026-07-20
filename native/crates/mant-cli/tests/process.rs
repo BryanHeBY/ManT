@@ -24,6 +24,7 @@ fn help_exposes_one_positional_topic_and_long_options_only() {
     assert!(help.contains("--update-tldr"));
     assert!(help.contains("--protocol-version"));
     assert!(help.contains("--schema <CONTRACT>"));
+    assert!(help.contains("--search <PATTERN>"));
     assert!(!help.contains("--json"));
     assert!(!help.contains("update tldr"));
 }
@@ -65,6 +66,7 @@ fn protocol_version_is_a_clean_json_document() {
     assert_eq!(value["querySchema"], "mant.query/v2");
     assert_eq!(value["outlineSchema"], "mant.outline/v2");
     assert_eq!(value["excerptSchema"], "mant.excerpt/v2");
+    assert_eq!(value["searchSchema"], "mant.search/v1");
 }
 
 #[test]

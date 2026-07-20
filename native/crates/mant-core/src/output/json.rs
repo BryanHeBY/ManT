@@ -1,6 +1,6 @@
 //! Serializes stable native contracts without a TypeScript shape conversion.
 
-use mant_ast::{QueryBundle, QueryExcerpt, QueryOutline, TldrCacheUpdate};
+use mant_ast::{QueryBundle, QueryExcerpt, QueryOutline, QuerySearch, TldrCacheUpdate};
 
 /// Serialize a query contract in compact or human-readable form.
 ///
@@ -33,6 +33,15 @@ pub fn render_excerpt_json(
     pretty: bool,
 ) -> Result<String, serde_json::Error> {
     render_json(excerpt, pretty)
+}
+
+/// Serialize structure-aware search results in compact or human-readable form.
+///
+/// # Errors
+///
+/// Propagates the unlikely JSON writer failure from [`serde_json`].
+pub fn render_search_json(search: &QuerySearch, pretty: bool) -> Result<String, serde_json::Error> {
+    render_json(search, pretty)
 }
 
 /// Serialize the explicit tldr update result for a process boundary.

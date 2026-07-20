@@ -86,6 +86,7 @@ rather than a mirror of parser internals:
 mant-cli <topic> [--format <format>]   -> query Markdown, text, or JSON
 mant-cli <topic> --outline [options]   -> selectable section or option tree
 mant-cli <topic> --node <path-or-id>   -> selected section subtrees
+mant-cli <topic> --search <pattern>    -> matches with node and Markdown locations
 mant-cli --update-tldr                 -> update result JSON
 mant-cli --protocol-version            -> protocol description JSON
 mant-cli --schema <contract>           -> generated JSON Schema
@@ -103,10 +104,11 @@ additional native processes.
 `mant.request/v2` requires a `schema` marker, `topic`, and a closed `view`
 variant; it accepts an optional manual `section` and rejects unknown fields at
 both the envelope and view levels. `full` returns `mant.query/v2`, `outline`
-selects either section-only or option-aware structure, and `excerpt` selects
-one or more node paths, IDs, or aliases. `mant-cli --schema request` exposes
-that exact input contract; `query`, `outline`, and `excerpt` expose the output
-contracts, while `all` returns a named catalog. The schemas are derived with
+selects either section-only or option-aware structure, `excerpt` selects one
+or more node paths, IDs, or aliases, and `search` returns `mant.search/v1`.
+`mant-cli --schema request` exposes that exact input contract; `query`,
+`outline`, `excerpt`, and `search` expose the output contracts, while `all`
+returns a named catalog. The schemas are derived with
 Schemars from `mant-ast`'s Serde types, explicitly pinned to JSON Schema Draft
 2020-12, and generated separately for deserialize and serialize behavior.
 
@@ -132,6 +134,16 @@ preserves source order. Their JSON contracts are `mant.outline/v2` and
 `mant.excerpt/v2`; plain text and CommonMark are also available. The TUI uses
 the same `QueryRequest` contract with `view.kind = "full"`; agents can select
 outline and excerpt projections directly through `--request-json`.
+
+Search is a native projection of the same full query. Rust renders one
+canonical CommonMark document, builds visible-text byte mappings from its
+CommonMark event stream, and applies the same literal or regular-expression
+matcher regardless of output format. Anchors already emitted for sections and
+semantic definitions act as a source map, so every occurrence reports both a
+stable Markdown range and the nearest path accepted by excerpt selection.
+The TUI keeps its in-memory interaction loop and never spawns a process while
+typing; this result model is the shared semantic basis for future UI indexing,
+not a second parser or a dependency on the system `grep` executable.
 
 ## Parsing and fallback policy
 

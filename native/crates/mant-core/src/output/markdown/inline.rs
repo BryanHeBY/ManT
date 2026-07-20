@@ -155,7 +155,7 @@ fn render_link(target: &str, title: Option<&str>, children: &[Inline]) -> String
     )
 }
 
-pub(super) fn html_anchor(id: &str) -> String {
+pub(crate) fn html_anchor(id: &str) -> String {
     format!("<a id=\"{}\"></a>", escape_html_attribute(id))
 }
 

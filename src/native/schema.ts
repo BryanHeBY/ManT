@@ -161,7 +161,18 @@ export interface MantQueryRequest {
   view:
     | { kind: "full" }
     | { kind: "outline"; detail: "sections" | "options" }
-    | { kind: "excerpt"; nodes: string[] };
+    | { kind: "excerpt"; nodes: string[] }
+    | {
+      kind: "search";
+      pattern: string;
+      syntax?: "literal" | "regex";
+      case?: "insensitive" | "sensitive" | "smart";
+      scope?: "visible" | "markdown";
+      word?: boolean;
+      contextLines?: number;
+      limit?: number;
+      offset?: number;
+    };
 }
 
 export interface NativeCliProtocol {
@@ -170,8 +181,9 @@ export interface NativeCliProtocol {
   requestSchema: "mant.request/v2";
   querySchema: "mant.query/v2";
   documentSchema: "mant.document/v2";
-  outlineSchema?: "mant.outline/v2";
-  excerptSchema?: "mant.excerpt/v2";
+  outlineSchema: "mant.outline/v2";
+  excerptSchema: "mant.excerpt/v2";
+  searchSchema: "mant.search/v1";
 }
 
 type JsonObject = Record<string, unknown>;
@@ -202,12 +214,9 @@ export function decodeNativeCliProtocol(input: string): NativeCliProtocol {
   expectLiteral(object.requestSchema, "mant.request/v2", "$protocol.requestSchema");
   expectLiteral(object.querySchema, "mant.query/v2", "$protocol.querySchema");
   expectLiteral(object.documentSchema, "mant.document/v2", "$protocol.documentSchema");
-  if (object.outlineSchema !== undefined) {
-    expectLiteral(object.outlineSchema, "mant.outline/v2", "$protocol.outlineSchema");
-  }
-  if (object.excerptSchema !== undefined) {
-    expectLiteral(object.excerptSchema, "mant.excerpt/v2", "$protocol.excerptSchema");
-  }
+  expectLiteral(object.outlineSchema, "mant.outline/v2", "$protocol.outlineSchema");
+  expectLiteral(object.excerptSchema, "mant.excerpt/v2", "$protocol.excerptSchema");
+  expectLiteral(object.searchSchema, "mant.search/v1", "$protocol.searchSchema");
   return object as unknown as NativeCliProtocol;
 }
 

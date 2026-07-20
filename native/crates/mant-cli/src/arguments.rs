@@ -7,7 +7,10 @@
 use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
-use mant_ast::{OutlineDetail, QueryRequest, QueryView, RequestSchema};
+use mant_ast::{
+    OutlineDetail, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
+    default_search_limit,
+};
 
 // ── Public command model ───────────────────────────────────────────────────
 
@@ -26,6 +29,7 @@ pub(crate) enum SchemaContract {
     Query,
     Outline,
     Excerpt,
+    Search,
     All,
 }
 
@@ -41,6 +45,40 @@ impl From<OutlineMode> for OutlineDetail {
         match value {
             OutlineMode::Sections => Self::Sections,
             OutlineMode::Options => Self::Options,
+        }
+    }
+}
+
+/// Case policy exposed without coupling the AST crate to clap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum SearchCaseMode {
+    Insensitive,
+    Sensitive,
+    Smart,
+}
+
+impl From<SearchCaseMode> for SearchCase {
+    fn from(value: SearchCaseMode) -> Self {
+        match value {
+            SearchCaseMode::Insensitive => Self::Insensitive,
+            SearchCaseMode::Sensitive => Self::Sensitive,
+            SearchCaseMode::Smart => Self::Smart,
+        }
+    }
+}
+
+/// Representation searched while results retain full-Markdown coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum SearchScopeMode {
+    Visible,
+    Markdown,
+}
+
+impl From<SearchScopeMode> for SearchScope {
+    fn from(value: SearchScopeMode) -> Self {
+        match value {
+            SearchScopeMode::Visible => Self::Visible,
+            SearchScopeMode::Markdown => Self::Markdown,
         }
     }
 }
@@ -85,7 +123,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli tar --outline options\n  mant-cli tar --node acls --format markdown\n  mant-cli gcc --node 4.2 --format markdown\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli tar --outline options\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
         .required(true)
@@ -108,23 +146,55 @@ struct Cli {
     #[arg(long, value_name = "NODE", value_parser = non_empty, requires = "topic")]
     node: Vec<String>,
 
+    /// Search visible manual text and report Markdown lines plus outline nodes.
+    #[arg(long, visible_alias = "grep", value_name = "PATTERN", value_parser = non_empty, requires = "topic", conflicts_with_all = ["outline", "node"])]
+    search: Option<String>,
+
+    /// Interpret the search pattern as a regular expression instead of a literal.
+    #[arg(long, requires = "search")]
+    regex: bool,
+
+    /// Select case handling for search matches.
+    #[arg(long = "case", value_name = "POLICY", value_enum, requires = "search")]
+    search_case: Option<SearchCaseMode>,
+
+    /// Match the pattern only at Unicode-aware word boundaries.
+    #[arg(long, requires = "search")]
+    word: bool,
+
+    /// Search visible text or the generated Markdown source.
+    #[arg(long = "scope", value_name = "SCOPE", value_enum, requires = "search")]
+    search_scope: Option<SearchScopeMode>,
+
+    /// Include this many full Markdown lines before and after each match.
+    #[arg(long, value_name = "LINES", requires = "search")]
+    context: Option<u16>,
+
+    /// Return at most this many matches.
+    #[arg(long, value_name = "COUNT", requires = "search")]
+    limit: Option<u32>,
+
+    /// Skip this many matches for deterministic pagination.
+    #[arg(long, value_name = "COUNT", requires = "search")]
+    offset: Option<u32>,
+
     /// Read a versioned `QueryRequest` JSON object from standard input.
-    #[arg(long, conflicts_with_all = ["section", "outline", "node"])]
+    #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "regex", "search_case", "word", "search_scope", "context", "limit", "offset"])]
     request_json: bool,
 
     /// Update tldr data through the installed client or `ManT` cache.
-    #[arg(long, conflicts_with_all = ["section", "outline", "node", "format"])]
+    #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "format"])]
     update_tldr: bool,
 
     /// Print the native protocol description as JSON.
-    #[arg(long, conflicts_with_all = ["section", "outline", "node", "format"])]
+    #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "format"])]
     protocol_version: bool,
 
-    /// Print a generated JSON Schema contract (`request`, `query`, `outline`, `excerpt`, or `all`).
-    #[arg(long, value_name = "CONTRACT", value_enum, conflicts_with_all = ["section", "outline", "node", "format"])]
+    /// Print a generated JSON Schema contract (`request`, `query`, `outline`, `excerpt`, `search`, or `all`).
+    #[arg(long, value_name = "CONTRACT", value_enum, conflicts_with_all = ["section", "outline", "node", "search", "format"])]
     schema: Option<SchemaContract>,
 
-    /// Output format. Content defaults to markdown; outlines default to text.
+    /// Output format. Full content defaults to markdown; outlines and search default to text.
     #[arg(long, value_name = "FORMAT", value_enum)]
     format: Option<QueryFormat>,
 
@@ -175,13 +245,30 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         QueryView::Outline {
             detail: detail.into(),
         }
+    } else if let Some(pattern) = parsed.search {
+        QueryView::Search {
+            pattern,
+            syntax: if parsed.regex {
+                SearchSyntax::Regex
+            } else {
+                SearchSyntax::Literal
+            },
+            case: parsed
+                .search_case
+                .map_or(SearchCase::Insensitive, Into::into),
+            scope: parsed.search_scope.map_or(SearchScope::Visible, Into::into),
+            word: parsed.word,
+            context_lines: parsed.context.unwrap_or(0),
+            limit: parsed.limit.unwrap_or_else(default_search_limit),
+            offset: parsed.offset.unwrap_or(0),
+        }
     } else if parsed.node.is_empty() {
         QueryView::Full {}
     } else {
         QueryView::Excerpt { nodes: parsed.node }
     };
     let format = parsed.format.unwrap_or(match &view {
-        QueryView::Outline { .. } => QueryFormat::Text,
+        QueryView::Outline { .. } | QueryView::Search { .. } => QueryFormat::Text,
         QueryView::Full { .. } | QueryView::Excerpt { .. } => QueryFormat::Markdown,
     });
     if parsed.compact && format != QueryFormat::Json {
@@ -224,7 +311,10 @@ fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Erro
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{OutlineDetail, QueryRequest, QueryView, RequestSchema};
+    use mant_ast::{
+        OutlineDetail, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope,
+        SearchSyntax,
+    };
 
     use super::{Command, QueryFormat, QuerySource, SchemaContract, parse};
 
@@ -341,6 +431,73 @@ mod tests {
     }
 
     #[test]
+    fn parses_literal_and_regex_searches_with_text_as_the_default() {
+        assert_eq!(
+            parse(&args(&["tar", "--search=--acls"])).expect("literal search"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V2,
+                    topic: "tar".to_owned(),
+                    section: None,
+                    view: QueryView::Search {
+                        pattern: "--acls".to_owned(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Insensitive,
+                        scope: SearchScope::Visible,
+                        word: false,
+                        context_lines: 0,
+                        limit: 100,
+                        offset: 0,
+                    },
+                }),
+                format: QueryFormat::Text,
+                pretty: true,
+            }
+        );
+        assert_eq!(
+            parse(&args(&[
+                "git",
+                "--grep",
+                "worktree|branch",
+                "--regex",
+                "--case",
+                "smart",
+                "--word",
+                "--scope",
+                "markdown",
+                "--context",
+                "2",
+                "--limit",
+                "20",
+                "--offset",
+                "5",
+                "--format",
+                "json",
+            ]))
+            .expect("regex search"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V2,
+                    topic: "git".to_owned(),
+                    section: None,
+                    view: QueryView::Search {
+                        pattern: "worktree|branch".to_owned(),
+                        syntax: SearchSyntax::Regex,
+                        case: SearchCase::Smart,
+                        scope: SearchScope::Markdown,
+                        word: true,
+                        context_lines: 2,
+                        limit: 20,
+                        offset: 5,
+                    },
+                }),
+                format: QueryFormat::Json,
+                pretty: true,
+            }
+        );
+    }
+
+    #[test]
     fn parses_long_option_actions_without_ad_hoc_subcommands() {
         assert_eq!(
             parse(&args(&["--update-tldr"])).expect("update"),
@@ -368,6 +525,10 @@ mod tests {
             vec!["--request-json", "--section", "1", "--format", "json"],
             vec!["--request-json", "--outline", "--format", "json"],
             vec!["git", "--outline", "--node", "1"],
+            vec!["git", "--outline", "--search", "branch"],
+            vec!["git", "--node", "1", "--search", "branch"],
+            vec!["git", "--regex"],
+            vec!["git", "--search", "branch", "--limit", "many"],
             vec!["git", "--node"],
             vec!["--section", "1"],
             vec!["--update-tldr", "--format", "json"],

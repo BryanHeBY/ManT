@@ -6,6 +6,7 @@ mod mandoc;
 mod output;
 mod projection;
 mod query;
+mod search;
 mod source;
 mod tldr;
 
@@ -14,10 +15,12 @@ pub use mandoc::{lower_mandoc_document, parse_manual_source};
 pub use output::{
     render_excerpt_json, render_excerpt_markdown, render_excerpt_text, render_markdown,
     render_outline_json, render_outline_markdown, render_outline_text, render_query_json,
-    render_query_text, render_update_json,
+    render_query_text, render_search_json, render_search_markdown, render_search_text,
+    render_update_json,
 };
 pub use projection::{ProjectionError, build_outline, build_outline_with_detail, select_excerpt};
 pub use query::{QueryError, query};
+pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,
     locate_manual_source, locate_manual_source_with,

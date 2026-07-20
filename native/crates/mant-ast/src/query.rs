@@ -3,7 +3,10 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{MantDocument, OutlineDetail, TldrDocument};
+use crate::{
+    MantDocument, OutlineDetail, SearchCase, SearchScope, SearchSyntax, TldrDocument,
+    default_search_limit,
+};
 
 /// Exact schema marker for a complete `ManT` query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -37,6 +40,26 @@ pub enum QueryView {
     Excerpt {
         #[schemars(length(min = 1))]
         nodes: Vec<String>,
+    },
+    Search {
+        #[schemars(length(min = 1, max = 4096))]
+        pattern: String,
+        #[serde(default)]
+        syntax: SearchSyntax,
+        #[serde(default)]
+        case: SearchCase,
+        #[serde(default)]
+        scope: SearchScope,
+        #[serde(default)]
+        word: bool,
+        #[serde(default)]
+        #[schemars(range(max = 100))]
+        context_lines: u16,
+        #[serde(default = "default_search_limit")]
+        #[schemars(range(min = 1, max = 10000))]
+        limit: u32,
+        #[serde(default)]
+        offset: u32,
     },
 }
 

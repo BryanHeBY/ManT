@@ -19,7 +19,7 @@ const nativeCliAvailable = Bun.spawnSync(
 ).exitCode === 0;
 
 const describeNativeCli = nativeCliAvailable ? describe : describe.skip;
-const contracts = ["request", "query", "outline", "excerpt"] as const;
+const contracts = ["request", "query", "outline", "excerpt", "search"] as const;
 type Contract = typeof contracts[number];
 type SchemaCatalog = Record<Contract, AnySchema>;
 
@@ -31,6 +31,7 @@ function compile(schema: AnySchema): ValidateFunction {
     allErrors: true,
     strict: true,
     formats: {
+      uint8: true,
       uint16: true,
       uint32: true,
       uint64: true,
@@ -75,6 +76,20 @@ describeNativeCli("generated native JSON Schemas", () => {
       topic: "tar",
       view: { kind: "excerpt", nodes: ["acls"] },
     });
+    expectValid(validateRequest, {
+      schema: "mant.request/v2",
+      topic: "tar",
+      view: {
+        kind: "search",
+        pattern: "--acls",
+        syntax: "literal",
+        case: "insensitive",
+        scope: "visible",
+        contextLines: 1,
+        limit: 20,
+        offset: 0,
+      },
+    });
     expect(validateRequest({ topic: "printf" })).toBe(false);
     expect(validateRequest({
       schema: "mant.request/v2",
@@ -95,5 +110,34 @@ describeNativeCli("generated native JSON Schemas", () => {
 
     const query = JSON.parse(await Bun.file(queryFixturePath).text()) as unknown;
     expectValid(compile(catalog.query), query);
+
+    expectValid(compile(catalog.search), {
+      schema: "mant.search/v1",
+      topic: "tar",
+      manualSection: "1",
+      query: {
+        pattern: "--acls",
+        syntax: "literal",
+        case: "insensitive",
+        scope: "visible",
+        word: false,
+        contextLines: 0,
+        limit: 100,
+        offset: 0,
+      },
+      render: {
+        schema: "mant.markdown/v1",
+        format: "markdown",
+        scope: "full",
+        lineBase: 1,
+        columnBase: 1,
+        lineCount: 900,
+      },
+      total: 0,
+      returned: 0,
+      offset: 0,
+      truncated: false,
+      matches: [],
+    });
   });
 });

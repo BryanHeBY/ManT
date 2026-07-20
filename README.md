@@ -119,6 +119,22 @@ The optional `options` outline detail adds normalized command-line option
 entries beneath their sections; each can be selected by its printed path, ID,
 or alias without loading an unrelated section into an agent's context.
 
+Search the same canonical document without scraping terminal output:
+
+```sh
+mant-cli tar --search=--acls
+mant-cli gcc --search warning --context 1
+mant-cli git --search 'worktree|branch' --regex --case smart
+mant-cli tar --search=--acls --format json --compact
+```
+
+`--search` (also `--grep`) defaults to a case-insensitive literal match over
+visible document text. `--regex`, `--word`, `--case`, `--scope`, `--context`,
+`--limit`, and `--offset` make matching and pagination explicit. Each result
+contains a one-based line and column in ManT's complete Markdown rendering and
+the nearest section or option path accepted directly by `--node`. Markdown
+coordinates therefore stay stable across text, JSON, and Markdown reports.
+
 Use the versioned JSON contract for structured consumers:
 
 ```sh
@@ -130,7 +146,7 @@ mant-cli --schema request
 mant-cli --schema all --compact
 ```
 
-`--schema` accepts `request`, `query`, `outline`, `excerpt`, or `all`. These
+`--schema` accepts `request`, `query`, `outline`, `excerpt`, `search`, or `all`. These
 Draft 2020-12 JSON Schemas are generated from the same Rust types used by the
 runtime, so agents can discover the exact input and output contracts without
 copying declarations from documentation. A versioned stdio request looks like:
@@ -149,6 +165,7 @@ The same input boundary can request projections without inventing CLI syntax:
 ```json
 {"schema":"mant.request/v2","topic":"tar","view":{"kind":"outline","detail":"options"}}
 {"schema":"mant.request/v2","topic":"tar","view":{"kind":"excerpt","nodes":["acls"]}}
+{"schema":"mant.request/v2","topic":"tar","view":{"kind":"search","pattern":"--acls","limit":20}}
 ```
 
 Update tldr data through its installed client when available, otherwise through

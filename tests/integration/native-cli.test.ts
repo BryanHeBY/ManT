@@ -32,6 +32,7 @@ describeNativeCli("real native CLI process boundary", () => {
     expect(protocol.documentSchema).toBe("mant.document/v2");
     expect(protocol.outlineSchema).toBe("mant.outline/v2");
     expect(protocol.excerptSchema).toBe("mant.excerpt/v2");
+    expect(protocol.searchSchema).toBe("mant.search/v1");
   });
 
   testWithManual("returns a validated manual through the native query pipeline", async () => {

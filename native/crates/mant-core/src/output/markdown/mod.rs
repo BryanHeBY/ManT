@@ -202,6 +202,8 @@ fn render_tldr(page: &TldrDocument) -> Vec<String> {
     output
 }
 
+pub(crate) use inline::html_anchor;
+
 fn render_more_information(value: &str) -> String {
     let value = value.trim();
     if value.starts_with("http://") || value.starts_with("https://") {

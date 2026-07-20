@@ -7,9 +7,11 @@ use std::{collections::HashSet, path::PathBuf, sync::OnceLock};
 
 use mant_ast::{
     Block, ExcerptSelection, Inline, MantDocument, OutlineDetail, OutlineNode, QueryBundle,
-    QuerySchema, Section, SourceFormat,
+    QuerySchema, SearchCase, SearchQuery, SearchScope, SearchSyntax, Section, SourceFormat,
 };
-use mant_core::{build_outline, build_outline_with_detail, parse_manual_source, select_excerpt};
+use mant_core::{
+    build_outline, build_outline_with_detail, parse_manual_source, search_query, select_excerpt,
+};
 
 static LS: OnceLock<MantDocument> = OnceLock::new();
 static GIT: OnceLock<MantDocument> = OnceLock::new();
@@ -483,6 +485,44 @@ fn tar_options_are_addressable_in_v2_outlines_and_excerpts() {
         excerpt.selections.as_slice(),
         [ExcerptSelection::ManualEntry { entry, .. }]
             if entry.identity.as_ref().is_some_and(|value| value.id == identity.id)
+    ));
+}
+
+#[test]
+fn tar_search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
+    let query = manual_query("tar");
+    let result = search_query(
+        &query,
+        &SearchQuery {
+            pattern: "--acls".to_owned(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 1,
+            limit: 100,
+            offset: 0,
+        },
+    )
+    .expect("search tar --acls");
+
+    assert!(result.total >= 1, "the option term should be searchable");
+    let option = result
+        .matches
+        .iter()
+        .find(|found| matches!(&found.node, mant_ast::SearchNode::ManualEntry { names, .. } if names.iter().any(|name| name == "--acls")))
+        .expect("--acls option match");
+    assert!(option.node.path().contains("/o"));
+    assert!(option.markdown.start_line > 1);
+    assert!(option.markdown.start_column > 0);
+    assert!(option.preview.contains("--acls"));
+
+    let excerpt = select_excerpt(&query, &[option.node.path().to_owned()])
+        .expect("search node can be passed directly to --node");
+    assert!(matches!(
+        excerpt.selections.as_slice(),
+        [ExcerptSelection::ManualEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| identity.names.iter().any(|name| name == "--acls"))
     ));
 }
 

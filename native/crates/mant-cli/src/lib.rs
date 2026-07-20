@@ -8,8 +8,8 @@ mod arguments;
 
 use std::io::{self, Read, Write};
 
-use mant_ast::{QueryBundle, QueryRequest, QueryView, TldrCacheUpdate};
-use mant_core::{ProjectionError, QueryError};
+use mant_ast::{QueryBundle, QueryRequest, QueryView, SearchQuery, TldrCacheUpdate};
+use mant_core::{ProjectionError, QueryError, SearchError};
 use serde::Serialize;
 
 use arguments::{Command, QueryFormat, QuerySource, SchemaContract};
@@ -31,6 +31,7 @@ struct ProtocolDescription<'a> {
     document_schema: &'a str,
     outline_schema: &'a str,
     excerpt_schema: &'a str,
+    search_schema: &'a str,
 }
 
 // ── Host boundary ─────────────────────────────────────────────────────────
@@ -106,6 +107,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
                 document_schema: "mant.document/v2",
                 outline_schema: "mant.outline/v2",
                 excerpt_schema: "mant.excerpt/v2",
+                search_schema: "mant.search/v1",
             },
             pretty,
         ),
@@ -114,6 +116,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             SchemaContract::Query => render_json(&mant_ast::query_bundle_json_schema(), pretty),
             SchemaContract::Outline => render_json(&mant_ast::query_outline_json_schema(), pretty),
             SchemaContract::Excerpt => render_json(&mant_ast::query_excerpt_json_schema(), pretty),
+            SchemaContract::Search => render_json(&mant_ast::query_search_json_schema(), pretty),
             SchemaContract::All => render_json(&mant_ast::query_json_schema_catalog(), pretty),
         },
         Command::UpdateTldr { pretty } => {
@@ -151,6 +154,37 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
                             .map_err(Failure::operational),
                     }
                 }
+                QueryView::Search {
+                    pattern,
+                    syntax,
+                    case,
+                    scope,
+                    word,
+                    context_lines,
+                    limit,
+                    offset,
+                } => {
+                    let search = mant_core::search_query(
+                        &query,
+                        &SearchQuery {
+                            pattern,
+                            syntax,
+                            case,
+                            scope,
+                            word,
+                            context_lines,
+                            limit,
+                            offset,
+                        },
+                    )
+                    .map_err(search_failure)?;
+                    match format {
+                        QueryFormat::Markdown => Ok(mant_core::render_search_markdown(&search)),
+                        QueryFormat::Text => Ok(mant_core::render_search_text(&search)),
+                        QueryFormat::Json => mant_core::render_search_json(&search, pretty)
+                            .map_err(Failure::operational),
+                    }
+                }
             }
         }
     }
@@ -177,6 +211,10 @@ fn projection_failure(error: ProjectionError) -> Failure {
         | ProjectionError::EmptySelector
         | ProjectionError::UnknownSelector { .. } => Failure::usage(error),
     }
+}
+
+fn search_failure(error: SearchError) -> Failure {
+    Failure::usage(error)
 }
 
 fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<QueryRequest, Failure> {
@@ -218,6 +256,29 @@ fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
         if nodes.iter().any(|node| node.trim().is_empty()) {
             return Err(Failure::usage("outline node must not be empty"));
         }
+    }
+    if let QueryView::Search {
+        pattern,
+        syntax,
+        case,
+        scope,
+        word,
+        context_lines,
+        limit,
+        offset,
+    } = &request.view
+    {
+        mant_core::validate_search_query(&SearchQuery {
+            pattern: pattern.clone(),
+            syntax: *syntax,
+            case: *case,
+            scope: *scope,
+            word: *word,
+            context_lines: *context_lines,
+            limit: *limit,
+            offset: *offset,
+        })
+        .map_err(search_failure)?;
     }
     Ok(())
 }
@@ -462,6 +523,10 @@ mod tests {
             br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"full"},"renderer":"html"}"#.as_slice(),
             br#"{"schema":"mant.request/v2","topic":"   ","view":{"kind":"full"}}"#.as_slice(),
             br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
+            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
+            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
+            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -542,6 +607,59 @@ mod tests {
     }
 
     #[test]
+    fn searches_report_markdown_coordinates_and_reusable_outline_nodes() {
+        let host = FakeHost::with_manual_and_tldr();
+        let (status, output, diagnostics) = invoke(
+            &[
+                "demo",
+                "--search",
+                "common details",
+                "--format",
+                "json",
+                "--compact",
+            ],
+            b"",
+            &host,
+        );
+
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
+        assert_eq!(value["schema"], "mant.search/v1");
+        assert_eq!(value["total"], 1);
+        assert_eq!(value["matches"][0]["node"]["path"], "2.1");
+        assert_eq!(value["matches"][0]["section"]["id"], "common-3");
+        assert!(value["matches"][0]["markdown"]["startLine"].as_u64() > Some(1));
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(&["demo", "--grep", "missing"], b"", &host);
+        assert_eq!(status, 0);
+        assert_eq!(output, "No matches for \"missing\" in demo(1).\n");
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn stdin_search_requests_use_the_same_projection_contract() {
+        let host = FakeHost::with_manual();
+        let (status, output, diagnostics) = invoke(
+            &["--request-json", "--format", "json", "--compact"],
+            br#"{"schema":"mant.request/v2","topic":"demo","view":{"kind":"search","pattern":"options","limit":10}}"#,
+            &host,
+        );
+
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
+        assert_eq!(value["schema"], "mant.search/v1");
+        assert_eq!(value["query"]["syntax"], "literal");
+        assert_eq!(value["query"]["scope"], "visible");
+        assert!(
+            value["matches"]
+                .as_array()
+                .is_some_and(|matches| !matches.is_empty())
+        );
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
     fn unknown_nodes_are_concise_usage_failures() {
         let host = FakeHost::with_manual();
         let (status, output, diagnostics) =
@@ -574,6 +692,7 @@ mod tests {
         assert_eq!(value["requestSchema"], "mant.request/v2");
         assert_eq!(value["outlineSchema"], "mant.outline/v2");
         assert_eq!(value["excerptSchema"], "mant.excerpt/v2");
+        assert_eq!(value["searchSchema"], "mant.search/v1");
         assert!(diagnostics.is_empty());
     }
 
@@ -615,6 +734,7 @@ mod tests {
         assert!(value["query"].is_object());
         assert!(value["outline"].is_object());
         assert!(value["excerpt"].is_object());
+        assert!(value["search"].is_object());
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);
