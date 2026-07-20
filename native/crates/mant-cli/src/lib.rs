@@ -8,7 +8,7 @@ mod arguments;
 
 use std::io::{self, Read, Write};
 
-use mant_ast::{QueryBundle, QueryRequest, QueryView, SearchQuery, TldrCacheUpdate};
+use mant_ast::{Diagnostic, QueryBundle, QueryRequest, QueryView, SearchQuery, TldrCacheUpdate};
 use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
 use serde::Serialize;
 
@@ -83,7 +83,7 @@ fn run_with_host(
         Err(error) => return report_argument_error(&error, diagnostics),
     };
 
-    let rendered = match execute(command, input, host) {
+    let rendered = match execute(command, input, diagnostics, host) {
         Ok(rendered) => rendered,
         Err(error) => return report_failure(&error, diagnostics),
     };
@@ -95,7 +95,12 @@ fn run_with_host(
     }
 }
 
-fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result<String, Failure> {
+fn execute(
+    command: Command,
+    input: &mut dyn Read,
+    diagnostics: &mut dyn Write,
+    host: &dyn CliHost,
+) -> Result<String, Failure> {
     match command {
         Command::Help(help) => Ok(help),
         Command::ProtocolVersion { pretty } => render_json(
@@ -133,6 +138,9 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             validate_query_request(&request)?;
             let view = request.view.clone();
             let query = host.query(&request, QueryPolicy { force_libmandoc })?;
+            if force_libmandoc {
+                report_native_diagnostics(&query, diagnostics)?;
+            }
             match view {
                 QueryView::Full { .. } => render_full_query(&query, format, pretty),
                 QueryView::Outline { detail } => {
@@ -189,6 +197,28 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             }
         }
     }
+}
+
+fn report_native_diagnostics(query: &QueryBundle, output: &mut dyn Write) -> Result<(), Failure> {
+    let Some(manual) = &query.manual else {
+        return Ok(());
+    };
+    for diagnostic in &manual.diagnostics {
+        writeln!(
+            output,
+            "mant-cli: libmandoc {}",
+            format_diagnostic(diagnostic)
+        )
+        .map_err(Failure::operational)?;
+    }
+    Ok(())
+}
+
+fn format_diagnostic(diagnostic: &Diagnostic) -> String {
+    let location = diagnostic.source.map_or_else(String::new, |source| {
+        format!(" at {}:{}", source.line, source.column)
+    });
+    format!("{:?}{location}: {}", diagnostic.level, diagnostic.message)
 }
 
 fn render_full_query(
@@ -355,9 +385,9 @@ mod tests {
     use std::cell::Cell;
 
     use mant_ast::{
-        Block, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument,
-        Producer, QueryBundle, QueryRequest, QuerySchema, Section, SourceFormat, TldrCacheAction,
-        TldrCacheUpdate, TldrDocument,
+        Block, Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, Inline,
+        LayoutHint, MantDocument, Producer, QueryBundle, QueryRequest, QuerySchema, Section,
+        SourceFormat, SourceSpan, TldrCacheAction, TldrCacheUpdate, TldrDocument,
     };
 
     use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, run_with_host};
@@ -609,6 +639,36 @@ mod tests {
         assert!(value.get("producer").is_none());
         assert!(value.get("diagnostics").is_none());
         assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn forced_queries_print_native_findings_on_stderr() {
+        let mut host = FakeHost::with_manual();
+        host.manual
+            .as_mut()
+            .expect("manual")
+            .diagnostics
+            .push(Diagnostic {
+                level: DiagnosticLevel::Unsupported,
+                code: None,
+                message: "unsupported roff request: xx".to_owned(),
+                source: Some(SourceSpan {
+                    line: 42,
+                    column: 3,
+                    end_line: None,
+                    end_column: None,
+                }),
+            });
+
+        let (status, output, diagnostics) =
+            invoke(&["demo", "--outline", "--force-libmandoc"], b"", &host);
+
+        assert_eq!(status, 0);
+        assert!(output.contains("[name-1] NAME"));
+        assert_eq!(
+            diagnostics,
+            "mant-cli: libmandoc Unsupported at 42:3: unsupported roff request: xx\n"
+        );
     }
 
     #[test]

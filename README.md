@@ -144,7 +144,9 @@ mant-cli tar --force-libmandoc --format json
 ```
 
 This diagnostic switch disables groff fallback for that invocation. It is a
-local execution policy, so it is deliberately not a field in the versioned
+strict local execution policy: a failed or empty libmandoc parse is reported
+even when a cached tldr page exists, and recoverable parser findings are
+printed on standard error. It is deliberately not a field in the versioned
 request JSON contract.
 
 Use the versioned JSON contract for structured consumers:

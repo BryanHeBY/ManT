@@ -159,8 +159,10 @@ document by itself. ManT renders groff output as a comparison and falls back
 only when the native document loses heading topology or materially less visible
 text. `--force-libmandoc` bypasses that comparison and all groff execution so a
 developer can inspect the native AST and diagnostics directly. This flag is an
-execution policy outside `mant.request/v2`; identical requests retain identical
-query semantics regardless of the chosen diagnostic policy.
+execution policy outside `mant.request/v2`; it treats an empty native manual as
+an error even when tldr content exists and reports recoverable native findings
+on standard error. Identical requests retain identical query semantics
+regardless of the chosen diagnostic policy.
 
 Direct lowering is covered by deterministic native fixtures and was compared
 against the former TypeScript implementation on large installed ls, git, gcc,

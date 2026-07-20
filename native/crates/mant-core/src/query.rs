@@ -129,6 +129,28 @@ fn query_with(
     let tldr = host.read_tldr(topic).ok().flatten();
     let manual = load_manual(&manual_request, policy, host);
 
+    // Force mode is an explicit parser diagnostic request. A tldr page may
+    // augment a successful manual, but must not turn a failed native parse
+    // into an apparently successful tldr-only response.
+    if policy.force_libmandoc {
+        return match manual {
+            Ok(Some(manual)) => Ok(QueryBundle {
+                schema: QuerySchema::V2,
+                topic: topic.to_owned(),
+                section,
+                manual: Some(manual),
+                tldr,
+            }),
+            Ok(None) => Err(QueryError::NoReadableContent {
+                topic: topic.to_owned(),
+            }),
+            Err(detail) => Err(QueryError::Manual {
+                topic: topic.to_owned(),
+                detail,
+            }),
+        };
+    }
+
     match manual {
         Ok(Some(manual)) => Ok(QueryBundle {
             schema: QuerySchema::V2,
@@ -172,14 +194,29 @@ fn load_manual(
         return match direct {
             Ok(document) if !document.sections.is_empty() => Ok(Some(document)),
             Ok(document) => {
-                let detail = document
+                let path = source_path.as_deref().map_or_else(
+                    || "<unknown source>".to_owned(),
+                    |path| path.display().to_string(),
+                );
+                let diagnostics = document
                     .diagnostics
-                    .first()
-                    .map(|diagnostic| format!(": {}", diagnostic.message))
-                    .unwrap_or_default();
+                    .iter()
+                    .map(|diagnostic| {
+                        let location = diagnostic.source.map_or_else(String::new, |source| {
+                            format!(" at {}:{}", source.line, source.column)
+                        });
+                        format!("{:?}{location}: {}", diagnostic.level, diagnostic.message)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                let detail = if diagnostics.is_empty() {
+                    String::new()
+                } else {
+                    format!("; diagnostics: {diagnostics}")
+                };
                 Err(format!(
-                    "could not load manual '{}': libmandoc produced no readable sections{detail}",
-                    request.topic
+                    "could not load manual '{}': libmandoc parsed {path} but produced no readable sections{detail}",
+                    request.topic,
                 ))
             }
             Err(error) => Err(format!(
@@ -522,6 +559,32 @@ mod tests {
             result.manual.expect("manual").source.format,
             SourceFormat::Man
         );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["tldr", "locate", "parse"]
+        );
+    }
+
+    #[test]
+    fn forced_libmandoc_failure_is_not_hidden_by_tldr() {
+        let mut host = host(Ok(document(SourceFormat::Man, true, false)));
+        host.tldr = Ok(Some(tldr()));
+        host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
+
+        let error = query_with(
+            &request(),
+            QueryPolicy {
+                force_libmandoc: true,
+            },
+            &host,
+        )
+        .expect_err("an optional tldr page must not hide native parser failure");
+
+        let QueryError::Manual { detail, .. } = error else {
+            panic!("expected the native parser diagnostic");
+        };
+        assert!(detail.contains("/man/tool.1"));
+        assert!(detail.contains("Unsupported: unsupported request"));
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
             ["tldr", "locate", "parse"]
