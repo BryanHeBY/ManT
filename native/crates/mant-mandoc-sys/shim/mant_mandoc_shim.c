@@ -70,6 +70,8 @@ struct mant_mandoc_document {
 static char *source_root;
 
 static char *copy_string(const char *);
+static struct mant_mandoc_document *parse_input(const char *,
+    const unsigned char *, size_t, int);
 static char *read_diagnostics(FILE *);
 static struct mant_mandoc_node *copy_node(const struct roff_node *);
 static void free_node(struct mant_mandoc_node *);
@@ -85,10 +87,24 @@ static char *copy_equation(const struct eqn_box *);
 struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, int allow_include)
 {
+	return parse_input(path, NULL, 0, allow_include);
+}
+
+struct mant_mandoc_document *
+mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
+    size_t length, int allow_include)
+{
+	return parse_input(path, buffer, length, allow_include);
+}
+
+static struct mant_mandoc_document *
+parse_input(const char *path, const unsigned char *buffer, size_t length,
+    int allow_include)
+{
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
 	struct roff_meta			*meta;
-	FILE				*messages;
+	FILE				*input, *messages;
 	int				 fd, options, saved_errno;
 
 	document = calloc(1, sizeof(*document));
@@ -96,6 +112,10 @@ mant_mandoc_parse_file(const char *path, int allow_include)
 		return NULL;
 	if (path == NULL || *path == '\0') {
 		document->error = copy_string("manual source path is empty");
+		return document;
+	}
+	if (buffer == NULL && length != 0) {
+		document->error = copy_string("manual source buffer is missing");
 		return document;
 	}
 
@@ -110,15 +130,35 @@ mant_mandoc_parse_file(const char *path, int allow_include)
 	set_source_root(path);
 	mchars_alloc();
 	parser = mparse_alloc(options, MANDOC_OS_OTHER, NULL);
-	fd = mparse_open(parser, path);
-	if (fd == -1) {
-		saved_errno = errno;
-		document->error = copy_string(strerror(saved_errno));
-		goto cleanup;
+	input = NULL;
+	if (buffer == NULL) {
+		fd = mparse_open(parser, path);
+		if (fd == -1) {
+			saved_errno = errno;
+			document->error = copy_string(strerror(saved_errno));
+			goto cleanup;
+		}
+	} else {
+		input = tmpfile();
+		if (input == NULL ||
+		    fwrite(buffer, 1, length, input) != length ||
+		    fflush(input) != 0 || fseek(input, 0, SEEK_SET) != 0) {
+			saved_errno = errno;
+			document->error = copy_string(saved_errno == 0 ?
+			    "could not stage decompressed manual source" :
+			    strerror(saved_errno));
+			goto cleanup;
+		}
+		fd = fileno(input);
 	}
 
 	mparse_readfd(parser, fd, path);
-	close(fd);
+	if (input == NULL)
+		close(fd);
+	else {
+		fclose(input);
+		input = NULL;
+	}
 	meta = mparse_result(parser);
 	document->macroset = (int)meta->macroset;
 	document->title = copy_string(meta->title);
@@ -136,6 +176,8 @@ mant_mandoc_parse_file(const char *path, int allow_include)
 		document->error = copy_string("libmandoc produced no syntax tree");
 
 cleanup:
+	if (input != NULL)
+		fclose(input);
 	mandoc_msg_setinfilename(NULL);
 	mandoc_msg_setoutfile(stderr);
 	if (messages != NULL) {

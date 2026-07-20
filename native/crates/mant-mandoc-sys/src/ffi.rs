@@ -24,6 +24,12 @@ struct CTableCell {
 
 unsafe extern "C" {
     fn mant_mandoc_parse_file(path: *const c_char, allow_include: i32) -> *mut CDocument;
+    fn mant_mandoc_parse_buffer(
+        path: *const c_char,
+        buffer: *const u8,
+        length: usize,
+        allow_include: i32,
+    ) -> *mut CDocument;
     fn mant_mandoc_document_free(document: *mut CDocument);
     fn mant_mandoc_document_ok(document: *const CDocument) -> i32;
     fn mant_mandoc_document_error(document: *const CDocument) -> *const c_char;
@@ -79,6 +85,26 @@ impl Drop for DocumentHandle {
 
 pub(super) fn parse_file(path: &CStr, allow_includes: bool) -> Result<ParsedDocument, String> {
     let pointer = unsafe { mant_mandoc_parse_file(path.as_ptr(), i32::from(allow_includes)) };
+    copy_document(pointer)
+}
+
+pub(super) fn parse_buffer(
+    path: &CStr,
+    buffer: &[u8],
+    allow_includes: bool,
+) -> Result<ParsedDocument, String> {
+    let pointer = unsafe {
+        mant_mandoc_parse_buffer(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            i32::from(allow_includes),
+        )
+    };
+    copy_document(pointer)
+}
+
+fn copy_document(pointer: *mut CDocument) -> Result<ParsedDocument, String> {
     let handle = DocumentHandle(
         NonNull::new(pointer)
             .ok_or_else(|| "libmandoc could not allocate a document".to_owned())?,

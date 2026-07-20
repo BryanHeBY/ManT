@@ -2,6 +2,8 @@
 #ifndef MANT_MANDOC_SHIM_H
 #define MANT_MANDOC_SHIM_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -53,6 +55,8 @@ enum mant_mandoc_display_kind {
 #define MANT_MANDOC_NODE_LINE_START (1U << 6)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(const char *, int);
+struct mant_mandoc_document *mant_mandoc_parse_buffer(
+    const char *, const unsigned char *, size_t, int);
 void mant_mandoc_document_free(struct mant_mandoc_document *);
 
 /* Internal target of the parser-only open() compile redirect. */

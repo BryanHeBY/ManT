@@ -7,6 +7,8 @@
 use std::{
     ffi::CString,
     fmt,
+    fs::File,
+    io,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
@@ -177,10 +179,25 @@ pub fn parse_file(path: &Path, allow_includes: bool) -> Result<ParsedDocument, P
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    ffi::parse_file(&c_path, allow_includes).map_err(|message| ParseError {
+    let parsed = if path.extension() == Some(std::ffi::OsStr::new("zst")) {
+        let source = File::open(path)
+            .and_then(zstd::stream::decode_all)
+            .map_err(|error| ParseError {
+                path: path.to_path_buf(),
+                message: zstd_error(&error),
+            })?;
+        ffi::parse_buffer(&c_path, &source, allow_includes)
+    } else {
+        ffi::parse_file(&c_path, allow_includes)
+    };
+    parsed.map_err(|message| ParseError {
         path: path.to_path_buf(),
         message,
     })
+}
+
+fn zstd_error(error: &io::Error) -> String {
+    format!("could not decompress zstd manual source: {error}")
 }
 
 #[cfg(test)]
@@ -244,6 +261,66 @@ mod tests {
         assert!(document.metadata.has_body);
         assert_eq!(document.root.kind, NodeKind::Root);
         assert!(!document.root.children.is_empty());
+    }
+
+    #[test]
+    fn parser_decompresses_zstd_sources_before_calling_libmandoc() {
+        let path = source_path("zstd-mandoc-session").with_extension("1.zst");
+        let source = b".TH ZSTD-MANT 1 \"2026-07-20\"\n.SH NAME\nzstd-mant \\- compressed manual\n";
+        let compressed = zstd::stream::encode_all(source.as_slice(), 1).expect("compress source");
+        fs::write(&path, compressed).expect("write compressed manual source");
+
+        let document = parse_file(&path, false).expect("parse zstd manual");
+        fs::remove_file(path).expect("remove compressed manual source");
+
+        assert_eq!(document.macro_set, MacroSet::Man);
+        assert_eq!(document.metadata.title.as_deref(), Some("ZSTD-MANT"));
+        assert_eq!(document.metadata.section.as_deref(), Some("1"));
+        assert!(document.metadata.has_body);
+        assert!(document.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn invalid_zstd_sources_fail_before_reaching_libmandoc() {
+        let path = source_path("invalid-zstd-mandoc-session").with_extension("1.zst");
+        fs::write(&path, b"not a zstd frame").expect("write invalid compressed source");
+
+        let error = parse_file(&path, false).expect_err("invalid zstd source must fail");
+        fs::remove_file(path).expect("remove invalid compressed source");
+
+        assert!(
+            error
+                .message
+                .starts_with("could not decompress zstd manual source:")
+        );
+        assert!(!error.message.contains("unsupported control character"));
+    }
+
+    #[test]
+    fn zstd_sources_keep_their_original_include_root() {
+        let root = std::env::temp_dir().join(format!(
+            "mant-zstd-include-mandoc-session-{}",
+            process::id()
+        ));
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("create temporary manual tree");
+        let target = man1.join("target.1");
+        fs::write(
+            &target,
+            ".TH ZSTD-INCLUDE 1\n.SH NAME\nzstd-include \\- included manual\n",
+        )
+        .expect("write included manual");
+        let alias = man1.join("alias.1.zst");
+        let compressed =
+            zstd::stream::encode_all(b".so man1/target.1\n".as_slice(), 1).expect("compress alias");
+        fs::write(&alias, compressed).expect("write compressed alias");
+
+        let document = parse_file(&alias, true).expect("resolve include from zstd source");
+        fs::remove_dir_all(root).expect("remove temporary manual tree");
+
+        assert_eq!(document.macro_set, MacroSet::Man);
+        assert_eq!(document.metadata.title.as_deref(), Some("ZSTD-INCLUDE"));
+        assert!(document.metadata.has_body);
     }
 
     #[test]

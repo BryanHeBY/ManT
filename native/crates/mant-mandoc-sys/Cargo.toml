@@ -7,6 +7,9 @@ license.workspace = true
 publish.workspace = true
 links = "mant_mandoc"
 
+[dependencies]
+zstd.workspace = true
+
 [build-dependencies]
 cc = "1"
 
