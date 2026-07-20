@@ -1,238 +1,146 @@
 # ManT
 
-[![CI](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-ManT is a structured terminal UI for local Unix manual pages. It combines a
-native document engine with an OpenTUI React interface and can show an optional
-tldr quick reference before the full manual.
+ManT makes local Unix manual pages easier to explore for people and easier to
+query for software. It presents the complete page in a responsive terminal UI,
+then exposes the same structured document through a native CLI for agents and
+scripts.
 
 ![ManT displaying a tldr quick reference and the structured man(1) page](docs/assets/screenshots/mant-man.png)
 
-The project installs two separate executables:
+## Two tools, one document model
 
-- `mant` is the interactive TUI.
-- `mant-cli` is the Rust query tool for agents, scripts, JSON, and Markdown.
+| Tool | Best for | Highlights |
+| --- | --- | --- |
+| `mant` | Reading in a terminal | Complete manual, hierarchy-aware sidebar, in-page links, search, and optional tldr quick reference |
+| `mant-cli` | Agents and automation | Markdown, text, JSON, generated schemas, semantic option lookups, and location-aware search |
 
-`mant` does not embed or extract `mant-cli`. It resolves `MANT_CLI_PATH` first,
-then looks for `mant-cli` on `PATH`.
+Both tools parse local `man` and `mdoc` sources with bundled libmandoc. A
+system `mandoc` installation is not required. If an installed `tldr` client has
+data for the topic, ManT puts that quick reference before the manual.
 
-## Requirements
+## Install
 
-- Linux or macOS with local manual pages and the `man` command
-- [Bun](https://bun.sh/) for the TUI and project scripts
-- Rust 1.85 or newer
-- GCC on Linux or Clang on macOS; set `CC` to override the default
+### Linux release archive
 
-The libmandoc source is vendored and compiled as part of the Rust workspace.
-A system `mandoc` installation is not required. An installed `tldr` client is
-optional.
+Download the archive for your architecture from the
+[latest release](https://github.com/BryanHeBY/mant/releases/latest), extract
+it, and put both executables on `PATH`:
 
-## Develop from a new clone
+```sh
+tar -xzf mant-<version>-linux-<arch>.tar.gz
+cd mant-<version>-linux-<arch>
+install -Dm755 mant mant-cli -t ~/.local/bin
+```
+
+`mant` locates its companion CLI through `MANT_CLI_PATH` first and then
+`PATH`, so keep `mant` and `mant-cli` together when installing from an archive.
+The release archive includes the relevant bundled-parser license and a SHA-256
+checksum is published alongside it.
+
+### Build from source
+
+Source builds support Linux and macOS. They require local manual pages and the
+`man` command, plus Bun, Rust 1.85+, and a C compiler (GCC on Linux or Clang on
+macOS by default).
 
 ```sh
 bun install
-bun run dev -- git
-```
-
-The development command performs an incremental release build of `mant-cli`,
-stages it under `native/bin`, sets `MANT_CLI_PATH`, and then starts the Bun TUI.
-An optional manual section can be selected with:
-
-```sh
-bun run dev -- printf --section 3
-```
-
-## Build
-
-```sh
 bun run build
+PATH="$PWD/dist:$PATH" mant git
 ```
 
-The build runs TypeScript checks, Rust formatting/tests/Clippy, Bun tests, and
-packaged smoke tests. It produces current-platform executables in `dist/`:
+The build produces `dist/mant` and `dist/mant-cli`. For a fast development
+loop, use `bun run dev -- git`; it builds and selects the local native CLI
+automatically.
 
-```text
-dist/mant
-dist/mant-cli
-```
-
-Install both files into the same directory on `PATH`. To exercise an uninstalled
-build directly, either add `dist` to `PATH` or select the CLI explicitly:
+## Read manuals interactively
 
 ```sh
-PATH="$PWD/dist:$PATH" ./dist/mant git
-MANT_CLI_PATH="$PWD/dist/mant-cli" ./dist/mant git
+mant git
+mant printf --section 3
+mant tar
 ```
 
-Official tagged releases currently provide paired, standalone executables for
-Linux on x64 and arm64. macOS remains supported when building from source, but
-prebuilt macOS archives are withheld until they can be Developer ID-signed and
-notarized. Each Linux archive is accompanied by a SHA-256 checksum and includes
-the licenses needed by the bundled libmandoc parser. A release tag must match
-the version in both `package.json` and `native/Cargo.toml`:
+The UI always shows the complete manual. Its sidebar mirrors nested sections,
+can reveal normalized command-line options on demand, follows page-local
+references, and synchronizes with the reading position after scrolling settles.
+Use `mant -h` for the focused interactive command reference.
 
-```sh
-git tag v0.2.0
-git push origin v0.2.0
-```
+## Query manuals from agents and scripts
 
-GitHub Actions builds each archive on its target architecture rather than
-cross-compiling the Rust/C native core. Linux x64 uses Bun's baseline target so
-the TUI does not require AVX2. After both builds pass, the workflow creates
-a draft GitHub Release with generated notes and every asset. Review or edit the
-notes in GitHub, then publish the draft manually; publishing does not rebuild
-the binaries.
-
-## Agent and script usage
-
-Direct queries default to Markdown:
+Direct content queries default to Markdown:
 
 ```sh
 mant-cli git
-mant-cli printf --section 3 --format markdown
+mant-cli printf --section 3 --format text
+mant-cli git --format json --compact
 ```
 
-`--format` is the sole output selector and accepts `markdown`, `text`, or
-`json`. Apart from the topic itself, every public argument uses a `--long`
-option name.
-
-Discover the complete query outline, then request only the content needed by a
-human or agent. Manual paths are one-based; an available tldr quick reference
-uses the reserved path `0`. `--node` also accepts the ID printed in brackets:
+Discover a document before retrieving only the content you need. Paths are
+one-based; `0` is reserved for an available tldr quick reference.
 
 ```sh
 mant-cli gcc --outline
-mant-cli gcc --outline --format json
 mant-cli gcc --outline sections
 mant-cli tar --node acls --format markdown
-mant-cli gcc --node 0 --format markdown
-mant-cli gcc --node tldr --format text
-mant-cli gcc --node 4.2 --format markdown
-mant-cli gcc --node options-4 --format text
 mant-cli gcc --node 4.2 --node 4.7 --format json
 ```
 
-Selecting a node includes all of its child sections. Repeated and overlapping
-selections are deduplicated and emitted in source order. `--section` continues
-to select the manual volume (for example `1` or `3p`), not an outline node.
-The default outline includes normalized command-line option entries beneath
-their sections; each can be selected by its printed path, ID, or alias without
-loading an unrelated section into an agent's context. Use `--outline sections`
-when only the compact section topology is needed.
-
-### Explain one option
-
-For one option, command, or environment variable, `--explain` skips the
-outline lookup and returns the existing Markdown excerpt with its section
-breadcrumb:
+Ask directly about one semantic entry without first walking the outline:
 
 ```sh
 mant-cli tar --explain=--exclude
 mant-cli tar --explain exclude
-mant-cli tar --explain --exclude
-mant-cli tar --explain=--exclude --format json --compact
 ```
 
-Use the `--explain=<option>` form when the selector begins with `-`; it is the
-least ambiguous form in scripts. `--explain` accepts an alias, semantic ID, or
-semantic outline path, but intentionally rejects sections and tldr—use `--node`
-for those broader selections.
+Use the `=` form when the selector starts with `-`. `--explain` returns one
+option, command, or environment-variable entry; use `--node` for a whole
+section or tldr content.
 
-Search the same canonical document without scraping terminal output:
+Search returns matches with stable Markdown line and column coordinates, plus
+the nearest reusable outline path:
 
 ```sh
-mant-cli tar --search=--acls
-mant-cli gcc --search warning --context 1
-mant-cli git --search 'worktree|branch' --regex --case smart
-mant-cli tar --search=--acls --format json --compact
+mant-cli tar --search=--acls --context 1
+mant-cli gcc --search 'worktree|branch' --regex --case smart
 ```
 
-`--search` (also `--grep`) defaults to a case-insensitive literal match over
-visible document text. `--regex`, `--word`, `--case`, `--scope`, `--context`,
-`--limit`, and `--offset` make matching and pagination explicit. Each result
-contains a one-based line and column in ManT's complete Markdown rendering and
-the nearest section or option path accepted directly by `--node`. Markdown
-coordinates therefore stay stable across text, JSON, and Markdown reports.
-
-When a platform unexpectedly falls back to groff, force the native parser to
-inspect its unmodified result and diagnostics:
+For machine integration, the versioned JSON Schema is discoverable from the
+binary rather than copied from documentation:
 
 ```sh
-mant --force-libmandoc tar
-mant-cli tar --force-libmandoc --format json
-```
-
-This diagnostic switch disables groff fallback for that invocation. It is a
-strict local execution policy: a failed or empty libmandoc parse is reported
-even when a cached tldr page exists, and recoverable parser findings are
-printed on standard error. It is deliberately not a field in the versioned
-request JSON contract.
-
-Use the versioned JSON contract for structured consumers:
-
-```sh
-mant-cli git --format json
-mant-cli git --format json --compact
-mant-cli git --format text
-mant-cli --protocol-version
 mant-cli --schema request
 mant-cli --schema all --compact
+mant-cli -h
 ```
 
-`--schema` accepts `request`, `query`, `outline`, `excerpt`, `search`, or `all`. These
-Draft 2020-12 JSON Schemas are generated from the same Rust types used by the
-runtime, so agents can discover the exact input and output contracts without
-copying declarations from documentation. A versioned stdio request looks like:
-
-```json
-{
-  "schema": "mant.request/v2",
-  "topic": "printf",
-  "section": "3",
-  "view": { "kind": "full" }
-}
-```
-
-The same input boundary can request projections without inventing CLI syntax:
-
-```json
-{"schema":"mant.request/v2","topic":"tar","view":{"kind":"outline","detail":"options"}}
-{"schema":"mant.request/v2","topic":"tar","view":{"kind":"excerpt","nodes":["acls"]}}
-{"schema":"mant.request/v2","topic":"tar","view":{"kind":"search","pattern":"--acls","limit":20}}
-```
-
-Update tldr data through its installed client when available, otherwise through
-ManT's private cache:
-
-```sh
-mant-cli --update-tldr
-```
+Run `mant-cli --update-tldr` to refresh data through the installed client when
+available, otherwise through ManT's private cache.
 
 ## Architecture
 
 ```text
-mant (Bun/OpenTUI React)
-  └─ stdio JSON → mant-cli
-                    └─ mant-core
-                         ├─ mant-ast
-                         └─ mant-mandoc-sys → private libmandoc C shim
+mant (Bun / OpenTUI React)
+  └─ versioned JSON over stdio → mant-cli
+                                  └─ mant-core
+                                       ├─ mant-ast
+                                       └─ libmandoc C shim
 ```
 
-Rust owns source discovery, man/mdoc/groff parsing, tldr behavior, the stable
-AST, and JSON/Markdown serialization. TypeScript validates `mant.query/v2` at
-the process boundary and owns only terminal interaction and presentation. See
-[`docs/architecture/native-core.md`](docs/architecture/native-core.md) for the
-contract and fallback policy.
+Rust owns source discovery, parsing, the stable AST, tldr integration, and
+Markdown/text/JSON output. TypeScript owns only terminal interaction and
+presentation after validating the native response boundary.
 
-## Focused checks
+## Documentation
 
-```sh
-bun test
-bun run lint
-bun run rust:test
-bun run rust:lint
-```
+- [Native architecture and protocol](docs/architecture/native-core.md)
+- [Development guide and repository map](docs/development.md)
+- [Maintainer release procedure](docs/releasing.md)
 
 ## License
 
-ManT is licensed under the [Apache License 2.0](LICENSE).
+ManT is licensed under the [Apache License 2.0](LICENSE). The bundled mandoc
+source retains its upstream license.
