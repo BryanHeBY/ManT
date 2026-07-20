@@ -1,0 +1,77 @@
+/**
+ * @file Consumes Rust-generated JSON Schemas from the real native CLI.
+ *
+ * The validator is test-only: production keeps its small handwritten guard,
+ * while this check catches drift between Serde, Schemars, and TypeScript.
+ */
+
+import { describe, expect, test } from "bun:test";
+import Ajv2020, { type AnySchema, type ValidateFunction } from "ajv/dist/2020.js";
+
+const nativeCliPath = new URL("../../native/bin/mant-cli", import.meta.url).pathname;
+const queryFixturePath = new URL(
+  "../contracts/minimal-query-v1.json",
+  import.meta.url,
+).pathname;
+const nativeCliAvailable = Bun.spawnSync(
+  [nativeCliPath, "--protocol-version", "--compact"],
+  { stdout: "ignore", stderr: "ignore" },
+).exitCode === 0;
+
+const describeNativeCli = nativeCliAvailable ? describe : describe.skip;
+const contracts = ["request", "query", "outline", "excerpt"] as const;
+type Contract = typeof contracts[number];
+type SchemaCatalog = Record<Contract, AnySchema>;
+
+function compile(schema: AnySchema): ValidateFunction {
+  // JSON Schema permits implementation-defined formats. Schemars annotates
+  // Rust unsigned integers with these names while numeric bounds remain in
+  // the schema; registering them keeps Ajv strict for every other format.
+  return new Ajv2020({
+    allErrors: true,
+    strict: true,
+    formats: {
+      uint16: true,
+      uint32: true,
+      uint64: true,
+    },
+  }).compile(schema);
+}
+
+function expectValid(validate: ValidateFunction, value: unknown): void {
+  if (!validate(value)) {
+    throw new Error(`generated schema rejected a valid value: ${JSON.stringify(validate.errors)}`);
+  }
+}
+
+describeNativeCli("generated native JSON Schemas", () => {
+  test("compile and validate the TypeScript request and shared query fixture", async () => {
+    const output = Bun.spawnSync(
+      [nativeCliPath, "--schema", "all", "--compact"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(output.exitCode).toBe(0);
+    expect(new TextDecoder().decode(output.stderr)).toBe("");
+
+    const catalog = JSON.parse(
+      new TextDecoder().decode(output.stdout),
+    ) as SchemaCatalog;
+    for (const contract of contracts) compile(catalog[contract]);
+
+    const validateRequest = compile(catalog.request);
+    expectValid(validateRequest, {
+      schema: "mant.request/v1",
+      topic: "printf",
+      section: "3",
+    });
+    expect(validateRequest({ topic: "printf" })).toBe(false);
+    expect(validateRequest({
+      schema: "mant.request/v1",
+      topic: "printf",
+      renderer: "html",
+    })).toBe(false);
+
+    const query = JSON.parse(await Bun.file(queryFixturePath).text()) as unknown;
+    expectValid(compile(catalog.query), query);
+  });
+});

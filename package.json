@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/react": "^19.2.17"
+    "@types/react": "^19.2.17",
+    "ajv": "8.20.0"
   }
 }
