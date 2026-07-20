@@ -120,6 +120,24 @@ their sections; each can be selected by its printed path, ID, or alias without
 loading an unrelated section into an agent's context. Use `--outline sections`
 when only the compact section topology is needed.
 
+### Explain one option
+
+For one option, command, or environment variable, `--explain` skips the
+outline lookup and returns the existing Markdown excerpt with its section
+breadcrumb:
+
+```sh
+mant-cli tar --explain=--exclude
+mant-cli tar --explain exclude
+mant-cli tar --explain --exclude
+mant-cli tar --explain=--exclude --format json --compact
+```
+
+Use the `--explain=<option>` form when the selector begins with `-`; it is the
+least ambiguous form in scripts. `--explain` accepts an alias, semantic ID, or
+semantic outline path, but intentionally rejects sections and tldr—use `--node`
+for those broader selections.
+
 Search the same canonical document without scraping terminal output:
 
 ```sh

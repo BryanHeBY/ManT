@@ -24,6 +24,7 @@ fn help_exposes_one_positional_topic_and_long_options_only() {
     assert!(help.contains("--update-tldr"));
     assert!(help.contains("--protocol-version"));
     assert!(help.contains("--schema <CONTRACT>"));
+    assert!(help.contains("--explain <ENTRY>"));
     assert!(help.contains("--search <PATTERN>"));
     assert!(!help.contains("--json"));
     assert!(!help.contains("update tldr"));

@@ -86,6 +86,7 @@ rather than a mirror of parser internals:
 mant-cli <topic> [--format <format>]   -> query Markdown, text, or JSON
 mant-cli <topic> --outline [sections|options] -> selectable section and option tree
 mant-cli <topic> --node <path-or-id>   -> selected section subtrees
+mant-cli <topic> --explain <alias-or-id> -> one option, command, or environment entry
 mant-cli <topic> --search <pattern>    -> matches with node and Markdown locations
 mant-cli <topic> --force-libmandoc     -> disable groff fallback for diagnosis
 mant-cli --update-tldr                 -> update result JSON
@@ -107,6 +108,11 @@ variant; it accepts an optional manual `section` and rejects unknown fields at
 both the envelope and view levels. `full` returns `mant.query/v2`, `outline`
 selects either section-only or option-aware structure, `excerpt` selects one
 or more node paths, IDs, or aliases, and `search` returns `mant.search/v1`.
+The direct-only `--explain` convenience flag normalizes to exactly one
+`excerpt` selector, then rejects anything other than a semantic manual entry.
+It deliberately adds no request or response variant, so agents retain one
+stable excerpt contract for both explicit `--node` requests and option-focused
+explanations.
 `mant-cli --schema request` exposes that exact input contract; `query`,
 `outline`, `excerpt`, and `search` expose the output contracts, while `all`
 returns a named catalog. The schemas are derived with

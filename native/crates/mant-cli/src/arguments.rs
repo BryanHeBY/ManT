@@ -99,6 +99,9 @@ pub(crate) enum Command {
         format: QueryFormat,
         pretty: bool,
         force_libmandoc: bool,
+        /// Require the excerpt selected by the direct CLI to be one semantic
+        /// entry rather than a section or the tldr document.
+        explain: bool,
     },
     UpdateTldr {
         pretty: bool,
@@ -124,7 +127,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --outline sections\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli tar --force-libmandoc --format json\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --outline sections\n  mant-cli tar --explain=--exclude\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli tar --force-libmandoc --format json\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
         .required(true)
@@ -140,15 +143,19 @@ struct Cli {
     section: Option<String>,
 
     /// Print selectable sections and command-line options by default.
-    #[arg(long, value_name = "DETAIL", value_enum, num_args = 0..=1, default_missing_value = "options", requires = "topic", conflicts_with = "node")]
+    #[arg(long, value_name = "DETAIL", value_enum, num_args = 0..=1, default_missing_value = "options", requires = "topic", conflicts_with_all = ["node", "explain"])]
     outline: Option<OutlineMode>,
 
     /// Print a node by outline path, document ID, or option alias; repeatable.
-    #[arg(long, value_name = "NODE", value_parser = non_empty, requires = "topic")]
+    #[arg(long, value_name = "NODE", value_parser = non_empty, requires = "topic", conflicts_with = "explain")]
     node: Vec<String>,
 
+    /// Explain one option, command, or environment variable by alias, ID, or outline path.
+    #[arg(long, value_name = "ENTRY", value_parser = non_empty, allow_hyphen_values = true, requires = "topic", conflicts_with_all = ["outline", "node", "search"])]
+    explain: Option<String>,
+
     /// Search visible manual text and report Markdown lines plus outline nodes.
-    #[arg(long, visible_alias = "grep", value_name = "PATTERN", value_parser = non_empty, requires = "topic", conflicts_with_all = ["outline", "node"])]
+    #[arg(long, visible_alias = "grep", value_name = "PATTERN", value_parser = non_empty, requires = "topic", conflicts_with_all = ["outline", "node", "explain"])]
     search: Option<String>,
 
     /// Interpret the search pattern as a regular expression instead of a literal.
@@ -180,7 +187,7 @@ struct Cli {
     offset: Option<u32>,
 
     /// Read a versioned `QueryRequest` JSON object from standard input.
-    #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "regex", "search_case", "word", "search_scope", "context", "limit", "offset"])]
+    #[arg(long, conflicts_with_all = ["section", "outline", "node", "explain", "search", "regex", "search_case", "word", "search_scope", "context", "limit", "offset"])]
     request_json: bool,
 
     /// Disable groff fallback and expose the bundled libmandoc result.
@@ -246,6 +253,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         });
     }
 
+    let explain = parsed.explain.is_some();
     let view = if let Some(detail) = parsed.outline {
         QueryView::Outline {
             detail: detail.into(),
@@ -266,6 +274,10 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
             context_lines: parsed.context.unwrap_or(0),
             limit: parsed.limit.unwrap_or_else(default_search_limit),
             offset: parsed.offset.unwrap_or(0),
+        }
+    } else if let Some(selector) = parsed.explain {
+        QueryView::Excerpt {
+            nodes: vec![selector],
         }
     } else if parsed.node.is_empty() {
         QueryView::Full {}
@@ -299,6 +311,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         format,
         pretty: !parsed.compact,
         force_libmandoc: parsed.force_libmandoc,
+        explain,
     })
 }
 
@@ -342,6 +355,7 @@ mod tests {
                 format: QueryFormat::Markdown,
                 pretty: true,
                 force_libmandoc: false,
+                explain: false,
             }
         );
     }
@@ -368,6 +382,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: false,
                 force_libmandoc: false,
+                explain: false,
             }
         );
     }
@@ -382,6 +397,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: false,
                 force_libmandoc: false,
+                explain: false,
             }
         );
     }
@@ -418,6 +434,7 @@ mod tests {
                 format: QueryFormat::Text,
                 pretty: true,
                 force_libmandoc: false,
+                explain: false,
             }
         );
         assert_eq!(
@@ -435,6 +452,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: true,
                 force_libmandoc: false,
+                explain: false,
             }
         );
         assert_eq!(
@@ -454,8 +472,36 @@ mod tests {
                 format: QueryFormat::Text,
                 pretty: true,
                 force_libmandoc: false,
+                explain: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_explain_as_a_single_semantic_excerpt() {
+        for (values, selector) in [
+            (vec!["tar", "--explain=--exclude"], "--exclude"),
+            (vec!["tar", "--explain", "--exclude"], "--exclude"),
+            (vec!["tar", "--explain", "exclude"], "exclude"),
+        ] {
+            assert_eq!(
+                parse(&args(&values)).expect("explain query"),
+                Command::Query {
+                    source: QuerySource::Arguments(QueryRequest {
+                        schema: RequestSchema::V2,
+                        topic: "tar".to_owned(),
+                        section: None,
+                        view: QueryView::Excerpt {
+                            nodes: vec![selector.to_owned()],
+                        },
+                    }),
+                    format: QueryFormat::Markdown,
+                    pretty: true,
+                    force_libmandoc: false,
+                    explain: true,
+                }
+            );
+        }
     }
 
     #[test]
@@ -481,6 +527,7 @@ mod tests {
                 format: QueryFormat::Text,
                 pretty: true,
                 force_libmandoc: false,
+                explain: false,
             }
         );
         assert_eq!(
@@ -523,6 +570,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: true,
                 force_libmandoc: false,
+                explain: false,
             }
         );
     }
@@ -557,6 +605,9 @@ mod tests {
             vec!["git", "--outline", "--node", "1"],
             vec!["git", "--outline", "--search", "branch"],
             vec!["git", "--node", "1", "--search", "branch"],
+            vec!["git", "--explain=--help", "--node", "help"],
+            vec!["git", "--explain=--help", "--outline"],
+            vec!["git", "--explain=--help", "--search", "help"],
             vec!["git", "--regex"],
             vec!["git", "--search", "branch", "--limit", "many"],
             vec!["git", "--node"],
@@ -595,6 +646,7 @@ mod tests {
                 format: QueryFormat::Markdown,
                 pretty: true,
                 force_libmandoc: false,
+                explain: false,
             }
         );
     }

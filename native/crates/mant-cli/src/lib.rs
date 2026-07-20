@@ -8,7 +8,10 @@ mod arguments;
 
 use std::io::{self, Read, Write};
 
-use mant_ast::{Diagnostic, QueryBundle, QueryRequest, QueryView, SearchQuery, TldrCacheUpdate};
+use mant_ast::{
+    Diagnostic, ExcerptSelection, QueryBundle, QueryRequest, QueryView, SearchQuery,
+    TldrCacheUpdate,
+};
 use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
 use serde::Serialize;
 
@@ -133,6 +136,7 @@ fn execute(
             format,
             pretty,
             force_libmandoc,
+            explain,
         } => {
             let request = read_query_request(source, input)?;
             validate_query_request(&request)?;
@@ -156,6 +160,9 @@ fn execute(
                 QueryView::Excerpt { nodes } => {
                     let excerpt =
                         mant_core::select_excerpt(&query, &nodes).map_err(projection_failure)?;
+                    if explain {
+                        validate_explanation(&excerpt)?;
+                    }
                     match format {
                         QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown(&excerpt)),
                         QueryFormat::Text => Ok(mant_core::render_excerpt_text(&excerpt)),
@@ -197,6 +204,20 @@ fn execute(
             }
         }
     }
+}
+
+/// Keep `--explain` focused on one semantic definition while reusing the
+/// versioned excerpt response used by `--node` and stdin requests.
+fn validate_explanation(excerpt: &mant_ast::QueryExcerpt) -> Result<(), Failure> {
+    if matches!(
+        excerpt.selections.as_slice(),
+        [ExcerptSelection::ManualEntry { .. }]
+    ) {
+        return Ok(());
+    }
+    Err(Failure::usage(
+        "--explain requires one option, command, or environment variable; use --node for sections",
+    ))
 }
 
 fn report_native_diagnostics(query: &QueryBundle, output: &mut dyn Write) -> Result<(), Failure> {
@@ -385,9 +406,10 @@ mod tests {
     use std::cell::Cell;
 
     use mant_ast::{
-        Block, Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, Inline,
-        LayoutHint, MantDocument, Producer, QueryBundle, QueryRequest, QuerySchema, Section,
-        SourceFormat, SourceSpan, TldrCacheAction, TldrCacheUpdate, TldrDocument,
+        Block, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic, DiagnosticLevel,
+        DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer,
+        QueryBundle, QueryRequest, QuerySchema, Section, SourceFormat, SourceSpan, TldrCacheAction,
+        TldrCacheUpdate, TldrDocument,
     };
 
     use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, run_with_host};
@@ -420,6 +442,13 @@ mod tests {
             Self {
                 manual: Some(manual()),
                 tldr: Some(tldr()),
+                ..Self::new()
+            }
+        }
+
+        fn with_explainable_manual() -> Self {
+            Self {
+                manual: Some(explainable_manual()),
                 ..Self::new()
             }
         }
@@ -502,6 +531,39 @@ mod tests {
                 ),
             ],
         }
+    }
+
+    fn explainable_manual() -> MantDocument {
+        let mut manual = manual();
+        let options = manual
+            .sections
+            .iter_mut()
+            .find(|section| section.id == "options-2")
+            .expect("options section");
+        options.blocks.push(Block::DefinitionList {
+            items: vec![DefinitionItem {
+                identity: Some(DefinitionIdentity {
+                    id: "exclude".to_owned(),
+                    role: DefinitionRole::Option,
+                    names: vec!["--exclude".to_owned()],
+                }),
+                terms: vec![vec![Inline::Text {
+                    value: "--exclude=PATTERN".to_owned(),
+                }]],
+                description: vec![Block::Paragraph {
+                    children: vec![Inline::Text {
+                        value: "Exclude matching files from the archive.".to_owned(),
+                    }],
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+                spacing_before_lines: None,
+            }],
+            compact: true,
+            layout: LayoutHint::default(),
+            source: None,
+        });
+        manual
     }
 
     fn tldr() -> TldrDocument {
@@ -639,6 +701,41 @@ mod tests {
         assert!(value.get("producer").is_none());
         assert!(value.get("diagnostics").is_none());
         assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn explains_one_semantic_entry_without_changing_the_excerpt_contract() {
+        let host = FakeHost::with_explainable_manual();
+        let (status, output, diagnostics) = invoke(&["demo", "--explain", "--exclude"], b"", &host);
+
+        assert_eq!(status, 0);
+        assert!(output.contains("Outline `2/o1`: OPTIONS → --exclude"));
+        assert!(output.contains("--exclude=PATTERN"));
+        assert!(output.contains("Exclude matching files from the archive."));
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &[
+                "demo",
+                "--explain=--exclude",
+                "--format",
+                "json",
+                "--compact",
+            ],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
+        assert_eq!(value["schema"], "mant.excerpt/v2");
+        assert_eq!(value["selections"][0]["kind"], "manual-entry");
+        assert_eq!(value["selections"][0]["id"], "exclude");
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(&["demo", "--explain=2"], b"", &host);
+        assert_eq!(status, 2);
+        assert!(output.is_empty());
+        assert!(diagnostics.contains("--explain requires one option"));
     }
 
     #[test]
