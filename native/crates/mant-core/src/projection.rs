@@ -3,14 +3,18 @@
 use std::{collections::HashSet, error::Error, fmt};
 
 use mant_ast::{
-    ExcerptSchema, ExcerptSelection, ManualExcerpt, ManualOutline, OutlineNode, OutlineReference,
-    OutlineSchema, QueryBundle, Section,
+    ExcerptSchema, ExcerptSelection, OutlineNode, OutlineNodeKind, OutlineReference, OutlineSchema,
+    QueryBundle, QueryExcerpt, QueryOutline, Section,
 };
 
-/// Failure to derive a manual-only view from a complete query.
+const TLDR_PATH: &str = "0";
+const TLDR_ID: &str = "tldr";
+const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
+
+/// Failure to derive an addressable view from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectionError {
-    MissingManual { topic: String },
+    MissingContent { topic: String },
     EmptySelection,
     EmptySelector,
     UnknownSelector { topic: String, selector: String },
@@ -19,14 +23,14 @@ pub enum ProjectionError {
 impl fmt::Display for ProjectionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingManual { topic } => {
-                write!(formatter, "manual page '{topic}' is unavailable")
+            Self::MissingContent { topic } => {
+                write!(formatter, "document '{topic}' has no available content")
             }
             Self::EmptySelection => formatter.write_str("at least one outline node is required"),
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::UnknownSelector { topic, selector } => write!(
                 formatter,
-                "manual '{topic}' has no outline node '{selector}'; run 'mant-cli {topic} --outline'"
+                "document '{topic}' has no outline node '{selector}'; run 'mant-cli {topic} --outline'"
             ),
         }
     }
@@ -34,58 +38,77 @@ impl fmt::Display for ProjectionError {
 
 impl Error for ProjectionError {}
 
-/// Build a block-free, addressable outline for one queried manual.
+/// Build a block-free, addressable outline for one complete query.
 ///
 /// # Errors
 ///
-/// Returns [`ProjectionError::MissingManual`] for a tldr-only query.
-pub fn build_outline(query: &QueryBundle) -> Result<ManualOutline, ProjectionError> {
-    let manual = query
-        .manual
-        .as_ref()
-        .ok_or_else(|| ProjectionError::MissingManual {
+/// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
+/// is available.
+pub fn build_outline(query: &QueryBundle) -> Result<QueryOutline, ProjectionError> {
+    if query.tldr.is_none() && query.manual.is_none() {
+        return Err(ProjectionError::MissingContent {
             topic: query.topic.clone(),
-        })?;
-    Ok(ManualOutline {
+        });
+    }
+    let mut nodes = Vec::new();
+    if query.tldr.is_some() {
+        nodes.push(OutlineNode {
+            kind: OutlineNodeKind::Tldr,
+            path: TLDR_PATH.to_owned(),
+            id: TLDR_ID.to_owned(),
+            title: TLDR_TITLE.to_owned(),
+            children: Vec::new(),
+        });
+    }
+    if let Some(manual) = &query.manual {
+        nodes.extend(outline_nodes(&manual.sections, &[]));
+    }
+    Ok(QueryOutline {
         schema: OutlineSchema::V1,
         topic: query.topic.clone(),
         manual_section: resolved_manual_section(query),
-        source: manual.source.clone(),
-        meta: manual.meta.clone(),
-        nodes: outline_nodes(&manual.sections, &[]),
+        source: query.manual.as_ref().map(|manual| manual.source.clone()),
+        meta: query.manual.as_ref().map(|manual| manual.meta.clone()),
+        nodes,
     })
 }
 
-/// Select complete section subtrees by one-based outline path or document ID.
+/// Select tldr or complete manual section subtrees by outline path or ID.
 ///
 /// Duplicate selections and descendants of another selected node are omitted.
 /// The result always follows source order, independent of argument order.
 ///
 /// # Errors
 ///
-/// Returns an error when no manual exists or any selector is empty or unknown.
+/// Returns an error when no content exists or any selector is empty or unknown.
 pub fn select_excerpt(
     query: &QueryBundle,
     selectors: &[String],
-) -> Result<ManualExcerpt, ProjectionError> {
+) -> Result<QueryExcerpt, ProjectionError> {
     if selectors.is_empty() {
         return Err(ProjectionError::EmptySelection);
     }
-    let manual = query
-        .manual
-        .as_ref()
-        .ok_or_else(|| ProjectionError::MissingManual {
+    if query.tldr.is_none() && query.manual.is_none() {
+        return Err(ProjectionError::MissingContent {
             topic: query.topic.clone(),
-        })?;
+        });
+    }
     let mut located = Vec::new();
-    collect_sections(&manual.sections, &[], &[], &mut located);
+    if let Some(manual) = &query.manual {
+        collect_sections(&manual.sections, &[], &[], &mut located);
+    }
 
+    let mut tldr_selected = false;
     let mut selected_ids = HashSet::new();
     let mut selected = Vec::new();
     for raw_selector in selectors {
         let selector = raw_selector.trim();
         if selector.is_empty() {
             return Err(ProjectionError::EmptySelector);
+        }
+        if matches!(selector, TLDR_PATH | TLDR_ID) && query.tldr.is_some() {
+            tldr_selected = true;
+            continue;
         }
         let candidate = located
             .iter()
@@ -109,24 +132,43 @@ pub fn select_excerpt(
     });
     selected.sort_by_key(|candidate| candidate.order);
 
-    Ok(ManualExcerpt {
-        schema: ExcerptSchema::V1,
-        topic: query.topic.clone(),
-        manual_section: resolved_manual_section(query),
-        producer: manual.producer.clone(),
-        source: manual.source.clone(),
-        meta: manual.meta.clone(),
-        diagnostics: manual.diagnostics.clone(),
-        selections: selected
+    let manual = if selected.is_empty() {
+        None
+    } else {
+        query.manual.as_ref()
+    };
+    let mut selections = Vec::new();
+    if let (true, Some(document)) = (tldr_selected, query.tldr.clone()) {
+        selections.push(ExcerptSelection::Tldr {
+            path: TLDR_PATH.to_owned(),
+            id: TLDR_ID.to_owned(),
+            title: TLDR_TITLE.to_owned(),
+            document,
+        });
+    }
+    selections.extend(
+        selected
             .into_iter()
-            .map(|candidate| ExcerptSelection {
+            .map(|candidate| ExcerptSelection::ManualSection {
                 path: candidate.path.clone(),
                 id: candidate.section.id.clone(),
                 title: candidate.section.title.clone(),
                 breadcrumbs: candidate.breadcrumbs.clone(),
                 section: candidate.section.clone(),
-            })
-            .collect(),
+            }),
+    );
+
+    Ok(QueryExcerpt {
+        schema: ExcerptSchema::V1,
+        topic: query.topic.clone(),
+        manual_section: manual.and_then(|_| resolved_manual_section(query)),
+        producer: manual.map(|manual| manual.producer.clone()),
+        source: manual.map(|manual| manual.source.clone()),
+        meta: manual.map(|manual| manual.meta.clone()),
+        diagnostics: manual
+            .map(|manual| manual.diagnostics.clone())
+            .unwrap_or_default(),
+        selections,
     })
 }
 
@@ -146,6 +188,7 @@ fn outline_nodes(sections: &[Section], parent: &[usize]) -> Vec<OutlineNode> {
             let mut coordinates = parent.to_vec();
             coordinates.push(index + 1);
             OutlineNode {
+                kind: OutlineNodeKind::ManualSection,
                 path: format_path(&coordinates),
                 id: section.id.clone(),
                 title: section.title.clone(),
@@ -206,8 +249,8 @@ fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        DocumentMeta, DocumentSchema, DocumentSource, MantDocument, Producer, QueryBundle,
-        QuerySchema, Section, SourceFormat,
+        DocumentMeta, DocumentSchema, DocumentSource, ExcerptSelection, MantDocument,
+        OutlineNodeKind, Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
     };
 
     use super::{ProjectionError, build_outline, select_excerpt};
@@ -262,6 +305,18 @@ mod tests {
         }
     }
 
+    fn tldr() -> TldrDocument {
+        TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["A small demonstration.".to_owned()],
+            more_information: Some("https://example.com/demo".to_owned()),
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "/tldr/pages/common/demo.md".to_owned(),
+        }
+    }
+
     #[test]
     fn builds_one_based_tree_paths_without_copying_blocks() {
         let outline = build_outline(&query()).expect("outline");
@@ -271,6 +326,20 @@ mod tests {
         assert_eq!(outline.nodes[1].id, "options-2");
         assert_eq!(outline.nodes[1].children[0].path, "2.1");
         assert_eq!(outline.nodes[1].children[1].path, "2.2");
+    }
+
+    #[test]
+    fn prepends_tldr_as_zero_without_renumbering_manual_sections() {
+        let mut query = query();
+        query.tldr = Some(tldr());
+
+        let outline = build_outline(&query).expect("combined outline");
+
+        assert_eq!(outline.nodes[0].kind, OutlineNodeKind::Tldr);
+        assert_eq!(outline.nodes[0].path, "0");
+        assert_eq!(outline.nodes[0].id, "tldr");
+        assert_eq!(outline.nodes[1].path, "1");
+        assert_eq!(outline.nodes[2].path, "2");
     }
 
     #[test]
@@ -286,34 +355,73 @@ mod tests {
         )
         .expect("excerpt");
 
-        assert_eq!(
-            excerpt
-                .selections
-                .iter()
-                .map(|selection| selection.path.as_str())
-                .collect::<Vec<_>>(),
-            ["2", "3"]
-        );
-        assert_eq!(excerpt.selections[0].section.children.len(), 2);
-        assert!(excerpt.selections[0].breadcrumbs.is_empty());
+        let paths = excerpt
+            .selections
+            .iter()
+            .map(|selection| match selection {
+                ExcerptSelection::Tldr { path, .. }
+                | ExcerptSelection::ManualSection { path, .. } => path.as_str(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(paths, ["2", "3"]);
+        let ExcerptSelection::ManualSection {
+            section,
+            breadcrumbs,
+            ..
+        } = &excerpt.selections[0]
+        else {
+            panic!("expected manual selection");
+        };
+        assert_eq!(section.children.len(), 2);
+        assert!(breadcrumbs.is_empty());
     }
 
     #[test]
     fn child_selection_retains_ancestor_breadcrumbs() {
         let excerpt = select_excerpt(&query(), &["2.2".to_owned()]).expect("excerpt");
 
-        assert_eq!(excerpt.selections[0].title, "Other options");
-        assert_eq!(excerpt.selections[0].breadcrumbs[0].path, "2");
-        assert_eq!(excerpt.selections[0].breadcrumbs[0].title, "OPTIONS");
+        let ExcerptSelection::ManualSection {
+            title, breadcrumbs, ..
+        } = &excerpt.selections[0]
+        else {
+            panic!("expected manual selection");
+        };
+        assert_eq!(title, "Other options");
+        assert_eq!(breadcrumbs[0].path, "2");
+        assert_eq!(breadcrumbs[0].title, "OPTIONS");
     }
 
     #[test]
-    fn reports_missing_manual_and_unknown_or_empty_selectors() {
-        let mut tldr_only = query();
-        tldr_only.manual = None;
+    fn selects_tldr_by_zero_or_id_and_supports_tldr_only_outlines() {
+        let mut combined = query();
+        combined.tldr = Some(tldr());
+        let excerpt = select_excerpt(
+            &combined,
+            &["2".to_owned(), "tldr".to_owned(), "0".to_owned()],
+        )
+        .expect("combined excerpt");
         assert!(matches!(
-            build_outline(&tldr_only),
-            Err(ProjectionError::MissingManual { .. })
+            excerpt.selections.as_slice(),
+            [ExcerptSelection::Tldr { path, .. }, ExcerptSelection::ManualSection { .. }]
+                if path == "0"
+        ));
+
+        let mut tldr_only = combined;
+        tldr_only.manual = None;
+        let outline = build_outline(&tldr_only).expect("tldr-only outline");
+        assert_eq!(outline.nodes.len(), 1);
+        assert_eq!(outline.nodes[0].path, "0");
+        assert!(outline.source.is_none());
+        assert!(outline.meta.is_none());
+    }
+
+    #[test]
+    fn reports_missing_content_and_unknown_or_empty_selectors() {
+        let mut empty = query();
+        empty.manual = None;
+        assert!(matches!(
+            build_outline(&empty),
+            Err(ProjectionError::MissingContent { .. })
         ));
         assert_eq!(
             select_excerpt(&query(), &[]),

@@ -162,7 +162,7 @@ fn render_full_query(
 
 fn projection_failure(error: ProjectionError) -> Failure {
     match error {
-        ProjectionError::MissingManual { .. } => Failure::operational(error),
+        ProjectionError::MissingContent { .. } => Failure::operational(error),
         ProjectionError::EmptySelection
         | ProjectionError::EmptySelector
         | ProjectionError::UnknownSelector { .. } => Failure::usage(error),
@@ -277,7 +277,7 @@ mod tests {
     use mant_ast::{
         Block, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument,
         Producer, QueryBundle, QueryRequest, QuerySchema, Section, SourceFormat, TldrCacheAction,
-        TldrCacheUpdate,
+        TldrCacheUpdate, TldrDocument,
     };
 
     use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, run_with_host};
@@ -286,6 +286,7 @@ mod tests {
         query_calls: Cell<usize>,
         update_calls: Cell<usize>,
         manual: Option<MantDocument>,
+        tldr: Option<TldrDocument>,
     }
 
     impl FakeHost {
@@ -294,12 +295,21 @@ mod tests {
                 query_calls: Cell::new(0),
                 update_calls: Cell::new(0),
                 manual: None,
+                tldr: None,
             }
         }
 
         fn with_manual() -> Self {
             Self {
                 manual: Some(manual()),
+                ..Self::new()
+            }
+        }
+
+        fn with_manual_and_tldr() -> Self {
+            Self {
+                manual: Some(manual()),
+                tldr: Some(tldr()),
                 ..Self::new()
             }
         }
@@ -313,7 +323,7 @@ mod tests {
                 topic: request.topic.trim().to_owned(),
                 section: request.section.clone(),
                 manual: self.manual.clone(),
-                tldr: None,
+                tldr: self.tldr.clone(),
             })
         }
 
@@ -380,6 +390,18 @@ mod tests {
         }
     }
 
+    fn tldr() -> TldrDocument {
+        TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["A small demonstration.".to_owned()],
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "/cache/tldr/pages/common/demo.md".to_owned(),
+        }
+    }
+
     fn section(id: &str, title: &str, text: &str, children: Vec<Section>) -> Section {
         Section {
             id: id.to_owned(),
@@ -437,9 +459,10 @@ mod tests {
 
     #[test]
     fn direct_queries_render_outlines_and_selected_nodes_in_requested_formats() {
-        let host = FakeHost::with_manual();
+        let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) = invoke(&["demo", "--outline"], b"", &host);
         assert_eq!(status, 0);
+        assert!(output.contains("├─ 0 [tldr] TLDR QUICK REFERENCE"));
         assert!(output.contains("├─ 1 [name-1] NAME"));
         assert!(output.contains("└─ 2 [options-2] OPTIONS"));
         assert!(output.contains("└─ 2.1 [common-3] Common options"));
@@ -456,6 +479,20 @@ mod tests {
         assert_eq!(value["selections"][0]["path"], "2.1");
         assert_eq!(value["selections"][0]["section"]["title"], "Common options");
         assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["demo", "--node", "0", "--format", "json", "--compact"],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("tldr excerpt JSON");
+        assert_eq!(value["selections"][0]["kind"], "tldr");
+        assert_eq!(value["selections"][0]["path"], "0");
+        assert_eq!(value["selections"][0]["document"]["title"], "demo");
+        assert!(value.get("producer").is_none());
+        assert!(value.get("diagnostics").is_none());
+        assert!(diagnostics.is_empty());
     }
 
     #[test]
@@ -466,7 +503,7 @@ mod tests {
 
         assert_eq!(status, 2);
         assert!(output.is_empty());
-        assert!(diagnostics.contains("manual 'demo' has no outline node '9'"));
+        assert!(diagnostics.contains("document 'demo' has no outline node '9'"));
         assert!(diagnostics.contains("mant-cli demo --outline"));
     }
 

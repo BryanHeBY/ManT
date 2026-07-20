@@ -96,13 +96,15 @@ mant-cli printf --section 3 --format markdown
 `json`. Apart from the topic itself, every public argument uses a `--long`
 option name.
 
-Discover a manual's outline, then request only the section subtrees needed by
-a human or agent. Outline paths are one-based and `--node` also accepts the
-document-local ID printed in brackets:
+Discover the complete query outline, then request only the content needed by a
+human or agent. Manual paths are one-based; an available tldr quick reference
+uses the reserved path `0`. `--node` also accepts the ID printed in brackets:
 
 ```sh
 mant-cli gcc --outline
 mant-cli gcc --outline --format json
+mant-cli gcc --node 0 --format markdown
+mant-cli gcc --node tldr --format text
 mant-cli gcc --node 4.2 --format markdown
 mant-cli gcc --node options-4 --format text
 mant-cli gcc --node 4.2 --node 4.7 --format json

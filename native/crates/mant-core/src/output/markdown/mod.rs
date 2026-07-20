@@ -4,7 +4,7 @@ mod blocks;
 mod inline;
 
 use mant_ast::{
-    ExcerptSelection, ManualExcerpt, ManualOutline, OutlineNode, QueryBundle, Section,
+    ExcerptSelection, OutlineNode, QueryBundle, QueryExcerpt, QueryOutline, Section,
     TldrCommandPart, TldrDocument,
 };
 
@@ -38,9 +38,9 @@ pub fn render_markdown(query: &QueryBundle) -> String {
         .to_owned()
 }
 
-/// Render a manual outline as a nested `CommonMark` list.
+/// Render a complete query outline as a nested `CommonMark` list.
 #[must_use]
-pub fn render_outline_markdown(outline: &ManualOutline) -> String {
+pub fn render_outline_markdown(outline: &QueryOutline) -> String {
     let mut blocks = vec![heading(
         1,
         &format!(
@@ -54,9 +54,9 @@ pub fn render_outline_markdown(outline: &ManualOutline) -> String {
     blocks.join("\n\n").trim_end().to_owned()
 }
 
-/// Render selected manual section subtrees with their outline context.
+/// Render selected query nodes with their outline context.
 #[must_use]
-pub fn render_excerpt_markdown(excerpt: &ManualExcerpt) -> String {
+pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
     let mut output = vec![heading(
         1,
         &document_label(&excerpt.topic, excerpt.manual_section.as_deref()),
@@ -66,7 +66,12 @@ pub fn render_excerpt_markdown(excerpt: &ManualExcerpt) -> String {
             output.push("---".to_owned());
         }
         output.push(selection_context(selection));
-        render_sections(&mut output, std::slice::from_ref(&selection.section), 2);
+        match selection {
+            ExcerptSelection::Tldr { document, .. } => output.extend(render_tldr(document)),
+            ExcerptSelection::ManualSection { section, .. } => {
+                render_sections(&mut output, std::slice::from_ref(section), 2);
+            }
+        }
     }
     output
         .into_iter()
@@ -96,14 +101,25 @@ fn outline_list(nodes: &[OutlineNode], depth: usize) -> String {
 }
 
 fn selection_context(selection: &ExcerptSelection) -> String {
-    let breadcrumb = selection
-        .breadcrumbs
-        .iter()
-        .map(|ancestor| escape_text(&ancestor.title))
-        .chain(std::iter::once(escape_text(&selection.title)))
-        .collect::<Vec<_>>()
-        .join(" → ");
-    format!("*Outline {}: {breadcrumb}*", code_span(&selection.path))
+    match selection {
+        ExcerptSelection::Tldr { path, title, .. } => {
+            format!("*Outline {}: {}*", code_span(path), escape_text(title))
+        }
+        ExcerptSelection::ManualSection {
+            path,
+            title,
+            breadcrumbs,
+            ..
+        } => {
+            let breadcrumb = breadcrumbs
+                .iter()
+                .map(|ancestor| escape_text(&ancestor.title))
+                .chain(std::iter::once(escape_text(title)))
+                .collect::<Vec<_>>()
+                .join(" → ");
+            format!("*Outline {}: {breadcrumb}*", code_span(path))
+        }
+    }
 }
 
 fn render_sections(output: &mut Vec<String>, sections: &[Section], depth: usize) {

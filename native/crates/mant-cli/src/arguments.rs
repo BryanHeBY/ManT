@@ -64,7 +64,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --node 4.2 --format markdown\n  mant-cli --request-json --format json --compact\n  mant-cli --update-tldr",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --node 0 --format markdown\n  mant-cli gcc --node 4.2 --format markdown\n  mant-cli --request-json --format json --compact\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version"])
         .required(true)
@@ -83,7 +83,7 @@ struct Cli {
     #[arg(long, requires = "topic", conflicts_with = "node")]
     outline: bool,
 
-    /// Print an outline node by one-based path or document ID; repeatable.
+    /// Print a node by outline path or document ID; repeatable (`0` selects tldr).
     #[arg(long, value_name = "NODE", value_parser = non_empty, requires = "topic")]
     node: Vec<String>,
 

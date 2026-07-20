@@ -1,6 +1,6 @@
 //! Serializes stable native contracts without a TypeScript shape conversion.
 
-use mant_ast::{ManualExcerpt, ManualOutline, QueryBundle, TldrCacheUpdate};
+use mant_ast::{QueryBundle, QueryExcerpt, QueryOutline, TldrCacheUpdate};
 
 /// Serialize a query contract in compact or human-readable form.
 ///
@@ -11,25 +11,25 @@ pub fn render_query_json(query: &QueryBundle, pretty: bool) -> Result<String, se
     render_json(query, pretty)
 }
 
-/// Serialize a manual outline in compact or human-readable form.
+/// Serialize a complete query outline in compact or human-readable form.
 ///
 /// # Errors
 ///
 /// Propagates the unlikely JSON writer failure from [`serde_json`].
 pub fn render_outline_json(
-    outline: &ManualOutline,
+    outline: &QueryOutline,
     pretty: bool,
 ) -> Result<String, serde_json::Error> {
     render_json(outline, pretty)
 }
 
-/// Serialize selected manual subtrees in compact or human-readable form.
+/// Serialize selected query nodes in compact or human-readable form.
 ///
 /// # Errors
 ///
 /// Propagates the unlikely JSON writer failure from [`serde_json`].
 pub fn render_excerpt_json(
-    excerpt: &ManualExcerpt,
+    excerpt: &QueryExcerpt,
     pretty: bool,
 ) -> Result<String, serde_json::Error> {
     render_json(excerpt, pretty)

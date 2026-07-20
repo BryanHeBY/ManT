@@ -5,7 +5,9 @@
 
 use std::{collections::HashSet, path::PathBuf, sync::OnceLock};
 
-use mant_ast::{Block, Inline, MantDocument, QueryBundle, QuerySchema, Section, SourceFormat};
+use mant_ast::{
+    Block, ExcerptSelection, Inline, MantDocument, QueryBundle, QuerySchema, Section, SourceFormat,
+};
 use mant_core::{build_outline, parse_manual_source, select_excerpt};
 
 static LS: OnceLock<MantDocument> = OnceLock::new();
@@ -442,12 +444,18 @@ fn real_nested_manuals_support_outline_discovery_and_targeted_excerpts() {
     let excerpt = select_excerpt(&query, &["git-diffs-28".to_owned(), "16.4".to_owned()])
         .expect("Git Diffs excerpt");
     assert_eq!(excerpt.selections.len(), 1);
-    assert_eq!(excerpt.selections[0].path, "16.4");
-    assert_eq!(
-        excerpt.selections[0].breadcrumbs[0].title,
-        "ENVIRONMENT VARIABLES"
-    );
-    assert!(block_slice_text(&excerpt.selections[0].section.blocks).contains("GIT_EXTERNAL_DIFF"));
+    let ExcerptSelection::ManualSection {
+        path,
+        breadcrumbs,
+        section,
+        ..
+    } = &excerpt.selections[0]
+    else {
+        panic!("expected Git Diffs manual section");
+    };
+    assert_eq!(path, "16.4");
+    assert_eq!(breadcrumbs[0].title, "ENVIRONMENT VARIABLES");
+    assert!(block_slice_text(&section.blocks).contains("GIT_EXTERNAL_DIFF"));
 }
 
 fn manual(name: &str) -> &'static MantDocument {

@@ -81,6 +81,17 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
     assert!(markdown.contains("*tldr-pages · CC BY 4.0 · common · en*"));
     assert!(markdown.contains("\n\n---\n\n<a id=\"name\"></a>\n\n## NAME"));
     assert!(!markdown.ends_with('\n'));
+
+    let outline = render_outline_markdown(&build_outline(&query).expect("combined outline"));
+    assert!(outline.contains("- `0` (`tldr`) TLDR QUICK REFERENCE"));
+    assert!(outline.contains("- `1` (`name`) NAME"));
+
+    let excerpt = select_excerpt(&query, &["0".to_owned()]).expect("tldr excerpt");
+    let excerpt = render_excerpt_markdown(&excerpt);
+    assert!(excerpt.contains("*Outline `0`: TLDR QUICK REFERENCE*"));
+    assert!(excerpt.contains("## TLDR"));
+    assert!(excerpt.contains("```sh\nls --all\n```"));
+    assert!(!excerpt.contains("## NAME"));
 }
 
 #[test]

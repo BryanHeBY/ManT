@@ -1,8 +1,8 @@
 //! Renders query, outline, and excerpt contracts as unstyled semantic text.
 
 use mant_ast::{
-    Block, DefinitionItem, ExcerptSelection, Inline, ListItem, ListKind, ManualExcerpt,
-    ManualOutline, OutlineNode, QueryBundle, Section, TableCell, TldrCommandPart,
+    Block, DefinitionItem, ExcerptSelection, Inline, ListItem, ListKind, OutlineNode, QueryBundle,
+    QueryExcerpt, QueryOutline, Section, TableCell, TldrCommandPart, TldrDocument,
 };
 
 /// Render a complete query without Markdown or terminal escape sequences.
@@ -15,31 +15,7 @@ pub fn render_query_text(query: &QueryBundle) -> String {
         .or(query.section.as_deref());
     let mut parts = vec![document_label(&query.topic, section)];
     if let Some(tldr) = &query.tldr {
-        let mut lines = vec!["TLDR".to_owned()];
-        lines.extend(tldr.description.iter().map(|line| line.trim().to_owned()));
-        if let Some(information) = &tldr.more_information {
-            lines.push(format!("More information: {}", information.trim()));
-        }
-        for example in &tldr.examples {
-            if !example.description.trim().is_empty() {
-                lines.push(example.description.trim().to_owned());
-            }
-            let command = example
-                .command_parts
-                .iter()
-                .map(|part| match part {
-                    TldrCommandPart::Text { value } | TldrCommandPart::Placeholder { value } => {
-                        value.as_str()
-                    }
-                })
-                .collect::<String>();
-            lines.push(if command.is_empty() {
-                example.command.clone()
-            } else {
-                command
-            });
-        }
-        parts.push(lines.join("\n\n"));
+        parts.push(render_tldr_text(tldr));
     }
     if let Some(manual) = &query.manual {
         parts.push(render_sections(&manual.sections, 0));
@@ -47,9 +23,9 @@ pub fn render_query_text(query: &QueryBundle) -> String {
     join_parts(parts)
 }
 
-/// Render a manual outline as a copyable Unicode tree.
+/// Render a complete query outline as a copyable Unicode tree.
 #[must_use]
-pub fn render_outline_text(outline: &ManualOutline) -> String {
+pub fn render_outline_text(outline: &QueryOutline) -> String {
     let mut lines = vec![document_label(
         &outline.topic,
         outline.manual_section.as_deref(),
@@ -58,9 +34,9 @@ pub fn render_outline_text(outline: &ManualOutline) -> String {
     lines.join("\n").trim_end().to_owned()
 }
 
-/// Render selected section subtrees as unstyled text with outline context.
+/// Render selected query nodes as unstyled text with outline context.
 #[must_use]
-pub fn render_excerpt_text(excerpt: &ManualExcerpt) -> String {
+pub fn render_excerpt_text(excerpt: &QueryExcerpt) -> String {
     let mut parts = vec![document_label(
         &excerpt.topic,
         excerpt.manual_section.as_deref(),
@@ -85,19 +61,57 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
 }
 
 fn render_selection(selection: &ExcerptSelection) -> String {
-    let mut parts = Vec::new();
-    if !selection.breadcrumbs.is_empty() {
-        let path = selection
-            .breadcrumbs
-            .iter()
-            .map(|ancestor| ancestor.title.as_str())
-            .chain(std::iter::once(selection.title.as_str()))
-            .collect::<Vec<_>>()
-            .join(" > ");
-        parts.push(format!("Outline {}: {path}", selection.path));
+    match selection {
+        ExcerptSelection::Tldr { document, .. } => render_tldr_text(document),
+        ExcerptSelection::ManualSection {
+            path,
+            title,
+            breadcrumbs,
+            section,
+            ..
+        } => {
+            let mut parts = Vec::new();
+            if !breadcrumbs.is_empty() {
+                let breadcrumb = breadcrumbs
+                    .iter()
+                    .map(|ancestor| ancestor.title.as_str())
+                    .chain(std::iter::once(title.as_str()))
+                    .collect::<Vec<_>>()
+                    .join(" > ");
+                parts.push(format!("Outline {path}: {breadcrumb}"));
+            }
+            parts.push(render_section(section, 0));
+            join_parts(parts)
+        }
     }
-    parts.push(render_section(&selection.section, 0));
-    join_parts(parts)
+}
+
+fn render_tldr_text(tldr: &TldrDocument) -> String {
+    let mut lines = vec!["TLDR".to_owned()];
+    lines.extend(tldr.description.iter().map(|line| line.trim().to_owned()));
+    if let Some(information) = &tldr.more_information {
+        lines.push(format!("More information: {}", information.trim()));
+    }
+    for example in &tldr.examples {
+        if !example.description.trim().is_empty() {
+            lines.push(example.description.trim().to_owned());
+        }
+        let command = example
+            .command_parts
+            .iter()
+            .map(|part| match part {
+                TldrCommandPart::Text { value } | TldrCommandPart::Placeholder { value } => {
+                    value.as_str()
+                }
+            })
+            .collect::<String>();
+        lines.push(if command.is_empty() {
+            example.command.clone()
+        } else {
+            command
+        });
+    }
+    lines.join("\n\n")
 }
 
 fn render_sections(sections: &[Section], depth: usize) -> String {
@@ -316,7 +330,7 @@ fn join_parts(parts: Vec<String>) -> String {
 mod tests {
     use mant_ast::{
         Block, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument,
-        Producer, QueryBundle, QuerySchema, Section, SourceFormat,
+        Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
     };
 
     use super::{render_excerpt_text, render_outline_text, render_query_text};
@@ -403,5 +417,29 @@ mod tests {
         assert!(output.contains("Outline 1.1: OPTIONS > Common options"));
         assert!(output.contains("child details"));
         assert!(!output.contains("parent details"));
+    }
+
+    #[test]
+    fn renders_tldr_as_zero_in_outlines_and_standalone_excerpts() {
+        let mut query = query();
+        query.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["A small demonstration.".to_owned()],
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "/cache/tldr/demo.md".to_owned(),
+        });
+
+        let outline = render_outline_text(&build_outline(&query).expect("combined outline"));
+        assert!(outline.contains("├─ 0 [tldr] TLDR QUICK REFERENCE"));
+        assert!(outline.contains("└─ 1 [options-1] OPTIONS"));
+
+        let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("tldr excerpt");
+        assert_eq!(
+            render_excerpt_text(&excerpt),
+            "demo\n\nTLDR\n\nA small demonstration."
+        );
     }
 }
