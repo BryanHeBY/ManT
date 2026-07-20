@@ -68,15 +68,17 @@ struct mant_mandoc_document {
 };
 
 static char *source_root;
+static int source_root_strict;
 
 static char *copy_string(const char *);
 static struct mant_mandoc_document *parse_input(const char *,
-    const unsigned char *, size_t, int);
+    const unsigned char *, size_t, const char *, int);
 static char *read_diagnostics(FILE *);
 static struct mant_mandoc_node *copy_node(const struct roff_node *);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
-static void set_source_root(const char *);
+static void set_source_root_from_path(const char *);
+static void set_source_root_directory(const char *);
 static void copy_normalized_data(struct mant_mandoc_node *,
     const struct roff_node *);
 static struct mant_mandoc_table_cell *copy_table_cells(
@@ -85,21 +87,22 @@ static void free_table_cells(struct mant_mandoc_table_cell *);
 static char *copy_equation(const struct eqn_box *);
 
 struct mant_mandoc_document *
-mant_mandoc_parse_file(const char *path, int allow_include)
+mant_mandoc_parse_file(const char *path, const char *include_root,
+    int allow_include)
 {
-	return parse_input(path, NULL, 0, allow_include);
+	return parse_input(path, NULL, 0, include_root, allow_include);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
-    size_t length, int allow_include)
+    size_t length, const char *include_root, int allow_include)
 {
-	return parse_input(path, buffer, length, allow_include);
+	return parse_input(path, buffer, length, include_root, allow_include);
 }
 
 static struct mant_mandoc_document *
 parse_input(const char *path, const unsigned char *buffer, size_t length,
-    int allow_include)
+    const char *include_root, int allow_include)
 {
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
@@ -127,7 +130,12 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	setprogname("mant");
 	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
-	set_source_root(path);
+	if (allow_include) {
+		if (include_root == NULL)
+			set_source_root_from_path(path);
+		else
+			set_source_root_directory(include_root);
+	}
 	mchars_alloc();
 	parser = mparse_alloc(options, MANDOC_OS_OTHER, NULL);
 	input = NULL;
@@ -188,6 +196,7 @@ cleanup:
 	mchars_free();
 	free(source_root);
 	source_root = NULL;
+	source_root_strict = 0;
 	return document;
 }
 
@@ -219,6 +228,10 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 	free(resolved);
 	if (fd != -1)
 		return fd;
+	if (source_root_strict) {
+		errno = saved_errno;
+		return -1;
+	}
 	fd = openat(AT_FDCWD, path, flags, mode);
 	if (fd == -1)
 		errno = saved_errno;
@@ -260,11 +273,12 @@ copy_string(const char *source)
 }
 
 static void
-set_source_root(const char *path)
+set_source_root_from_path(const char *path)
 {
 	char	*last_slash, *directory_name;
 
 	free(source_root);
+	source_root_strict = 0;
 	source_root = copy_string(path);
 	if (source_root == NULL)
 		return;
@@ -287,6 +301,14 @@ set_source_root(const char *path)
 		if (last_slash != NULL && last_slash != source_root)
 			*last_slash = '\0';
 	}
+}
+
+static void
+set_source_root_directory(const char *directory)
+{
+	free(source_root);
+	source_root_strict = 1;
+	source_root = copy_string(directory);
 }
 
 static char *

@@ -23,11 +23,19 @@ include = [
 publish = true
 links = "libmandoc_rs"
 
+[features]
+default = []
+serde = ["dep:serde"]
+
 [dependencies]
+serde = { workspace = true, optional = true }
 zstd.workspace = true
 
 [build-dependencies]
 cc = "1"
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

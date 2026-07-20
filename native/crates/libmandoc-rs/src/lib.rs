@@ -4,200 +4,31 @@
 //! never observes libmandoc's private `roff_node` layout, and the global C
 //! parser state is serialized inside this crate.
 
-use std::{
-    ffi::CString,
-    fmt,
-    fs::File,
-    io,
-    os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
-};
-
 #[cfg(test)]
 mod build_config;
 
+mod ast;
+mod diagnostics;
 #[allow(unsafe_code)]
 mod ffi;
+mod parser;
+
+pub use ast::{
+    DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind, NormalizedListKind,
+    TableAlignment, TableCell,
+};
+pub use diagnostics::{Diagnostic, DiagnosticLevel, SourceLocation};
+pub use parser::{
+    Compression, IncludePolicy, ParseError, ParseErrorKind, ParseOptions, ParseReport, Parser,
+};
 
 /// Pinned upstream version compiled by this crate's build script.
 pub const LIBMANDOC_VERSION: &str = "1.14.6";
 
-static PARSER_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-/// High-level macro package detected by libmandoc.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MacroSet {
-    None,
-    Mdoc,
-    Man,
-}
-
-/// Renderer-neutral node role copied from the libmandoc syntax tree.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NodeKind {
-    Root,
-    Block,
-    Head,
-    Body,
-    Tail,
-    Element,
-    Text,
-    Comment,
-    Table,
-    Equation,
-}
-
-/// Normalized mdoc list behavior copied independently of upstream enum values.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NormalizedListKind {
-    Bullet,
-    Ordered,
-    Definition,
-    Column,
-    Plain,
-}
-
-/// Whether an mdoc display preserves source line layout.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DisplayKind {
-    Literal,
-    Filled,
-}
-
-/// Horizontal alignment retained for one parsed tbl(7) cell.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TableAlignment {
-    Left,
-    Center,
-    Right,
-}
-
-/// Owned payload of one cell in a libmandoc table row.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TableCell {
-    pub text: Option<String>,
-    pub column_span: u16,
-    pub row_span: u16,
-    pub alignment: TableAlignment,
-}
-
-/// Source and renderer flags needed by the future AST lowering pass.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct NodeFlags {
-    pub generated: bool,
-    pub sentence_end: bool,
-    pub no_print: bool,
-    pub no_fill: bool,
-    /// libmandoc selected this node as a same-document destination.
-    pub deep_link_target: bool,
-    /// libmandoc renders a self-link for this destination.
-    pub permalink: bool,
-    /// This node begins a roff input line (`NODE_LINE`).
-    ///
-    /// Some man macros keep same-line layout arguments and next-line visible
-    /// content in one syntax head, so source-line role is semantic data.
-    pub line_start: bool,
-}
-
-/// An owned syntax node with no pointers into the C parser.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Node {
-    pub kind: NodeKind,
-    pub macro_name: Option<String>,
-    pub text: Option<String>,
-    /// Canonical same-document tag assigned during libmandoc validation.
-    pub tag: Option<String>,
-    pub line: u32,
-    pub column: u32,
-    pub flags: NodeFlags,
-    pub list_kind: Option<NormalizedListKind>,
-    pub display_kind: Option<DisplayKind>,
-    pub compact: bool,
-    pub offset: Option<String>,
-    pub table_cells: Vec<TableCell>,
-    pub equation: Option<String>,
-    pub children: Vec<Self>,
-}
-
-/// Metadata copied from a completed libmandoc parse.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Metadata {
-    pub title: Option<String>,
-    pub section: Option<String>,
-    pub volume: Option<String>,
-    pub os: Option<String>,
-    pub arch: Option<String>,
-    pub name: Option<String>,
-    pub date: Option<String>,
-    pub alias_target: Option<String>,
-    pub has_body: bool,
-}
-
-/// Complete owned output of the low-level parser session.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ParsedDocument {
-    pub macro_set: MacroSet,
-    pub metadata: Metadata,
-    pub diagnostics: String,
-    pub root: Node,
-}
-
-/// File-level failure reported without leaking C or runtime diagnostics.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ParseError {
-    pub path: PathBuf,
-    pub message: String,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}: {}", self.path.display(), self.message)
-    }
-}
-
-impl std::error::Error for ParseError {}
-
-/// Parse one source file, optionally resolving `.so` includes relative to it.
-///
-/// libmandoc 1.14.6 keeps diagnostics and character tables in process-global
-/// state. Serializing the entire C call ensures concurrent frontend requests
-/// cannot overwrite one another.
-///
-/// # Errors
-///
-/// Returns [`ParseError`] when the path cannot be represented for C, the
-/// source cannot be opened, or libmandoc does not produce a valid tree.
-pub fn parse_file(path: &Path, allow_includes: bool) -> Result<ParsedDocument, ParseError> {
-    let c_path = CString::new(path.as_os_str().as_bytes()).map_err(|_| ParseError {
-        path: path.to_path_buf(),
-        message: "manual source path contains a NUL byte".into(),
-    })?;
-    let lock = PARSER_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    let parsed = if path.extension() == Some(std::ffi::OsStr::new("zst")) {
-        let source = File::open(path)
-            .and_then(zstd::stream::decode_all)
-            .map_err(|error| ParseError {
-                path: path.to_path_buf(),
-                message: zstd_error(&error),
-            })?;
-        ffi::parse_buffer(&c_path, &source, allow_includes)
-    } else {
-        ffi::parse_file(&c_path, allow_includes)
-    };
-    parsed.map_err(|message| ParseError {
-        path: path.to_path_buf(),
-        message,
-    })
-}
-
-fn zstd_error(error: &io::Error) -> String {
-    format!("could not decompress zstd manual source: {error}")
+/// Private output of the FFI boundary before diagnostics become public values.
+struct RawDocument {
+    document: Document,
+    diagnostics: String,
 }
 
 #[cfg(test)]
@@ -205,11 +36,25 @@ mod tests {
     use std::{fs, process};
 
     use super::{
-        DisplayKind, MacroSet, Node, NodeKind, NormalizedListKind, TableAlignment, parse_file,
+        Compression, DisplayKind, Document, IncludePolicy, MacroSet, Node, NodeKind,
+        NormalizedListKind, ParseError, ParseOptions, Parser, TableAlignment,
     };
 
     fn source_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-{label}-{}.1", process::id()))
+    }
+
+    fn parse_file(path: &std::path::Path, allow_includes: bool) -> Result<Document, ParseError> {
+        Parser::new(ParseOptions {
+            includes: if allow_includes {
+                IncludePolicy::SourceTree
+            } else {
+                IncludePolicy::Deny
+            },
+            compression: Compression::Auto,
+        })
+        .parse_file(path)
+        .map(|report| report.document)
     }
 
     fn find_macro<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
@@ -270,14 +115,17 @@ mod tests {
         let compressed = zstd::stream::encode_all(source.as_slice(), 1).expect("compress source");
         fs::write(&path, compressed).expect("write compressed manual source");
 
-        let document = parse_file(&path, false).expect("parse zstd manual");
+        let report = Parser::default()
+            .parse_file(&path)
+            .expect("parse zstd manual");
         fs::remove_file(path).expect("remove compressed manual source");
 
+        assert!(report.diagnostics.is_empty());
+        let document = report.document;
         assert_eq!(document.macro_set, MacroSet::Man);
         assert_eq!(document.metadata.title.as_deref(), Some("ZSTD-MANT"));
         assert_eq!(document.metadata.section.as_deref(), Some("1"));
         assert!(document.metadata.has_body);
-        assert!(document.diagnostics.is_empty());
     }
 
     #[test]
@@ -293,6 +141,7 @@ mod tests {
                 .message
                 .starts_with("could not decompress zstd manual source:")
         );
+        assert_eq!(error.kind, super::ParseErrorKind::Decompression);
         assert!(!error.message.contains("unsupported control character"));
     }
 
@@ -403,6 +252,119 @@ mod tests {
             std::env::current_dir().expect("current directory after parse"),
             cwd
         );
+    }
+
+    #[test]
+    fn parser_accepts_owned_bytes_and_detects_zstd_frames() {
+        let source = b".TH BYTES 1\n.SH NAME\nbytes \\- parser input\n";
+        let plain = Parser::default()
+            .parse_bytes("memory.1", source)
+            .expect("parse plain byte input");
+        assert_eq!(plain.document.metadata.title.as_deref(), Some("BYTES"));
+
+        let compressed = zstd::stream::encode_all(source.as_slice(), 1).expect("compress source");
+        let zstd = Parser::default()
+            .parse_bytes("memory.1", &compressed)
+            .expect("detect and parse zstd byte input");
+        assert_eq!(zstd.document.metadata.title.as_deref(), Some("BYTES"));
+    }
+
+    #[test]
+    fn parser_only_expands_includes_when_policy_allows_a_root() {
+        let base = std::env::temp_dir().join(format!(
+            "libmandoc-rs-explicit-include-root-{}",
+            process::id()
+        ));
+        let includes = base.join("includes");
+        fs::create_dir_all(&includes).expect("create explicit include root");
+        fs::write(
+            includes.join("target.1"),
+            ".TH EXPLICIT-ROOT 1\n.SH NAME\nexplicit-root \\- include fixture\n",
+        )
+        .expect("write included source");
+        let alias = base.join("alias.1");
+        fs::write(&alias, ".so target.1\n").expect("write alias source");
+
+        let denied = Parser::default()
+            .parse_file(&alias)
+            .expect("parse alias without include expansion");
+        let expanded = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(includes),
+            compression: Compression::Auto,
+        })
+        .parse_file(&alias)
+        .expect("resolve alias against explicit root");
+        fs::remove_dir_all(base).expect("remove temporary manual tree");
+
+        assert_ne!(
+            denied.document.metadata.title.as_deref(),
+            Some("EXPLICIT-ROOT")
+        );
+        assert_eq!(
+            expanded.document.metadata.title.as_deref(),
+            Some("EXPLICIT-ROOT")
+        );
+    }
+
+    #[test]
+    fn explicit_include_root_does_not_fall_back_to_process_cwd() {
+        let identifier = format!("libmandoc-rs-ambient-{}", process::id());
+        let cwd_target = std::env::current_dir()
+            .expect("read test cwd")
+            .join(format!("{identifier}.1"));
+        fs::write(
+            &cwd_target,
+            ".TH AMBIENT 1\n.SH NAME\nambient \\- must not be included\n",
+        )
+        .expect("write ambient source");
+
+        let base = std::env::temp_dir().join(format!("{identifier}-root"));
+        fs::create_dir_all(&base).expect("create empty include root");
+        let alias = base.join("alias.1");
+        fs::write(&alias, format!(".so {identifier}.1\n")).expect("write alias source");
+
+        let result = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(base.clone()),
+            compression: Compression::Auto,
+        })
+        .parse_file(&alias);
+        fs::remove_file(cwd_target).expect("remove ambient source");
+        fs::remove_dir_all(base).expect("remove temporary manual tree");
+
+        match result {
+            Ok(report) => assert_ne!(report.document.metadata.title.as_deref(), Some("AMBIENT")),
+            Err(error) => assert_eq!(error.kind, super::ParseErrorKind::Parse),
+        }
+    }
+
+    #[test]
+    fn parser_returns_structured_nonfatal_diagnostics() {
+        let report = Parser::default()
+            .parse_bytes(
+                "diagnostics.1",
+                b".Dd July 19, 2026\n.Dt BAD 1\n.Os\n.Sh NAME\n.Nm bad\n.ab\n",
+            )
+            .expect("return best-effort document");
+
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.level == super::DiagnosticLevel::Unsupported)
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn serde_feature_round_trips_the_public_parse_report() {
+        let report = Parser::default()
+            .parse_bytes("serde.1", b".TH SERDE 1\n.SH NAME\nserde \\- fixture\n")
+            .expect("parse source for serialization");
+        let encoded = serde_json::to_string(&report).expect("serialize parse report");
+        let decoded: super::ParseReport =
+            serde_json::from_str(&encoded).expect("deserialize parse report");
+
+        assert_eq!(decoded, report);
     }
 
     #[test]

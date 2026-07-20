@@ -9,13 +9,51 @@ to depend on libmandoc's private C structures or parser lifetime.
 
 - A fully owned AST with source locations, macro roles, display/list metadata,
   table cells, equations, and validated same-document tags.
-- File parsing with source-relative `.so` includes controlled by the caller.
+- A `Parser` API whose caller-controlled `.so` policy defaults to denial.
+- Structured non-fatal diagnostics and typed source/decompression failures.
 - Top-level uncompressed, gzip, and zstd manual sources.
 - Serialized calls to the upstream parser, whose relevant state is global.
 
 The crate is a parser layer only.  It intentionally does not render terminal
 output or HTML, locate system manual pages, interpret application-specific
 section models, or run a pager.
+
+## Basic use
+
+```rust,no_run
+use libmandoc_rs::{IncludePolicy, ParseOptions, Parser};
+
+let parser = Parser::new(ParseOptions {
+    includes: IncludePolicy::SourceTree,
+    ..ParseOptions::default()
+});
+let report = parser.parse_file("/usr/share/man/man1/ls.1.gz")?;
+
+println!("{:?}", report.document.macro_set);
+for diagnostic in report.diagnostics {
+    eprintln!("{:?}: {}", diagnostic.level, diagnostic.message);
+}
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Use `Parser::parse_bytes` if the caller owns the source transport. Its auto
+mode recognizes zstd frames; gzip byte streams should be passed to
+`parse_file`, where libmandoc opens them natively.
+
+`IncludePolicy::Deny` is the default. `SourceTree` preserves ordinary manual
+tree lookup, while `Root(path)` confines `.so` resolution to a directory the
+caller explicitly chooses.
+
+Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
+for the public AST, parser configuration, reports, diagnostics, and errors.
+
+## Compression contract
+
+`Compression::Auto` parses ordinary files through libmandoc (including its
+native gzip support) and stages `.zst` input through Rust's zstd decoder.
+`Compression::Plain` bypasses top-level compression detection, and
+`Compression::Zstd` requires a zstd frame. Other compression formats are not
+currently part of this crate's supported contract.
 
 ## Build requirements and supported targets
 

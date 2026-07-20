@@ -7,7 +7,7 @@ mod navigation;
 
 use std::path::Path;
 
-use libmandoc_rs::{MacroSet, Node, ParsedDocument};
+use libmandoc_rs::{Document, IncludePolicy, MacroSet, Node, ParseOptions, ParseReport, Parser};
 use mant_ast::{
     DocumentMeta, DocumentSchema, DocumentSource, Engine, MantDocument, Producer, SourceFormat,
     SourceSpan,
@@ -23,15 +23,20 @@ pub use libmandoc_rs::ParseError;
 ///
 /// Returns [`ParseError`] when the source cannot be opened or parsed.
 pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ParseError> {
-    let parsed = libmandoc_rs::parse_file(path, true)?;
-    Ok(lower_mandoc_document(path, &parsed))
+    let report = Parser::new(ParseOptions {
+        includes: IncludePolicy::SourceTree,
+        ..ParseOptions::default()
+    })
+    .parse_file(path)?;
+    Ok(lower_mandoc_document(path, &report))
 }
 
 /// Convert a completed low-level parse into the stable document contract.
 #[must_use]
-pub fn lower_mandoc_document(path: &Path, parsed: &ParsedDocument) -> MantDocument {
+pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument {
+    let parsed: &Document = &report.document;
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref());
-    let mut diagnostics = diagnostics::parse_diagnostics(&parsed.diagnostics);
+    let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
     let explicit_targets = navigation::explicit_targets(&parsed.root);
     let mut retained_targets = explicit_targets.clone();

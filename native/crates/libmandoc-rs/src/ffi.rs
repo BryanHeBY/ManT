@@ -3,8 +3,8 @@
 use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
 
 use super::{
-    DisplayKind, MacroSet, Metadata, Node, NodeFlags, NodeKind, NormalizedListKind, ParsedDocument,
-    TableAlignment, TableCell,
+    DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind, NormalizedListKind,
+    RawDocument, TableAlignment, TableCell,
 };
 
 #[repr(C)]
@@ -23,11 +23,16 @@ struct CTableCell {
 }
 
 unsafe extern "C" {
-    fn mant_mandoc_parse_file(path: *const c_char, allow_include: i32) -> *mut CDocument;
+    fn mant_mandoc_parse_file(
+        path: *const c_char,
+        include_root: *const c_char,
+        allow_include: i32,
+    ) -> *mut CDocument;
     fn mant_mandoc_parse_buffer(
         path: *const c_char,
         buffer: *const u8,
         length: usize,
+        include_root: *const c_char,
         allow_include: i32,
     ) -> *mut CDocument;
     fn mant_mandoc_document_free(document: *mut CDocument);
@@ -83,28 +88,40 @@ impl Drop for DocumentHandle {
     }
 }
 
-pub(super) fn parse_file(path: &CStr, allow_includes: bool) -> Result<ParsedDocument, String> {
-    let pointer = unsafe { mant_mandoc_parse_file(path.as_ptr(), i32::from(allow_includes)) };
-    copy_document(pointer)
-}
-
-pub(super) fn parse_buffer(
+pub(super) fn parse_file(
     path: &CStr,
-    buffer: &[u8],
+    include_root: Option<&CStr>,
     allow_includes: bool,
-) -> Result<ParsedDocument, String> {
+) -> Result<RawDocument, String> {
     let pointer = unsafe {
-        mant_mandoc_parse_buffer(
+        mant_mandoc_parse_file(
             path.as_ptr(),
-            buffer.as_ptr(),
-            buffer.len(),
+            include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
         )
     };
     copy_document(pointer)
 }
 
-fn copy_document(pointer: *mut CDocument) -> Result<ParsedDocument, String> {
+pub(super) fn parse_buffer(
+    path: &CStr,
+    buffer: &[u8],
+    include_root: Option<&CStr>,
+    allow_includes: bool,
+) -> Result<RawDocument, String> {
+    let pointer = unsafe {
+        mant_mandoc_parse_buffer(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            include_root.map_or(std::ptr::null(), CStr::as_ptr),
+            i32::from(allow_includes),
+        )
+    };
+    copy_document(pointer)
+}
+
+fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
     let handle = DocumentHandle(
         NonNull::new(pointer)
             .ok_or_else(|| "libmandoc could not allocate a document".to_owned())?,
@@ -122,23 +139,27 @@ fn copy_document(pointer: *mut CDocument) -> Result<ParsedDocument, String> {
         return Err("libmandoc produced no syntax tree".to_owned());
     }
 
-    Ok(ParsedDocument {
-        macro_set: macro_set(unsafe { mant_mandoc_document_macroset(document) })?,
-        metadata: Metadata {
-            title: unsafe { optional_string(mant_mandoc_document_title(document)) },
-            section: unsafe { optional_string(mant_mandoc_document_section(document)) },
-            volume: unsafe { optional_string(mant_mandoc_document_volume(document)) },
-            os: unsafe { optional_string(mant_mandoc_document_os(document)) },
-            arch: unsafe { optional_string(mant_mandoc_document_arch(document)) },
-            name: unsafe { optional_string(mant_mandoc_document_name(document)) },
-            date: unsafe { optional_string(mant_mandoc_document_date(document)) },
-            alias_target: unsafe { optional_string(mant_mandoc_document_alias_target(document)) },
-            has_body: unsafe { mant_mandoc_document_has_body(document) } != 0,
+    Ok(RawDocument {
+        document: Document {
+            macro_set: macro_set(unsafe { mant_mandoc_document_macroset(document) })?,
+            metadata: Metadata {
+                title: unsafe { optional_string(mant_mandoc_document_title(document)) },
+                section: unsafe { optional_string(mant_mandoc_document_section(document)) },
+                volume: unsafe { optional_string(mant_mandoc_document_volume(document)) },
+                os: unsafe { optional_string(mant_mandoc_document_os(document)) },
+                arch: unsafe { optional_string(mant_mandoc_document_arch(document)) },
+                name: unsafe { optional_string(mant_mandoc_document_name(document)) },
+                date: unsafe { optional_string(mant_mandoc_document_date(document)) },
+                alias_target: unsafe {
+                    optional_string(mant_mandoc_document_alias_target(document))
+                },
+                has_body: unsafe { mant_mandoc_document_has_body(document) } != 0,
+            },
+            root: unsafe { copy_node(root) }?,
         },
         diagnostics: unsafe {
             optional_string(mant_mandoc_document_diagnostics(document)).unwrap_or_default()
         },
-        root: unsafe { copy_node(root) }?,
     })
 }
 
