@@ -37,14 +37,19 @@ function processExecPath(): string {
 }
 
 describe("real CLI entry point", () => {
-  test("prints help without loading or starting the TUI", async () => {
-    const result = await invokeCli("--help");
+  test("prints either help alias without loading or starting the TUI", async () => {
+    const [short, long] = await Promise.all([
+      invokeCli("-h"),
+      invokeCli("--help"),
+    ]);
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Usage:");
-    expect(result.stdout).toContain("mant-cli <topic>");
-    expect(result.stdout).not.toContain("--roff-ast");
-    expect(result.stderr).toBe("");
+    expect(short.exitCode).toBe(0);
+    expect(short.stdout).toContain("Usage:");
+    expect(short.stdout).toContain("mant-cli <topic>");
+    expect(short.stdout).toContain("--explain=--option");
+    expect(short.stdout).not.toContain("--roff-ast");
+    expect(short.stderr).toBe("");
+    expect(long).toEqual(short);
   });
 
   test("reports unknown options without Bun source excerpts", async () => {

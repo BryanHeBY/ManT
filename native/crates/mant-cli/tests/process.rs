@@ -10,7 +10,7 @@ fn executable() -> &'static str {
 }
 
 #[test]
-fn help_exposes_one_positional_topic_and_long_options_only() {
+fn help_groups_the_public_query_surface() {
     let output = Command::new(executable())
         .arg("--help")
         .output()
@@ -20,6 +20,10 @@ fn help_exposes_one_positional_topic_and_long_options_only() {
     assert!(output.stderr.is_empty());
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
     assert!(help.contains("mant-cli <TOPIC> [OPTIONS]"));
+    assert!(help.contains("Document selection:"));
+    assert!(help.contains("Search:"));
+    assert!(help.contains("Integration:"));
+    assert!(help.contains("-h, --help"));
     assert!(help.contains("--format <FORMAT>"));
     assert!(help.contains("--update-tldr"));
     assert!(help.contains("--protocol-version"));
@@ -28,6 +32,24 @@ fn help_exposes_one_positional_topic_and_long_options_only() {
     assert!(help.contains("--search <PATTERN>"));
     assert!(!help.contains("--json"));
     assert!(!help.contains("update tldr"));
+}
+
+#[test]
+fn short_help_alias_matches_long_help() {
+    let short = Command::new(executable())
+        .arg("-h")
+        .output()
+        .expect("run mant-cli -h");
+    let long = Command::new(executable())
+        .arg("--help")
+        .output()
+        .expect("run mant-cli --help");
+
+    assert!(short.status.success());
+    assert!(short.stderr.is_empty());
+    assert_eq!(short.stdout, long.stdout);
+    assert!(long.status.success());
+    assert!(long.stderr.is_empty());
 }
 
 #[test]

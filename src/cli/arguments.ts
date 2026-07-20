@@ -26,11 +26,11 @@ export class CliUsageError extends Error {
 
 // ── Help text ──────────────────────────────────────────────────────────────
 
-export const CLI_HELP = `ManT — browse local man pages in a structured terminal UI
+export const CLI_HELP = `ManT — explore local manual pages in a structured terminal UI
 
 Usage:
   mant <topic> [--section <section>] [--force-libmandoc]
-  mant --help
+  mant -h, --help
 
 Options:
   -h, --help              Show this help and exit
@@ -38,17 +38,20 @@ Options:
   --force-libmandoc       Disable groff fallback for parser diagnostics
   --                      Treat all remaining arguments as the topic
 
-Agent and pipeline output:
-  mant-cli <topic>                         Print Markdown
-  mant-cli <topic> --outline               Print a selectable section tree
-  mant-cli <topic> --node 4.2              Print one section subtree
-  mant-cli <topic> --format text           Print unstyled semantic text
-  mant-cli <topic> --format json           Print the versioned document as JSON
-  mant-cli --update-tldr                   Update the tldr cache
+What ManT provides:
+  Complete manuals with a hierarchy-aware sidebar, in-page references,
+  document search, and optional tldr quick references.
+
+For agents and scripts:
+  mant-cli <topic> --outline               Discover sections and options
+  mant-cli <topic> --explain=--option      Explain one semantic entry
+  mant-cli <topic> --search=<pattern>      Find text with stable locations
+  mant-cli -h                              Show Markdown, text, JSON, and schema output
 
 Examples:
   mant git
-  mant printf --section 3`;
+  mant printf --section 3
+  mant --force-libmandoc tar`;
 
 // ── Parser ─────────────────────────────────────────────────────────────────
 

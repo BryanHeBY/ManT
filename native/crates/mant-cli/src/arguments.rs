@@ -123,11 +123,11 @@ pub(crate) enum Command {
 #[allow(clippy::struct_excessive_bools)]
 #[command(
     name = "mant-cli",
-    about = "Query local manual pages for scripts and agents",
+    about = "Query structured local manual pages for agents and scripts",
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --outline sections\n  mant-cli tar --explain=--exclude\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli tar --force-libmandoc --format json\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli gcc --outline\n  mant-cli tar --explain=--exclude\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls --context 1\n  mant-cli git --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
         .required(true)
@@ -139,83 +139,183 @@ struct Cli {
     topic: Option<String>,
 
     /// Select a manual section such as 1 or 3p.
-    #[arg(long, value_name = "SECTION", value_parser = non_empty, requires = "topic")]
+    #[arg(
+        long,
+        value_name = "SECTION",
+        value_parser = non_empty,
+        requires = "topic",
+        help_heading = "Document selection"
+    )]
     section: Option<String>,
 
     /// Print selectable sections and command-line options by default.
-    #[arg(long, value_name = "DETAIL", value_enum, num_args = 0..=1, default_missing_value = "options", requires = "topic", conflicts_with_all = ["node", "explain"])]
+    #[arg(
+        long,
+        value_name = "DETAIL",
+        value_enum,
+        num_args = 0..=1,
+        default_missing_value = "options",
+        requires = "topic",
+        conflicts_with_all = ["node", "explain"],
+        help_heading = "Document selection"
+    )]
     outline: Option<OutlineMode>,
 
     /// Print a node by outline path, document ID, or option alias; repeatable.
-    #[arg(long, value_name = "NODE", value_parser = non_empty, requires = "topic", conflicts_with = "explain")]
+    #[arg(
+        long,
+        value_name = "NODE",
+        value_parser = non_empty,
+        requires = "topic",
+        conflicts_with = "explain",
+        help_heading = "Document selection"
+    )]
     node: Vec<String>,
 
     /// Explain one option, command, or environment variable by alias, ID, or outline path.
-    #[arg(long, value_name = "ENTRY", value_parser = non_empty, allow_hyphen_values = true, requires = "topic", conflicts_with_all = ["outline", "node", "search"])]
+    #[arg(
+        long,
+        value_name = "ENTRY",
+        value_parser = non_empty,
+        allow_hyphen_values = true,
+        requires = "topic",
+        conflicts_with_all = ["outline", "node", "search"],
+        help_heading = "Document selection"
+    )]
     explain: Option<String>,
 
     /// Search visible manual text and report Markdown lines plus outline nodes.
-    #[arg(long, visible_alias = "grep", value_name = "PATTERN", value_parser = non_empty, requires = "topic", conflicts_with_all = ["outline", "node", "explain"])]
+    #[arg(
+        long,
+        visible_alias = "grep",
+        value_name = "PATTERN",
+        value_parser = non_empty,
+        requires = "topic",
+        conflicts_with_all = ["outline", "node", "explain"],
+        help_heading = "Search"
+    )]
     search: Option<String>,
 
     /// Interpret the search pattern as a regular expression instead of a literal.
-    #[arg(long, requires = "search")]
+    #[arg(long, requires = "search", help_heading = "Search")]
     regex: bool,
 
     /// Select case handling for search matches.
-    #[arg(long = "case", value_name = "POLICY", value_enum, requires = "search")]
+    #[arg(
+        long = "case",
+        value_name = "POLICY",
+        value_enum,
+        requires = "search",
+        help_heading = "Search"
+    )]
     search_case: Option<SearchCaseMode>,
 
     /// Match the pattern only at Unicode-aware word boundaries.
-    #[arg(long, requires = "search")]
+    #[arg(long, requires = "search", help_heading = "Search")]
     word: bool,
 
     /// Search visible text or the generated Markdown source.
-    #[arg(long = "scope", value_name = "SCOPE", value_enum, requires = "search")]
+    #[arg(
+        long = "scope",
+        value_name = "SCOPE",
+        value_enum,
+        requires = "search",
+        help_heading = "Search"
+    )]
     search_scope: Option<SearchScopeMode>,
 
     /// Include this many full Markdown lines before and after each match.
-    #[arg(long, value_name = "LINES", requires = "search")]
+    #[arg(
+        long,
+        value_name = "LINES",
+        requires = "search",
+        help_heading = "Search"
+    )]
     context: Option<u16>,
 
     /// Return at most this many matches.
-    #[arg(long, value_name = "COUNT", requires = "search")]
+    #[arg(
+        long,
+        value_name = "COUNT",
+        requires = "search",
+        help_heading = "Search"
+    )]
     limit: Option<u32>,
 
     /// Skip this many matches for deterministic pagination.
-    #[arg(long, value_name = "COUNT", requires = "search")]
+    #[arg(
+        long,
+        value_name = "COUNT",
+        requires = "search",
+        help_heading = "Search"
+    )]
     offset: Option<u32>,
 
     /// Read a versioned `QueryRequest` JSON object from standard input.
-    #[arg(long, conflicts_with_all = ["section", "outline", "node", "explain", "search", "regex", "search_case", "word", "search_scope", "context", "limit", "offset"])]
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "section",
+            "outline",
+            "node",
+            "explain",
+            "search",
+            "regex",
+            "search_case",
+            "word",
+            "search_scope",
+            "context",
+            "limit",
+            "offset"
+        ],
+        help_heading = "Integration"
+    )]
     request_json: bool,
 
     /// Disable groff fallback and expose the bundled libmandoc result.
-    #[arg(long, conflicts_with_all = ["update_tldr", "protocol_version", "schema"])]
+    #[arg(
+        long,
+        conflicts_with_all = ["update_tldr", "protocol_version", "schema"],
+        help_heading = "Diagnostics"
+    )]
     force_libmandoc: bool,
 
     /// Update tldr data through the installed client or `ManT` cache.
-    #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "format"])]
+    #[arg(
+        long,
+        conflicts_with_all = ["section", "outline", "node", "search", "format"],
+        help_heading = "Data"
+    )]
     update_tldr: bool,
 
     /// Print the native protocol description as JSON.
-    #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "format"])]
+    #[arg(
+        long,
+        conflicts_with_all = ["section", "outline", "node", "search", "format"],
+        help_heading = "Integration"
+    )]
     protocol_version: bool,
 
     /// Print a generated JSON Schema contract (`request`, `query`, `outline`, `excerpt`, `search`, or `all`).
-    #[arg(long, value_name = "CONTRACT", value_enum, conflicts_with_all = ["section", "outline", "node", "search", "format"])]
+    #[arg(
+        long,
+        value_name = "CONTRACT",
+        value_enum,
+        conflicts_with_all = ["section", "outline", "node", "search", "format"],
+        help_heading = "Integration"
+    )]
     schema: Option<SchemaContract>,
 
     /// Output format. Full content defaults to markdown; outlines and search default to text.
-    #[arg(long, value_name = "FORMAT", value_enum)]
+    #[arg(long, value_name = "FORMAT", value_enum, help_heading = "Output")]
     format: Option<QueryFormat>,
 
     /// Omit JSON indentation. Query output also requires `--format json`.
-    #[arg(long)]
+    #[arg(long, help_heading = "Output")]
     compact: bool,
 
     /// Print help.
-    #[arg(long, action = ArgAction::Help)]
+    #[arg(short = 'h', long, action = ArgAction::Help, help_heading = "General")]
     help: Option<bool>,
 }
 
@@ -620,7 +720,6 @@ mod tests {
             vec!["git", "--md"],
             vec!["git", "--markdown"],
             vec!["git", "--text"],
-            vec!["-h"],
             vec!["git", "-s", "1"],
             vec!["git", "-n", "1"],
             vec!["--unknown", "git"],
@@ -632,8 +731,10 @@ mod tests {
 
     #[test]
     fn help_is_side_effect_free_and_the_option_terminator_preserves_a_topic() {
-        let help = parse(&args(&["--help"])).expect("help");
-        assert!(matches!(help, Command::Help(text) if text.contains("Usage: mant-cli")));
+        for flag in ["--help", "-h"] {
+            let help = parse(&args(&[flag])).expect("help");
+            assert!(matches!(help, Command::Help(text) if text.contains("Usage: mant-cli")));
+        }
         assert_eq!(
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
