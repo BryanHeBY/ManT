@@ -5,6 +5,7 @@ use mant_ast::{
     ListItem, ListKind, MantDocument, Producer, QueryBundle, QuerySchema, Section, SourceFormat,
     TableCell, TableRow, TldrCommandPart, TldrDocument, TldrExample,
 };
+use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use super::render_markdown;
 use super::{render_excerpt_markdown, render_outline_markdown};
@@ -178,6 +179,86 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     assert!(markdown.contains("- first item"));
     assert!(markdown.contains("- **-a**  \n  **--all**"));
     assert!(markdown.contains("Show all entries."));
+}
+
+#[test]
+fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
+    let definitions = Block::DefinitionList {
+        items: vec![DefinitionItem {
+            identity: None,
+            terms: vec![vec![
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "-r ".to_owned(),
+                    }],
+                },
+                Inline::Emphasis {
+                    children: vec![Inline::Text {
+                        value: "prompt".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: ", ".to_owned(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "--prompt=".to_owned(),
+                    }],
+                },
+                Inline::Emphasis {
+                    children: vec![Inline::Text {
+                        value: "prompt".to_owned(),
+                    }],
+                },
+            ]],
+            description: vec![paragraph(vec![Inline::Text {
+                value: "Set the pager prompt.".to_owned(),
+            }])],
+            spacing_before_lines: None,
+        }],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let query = QueryBundle {
+        schema: QuerySchema::V2,
+        topic: "man".to_owned(),
+        section: Some("1".to_owned()),
+        manual: Some(manual(vec![section(
+            "OPTIONS",
+            vec![definitions],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("**-r** *prompt*, **--prompt=**_prompt_"));
+    assert!(!markdown.contains("***"));
+    assert!(!markdown.contains("<em>"));
+
+    let styled_events = Parser::new(&markdown)
+        .filter_map(|event| match event {
+            Event::Start(Tag::Strong) => Some("strong-start"),
+            Event::End(TagEnd::Strong) => Some("strong-end"),
+            Event::Start(Tag::Emphasis) => Some("emphasis-start"),
+            Event::End(TagEnd::Emphasis) => Some("emphasis-end"),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        styled_events,
+        [
+            "strong-start",
+            "strong-end",
+            "emphasis-start",
+            "emphasis-end",
+            "strong-start",
+            "strong-end",
+            "emphasis-start",
+            "emphasis-end",
+        ]
+    );
 }
 
 #[test]

@@ -293,6 +293,45 @@ mod tests {
     }
 
     #[test]
+    fn lets_explicit_fonts_override_an_alternating_macro_default() {
+        let path = temporary_source(
+            "alternating-font-reset",
+            ".TH MAN 1\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             .BI \\-r\\  prompt \\fR,\\ \\fB\\-\\-prompt= prompt\n\
+             Set the pager prompt.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower alternating font reset");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        let term = items[0]
+            .terms
+            .first()
+            .expect("first definition term")
+            .iter()
+            .filter(|inline| !matches!(inline, Inline::Anchor { .. }))
+            .collect::<Vec<_>>();
+
+        assert_eq!(term.len(), 5);
+        assert!(matches!(term[0], Inline::Strong { children } if inline_text(children) == "-r "));
+        assert!(
+            matches!(term[1], Inline::Emphasis { children } if inline_text(children) == "prompt")
+        );
+        assert!(matches!(term[2], Inline::Text { value } if value == ", "));
+        assert!(
+            matches!(term[3], Inline::Strong { children } if inline_text(children) == "--prompt=")
+        );
+        assert!(
+            matches!(term[4], Inline::Emphasis { children } if inline_text(children) == "prompt")
+        );
+    }
+
+    #[test]
     fn suppresses_pod_font_requests_around_verbatim_blocks() {
         let path = temporary_source(
             "pod-verbatim-fonts",

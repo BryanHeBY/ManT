@@ -93,10 +93,10 @@ fn render_inline_raw(children: &[Inline]) -> String {
         match child {
             Inline::Text { value } => output.push_str(&escape_text(value)),
             Inline::Strong { children } => {
-                output.push_str(&render_styled(children, "**"));
+                output.push_str(&render_styled(children, "**", "__", &output));
             }
             Inline::Emphasis { children } => {
-                output.push_str(&render_styled(children, "*"));
+                output.push_str(&render_styled(children, "*", "_", &output));
             }
             Inline::Code { value } => output.push_str(&code_span(value)),
             Inline::ExternalLink {
@@ -120,7 +120,16 @@ fn render_inline_raw(children: &[Inline]) -> String {
     output
 }
 
-fn render_styled(children: &[Inline], marker: &str) -> String {
+/// Render one styled span with the ordinary asterisk marker, switching to the
+/// equivalent underscore marker when adjacent styles would form an ambiguous
+/// run of `*`. This keeps the output pure Markdown while preserving emphasis
+/// within ordinary words, where underscore delimiters are intentionally inert.
+fn render_styled(
+    children: &[Inline],
+    primary_marker: &str,
+    alternate_marker: &str,
+    preceding: &str,
+) -> String {
     let rendered = render_inline_raw(children);
     let core = rendered.trim_matches([' ', '\t']);
     if core.is_empty() {
@@ -128,11 +137,14 @@ fn render_styled(children: &[Inline], marker: &str) -> String {
     }
     let leading_width = rendered.len() - rendered.trim_start_matches([' ', '\t']).len();
     let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t']).len();
-    format!(
-        "{}{marker}{core}{marker}{}",
-        &rendered[..leading_width],
-        &rendered[rendered.len() - trailing_width..]
-    )
+    let leading = &rendered[..leading_width];
+    let trailing = &rendered[rendered.len() - trailing_width..];
+    let marker = if preceding.ends_with('*') || core.contains(primary_marker) {
+        alternate_marker
+    } else {
+        primary_marker
+    };
+    format!("{leading}{marker}{core}{marker}{trailing}")
 }
 
 fn render_link(target: &str, title: Option<&str>, children: &[Inline]) -> String {

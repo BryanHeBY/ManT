@@ -138,7 +138,7 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         return Vec::new();
     }
     if node.kind == NodeKind::Text {
-        return parse_roff_text(node.text.as_deref().unwrap_or_default());
+        return lower_text_node(node, Font::Regular);
     }
 
     let macro_name = node.macro_name.as_deref();
@@ -291,11 +291,17 @@ fn lower_alternating_fonts(
 ) -> Vec<Inline> {
     let mut output = Vec::new();
     for (index, child) in children.iter().enumerate() {
-        let lowered = lower_inline_node(child, default_name);
-        output.extend(apply_font(
-            lowered,
-            if index % 2 == 0 { first } else { second },
-        ));
+        let font = if index % 2 == 0 { first } else { second };
+        // An alternating man(7) macro establishes the *initial* font for
+        // each argument. Explicit `\\f` escapes inside that argument must
+        // still be able to reset or replace it; wrapping an already-lowered
+        // argument would incorrectly nest the outer font around the reset.
+        let lowered = if child.kind == NodeKind::Text {
+            lower_text_node(child, font)
+        } else {
+            apply_font(lower_inline_node(child, default_name), font)
+        };
+        output.extend(lowered);
     }
     output
 }
@@ -340,10 +346,17 @@ fn text_node(value: &str) -> Vec<Inline> {
 }
 
 pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
+    parse_roff_text_with_font(source, Font::Regular)
+}
+
+/// Decode one roff text run using the font selected by its enclosing macro.
+/// Explicit `\\f` escapes change `font` while the run is scanned, so a reset
+/// to regular text remains visible even inside an alternating `.BI` argument.
+fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
     let characters: Vec<char> = source.chars().collect();
     let mut output = Vec::new();
     let mut buffer = String::new();
-    let mut font = Font::Regular;
+    let mut font = initial_font;
     let mut link: Option<String> = None;
     let mut index = 0;
 
@@ -411,6 +424,16 @@ pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
     output
+}
+
+/// Lower a text node after honoring a macro-provided default font. Nodes marked
+/// non-printing by libmandoc are never allowed to escape through this shortcut.
+fn lower_text_node(node: &Node, initial_font: Font) -> Vec<Inline> {
+    if node.flags.no_print || node.kind == NodeKind::Comment {
+        Vec::new()
+    } else {
+        parse_roff_text_with_font(node.text.as_deref().unwrap_or_default(), initial_font)
+    }
 }
 
 fn parse_font(characters: &[char], index: &mut usize) -> Font {
