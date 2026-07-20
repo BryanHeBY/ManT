@@ -6,33 +6,42 @@
  */
 
 import type { InputRenderable } from "@opentui/core";
+import { useEffect, useState } from "react";
 
 export interface SearchBarProps {
   inputRef: { current: InputRenderable | null };
-  draft: string;
   appliedQuery: string;
   matchCount: number;
   matchIndex: number;
-  onDraftChange: (value: string) => void;
   onSubmit: (value: string) => void;
 }
 
 export function SearchBar({
   inputRef,
-  draft,
   appliedQuery,
   matchCount,
   matchIndex,
-  onDraftChange,
   onSubmit,
 }: SearchBarProps) {
-  const hasAppliedQuery = appliedQuery.length > 0 && draft === appliedQuery;
+  // Keep ordinary typing inside OpenTUI's native InputRenderable. Feeding
+  // every keystroke through App state can delay reconciliation on large man
+  // pages long enough for the following Enter event to reach a replaced input.
+  // React only needs to know when an already-applied query has been edited so
+  // the result/no-match hint can return to its pending state.
+  const [isEditingAppliedQuery, setIsEditingAppliedQuery] = useState(false);
+  useEffect(() => setIsEditingAppliedQuery(false), [appliedQuery]);
+  const hasAppliedQuery = appliedQuery.length > 0 && !isEditingAppliedQuery;
   const hasNoMatches = hasAppliedQuery && matchCount === 0;
   // OpenTUI React emits the current string, while the inherited core option
   // type still mentions an empty SubmitEvent. Accept both shapes at this
   // adapter boundary and read the renderable as a compatibility fallback.
   const submitCurrentValue = (value: unknown) => {
-    onSubmit(typeof value === "string" ? value : inputRef.current?.value ?? draft);
+    onSubmit(typeof value === "string" ? value : inputRef.current?.value ?? "");
+  };
+  const noteInputChange = (value: string) => {
+    if (appliedQuery && value !== appliedQuery && !isEditingAppliedQuery) {
+      setIsEditingAppliedQuery(true);
+    }
   };
 
   return (
@@ -42,7 +51,6 @@ export function SearchBar({
       <input
         ref={inputRef}
         flexGrow={1}
-        value={draft}
         focused
         placeholder="Search this page"
         placeholderColor="#6c7086"
@@ -50,7 +58,7 @@ export function SearchBar({
         focusedBackgroundColor="#313244"
         textColor="#cdd6f4"
         focusedTextColor="#cdd6f4"
-        onInput={onDraftChange}
+        onInput={noteInputChange}
         onSubmit={submitCurrentValue}
       />
       <box width={1} />
@@ -63,7 +71,7 @@ export function SearchBar({
         </box>
       ) : (
         <text fg="#7f849c">
-          {draft !== appliedQuery || !hasAppliedQuery
+          {!hasAppliedQuery
             ? "Enter search · Esc cancel"
             : `${matchIndex + 1}/${matchCount}  Enter next · Esc close`}
         </text>

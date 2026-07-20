@@ -4,7 +4,11 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mockLsResult, mockQuery } from "../../fixtures/mock-result";
+import {
+  mockLsResult,
+  mockLsWithTldrResult,
+  mockQuery,
+} from "../../fixtures/mock-result";
 import {
   contentPosition,
   flushEscape,
@@ -19,39 +23,70 @@ import {
 installOpenTuiWarningFilter();
 
 describe("App search (e2e)", () => {
-  test("submits the current option text immediately on a large manual", async () => {
-    const result = mockQuery("tar", [{
-      id: "extended-file-attributes",
-      title: "Extended file attributes",
-      blocks: [{
-        type: "definition-list",
-        compact: true,
-        items: Array.from({ length: 320 }, (_, index) => ({
-          terms: [[{
-            type: "strong" as const,
-            children: [{
-              type: "text" as const,
-              value: index === 280 ? "--acls" : `--option-${index}`,
+  test("keeps option input responsive and aligns a match inside the TLDR border", async () => {
+    const result = {
+      ...mockQuery("tar", [{
+        id: "extended-file-attributes",
+        title: "Extended file attributes",
+        blocks: [{
+          type: "definition-list" as const,
+          compact: true,
+          items: Array.from({ length: 640 }, (_, index) => ({
+            terms: [[{
+              type: "strong" as const,
+              children: [{
+                type: "text" as const,
+                value: index === 580 ? "--acls" : `--option-${index}`,
+              }],
+            }]],
+            description: [{
+              type: "paragraph" as const,
+              children: [{ type: "text" as const, value: `Option description ${index}.` }],
             }],
-          }]],
-          description: [{
-            type: "paragraph" as const,
-            children: [{ type: "text" as const, value: `Option description ${index}.` }],
+          })),
+        }],
+        children: [],
+      }]),
+      tldr: {
+        ...mockLsWithTldrResult.tldr!,
+        title: "tar",
+        description: ["Archiving utility."],
+        examples: [{
+          description: "Extract matching files",
+          command: "tar xf path/to/source.tar --wildcards \"*.html\"",
+          commandParts: [{
+            type: "text" as const,
+            value: "tar xf path/to/source.tar --wildcards \"*.html\"",
           }],
-        })),
-      }],
-      children: [],
-    }]);
-    const setup = await renderApp(result);
+        }],
+      },
+    };
+    const setup = await renderApp(result, { width: 120, height: 30 });
 
     setup.mockInput.pressKey("/");
     await flushKeyboard(setup);
     setup.mockInput.typeText("--acls");
     setup.mockInput.pressEnter();
     await flushKeyboard(setup);
-    const frame = await waitForFrame(setup, (candidate) => candidate.includes("1/1"), 1_000);
-    expect(frame).toContain("1/1");
-    expect(contentPosition(frame, "--acls").y).toBe(2);
+    expect(setup.captureCharFrame()).toContain("1/1");
+
+    setup.mockInput.pressEscape();
+    await flushEscape(setup);
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("-w");
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+    const active = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .filter((span) => span.bg.toInts().slice(0, 3).join(",") === "249,226,175")
+      .map((span) => span.text)
+      .join("");
+    expect(active).toBe("-w");
+    expect(contentPosition(
+      setup.captureCharFrame(),
+      "tar xf path/to/source.tar --wildcards",
+    ).y).toBe(2);
     setup.renderer.destroy();
   });
 

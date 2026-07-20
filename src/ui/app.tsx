@@ -113,9 +113,6 @@ export function App({ result, onQuit }: AppProps) {
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [menuCursor, setMenuCursor] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  // Keep the editing buffer separate from the indexed query so typing remains
-  // free of search work and a new result set appears only after confirmation.
-  const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState<AppliedSearch>({
     query: "",
     matches: [],
@@ -330,21 +327,18 @@ export function App({ result, onQuit }: AppProps) {
   const openSearch = () => {
     setOpenMenu(null);
     setIsHelpOpen(false);
-    setSearchDraft(searchQuery);
     setIsSearchOpen(true);
   };
 
   /** Leave search mode and remove every visual/result state owned by it. */
   const closeSearch = () => {
     clearAllSearchDecorations();
-    setSearchDraft("");
     setSearch({ query: "", matches: [], activeIndex: 0 });
     setIsSearchOpen(false);
   };
 
   /** Apply the input's submitted value instead of a possibly stale render snapshot. */
   const submitSearch = (submittedDraft: string) => {
-    if (submittedDraft !== searchDraft) setSearchDraft(submittedDraft);
     if (submittedDraft === searchQuery) {
       selectSearchMatch(searchIndex + 1);
       return;
@@ -501,10 +495,16 @@ export function App({ result, onQuit }: AppProps) {
       if (e.name === "escape") {
         e.preventDefault();
         closeSearch();
-      } else if (e.name === "down" && searchDraft === searchQuery) {
+      } else if (
+        e.name === "down"
+        && searchInputRef.current?.value === searchQuery
+      ) {
         e.preventDefault();
         selectSearchMatch(searchIndex + 1);
-      } else if (e.name === "up" && searchDraft === searchQuery) {
+      } else if (
+        e.name === "up"
+        && searchInputRef.current?.value === searchQuery
+      ) {
         e.preventDefault();
         selectSearchMatch(searchIndex - 1);
       }
@@ -694,11 +694,9 @@ export function App({ result, onQuit }: AppProps) {
       {isSearchOpen ? (
         <SearchBar
           inputRef={searchInputRef}
-          draft={searchDraft}
           appliedQuery={searchQuery}
           matchCount={searchMatches.length}
           matchIndex={searchIndex}
-          onDraftChange={setSearchDraft}
           onSubmit={submitSearch}
         />
       ) : (
