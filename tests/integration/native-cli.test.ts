@@ -33,7 +33,7 @@ describeNativeCli("real native CLI process boundary", () => {
     expect(protocol.excerptSchema).toBe("mant.excerpt/v1");
   });
 
-  testWithManual("returns a validated source-lowered manual", async () => {
+  testWithManual("returns a validated manual through the native query pipeline", async () => {
     const client = createNativeCliClient({
       env: { MANT_CLI_PATH: nativeCliPath },
       which: () => null,
@@ -41,7 +41,11 @@ describeNativeCli("real native CLI process boundary", () => {
 
     const query = await client.query({ topic: "ls" });
     expect(query.schema).toBe("mant.query/v1");
-    expect(query.manual?.producer.engine?.name).toBe("libmandoc");
+    // Host manual sources vary by operating system and distribution. The
+    // native query pipeline prefers libmandoc, but may legitimately fall back
+    // to groff HTML for source constructs libmandoc cannot lower. Fixed roff
+    // fixtures exercise the libmandoc-only path independently.
+    expect(query.manual?.producer.name).toBe("mant");
     expect(query.manual?.sections.length).toBeGreaterThan(0);
   });
 });
