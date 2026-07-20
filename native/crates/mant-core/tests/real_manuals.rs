@@ -163,8 +163,16 @@ fn git_keeps_nested_sections_examples_and_inline_grouping() {
         .expect("Git Diffs subsection");
     assert_preformatted(git_diffs, "path old-file", 8);
 
-    let option_summary = section(document, "OPTIONS")
-        .blocks
+    let help = nested_definition_items(section(document, "OPTIONS"))
+        .into_iter()
+        .find(|item| {
+            item.identity
+                .as_ref()
+                .is_some_and(|identity| identity.names.iter().any(|name| name == "--help"))
+        })
+        .expect("semantic --help option");
+    let option_summary = help
+        .description
         .iter()
         .find_map(|block| match block {
             Block::Paragraph { children, .. }
@@ -183,6 +191,11 @@ fn git_keeps_nested_sections_examples_and_inline_grouping() {
     let ancillary_text = block_slice_text(&ancillary.blocks);
     assert!(ancillary_text.contains("git-config(1)"));
     assert!(ancillary_text.contains("git-fast-export(1)"));
+
+    let outline = build_outline_with_detail(&manual_query("git"), OutlineDetail::Options)
+        .expect("git option outline");
+    assert!(find_outline_entry(&outline.nodes, "--help").is_some());
+    assert!(find_outline_entry(&outline.nodes, "-C").is_some());
 }
 
 #[test]
@@ -672,21 +685,61 @@ fn as_preformatted(block: &Block) -> Option<&[Inline]> {
 }
 
 fn assert_preformatted(section: &Section, needle: &str, expected_indent: u16) {
-    let block = section
-        .blocks
-        .iter()
-        .find(|block| {
-            as_preformatted(block).is_some_and(|children| inline_text(children).contains(needle))
-        })
+    let (children, indent) = find_preformatted(&section.blocks, needle, 0)
         .unwrap_or_else(|| panic!("missing preformatted text {needle:?} in {}", section.title));
-    let Block::Preformatted {
-        children, layout, ..
-    } = block
-    else {
-        unreachable!()
-    };
     assert!(inline_text(children).contains(needle));
-    assert_eq!(layout.indent_columns, expected_indent);
+    assert_eq!(indent, expected_indent);
+}
+
+fn find_preformatted<'a>(
+    blocks: &'a [Block],
+    needle: &str,
+    base_indent: u16,
+) -> Option<(&'a [Inline], u16)> {
+    for block in blocks {
+        match block {
+            Block::Preformatted {
+                children, layout, ..
+            } if inline_text(children).contains(needle) => {
+                return Some((children, base_indent + layout.indent_columns));
+            }
+            Block::List { items, layout, .. } => {
+                for item in items {
+                    if let Some(found) =
+                        find_preformatted(&item.blocks, needle, base_indent + layout.indent_columns)
+                    {
+                        return Some(found);
+                    }
+                }
+            }
+            Block::DefinitionList { items, layout, .. } => {
+                for item in items {
+                    if let Some(found) = find_preformatted(
+                        &item.description,
+                        needle,
+                        base_indent + layout.indent_columns + 4,
+                    ) {
+                        return Some(found);
+                    }
+                }
+            }
+            Block::Table { rows, layout, .. } => {
+                for cell in rows.iter().flat_map(|row| &row.cells) {
+                    if let Some(found) =
+                        find_preformatted(&cell.blocks, needle, base_indent + layout.indent_columns)
+                    {
+                        return Some(found);
+                    }
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
+    None
 }
 
 fn contains_strong(children: &[Inline], expected: &str) -> bool {

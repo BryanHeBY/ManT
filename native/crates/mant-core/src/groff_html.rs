@@ -583,26 +583,25 @@ mod tests {
             None,
         );
         let blocks = &document.sections[0].blocks;
-        assert_eq!(blocks.len(), 2);
+        let [Block::DefinitionList { items, layout, .. }] = blocks.as_slice() else {
+            panic!("hanging groff table should become a semantic definition");
+        };
+        assert_eq!(layout.indent_columns, 7);
+        assert!(
+            items[0]
+                .identity
+                .as_ref()
+                .is_some_and(|identity| { identity.names == ["-c"] })
+        );
         assert!(matches!(
-            blocks[0],
-            Block::Paragraph {
+            items[0].description.as_slice(),
+            [Block::Paragraph {
                 layout: mant_ast::LayoutHint {
-                    indent_columns: 7,
+                    indent_columns: 3,
                     ..
                 },
                 ..
-            }
-        ));
-        assert!(matches!(
-            blocks[1],
-            Block::Paragraph {
-                layout: mant_ast::LayoutHint {
-                    indent_columns: 14,
-                    ..
-                },
-                ..
-            }
+            }]
         ));
     }
 
