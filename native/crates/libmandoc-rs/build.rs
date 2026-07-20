@@ -46,7 +46,7 @@ const LIBMANDOC_SOURCES: &[&str] = &[
 
 fn main() {
     let crate_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
-    let vendor_dir = crate_dir.join("../../vendor/mandoc-1.14.6");
+    let vendor_dir = crate_dir.join("vendor/mandoc-1.14.6");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target operating system");
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();

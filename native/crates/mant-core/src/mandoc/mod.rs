@@ -7,15 +7,15 @@ mod navigation;
 
 use std::path::Path;
 
+use libmandoc_rs::{MacroSet, Node, ParsedDocument};
 use mant_ast::{
     DocumentMeta, DocumentSchema, DocumentSource, Engine, MantDocument, Producer, SourceFormat,
     SourceSpan,
 };
-use mant_mandoc_sys::{MacroSet, Node, ParsedDocument};
 
 use self::inline::{parse_roff_text, plain_text};
 
-pub use mant_mandoc_sys::ParseError;
+pub use libmandoc_rs::ParseError;
 
 /// Parse and normalize one located man or mdoc source file.
 ///
@@ -23,7 +23,7 @@ pub use mant_mandoc_sys::ParseError;
 ///
 /// Returns [`ParseError`] when the source cannot be opened or parsed.
 pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ParseError> {
-    let parsed = mant_mandoc_sys::parse_file(path, true)?;
+    let parsed = libmandoc_rs::parse_file(path, true)?;
     Ok(lower_mandoc_document(path, &parsed))
 }
 
@@ -47,7 +47,7 @@ pub fn lower_mandoc_document(path: &Path, parsed: &ParsedDocument) -> MantDocume
             version: env!("CARGO_PKG_VERSION").to_owned(),
             engine: Some(Engine {
                 name: "libmandoc".to_owned(),
-                version: mant_mandoc_sys::MANDOC_VERSION.to_owned(),
+                version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
             }),
         },
         source: DocumentSource {
@@ -131,7 +131,7 @@ fn source_span(node: &Node) -> Option<SourceSpan> {
     })
 }
 
-fn part_children(node: &Node, kind: mant_mandoc_sys::NodeKind) -> &[Node] {
+fn part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
     node.children
         .iter()
         .find(|child| child.kind == kind)
@@ -693,7 +693,7 @@ mod tests {
     #[test]
     fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
         let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../vendor/mandoc-1.14.6/mandoc.1");
+            .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
 
         let document = parse_manual_source(&source).expect("lower vendored mandoc manual");
 

@@ -1,11 +1,11 @@
 //! Reconstructs sections and semantic blocks from the copied mandoc tree.
 
+use libmandoc_rs::{
+    DisplayKind, Node, NodeKind, NormalizedListKind, TableAlignment as MandocTableAlignment,
+};
 use mant_ast::{
     Block, DefinitionItem, Inline, LayoutHint, ListItem, ListKind, Section,
     TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
-};
-use mant_mandoc_sys::{
-    DisplayKind, Node, NodeKind, NormalizedListKind, TableAlignment as MandocTableAlignment,
 };
 
 use super::{

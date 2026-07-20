@@ -265,6 +265,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
+name = "libmandoc-rs"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "zstd",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -311,20 +319,12 @@ version = "0.2.0"
 dependencies = [
  "grep-matcher",
  "grep-regex",
+ "libmandoc-rs",
  "mant-ast",
- "mant-mandoc-sys",
  "pulldown-cmark",
  "scraper",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "mant-mandoc-sys"
-version = "0.2.0"
-dependencies = [
- "cc",
- "zstd",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 //! Normalizes roff escapes and semantic mdoc macros into inline AST nodes.
 
+use libmandoc_rs::{Node, NodeKind};
 use mant_ast::Inline;
-use mant_mandoc_sys::{Node, NodeKind};
 
 use super::part_children;
 

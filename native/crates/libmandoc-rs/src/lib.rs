@@ -1,4 +1,4 @@
-//! Safe ownership boundary around `ManT`'s pinned libmandoc parser.
+//! Safe ownership boundary around the pinned libmandoc parser.
 //!
 //! The C shim completes and copies a parse before returning. Rust therefore
 //! never observes libmandoc's private `roff_node` layout, and the global C
@@ -21,7 +21,7 @@ mod build_config;
 mod ffi;
 
 /// Pinned upstream version compiled by this crate's build script.
-pub const MANDOC_VERSION: &str = "1.14.6";
+pub const LIBMANDOC_VERSION: &str = "1.14.6";
 
 static PARSER_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn upstream_version_is_pinned() {
-        assert_eq!(super::MANDOC_VERSION, "1.14.6");
+        assert_eq!(super::LIBMANDOC_VERSION, "1.14.6");
     }
 
     #[test]
@@ -381,17 +381,24 @@ mod tests {
 
     #[test]
     fn source_relative_includes_do_not_change_process_cwd() {
-        let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-        let alias = repository.join("tests/fixtures/roff/alias-mdoc.1");
+        let root =
+            std::env::temp_dir().join(format!("libmandoc-rs-relative-include-{}", process::id()));
+        fs::create_dir_all(&root).expect("create temporary manual tree");
+        let target = root.join("minimal-mdoc.1");
+        fs::write(
+            &target,
+            ".Dd July 19, 2026\n.Dt INCLUDE-FIXTURE 1\n.Os\n.Sh NAME\ninclude-fixture\n",
+        )
+        .expect("write included source");
+        let alias = root.join("alias-mdoc.1");
+        fs::write(&alias, ".so minimal-mdoc.1\n").expect("write alias source");
         let cwd = std::env::current_dir().expect("current directory before parse");
 
         let document = parse_file(&alias, true).expect("resolve source-relative include");
+        fs::remove_dir_all(root).expect("remove temporary manual tree");
 
         assert_eq!(document.macro_set, MacroSet::Mdoc);
-        assert_eq!(
-            document.metadata.title.as_deref(),
-            Some("MANT-MDOC-FIXTURE")
-        );
+        assert_eq!(document.metadata.title.as_deref(), Some("INCLUDE-FIXTURE"));
         assert_eq!(
             std::env::current_dir().expect("current directory after parse"),
             cwd

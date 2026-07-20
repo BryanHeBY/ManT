@@ -10,7 +10,7 @@ publish.workspace = true
 grep-matcher.workspace = true
 grep-regex.workspace = true
 mant-ast = { path = "../mant-ast" }
-mant-mandoc-sys = { path = "../mant-mandoc-sys" }
+libmandoc-rs = { path = "../libmandoc-rs" }
 pulldown-cmark.workspace = true
 # scraper 0.26 and 0.27 use let-chains stabilized after ManT's Rust 1.85 MSRV.
 scraper = "0.25.0"

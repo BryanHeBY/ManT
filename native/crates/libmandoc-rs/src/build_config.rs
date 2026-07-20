@@ -23,9 +23,9 @@ pub(crate) fn target_configuration(
         ("linux", "gnu") => ("config/linux-gnu.h", LINUX_COMPAT_SOURCES),
         ("macos", _) => ("config/macos.h", MACOS_COMPAT_SOURCES),
         ("linux", env) => {
-            panic!("mant-mandoc-sys does not yet provide a checked configuration for Linux/{env}")
+            panic!("libmandoc-rs does not yet provide a checked configuration for Linux/{env}")
         }
-        (os, _) => panic!("mant-mandoc-sys only supports Linux/glibc and macOS, not {os}"),
+        (os, _) => panic!("libmandoc-rs only supports Linux/glibc and macOS, not {os}"),
     }
 }
 

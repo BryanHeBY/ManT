@@ -428,7 +428,7 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
 #[test]
 fn serializes_a_large_source_lowered_document() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../vendor/mandoc-1.14.6/mandoc.1");
+        .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
     let document = crate::parse_manual_source(&source).expect("large native document");
     let query = QueryBundle {
         schema: QuerySchema::V2,

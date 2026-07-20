@@ -6,8 +6,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use libmandoc_rs::{Node, NodeKind};
 use mant_ast::{Block, Diagnostic, DiagnosticLevel, Inline, Section};
-use mant_mandoc_sys::{Node, NodeKind};
 
 type SectionTargets = HashMap<String, Option<String>>;
 
