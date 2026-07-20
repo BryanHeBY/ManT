@@ -13,6 +13,7 @@ import {
 import {
   decodeMantQuery,
   decodeNativeCliProtocol,
+  type MantQueryRequest,
   type MantQueryBundle,
   type NativeCliProtocol,
 } from "./schema";
@@ -97,12 +98,14 @@ export function createNativeCliClient(
     async query(request) {
       const { path } = await getVerified();
       const command = [path, "--request-json", "--format", "json", "--compact"];
+      const wireRequest: MantQueryRequest = {
+        schema: "mant.request/v2",
+        topic: request.topic,
+        ...(request.section === undefined ? {} : { section: request.section }),
+        view: { kind: "full" },
+      };
       const result = await execute(command, {
-        stdin: encoder.encode(JSON.stringify({
-          schema: "mant.request/v1",
-          topic: request.topic,
-          ...(request.section === undefined ? {} : { section: request.section }),
-        })),
+        stdin: encoder.encode(JSON.stringify(wireRequest)),
       });
       if (result.exitCode !== 0) throw nativeCliFailure(command, result);
       return decodeMantQuery(decoder.decode(result.stdout));

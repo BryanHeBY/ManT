@@ -72,8 +72,8 @@ the licenses needed by the bundled libmandoc parser. A release tag must match
 the version in both `package.json` and `native/Cargo.toml`:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 GitHub Actions builds each archive on its target architecture rather than
@@ -103,6 +103,8 @@ uses the reserved path `0`. `--node` also accepts the ID printed in brackets:
 ```sh
 mant-cli gcc --outline
 mant-cli gcc --outline --format json
+mant-cli tar --outline options
+mant-cli tar --node acls --format markdown
 mant-cli gcc --node 0 --format markdown
 mant-cli gcc --node tldr --format text
 mant-cli gcc --node 4.2 --format markdown
@@ -113,6 +115,9 @@ mant-cli gcc --node 4.2 --node 4.7 --format json
 Selecting a node includes all of its child sections. Repeated and overlapping
 selections are deduplicated and emitted in source order. `--section` continues
 to select the manual volume (for example `1` or `3p`), not an outline node.
+The optional `options` outline detail adds normalized command-line option
+entries beneath their sections; each can be selected by its printed path, ID,
+or alias without loading an unrelated section into an agent's context.
 
 Use the versioned JSON contract for structured consumers:
 
@@ -132,10 +137,18 @@ copying declarations from documentation. A versioned stdio request looks like:
 
 ```json
 {
-  "schema": "mant.request/v1",
+  "schema": "mant.request/v2",
   "topic": "printf",
-  "section": "3"
+  "section": "3",
+  "view": { "kind": "full" }
 }
+```
+
+The same input boundary can request projections without inventing CLI syntax:
+
+```json
+{"schema":"mant.request/v2","topic":"tar","view":{"kind":"outline","detail":"options"}}
+{"schema":"mant.request/v2","topic":"tar","view":{"kind":"excerpt","nodes":["acls"]}}
 ```
 
 Update tldr data through its installed client when available, otherwise through
@@ -156,7 +169,7 @@ mant (Bun/OpenTUI React)
 ```
 
 Rust owns source discovery, man/mdoc/groff parsing, tldr behavior, the stable
-AST, and JSON/Markdown serialization. TypeScript validates `mant.query/v1` at
+AST, and JSON/Markdown serialization. TypeScript validates `mant.query/v2` at
 the process boundary and owns only terminal interaction and presentation. See
 [`docs/architecture/native-core.md`](docs/architecture/native-core.md) for the
 contract and fallback policy.

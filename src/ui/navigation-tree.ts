@@ -1,13 +1,25 @@
 /**
- * @file Provides pure section-tree traversal and terminal label formatting for
- * the manual sidebar. Keeping it UI-framework-free makes tree behavior easy
- * to test and reuse from stateful UI code.
+ * @file Builds and traverses the sidebar's section and semantic-option tree.
+ * Keeping it UI-framework-free makes tree behavior and terminal label
+ * formatting easy to test outside stateful UI code.
  */
 
-import type { MantSection } from "../native";
+import type { MantBlock, MantDefinitionItem, MantSection } from "../native";
+
+export type NavigationNodeKind = "section" | "entry-group" | "option";
+
+/** One sidebar node, including virtual groups and semantic manual entries. */
+export interface NavigationNode {
+  id: string;
+  title: string;
+  kind: NavigationNodeKind;
+  /** ID of the section heading or inline anchor rendered in the content pane. */
+  targetId: string;
+  children: NavigationNode[];
+}
 
 export interface FlatNode {
-  node: MantSection;
+  node: NavigationNode;
   depth: number;
   hasChildren: boolean;
   isLast: boolean;
@@ -16,7 +28,7 @@ export interface FlatNode {
 }
 
 export function flattenVisibleNodes(
-  nodes: MantSection[],
+  nodes: NavigationNode[],
   expanded: ReadonlySet<string>,
   depth = 0,
   ancestorHasNext: boolean[] = [],
@@ -39,7 +51,74 @@ export function flattenVisibleNodes(
   return result;
 }
 
-export function findNodeById(nodes: MantSection[], id: string): MantSection | null {
+/** Build the sidebar model without mutating the renderer-neutral AST. */
+export function buildNavigationNodes(sections: MantSection[]): NavigationNode[] {
+  return sections.map((section) => {
+    const entries: MantDefinitionItem[] = [];
+    collectDefinitionEntries(section.blocks, entries);
+    const children: NavigationNode[] = [];
+    if (entries.length > 0) {
+      children.push({
+        id: `__mant-options__${section.id}`,
+        title: `OPTIONS (${entries.length})`,
+        kind: "entry-group",
+        targetId: section.id,
+        children: entries.flatMap((entry) => entry.identity
+          ? [{
+              id: entry.identity.id,
+              title: entry.identity.names.join(", "),
+              kind: "option" as const,
+              targetId: entry.identity.id,
+              children: [],
+            }]
+          : []),
+      });
+    }
+    children.push(...buildNavigationNodes(section.children));
+    return {
+      id: section.id,
+      title: section.title,
+      kind: "section" as const,
+      targetId: section.id,
+      children,
+    };
+  });
+}
+
+function collectDefinitionEntries(
+  blocks: MantBlock[],
+  output: MantDefinitionItem[],
+): void {
+  for (const block of blocks) {
+    switch (block.type) {
+      case "definition-list":
+        for (const item of block.items) {
+          if (item.identity?.role === "option") output.push(item);
+          collectDefinitionEntries(item.description, output);
+        }
+        break;
+      case "list":
+        for (const item of block.items) collectDefinitionEntries(item.blocks, output);
+        break;
+      case "table":
+        for (const row of block.rows) {
+          for (const cell of row.cells) collectDefinitionEntries(cell.blocks, output);
+        }
+        break;
+      case "paragraph":
+      case "preformatted":
+      case "equation":
+      case "vertical-space":
+      case "unsupported":
+        break;
+    }
+  }
+}
+
+export function findNodeById<T extends { id: string; children: T[] }>(
+  nodes: T[],
+  id: string,
+): T | null {
   for (const node of nodes) {
     if (node.id === id) return node;
     const found = findNodeById(node.children, id);
@@ -49,10 +128,10 @@ export function findNodeById(nodes: MantSection[], id: string): MantSection | nu
 }
 
 export function findParentById(
-  nodes: MantSection[],
+  nodes: NavigationNode[],
   id: string,
-  parent: MantSection | null = null,
-): MantSection | null {
+  parent: NavigationNode | null = null,
+): NavigationNode | null {
   for (const node of nodes) {
     if (node.id === id) return parent;
     const found = findParentById(node.children, id, node);
@@ -86,9 +165,9 @@ export function sectionIdsInDocumentOrder(nodes: MantSection[]): string[] {
   return ids;
 }
 
-export function collectBranchIds(nodes: MantSection[]): Set<string> {
+export function collectBranchIds(nodes: NavigationNode[]): Set<string> {
   const ids = new Set<string>();
-  const visit = (node: MantSection) => {
+  const visit = (node: NavigationNode) => {
     if (node.children.length > 0) ids.add(node.id);
     for (const child of node.children) visit(child);
   };

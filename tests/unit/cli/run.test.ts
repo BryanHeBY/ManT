@@ -7,7 +7,7 @@ import type { MantQueryBundle, NativeQueryRequest } from "../../../src/native";
 import { runCli } from "../../../src/cli/run";
 
 const result: MantQueryBundle = {
-  schema: "mant.query/v1",
+  schema: "mant.query/v2",
   topic: "git",
 };
 

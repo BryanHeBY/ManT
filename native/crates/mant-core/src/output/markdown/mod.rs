@@ -4,8 +4,8 @@ mod blocks;
 mod inline;
 
 use mant_ast::{
-    ExcerptSelection, OutlineNode, QueryBundle, QueryExcerpt, QueryOutline, Section,
-    TldrCommandPart, TldrDocument,
+    Block, ExcerptSelection, LayoutHint, OutlineNode, QueryBundle, QueryExcerpt, QueryOutline,
+    Section, TldrCommandPart, TldrDocument,
 };
 
 use self::{
@@ -71,6 +71,14 @@ pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
             ExcerptSelection::ManualSection { section, .. } => {
                 render_sections(&mut output, std::slice::from_ref(section), 2);
             }
+            ExcerptSelection::ManualEntry { entry, .. } => {
+                output.extend(render_blocks(&[Block::DefinitionList {
+                    items: vec![entry.clone()],
+                    compact: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                }]));
+            }
         }
     }
     output
@@ -88,11 +96,11 @@ fn outline_list(nodes: &[OutlineNode], depth: usize) -> String {
         lines.push(format!(
             "{}- {} ({}) {}",
             "  ".repeat(depth),
-            code_span(&node.path),
-            code_span(&node.id),
-            escape_text(&node.title)
+            code_span(node.path()),
+            code_span(node.id()),
+            escape_text(node.title())
         ));
-        let children = outline_list(&node.children, depth + 1);
+        let children = outline_list(node.children(), depth + 1);
         if !children.is_empty() {
             lines.push(children);
         }
@@ -106,6 +114,20 @@ fn selection_context(selection: &ExcerptSelection) -> String {
             format!("*Outline {}: {}*", code_span(path), escape_text(title))
         }
         ExcerptSelection::ManualSection {
+            path,
+            title,
+            breadcrumbs,
+            ..
+        } => {
+            let breadcrumb = breadcrumbs
+                .iter()
+                .map(|ancestor| escape_text(&ancestor.title))
+                .chain(std::iter::once(escape_text(title)))
+                .collect::<Vec<_>>()
+                .join(" → ");
+            format!("*Outline {}: {breadcrumb}*", code_span(path))
+        }
+        ExcerptSelection::ManualEntry {
             path,
             title,
             breadcrumbs,

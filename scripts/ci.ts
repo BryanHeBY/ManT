@@ -87,8 +87,8 @@ async function verifyPackagedExecutable(): Promise<void> {
     manual?: { schema?: string; sections?: unknown[] };
   };
   if (
-    query.schema !== "mant.query/v1"
-    || query.manual?.schema !== "mant.document/v1"
+    query.schema !== "mant.query/v2"
+    || query.manual?.schema !== "mant.document/v2"
     || !query.manual.sections?.length
   ) {
     throw new Error("packaged mant-cli did not return a readable native document");

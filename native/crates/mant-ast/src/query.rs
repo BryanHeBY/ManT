@@ -3,39 +3,59 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{MantDocument, TldrDocument};
+use crate::{MantDocument, OutlineDetail, TldrDocument};
 
 /// Exact schema marker for a complete `ManT` query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum QuerySchema {
-    /// First query envelope built around `mant.document/v1`.
-    #[serde(rename = "mant.query/v1")]
-    V1,
+    /// Query envelope built around `mant.document/v2`.
+    #[serde(rename = "mant.query/v2")]
+    V2,
 }
 
 /// Exact schema marker for a native query request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum RequestSchema {
-    /// First request contract accepted through `--request-json`.
-    #[serde(rename = "mant.request/v1")]
-    V1,
+    /// Query and projection request accepted through `--request-json`.
+    #[serde(rename = "mant.request/v2")]
+    V2,
+}
+
+/// Projection requested after loading one complete manual query.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum QueryView {
+    Full {},
+    Outline {
+        detail: OutlineDetail,
+    },
+    Excerpt {
+        #[schemars(length(min = 1))]
+        nodes: Vec<String>,
+    },
 }
 
 /// Validated use-case input accepted by the native query boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:request:v1"))]
+#[schemars(extend("$id" = "urn:mant:request:v2"))]
 pub struct QueryRequest {
     pub schema: RequestSchema,
     pub topic: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub section: Option<String>,
+    pub view: QueryView,
 }
 
 /// Native result consumed by JSON, Markdown, and interactive frontends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:query:v1"))]
+#[schemars(extend("$id" = "urn:mant:query:v2"))]
 pub struct QueryBundle {
     pub schema: QuerySchema,
     pub topic: String,

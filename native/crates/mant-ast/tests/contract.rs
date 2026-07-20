@@ -1,17 +1,18 @@
-//! Cross-language golden contract tests for the first stable query schema.
+//! Cross-language golden contract tests for the second query schema.
 
 use mant_ast::{
-    Block, Inline, QueryBundle, QueryRequest, QuerySchema, RequestSchema, SourceFormat,
+    Block, Inline, OutlineDetail, QueryBundle, QueryRequest, QuerySchema, QueryView, RequestSchema,
+    SourceFormat,
 };
 use serde_json::Value;
 
-const MINIMAL_QUERY: &str = include_str!("../../../../tests/contracts/minimal-query-v1.json");
+const MINIMAL_QUERY: &str = include_str!("../../../../tests/contracts/minimal-query-v2.json");
 
 #[test]
 fn shared_query_fixture_round_trips_without_shape_changes() {
     let query: QueryBundle = serde_json::from_str(MINIMAL_QUERY).expect("valid shared fixture");
 
-    assert_eq!(query.schema, QuerySchema::V1);
+    assert_eq!(query.schema, QuerySchema::V2);
     assert_eq!(query.topic, "ls");
     let manual = query.manual.as_ref().expect("manual document");
     assert_eq!(manual.source.format, SourceFormat::Man);
@@ -47,33 +48,64 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
 
 #[test]
 fn unknown_query_schema_is_rejected() {
-    let incompatible = MINIMAL_QUERY.replace("mant.query/v1", "mant.query/v2");
+    let incompatible = MINIMAL_QUERY.replace("mant.query/v2", "mant.query/v1");
     let error = serde_json::from_str::<QueryBundle>(&incompatible).expect_err("unknown schema");
 
     assert!(error.to_string().contains("unknown variant"));
 }
 
 #[test]
-fn native_query_request_is_small_and_rejects_unknown_fields() {
-    let request: QueryRequest =
-        serde_json::from_str(r#"{"schema":"mant.request/v1","topic":"printf","section":"3"}"#)
-            .expect("valid query request");
-    assert_eq!(request.schema, RequestSchema::V1);
+fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
+    let request: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v2","topic":"printf","section":"3","view":{"kind":"full"}}"#,
+    )
+    .expect("valid full query request");
+    assert_eq!(request.schema, RequestSchema::V2);
     assert_eq!(request.topic, "printf");
     assert_eq!(request.section.as_deref(), Some("3"));
+    assert_eq!(request.view, QueryView::Full {});
+
+    let outline: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"outline","detail":"options"}}"#,
+    )
+    .expect("valid outline request");
+    assert_eq!(
+        outline.view,
+        QueryView::Outline {
+            detail: OutlineDetail::Options,
+        }
+    );
+
+    let excerpt: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"excerpt","nodes":["acls"]}}"#,
+    )
+    .expect("valid excerpt request");
+    assert_eq!(
+        excerpt.view,
+        QueryView::Excerpt {
+            nodes: vec!["acls".to_owned()],
+        }
+    );
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v1","topic":"ls","mode":"html"}"#,
+        r#"{"schema":"mant.request/v2","topic":"ls","view":{"kind":"full"},"mode":"html"}"#,
     )
     .expect_err("unknown request field");
     assert!(error.to_string().contains("unknown field"));
 
-    let error = serde_json::from_str::<QueryRequest>(r#"{"topic":"ls"}"#)
+    let error = serde_json::from_str::<QueryRequest>(r#"{"topic":"ls","view":{"kind":"full"}}"#)
         .expect_err("missing request schema");
     assert!(error.to_string().contains("missing field `schema`"));
 
-    let error =
-        serde_json::from_str::<QueryRequest>(r#"{"schema":"mant.request/v2","topic":"ls"}"#)
-            .expect_err("unknown request schema");
+    let error = serde_json::from_str::<QueryRequest>(
+        r#"{"schema":"mant.request/v1","topic":"ls","view":{"kind":"full"}}"#,
+    )
+    .expect_err("unknown request schema");
     assert!(error.to_string().contains("unknown variant"));
+
+    let error = serde_json::from_str::<QueryRequest>(
+        r#"{"schema":"mant.request/v2","topic":"ls","view":{"kind":"full","future":true}}"#,
+    )
+    .expect_err("unknown view field");
+    assert!(error.to_string().contains("unknown field"));
 }

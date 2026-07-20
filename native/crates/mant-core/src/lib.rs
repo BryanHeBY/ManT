@@ -1,5 +1,6 @@
 //! Manual source, query, and output engine independent from its process hosts.
 
+mod definitions;
 mod groff_html;
 mod mandoc;
 mod output;
@@ -15,7 +16,7 @@ pub use output::{
     render_outline_json, render_outline_markdown, render_outline_text, render_query_json,
     render_query_text, render_update_json,
 };
-pub use projection::{ProjectionError, build_outline, select_excerpt};
+pub use projection::{ProjectionError, build_outline, build_outline_with_detail, select_excerpt};
 pub use query::{QueryError, query};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,
@@ -40,6 +41,6 @@ mod tests {
 
     #[test]
     fn exposes_the_ast_contract_version() {
-        assert_eq!(native_api_version(), "1");
+        assert_eq!(native_api_version(), "2");
     }
 }

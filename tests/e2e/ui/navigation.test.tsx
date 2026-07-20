@@ -279,6 +279,54 @@ describe("App navigation (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("reveals semantic options on demand and scrolls to their definitions", async () => {
+    const result = mockQuery("tar", [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [
+        ...Array.from({ length: 24 }, (_, index) => ({
+          type: "paragraph" as const,
+          children: [{ type: "text" as const, value: `Option introduction ${index}` }],
+        })),
+        {
+          type: "definition-list",
+          items: [{
+            identity: {
+              id: "option-acls",
+              role: "option",
+              names: ["--acls"],
+            },
+            terms: [[{ type: "strong", children: [{ type: "text", value: "--acls" }] }]],
+            description: [{
+              type: "paragraph",
+              children: [{ type: "text", value: "Enable ACL support." }],
+            }],
+          }],
+        },
+      ],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 100, height: 24 });
+    let frame = setup.captureCharFrame();
+    expect(navLines(frame).some((line) => line.includes("OPTIONS (1)"))).toBe(true);
+    expect(navLines(frame).some((line) => line.includes("--acls"))).toBe(false);
+
+    const group = navPosition(frame, "OPTIONS (1)");
+    await setup.mockMouse.click(NAV_WIDTH - 3, group.y);
+    await setup.flush();
+    frame = setup.captureCharFrame();
+    const option = navPosition(frame, "--acls");
+
+    await setup.mockMouse.click(NAV_WIDTH - 3, option.y);
+    await setup.flush();
+    frame = setup.captureCharFrame();
+    expect(navLines(frame).some((line) => line.includes("›") && line.includes("--acls")))
+      .toBe(true);
+    expect(contentPosition(frame, "--acls").y).toBe(2);
+
+    setup.renderer.destroy();
+  });
+
   test("folds and unfolds child sections on mouse click", async () => {
     const setup = await renderApp(parentTreeResult());
     let frame = setup.captureCharFrame();

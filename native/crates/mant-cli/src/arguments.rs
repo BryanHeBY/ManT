@@ -7,7 +7,7 @@
 use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
-use mant_ast::{QueryRequest, RequestSchema};
+use mant_ast::{OutlineDetail, QueryRequest, QueryView, RequestSchema};
 
 // ── Public command model ───────────────────────────────────────────────────
 
@@ -19,14 +19,6 @@ pub(crate) enum QueryFormat {
     Json,
 }
 
-/// Projection applied after the complete manual has been queried once.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum QueryView {
-    Full,
-    Outline,
-    Excerpt(Vec<String>),
-}
-
 /// A discoverable JSON Schema exposed by the native process boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum SchemaContract {
@@ -35,6 +27,22 @@ pub(crate) enum SchemaContract {
     Outline,
     Excerpt,
     All,
+}
+
+/// Semantic entries included beneath the ordinary section outline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum OutlineMode {
+    Sections,
+    Options,
+}
+
+impl From<OutlineMode> for OutlineDetail {
+    fn from(value: OutlineMode) -> Self {
+        match value {
+            OutlineMode::Sections => Self::Sections,
+            OutlineMode::Options => Self::Options,
+        }
+    }
 }
 
 /// Where a query request comes from.
@@ -50,7 +58,6 @@ pub(crate) enum Command {
     Help(String),
     Query {
         source: QuerySource,
-        view: QueryView,
         format: QueryFormat,
         pretty: bool,
     },
@@ -78,7 +85,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --node 0 --format markdown\n  mant-cli gcc --node 4.2 --format markdown\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli tar --outline options\n  mant-cli tar --node acls --format markdown\n  mant-cli gcc --node 4.2 --format markdown\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
         .required(true)
@@ -93,11 +100,11 @@ struct Cli {
     #[arg(long, value_name = "SECTION", value_parser = non_empty, requires = "topic")]
     section: Option<String>,
 
-    /// Print the manual's selectable section tree.
-    #[arg(long, requires = "topic", conflicts_with = "node")]
-    outline: bool,
+    /// Print selectable sections, optionally including command-line options.
+    #[arg(long, value_name = "DETAIL", value_enum, num_args = 0..=1, default_missing_value = "sections", requires = "topic", conflicts_with = "node")]
+    outline: Option<OutlineMode>,
 
-    /// Print a node by outline path or document ID; repeatable (`0` selects tldr).
+    /// Print a node by outline path, document ID, or option alias; repeatable.
     #[arg(long, value_name = "NODE", value_parser = non_empty, requires = "topic")]
     node: Vec<String>,
 
@@ -164,16 +171,18 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         });
     }
 
-    let view = if parsed.outline {
-        QueryView::Outline
+    let view = if let Some(detail) = parsed.outline {
+        QueryView::Outline {
+            detail: detail.into(),
+        }
     } else if parsed.node.is_empty() {
-        QueryView::Full
+        QueryView::Full {}
     } else {
-        QueryView::Excerpt(parsed.node)
+        QueryView::Excerpt { nodes: parsed.node }
     };
     let format = parsed.format.unwrap_or(match &view {
-        QueryView::Outline => QueryFormat::Text,
-        QueryView::Full | QueryView::Excerpt(_) => QueryFormat::Markdown,
+        QueryView::Outline { .. } => QueryFormat::Text,
+        QueryView::Full { .. } | QueryView::Excerpt { .. } => QueryFormat::Markdown,
     });
     if parsed.compact && format != QueryFormat::Json {
         return Err(command_error(
@@ -186,15 +195,15 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         QuerySource::StdinJson
     } else {
         QuerySource::Arguments(QueryRequest {
-            schema: RequestSchema::V1,
+            schema: RequestSchema::V2,
             topic: parsed.topic.expect("clap requires one input source"),
             section: parsed.section,
+            view,
         })
     };
 
     Ok(Command::Query {
         source,
-        view,
         format,
         pretty: !parsed.compact,
     })
@@ -215,9 +224,9 @@ fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Erro
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{QueryRequest, RequestSchema};
+    use mant_ast::{OutlineDetail, QueryRequest, QueryView, RequestSchema};
 
-    use super::{Command, QueryFormat, QuerySource, QueryView, SchemaContract, parse};
+    use super::{Command, QueryFormat, QuerySource, SchemaContract, parse};
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -229,11 +238,11 @@ mod tests {
             parse(&args(&["git"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V1,
+                    schema: RequestSchema::V2,
                     topic: "git".to_owned(),
                     section: None,
+                    view: QueryView::Full {},
                 }),
-                view: QueryView::Full,
                 format: QueryFormat::Markdown,
                 pretty: true,
             }
@@ -254,11 +263,11 @@ mod tests {
             .expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V1,
+                    schema: RequestSchema::V2,
                     topic: "printf".to_owned(),
                     section: Some("3".to_owned()),
+                    view: QueryView::Full {},
                 }),
-                view: QueryView::Full,
                 format: QueryFormat::Json,
                 pretty: false,
             }
@@ -272,7 +281,6 @@ mod tests {
                 .expect("stdin query"),
             Command::Query {
                 source: QuerySource::StdinJson,
-                view: QueryView::Full,
                 format: QueryFormat::Json,
                 pretty: false,
             }
@@ -285,12 +293,30 @@ mod tests {
             parse(&args(&["gcc", "--outline"])).expect("outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V1,
+                    schema: RequestSchema::V2,
                     topic: "gcc".to_owned(),
                     section: None,
+                    view: QueryView::Outline {
+                        detail: OutlineDetail::Sections,
+                    },
                 }),
-                view: QueryView::Outline,
                 format: QueryFormat::Text,
+                pretty: true,
+            }
+        );
+        assert_eq!(
+            parse(&args(&["tar", "--outline", "options", "--format", "json"]))
+                .expect("option outline"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V2,
+                    topic: "tar".to_owned(),
+                    section: None,
+                    view: QueryView::Outline {
+                        detail: OutlineDetail::Options,
+                    },
+                }),
+                format: QueryFormat::Json,
                 pretty: true,
             }
         );
@@ -301,11 +327,13 @@ mod tests {
             .expect("excerpt"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V1,
+                    schema: RequestSchema::V2,
                     topic: "gcc".to_owned(),
                     section: None,
+                    view: QueryView::Excerpt {
+                        nodes: vec!["4.2".to_owned(), "files-8".to_owned()],
+                    },
                 }),
-                view: QueryView::Excerpt(vec!["4.2".to_owned(), "files-8".to_owned()]),
                 format: QueryFormat::Text,
                 pretty: true,
             }
@@ -368,11 +396,11 @@ mod tests {
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V1,
+                    schema: RequestSchema::V2,
                     topic: "--help".to_owned(),
                     section: None,
+                    view: QueryView::Full {},
                 }),
-                view: QueryView::Full,
                 format: QueryFormat::Markdown,
                 pretty: true,
             }

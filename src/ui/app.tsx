@@ -27,6 +27,7 @@ import {
 import { SectionContent, TldrQuickReference } from "./manual-content";
 import { ManualSidebar } from "./manual-sidebar";
 import {
+  buildNavigationNodes,
   clamp,
   collectBranchIds,
   findNodeById,
@@ -141,9 +142,13 @@ export function App({ result, onQuit }: AppProps) {
 
   // ── Derived document model ─────────────────────────────────
 
+  const navigationRoots = useMemo(
+    () => buildNavigationNodes(sections),
+    [sections]
+  );
   const visibleNodes = useMemo(
-    () => flattenVisibleNodes(sections, expanded),
-    [sections, expanded]
+    () => flattenVisibleNodes(navigationRoots, expanded),
+    [navigationRoots, expanded]
   );
   const navigationItems = useMemo(
     () => [
@@ -154,13 +159,17 @@ export function App({ result, onQuit }: AppProps) {
     ],
     [result.tldr, visibleNodes]
   );
+  const visibleSectionCount = useMemo(
+    () => visibleNodes.filter(({ node }) => node.kind === "section").length,
+    [visibleNodes]
+  );
   const pageSearchIndex = useMemo(
     () => buildPageSearchIndex(sections, result.tldr),
     [sections, result.tldr]
   );
   const branchIds = useMemo(
-    () => collectBranchIds(sections),
-    [sections]
+    () => collectBranchIds(navigationRoots),
+    [navigationRoots]
   );
   const searchQuery = search.query;
   const searchMatches = search.matches;
@@ -259,6 +268,22 @@ export function App({ result, onQuit }: AppProps) {
     navScrollRef.current?.scrollChildIntoView(navId(id));
   };
 
+  const selectNavigationNode = (id: string) => {
+    if (id === TLDR_NAV_ID) {
+      selectSection(id);
+      return;
+    }
+    const node = findNodeById(navigationRoots, id);
+    if (!node) return;
+    setSelectedId(id);
+    scrollToContent(
+      node.kind === "option"
+        ? contentAnchorId(node.targetId)
+        : contentId(node.targetId),
+    );
+    navScrollRef.current?.scrollChildIntoView(navId(id));
+  };
+
   /** Follow a typed same-page reference without creating browser-like history. */
   const navigateWithinPage = (target: string) => {
     const path = findNodePath(sections, target);
@@ -297,7 +322,7 @@ export function App({ result, onQuit }: AppProps) {
       Math.max(navigationItems.length - 1, 0)
     );
     const next = navigationItems[nextIndex];
-    if (next) selectSection(next.id);
+    if (next) selectNavigationNode(next.id);
   };
 
   // ── Search actions ─────────────────────────────────────────
@@ -341,23 +366,23 @@ export function App({ result, onQuit }: AppProps) {
   const collapseAll = () => setExpanded(new Set());
 
   const navigateToParent = () => {
-    const parent = findParentById(sections, selectedId);
-    if (parent) selectSection(parent.id);
+    const parent = findParentById(navigationRoots, selectedId);
+    if (parent) selectNavigationNode(parent.id);
   };
 
   const navigateToFirstChild = () => {
-    const node = findNodeById(sections, selectedId);
-    if (node?.children[0]) selectSection(node.children[0].id);
+    const node = findNodeById(navigationRoots, selectedId);
+    if (node?.children[0]) selectNavigationNode(node.children[0].id);
   };
 
   const expandCurrentSection = () => {
-    const node = findNodeById(sections, selectedId);
+    const node = findNodeById(navigationRoots, selectedId);
     if (!node?.children.length) return;
     setExpanded((current) => new Set(current).add(node.id));
   };
 
   const collapseCurrentSection = () => {
-    const node = findNodeById(sections, selectedId);
+    const node = findNodeById(navigationRoots, selectedId);
     if (!node?.children.length) return;
     setExpanded((current) => {
       const next = new Set(current);
@@ -455,7 +480,7 @@ export function App({ result, onQuit }: AppProps) {
       return;
     }
 
-    selectSection(id);
+    selectNavigationNode(id);
     if (hasChildren) {
       setExpanded((current) => new Set(current).add(id));
     }
@@ -548,14 +573,14 @@ export function App({ result, onQuit }: AppProps) {
     } else if (e.name === "k" || e.name === "up") {
       selectRelativeSection(-1);
     } else if (e.name === "h" || e.name === "left") {
-      const node = findNodeById(sections, selectedId);
+      const node = findNodeById(navigationRoots, selectedId);
       if (node && expanded.has(node.id) && node.children.length > 0) {
         collapseCurrentSection();
       } else {
         navigateToParent();
       }
     } else if (e.name === "l" || e.name === "right") {
-      const node = findNodeById(sections, selectedId);
+      const node = findNodeById(navigationRoots, selectedId);
       if (node && node.children.length > 0) {
         if (!expanded.has(node.id)) {
           expandCurrentSection();
@@ -564,7 +589,7 @@ export function App({ result, onQuit }: AppProps) {
         }
       }
     } else if (e.name === "return" || e.name === "enter" || e.name === "space") {
-      const node = findNodeById(sections, selectedId);
+      const node = findNodeById(navigationRoots, selectedId);
       if (node?.children.length) {
         toggleExpanded(node.id);
       }
@@ -680,7 +705,7 @@ export function App({ result, onQuit }: AppProps) {
         <ManualStatusBar
           navigationItems={navigationItems}
           selectedId={selectedId}
-          visibleSectionCount={visibleNodes.length}
+          visibleSectionCount={visibleSectionCount}
           hasTldr={Boolean(result.tldr)}
           searchQuery={searchQuery}
           searchMatchCount={searchMatches.length}

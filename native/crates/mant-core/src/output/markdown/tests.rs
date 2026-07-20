@@ -20,7 +20,7 @@ fn paragraph(children: Vec<Inline>) -> Block {
 
 fn manual(sections: Vec<Section>) -> MantDocument {
     MantDocument {
-        schema: DocumentSchema::V1,
+        schema: DocumentSchema::V2,
         producer: Producer {
             name: "test".to_owned(),
             version: "1".to_owned(),
@@ -51,7 +51,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 #[test]
 fn renders_tldr_before_manual_and_resolves_placeholders() {
     let query = QueryBundle {
-        schema: QuerySchema::V1,
+        schema: QuerySchema::V2,
         topic: "ls".to_owned(),
         section: None,
         manual: Some(manual(vec![section("NAME", Vec::new(), Vec::new())])),
@@ -135,6 +135,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     };
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
+            identity: None,
             terms: vec![
                 vec![Inline::Strong {
                     children: vec![Inline::Text {
@@ -157,7 +158,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         source: None,
     };
     let query = QueryBundle {
-        schema: QuerySchema::V1,
+        schema: QuerySchema::V2,
         topic: "demo * command".to_owned(),
         section: None,
         manual: Some(manual(vec![section(
@@ -182,7 +183,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
 #[test]
 fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
     let query = QueryBundle {
-        schema: QuerySchema::V1,
+        schema: QuerySchema::V2,
         topic: "demo".to_owned(),
         section: None,
         manual: Some(manual(vec![section(
@@ -251,7 +252,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
 fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
-        .join("tests/contracts/minimal-query-v1.json");
+        .join("tests/contracts/minimal-query-v2.json");
     let query: QueryBundle =
         serde_json::from_str(&std::fs::read_to_string(fixture).expect("shared query fixture"))
             .expect("query contract");
@@ -268,13 +269,13 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     assert!(markdown.contains("[OPTIONS](#options-1)"));
     assert!(markdown.contains("<a id=\"options-1\"></a>\n\n## OPTIONS"));
     assert!(markdown.contains("<a id=\"all-option\"></a>"));
-    assert!(!markdown.contains("mant.query/v1"));
+    assert!(!markdown.contains("mant.query/v2"));
 }
 
 #[test]
 fn protects_paragraph_lines_from_accidental_block_syntax() {
     let query = QueryBundle {
-        schema: QuerySchema::V1,
+        schema: QuerySchema::V2,
         topic: "syntax".to_owned(),
         section: None,
         manual: Some(manual(vec![section(
@@ -307,7 +308,7 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 #[test]
 fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
     let query = QueryBundle {
-        schema: QuerySchema::V1,
+        schema: QuerySchema::V2,
         topic: "demo".to_owned(),
         section: Some("1".to_owned()),
         manual: Some(manual(vec![section(
@@ -349,7 +350,7 @@ fn serializes_a_large_source_lowered_document() {
         .join("../../vendor/mandoc-1.14.6/mandoc.1");
     let document = crate::parse_manual_source(&source).expect("large native document");
     let query = QueryBundle {
-        schema: QuerySchema::V1,
+        schema: QuerySchema::V2,
         topic: "mandoc".to_owned(),
         section: Some("1".to_owned()),
         manual: Some(document),

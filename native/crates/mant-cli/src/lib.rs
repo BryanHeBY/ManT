@@ -8,16 +8,16 @@ mod arguments;
 
 use std::io::{self, Read, Write};
 
-use mant_ast::{QueryBundle, QueryRequest, TldrCacheUpdate};
+use mant_ast::{QueryBundle, QueryRequest, QueryView, TldrCacheUpdate};
 use mant_core::{ProjectionError, QueryError};
 use serde::Serialize;
 
-use arguments::{Command, QueryFormat, QuerySource, QueryView, SchemaContract};
+use arguments::{Command, QueryFormat, QuerySource, SchemaContract};
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
 /// Exact stdio protocol understood by the TypeScript client.
-pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v1";
+pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v2";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 
@@ -101,11 +101,11 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_core::native_api_version(),
-                request_schema: "mant.request/v1",
-                query_schema: "mant.query/v1",
-                document_schema: "mant.document/v1",
-                outline_schema: "mant.outline/v1",
-                excerpt_schema: "mant.excerpt/v1",
+                request_schema: "mant.request/v2",
+                query_schema: "mant.query/v2",
+                document_schema: "mant.document/v2",
+                outline_schema: "mant.outline/v2",
+                excerpt_schema: "mant.excerpt/v2",
             },
             pretty,
         ),
@@ -122,17 +122,18 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
         }
         Command::Query {
             source,
-            view,
             format,
             pretty,
         } => {
             let request = read_query_request(source, input)?;
             validate_query_request(&request)?;
+            let view = request.view.clone();
             let query = host.query(&request)?;
             match view {
-                QueryView::Full => render_full_query(&query, format, pretty),
-                QueryView::Outline => {
-                    let outline = mant_core::build_outline(&query).map_err(projection_failure)?;
+                QueryView::Full { .. } => render_full_query(&query, format, pretty),
+                QueryView::Outline { detail } => {
+                    let outline = mant_core::build_outline_with_detail(&query, detail)
+                        .map_err(projection_failure)?;
                     match format {
                         QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
                         QueryFormat::Text => Ok(mant_core::render_outline_text(&outline)),
@@ -140,9 +141,9 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
                             .map_err(Failure::operational),
                     }
                 }
-                QueryView::Excerpt(selectors) => {
-                    let excerpt = mant_core::select_excerpt(&query, &selectors)
-                        .map_err(projection_failure)?;
+                QueryView::Excerpt { nodes } => {
+                    let excerpt =
+                        mant_core::select_excerpt(&query, &nodes).map_err(projection_failure)?;
                     match format {
                         QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown(&excerpt)),
                         QueryFormat::Text => Ok(mant_core::render_excerpt_text(&excerpt)),
@@ -209,6 +210,14 @@ fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
         .is_some_and(|value| value.trim().is_empty())
     {
         return Err(Failure::usage("manual section must not be empty"));
+    }
+    if let QueryView::Excerpt { nodes } = &request.view {
+        if nodes.is_empty() {
+            return Err(Failure::usage("at least one outline node is required"));
+        }
+        if nodes.iter().any(|node| node.trim().is_empty()) {
+            return Err(Failure::usage("outline node must not be empty"));
+        }
     }
     Ok(())
 }
@@ -328,7 +337,7 @@ mod tests {
         fn query(&self, request: &QueryRequest) -> Result<QueryBundle, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
             Ok(QueryBundle {
-                schema: QuerySchema::V1,
+                schema: QuerySchema::V2,
                 topic: request.topic.trim().to_owned(),
                 section: request.section.clone(),
                 manual: self.manual.clone(),
@@ -366,7 +375,7 @@ mod tests {
 
     fn manual() -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V1,
+            schema: DocumentSchema::V2,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
@@ -433,14 +442,14 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v1","topic":"git","section":"1"}"#,
+            br#"{"schema":"mant.request/v2","topic":"git","section":"1","view":{"kind":"full"}}"#,
             &host,
         );
 
         assert_eq!(status, 0);
         assert_eq!(
             output,
-            "{\"schema\":\"mant.query/v1\",\"topic\":\"git\",\"section\":\"1\"}\n"
+            "{\"schema\":\"mant.query/v2\",\"topic\":\"git\",\"section\":\"1\"}\n"
         );
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 1);
@@ -450,8 +459,9 @@ mod tests {
     fn malformed_or_extended_requests_fail_before_querying_the_host() {
         for input in [
             br"not-json".as_slice(),
-            br#"{"schema":"mant.request/v1","topic":"git","renderer":"html"}"#.as_slice(),
-            br#"{"schema":"mant.request/v1","topic":"   "}"#.as_slice(),
+            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"full"},"renderer":"html"}"#.as_slice(),
+            br#"{"schema":"mant.request/v2","topic":"   ","view":{"kind":"full"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -464,6 +474,33 @@ mod tests {
             assert!(diagnostics.starts_with("mant-cli: "));
             assert_eq!(host.query_calls.get(), 0);
         }
+    }
+
+    #[test]
+    fn stdin_requests_select_outline_and_excerpt_projections() {
+        let host = FakeHost::with_manual_and_tldr();
+        let (status, output, diagnostics) = invoke(
+            &["--request-json", "--format", "json", "--compact"],
+            br#"{"schema":"mant.request/v2","topic":"demo","view":{"kind":"outline","detail":"sections"}}"#,
+            &host,
+        );
+        assert_eq!(status, 0);
+        let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
+        assert_eq!(outline["schema"], "mant.outline/v2");
+        assert_eq!(outline["detail"], "sections");
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["--request-json", "--format", "json", "--compact"],
+            br#"{"schema":"mant.request/v2","topic":"demo","view":{"kind":"excerpt","nodes":["2.1"]}}"#,
+            &host,
+        );
+        assert_eq!(status, 0);
+        let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
+        assert_eq!(excerpt["schema"], "mant.excerpt/v2");
+        assert_eq!(excerpt["selections"][0]["path"], "2.1");
+        assert!(diagnostics.is_empty());
+        assert_eq!(host.query_calls.get(), 2);
     }
 
     #[test]
@@ -484,7 +521,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(value["schema"], "mant.excerpt/v1");
+        assert_eq!(value["schema"], "mant.excerpt/v2");
         assert_eq!(value["selections"][0]["path"], "2.1");
         assert_eq!(value["selections"][0]["section"]["title"], "Common options");
         assert!(diagnostics.is_empty());
@@ -513,7 +550,7 @@ mod tests {
         assert_eq!(status, 2);
         assert!(output.is_empty());
         assert!(diagnostics.contains("document 'demo' has no outline node '9'"));
-        assert!(diagnostics.contains("mant-cli demo --outline"));
+        assert!(diagnostics.contains("mant-cli demo --outline options"));
     }
 
     #[test]
@@ -533,10 +570,10 @@ mod tests {
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
-        assert_eq!(value["nativeApiVersion"], "1");
-        assert_eq!(value["requestSchema"], "mant.request/v1");
-        assert_eq!(value["outlineSchema"], "mant.outline/v1");
-        assert_eq!(value["excerptSchema"], "mant.excerpt/v1");
+        assert_eq!(value["nativeApiVersion"], "2");
+        assert_eq!(value["requestSchema"], "mant.request/v2");
+        assert_eq!(value["outlineSchema"], "mant.outline/v2");
+        assert_eq!(value["excerptSchema"], "mant.excerpt/v2");
         assert!(diagnostics.is_empty());
     }
 
@@ -566,7 +603,7 @@ mod tests {
             "https://json-schema.org/draft/2020-12/schema"
         );
         assert_eq!(value["additionalProperties"], false);
-        assert!(output.contains("mant.request/v1"));
+        assert!(output.contains("mant.request/v2"));
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);

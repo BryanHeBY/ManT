@@ -53,10 +53,12 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
         let connector = if last { "└─" } else { "├─" };
         output.push(format!(
             "{prefix}{connector} {} [{}] {}",
-            node.path, node.id, node.title
+            node.path(),
+            node.id(),
+            node.title()
         ));
         let child_prefix = format!("{prefix}{}", if last { "  " } else { "│ " });
-        render_outline_nodes(&node.children, &child_prefix, output);
+        render_outline_nodes(node.children(), &child_prefix, output);
     }
 }
 
@@ -82,6 +84,24 @@ fn render_selection(selection: &ExcerptSelection) -> String {
             }
             parts.push(render_section(section, 0));
             join_parts(parts)
+        }
+        ExcerptSelection::ManualEntry {
+            path,
+            title,
+            breadcrumbs,
+            entry,
+            ..
+        } => {
+            let breadcrumb = breadcrumbs
+                .iter()
+                .map(|ancestor| ancestor.title.as_str())
+                .chain(std::iter::once(title.as_str()))
+                .collect::<Vec<_>>()
+                .join(" > ");
+            join_parts(vec![
+                format!("Outline {path}: {breadcrumb}"),
+                render_definitions(std::slice::from_ref(entry), true, 0),
+            ])
         }
     }
 }
@@ -338,11 +358,11 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V1,
+            schema: QuerySchema::V2,
             topic: "demo".to_owned(),
             section: None,
             manual: Some(MantDocument {
-                schema: DocumentSchema::V1,
+                schema: DocumentSchema::V2,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),

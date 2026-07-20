@@ -20,13 +20,13 @@ function result(stdout: string, stderr = "", exitCode = 0): CommandResult {
 }
 
 const protocol = JSON.stringify({
-  protocol: "mant.cli/v1",
-  nativeApiVersion: "1",
-  requestSchema: "mant.request/v1",
-  querySchema: "mant.query/v1",
-  documentSchema: "mant.document/v1",
-  outlineSchema: "mant.outline/v1",
-  excerptSchema: "mant.excerpt/v1",
+  protocol: "mant.cli/v2",
+  nativeApiVersion: "2",
+  requestSchema: "mant.request/v2",
+  querySchema: "mant.query/v2",
+  documentSchema: "mant.document/v2",
+  outlineSchema: "mant.outline/v2",
+  excerptSchema: "mant.excerpt/v2",
 });
 
 describe("native mant-cli client", () => {
@@ -55,7 +55,7 @@ describe("native mant-cli client", () => {
       calls.push({ command, options });
       if (command.includes("--protocol-version")) return result(protocol);
       return result(JSON.stringify({
-        schema: "mant.query/v1",
+        schema: "mant.query/v2",
         topic: "git",
         section: "1",
       }));
@@ -70,7 +70,7 @@ describe("native mant-cli client", () => {
 
     const first = await client.query({ topic: "git", section: "1" });
     const second = await client.query({ topic: "git", section: "1" });
-    expect(first.schema).toBe("mant.query/v1");
+    expect(first.schema).toBe("mant.query/v2");
     expect(second.topic).toBe("git");
     expect(calls.map((call) => call.command)).toEqual([
       ["/tools/mant-cli", "--protocol-version", "--compact"],
@@ -78,7 +78,7 @@ describe("native mant-cli client", () => {
       ["/tools/mant-cli", "--request-json", "--format", "json", "--compact"],
     ]);
     expect(new TextDecoder().decode(calls[1]?.options?.stdin))
-      .toBe('{"schema":"mant.request/v1","topic":"git","section":"1"}');
+      .toBe('{"schema":"mant.request/v2","topic":"git","section":"1","view":{"kind":"full"}}');
   });
 
   test("rejects incompatible binaries before issuing a query", async () => {
@@ -87,12 +87,12 @@ describe("native mant-cli client", () => {
       env: { MANT_CLI_PATH: "/tools/mant-cli" },
       runCommand: async () => {
         calls += 1;
-        return result(protocol.replace("mant.cli/v1", "mant.cli/v2"));
+        return result(protocol.replace("mant.cli/v2", "mant.cli/v1"));
       },
     });
 
     await expect(client.query({ topic: "git" }))
-      .rejects.toThrow("expected 'mant.cli/v1'");
+      .rejects.toThrow("expected 'mant.cli/v2'");
     expect(calls).toBe(1);
   });
 

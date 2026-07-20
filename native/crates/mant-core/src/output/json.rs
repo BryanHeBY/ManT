@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn compact_and_pretty_query_output_share_the_same_contract() {
         let query = QueryBundle {
-            schema: QuerySchema::V1,
+            schema: QuerySchema::V2,
             topic: "ls".to_owned(),
             section: Some("1".to_owned()),
             manual: None,
@@ -75,7 +75,7 @@ mod tests {
 
         assert_eq!(
             compact,
-            r#"{"schema":"mant.query/v1","topic":"ls","section":"1"}"#
+            r#"{"schema":"mant.query/v2","topic":"ls","section":"1"}"#
         );
         assert!(pretty.contains("\n  \"topic\": \"ls\","));
         assert_eq!(

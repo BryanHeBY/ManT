@@ -3,8 +3,8 @@
 use std::{collections::HashSet, error::Error, fmt};
 
 use mant_ast::{
-    ExcerptSchema, ExcerptSelection, OutlineNode, OutlineNodeKind, OutlineReference, OutlineSchema,
-    QueryBundle, QueryExcerpt, QueryOutline, Section,
+    Block, DefinitionItem, ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode,
+    OutlineReference, OutlineSchema, QueryBundle, QueryExcerpt, QueryOutline, Section,
 };
 
 const TLDR_PATH: &str = "0";
@@ -30,7 +30,7 @@ impl fmt::Display for ProjectionError {
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::UnknownSelector { topic, selector } => write!(
                 formatter,
-                "document '{topic}' has no outline node '{selector}'; run 'mant-cli {topic} --outline'"
+                "document '{topic}' has no outline node '{selector}'; run 'mant-cli {topic} --outline options'"
             ),
         }
     }
@@ -45,6 +45,19 @@ impl Error for ProjectionError {}
 /// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
 /// is available.
 pub fn build_outline(query: &QueryBundle) -> Result<QueryOutline, ProjectionError> {
+    build_outline_with_detail(query, OutlineDetail::Sections)
+}
+
+/// Build an outline with optional semantic definition entries.
+///
+/// # Errors
+///
+/// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
+/// is available.
+pub fn build_outline_with_detail(
+    query: &QueryBundle,
+    detail: OutlineDetail,
+) -> Result<QueryOutline, ProjectionError> {
     if query.tldr.is_none() && query.manual.is_none() {
         return Err(ProjectionError::MissingContent {
             topic: query.topic.clone(),
@@ -52,19 +65,18 @@ pub fn build_outline(query: &QueryBundle) -> Result<QueryOutline, ProjectionErro
     }
     let mut nodes = Vec::new();
     if query.tldr.is_some() {
-        nodes.push(OutlineNode {
-            kind: OutlineNodeKind::Tldr,
+        nodes.push(OutlineNode::Tldr {
             path: TLDR_PATH.to_owned(),
             id: TLDR_ID.to_owned(),
             title: TLDR_TITLE.to_owned(),
-            children: Vec::new(),
         });
     }
     if let Some(manual) = &query.manual {
-        nodes.extend(outline_nodes(&manual.sections, &[]));
+        nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V1,
+        schema: OutlineSchema::V2,
+        detail,
         topic: query.topic.clone(),
         manual_section: resolved_manual_section(query),
         source: query.manual.as_ref().map(|manual| manual.source.clone()),
@@ -112,25 +124,32 @@ pub fn select_excerpt(
         }
         let candidate = located
             .iter()
-            .find(|candidate| candidate.path == selector || candidate.section.id == selector)
+            .find(|candidate| candidate.matches(selector))
             .ok_or_else(|| ProjectionError::UnknownSelector {
                 topic: query.topic.clone(),
                 selector: selector.to_owned(),
             })?;
-        if selected_ids.insert(candidate.section.id.as_str()) {
+        if selected_ids.insert(candidate.id()) {
             selected.push(candidate);
         }
     }
-    let selected_coordinates = selected
+    let selected_sections = selected
         .iter()
-        .map(|candidate| candidate.coordinates.clone())
+        .filter(|candidate| candidate.is_section())
+        .map(|candidate| candidate.coordinates().to_vec())
         .collect::<Vec<_>>();
     selected.retain(|candidate| {
-        !selected_coordinates.iter().any(|other| {
-            other != &candidate.coordinates && is_ancestor(other, &candidate.coordinates)
+        !selected_sections.iter().any(|ancestor| {
+            if candidate.is_section() {
+                ancestor != candidate.coordinates()
+                    && is_ancestor(ancestor, candidate.coordinates())
+            } else {
+                ancestor == candidate.coordinates()
+                    || is_ancestor(ancestor, candidate.coordinates())
+            }
         })
     });
-    selected.sort_by_key(|candidate| candidate.order);
+    selected.sort_by_key(|candidate| candidate.order());
 
     let manual = if selected.is_empty() {
         None
@@ -146,20 +165,10 @@ pub fn select_excerpt(
             document,
         });
     }
-    selections.extend(
-        selected
-            .into_iter()
-            .map(|candidate| ExcerptSelection::ManualSection {
-                path: candidate.path.clone(),
-                id: candidate.section.id.clone(),
-                title: candidate.section.title.clone(),
-                breadcrumbs: candidate.breadcrumbs.clone(),
-                section: candidate.section.clone(),
-            }),
-    );
+    selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V1,
+        schema: ExcerptSchema::V2,
         topic: query.topic.clone(),
         manual_section: manual.and_then(|_| resolved_manual_section(query)),
         producer: manual.map(|manual| manual.producer.clone()),
@@ -180,44 +189,166 @@ fn resolved_manual_section(query: &QueryBundle) -> Option<String> {
         .or_else(|| query.section.clone())
 }
 
-fn outline_nodes(sections: &[Section], parent: &[usize]) -> Vec<OutlineNode> {
+fn outline_nodes(
+    sections: &[Section],
+    parent: &[usize],
+    detail: OutlineDetail,
+) -> Vec<OutlineNode> {
     sections
         .iter()
         .enumerate()
         .map(|(index, section)| {
             let mut coordinates = parent.to_vec();
             coordinates.push(index + 1);
-            OutlineNode {
-                kind: OutlineNodeKind::ManualSection,
-                path: format_path(&coordinates),
+            let path = format_path(&coordinates);
+            let mut children = Vec::new();
+            if detail == OutlineDetail::Options {
+                let mut entries = Vec::new();
+                collect_definition_entries(&section.blocks, &mut entries);
+                children.extend(
+                    entries
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(index, entry)| {
+                            let identity = entry.identity.as_ref()?;
+                            Some(OutlineNode::ManualEntry {
+                                path: format!("{path}/o{}", index + 1),
+                                id: identity.id.clone(),
+                                title: identity.names.join(", "),
+                                role: identity.role,
+                                names: identity.names.clone(),
+                            })
+                        }),
+                );
+            }
+            children.extend(outline_nodes(&section.children, &coordinates, detail));
+            OutlineNode::ManualSection {
+                path,
                 id: section.id.clone(),
                 title: section.title.clone(),
-                children: outline_nodes(&section.children, &coordinates),
+                children,
             }
         })
         .collect()
 }
 
-struct LocatedSection<'a> {
-    order: usize,
-    coordinates: Vec<usize>,
-    path: String,
-    breadcrumbs: Vec<OutlineReference>,
-    section: &'a Section,
+enum LocatedNode<'a> {
+    Section {
+        order: usize,
+        coordinates: Vec<usize>,
+        path: String,
+        breadcrumbs: Vec<OutlineReference>,
+        section: &'a Section,
+    },
+    Entry {
+        order: usize,
+        coordinates: Vec<usize>,
+        path: String,
+        title: String,
+        breadcrumbs: Vec<OutlineReference>,
+        entry: &'a DefinitionItem,
+    },
+}
+
+impl LocatedNode<'_> {
+    fn order(&self) -> usize {
+        match self {
+            Self::Section { order, .. } | Self::Entry { order, .. } => *order,
+        }
+    }
+
+    fn coordinates(&self) -> &[usize] {
+        match self {
+            Self::Section { coordinates, .. } | Self::Entry { coordinates, .. } => coordinates,
+        }
+    }
+
+    fn path(&self) -> &str {
+        match self {
+            Self::Section { path, .. } | Self::Entry { path, .. } => path,
+        }
+    }
+
+    fn id(&self) -> &str {
+        match self {
+            Self::Section { section, .. } => &section.id,
+            Self::Entry { entry, .. } => {
+                &entry
+                    .identity
+                    .as_ref()
+                    .expect("located entries have identities")
+                    .id
+            }
+        }
+    }
+
+    fn matches(&self, selector: &str) -> bool {
+        if self.path() == selector || self.id() == selector {
+            return true;
+        }
+        match self {
+            Self::Entry { entry, .. } => entry.identity.as_ref().is_some_and(|identity| {
+                identity
+                    .names
+                    .iter()
+                    .any(|name| name == selector || name.trim_start_matches('-') == selector)
+            }),
+            Self::Section { .. } => false,
+        }
+    }
+
+    const fn is_section(&self) -> bool {
+        matches!(self, Self::Section { .. })
+    }
+
+    fn selection(&self) -> ExcerptSelection {
+        match self {
+            Self::Section {
+                path,
+                breadcrumbs,
+                section,
+                ..
+            } => ExcerptSelection::ManualSection {
+                path: path.clone(),
+                id: section.id.clone(),
+                title: section.title.clone(),
+                breadcrumbs: breadcrumbs.clone(),
+                section: (*section).clone(),
+            },
+            Self::Entry {
+                path,
+                title,
+                breadcrumbs,
+                entry,
+                ..
+            } => ExcerptSelection::ManualEntry {
+                path: path.clone(),
+                id: entry
+                    .identity
+                    .as_ref()
+                    .expect("located entries have identities")
+                    .id
+                    .clone(),
+                title: title.clone(),
+                breadcrumbs: breadcrumbs.clone(),
+                entry: (*entry).clone(),
+            },
+        }
+    }
 }
 
 fn collect_sections<'a>(
     sections: &'a [Section],
     parent_coordinates: &[usize],
     breadcrumbs: &[OutlineReference],
-    output: &mut Vec<LocatedSection<'a>>,
+    output: &mut Vec<LocatedNode<'a>>,
 ) {
     for (index, section) in sections.iter().enumerate() {
         let mut coordinates = parent_coordinates.to_vec();
         coordinates.push(index + 1);
         let path = format_path(&coordinates);
         let order = output.len();
-        output.push(LocatedSection {
+        output.push(LocatedNode::Section {
             order,
             coordinates: coordinates.clone(),
             path: path.clone(),
@@ -226,11 +357,58 @@ fn collect_sections<'a>(
         });
         let mut child_breadcrumbs = breadcrumbs.to_vec();
         child_breadcrumbs.push(OutlineReference {
-            path,
+            path: path.clone(),
             id: section.id.clone(),
             title: section.title.clone(),
         });
+        let mut entries = Vec::new();
+        collect_definition_entries(&section.blocks, &mut entries);
+        for (index, entry) in entries.into_iter().enumerate() {
+            let Some(identity) = &entry.identity else {
+                continue;
+            };
+            output.push(LocatedNode::Entry {
+                order: output.len(),
+                coordinates: coordinates.clone(),
+                path: format!("{path}/o{}", index + 1),
+                title: identity.names.join(", "),
+                breadcrumbs: child_breadcrumbs.clone(),
+                entry,
+            });
+        }
         collect_sections(&section.children, &coordinates, &child_breadcrumbs, output);
+    }
+}
+
+fn collect_definition_entries<'a>(blocks: &'a [Block], output: &mut Vec<&'a DefinitionItem>) {
+    for block in blocks {
+        match block {
+            Block::List { items, .. } => {
+                for item in items {
+                    collect_definition_entries(&item.blocks, output);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    if item.identity.is_some() {
+                        output.push(item);
+                    }
+                    collect_definition_entries(&item.description, output);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for row in rows {
+                    for cell in &row.cells {
+                        collect_definition_entries(&cell.blocks, output);
+                    }
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::Unsupported { .. } => {}
+        }
     }
 }
 
@@ -249,8 +427,8 @@ fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        DocumentMeta, DocumentSchema, DocumentSource, ExcerptSelection, MantDocument,
-        OutlineNodeKind, Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
+        DocumentMeta, DocumentSchema, DocumentSource, ExcerptSelection, MantDocument, OutlineNode,
+        Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
     };
 
     use super::{ProjectionError, build_outline, select_excerpt};
@@ -268,11 +446,11 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V1,
+            schema: QuerySchema::V2,
             topic: "demo".to_owned(),
             section: None,
             manual: Some(MantDocument {
-                schema: DocumentSchema::V1,
+                schema: DocumentSchema::V2,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -322,10 +500,10 @@ mod tests {
         let outline = build_outline(&query()).expect("outline");
 
         assert_eq!(outline.manual_section.as_deref(), Some("1"));
-        assert_eq!(outline.nodes[1].path, "2");
-        assert_eq!(outline.nodes[1].id, "options-2");
-        assert_eq!(outline.nodes[1].children[0].path, "2.1");
-        assert_eq!(outline.nodes[1].children[1].path, "2.2");
+        assert_eq!(outline.nodes[1].path(), "2");
+        assert_eq!(outline.nodes[1].id(), "options-2");
+        assert_eq!(outline.nodes[1].children()[0].path(), "2.1");
+        assert_eq!(outline.nodes[1].children()[1].path(), "2.2");
     }
 
     #[test]
@@ -335,11 +513,11 @@ mod tests {
 
         let outline = build_outline(&query).expect("combined outline");
 
-        assert_eq!(outline.nodes[0].kind, OutlineNodeKind::Tldr);
-        assert_eq!(outline.nodes[0].path, "0");
-        assert_eq!(outline.nodes[0].id, "tldr");
-        assert_eq!(outline.nodes[1].path, "1");
-        assert_eq!(outline.nodes[2].path, "2");
+        assert!(matches!(outline.nodes[0], OutlineNode::Tldr { .. }));
+        assert_eq!(outline.nodes[0].path(), "0");
+        assert_eq!(outline.nodes[0].id(), "tldr");
+        assert_eq!(outline.nodes[1].path(), "1");
+        assert_eq!(outline.nodes[2].path(), "2");
     }
 
     #[test]
@@ -360,7 +538,8 @@ mod tests {
             .iter()
             .map(|selection| match selection {
                 ExcerptSelection::Tldr { path, .. }
-                | ExcerptSelection::ManualSection { path, .. } => path.as_str(),
+                | ExcerptSelection::ManualSection { path, .. }
+                | ExcerptSelection::ManualEntry { path, .. } => path.as_str(),
             })
             .collect::<Vec<_>>();
         assert_eq!(paths, ["2", "3"]);
@@ -410,7 +589,7 @@ mod tests {
         tldr_only.manual = None;
         let outline = build_outline(&tldr_only).expect("tldr-only outline");
         assert_eq!(outline.nodes.len(), 1);
-        assert_eq!(outline.nodes[0].path, "0");
+        assert_eq!(outline.nodes[0].path(), "0");
         assert!(outline.source.is_none());
         assert!(outline.meta.is_none());
     }

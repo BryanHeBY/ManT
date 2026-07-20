@@ -6,9 +6,10 @@
 use std::{collections::HashSet, path::PathBuf, sync::OnceLock};
 
 use mant_ast::{
-    Block, ExcerptSelection, Inline, MantDocument, QueryBundle, QuerySchema, Section, SourceFormat,
+    Block, ExcerptSelection, Inline, MantDocument, OutlineDetail, OutlineNode, QueryBundle,
+    QuerySchema, Section, SourceFormat,
 };
-use mant_core::{build_outline, parse_manual_source, select_excerpt};
+use mant_core::{build_outline, build_outline_with_detail, parse_manual_source, select_excerpt};
 
 static LS: OnceLock<MantDocument> = OnceLock::new();
 static GIT: OnceLock<MantDocument> = OnceLock::new();
@@ -436,10 +437,10 @@ fn fixed_roff_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
 fn real_nested_manuals_support_outline_discovery_and_targeted_excerpts() {
     let query = manual_query("git");
     let outline = build_outline(&query).expect("Git outline");
-    let git_diffs = &outline.nodes[15].children[3];
-    assert_eq!(git_diffs.path, "16.4");
-    assert_eq!(git_diffs.id, "git-diffs-28");
-    assert_eq!(git_diffs.title, "Git Diffs");
+    let git_diffs = &outline.nodes[15].children()[3];
+    assert_eq!(git_diffs.path(), "16.4");
+    assert_eq!(git_diffs.id(), "git-diffs-28");
+    assert_eq!(git_diffs.title(), "Git Diffs");
 
     let excerpt = select_excerpt(&query, &["git-diffs-28".to_owned(), "16.4".to_owned()])
         .expect("Git Diffs excerpt");
@@ -456,6 +457,33 @@ fn real_nested_manuals_support_outline_discovery_and_targeted_excerpts() {
     assert_eq!(path, "16.4");
     assert_eq!(breadcrumbs[0].title, "ENVIRONMENT VARIABLES");
     assert!(block_slice_text(&section.blocks).contains("GIT_EXTERNAL_DIFF"));
+}
+
+#[test]
+fn tar_options_are_addressable_in_v2_outlines_and_excerpts() {
+    let query = manual_query("tar");
+    let acls = semantic_definition_items(manual("tar"))
+        .into_iter()
+        .find(|item| {
+            item.identity
+                .as_ref()
+                .is_some_and(|identity| identity.names.iter().any(|name| name == "--acls"))
+        })
+        .expect("tar --acls semantic option");
+    let identity = acls.identity.as_ref().expect("option identity");
+    assert!(!identity.id.is_empty());
+
+    let outline =
+        build_outline_with_detail(&query, OutlineDetail::Options).expect("tar option outline");
+    let outlined = find_outline_entry(&outline.nodes, "--acls").expect("outlined --acls");
+    assert_eq!(outlined.id(), identity.id);
+
+    let excerpt = select_excerpt(&query, &["acls".to_owned()]).expect("--acls excerpt by alias");
+    assert!(matches!(
+        excerpt.selections.as_slice(),
+        [ExcerptSelection::ManualEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|value| value.id == identity.id)
+    ));
 }
 
 fn manual(name: &str) -> &'static MantDocument {
@@ -476,7 +504,7 @@ fn manual(name: &str) -> &'static MantDocument {
 fn manual_query(name: &str) -> QueryBundle {
     let manual = manual(name).clone();
     QueryBundle {
-        schema: QuerySchema::V1,
+        schema: QuerySchema::V2,
         topic: name.to_owned(),
         section: manual.meta.section.clone(),
         manual: Some(manual),
@@ -569,6 +597,31 @@ fn nested_definition_items(section: &Section) -> Vec<&mant_ast::DefinitionItem> 
         })
         .flatten()
         .collect()
+}
+
+fn semantic_definition_items(document: &MantDocument) -> Vec<&mant_ast::DefinitionItem> {
+    document_blocks(document)
+        .into_iter()
+        .filter_map(|block| match block {
+            Block::DefinitionList { items, .. } => Some(items.iter()),
+            _ => None,
+        })
+        .flatten()
+        .filter(|item| item.identity.is_some())
+        .collect()
+}
+
+fn find_outline_entry<'a>(nodes: &'a [OutlineNode], name: &str) -> Option<&'a OutlineNode> {
+    for node in nodes {
+        if matches!(node, OutlineNode::ManualEntry { names, .. } if names.iter().any(|value| value == name))
+        {
+            return Some(node);
+        }
+        if let Some(found) = find_outline_entry(node.children(), name) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 fn as_preformatted(block: &Block) -> Option<&[Inline]> {

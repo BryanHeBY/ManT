@@ -46,7 +46,7 @@ fn request_schema_is_discoverable_without_host_state() {
     assert!(
         String::from_utf8(output.stdout)
             .expect("UTF-8 schema")
-            .contains("mant.request/v1")
+            .contains("mant.request/v2")
     );
 }
 
@@ -60,11 +60,11 @@ fn protocol_version_is_a_clean_json_document() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
-    assert_eq!(value["protocol"], "mant.cli/v1");
-    assert_eq!(value["requestSchema"], "mant.request/v1");
-    assert_eq!(value["querySchema"], "mant.query/v1");
-    assert_eq!(value["outlineSchema"], "mant.outline/v1");
-    assert_eq!(value["excerptSchema"], "mant.excerpt/v1");
+    assert_eq!(value["protocol"], "mant.cli/v2");
+    assert_eq!(value["requestSchema"], "mant.request/v2");
+    assert_eq!(value["querySchema"], "mant.query/v2");
+    assert_eq!(value["outlineSchema"], "mant.outline/v2");
+    assert_eq!(value["excerptSchema"], "mant.excerpt/v2");
 }
 
 #[test]
@@ -80,7 +80,9 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
         .stdin
         .take()
         .expect("stdin")
-        .write_all(br#"{"schema":"mant.request/v1","topic":"git","futureField":true}"#)
+        .write_all(
+            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"full"},"futureField":true}"#,
+        )
         .expect("write request");
     let output = child.wait_with_output().expect("wait for mant-cli");
 

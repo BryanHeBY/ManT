@@ -13,7 +13,7 @@ pub use schema::*;
 pub use tldr::*;
 
 /// Native API version negotiated independently from document schema versions.
-pub const NATIVE_API_VERSION: &str = "1";
+pub const NATIVE_API_VERSION: &str = "2";
 
 #[cfg(test)]
 mod tests {
@@ -21,6 +21,6 @@ mod tests {
 
     #[test]
     fn native_api_version_is_explicit() {
-        assert_eq!(NATIVE_API_VERSION, "1");
+        assert_eq!(NATIVE_API_VERSION, "2");
     }
 }

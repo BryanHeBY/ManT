@@ -2,7 +2,7 @@
 
 mod blocks;
 mod diagnostics;
-mod inline;
+pub(crate) mod inline;
 mod navigation;
 
 use std::path::Path;
@@ -32,9 +32,14 @@ pub fn lower_mandoc_document(path: &Path, parsed: &ParsedDocument) -> MantDocume
     let mut diagnostics = diagnostics::parse_diagnostics(&parsed.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
     let explicit_targets = navigation::explicit_targets(&parsed.root);
-    navigation::resolve_navigation(&mut sections, &explicit_targets, &mut diagnostics);
+    let mut retained_targets = explicit_targets.clone();
+    retained_targets.extend(crate::definitions::identify_definitions(
+        &mut sections,
+        &explicit_targets,
+    ));
+    navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
     MantDocument {
-        schema: DocumentSchema::V1,
+        schema: DocumentSchema::V2,
         producer: Producer {
             name: "mant".to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),

@@ -115,7 +115,7 @@ pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> 
     builder.finish()
 }
 
-pub(super) fn plain_text(nodes: &[Inline]) -> String {
+pub(crate) fn plain_text(nodes: &[Inline]) -> String {
     let mut output = String::new();
     for node in nodes {
         match node {

@@ -27,6 +27,15 @@ export interface ManualSidebarProps {
   onActivateTldr: () => void;
 }
 
+function navigationTitleColor(flatNode: FlatNode, selected: boolean): string {
+  if (selected) return "#f5e0dc";
+  if (flatNode.node.kind === "entry-group") return "#f9e2af";
+  if (flatNode.node.kind === "option") return "#a6e3a1";
+  if (flatNode.depth === 0) return "#cdd6f4";
+  if (flatNode.depth === 1) return "#89b4fa";
+  return "#a6adc8";
+}
+
 /** Displays document hierarchy and preserves a continuous selected-row background. */
 export function ManualSidebar({
   result,
@@ -38,6 +47,9 @@ export function ManualSidebar({
   onActivateNode,
   onActivateTldr,
 }: ManualSidebarProps) {
+  const visibleManualSections = visibleNodes.filter(
+    ({ node }) => node.kind === "section",
+  ).length;
   return (
     <box width={width} flexDirection="column" flexShrink={0} backgroundColor="#11111b">
       <box
@@ -53,7 +65,7 @@ export function ManualSidebar({
           {`MANUAL · ${result.topic}`}
         </text>
         <text height={1} fg="#7f849c" selectable={false}>
-          {`${result.manual?.sections.length ?? 0} top-level · ${visibleNodes.length} manual${result.tldr ? " · TLDR" : ""}`}
+          {`${result.manual?.sections.length ?? 0} top-level · ${visibleManualSections} manual${result.tldr ? " · TLDR" : ""}`}
         </text>
       </box>
       <box height={1} paddingLeft={1} paddingRight={1}>
@@ -97,16 +109,10 @@ export function ManualSidebar({
         {visibleNodes.map((flatNode) => {
           const { node, hasChildren } = flatNode;
           const isSelected = node.id === selectedId;
-          const titleColor = isSelected
-            ? "#f5e0dc"
-            : flatNode.depth === 0
-              ? "#cdd6f4"
-              : flatNode.depth === 1
-                ? "#89b4fa"
-                : "#a6adc8";
+          const titleColor = navigationTitleColor(flatNode, isSelected);
           const disclosure = hasChildren
             ? expanded.has(node.id) ? "▾ " : "▸ "
-            : "· ";
+            : node.kind === "option" ? "◇ " : "· ";
           const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
           const selectedTitleLines = isSelected
             ? wrapNavigationTitle(node.title, width - 1 - terminalColumnWidth(labelPrefix))

@@ -1,12 +1,12 @@
 {
-  "schema": "mant.query/v1",
+  "schema": "mant.query/v2",
   "topic": "ls",
   "section": "1",
   "manual": {
-    "schema": "mant.document/v1",
+    "schema": "mant.document/v2",
     "producer": {
       "name": "mant-native",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "engine": {
         "name": "libmandoc",
         "version": "1.14.6"
@@ -84,6 +84,30 @@
               { "type": "anchor", "id": "all-option" },
               { "type": "code", "value": "--all" },
               { "type": "text", "value": " includes hidden entries." }
+            ]
+          },
+          {
+            "type": "definition-list",
+            "items": [
+              {
+                "identity": {
+                  "id": "almost-all-option",
+                  "role": "option",
+                  "names": ["-A", "--almost-all"]
+                },
+                "terms": [
+                  [
+                    { "type": "anchor", "id": "almost-all-option" },
+                    { "type": "strong", "children": [{ "type": "text", "value": "-A, --almost-all" }] }
+                  ]
+                ],
+                "description": [
+                  {
+                    "type": "paragraph",
+                    "children": [{ "type": "text", "value": "Do not list implied dot entries." }]
+                  }
+                ]
+              }
             ]
           }
         ],

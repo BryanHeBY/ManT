@@ -282,7 +282,13 @@ function renderBlockNodes(
                   {item.terms.map((term, termIndex) => {
                     const termPath = searchPath.term(itemPath, termIndex);
                     return (
-                      <box key={`term-${termIndex}`} paddingLeft={indent}>
+                      <box
+                        key={`term-${termIndex}`}
+                        {...(termIndex === 0 && item.identity
+                          ? { id: contentAnchorId(item.identity.id) }
+                          : {})}
+                        paddingLeft={indent}
+                      >
                         <text
                           id={contentSearchId(sectionId, termPath)}
                           fg="#cdd6f4"

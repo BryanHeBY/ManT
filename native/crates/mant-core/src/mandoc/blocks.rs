@@ -482,8 +482,12 @@ fn definition_item(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) -> DefinitionItem {
-    let term = lower_inline_nodes(visible_definition_head(node), context.default_name);
+    let mut term = lower_inline_nodes(visible_definition_head(node), context.default_name);
+    if let Some(id) = definition_head_anchor(node, &term) {
+        term.insert(0, Inline::Anchor { id });
+    }
     DefinitionItem {
+        identity: None,
         terms: (!term.is_empty()).then_some(term).into_iter().collect(),
         description: lower_blocks(
             part_children(node, NodeKind::Body),
@@ -493,6 +497,26 @@ fn definition_item(
         ),
         spacing_before_lines: None,
     }
+}
+
+/// Preserve libmandoc's tag on a man(7) `.TP`/`.IP` head. Unlike mdoc `Fl`
+/// tags, this identity lives on the structural head rather than a visible
+/// inline child, so it has to be copied before lowering discards that wrapper.
+fn definition_head_anchor(node: &Node, term: &[Inline]) -> Option<String> {
+    let head = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Head)?;
+    if !head.flags.deep_link_target {
+        return None;
+    }
+    head.tag.clone().or_else(|| {
+        plain_text(term)
+            .trim_start_matches('-')
+            .split_whitespace()
+            .next()
+            .map(ToOwned::to_owned)
+    })
 }
 
 /// Return only document content from a definition macro's mixed-purpose head.

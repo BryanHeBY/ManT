@@ -10,10 +10,10 @@ import type {
 
 function manual(sections: MantSection[]): MantDocument {
   return {
-    schema: "mant.document/v1",
+    schema: "mant.document/v2",
     producer: {
       name: "mant",
-      version: "0.1.0",
+      version: "0.2.0",
       engine: { name: "libmandoc", version: "1.14.6" },
     },
     source: { format: "man", path: "/fixtures/manual.1" },
@@ -56,7 +56,7 @@ export const mockLsSections: MantSection[] = [
 ];
 
 export const mockLsResult: MantQueryBundle = {
-  schema: "mant.query/v1",
+  schema: "mant.query/v2",
   topic: "ls",
   manual: manual(mockLsSections),
 };
@@ -93,7 +93,7 @@ export const mockLsWithTldrResult: MantQueryBundle = {
 
 export function mockQuery(topic: string, sections: MantSection[]): MantQueryBundle {
   return {
-    schema: "mant.query/v1",
+    schema: "mant.query/v2",
     topic,
     manual: manual(sections),
   };

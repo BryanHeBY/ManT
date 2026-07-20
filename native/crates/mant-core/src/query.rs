@@ -107,14 +107,14 @@ fn query_with(request: &QueryRequest, host: &dyn QueryHost) -> Result<QueryBundl
 
     match manual {
         Ok(Some(manual)) => Ok(QueryBundle {
-            schema: QuerySchema::V1,
+            schema: QuerySchema::V2,
             topic: topic.to_owned(),
             section,
             manual: Some(manual),
             tldr,
         }),
         Ok(None) | Err(_) if tldr.is_some() => Ok(QueryBundle {
-            schema: QuerySchema::V1,
+            schema: QuerySchema::V2,
             topic: topic.to_owned(),
             section,
             manual: None,
@@ -227,7 +227,7 @@ mod tests {
 
     use mant_ast::{
         Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, MantDocument,
-        Producer, QueryRequest, RequestSchema, Section, SourceFormat, TldrDocument,
+        Producer, QueryRequest, QueryView, RequestSchema, Section, SourceFormat, TldrDocument,
     };
 
     use crate::{CommandOutput, CommandRunner, ManualRequest};
@@ -271,7 +271,7 @@ mod tests {
 
     fn document(format: SourceFormat, unsupported: bool, readable: bool) -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V1,
+            schema: DocumentSchema::V2,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
@@ -330,9 +330,10 @@ mod tests {
 
     fn request() -> QueryRequest {
         QueryRequest {
-            schema: RequestSchema::V1,
+            schema: RequestSchema::V2,
             topic: " tool ".to_owned(),
             section: None,
+            view: QueryView::Full {},
         }
     }
 
@@ -406,9 +407,10 @@ mod tests {
         assert_eq!(
             query_with(
                 &QueryRequest {
-                    schema: RequestSchema::V1,
+                    schema: RequestSchema::V2,
                     topic: " ".to_owned(),
-                    section: None
+                    section: None,
+                    view: QueryView::Full {},
                 },
                 &host
             ),

@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 /// Exact schema marker for a normalized manual document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
-    /// First stable renderer-neutral document model.
-    #[serde(rename = "mant.document/v1")]
-    V1,
+    /// Renderer-neutral model with addressable semantic definition entries.
+    #[serde(rename = "mant.document/v2")]
+    V2,
 }
 
 /// A normalized manual page ready for interactive or textual rendering.
@@ -243,12 +243,36 @@ pub struct ListItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DefinitionItem {
+    /// Present when the native lowering pass can identify this definition as
+    /// a stable semantic entry, such as a command-line option.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<DefinitionIdentity>,
     pub terms: Vec<Vec<Inline>>,
     pub description: Vec<Block>,
     /// Terminal rows requested before this item when man(7) changes `.PD`.
     /// `None` inherits the containing list's compactness policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spacing_before_lines: Option<u16>,
+}
+
+/// Stable, renderer-independent identity for one navigable definition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DefinitionIdentity {
+    /// Unique within one document and shared with the term's inline anchor.
+    pub id: String,
+    pub role: DefinitionRole,
+    /// Plain normalized names suitable for outlines and agent selection.
+    pub names: Vec<String>,
+}
+
+/// Semantic role assigned before roff macro details leave the native layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum DefinitionRole {
+    Option,
+    Command,
+    EnvironmentVariable,
 }
 
 /// One logical table row.

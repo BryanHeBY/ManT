@@ -39,8 +39,8 @@ lower a document.  It never defines ManT's public AST and never formats JSON.
 
 ## Stable and unstable models
 
-`mant.document/v1` is the stable manual document contract consumed by the UI
-and output renderers.  `mant.query/v1` combines an optional manual document
+`mant.document/v2` is the stable manual document contract consumed by the UI
+and output renderers.  `mant.query/v2` combines an optional manual document
 with an optional tldr document while preserving their different sources and
 licences.
 
@@ -58,6 +58,12 @@ every destination as an untyped URI:
 - `manual-reference` identifies another manual by name and optional section;
 - `section-reference` targets a document-local section ID;
 - `anchor` marks a zero-width document-local destination such as mdoc `Tg`.
+
+Definition-list entries may also carry a semantic `identity` with a stable
+document-local ID, a role, and normalized names. Version 2 currently assigns
+this identity to recognized command-line options. It preserves the complete
+rendered term and description while making aliases such as `-g` and
+`--listed-incremental` discoverable as one addressable entry.
 
 Section IDs and explicit anchor IDs occupy the same namespace within one
 document. Renderers may style or activate these nodes differently, but must
@@ -78,7 +84,7 @@ rather than a mirror of parser internals:
 
 ```text
 mant-cli <topic> [--format <format>]   -> query Markdown, text, or JSON
-mant-cli <topic> --outline             -> selectable manual tree
+mant-cli <topic> --outline [options]   -> selectable section or option tree
 mant-cli <topic> --node <path-or-id>   -> selected section subtrees
 mant-cli --update-tldr                 -> update result JSON
 mant-cli --protocol-version            -> protocol description JSON
@@ -87,20 +93,22 @@ mant-cli --schema <contract>           -> generated JSON Schema
 
 For the TUI, `mant-cli --request-json --format json --compact` reads one closed,
 versioned `QueryRequest` object from standard input and emits exactly one
-`mant.query/v1` object on standard output.  Standard error contains concise
+`mant.query/v2` object on standard output.  Standard error contains concise
 diagnostics only.  Status 0 means success, 2 means invalid invocation or
 request, and 1 means an operational failure.  The TypeScript client drains
 stdout and stderr concurrently, validates the protocol and schema, and starts
 one process per document query; interactive search and navigation never spawn
 additional native processes.
 
-`mant.request/v1` requires a `schema` marker and `topic`, accepts an optional
-manual `section`, and rejects unknown fields. `mant-cli --schema request`
-exposes that input contract; `query`, `outline`, and `excerpt` expose the
-corresponding output contracts, while `all` returns a named catalog. The
-schemas are derived with Schemars from `mant-ast`'s Serde types, explicitly
-pinned to JSON Schema Draft 2020-12, and generated separately for deserialize
-and serialize behavior.
+`mant.request/v2` requires a `schema` marker, `topic`, and a closed `view`
+variant; it accepts an optional manual `section` and rejects unknown fields at
+both the envelope and view levels. `full` returns `mant.query/v2`, `outline`
+selects either section-only or option-aware structure, and `excerpt` selects
+one or more node paths, IDs, or aliases. `mant-cli --schema request` exposes
+that exact input contract; `query`, `outline`, and `excerpt` expose the output
+contracts, while `all` returns a named catalog. The schemas are derived with
+Schemars from `mant-ast`'s Serde types, explicitly pinned to JSON Schema Draft
+2020-12, and generated separately for deserialize and serialize behavior.
 
 `mant` and `mant-cli` are separate installed executables.  The TUI resolves
 `MANT_CLI_PATH` first and otherwise looks up `mant-cli` on `PATH`; it never
@@ -116,17 +124,19 @@ recoverable parser findings are structured diagnostics in the query result.
 
 Outline and excerpt views are projections of the same complete native
 document, so they never reimplement parsing rules. Outlines expose both a
-one-based tree path such as `4.2` and the document-local section ID. Excerpt
-selection accepts either value, includes the selected node's descendants,
-deduplicates overlaps, and preserves source order. Their JSON contracts are
-`mant.outline/v1` and `mant.excerpt/v1`; plain text and CommonMark are also
-available. The TUI's closed `--request-json` input remains `QueryRequest` and
-does not accept projection controls.
+one-based tree path such as `4.2` and the document-local section ID. Passing
+`--outline options` adds semantic option entries with paths such as `4.2/o3`.
+Excerpt selection accepts a section path, option path, document ID, or option
+alias; it includes complete selected content, deduplicates overlaps, and
+preserves source order. Their JSON contracts are `mant.outline/v2` and
+`mant.excerpt/v2`; plain text and CommonMark are also available. The TUI uses
+the same `QueryRequest` contract with `view.kind = "full"`; agents can select
+outline and excerpt projections directly through `--request-json`.
 
 ## Parsing and fallback policy
 
 The primary path reads the located manual source and lowers libmandoc's
-validated man(7) or mdoc(7) tree directly into `mant.document/v1`.  Rust owns
+validated man(7) or mdoc(7) tree directly into `mant.document/v2`.  Rust owns
 compression handling and preserves the original source path and include base
 directory.  `.so` aliases and includes must work without exposing temporary
 paths in the result.

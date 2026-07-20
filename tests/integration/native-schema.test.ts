@@ -10,7 +10,7 @@ import Ajv2020, { type AnySchema, type ValidateFunction } from "ajv/dist/2020.js
 
 const nativeCliPath = new URL("../../native/bin/mant-cli", import.meta.url).pathname;
 const queryFixturePath = new URL(
-  "../contracts/minimal-query-v1.json",
+  "../contracts/minimal-query-v2.json",
   import.meta.url,
 ).pathname;
 const nativeCliAvailable = Bun.spawnSync(
@@ -60,15 +60,37 @@ describeNativeCli("generated native JSON Schemas", () => {
 
     const validateRequest = compile(catalog.request);
     expectValid(validateRequest, {
-      schema: "mant.request/v1",
+      schema: "mant.request/v2",
       topic: "printf",
       section: "3",
+      view: { kind: "full" },
+    });
+    expectValid(validateRequest, {
+      schema: "mant.request/v2",
+      topic: "tar",
+      view: { kind: "outline", detail: "options" },
+    });
+    expectValid(validateRequest, {
+      schema: "mant.request/v2",
+      topic: "tar",
+      view: { kind: "excerpt", nodes: ["acls"] },
     });
     expect(validateRequest({ topic: "printf" })).toBe(false);
     expect(validateRequest({
-      schema: "mant.request/v1",
+      schema: "mant.request/v2",
       topic: "printf",
+      view: { kind: "full" },
       renderer: "html",
+    })).toBe(false);
+    expect(validateRequest({
+      schema: "mant.request/v2",
+      topic: "tar",
+      view: { kind: "excerpt", nodes: [] },
+    })).toBe(false);
+    expect(validateRequest({
+      schema: "mant.request/v2",
+      topic: "tar",
+      view: { kind: "full", future: true },
     })).toBe(false);
 
     const query = JSON.parse(await Bun.file(queryFixturePath).text()) as unknown;

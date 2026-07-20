@@ -27,11 +27,11 @@ describeNativeCli("real native CLI process boundary", () => {
     });
 
     const protocol = await client.protocol();
-    expect(protocol.protocol).toBe("mant.cli/v1");
-    expect(protocol.requestSchema).toBe("mant.request/v1");
-    expect(protocol.documentSchema).toBe("mant.document/v1");
-    expect(protocol.outlineSchema).toBe("mant.outline/v1");
-    expect(protocol.excerptSchema).toBe("mant.excerpt/v1");
+    expect(protocol.protocol).toBe("mant.cli/v2");
+    expect(protocol.requestSchema).toBe("mant.request/v2");
+    expect(protocol.documentSchema).toBe("mant.document/v2");
+    expect(protocol.outlineSchema).toBe("mant.outline/v2");
+    expect(protocol.excerptSchema).toBe("mant.excerpt/v2");
   });
 
   testWithManual("returns a validated manual through the native query pipeline", async () => {
@@ -41,7 +41,7 @@ describeNativeCli("real native CLI process boundary", () => {
     });
 
     const query = await client.query({ topic: "ls" });
-    expect(query.schema).toBe("mant.query/v1");
+    expect(query.schema).toBe("mant.query/v2");
     // Host manual sources vary by operating system and distribution. The
     // native query pipeline prefers libmandoc, but may legitimately fall back
     // to groff HTML for source constructs libmandoc cannot lower. Fixed roff

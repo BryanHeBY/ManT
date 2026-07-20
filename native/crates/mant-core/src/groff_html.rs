@@ -18,8 +18,10 @@ pub fn parse_groff_html(html: &str, source_path: Option<String>) -> MantDocument
         }
     }
 
+    let mut sections = nest_sections(sections);
+    crate::definitions::identify_definitions(&mut sections, &std::collections::HashSet::new());
     MantDocument {
-        schema: DocumentSchema::V1,
+        schema: DocumentSchema::V2,
         producer: Producer {
             name: "mant".to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -32,7 +34,7 @@ pub fn parse_groff_html(html: &str, source_path: Option<String>) -> MantDocument
         },
         meta: DocumentMeta::default(),
         diagnostics: Vec::new(),
-        sections: nest_sections(sections),
+        sections,
     }
 }
 
@@ -288,6 +290,7 @@ fn parse_definition_list(element: ElementRef<'_>, layout: LayoutHint) -> Option<
                 }
                 if !terms.is_empty() || !description.is_empty() {
                     items.push(DefinitionItem {
+                        identity: None,
                         terms: std::mem::take(&mut terms),
                         description,
                         spacing_before_lines: None,
@@ -299,6 +302,7 @@ fn parse_definition_list(element: ElementRef<'_>, layout: LayoutHint) -> Option<
     }
     if !terms.is_empty() {
         items.push(DefinitionItem {
+            identity: None,
             terms,
             description: Vec::new(),
             spacing_before_lines: None,
