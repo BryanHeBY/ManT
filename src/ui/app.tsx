@@ -113,6 +113,7 @@ export function App({ result, onQuit }: AppProps) {
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [menuCursor, setMenuCursor] = useState(0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSearchEditing, setIsSearchEditing] = useState(false);
   const [search, setSearch] = useState<AppliedSearch>({
     query: "",
     matches: [],
@@ -328,6 +329,7 @@ export function App({ result, onQuit }: AppProps) {
     setOpenMenu(null);
     setIsHelpOpen(false);
     setIsSearchOpen(true);
+    setIsSearchEditing(false);
   };
 
   /** Leave search mode and remove every visual/result state owned by it. */
@@ -335,10 +337,12 @@ export function App({ result, onQuit }: AppProps) {
     clearAllSearchDecorations();
     setSearch({ query: "", matches: [], activeIndex: 0 });
     setIsSearchOpen(false);
+    setIsSearchEditing(false);
   };
 
   /** Apply the input's submitted value instead of a possibly stale render snapshot. */
   const submitSearch = (submittedDraft: string) => {
+    setIsSearchEditing(false);
     if (submittedDraft === searchQuery) {
       selectSearchMatch(searchIndex + 1);
       return;
@@ -507,6 +511,15 @@ export function App({ result, onQuit }: AppProps) {
       ) {
         e.preventDefault();
         selectSearchMatch(searchIndex - 1);
+      } else if (
+        !e.ctrl
+        && (e.name.length === 1 || e.name === "space" || e.name === "backspace" || e.name === "delete")
+      ) {
+        // Treat only an actual text-editing key as a pending query change.
+        // The native input's delayed onInput notifications may describe an
+        // earlier edit after Enter, so using them here makes result status
+        // nondeterministic on large documents.
+        setIsSearchEditing(true);
       }
       return;
     }
@@ -695,6 +708,7 @@ export function App({ result, onQuit }: AppProps) {
         <SearchBar
           inputRef={searchInputRef}
           appliedQuery={searchQuery}
+          isEditing={isSearchEditing}
           matchCount={searchMatches.length}
           matchIndex={searchIndex}
           onSubmit={submitSearch}

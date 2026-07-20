@@ -6,11 +6,11 @@
  */
 
 import type { InputRenderable } from "@opentui/core";
-import { useEffect, useState } from "react";
 
 export interface SearchBarProps {
   inputRef: { current: InputRenderable | null };
   appliedQuery: string;
+  isEditing: boolean;
   matchCount: number;
   matchIndex: number;
   onSubmit: (value: string) => void;
@@ -19,18 +19,16 @@ export interface SearchBarProps {
 export function SearchBar({
   inputRef,
   appliedQuery,
+  isEditing,
   matchCount,
   matchIndex,
   onSubmit,
 }: SearchBarProps) {
-  // Keep ordinary typing inside OpenTUI's native InputRenderable. Feeding
-  // every keystroke through App state can delay reconciliation on large man
-  // pages long enough for the following Enter event to reach a replaced input.
-  // React only needs to know when an already-applied query has been edited so
-  // the result/no-match hint can return to its pending state.
-  const [isEditingAppliedQuery, setIsEditingAppliedQuery] = useState(false);
-  useEffect(() => setIsEditingAppliedQuery(false), [appliedQuery]);
-  const hasAppliedQuery = appliedQuery.length > 0 && !isEditingAppliedQuery;
+  // Text itself stays inside OpenTUI's native InputRenderable so large pages
+  // do not reconcile on every keystroke. App owns the explicit editing flag:
+  // input callbacks may arrive after submit, so they cannot safely determine
+  // whether a confirmed query has subsequently been changed.
+  const hasAppliedQuery = appliedQuery.length > 0 && !isEditing;
   const hasNoMatches = hasAppliedQuery && matchCount === 0;
   // OpenTUI React emits the current string, while the inherited core option
   // type still mentions an empty SubmitEvent. Accept both shapes at this
@@ -38,12 +36,6 @@ export function SearchBar({
   const submitCurrentValue = (value: unknown) => {
     onSubmit(typeof value === "string" ? value : inputRef.current?.value ?? "");
   };
-  const noteInputChange = (value: string) => {
-    if (appliedQuery && value !== appliedQuery && !isEditingAppliedQuery) {
-      setIsEditingAppliedQuery(true);
-    }
-  };
-
   return (
     <box height={1} flexDirection="row" backgroundColor="#181825" paddingLeft={1} paddingRight={1}>
       <text fg="#f9e2af">Find:</text>
@@ -58,7 +50,6 @@ export function SearchBar({
         focusedBackgroundColor="#313244"
         textColor="#cdd6f4"
         focusedTextColor="#cdd6f4"
-        onInput={noteInputChange}
         onSubmit={submitCurrentValue}
       />
       <box width={1} />
