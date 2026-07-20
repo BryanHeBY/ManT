@@ -596,7 +596,15 @@ fn extend_transparent_blocks(
     // A transparent wrapper cannot decide whether its first child begins a
     // new paragraph in isolation. At section start there is no leading
     // distance; after visible outer content the current `.PD` value applies.
-    let boundary_spacing = if output.is_empty() {
+    // An explicit vertical-space node already owns the distance before the
+    // wrapper's first visible child. Applying `.PD` as well would represent
+    // the same roff gap twice; this is common in Sphinx's `.sp` + `.INDENT`
+    // output and produces visibly doubled rows in both the TUI and text views.
+    let boundary_spacing = if output.is_empty()
+        || output
+            .last()
+            .is_some_and(|block| matches!(block, Block::VerticalSpace { .. }))
+    {
         0
     } else {
         paragraph_distance

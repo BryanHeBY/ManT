@@ -13,6 +13,8 @@ use mant_ast::{
 };
 use mant_mandoc_sys::{MacroSet, Node, ParsedDocument};
 
+use self::inline::{parse_roff_text, plain_text};
+
 pub use mant_mandoc_sys::ParseError;
 
 /// Parse and normalize one located man or mdoc source file.
@@ -57,18 +59,28 @@ pub fn lower_mandoc_document(path: &Path, parsed: &ParsedDocument) -> MantDocume
             renderer: None,
         },
         meta: DocumentMeta {
-            title: parsed.metadata.title.clone(),
-            section: parsed.metadata.section.clone(),
-            date: parsed.metadata.date.clone(),
-            volume: parsed.metadata.volume.clone(),
-            os: parsed.metadata.os.clone(),
-            arch: parsed.metadata.arch.clone(),
-            names: parsed.metadata.name.iter().cloned().collect(),
+            title: normalize_metadata(parsed.metadata.title.as_deref()),
+            section: normalize_metadata(parsed.metadata.section.as_deref()),
+            date: normalize_metadata(parsed.metadata.date.as_deref()),
+            volume: normalize_metadata(parsed.metadata.volume.as_deref()),
+            os: normalize_metadata(parsed.metadata.os.as_deref()),
+            arch: normalize_metadata(parsed.metadata.arch.as_deref()),
+            names: normalize_metadata(parsed.metadata.name.as_deref())
+                .into_iter()
+                .collect(),
             alias_target: parsed.metadata.alias_target.clone(),
         },
         diagnostics,
         sections,
     }
+}
+
+/// Metadata strings come from roff macro arguments rather than visible text
+/// nodes, so libmandoc can legitimately retain zero-width escapes such as
+/// `\&`. Normalize them through the same inline decoder used for document
+/// content before exposing the renderer-neutral contract.
+fn normalize_metadata(value: Option<&str>) -> Option<String> {
+    value.map(|value| plain_text(&parse_roff_text(value)))
 }
 
 struct LoweringContext<'a> {
@@ -428,6 +440,37 @@ mod tests {
         assert_eq!(compact.spacing_before_lines, 0);
         assert_eq!(next.spacing_before_lines, 0);
         assert_eq!(final_section.spacing_before_lines, 1);
+    }
+
+    #[test]
+    fn does_not_duplicate_explicit_space_before_a_transparent_indent() {
+        let path = temporary_source(
+            "explicit-space-before-indent",
+            ".TH SPACING 1\n\
+             .SH CONTENT\n\
+             Before.\n\
+             .sp\n\
+             .RS 4\n\
+             After.\n\
+             .RE\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower explicit indented spacing");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [
+            Block::Paragraph { .. },
+            Block::VerticalSpace { lines: 1, .. },
+            Block::Paragraph { layout, .. },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("expected prose, one explicit gap, and indented prose");
+        };
+        assert_eq!(layout.indent_columns, 4);
+        assert_eq!(
+            layout.spacing_before_lines, 0,
+            "the explicit gap must not be repeated as wrapper boundary spacing",
+        );
     }
 
     #[test]

@@ -18,6 +18,10 @@ static GIT: OnceLock<MantDocument> = OnceLock::new();
 static GCC: OnceLock<MantDocument> = OnceLock::new();
 static CLANG: OnceLock<MantDocument> = OnceLock::new();
 static TAR: OnceLock<MantDocument> = OnceLock::new();
+static FEDORA44_CLANG: OnceLock<MantDocument> = OnceLock::new();
+static FEDORA44_GCC: OnceLock<MantDocument> = OnceLock::new();
+static FEDORA44_GIT: OnceLock<MantDocument> = OnceLock::new();
+static FEDORA44_TAR: OnceLock<MantDocument> = OnceLock::new();
 
 const LS_SECTIONS: &[&str] = &[
     "NAME",
@@ -121,6 +125,55 @@ fn fixed_roff_pages_keep_their_complete_section_topology() {
         );
         let ids: HashSet<&str> = sections.iter().map(|section| section.id.as_str()).collect();
         assert_eq!(ids.len(), sections.len(), "fixture {name} section IDs");
+    }
+}
+
+#[test]
+fn fedora44_zstd_pages_keep_complete_sections_and_semantic_option_outlines() {
+    let cases = [
+        ("clang", 9, 78, "-std", "22"),
+        ("gcc", 10, 2_731, "-Wsuggest-final-types", "gcc-16"),
+        ("git", 24, 25, "--help", "Git 2.53.0"),
+        ("tar", 9, 156, "--acls", "TAR"),
+    ];
+
+    for (name, section_count, option_count, known_option, expected_os) in cases {
+        let document = fedora44_manual(name);
+        assert_eq!(document.source.format, SourceFormat::Man, "fixture {name}");
+        assert_eq!(document.sections.len(), section_count, "fixture {name}");
+        assert_eq!(
+            document.meta.section.as_deref(),
+            Some("1"),
+            "fixture {name}"
+        );
+        assert_eq!(
+            document.meta.os.as_deref(),
+            Some(expected_os),
+            "fixture {name} metadata must not leak roff escapes",
+        );
+        assert!(
+            document
+                .source
+                .path
+                .as_deref()
+                .is_some_and(|path| path.ends_with(".1.zst")),
+            "fixture {name} must exercise the zstd source path",
+        );
+
+        let query = query_for_document(name, document);
+        let outline = build_outline_with_detail(&query, OutlineDetail::Options)
+            .unwrap_or_else(|error| panic!("build {name} option outline: {error}"));
+        assert_eq!(
+            count_outline_entries(&outline.nodes),
+            option_count,
+            "fixture {name} semantic option count",
+        );
+        assert!(
+            find_outline_entry(&outline.nodes, known_option).is_some(),
+            "fixture {name} must expose {known_option}",
+        );
+
+        assert_no_duplicate_vertical_spacing(&document.sections, name);
     }
 }
 
@@ -420,31 +473,10 @@ fn ls_and_tar_keep_definition_lists_subsections_and_inline_styles() {
 #[test]
 fn fixed_roff_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
     for name in ["ls", "git", "gcc", "clang", "tar"] {
-        for block in document_blocks(manual(name)) {
-            visit_block_inlines(block, &mut |inline| {
-                let value = match inline {
-                    Inline::Text { value } | Inline::Code { value } => value,
-                    Inline::Strong { .. }
-                    | Inline::Emphasis { .. }
-                    | Inline::ExternalLink { .. }
-                    | Inline::EmailLink { .. }
-                    | Inline::ManualReference { .. }
-                    | Inline::SectionReference { .. }
-                    | Inline::Anchor { .. }
-                    | Inline::LineBreak => return,
-                };
-                assert!(
-                    !value.contains("\\f")
-                        && !value.contains("\\(")
-                        && !value.contains("\\*")
-                        && !value.contains("<br")
-                        && !value.contains("<b>")
-                        && !value.contains("<i>")
-                        && !value.contains(['\u{1d}', '\u{1e}', '\u{1f}']),
-                    "fixture {name} leaked source markup: {value:?}",
-                );
-            });
-        }
+        assert_document_has_no_source_markup(name, manual(name));
+    }
+    for name in ["git", "gcc", "clang", "tar"] {
+        assert_document_has_no_source_markup(&format!("fedora44/{name}"), fedora44_manual(name));
     }
 }
 
@@ -555,7 +587,11 @@ fn manual(name: &str) -> &'static MantDocument {
 }
 
 fn manual_query(name: &str) -> QueryBundle {
-    let manual = manual(name).clone();
+    query_for_document(name, manual(name))
+}
+
+fn query_for_document(name: &str, document: &MantDocument) -> QueryBundle {
+    let manual = document.clone();
     QueryBundle {
         schema: QuerySchema::V2,
         topic: name.to_owned(),
@@ -565,11 +601,32 @@ fn manual_query(name: &str) -> QueryBundle {
     }
 }
 
+fn fedora44_manual(name: &str) -> &'static MantDocument {
+    let slot = match name {
+        "clang" => &FEDORA44_CLANG,
+        "gcc" => &FEDORA44_GCC,
+        "git" => &FEDORA44_GIT,
+        "tar" => &FEDORA44_TAR,
+        _ => panic!("unknown Fedora Linux 44 fixture {name}"),
+    };
+    slot.get_or_init(|| {
+        parse_manual_source(&fedora44_fixture_path(name))
+            .unwrap_or_else(|error| panic!("parse Fedora Linux 44 {name} fixture: {error}"))
+    })
+}
+
 fn fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
         .join("tests/fixtures/roff/real")
         .join(format!("{name}.1.gz"))
+}
+
+fn fedora44_fixture_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("tests/fixtures/roff/real/fedora44")
+        .join(format!("{name}.1.zst"))
 }
 
 fn collect_sections<'a>(sections: &'a [Section], output: &mut Vec<&'a Section>) {
@@ -675,6 +732,100 @@ fn find_outline_entry<'a>(nodes: &'a [OutlineNode], name: &str) -> Option<&'a Ou
         }
     }
     None
+}
+
+fn count_outline_entries(nodes: &[OutlineNode]) -> usize {
+    nodes
+        .iter()
+        .map(|node| {
+            usize::from(matches!(node, OutlineNode::ManualEntry { .. }))
+                + count_outline_entries(node.children())
+        })
+        .sum()
+}
+
+fn assert_no_duplicate_vertical_spacing(sections: &[Section], fixture: &str) {
+    for section in sections {
+        assert_block_spacing_is_normalized(&section.blocks, fixture, &section.title);
+        assert_no_duplicate_vertical_spacing(&section.children, fixture);
+    }
+}
+
+fn assert_block_spacing_is_normalized(blocks: &[Block], fixture: &str, section: &str) {
+    for pair in blocks.windows(2) {
+        if matches!(pair[0], Block::VerticalSpace { .. }) {
+            assert_eq!(
+                block_spacing_before(&pair[1]),
+                0,
+                "fixture {fixture} section {section} stores one roff gap twice",
+            );
+        }
+    }
+    for block in blocks {
+        match block {
+            Block::List { items, .. } => {
+                for item in items {
+                    assert_block_spacing_is_normalized(&item.blocks, fixture, section);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    assert_block_spacing_is_normalized(&item.description, fixture, section);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter().flat_map(|row| &row.cells) {
+                    assert_block_spacing_is_normalized(&cell.blocks, fixture, section);
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn block_spacing_before(block: &Block) -> u16 {
+    match block {
+        Block::Paragraph { layout, .. }
+        | Block::Preformatted { layout, .. }
+        | Block::List { layout, .. }
+        | Block::DefinitionList { layout, .. }
+        | Block::Table { layout, .. }
+        | Block::Equation { layout, .. }
+        | Block::Unsupported { layout, .. } => layout.spacing_before_lines,
+        Block::VerticalSpace { .. } => 0,
+    }
+}
+
+fn assert_document_has_no_source_markup(name: &str, document: &MantDocument) {
+    for block in document_blocks(document) {
+        visit_block_inlines(block, &mut |inline| {
+            let value = match inline {
+                Inline::Text { value } | Inline::Code { value } => value,
+                Inline::Strong { .. }
+                | Inline::Emphasis { .. }
+                | Inline::ExternalLink { .. }
+                | Inline::EmailLink { .. }
+                | Inline::ManualReference { .. }
+                | Inline::SectionReference { .. }
+                | Inline::Anchor { .. }
+                | Inline::LineBreak => return,
+            };
+            assert!(
+                !value.contains("\\f")
+                    && !value.contains("\\(")
+                    && !value.contains("\\*")
+                    && !value.contains("<br")
+                    && !value.contains("<b>")
+                    && !value.contains("<i>")
+                    && !value.contains(['\u{1d}', '\u{1e}', '\u{1f}']),
+                "fixture {name} leaked source markup: {value:?}",
+            );
+        });
+    }
 }
 
 fn as_preformatted(block: &Block) -> Option<&[Inline]> {

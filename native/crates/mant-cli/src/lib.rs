@@ -733,7 +733,7 @@ mod tests {
         assert_eq!(status, 2);
         assert!(output.is_empty());
         assert!(diagnostics.contains("document 'demo' has no outline node '9'"));
-        assert!(diagnostics.contains("mant-cli demo --outline options"));
+        assert!(diagnostics.contains("mant-cli demo --outline"));
     }
 
     #[test]

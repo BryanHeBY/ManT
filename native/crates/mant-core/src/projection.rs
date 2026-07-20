@@ -30,7 +30,7 @@ impl fmt::Display for ProjectionError {
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::UnknownSelector { topic, selector } => write!(
                 formatter,
-                "document '{topic}' has no outline node '{selector}'; run 'mant-cli {topic} --outline options'"
+                "document '{topic}' has no outline node '{selector}'; run 'mant-cli {topic} --outline'"
             ),
         }
     }

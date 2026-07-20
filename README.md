@@ -103,7 +103,7 @@ uses the reserved path `0`. `--node` also accepts the ID printed in brackets:
 ```sh
 mant-cli gcc --outline
 mant-cli gcc --outline --format json
-mant-cli tar --outline options
+mant-cli gcc --outline sections
 mant-cli tar --node acls --format markdown
 mant-cli gcc --node 0 --format markdown
 mant-cli gcc --node tldr --format text
@@ -115,9 +115,10 @@ mant-cli gcc --node 4.2 --node 4.7 --format json
 Selecting a node includes all of its child sections. Repeated and overlapping
 selections are deduplicated and emitted in source order. `--section` continues
 to select the manual volume (for example `1` or `3p`), not an outline node.
-The optional `options` outline detail adds normalized command-line option
-entries beneath their sections; each can be selected by its printed path, ID,
-or alias without loading an unrelated section into an agent's context.
+The default outline includes normalized command-line option entries beneath
+their sections; each can be selected by its printed path, ID, or alias without
+loading an unrelated section into an agent's context. Use `--outline sections`
+when only the compact section topology is needed.
 
 Search the same canonical document without scraping terminal output:
 

@@ -1,13 +1,18 @@
 # Fixed real-man roff fixtures
 
-These compressed files are byte-for-byte snapshots of manual pages shipped by
-the official Arch Linux x86_64 packages listed below. They were acquired on
-2026-07-19 from `/usr/share/man/man1` and are parsed directly through ManT's
+These compressed files are fixed snapshots of manual pages shipped by the
+official Linux packages listed below. They are parsed directly through ManT's
 bundled libmandoc; tests never consult the host manual database for them.
 
-The snapshots replace the former renderer-specific HTML fixtures. Keeping the
-original compressed roff makes parser regressions reproducible across Linux and
+The snapshots replace the former renderer-specific HTML fixtures. Keeping fixed
+compressed roff sources makes parser regressions reproducible across Linux and
 macOS while retaining all notices embedded by the upstream documentation.
+
+`fedora44/` contains a second fixed set derived from Fedora Linux 44 packages.
+Its roff bytes are preserved exactly and losslessly recompressed with zstd,
+covering the in-process zstd source path as well as current GCC, Clang, Git,
+and GNU tar generator output. See [`fedora44/README.md`](fedora44/README.md)
+for the exact RPM and source-RPM provenance, hashes, and license mapping.
 
 ## Provenance and licensing
 

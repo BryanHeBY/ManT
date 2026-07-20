@@ -124,7 +124,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli tar --outline options\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli tar --force-libmandoc --format json\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --outline sections\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli tar --force-libmandoc --format json\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
         .required(true)
@@ -139,8 +139,8 @@ struct Cli {
     #[arg(long, value_name = "SECTION", value_parser = non_empty, requires = "topic")]
     section: Option<String>,
 
-    /// Print selectable sections, optionally including command-line options.
-    #[arg(long, value_name = "DETAIL", value_enum, num_args = 0..=1, default_missing_value = "sections", requires = "topic", conflicts_with = "node")]
+    /// Print selectable sections and command-line options by default.
+    #[arg(long, value_name = "DETAIL", value_enum, num_args = 0..=1, default_missing_value = "options", requires = "topic", conflicts_with = "node")]
     outline: Option<OutlineMode>,
 
     /// Print a node by outline path, document ID, or option alias; repeatable.
@@ -412,7 +412,7 @@ mod tests {
                     topic: "gcc".to_owned(),
                     section: None,
                     view: QueryView::Outline {
-                        detail: OutlineDetail::Sections,
+                        detail: OutlineDetail::Options,
                     },
                 }),
                 format: QueryFormat::Text,

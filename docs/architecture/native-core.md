@@ -84,7 +84,7 @@ rather than a mirror of parser internals:
 
 ```text
 mant-cli <topic> [--format <format>]   -> query Markdown, text, or JSON
-mant-cli <topic> --outline [options]   -> selectable section or option tree
+mant-cli <topic> --outline [sections|options] -> selectable section and option tree
 mant-cli <topic> --node <path-or-id>   -> selected section subtrees
 mant-cli <topic> --search <pattern>    -> matches with node and Markdown locations
 mant-cli <topic> --force-libmandoc     -> disable groff fallback for diagnosis
@@ -128,7 +128,9 @@ recoverable parser findings are structured diagnostics in the query result.
 Outline and excerpt views are projections of the same complete native
 document, so they never reimplement parsing rules. Outlines expose both a
 one-based tree path such as `4.2` and the document-local section ID. Passing
-`--outline options` adds semantic option entries with paths such as `4.2/o3`.
+`--outline` includes semantic option entries with paths such as `4.2/o3` by
+default. `--outline sections` is the explicit compact view for callers that
+only need section topology.
 Excerpt selection accepts a section path, option path, document ID, or option
 alias; it includes complete selected content, deduplicates overlaps, and
 preserves source order. Their JSON contracts are `mant.outline/v2` and
