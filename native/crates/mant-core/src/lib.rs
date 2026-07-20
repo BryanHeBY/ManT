@@ -19,7 +19,7 @@ pub use output::{
     render_update_json,
 };
 pub use projection::{ProjectionError, build_outline, build_outline_with_detail, select_excerpt};
-pub use query::{QueryError, query};
+pub use query::{QueryError, QueryPolicy, query, query_with_policy};
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,

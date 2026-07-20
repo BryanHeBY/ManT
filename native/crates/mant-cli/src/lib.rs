@@ -9,7 +9,7 @@ mod arguments;
 use std::io::{self, Read, Write};
 
 use mant_ast::{QueryBundle, QueryRequest, QueryView, SearchQuery, TldrCacheUpdate};
-use mant_core::{ProjectionError, QueryError, SearchError};
+use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
 use serde::Serialize;
 
 use arguments::{Command, QueryFormat, QuerySource, SchemaContract};
@@ -37,15 +37,15 @@ struct ProtocolDescription<'a> {
 // ── Host boundary ─────────────────────────────────────────────────────────
 
 trait CliHost {
-    fn query(&self, request: &QueryRequest) -> Result<QueryBundle, Failure>;
+    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure>;
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
 }
 
 struct SystemHost;
 
 impl CliHost for SystemHost {
-    fn query(&self, request: &QueryRequest) -> Result<QueryBundle, Failure> {
-        mant_core::query(request).map_err(|error| match error {
+    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
+        mant_core::query_with_policy(request, policy).map_err(|error| match error {
             QueryError::EmptyTopic | QueryError::InvalidSection => Failure::usage(error),
             _ => Failure::operational(error),
         })
@@ -127,11 +127,12 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             source,
             format,
             pretty,
+            force_libmandoc,
         } => {
             let request = read_query_request(source, input)?;
             validate_query_request(&request)?;
             let view = request.view.clone();
-            let query = host.query(&request)?;
+            let query = host.query(&request, QueryPolicy { force_libmandoc })?;
             match view {
                 QueryView::Full { .. } => render_full_query(&query, format, pretty),
                 QueryView::Outline { detail } => {
@@ -359,7 +360,7 @@ mod tests {
         TldrCacheUpdate, TldrDocument,
     };
 
-    use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, run_with_host};
+    use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, run_with_host};
 
     struct FakeHost {
         query_calls: Cell<usize>,
@@ -395,7 +396,11 @@ mod tests {
     }
 
     impl CliHost for FakeHost {
-        fn query(&self, request: &QueryRequest) -> Result<QueryBundle, Failure> {
+        fn query(
+            &self,
+            request: &QueryRequest,
+            _policy: QueryPolicy,
+        ) -> Result<QueryBundle, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
             Ok(QueryBundle {
                 schema: QuerySchema::V2,

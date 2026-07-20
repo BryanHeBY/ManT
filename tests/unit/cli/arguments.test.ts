@@ -29,6 +29,11 @@ describe("interactive CLI argument parsing", () => {
       topic: "git",
       section: "1",
     });
+    expect(parseCliArguments(["tar", "--force-libmandoc"])).toEqual({
+      kind: "query",
+      topic: "tar",
+      forceLibmandoc: true,
+    });
   });
 
   test("joins multi-part topics and honours the option terminator", () => {

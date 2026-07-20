@@ -24,6 +24,7 @@ const decoder = new TextDecoder();
 export interface NativeQueryRequest {
   topic: string;
   section?: string;
+  forceLibmandoc?: boolean;
 }
 
 export interface NativeCliClient {
@@ -97,7 +98,14 @@ export function createNativeCliClient(
 
     async query(request) {
       const { path } = await getVerified();
-      const command = [path, "--request-json", "--format", "json", "--compact"];
+      const command = [
+        path,
+        "--request-json",
+        ...(request.forceLibmandoc ? ["--force-libmandoc"] : []),
+        "--format",
+        "json",
+        "--compact",
+      ];
       const wireRequest: MantQueryRequest = {
         schema: "mant.request/v2",
         topic: request.topic,

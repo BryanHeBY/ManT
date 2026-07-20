@@ -87,6 +87,7 @@ mant-cli <topic> [--format <format>]   -> query Markdown, text, or JSON
 mant-cli <topic> --outline [options]   -> selectable section or option tree
 mant-cli <topic> --node <path-or-id>   -> selected section subtrees
 mant-cli <topic> --search <pattern>    -> matches with node and Markdown locations
+mant-cli <topic> --force-libmandoc     -> disable groff fallback for diagnosis
 mant-cli --update-tldr                 -> update result JSON
 mant-cli --protocol-version            -> protocol description JSON
 mant-cli --schema <contract>           -> generated JSON Schema
@@ -152,6 +153,14 @@ validated man(7) or mdoc(7) tree directly into `mant.document/v2`.  Rust owns
 compression handling and preserves the original source path and include base
 directory.  `.so` aliases and includes must work without exposing temporary
 paths in the result.
+
+An unsupported libmandoc diagnostic no longer discards an otherwise complete
+document by itself. ManT renders groff output as a comparison and falls back
+only when the native document loses heading topology or materially less visible
+text. `--force-libmandoc` bypasses that comparison and all groff execution so a
+developer can inspect the native AST and diagnostics directly. This flag is an
+execution policy outside `mant.request/v2`; identical requests retain identical
+query semantics regardless of the chosen diagnostic policy.
 
 Direct lowering is covered by deterministic native fixtures and was compared
 against the former TypeScript implementation on large installed ls, git, gcc,

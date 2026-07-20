@@ -8,7 +8,8 @@ use std::{
 };
 
 use mant_ast::{
-    DiagnosticLevel, MantDocument, QueryBundle, QueryRequest, QuerySchema, TldrDocument,
+    Block, DiagnosticLevel, MantDocument, QueryBundle, QueryRequest, QuerySchema, Section,
+    TldrDocument,
 };
 
 use crate::{
@@ -23,6 +24,13 @@ pub enum QueryError {
     InvalidSection,
     Manual { topic: String, detail: String },
     NoReadableContent { topic: String },
+}
+
+/// Host execution policy kept outside the serialized request contract.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct QueryPolicy {
+    /// Disable the groff renderer and surface the native parser result.
+    pub force_libmandoc: bool,
 }
 
 impl fmt::Display for QueryError {
@@ -50,7 +58,19 @@ impl Error for QueryError {}
 /// Returns [`QueryError`] for invalid input or when neither source can produce
 /// readable content.
 pub fn query(request: &QueryRequest) -> Result<QueryBundle, QueryError> {
-    query_with(request, &SystemQueryHost)
+    query_with(request, QueryPolicy::default(), &SystemQueryHost)
+}
+
+/// Query with an explicit host policy such as native-parser-only diagnostics.
+///
+/// # Errors
+///
+/// Returns [`QueryError`] under the same conditions as [`query`].
+pub fn query_with_policy(
+    request: &QueryRequest,
+    policy: QueryPolicy,
+) -> Result<QueryBundle, QueryError> {
+    query_with(request, policy, &SystemQueryHost)
 }
 
 trait QueryHost {
@@ -88,7 +108,11 @@ impl QueryHost for SystemQueryHost {
     }
 }
 
-fn query_with(request: &QueryRequest, host: &dyn QueryHost) -> Result<QueryBundle, QueryError> {
+fn query_with(
+    request: &QueryRequest,
+    policy: QueryPolicy,
+    host: &dyn QueryHost,
+) -> Result<QueryBundle, QueryError> {
     let topic = request.topic.trim();
     if topic.is_empty() {
         return Err(QueryError::EmptyTopic);
@@ -103,7 +127,7 @@ fn query_with(request: &QueryRequest, host: &dyn QueryHost) -> Result<QueryBundl
     // A malformed or unreadable community cache must never hide a valid man
     // page. It is an optional augmentation and is never updated during query.
     let tldr = host.read_tldr(topic).ok().flatten();
-    let manual = load_manual(&manual_request, host);
+    let manual = load_manual(&manual_request, policy, host);
 
     match manual {
         Ok(Some(manual)) => Ok(QueryBundle {
@@ -132,6 +156,7 @@ fn query_with(request: &QueryRequest, host: &dyn QueryHost) -> Result<QueryBundl
 
 fn load_manual(
     request: &ManualRequest,
+    policy: QueryPolicy,
     host: &dyn QueryHost,
 ) -> Result<Option<MantDocument>, String> {
     let located = host.locate_manual(request);
@@ -143,6 +168,27 @@ fn load_manual(
         Err(error) => (None, Err(error)),
     };
 
+    if policy.force_libmandoc {
+        return match direct {
+            Ok(document) if !document.sections.is_empty() => Ok(Some(document)),
+            Ok(document) => {
+                let detail = document
+                    .diagnostics
+                    .first()
+                    .map(|diagnostic| format!(": {}", diagnostic.message))
+                    .unwrap_or_default();
+                Err(format!(
+                    "could not load manual '{}': libmandoc produced no readable sections{detail}",
+                    request.topic
+                ))
+            }
+            Err(error) => Err(format!(
+                "could not load manual '{}': source/libmandoc: {error}",
+                request.topic
+            )),
+        };
+    }
+
     if let Ok(document) = &direct {
         let readable = !document.sections.is_empty();
         if readable && !has_unsupported_diagnostics(document) {
@@ -150,7 +196,13 @@ fn load_manual(
         }
 
         match host.render_groff(request, source_path.as_deref()) {
-            Ok(fallback) if !fallback.sections.is_empty() => return Ok(Some(fallback)),
+            Ok(fallback) if !fallback.sections.is_empty() => {
+                return Ok(Some(if prefer_direct_document(document, &fallback) {
+                    document.clone()
+                } else {
+                    fallback
+                }));
+            }
             Ok(_) | Err(_) if readable => return Ok(Some(document.clone())),
             Ok(_) => return Ok(None),
             Err(fallback_error) => {
@@ -171,6 +223,90 @@ fn load_manual(
             request.topic
         )),
     }
+}
+
+/// Keep a structurally complete native AST when an unsupported finding is
+/// local rather than allowing one diagnostic to discard the whole document.
+///
+/// libmandoc deliberately reports unfamiliar requests even when it retained
+/// all visible content around them. We still render groff as a reference, then
+/// compare complete heading topology and visible-text coverage. A materially
+/// truncated native document continues to fall back to groff.
+fn prefer_direct_document(direct: &MantDocument, fallback: &MantDocument) -> bool {
+    let direct_titles = section_titles(&direct.sections);
+    let fallback_titles = section_titles(&fallback.sections);
+    if direct_titles != fallback_titles {
+        return false;
+    }
+
+    let direct_text = visible_text_len(&direct.sections);
+    let fallback_text = visible_text_len(&fallback.sections);
+    direct_text >= fallback_text.saturating_mul(9) / 10
+}
+
+fn section_titles(sections: &[Section]) -> Vec<String> {
+    let mut titles = Vec::new();
+    collect_section_titles(sections, &mut titles);
+    titles
+}
+
+fn collect_section_titles(sections: &[Section], output: &mut Vec<String>) {
+    for section in sections {
+        let normalized = section
+            .title
+            .chars()
+            .flat_map(char::to_lowercase)
+            .map(|character| match character {
+                '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
+                value => value,
+            })
+            .collect::<String>();
+        output.push(normalized.split_whitespace().collect::<Vec<_>>().join(" "));
+        collect_section_titles(&section.children, output);
+    }
+}
+
+fn visible_text_len(sections: &[Section]) -> usize {
+    sections
+        .iter()
+        .map(|section| {
+            section.title.chars().count()
+                + block_text_len(&section.blocks)
+                + visible_text_len(&section.children)
+        })
+        .sum()
+}
+
+fn block_text_len(blocks: &[Block]) -> usize {
+    blocks
+        .iter()
+        .map(|block| match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                crate::mandoc::inline::plain_text(children).chars().count()
+            }
+            Block::List { items, .. } => {
+                items.iter().map(|item| block_text_len(&item.blocks)).sum()
+            }
+            Block::DefinitionList { items, .. } => items
+                .iter()
+                .map(|item| {
+                    item.terms
+                        .iter()
+                        .map(|term| crate::mandoc::inline::plain_text(term).chars().count())
+                        .sum::<usize>()
+                        + block_text_len(&item.description)
+                })
+                .sum(),
+            Block::Table { rows, .. } => rows
+                .iter()
+                .flat_map(|row| &row.cells)
+                .map(|cell| block_text_len(&cell.blocks))
+                .sum(),
+            Block::Equation { value, .. } => value.chars().count(),
+            Block::Unsupported { text, .. } => text.chars().count(),
+            Block::VerticalSpace { .. } => 0,
+        })
+        .sum()
 }
 
 fn has_unsupported_diagnostics(document: &MantDocument) -> bool {
@@ -232,7 +368,7 @@ mod tests {
 
     use crate::{CommandOutput, CommandRunner, ManualRequest};
 
-    use super::{QueryError, QueryHost, query_with, render_groff_document_with};
+    use super::{QueryError, QueryHost, QueryPolicy, query_with, render_groff_document_with};
 
     #[derive(Clone)]
     struct StubHost {
@@ -340,7 +476,7 @@ mod tests {
     #[test]
     fn ordinary_direct_document_does_not_start_groff() {
         let host = host(Ok(document(SourceFormat::Man, false, true)));
-        let result = query_with(&request(), &host).expect("query");
+        let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
 
         assert_eq!(result.topic, "tool");
         assert_eq!(
@@ -354,14 +490,14 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_direct_document_prefers_readable_groff() {
+    fn complete_direct_document_survives_an_unsupported_finding() {
         let mut host = host(Ok(document(SourceFormat::Man, true, true)));
         host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
-        let result = query_with(&request(), &host).expect("query");
+        let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
 
         assert_eq!(
             result.manual.expect("manual").source.format,
-            SourceFormat::GroffHtml
+            SourceFormat::Man
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
@@ -370,9 +506,53 @@ mod tests {
     }
 
     #[test]
+    fn forced_libmandoc_never_starts_groff() {
+        let mut host = host(Ok(document(SourceFormat::Man, true, true)));
+        host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
+        let result = query_with(
+            &request(),
+            QueryPolicy {
+                force_libmandoc: true,
+            },
+            &host,
+        )
+        .expect("forced native query");
+
+        assert_eq!(
+            result.manual.expect("manual").source.format,
+            SourceFormat::Man
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["tldr", "locate", "parse"]
+        );
+    }
+
+    #[test]
+    fn truncated_unsupported_document_still_uses_groff() {
+        let mut host = host(Ok(document(SourceFormat::Man, true, true)));
+        let mut fallback = document(SourceFormat::GroffHtml, false, true);
+        fallback.sections.push(Section {
+            id: "options-2".to_owned(),
+            title: "OPTIONS".to_owned(),
+            spacing_before_lines: 1,
+            blocks: Vec::new(),
+            children: Vec::new(),
+            source: None,
+        });
+        host.fallback = Ok(fallback);
+
+        let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
+        assert_eq!(
+            result.manual.expect("manual").source.format,
+            SourceFormat::GroffHtml
+        );
+    }
+
+    #[test]
     fn failed_groff_retains_readable_best_effort_document() {
         let host = host(Ok(document(SourceFormat::Mdoc, true, true)));
-        let result = query_with(&request(), &host).expect("query");
+        let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
         assert_eq!(
             result.manual.expect("manual").source.format,
             SourceFormat::Mdoc
@@ -384,7 +564,8 @@ mod tests {
         let mut host = host(Err("libmandoc failed".to_owned()));
         host.locate = Err("source not found".to_owned());
         host.tldr = Ok(Some(tldr()));
-        let result = query_with(&request(), &host).expect("tldr-only query");
+        let result =
+            query_with(&request(), QueryPolicy::default(), &host).expect("tldr-only query");
 
         assert!(result.manual.is_none());
         assert_eq!(result.tldr.expect("tldr").title, "tool");
@@ -394,7 +575,8 @@ mod tests {
     fn reports_both_manual_paths_when_no_content_exists() {
         let mut host = host(Err("libmandoc failed".to_owned()));
         host.locate = Err("source not found".to_owned());
-        let error = query_with(&request(), &host).expect_err("empty query must fail");
+        let error = query_with(&request(), QueryPolicy::default(), &host)
+            .expect_err("empty query must fail");
         assert_eq!(
             error.to_string(),
             "could not load manual 'tool': source/libmandoc: source not found; man/groff: fallback unavailable"
@@ -412,6 +594,7 @@ mod tests {
                     section: None,
                     view: QueryView::Full {},
                 },
+                QueryPolicy::default(),
                 &host
             ),
             Err(QueryError::EmptyTopic)

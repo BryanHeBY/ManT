@@ -135,6 +135,18 @@ contains a one-based line and column in ManT's complete Markdown rendering and
 the nearest section or option path accepted directly by `--node`. Markdown
 coordinates therefore stay stable across text, JSON, and Markdown reports.
 
+When a platform unexpectedly falls back to groff, force the native parser to
+inspect its unmodified result and diagnostics:
+
+```sh
+mant --force-libmandoc tar
+mant-cli tar --force-libmandoc --format json
+```
+
+This diagnostic switch disables groff fallback for that invocation. It is a
+local execution policy, so it is deliberately not a field in the versioned
+request JSON contract.
+
 Use the versioned JSON contract for structured consumers:
 
 ```sh

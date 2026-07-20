@@ -98,6 +98,7 @@ pub(crate) enum Command {
         source: QuerySource,
         format: QueryFormat,
         pretty: bool,
+        force_libmandoc: bool,
     },
     UpdateTldr {
         pretty: bool,
@@ -123,7 +124,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli tar --outline options\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli tar --outline options\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls\n  mant-cli gcc --search warning --format json\n  mant-cli git --search 'worktree|branch' --regex\n  mant-cli tar --force-libmandoc --format json\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
         .required(true)
@@ -181,6 +182,10 @@ struct Cli {
     /// Read a versioned `QueryRequest` JSON object from standard input.
     #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "regex", "search_case", "word", "search_scope", "context", "limit", "offset"])]
     request_json: bool,
+
+    /// Disable groff fallback and expose the bundled libmandoc result.
+    #[arg(long, conflicts_with_all = ["update_tldr", "protocol_version", "schema"])]
+    force_libmandoc: bool,
 
     /// Update tldr data through the installed client or `ManT` cache.
     #[arg(long, conflicts_with_all = ["section", "outline", "node", "search", "format"])]
@@ -293,6 +298,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         source,
         format,
         pretty: !parsed.compact,
+        force_libmandoc: parsed.force_libmandoc,
     })
 }
 
@@ -335,6 +341,7 @@ mod tests {
                 }),
                 format: QueryFormat::Markdown,
                 pretty: true,
+                force_libmandoc: false,
             }
         );
     }
@@ -360,6 +367,7 @@ mod tests {
                 }),
                 format: QueryFormat::Json,
                 pretty: false,
+                force_libmandoc: false,
             }
         );
     }
@@ -373,8 +381,25 @@ mod tests {
                 source: QuerySource::StdinJson,
                 format: QueryFormat::Json,
                 pretty: false,
+                force_libmandoc: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_force_libmandoc_for_direct_and_stdin_queries() {
+        for values in [
+            vec!["tar", "--force-libmandoc", "--format", "json"],
+            vec!["--request-json", "--force-libmandoc", "--format", "json"],
+        ] {
+            assert!(matches!(
+                parse(&args(&values)).expect("forced native query"),
+                Command::Query {
+                    force_libmandoc: true,
+                    ..
+                }
+            ));
+        }
     }
 
     #[test]
@@ -392,6 +417,7 @@ mod tests {
                 }),
                 format: QueryFormat::Text,
                 pretty: true,
+                force_libmandoc: false,
             }
         );
         assert_eq!(
@@ -408,6 +434,7 @@ mod tests {
                 }),
                 format: QueryFormat::Json,
                 pretty: true,
+                force_libmandoc: false,
             }
         );
         assert_eq!(
@@ -426,6 +453,7 @@ mod tests {
                 }),
                 format: QueryFormat::Text,
                 pretty: true,
+                force_libmandoc: false,
             }
         );
     }
@@ -452,6 +480,7 @@ mod tests {
                 }),
                 format: QueryFormat::Text,
                 pretty: true,
+                force_libmandoc: false,
             }
         );
         assert_eq!(
@@ -493,6 +522,7 @@ mod tests {
                 }),
                 format: QueryFormat::Json,
                 pretty: true,
+                force_libmandoc: false,
             }
         );
     }
@@ -564,6 +594,7 @@ mod tests {
                 }),
                 format: QueryFormat::Markdown,
                 pretty: true,
+                force_libmandoc: false,
             }
         );
     }
