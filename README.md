@@ -127,12 +127,15 @@ mant (Bun / OpenTUI React)
   └─ versioned JSON over stdio → mant-cli
                                   └─ mant-core
                                        ├─ mant-ast
-                                       └─ libmandoc C shim
+                                       └─ libmandoc-rs
+                                            └─ vendored libmandoc + private C shim
 ```
 
 Rust owns source discovery, parsing, the stable AST, tldr integration, and
-Markdown/text/JSON output. TypeScript owns only terminal interaction and
-presentation after validating the native response boundary.
+Markdown/text/JSON output. `libmandoc-rs` exposes an owned, renderer-neutral
+parse tree; `mant-core` lowers that tree into ManT's document contract.
+TypeScript owns only terminal interaction and presentation after validating the
+native response boundary.
 
 ## Documentation
 

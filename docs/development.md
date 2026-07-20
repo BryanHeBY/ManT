@@ -55,8 +55,7 @@ native/
   crates/mant-ast/           Versioned document, query, outline, and schema types
   crates/mant-core/          Source loading, libmandoc lowering, projections, output
   crates/mant-cli/           Agent/script CLI and stdin JSON boundary
-  crates/mant-mandoc-sys/    Safe Rust boundary around vendored libmandoc C code
-  vendor/                    Pinned upstream mandoc source and license
+  crates/libmandoc-rs/       Owned libmandoc parse API, private C shim, and vendored source
 scripts/                     Local build, compiler selection, packaging, and dev wrappers
 tests/                       Bun unit/integration/TUI tests and fixed roff fixtures
 docs/architecture/           Design decisions and stable-boundary documentation
@@ -76,6 +75,10 @@ rendering. Fixed real roff sources in `tests/fixtures/roff/real/` are covered
 by native integration tests; their provenance and licenses are documented in
 that directory. Bun tests cover the process protocol, schema validation, and
 the terminal UI's rendering, search, and navigation behavior.
+
+`libmandoc-rs` also has a self-contained package test boundary: its parser,
+compression, include-policy, diagnostic, and optional `serde` tests must pass
+from Cargo's staged package directory without ManT fixtures outside the crate.
 
 When changing a versioned AST or protocol type, update its Rust contract tests
 and the TypeScript schema consumer in the same change. Keep the stdio boundary

@@ -21,7 +21,7 @@ ManT will use a Rust native core with four layers:
 
 ```text
 mant-ast          versioned document and query contracts
-mant-mandoc-sys   pinned libmandoc build and private C shim
+libmandoc-rs      owned libmandoc parse tree, private C shim, and build logic
 mant-core         source loading, parsing, query, and output renderers
 mant-cli          standalone agent CLI and versioned stdio process boundary
 ```
@@ -33,9 +33,12 @@ interface, navigation, search interaction, and terminal styling.  The native
 does not interpret roff or renderer HTML and does not serialize JSON or
 Markdown documents.
 
-The C shim is private and deliberately small.  It hides libmandoc structure
-layouts, manages parser handles, and exposes the information Rust needs to
-lower a document.  It never defines ManT's public AST and never formats JSON.
+`libmandoc-rs` is the boundary around the bundled C parser. Its deliberately
+small private C shim hides libmandoc structure layouts and parser handles; the
+crate copies each completed parse into an owned, renderer-neutral tree with
+structured diagnostics. The crate exposes no ManT-specific types and never
+formats JSON. `mant-core` alone lowers that parse tree into ManT's public
+document contract.
 
 ## Stable and unstable models
 
@@ -206,7 +209,8 @@ capture so one parse cannot contaminate the next.
 Rust owns:
 
 - manual source loading, decompression, aliases, and include context;
-- libmandoc man/mdoc lowering and groff HTML compatibility parsing;
+- lowering the owned `libmandoc-rs` man/mdoc tree and groff HTML compatibility
+  parsing;
 - section, block, inline, layout-hint, link, table, and equation semantics;
 - tldr cache discovery, parsing, update behavior, and query composition;
 - versioned JSON and CommonMark serialization.
