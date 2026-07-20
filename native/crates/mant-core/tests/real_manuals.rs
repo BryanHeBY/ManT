@@ -507,9 +507,10 @@ fn real_nested_manuals_support_outline_discovery_and_targeted_excerpts() {
 }
 
 #[test]
-fn tar_options_are_addressable_in_v2_outlines_and_excerpts() {
-    let query = manual_query("tar");
-    let acls = semantic_definition_items(manual("tar"))
+fn fedora44_zstd_tar_options_are_addressable_in_v2_outlines_and_excerpts() {
+    let document = fedora44_manual("tar");
+    let query = query_for_document("tar", document);
+    let acls = semantic_definition_items(document)
         .into_iter()
         .find(|item| {
             item.identity
@@ -534,8 +535,8 @@ fn tar_options_are_addressable_in_v2_outlines_and_excerpts() {
 }
 
 #[test]
-fn tar_search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
-    let query = manual_query("tar");
+fn fedora44_zstd_tar_search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
+    let query = query_for_document("tar", fedora44_manual("tar"));
     let result = search_query(
         &query,
         &SearchQuery {

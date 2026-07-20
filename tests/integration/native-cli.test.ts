@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { createNativeCliClient } from "../../src/native/client";
+import { buildPageSearchIndex, queryPageSearchIndex } from "../../src/ui/search";
 
 const nativeCliPath = new URL("../../native/bin/mant-cli", import.meta.url).pathname;
 const nativeCliAvailable = Bun.spawnSync(
@@ -15,9 +16,15 @@ const localManualAvailable = nativeCliAvailable
     stdout: "ignore",
     stderr: "ignore",
   }).exitCode === 0;
+const tarManualAvailable = nativeCliAvailable
+  && Bun.spawnSync(["man", "-w", "tar"], {
+    stdout: "ignore",
+    stderr: "ignore",
+  }).exitCode === 0;
 
 const describeNativeCli = nativeCliAvailable ? describe : describe.skip;
 const testWithManual = localManualAvailable ? test : test.skip;
+const testWithTarManual = tarManualAvailable ? test : test.skip;
 
 describeNativeCli("real native CLI process boundary", () => {
   test("negotiates the exact protocol through an explicit path", async () => {
@@ -49,5 +56,21 @@ describeNativeCli("real native CLI process boundary", () => {
     // fixtures exercise the libmandoc-only path independently.
     expect(query.manual?.producer.name).toBe("mant");
     expect(query.manual?.sections.length).toBeGreaterThan(0);
+  });
+
+  testWithTarManual("passes semantic tar options through the TUI search index", async () => {
+    const client = createNativeCliClient({
+      env: { MANT_CLI_PATH: nativeCliPath },
+      which: () => null,
+    });
+
+    const query = await client.query({ topic: "tar" });
+    expect(query.manual?.producer.engine?.name).toBe("libmandoc");
+
+    const index = buildPageSearchIndex(query.manual?.sections ?? [], query.tldr);
+    const match = queryPageSearchIndex(index, "--acls")[0];
+    expect(match?.text).toBe("--acls");
+    expect(match?.targetPath).toContain(".definition-");
+    expect(match?.targetPath).toContain(".term-");
   });
 });
