@@ -317,14 +317,16 @@ export function App({ result, onQuit }: AppProps) {
     setIsSearchOpen(false);
   };
 
-  const submitSearch = () => {
-    if (searchDraft === searchQuery) {
+  /** Apply the input's submitted value instead of a possibly stale render snapshot. */
+  const submitSearch = (submittedDraft: string) => {
+    if (submittedDraft !== searchDraft) setSearchDraft(submittedDraft);
+    if (submittedDraft === searchQuery) {
       selectSearchMatch(searchIndex + 1);
       return;
     }
 
-    const matches = queryPageSearchIndex(pageSearchIndex, searchDraft);
-    setSearch({ query: searchDraft, matches, activeIndex: 0 });
+    const matches = queryPageSearchIndex(pageSearchIndex, submittedDraft);
+    setSearch({ query: submittedDraft, matches, activeIndex: 0 });
     decorateSearchMatches(matches);
     if (matches[0]) {
       setSelectedId(matches[0].sectionId);
@@ -474,9 +476,6 @@ export function App({ result, onQuit }: AppProps) {
       if (e.name === "escape") {
         e.preventDefault();
         closeSearch();
-      } else if (e.name === "return" || e.name === "enter") {
-        e.preventDefault();
-        submitSearch();
       } else if (e.name === "down" && searchDraft === searchQuery) {
         e.preventDefault();
         selectSearchMatch(searchIndex + 1);

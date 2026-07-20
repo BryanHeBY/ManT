@@ -19,6 +19,42 @@ import {
 installOpenTuiWarningFilter();
 
 describe("App search (e2e)", () => {
+  test("submits the current option text immediately on a large manual", async () => {
+    const result = mockQuery("tar", [{
+      id: "extended-file-attributes",
+      title: "Extended file attributes",
+      blocks: [{
+        type: "definition-list",
+        compact: true,
+        items: Array.from({ length: 320 }, (_, index) => ({
+          terms: [[{
+            type: "strong" as const,
+            children: [{
+              type: "text" as const,
+              value: index === 280 ? "--acls" : `--option-${index}`,
+            }],
+          }]],
+          description: [{
+            type: "paragraph" as const,
+            children: [{ type: "text" as const, value: `Option description ${index}.` }],
+          }],
+        })),
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result);
+
+    setup.mockInput.pressKey("/");
+    await flushKeyboard(setup);
+    setup.mockInput.typeText("--acls");
+    setup.mockInput.pressEnter();
+    await flushKeyboard(setup);
+    const frame = await waitForFrame(setup, (candidate) => candidate.includes("1/1"), 1_000);
+    expect(frame).toContain("1/1");
+    expect(contentPosition(frame, "--acls").y).toBe(2);
+    setup.renderer.destroy();
+  });
+
   test("searches only after the bottom input is confirmed", async () => {
     const setup = await renderApp(mockLsResult);
 

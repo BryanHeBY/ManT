@@ -14,7 +14,7 @@ export interface SearchBarProps {
   matchCount: number;
   matchIndex: number;
   onDraftChange: (value: string) => void;
-  onSubmit: () => void;
+  onSubmit: (value: string) => void;
 }
 
 export function SearchBar({
@@ -28,6 +28,12 @@ export function SearchBar({
 }: SearchBarProps) {
   const hasAppliedQuery = appliedQuery.length > 0 && draft === appliedQuery;
   const hasNoMatches = hasAppliedQuery && matchCount === 0;
+  // OpenTUI React emits the current string, while the inherited core option
+  // type still mentions an empty SubmitEvent. Accept both shapes at this
+  // adapter boundary and read the renderable as a compatibility fallback.
+  const submitCurrentValue = (value: unknown) => {
+    onSubmit(typeof value === "string" ? value : inputRef.current?.value ?? draft);
+  };
 
   return (
     <box height={1} flexDirection="row" backgroundColor="#181825" paddingLeft={1} paddingRight={1}>
@@ -45,7 +51,7 @@ export function SearchBar({
         textColor="#cdd6f4"
         focusedTextColor="#cdd6f4"
         onInput={onDraftChange}
-        onSubmit={onSubmit}
+        onSubmit={submitCurrentValue}
       />
       <box width={1} />
       {hasNoMatches ? (
