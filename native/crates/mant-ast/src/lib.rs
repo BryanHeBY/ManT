@@ -3,11 +3,13 @@
 mod document;
 mod outline;
 mod query;
+mod schema;
 mod tldr;
 
 pub use document::*;
 pub use outline::*;
 pub use query::*;
+pub use schema::*;
 pub use tldr::*;
 
 /// Native API version negotiated independently from document schema versions.

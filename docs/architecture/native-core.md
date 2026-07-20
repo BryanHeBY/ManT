@@ -82,16 +82,25 @@ mant-cli <topic> --outline             -> selectable manual tree
 mant-cli <topic> --node <path-or-id>   -> selected section subtrees
 mant-cli --update-tldr                 -> update result JSON
 mant-cli --protocol-version            -> protocol description JSON
+mant-cli --schema <contract>           -> generated JSON Schema
 ```
 
-For the TUI, `mant-cli --request-json --format json --compact` reads one closed
-`QueryRequest` object from standard input and emits exactly one
+For the TUI, `mant-cli --request-json --format json --compact` reads one closed,
+versioned `QueryRequest` object from standard input and emits exactly one
 `mant.query/v1` object on standard output.  Standard error contains concise
 diagnostics only.  Status 0 means success, 2 means invalid invocation or
 request, and 1 means an operational failure.  The TypeScript client drains
 stdout and stderr concurrently, validates the protocol and schema, and starts
 one process per document query; interactive search and navigation never spawn
 additional native processes.
+
+`mant.request/v1` requires a `schema` marker and `topic`, accepts an optional
+manual `section`, and rejects unknown fields. `mant-cli --schema request`
+exposes that input contract; `query`, `outline`, and `excerpt` expose the
+corresponding output contracts, while `all` returns a named catalog. The
+schemas are derived with Schemars from `mant-ast`'s Serde types, explicitly
+pinned to JSON Schema Draft 2020-12, and generated separately for deserialize
+and serialize behavior.
 
 `mant` and `mant-cli` are separate installed executables.  The TUI resolves
 `MANT_CLI_PATH` first and otherwise looks up `mant-cli` on `PATH`; it never

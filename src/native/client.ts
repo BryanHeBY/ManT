@@ -98,7 +98,11 @@ export function createNativeCliClient(
       const { path } = await getVerified();
       const command = [path, "--request-json", "--format", "json", "--compact"];
       const result = await execute(command, {
-        stdin: encoder.encode(JSON.stringify(request)),
+        stdin: encoder.encode(JSON.stringify({
+          schema: "mant.request/v1",
+          topic: request.topic,
+          ...(request.section === undefined ? {} : { section: request.section }),
+        })),
       });
       if (result.exitCode !== 0) throw nativeCliFailure(command, result);
       return decodeMantQuery(decoder.decode(result.stdout));

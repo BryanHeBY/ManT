@@ -16,6 +16,7 @@ describe("native query schema", () => {
     const protocol = JSON.stringify({
       protocol: "mant.cli/v1",
       nativeApiVersion: "1",
+      requestSchema: "mant.request/v1",
       querySchema: "mant.query/v1",
       documentSchema: "mant.document/v1",
       outlineSchema: "mant.outline/v1",

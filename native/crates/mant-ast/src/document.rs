@@ -1,9 +1,10 @@
 //! Stable manual-document nodes independent from roff and HTML renderers.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Exact schema marker for a normalized manual document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
     /// First stable renderer-neutral document model.
     #[serde(rename = "mant.document/v1")]
@@ -11,7 +12,7 @@ pub enum DocumentSchema {
 }
 
 /// A normalized manual page ready for interactive or textual rendering.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MantDocument {
     pub schema: DocumentSchema,
@@ -24,7 +25,7 @@ pub struct MantDocument {
 }
 
 /// Identifies `ManT` and the parsing engine used to build the document.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Producer {
     pub name: String,
@@ -34,7 +35,7 @@ pub struct Producer {
 }
 
 /// Pinned parser implementation behind the stable `ManT` contract.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Engine {
     pub name: String,
@@ -42,7 +43,7 @@ pub struct Engine {
 }
 
 /// Source format consumed by the normalization engine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum SourceFormat {
     Man,
@@ -52,7 +53,7 @@ pub enum SourceFormat {
 }
 
 /// Original source identity; temporary decompression paths must not appear.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSource {
     pub format: SourceFormat,
@@ -63,7 +64,7 @@ pub struct DocumentSource {
 }
 
 /// Metadata normalized from TH, Dt, and the validated libmandoc result.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -85,7 +86,7 @@ pub struct DocumentMeta {
 }
 
 /// Recoverable parser finding attached to the returned best-effort document.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Diagnostic {
     pub level: DiagnosticLevel,
@@ -97,7 +98,7 @@ pub struct Diagnostic {
 }
 
 /// Severity reported by the parser without turning useful output into failure.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum DiagnosticLevel {
     Style,
@@ -107,7 +108,7 @@ pub enum DiagnosticLevel {
 }
 
 /// One-based location in the original source file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceSpan {
     pub line: u32,
@@ -119,7 +120,7 @@ pub struct SourceSpan {
 }
 
 /// Hierarchical manual section. Depth is derived from tree position.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Section {
     /// Unique within one document; consumers must not treat it as a global ID.
@@ -135,7 +136,7 @@ pub struct Section {
 }
 
 /// Presentation hints retained from roff but optional for semantic outputs.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LayoutHint {
     #[serde(default, skip_serializing_if = "is_zero_u16")]
@@ -146,7 +147,7 @@ pub struct LayoutHint {
 }
 
 /// A document block capable of preserving nested manual structures.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
@@ -223,7 +224,7 @@ pub enum Block {
 }
 
 /// Marker behavior of an ordinary list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum ListKind {
     Bullet,
@@ -232,14 +233,14 @@ pub enum ListKind {
 }
 
 /// A list item contains blocks so nested lists and displays remain intact.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListItem {
     pub blocks: Vec<Block>,
 }
 
 /// A term may have aliases and its description may contain arbitrary blocks.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DefinitionItem {
     pub terms: Vec<Vec<Inline>>,
@@ -251,14 +252,14 @@ pub struct DefinitionItem {
 }
 
 /// One logical table row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TableRow {
     pub cells: Vec<TableCell>,
 }
 
 /// Block-capable table cell with optional layout information.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TableCell {
     pub blocks: Vec<Block>,
@@ -271,7 +272,7 @@ pub struct TableCell {
 }
 
 /// Horizontal alignment requested by a source table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TableAlignment {
     Left,
@@ -280,7 +281,7 @@ pub enum TableAlignment {
 }
 
 /// Inline content shared by prose, terms, and styled preformatted runs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",

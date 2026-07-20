@@ -7,7 +7,7 @@
 use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
-use mant_ast::QueryRequest;
+use mant_ast::{QueryRequest, RequestSchema};
 
 // ── Public command model ───────────────────────────────────────────────────
 
@@ -25,6 +25,16 @@ pub(crate) enum QueryView {
     Full,
     Outline,
     Excerpt(Vec<String>),
+}
+
+/// A discoverable JSON Schema exposed by the native process boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum SchemaContract {
+    Request,
+    Query,
+    Outline,
+    Excerpt,
+    All,
 }
 
 /// Where a query request comes from.
@@ -50,6 +60,10 @@ pub(crate) enum Command {
     ProtocolVersion {
         pretty: bool,
     },
+    Schema {
+        contract: SchemaContract,
+        pretty: bool,
+    },
 }
 
 // ── Declarative command line ───────────────────────────────────────────────
@@ -63,10 +77,10 @@ pub(crate) enum Command {
     about = "Query local manual pages for scripts and agents",
     disable_help_flag = true,
     disable_version_flag = true,
-    override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --node 0 --format markdown\n  mant-cli gcc --node 4.2 --format markdown\n  mant-cli --request-json --format json --compact\n  mant-cli --update-tldr",
+    override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli printf --section 3 --format json\n  mant-cli gcc --outline\n  mant-cli gcc --node 0 --format markdown\n  mant-cli gcc --node 4.2 --format markdown\n  mant-cli --request-json --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
     group = ArgGroup::new("source")
-        .args(["topic", "request_json", "update_tldr", "protocol_version"])
+        .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
         .required(true)
         .multiple(false)
 )]
@@ -98,6 +112,10 @@ struct Cli {
     /// Print the native protocol description as JSON.
     #[arg(long, conflicts_with_all = ["section", "outline", "node", "format"])]
     protocol_version: bool,
+
+    /// Print a generated JSON Schema contract (`request`, `query`, `outline`, `excerpt`, or `all`).
+    #[arg(long, value_name = "CONTRACT", value_enum, conflicts_with_all = ["section", "outline", "node", "format"])]
+    schema: Option<SchemaContract>,
 
     /// Output format. Content defaults to markdown; outlines default to text.
     #[arg(long, value_name = "FORMAT", value_enum)]
@@ -139,6 +157,12 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
             pretty: !parsed.compact,
         });
     }
+    if let Some(contract) = parsed.schema {
+        return Ok(Command::Schema {
+            contract,
+            pretty: !parsed.compact,
+        });
+    }
 
     let view = if parsed.outline {
         QueryView::Outline
@@ -162,6 +186,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         QuerySource::StdinJson
     } else {
         QuerySource::Arguments(QueryRequest {
+            schema: RequestSchema::V1,
             topic: parsed.topic.expect("clap requires one input source"),
             section: parsed.section,
         })
@@ -190,9 +215,9 @@ fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Erro
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::QueryRequest;
+    use mant_ast::{QueryRequest, RequestSchema};
 
-    use super::{Command, QueryFormat, QuerySource, QueryView, parse};
+    use super::{Command, QueryFormat, QuerySource, QueryView, SchemaContract, parse};
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -204,6 +229,7 @@ mod tests {
             parse(&args(&["git"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V1,
                     topic: "git".to_owned(),
                     section: None,
                 }),
@@ -228,6 +254,7 @@ mod tests {
             .expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V1,
                     topic: "printf".to_owned(),
                     section: Some("3".to_owned()),
                 }),
@@ -258,6 +285,7 @@ mod tests {
             parse(&args(&["gcc", "--outline"])).expect("outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V1,
                     topic: "gcc".to_owned(),
                     section: None,
                 }),
@@ -273,6 +301,7 @@ mod tests {
             .expect("excerpt"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V1,
                     topic: "gcc".to_owned(),
                     section: None,
                 }),
@@ -293,6 +322,13 @@ mod tests {
             parse(&args(&["--protocol-version", "--compact"])).expect("version"),
             Command::ProtocolVersion { pretty: false }
         );
+        assert_eq!(
+            parse(&args(&["--schema", "request", "--compact"])).expect("schema"),
+            Command::Schema {
+                contract: SchemaContract::Request,
+                pretty: false,
+            }
+        );
     }
 
     #[test]
@@ -307,6 +343,8 @@ mod tests {
             vec!["git", "--node"],
             vec!["--section", "1"],
             vec!["--update-tldr", "--format", "json"],
+            vec!["--schema", "request", "--format", "json"],
+            vec!["--schema", "unknown"],
             vec!["update", "tldr"],
             vec!["git", "--json"],
             vec!["git", "--md"],
@@ -330,6 +368,7 @@ mod tests {
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
+                    schema: RequestSchema::V1,
                     topic: "--help".to_owned(),
                     section: None,
                 }),

@@ -1,19 +1,21 @@
 //! Stable contracts for lightweight query outlines and selected excerpts.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{Diagnostic, DocumentMeta, DocumentSource, Producer, Section, TldrDocument};
 
 /// Exact schema marker for a query outline response.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum OutlineSchema {
     #[serde(rename = "mant.outline/v1")]
     V1,
 }
 
 /// A block-free tree used to discover selectable query content.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(extend("$id" = "urn:mant:outline:v1"))]
 pub struct QueryOutline {
     pub schema: OutlineSchema,
     pub topic: String,
@@ -27,7 +29,7 @@ pub struct QueryOutline {
 }
 
 /// Kind of document content addressed by an outline node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum OutlineNodeKind {
     Tldr,
@@ -35,7 +37,7 @@ pub enum OutlineNodeKind {
 }
 
 /// One uniquely addressable node in a query outline.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlineNode {
     pub kind: OutlineNodeKind,
@@ -49,15 +51,16 @@ pub struct OutlineNode {
 }
 
 /// Exact schema marker for selected query content.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExcerptSchema {
     #[serde(rename = "mant.excerpt/v1")]
     V1,
 }
 
 /// One or more independently selected nodes from a complete query.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
+#[schemars(extend("$id" = "urn:mant:excerpt:v1"))]
 pub struct QueryExcerpt {
     pub schema: ExcerptSchema,
     pub topic: String,
@@ -75,7 +78,7 @@ pub struct QueryExcerpt {
 }
 
 /// One selected document node together with its location in the complete outline.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
@@ -101,7 +104,7 @@ pub enum ExcerptSelection {
 }
 
 /// Compact ancestor identity attached to an excerpt selection.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlineReference {
     pub path: String,

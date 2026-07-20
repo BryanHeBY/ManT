@@ -1,9 +1,10 @@
 //! Structured tldr content kept distinct from authoritative manual pages.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// One cached tldr page included in a query bundle.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrDocument {
     pub title: String,
@@ -17,7 +18,7 @@ pub struct TldrDocument {
 }
 
 /// Human explanation paired with one shell command example.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrExample {
     pub description: String,
@@ -26,7 +27,7 @@ pub struct TldrExample {
 }
 
 /// Styled command fragment used by the TUI to distinguish placeholders.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
@@ -38,7 +39,7 @@ pub enum TldrCommandPart {
 }
 
 /// How an explicit tldr cache refresh changed local state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TldrCacheAction {
     Cloned,
@@ -46,7 +47,7 @@ pub enum TldrCacheAction {
 }
 
 /// Result of an explicit `mant-cli --update-tldr` operation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrCacheUpdate {
     pub action: TldrCacheAction,

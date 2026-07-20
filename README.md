@@ -121,6 +121,21 @@ mant-cli git --format json
 mant-cli git --format json --compact
 mant-cli git --format text
 mant-cli --protocol-version
+mant-cli --schema request
+mant-cli --schema all --compact
+```
+
+`--schema` accepts `request`, `query`, `outline`, `excerpt`, or `all`. These
+Draft 2020-12 JSON Schemas are generated from the same Rust types used by the
+runtime, so agents can discover the exact input and output contracts without
+copying declarations from documentation. A versioned stdio request looks like:
+
+```json
+{
+  "schema": "mant.request/v1",
+  "topic": "printf",
+  "section": "3"
+}
 ```
 
 Update tldr data through its installed client when available, otherwise through

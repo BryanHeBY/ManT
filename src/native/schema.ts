@@ -150,6 +150,7 @@ export interface MantQueryBundle {
 export interface NativeCliProtocol {
   protocol: "mant.cli/v1";
   nativeApiVersion: "1";
+  requestSchema: "mant.request/v1";
   querySchema: "mant.query/v1";
   documentSchema: "mant.document/v1";
   outlineSchema?: "mant.outline/v1";
@@ -181,6 +182,7 @@ export function decodeNativeCliProtocol(input: string): NativeCliProtocol {
   const object = expectObject(value, "$protocol");
   expectLiteral(object.protocol, "mant.cli/v1", "$protocol.protocol");
   expectLiteral(object.nativeApiVersion, "1", "$protocol.nativeApiVersion");
+  expectLiteral(object.requestSchema, "mant.request/v1", "$protocol.requestSchema");
   expectLiteral(object.querySchema, "mant.query/v1", "$protocol.querySchema");
   expectLiteral(object.documentSchema, "mant.document/v1", "$protocol.documentSchema");
   if (object.outlineSchema !== undefined) {

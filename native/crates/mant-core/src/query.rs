@@ -227,7 +227,7 @@ mod tests {
 
     use mant_ast::{
         Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, MantDocument,
-        Producer, QueryRequest, Section, SourceFormat, TldrDocument,
+        Producer, QueryRequest, RequestSchema, Section, SourceFormat, TldrDocument,
     };
 
     use crate::{CommandOutput, CommandRunner, ManualRequest};
@@ -330,6 +330,7 @@ mod tests {
 
     fn request() -> QueryRequest {
         QueryRequest {
+            schema: RequestSchema::V1,
             topic: " tool ".to_owned(),
             section: None,
         }
@@ -405,6 +406,7 @@ mod tests {
         assert_eq!(
             query_with(
                 &QueryRequest {
+                    schema: RequestSchema::V1,
                     topic: " ".to_owned(),
                     section: None
                 },

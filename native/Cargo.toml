@@ -23,6 +23,7 @@ pedantic = "warn"
 
 [workspace.dependencies]
 clap = { version = "4.6.2", default-features = false, features = ["derive", "error-context", "help", "std", "suggestions", "usage"] }
+schemars = "=1.2.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

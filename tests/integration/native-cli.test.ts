@@ -28,6 +28,7 @@ describeNativeCli("real native CLI process boundary", () => {
 
     const protocol = await client.protocol();
     expect(protocol.protocol).toBe("mant.cli/v1");
+    expect(protocol.requestSchema).toBe("mant.request/v1");
     expect(protocol.documentSchema).toBe("mant.document/v1");
     expect(protocol.outlineSchema).toBe("mant.outline/v1");
     expect(protocol.excerptSchema).toBe("mant.excerpt/v1");

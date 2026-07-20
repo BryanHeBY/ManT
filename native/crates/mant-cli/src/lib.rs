@@ -12,7 +12,7 @@ use mant_ast::{QueryBundle, QueryRequest, TldrCacheUpdate};
 use mant_core::{ProjectionError, QueryError};
 use serde::Serialize;
 
-use arguments::{Command, QueryFormat, QuerySource, QueryView};
+use arguments::{Command, QueryFormat, QuerySource, QueryView, SchemaContract};
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
@@ -26,6 +26,7 @@ const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 struct ProtocolDescription<'a> {
     protocol: &'a str,
     native_api_version: &'a str,
+    request_schema: &'a str,
     query_schema: &'a str,
     document_schema: &'a str,
     outline_schema: &'a str,
@@ -100,6 +101,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_core::native_api_version(),
+                request_schema: "mant.request/v1",
                 query_schema: "mant.query/v1",
                 document_schema: "mant.document/v1",
                 outline_schema: "mant.outline/v1",
@@ -107,6 +109,13 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             },
             pretty,
         ),
+        Command::Schema { contract, pretty } => match contract {
+            SchemaContract::Request => render_json(&mant_ast::query_request_json_schema(), pretty),
+            SchemaContract::Query => render_json(&mant_ast::query_bundle_json_schema(), pretty),
+            SchemaContract::Outline => render_json(&mant_ast::query_outline_json_schema(), pretty),
+            SchemaContract::Excerpt => render_json(&mant_ast::query_excerpt_json_schema(), pretty),
+            SchemaContract::All => render_json(&mant_ast::query_json_schema_catalog(), pretty),
+        },
         Command::UpdateTldr { pretty } => {
             let update = host.update_tldr()?;
             mant_core::render_update_json(&update, pretty).map_err(Failure::operational)
@@ -424,7 +433,7 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"topic":"git","section":"1"}"#,
+            br#"{"schema":"mant.request/v1","topic":"git","section":"1"}"#,
             &host,
         );
 
@@ -441,8 +450,8 @@ mod tests {
     fn malformed_or_extended_requests_fail_before_querying_the_host() {
         for input in [
             br"not-json".as_slice(),
-            br#"{"topic":"git","renderer":"html"}"#.as_slice(),
-            br#"{"topic":"   "}"#.as_slice(),
+            br#"{"schema":"mant.request/v1","topic":"git","renderer":"html"}"#.as_slice(),
+            br#"{"schema":"mant.request/v1","topic":"   "}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -525,6 +534,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
         assert_eq!(value["nativeApiVersion"], "1");
+        assert_eq!(value["requestSchema"], "mant.request/v1");
         assert_eq!(value["outlineSchema"], "mant.outline/v1");
         assert_eq!(value["excerptSchema"], "mant.excerpt/v1");
         assert!(diagnostics.is_empty());
@@ -539,6 +549,36 @@ mod tests {
         assert!(diagnostics.starts_with("error: unexpected argument '--unknown'"));
         assert!(diagnostics.contains("Usage: mant-cli"));
         assert!(diagnostics.contains("For more information, try '--help'."));
+        assert_eq!(host.query_calls.get(), 0);
+        assert_eq!(host.update_calls.get(), 0);
+    }
+
+    #[test]
+    fn generated_schemas_are_json_only_and_side_effect_free() {
+        let host = FakeHost::new();
+        let (status, output, diagnostics) =
+            invoke(&["--schema", "request", "--compact"], b"", &host);
+
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("request schema");
+        assert_eq!(
+            value["$schema"],
+            "https://json-schema.org/draft/2020-12/schema"
+        );
+        assert_eq!(value["additionalProperties"], false);
+        assert!(output.contains("mant.request/v1"));
+        assert!(diagnostics.is_empty());
+        assert_eq!(host.query_calls.get(), 0);
+        assert_eq!(host.update_calls.get(), 0);
+
+        let (status, output, diagnostics) = invoke(&["--schema", "all"], b"", &host);
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("schema catalog");
+        assert!(value["request"].is_object());
+        assert!(value["query"].is_object());
+        assert!(value["outline"].is_object());
+        assert!(value["excerpt"].is_object());
+        assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);
     }

@@ -22,6 +22,7 @@ function result(stdout: string, stderr = "", exitCode = 0): CommandResult {
 const protocol = JSON.stringify({
   protocol: "mant.cli/v1",
   nativeApiVersion: "1",
+  requestSchema: "mant.request/v1",
   querySchema: "mant.query/v1",
   documentSchema: "mant.document/v1",
   outlineSchema: "mant.outline/v1",
@@ -77,7 +78,7 @@ describe("native mant-cli client", () => {
       ["/tools/mant-cli", "--request-json", "--format", "json", "--compact"],
     ]);
     expect(new TextDecoder().decode(calls[1]?.options?.stdin))
-      .toBe('{"topic":"git","section":"1"}');
+      .toBe('{"schema":"mant.request/v1","topic":"git","section":"1"}');
   });
 
   test("rejects incompatible binaries before issuing a query", async () => {
