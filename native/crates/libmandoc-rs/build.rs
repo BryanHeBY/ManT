@@ -87,6 +87,10 @@ fn main() {
     // read.c transparently handles compressed manual sources through zlib.
     println!("cargo:rustc-link-lib=z");
     println!("cargo:rerun-if-changed=build.rs");
+    // Target selection lives here and is pulled in via #[path]; Cargo does not
+    // discover that dependency, so track it explicitly or edits to the config
+    // map would reuse a stale config.h and source list on incremental builds.
+    println!("cargo:rerun-if-changed=src/build_config.rs");
     println!("cargo:rerun-if-changed=config");
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
