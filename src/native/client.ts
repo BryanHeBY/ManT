@@ -25,6 +25,7 @@ export interface NativeQueryRequest {
   topic: string;
   section?: string;
   forceLibmandoc?: boolean;
+  forceGroff?: boolean;
 }
 
 export interface NativeCliClient {
@@ -102,6 +103,7 @@ export function createNativeCliClient(
         path,
         "--request-json",
         ...(request.forceLibmandoc ? ["--force-libmandoc"] : []),
+        ...(request.forceGroff ? ["--force-groff"] : []),
         "--format",
         "json",
         "--compact",

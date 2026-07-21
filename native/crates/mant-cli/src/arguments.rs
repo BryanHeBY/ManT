@@ -101,6 +101,7 @@ pub(crate) enum Command {
         force_libmandoc: bool,
         /// Require the excerpt selected by the direct CLI to be one semantic
         /// entry rather than a section or the tldr document.
+        force_groff: bool,
         explain: bool,
     },
     UpdateTldr {
@@ -282,6 +283,14 @@ struct Cli {
     )]
     force_libmandoc: bool,
 
+    /// Use `man -Thtml` + groff HTML parser instead of libmandoc.
+    #[arg(
+        long,
+        conflicts_with_all = ["update_tldr", "protocol_version", "schema", "force_libmandoc"],
+        help_heading = "Diagnostics"
+    )]
+    force_groff: bool,
+
     /// Update tldr data through the installed client or `ManT` cache.
     #[arg(
         long,
@@ -445,6 +454,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         format,
         pretty: !parsed.compact,
         force_libmandoc: parsed.force_libmandoc,
+        force_groff: parsed.force_groff,
         explain,
     })
 }
@@ -489,6 +499,7 @@ mod tests {
                 format: QueryFormat::Markdown,
                 pretty: true,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -516,6 +527,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: false,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -531,6 +543,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: false,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -546,6 +559,7 @@ mod tests {
                 parse(&args(&values)).expect("forced native query"),
                 Command::Query {
                     force_libmandoc: true,
+                    force_groff: false,
                     ..
                 }
             ));
@@ -568,6 +582,7 @@ mod tests {
                 format: QueryFormat::Text,
                 pretty: true,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -586,6 +601,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: true,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -606,6 +622,7 @@ mod tests {
                 format: QueryFormat::Text,
                 pretty: true,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -632,6 +649,7 @@ mod tests {
                     format: QueryFormat::Markdown,
                     pretty: true,
                     force_libmandoc: false,
+                    force_groff: false,
                     explain: true,
                 }
             );
@@ -661,6 +679,7 @@ mod tests {
                 format: QueryFormat::Text,
                 pretty: true,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -704,6 +723,7 @@ mod tests {
                 format: QueryFormat::Json,
                 pretty: true,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );
@@ -785,6 +805,7 @@ mod tests {
                 format: QueryFormat::Markdown,
                 pretty: true,
                 force_libmandoc: false,
+                force_groff: false,
                 explain: false,
             }
         );

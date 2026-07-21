@@ -39,11 +39,13 @@ struct ProtocolDescription<'a> {
 }
 
 /// Normalized fields of a conventional CLI document query.
+#[allow(clippy::struct_excessive_bools)]
 struct QueryExecution {
     source: QuerySource,
     format: QueryFormat,
     pretty: bool,
     force_libmandoc: bool,
+    force_groff: bool,
     explain: bool,
 }
 
@@ -188,6 +190,7 @@ fn execute(
             format,
             pretty,
             force_libmandoc,
+            force_groff,
             explain,
         } => execute_query(
             QueryExecution {
@@ -195,6 +198,7 @@ fn execute(
                 format,
                 pretty,
                 force_libmandoc,
+                force_groff,
                 explain,
             },
             input,
@@ -218,9 +222,10 @@ fn execute_query(
         &request,
         QueryPolicy {
             force_libmandoc: command.force_libmandoc,
+            force_groff: command.force_groff,
         },
     )?;
-    if command.force_libmandoc {
+    if command.force_libmandoc || command.force_groff {
         report_native_diagnostics(&query, diagnostics)?;
     }
     render_query_view(

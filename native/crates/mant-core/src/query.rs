@@ -7,10 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use mant_ast::{
-    Block, DiagnosticLevel, MantDocument, QueryBundle, QueryRequest, QuerySchema, Section,
-    TldrDocument,
-};
+use mant_ast::{MantDocument, QueryBundle, QueryRequest, QuerySchema, TldrDocument};
 
 use crate::{
     CommandRunner, ManualRequest, SystemCommandRunner, locate_manual_source, parse_groff_html,
@@ -30,7 +27,12 @@ pub enum QueryError {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QueryPolicy {
     /// Disable the groff renderer and surface the native parser result.
+    /// Since libmandoc is now the default backend, this flag is retained
+    /// for backward compatibility but has no behavioural effect.
     pub force_libmandoc: bool,
+    /// Use `man -Thtml` + groff HTML parser instead of libmandoc.
+    /// This code path has not been comprehensively tested.
+    pub force_groff: bool,
 }
 
 impl fmt::Display for QueryError {
@@ -129,10 +131,10 @@ fn query_with(
     let tldr = host.read_tldr(topic).ok().flatten();
     let manual = load_manual(&manual_request, policy, host);
 
-    // Force mode is an explicit parser diagnostic request. A tldr page may
-    // augment a successful manual, but must not turn a failed native parse
-    // into an apparently successful tldr-only response.
-    if policy.force_libmandoc {
+    // Force-libmandoc mode is an explicit parser diagnostic request.
+    // A tldr page may augment a successful manual, but must not turn a
+    // failed native parse into an apparently successful tldr-only response.
+    if policy.force_libmandoc || policy.force_groff {
         return match manual {
             Ok(Some(manual)) => Ok(QueryBundle {
                 schema: QuerySchema::V2,
@@ -190,167 +192,49 @@ fn load_manual(
         Err(error) => (None, Err(error)),
     };
 
-    if policy.force_libmandoc {
-        return match direct {
-            Ok(document) if !document.sections.is_empty() => Ok(Some(document)),
-            Ok(document) => {
-                let path = source_path.as_deref().map_or_else(
-                    || "<unknown source>".to_owned(),
-                    |path| path.display().to_string(),
-                );
-                let diagnostics = document
-                    .diagnostics
-                    .iter()
-                    .map(|diagnostic| {
-                        let location = diagnostic.source.map_or_else(String::new, |source| {
-                            format!(" at {}:{}", source.line, source.column)
-                        });
-                        format!("{:?}{location}: {}", diagnostic.level, diagnostic.message)
-                    })
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                let detail = if diagnostics.is_empty() {
-                    String::new()
-                } else {
-                    format!("; diagnostics: {diagnostics}")
-                };
-                Err(format!(
-                    "could not load manual '{}': libmandoc parsed {path} but produced no readable sections{detail}",
-                    request.topic,
-                ))
-            }
-            Err(error) => Err(format!(
-                "could not load manual '{}': source/libmandoc: {error}",
-                request.topic
-            )),
+    // --force-groff: skip libmandoc, use man -Thtml + groff HTML parser.
+    if policy.force_groff {
+        return match host.render_groff(request, source_path.as_deref()) {
+            Ok(fallback) if !fallback.sections.is_empty() => Ok(Some(fallback)),
+            Ok(_) => Ok(None),
+            Err(error) => Err(error),
         };
     }
 
-    if let Ok(document) = &direct {
-        let readable = !document.sections.is_empty();
-        if readable && !has_unsupported_diagnostics(document) {
-            return Ok(Some(document.clone()));
-        }
-
-        match host.render_groff(request, source_path.as_deref()) {
-            Ok(fallback) if !fallback.sections.is_empty() => {
-                return Ok(Some(if prefer_direct_document(document, &fallback) {
-                    document.clone()
-                } else {
-                    fallback
-                }));
-            }
-            Ok(_) | Err(_) if readable => return Ok(Some(document.clone())),
-            Ok(_) => return Ok(None),
-            Err(fallback_error) => {
-                return Err(format!(
-                    "could not load manual '{}': libmandoc produced no readable sections; man/groff: {fallback_error}",
-                    request.topic
-                ));
-            }
-        }
-    }
-
-    let direct_error = direct.expect_err("the successful branch returns above");
-    match host.render_groff(request, source_path.as_deref()) {
-        Ok(fallback) if !fallback.sections.is_empty() => Ok(Some(fallback)),
-        Ok(_) => Ok(None),
-        Err(fallback_error) => Err(format!(
-            "could not load manual '{}': source/libmandoc: {direct_error}; man/groff: {fallback_error}",
+    // Default (and --force-libmandoc): libmandoc only.
+    let document = direct.map_err(|error| {
+        format!(
+            "could not load manual '{}': source/libmandoc: {error}",
             request.topic
-        )),
-    }
-}
-
-/// Keep a structurally complete native AST when an unsupported finding is
-/// local rather than allowing one diagnostic to discard the whole document.
-///
-/// libmandoc deliberately reports unfamiliar requests even when it retained
-/// all visible content around them. We still render groff as a reference, then
-/// compare complete heading topology and visible-text coverage. A materially
-/// truncated native document continues to fall back to groff.
-fn prefer_direct_document(direct: &MantDocument, fallback: &MantDocument) -> bool {
-    let direct_titles = section_titles(&direct.sections);
-    let fallback_titles = section_titles(&fallback.sections);
-    if direct_titles != fallback_titles {
-        return false;
-    }
-
-    let direct_text = visible_text_len(&direct.sections);
-    let fallback_text = visible_text_len(&fallback.sections);
-    direct_text >= fallback_text.saturating_mul(9) / 10
-}
-
-fn section_titles(sections: &[Section]) -> Vec<String> {
-    let mut titles = Vec::new();
-    collect_section_titles(sections, &mut titles);
-    titles
-}
-
-fn collect_section_titles(sections: &[Section], output: &mut Vec<String>) {
-    for section in sections {
-        let normalized = section
-            .title
-            .chars()
-            .flat_map(char::to_lowercase)
-            .map(|character| match character {
-                '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}' => '-',
-                value => value,
+        )
+    })?;
+    if document.sections.is_empty() {
+        let path = source_path.as_deref().map_or_else(
+            || "<unknown source>".to_owned(),
+            |path| path.display().to_string(),
+        );
+        let diagnostics = document
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                let location = diagnostic.source.map_or_else(String::new, |source| {
+                    format!(" at {}:{}", source.line, source.column)
+                });
+                format!("{:?}{location}: {}", diagnostic.level, diagnostic.message)
             })
-            .collect::<String>();
-        output.push(normalized.split_whitespace().collect::<Vec<_>>().join(" "));
-        collect_section_titles(&section.children, output);
+            .collect::<Vec<_>>()
+            .join("; ");
+        let detail = if diagnostics.is_empty() {
+            String::new()
+        } else {
+            format!("; diagnostics: {diagnostics}")
+        };
+        return Err(format!(
+            "could not load manual '{}': libmandoc parsed {path} but produced no readable sections{detail}",
+            request.topic,
+        ));
     }
-}
-
-fn visible_text_len(sections: &[Section]) -> usize {
-    sections
-        .iter()
-        .map(|section| {
-            section.title.chars().count()
-                + block_text_len(&section.blocks)
-                + visible_text_len(&section.children)
-        })
-        .sum()
-}
-
-fn block_text_len(blocks: &[Block]) -> usize {
-    blocks
-        .iter()
-        .map(|block| match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                crate::mandoc::inline::plain_text(children).chars().count()
-            }
-            Block::List { items, .. } => {
-                items.iter().map(|item| block_text_len(&item.blocks)).sum()
-            }
-            Block::DefinitionList { items, .. } => items
-                .iter()
-                .map(|item| {
-                    item.terms
-                        .iter()
-                        .map(|term| crate::mandoc::inline::plain_text(term).chars().count())
-                        .sum::<usize>()
-                        + block_text_len(&item.description)
-                })
-                .sum(),
-            Block::Table { rows, .. } => rows
-                .iter()
-                .flat_map(|row| &row.cells)
-                .map(|cell| block_text_len(&cell.blocks))
-                .sum(),
-            Block::Equation { value, .. } => value.chars().count(),
-            Block::Unsupported { text, .. } => text.chars().count(),
-            Block::VerticalSpace { .. } => 0,
-        })
-        .sum()
-}
-
-fn has_unsupported_diagnostics(document: &MantDocument) -> bool {
-    document
-        .diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.level == DiagnosticLevel::Unsupported)
+    Ok(Some(document))
 }
 
 fn render_groff_document_with(
@@ -526,6 +410,9 @@ mod tests {
         );
     }
 
+    /// With the old groff-fallback architecture this test verified that an
+    /// unsupported diagnostic did not trigger an unnecessary groff call.
+    /// Now libmandoc is the sole default backend so groff is never called.
     #[test]
     fn complete_direct_document_survives_an_unsupported_finding() {
         let mut host = host(Ok(document(SourceFormat::Man, true, true)));
@@ -538,7 +425,7 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "parse", "groff"]
+            ["tldr", "locate", "parse"]
         );
     }
 
@@ -550,6 +437,7 @@ mod tests {
             &request(),
             QueryPolicy {
                 force_libmandoc: true,
+                force_groff: false,
             },
             &host,
         )
@@ -575,6 +463,7 @@ mod tests {
             &request(),
             QueryPolicy {
                 force_libmandoc: true,
+                force_groff: false,
             },
             &host,
         )
@@ -591,25 +480,20 @@ mod tests {
         );
     }
 
+    /// With the old groff-fallback architecture this test verified that a
+    /// truncated native document fell back to groff. Now libmandoc is the
+    /// default and an empty-sections document is an error.
     #[test]
-    fn truncated_unsupported_document_still_uses_groff() {
-        let mut host = host(Ok(document(SourceFormat::Man, true, true)));
-        let mut fallback = document(SourceFormat::GroffHtml, false, true);
-        fallback.sections.push(Section {
-            id: "options-2".to_owned(),
-            title: "OPTIONS".to_owned(),
-            spacing_before_lines: 1,
-            blocks: Vec::new(),
-            children: Vec::new(),
-            source: None,
-        });
-        host.fallback = Ok(fallback);
+    fn truncated_unsupported_document_is_an_error_by_default() {
+        let host = host(Ok(document(SourceFormat::Man, true, false)));
 
-        let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
-        assert_eq!(
-            result.manual.expect("manual").source.format,
-            SourceFormat::GroffHtml
-        );
+        let QueryError::Manual { detail, .. } =
+            query_with(&request(), QueryPolicy::default(), &host)
+                .expect_err("empty-section document must error by default")
+        else {
+            panic!("expected Manual error");
+        };
+        assert!(detail.contains("produced no readable sections"));
     }
 
     #[test]
@@ -642,7 +526,7 @@ mod tests {
             .expect_err("empty query must fail");
         assert_eq!(
             error.to_string(),
-            "could not load manual 'tool': source/libmandoc: source not found; man/groff: fallback unavailable"
+            "could not load manual 'tool': source/libmandoc: source not found"
         );
     }
 

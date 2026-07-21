@@ -14,6 +14,7 @@ export type CliCommand =
     topic: string;
     section?: string;
     forceLibmandoc?: boolean;
+    forceGroff?: boolean;
   };
 
 /** An invalid invocation; callers report these with exit code 2. */
@@ -29,13 +30,15 @@ export class CliUsageError extends Error {
 export const CLI_HELP = `ManT — explore local manual pages in a structured terminal UI
 
 Usage:
-  mant <topic> [--section <section>] [--force-libmandoc]
+  mant <topic> [--section <section>] [--force-libmandoc] [--force-groff]
   mant -h, --help
 
 Options:
   -h, --help              Show this help and exit
   -s, --section <value>   Select a manual section, such as 1 or 3p
   --force-libmandoc       Disable groff fallback for parser diagnostics
+  --force-groff           Use man -Thtml + groff HTML parser instead of libmandoc
+                           (not comprehensively tested)
   --                      Treat all remaining arguments as the topic
 
 What ManT provides:
@@ -61,6 +64,7 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
   let parseOptions = true;
   let section: string | undefined;
   let forceLibmandoc = false;
+  let forceGroff = false;
   const topicParts: string[] = [];
 
   for (let index = 0; index < args.length; index++) {
@@ -78,6 +82,8 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
       section = value;
     } else if (parseOptions && arg === "--force-libmandoc") {
       forceLibmandoc = true;
+    } else if (parseOptions && arg === "--force-groff") {
+      forceGroff = true;
     } else if (parseOptions && arg.startsWith("-")) {
       throw new CliUsageError(
         `unknown option '${arg}'; non-interactive output is provided by mant-cli`,
@@ -100,5 +106,6 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
     topic,
     ...(section === undefined ? {} : { section: section.trim() }),
     ...(forceLibmandoc ? { forceLibmandoc: true } : {}),
+    ...(forceGroff ? { forceGroff: true } : {}),
   };
 }
