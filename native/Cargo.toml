@@ -10,7 +10,7 @@ resolver = "3"
 [workspace.package]
 version = "0.2.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "Apache-2.0"
 publish = false
 
@@ -26,9 +26,13 @@ clap = { version = "4.6.2", default-features = false, features = ["derive", "err
 grep-matcher = "0.1.8"
 grep-regex = "0.1.14"
 pulldown-cmark = { version = "0.13.0", default-features = false }
+# Keep the SDK and its generated glue on the same upstream minor release.
+rmcp = { version = "=1.7.0", default-features = false, features = ["macros", "server", "transport-io"] }
+rmcp-macros = "=1.7.0"
 schemars = "=1.2.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", default-features = false, features = ["macros", "rt", "sync"] }
 zstd = { version = "0.13.3", default-features = false }
 
 [profile.release]

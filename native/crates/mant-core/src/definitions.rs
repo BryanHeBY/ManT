@@ -237,10 +237,10 @@ fn identify_item(
     } else {
         unique_id(&preferred, used, reserved)
     };
-    if !anchors.iter().any(|anchor| anchor == &id) {
-        if let Some(term) = item.terms.first_mut() {
-            term.insert(0, Inline::Anchor { id: id.clone() });
-        }
+    if !anchors.iter().any(|anchor| anchor == &id)
+        && let Some(term) = item.terms.first_mut()
+    {
+        term.insert(0, Inline::Anchor { id: id.clone() });
     }
     retained.insert(id.clone());
     item.identity = Some(DefinitionIdentity {

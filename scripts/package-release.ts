@@ -117,7 +117,7 @@ export async function packageRelease(
     await copyFile(join(root, "README.md"), join(packageDirectory, "README.md"));
     await copyFile(join(root, "LICENSE"), join(packageDirectory, "LICENSE"));
     await copyFile(
-      join(root, "native", "vendor", "mandoc-1.14.6", "LICENSE"),
+      join(root, "native", "crates", "libmandoc-rs", "vendor", "mandoc-1.14.6", "LICENSE"),
       join(licenseDirectory, "mandoc.txt"),
     );
     await runTar(stagingDirectory, archiveRoot, archive);

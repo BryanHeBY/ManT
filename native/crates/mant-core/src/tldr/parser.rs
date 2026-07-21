@@ -38,26 +38,26 @@ pub fn parse_tldr_command(command: &str) -> Vec<TldrCommandPart> {
 
     while cursor < command.len() {
         let remainder = &command[cursor..];
-        if let Some(escaped) = remainder.strip_prefix(r"\{\{") {
-            if let Some(close) = escaped.find(r"\}\}") {
-                push_part(
-                    &mut parts,
-                    PartKind::Text,
-                    format!("{{{{{}}}}}", &escaped[..close]),
-                );
-                cursor += 4 + close + 4;
-                continue;
-            }
+        if let Some(escaped) = remainder.strip_prefix(r"\{\{")
+            && let Some(close) = escaped.find(r"\}\}")
+        {
+            push_part(
+                &mut parts,
+                PartKind::Text,
+                format!("{{{{{}}}}}", &escaped[..close]),
+            );
+            cursor += 4 + close + 4;
+            continue;
         }
 
-        if let Some(placeholder) = remainder.strip_prefix("{{") {
-            if let Some(close) = placeholder.find("}}") {
-                let value = resolve_option_placeholder(&placeholder[..close])
-                    .unwrap_or(&placeholder[..close]);
-                push_part(&mut parts, PartKind::Placeholder, value.to_owned());
-                cursor += 2 + close + 2;
-                continue;
-            }
+        if let Some(placeholder) = remainder.strip_prefix("{{")
+            && let Some(close) = placeholder.find("}}")
+        {
+            let value =
+                resolve_option_placeholder(&placeholder[..close]).unwrap_or(&placeholder[..close]);
+            push_part(&mut parts, PartKind::Placeholder, value.to_owned());
+            cursor += 2 + close + 2;
+            continue;
         }
 
         let Some(character) = remainder.chars().next() else {
@@ -93,11 +93,11 @@ pub fn parse_tldr_page(
             continue;
         }
 
-        if title.is_empty() {
-            if let Some(heading) = trimmed.strip_prefix("# ") {
-                title = flatten_markdown(heading);
-                continue;
-            }
+        if title.is_empty()
+            && let Some(heading) = trimmed.strip_prefix("# ")
+        {
+            title = flatten_markdown(heading);
+            continue;
         }
 
         if let Some(quote) = trimmed.strip_prefix('>') {
@@ -126,10 +126,10 @@ pub fn parse_tldr_page(
             continue;
         }
 
-        if let Some(command) = standalone_code(trimmed) {
-            if let Some(example_description) = pending_description.take() {
-                examples.push(make_example(example_description, command.to_owned()));
-            }
+        if let Some(command) = standalone_code(trimmed)
+            && let Some(example_description) = pending_description.take()
+        {
+            examples.push(make_example(example_description, command.to_owned()));
         }
     }
 

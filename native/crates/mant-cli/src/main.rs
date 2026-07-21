@@ -1,8 +1,9 @@
 //! OS entry point for the standalone native `mant-cli` executable.
 
-use std::{env, io, process::ExitCode};
+use std::{env, process::ExitCode};
 
-fn main() -> ExitCode {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> ExitCode {
     let mut arguments = Vec::new();
     for argument in env::args_os().skip(1) {
         let Ok(argument) = argument.into_string() else {
@@ -13,11 +14,6 @@ fn main() -> ExitCode {
         arguments.push(argument);
     }
 
-    let status = mant_cli::run(
-        &arguments,
-        &mut io::stdin().lock(),
-        &mut io::stdout().lock(),
-        &mut io::stderr().lock(),
-    );
+    let status = mant_cli::run_process(&arguments).await;
     ExitCode::from(status)
 }

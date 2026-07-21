@@ -15,7 +15,7 @@ scripts.
 | Tool | Best for | Highlights |
 | --- | --- | --- |
 | `mant` | Reading in a terminal | Complete manual, hierarchy-aware sidebar, in-page links, search, and optional tldr quick reference |
-| `mant-cli` | Agents and automation | Markdown, text, JSON, generated schemas, semantic option lookups, and location-aware search |
+| `mant-cli` | Agents and automation | Markdown, text, JSON, generated schemas, semantic option lookups, location-aware search, and MCP stdio |
 
 Both tools parse local `man` and `mdoc` sources with bundled libmandoc. A
 system `mandoc` installation is not required. If an installed `tldr` client has
@@ -43,7 +43,7 @@ checksum is published alongside it.
 ### Build from source
 
 Source builds support Linux and macOS. They require local manual pages and the
-`man` command, plus Bun, Rust 1.85+, and a C compiler (GCC on Linux or Clang on
+`man` command, plus Bun, Rust 1.88+, and a C compiler (GCC on Linux or Clang on
 macOS by default).
 
 ```sh
@@ -120,6 +120,23 @@ mant-cli -h
 Run `mant-cli --update-tldr` to refresh data through the installed client when
 available, otherwise through ManT's private cache.
 
+## Connect agents over MCP
+
+Run the same native executable as a read-only MCP server over standard input
+and output:
+
+```sh
+mant-cli --mcp
+```
+
+Configure an MCP client with command `mant-cli` and arguments `["--mcp"]`.
+`tools/list` exposes generated input and output JSON Schemas for four tools:
+`mant_manual_outline`, `mant_manual_get`, `mant_manual_explain`, and
+`mant_manual_search`. They return the same versioned ManT projections as the
+direct CLI. The server has no network transport and no mutation tools; its
+standard output is reserved for MCP JSON-RPC, while diagnostics use standard
+error.
+
 ## Architecture
 
 ```text
@@ -129,6 +146,8 @@ mant (Bun / OpenTUI React)
                                        ├─ mant-ast
                                        └─ libmandoc-rs
                                             └─ vendored libmandoc + private C shim
+
+MCP client ── stdio JSON-RPC → mant-cli --mcp ──→ mant-core
 ```
 
 Rust owns source discovery, parsing, the stable AST, tldr integration, and

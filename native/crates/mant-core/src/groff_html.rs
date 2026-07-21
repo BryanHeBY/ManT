@@ -12,10 +12,10 @@ pub fn parse_groff_html(html: &str, source_path: Option<String>) -> MantDocument
     let document = Html::parse_document(html);
     let mut sections = Vec::new();
     let mut next_id = 1;
-    if let Ok(body_selector) = Selector::parse("body") {
-        if let Some(body) = document.select(&body_selector).next() {
-            parse_body(body, &mut sections, &mut next_id);
-        }
+    if let Ok(body_selector) = Selector::parse("body")
+        && let Some(body) = document.select(&body_selector).next()
+    {
+        parse_body(body, &mut sections, &mut next_id);
     }
 
     let mut sections = nest_sections(sections);
@@ -47,10 +47,10 @@ fn parse_body(body: ElementRef<'_>, sections: &mut Vec<FlatSection>, next_id: &m
     for child in body.children() {
         if let Some(text) = child.value().as_text() {
             let text = normalize_text(text.text.as_ref());
-            if !text.is_empty() {
-                if let Some(current) = sections.last_mut() {
-                    current.section.blocks.push(paragraph(text, 0));
-                }
+            if !text.is_empty()
+                && let Some(current) = sections.last_mut()
+            {
+                current.section.blocks.push(paragraph(text, 0));
             }
             continue;
         }
@@ -149,10 +149,10 @@ fn parse_layout_table(table: ElementRef<'_>) -> Vec<Block> {
         for cell in row.select(&cell_selector) {
             let indent = percent_to_columns(cumulative_width);
             for child in cell.children().filter_map(ElementRef::wrap) {
-                if matches!(child.value().name(), "p" | "pre" | "ul" | "ol" | "dl") {
-                    if let Some(block) = parse_block(child, indent) {
-                        blocks.push(block);
-                    }
+                if matches!(child.value().name(), "p" | "pre" | "ul" | "ol" | "dl")
+                    && let Some(block) = parse_block(child, indent)
+                {
+                    blocks.push(block);
                 }
             }
             cumulative_width += cell

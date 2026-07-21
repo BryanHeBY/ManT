@@ -5,6 +5,7 @@
 //! reserved for the requested document; diagnostics go to standard error.
 
 mod arguments;
+mod mcp;
 
 use std::io::{self, Read, Write};
 
@@ -35,6 +36,15 @@ struct ProtocolDescription<'a> {
     outline_schema: &'a str,
     excerpt_schema: &'a str,
     search_schema: &'a str,
+}
+
+/// Normalized fields of a conventional CLI document query.
+struct QueryExecution {
+    source: QuerySource,
+    format: QueryFormat,
+    pretty: bool,
+    force_libmandoc: bool,
+    explain: bool,
 }
 
 // ── Host boundary ─────────────────────────────────────────────────────────
@@ -74,6 +84,30 @@ pub fn run(
     run_with_host(arguments, input, output, diagnostics, &SystemHost)
 }
 
+/// Run one native-process invocation, including the long-lived MCP mode.
+///
+/// The conventional CLI keeps injectable streams through [`run`], while MCP
+/// owns operating-system stdio because the protocol reserves it exclusively
+/// for newline-delimited JSON-RPC messages.
+pub async fn run_process(arguments: &[String]) -> u8 {
+    let command = match arguments::parse(arguments) {
+        Ok(command) => command,
+        Err(error) => return report_argument_error(&error, &mut io::stderr().lock()),
+    };
+
+    if matches!(command, Command::Mcp) {
+        return mcp::run_stdio().await;
+    }
+
+    run_command(
+        command,
+        &mut io::stdin().lock(),
+        &mut io::stdout().lock(),
+        &mut io::stderr().lock(),
+        &SystemHost,
+    )
+}
+
 fn run_with_host(
     arguments: &[String],
     input: &mut dyn Read,
@@ -85,6 +119,23 @@ fn run_with_host(
         Ok(command) => command,
         Err(error) => return report_argument_error(&error, diagnostics),
     };
+
+    run_command(command, input, output, diagnostics, host)
+}
+
+fn run_command(
+    command: Command,
+    input: &mut dyn Read,
+    output: &mut dyn Write,
+    diagnostics: &mut dyn Write,
+    host: &dyn CliHost,
+) -> u8 {
+    if matches!(command, Command::Mcp) {
+        return report_failure(
+            &Failure::usage("MCP mode must be launched through the native process entry point"),
+            diagnostics,
+        );
+    }
 
     let rendered = match execute(command, input, diagnostics, host) {
         Ok(rendered) => rendered,
@@ -127,6 +178,7 @@ fn execute(
             SchemaContract::Search => render_json(&mant_ast::query_search_json_schema(), pretty),
             SchemaContract::All => render_json(&mant_ast::query_json_schema_catalog(), pretty),
         },
+        Command::Mcp => unreachable!("MCP mode is dispatched before normal CLI execution"),
         Command::UpdateTldr { pretty } => {
             let update = host.update_tldr()?;
             mant_core::render_update_json(&update, pretty).map_err(Failure::operational)
@@ -137,40 +189,96 @@ fn execute(
             pretty,
             force_libmandoc,
             explain,
-        } => {
-            let request = read_query_request(source, input)?;
-            validate_query_request(&request)?;
-            let view = request.view.clone();
-            let query = host.query(&request, QueryPolicy { force_libmandoc })?;
-            if force_libmandoc {
-                report_native_diagnostics(&query, diagnostics)?;
+        } => execute_query(
+            QueryExecution {
+                source,
+                format,
+                pretty,
+                force_libmandoc,
+                explain,
+            },
+            input,
+            diagnostics,
+            host,
+        ),
+    }
+}
+
+/// Load one manual query and render the projection encoded in its request.
+fn execute_query(
+    command: QueryExecution,
+    input: &mut dyn Read,
+    diagnostics: &mut dyn Write,
+    host: &dyn CliHost,
+) -> Result<String, Failure> {
+    let request = read_query_request(command.source, input)?;
+    validate_query_request(&request)?;
+    let view = request.view.clone();
+    let query = host.query(
+        &request,
+        QueryPolicy {
+            force_libmandoc: command.force_libmandoc,
+        },
+    )?;
+    if command.force_libmandoc {
+        report_native_diagnostics(&query, diagnostics)?;
+    }
+    render_query_view(
+        &query,
+        view,
+        command.format,
+        command.pretty,
+        command.explain,
+    )
+}
+
+/// Render one already-loaded projection without re-reading local source data.
+fn render_query_view(
+    query: &QueryBundle,
+    view: QueryView,
+    format: QueryFormat,
+    pretty: bool,
+    explain: bool,
+) -> Result<String, Failure> {
+    match view {
+        QueryView::Full { .. } => render_full_query(query, format, pretty),
+        QueryView::Outline { detail } => {
+            let outline =
+                mant_core::build_outline_with_detail(query, detail).map_err(projection_failure)?;
+            match format {
+                QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
+                QueryFormat::Text => Ok(mant_core::render_outline_text(&outline)),
+                QueryFormat::Json => {
+                    mant_core::render_outline_json(&outline, pretty).map_err(Failure::operational)
+                }
             }
-            match view {
-                QueryView::Full { .. } => render_full_query(&query, format, pretty),
-                QueryView::Outline { detail } => {
-                    let outline = mant_core::build_outline_with_detail(&query, detail)
-                        .map_err(projection_failure)?;
-                    match format {
-                        QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
-                        QueryFormat::Text => Ok(mant_core::render_outline_text(&outline)),
-                        QueryFormat::Json => mant_core::render_outline_json(&outline, pretty)
-                            .map_err(Failure::operational),
-                    }
+        }
+        QueryView::Excerpt { nodes } => {
+            let excerpt = mant_core::select_excerpt(query, &nodes).map_err(projection_failure)?;
+            if explain {
+                validate_explanation(&excerpt)?;
+            }
+            match format {
+                QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown(&excerpt)),
+                QueryFormat::Text => Ok(mant_core::render_excerpt_text(&excerpt)),
+                QueryFormat::Json => {
+                    mant_core::render_excerpt_json(&excerpt, pretty).map_err(Failure::operational)
                 }
-                QueryView::Excerpt { nodes } => {
-                    let excerpt =
-                        mant_core::select_excerpt(&query, &nodes).map_err(projection_failure)?;
-                    if explain {
-                        validate_explanation(&excerpt)?;
-                    }
-                    match format {
-                        QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown(&excerpt)),
-                        QueryFormat::Text => Ok(mant_core::render_excerpt_text(&excerpt)),
-                        QueryFormat::Json => mant_core::render_excerpt_json(&excerpt, pretty)
-                            .map_err(Failure::operational),
-                    }
-                }
-                QueryView::Search {
+            }
+        }
+        QueryView::Search {
+            pattern,
+            syntax,
+            case,
+            scope,
+            word,
+            context_lines,
+            limit,
+            offset,
+        } => {
+            let search = mant_core::search_query(
+                query,
+                &SearchQuery {
                     pattern,
                     syntax,
                     case,
@@ -179,27 +287,14 @@ fn execute(
                     context_lines,
                     limit,
                     offset,
-                } => {
-                    let search = mant_core::search_query(
-                        &query,
-                        &SearchQuery {
-                            pattern,
-                            syntax,
-                            case,
-                            scope,
-                            word,
-                            context_lines,
-                            limit,
-                            offset,
-                        },
-                    )
-                    .map_err(search_failure)?;
-                    match format {
-                        QueryFormat::Markdown => Ok(mant_core::render_search_markdown(&search)),
-                        QueryFormat::Text => Ok(mant_core::render_search_text(&search)),
-                        QueryFormat::Json => mant_core::render_search_json(&search, pretty)
-                            .map_err(Failure::operational),
-                    }
+                },
+            )
+            .map_err(search_failure)?;
+            match format {
+                QueryFormat::Markdown => Ok(mant_core::render_search_markdown(&search)),
+                QueryFormat::Text => Ok(mant_core::render_search_text(&search)),
+                QueryFormat::Json => {
+                    mant_core::render_search_json(&search, pretty).map_err(Failure::operational)
                 }
             }
         }

@@ -84,10 +84,10 @@ fn lower_section(
 }
 
 fn update_paragraph_distance(node: &Node, paragraph_distance: &mut u16) {
-    if node.macro_name.as_deref() == Some("PD") {
-        if let Some(lines) = paragraph_distance_lines(node) {
-            *paragraph_distance = lines;
-        }
+    if node.macro_name.as_deref() == Some("PD")
+        && let Some(lines) = paragraph_distance_lines(node)
+    {
+        *paragraph_distance = lines;
     }
 }
 

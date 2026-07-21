@@ -10,8 +10,12 @@ publish.workspace = true
 clap.workspace = true
 mant-ast = { path = "../mant-ast" }
 mant-core = { path = "../mant-core" }
+rmcp.workspace = true
+rmcp-macros.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

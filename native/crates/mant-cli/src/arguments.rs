@@ -113,6 +113,8 @@ pub(crate) enum Command {
         contract: SchemaContract,
         pretty: bool,
     },
+    /// Run the read-only MCP server over standard input and output.
+    Mcp,
 }
 
 // ── Declarative command line ───────────────────────────────────────────────
@@ -126,10 +128,10 @@ pub(crate) enum Command {
     about = "Query structured local manual pages for agents and scripts",
     disable_help_flag = true,
     disable_version_flag = true,
-    override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli gcc --outline\n  mant-cli tar --explain=--exclude\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls --context 1\n  mant-cli git --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr",
+    override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]\n       mant-cli --mcp",
+    after_help = "Examples:\n  mant-cli git\n  mant-cli gcc --outline\n  mant-cli tar --explain=--exclude\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls --context 1\n  mant-cli git --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr\n  mant-cli --mcp",
     group = ArgGroup::new("source")
-        .args(["topic", "request_json", "update_tldr", "protocol_version", "schema"])
+        .args(["topic", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
@@ -306,6 +308,35 @@ struct Cli {
     )]
     schema: Option<SchemaContract>,
 
+    /// Serve read-only manual queries through the MCP stdio transport.
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "topic",
+            "section",
+            "outline",
+            "node",
+            "explain",
+            "search",
+            "regex",
+            "search_case",
+            "word",
+            "search_scope",
+            "context",
+            "limit",
+            "offset",
+            "request_json",
+            "force_libmandoc",
+            "update_tldr",
+            "protocol_version",
+            "schema",
+            "format",
+            "compact"
+        ],
+        help_heading = "Integration"
+    )]
+    mcp: bool,
+
     /// Output format. Full content defaults to markdown; outlines and search default to text.
     #[arg(long, value_name = "FORMAT", value_enum, help_heading = "Output")]
     format: Option<QueryFormat>,
@@ -336,6 +367,9 @@ pub(crate) fn parse(arguments: &[String]) -> Result<Command, clap::Error> {
 }
 
 fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
+    if parsed.mcp {
+        return Ok(Command::Mcp);
+    }
     if parsed.update_tldr {
         return Ok(Command::UpdateTldr {
             pretty: !parsed.compact,
@@ -692,6 +726,7 @@ mod tests {
                 pretty: false,
             }
         );
+        assert_eq!(parse(&args(&["--mcp"])).expect("MCP"), Command::Mcp);
     }
 
     #[test]
@@ -714,6 +749,9 @@ mod tests {
             vec!["--section", "1"],
             vec!["--update-tldr", "--format", "json"],
             vec!["--schema", "request", "--format", "json"],
+            vec!["--mcp", "git"],
+            vec!["--mcp", "--format", "json"],
+            vec!["--mcp", "--update-tldr"],
             vec!["--schema", "unknown"],
             vec!["update", "tldr"],
             vec!["git", "--json"],
