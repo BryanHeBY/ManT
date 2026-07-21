@@ -21,6 +21,15 @@ Each distribution directory also contains a `VERIFIED_TOPICS.txt` listing
 every man page that has been scanned through `mant-cli --force-libmandoc`
 with the results, methodology, and findings summarised below.
 
+### Known libmandoc limitations found during spot-check
+
+| Page | Issue |
+| ---- | ----- |
+| `ps(1)` (procps-ng) | All 20+ `.SH` section titles lost; libmandoc mis-handles `.na`/`.nh` before `.SH` |
+| `ssh(1)` (OpenSSH) | `.Bd -literal` code blocks in VPN section rendered as H1 headings |
+
+These are upstream libmandoc parser bugs, not ManT framework issues.
+
 ## Adding or replacing a fixture source
 
 Create or update a distribution-specific directory rather than adding a page

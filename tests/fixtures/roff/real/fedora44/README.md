@@ -54,24 +54,25 @@ assertions in the same commit.
 
 ## `mant-cli` 解析验证
 
-2026-07-21 对从 Fedora Linux 44 下载的 20 个软件包中的 **246 页**
-（232 个 distinct topic）执行了 `mant-cli --force-libmandoc` 批量扫描。
+2026-07-21 对从 Fedora Linux 44 下载的 33 个软件包中的 **~430 页**
+执行了 `mant-cli --force-libmandoc` 批量扫描。
 
-结果：**100% 成功**，0 崩溃，0 解析失败。
+结果：**100% 成功**，0 解析崩溃。
 
 完整 topic 清单见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
 
 | 软件包 | Topics | 备注 |
 | ------ | ------ | ---- |
-| tcl/tk | 104 | Tcl 命令和 C API |
+| tcl/tk | 99 | Tcl 命令和 C API |
+| util-linux | 69 | mount, fdisk, ... |
 | groff | 36 | groff 工具链和宏包 |
 | mtools | 27 | FAT 文件系统工具 |
-| mandoc | 6 | mandoc 工具链 |
-| mutt | 5 | 邮件客户端 |
-| nmap | 2 | 网络扫描 |
-| rsync / socat | 各3 | — |
-| gawk | 2 | GNU awk |
-| 其他（cpio, gnuplot, graphviz, recode, screen, tmux, units, xterm） | 各1–3 | — |
+| procps-ng | 25 | ps, top, kill, ... |
+| zsh | 17 | Z shell 及其模块 |
+| system (s8) | 10 | 系统管理 |
+| coreutils | 6 | — |
+| mandoc | 6 | — |
+| 其他 | 各1–5 | bash, cpio, curl, diffutils, findutils, gawk, git, gnuplot, graphviz, grep, mutt, nmap, openssh, recode, rsync, screen, sed, socat, tmux, units, xterm |
 
 [clang 22.1.1-2.fc44]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/Packages/c/clang-22.1.1-2.fc44.x86_64.rpm
 [llvm source RPM]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/l/llvm-22.1.1-2.fc44.src.rpm

@@ -44,26 +44,27 @@ same commit.
 
 ## `mant-cli` 解析验证
 
-2026-07-21 对从 Arch Linux 下载的 20 个软件包中的 **1,373 页**
-（1,358 个 distinct topic）执行了 `mant-cli --force-libmandoc` 批量扫描。
+2026-07-21 对从 Arch Linux 下载的 33 个软件包中的 **4,064 页**
+执行了 `mant-cli --force-libmandoc` 批量扫描。
 
-结果：**100% 成功**，0 崩溃，0 解析失败。
+结果：**100% 成功**，0 解析崩溃。fexit=1 均为非英语 man 页的 locale 查找失败。
 
 完整 topic 清单见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
 
 | 软件包 | Topics | 备注 |
 | ------ | ------ | ---- |
-| tcl/tk | 1,222 | Tcl 命令和 C API（section n） |
+| tcl/tk | 1,199 | Tcl 命令和 C API（section n） |
+| library (s3) | 464 | ncurses、util-linux 等库函数 |
+| coreutils | 118 | GNU coreutils 全量（ls, cat, cp, ...） |
+| util-linux | 102 | mount, fdisk, losetup, ... |
+| curl | 93 | libcurl API（section 3） |
 | graphviz | 46 | 图形布局工具和 C API |
+| procps-ng | 31 | ps, top, kill, free, ... |
 | mtools | 30 | FAT 文件系统工具 |
-| library (s3) | 17 | ncurses 等库函数 |
+| openssh | 14 | ssh, sshd, scp, sftp, ... |
 | mandoc | 12 | mandoc 工具链 |
-| mutt | 5 | 邮件客户端 |
-| rsync | 4 | 文件同步 |
-| xterm | 4 | 终端模拟器 |
-| nmap | 3 | 网络扫描 |
-| parted | 2 | 磁盘分区 |
-| 其他（cpio, gnuplot, recode, screen, socat, tmux） | 各1 | — |
+| system (s8) | 11 | 系统管理工具 |
+| 其他（bash, cpio, diffutils, findutils, gnuplot, grep, mutt, nmap, parted, recode, rsync, screen, sed, socat, tmux, xterm） | 1–5 各 | — |
 
 [GNU coreutils]: https://www.gnu.org/software/coreutils/
 [Git]: https://git-scm.com/

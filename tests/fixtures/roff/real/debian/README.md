@@ -43,23 +43,22 @@ hash, and applicable license references in the same commit.
 
 ## `mant-cli` 解析验证
 
-2026-07-21 对从 Debian sid 下载的 20 个软件包中的 **159 页**
-（145 个 distinct topic）执行了 `mant-cli --force-libmandoc` 批量扫描。
+2026-07-21 对从 Debian sid 下载的 33 个软件包中的 **~320 页**
+执行了 `mant-cli --force-libmandoc` 批量扫描。
 
-结果：**100% 成功**，0 崩溃，0 解析失败。
+结果：**100% 成功**，0 解析崩溃。
 
 完整 topic 清单见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
 
 | 软件包 | Topics | 备注 |
 | ------ | ------ | ---- |
+| coreutils | 100 | GNU coreutils 全量 |
+| util-linux | 49 | mount, fdisk, ... |
 | groff | 41 | groff 工具链和宏包 |
 | mtools | 30 | FAT 文件系统工具 |
 | mandoc | 12 | mandoc 工具链 |
-| mutt | 6 | 邮件客户端 |
-| graphviz / xterm | 各5 | — |
-| rsync | 4 | 文件同步 |
-| cpio / gawk / nmap / parted / units | 各2 | — |
-| 其他（recode, screen, socat, tmux） | 各1 | — |
+| procps-ng | 6 | ps, top, ... |
+| 其他 | 各1–6 | bash, cpio, curl, diffutils, findutils, gawk, graphviz, grep, mutt, nmap, parted, recode, rsync, screen, sed, socat, tmux, units, xterm |
 
 [GNU cpio]: https://www.gnu.org/software/cpio/
 [GNU groff]: https://www.gnu.org/software/groff/

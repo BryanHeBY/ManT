@@ -1,10 +1,130 @@
 # mant-cli verified topics: debian
 # scanned 2026-07-21, 100% parse success, 0 crashes
-# total distinct topics: 145
+# total distinct topics: 318
+
+## bash (3 pages)
+mant-cli bash --section 1
+mant-cli bash-builtins --section 7
+mant-cli bashbug --section 1
+
+## coreutils (100 pages)
+mant-cli arch --section 1
+mant-cli b2sum --section 1
+mant-cli base32 --section 1
+mant-cli base64 --section 1
+mant-cli basename --section 1
+mant-cli basenc --section 1
+mant-cli cat --section 1
+mant-cli chcon --section 1
+mant-cli chgrp --section 1
+mant-cli chmod --section 1
+mant-cli chown --section 1
+mant-cli chroot --section 8
+mant-cli cksum --section 1
+mant-cli comm --section 1
+mant-cli cp --section 1
+mant-cli csplit --section 1
+mant-cli cut --section 1
+mant-cli date --section 1
+mant-cli dd --section 1
+mant-cli df --section 1
+mant-cli dir --section 1
+mant-cli dircolors --section 1
+mant-cli dirname --section 1
+mant-cli du --section 1
+mant-cli echo --section 1
+mant-cli env --section 1
+mant-cli expand --section 1
+mant-cli expr --section 1
+mant-cli factor --section 1
+mant-cli false --section 1
+mant-cli fmt --section 1
+mant-cli fold --section 1
+mant-cli groups --section 1
+mant-cli head --section 1
+mant-cli hostid --section 1
+mant-cli id --section 1
+mant-cli install --section 1
+mant-cli join --section 1
+mant-cli link --section 1
+mant-cli ln --section 1
+mant-cli logname --section 1
+mant-cli ls --section 1
+mant-cli md5sum --section 1
+mant-cli mkdir --section 1
+mant-cli mkfifo --section 1
+mant-cli mknod --section 1
+mant-cli mktemp --section 1
+mant-cli mv --section 1
+mant-cli nice --section 1
+mant-cli nl --section 1
+mant-cli nohup --section 1
+mant-cli nproc --section 1
+mant-cli numfmt --section 1
+mant-cli od --section 1
+mant-cli paste --section 1
+mant-cli pathchk --section 1
+mant-cli pinky --section 1
+mant-cli pr --section 1
+mant-cli printenv --section 1
+mant-cli printf --section 1
+mant-cli ptx --section 1
+mant-cli pwd --section 1
+mant-cli readlink --section 1
+mant-cli realpath --section 1
+mant-cli rm --section 1
+mant-cli rmdir --section 1
+mant-cli runcon --section 1
+mant-cli seq --section 1
+mant-cli sha1sum --section 1
+mant-cli sha224sum --section 1
+mant-cli sha256sum --section 1
+mant-cli sha384sum --section 1
+mant-cli sha512sum --section 1
+mant-cli shred --section 1
+mant-cli shuf --section 1
+mant-cli sleep --section 1
+mant-cli sort --section 1
+mant-cli split --section 1
+mant-cli stat --section 1
+mant-cli stdbuf --section 1
+mant-cli stty --section 1
+mant-cli sync --section 1
+mant-cli tac --section 1
+mant-cli tail --section 1
+mant-cli tee --section 1
+mant-cli test --section 1
+mant-cli timeout --section 1
+mant-cli touch --section 1
+mant-cli tr --section 1
+mant-cli true --section 1
+mant-cli truncate --section 1
+mant-cli tsort --section 1
+mant-cli tty --section 1
+mant-cli uname --section 1
+mant-cli unexpand --section 1
+mant-cli uniq --section 1
+mant-cli unlink --section 1
+mant-cli users --section 1
+mant-cli vdir --section 1
+mant-cli yes --section 1
 
 ## cpio (2 pages)
 mant-cli cpio --section 1
 mant-cli mt-gnu --section 1
+
+## curl (1 pages)
+mant-cli curl --section 1
+
+## diffutils (4 pages)
+mant-cli cmp --section 1
+mant-cli diff --section 1
+mant-cli diff3 --section 1
+mant-cli sdiff --section 1
+
+## findutils (2 pages)
+mant-cli find --section 1
+mant-cli xargs --section 1
 
 ## gawk (2 pages)
 mant-cli gawk --section 1
@@ -16,6 +136,9 @@ mant-cli gvpr --section 1
 mant-cli nop --section 1
 mant-cli osage --section 1
 mant-cli patchwork --section 1
+
+## grep (1 pages)
+mant-cli grep --section 1
 
 ## groff (41 pages)
 mant-cli addftinfo --section 1
@@ -122,6 +245,14 @@ mant-cli nping --section 1
 mant-cli parted --section 8
 mant-cli partprobe --section 8
 
+## procps-ng (6 pages)
+mant-cli wc --section 1
+mant-cli wcurl --section 1
+mant-cli whereis --section 1
+mant-cli who --section 1
+mant-cli whoami --section 1
+mant-cli wipefs --section 8
+
 ## recode (1 pages)
 mant-cli recode --section 1
 
@@ -134,6 +265,9 @@ mant-cli rsyncd.conf --section 5
 ## screen (1 pages)
 mant-cli screen --section 1
 
+## sed (1 pages)
+mant-cli sed --section 1
+
 ## socat (1 pages)
 mant-cli socat1 --section 1
 
@@ -144,6 +278,57 @@ mant-cli tmux --section 1
 mant-cli units --section 1
 mant-cli units_cur --section 1
 
+## util-linux (49 pages)
+mant-cli agetty --section 8
+mant-cli blkdiscard --section 8
+mant-cli blkid --section 8
+mant-cli blockdev --section 8
+mant-cli choom --section 1
+mant-cli chrt --section 1
+mant-cli dmesg --section 1
+mant-cli findfs --section 8
+mant-cli findmnt --section 8
+mant-cli flock --section 1
+mant-cli fsck --section 8
+mant-cli fsfreeze --section 8
+mant-cli fstrim --section 8
+mant-cli getopt --section 1
+mant-cli ionice --section 1
+mant-cli ipcmk --section 1
+mant-cli ipcrm --section 1
+mant-cli ipcs --section 1
+mant-cli logger --section 1
+mant-cli lsblk --section 8
+mant-cli lscpu --section 1
+mant-cli lsipc --section 1
+mant-cli lslocks --section 8
+mant-cli lsns --section 8
+mant-cli mcookie --section 1
+mant-cli mkfs --section 8
+mant-cli mkswap --section 8
+mant-cli more --section 1
+mant-cli mountpoint --section 1
+mant-cli namei --section 1
+mant-cli nsenter --section 1
+mant-cli partx --section 8
+mant-cli prlimit --section 1
+mant-cli readprofile --section 8
+mant-cli revoutput --section 3am
+mant-cli revtwoway --section 3am
+mant-cli rtcwake --section 8
+mant-cli runuser --section 1
+mant-cli setarch --section 8
+mant-cli setsid --section 1
+mant-cli setterm --section 1
+mant-cli su --section 1
+mant-cli sulogin --section 8
+mant-cli sum --section 1
+mant-cli swaplabel --section 8
+mant-cli taskset --section 1
+mant-cli uclampset --section 1
+mant-cli unshare --section 1
+mant-cli zramctl --section 8
+
 ## xterm (5 pages)
 mant-cli koi8rxterm --section 1
 mant-cli lxterm --section 1
@@ -151,11 +336,15 @@ mant-cli resize --section 1
 mant-cli uxterm --section 1
 mant-cli xterm --section 1
 
-## other (28 pages)
+## other (34 pages)
+mant-cli adjtime_config --section 5
+mant-cli clear_console --section 1
+mant-cli fallocate --section 1
 mant-cli filefuncs --section 3am
 mant-cli fnmatch --section 3am
 mant-cli fork --section 3am
 mant-cli graphviz --section 7
+mant-cli hardlink --section 1
 mant-cli inplace --section 3am
 mant-cli lz --section 1
 mant-cli mapropos --section 1
@@ -170,12 +359,14 @@ mant-cli mxtar --section 1
 mant-cli ordchr --section 3am
 mant-cli pdfmom --section 1
 mant-cli pm-gawk --section 1
+mant-cli rbash --section 1
 mant-cli readdir --section 3am
 mant-cli readfile --section 3am
-mant-cli revoutput --section 3am
-mant-cli revtwoway --section 3am
 mant-cli roff --section 7
 mant-cli rwarray --section 3am
+mant-cli scols-filter --section 5
+mant-cli setpriv --section 1
+mant-cli terminal-colors.d --section 5
 mant-cli tgz --section 1
 mant-cli time --section 3am
 mant-cli uz --section 1

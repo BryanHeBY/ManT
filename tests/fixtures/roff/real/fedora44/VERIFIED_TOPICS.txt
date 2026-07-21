@@ -1,19 +1,52 @@
 # mant-cli verified topics: fedora
 # scanned 2026-07-21, 100% parse success, 0 crashes
-# total distinct topics: 232
+# total distinct topics: 437
+
+## bash (2 pages)
+mant-cli bash --section 1
+mant-cli bashbug --section 1
+
+## coreutils (6 pages)
+mant-cli command --section 1
+mant-cli dirs --section 1
+mant-cli lsclocks --section 1
+mant-cli print --section n
+mant-cli trap --section 1
+mant-cli uname26 --section 8
 
 ## cpio (1 pages)
 mant-cli cpio --section 1
 
+## curl (1 pages)
+mant-cli curl --section 1
+
+## diffutils (4 pages)
+mant-cli cmp --section 1
+mant-cli diff --section 1
+mant-cli diff3 --section 1
+mant-cli sdiff --section 1
+
+## findutils (2 pages)
+mant-cli find --section 1
+mant-cli xargs --section 1
+
 ## gawk (2 pages)
 mant-cli gawk --section 1
 mant-cli gawkbug --section 1
+
+## git (3 pages)
+mant-cli git-contacts --section 1
+mant-cli git-filter-branch --section 1
+mant-cli git-request-pull --section 1
 
 ## gnuplot (1 pages)
 mant-cli gnuplot --section 1
 
 ## graphviz (1 pages)
 mant-cli pack --section n
+
+## grep (1 pages)
+mant-cli grep --section 1
 
 ## groff (36 pages)
 mant-cli addftinfo --section 1
@@ -101,6 +134,36 @@ mant-cli smime_keys --section 1
 mant-cli nmap --section 1
 mant-cli nping --section 1
 
+## openssh (1 pages)
+mant-cli ssh-keygen --section 1
+
+## procps-ng (25 pages)
+mant-cli free --section 1
+mant-cli pgrep --section 1
+mant-cli pidof --section 1
+mant-cli pmap --section 1
+mant-cli ps --section 1
+mant-cli pwdx --section 1
+mant-cli slabtop --section 1
+mant-cli sysctl --section 8
+mant-cli sysctl.conf --section 5
+mant-cli tload --section 1
+mant-cli top --section 1
+mant-cli toplevel --section n
+mant-cli uptime --section 1
+mant-cli vmstat --section 8
+mant-cli w --section 1
+mant-cli wait --section 1
+mant-cli waitpid --section 1
+mant-cli wall --section 1
+mant-cli watch --section 1
+mant-cli wdctl --section 8
+mant-cli whereis --section 1
+mant-cli winfo --section n
+mant-cli wipefs --section 8
+mant-cli wm --section n
+mant-cli write --section 1
+
 ## recode (1 pages)
 mant-cli recode --section 1
 
@@ -112,12 +175,27 @@ mant-cli rsyncd.conf --section 5
 ## screen (1 pages)
 mant-cli screen --section 1
 
+## sed (1 pages)
+mant-cli sed --section 1
+
 ## socat (3 pages)
 mant-cli filan --section 1
 mant-cli procan --section 1
 mant-cli socat1 --section 1
 
-## tcl/tk (104 pages)
+## system (s8) (10 pages)
+mant-cli blkpr --section 8
+mant-cli clock --section 8
+mant-cli ctrlaltdel --section 8
+mant-cli fdformat --section 8
+mant-cli i386 --section 8
+mant-cli linux32 --section 8
+mant-cli linux64 --section 8
+mant-cli nologin --section 8
+mant-cli rfkill --section 8
+mant-cli x86_64 --section 8
+
+## tcl/tk (99 pages)
 mant-cli bell --section n
 mant-cli bind --section n
 mant-cli bindtags --section n
@@ -127,7 +205,6 @@ mant-cli button --section n
 mant-cli canvas --section n
 mant-cli checkbutton --section n
 mant-cli clipboard --section n
-mant-cli colors --section n
 mant-cli console --section n
 mant-cli cursors --section n
 mant-cli destroy --section n
@@ -155,7 +232,6 @@ mant-cli options --section n
 mant-cli panedwindow --section n
 mant-cli photo --section n
 mant-cli place --section n
-mant-cli print --section n
 mant-cli radiobutton --section n
 mant-cli raise --section n
 mant-cli safe_loadTk --section n
@@ -195,7 +271,6 @@ mant-cli tk_textPaste --section n
 mant-cli tk_version --section n
 mant-cli tkerror --section n
 mant-cli tkwait --section n
-mant-cli toplevel --section n
 mant-cli ttk_button --section n
 mant-cli ttk_checkbutton --section n
 mant-cli ttk_combobox --section n
@@ -219,9 +294,7 @@ mant-cli ttk_style --section n
 mant-cli ttk_treeview --section n
 mant-cli ttk_vsapi --section n
 mant-cli ttk_widget --section n
-mant-cli winfo --section n
 mant-cli wish --section 1
-mant-cli wm --section n
 
 ## tmux (1 pages)
 mant-cli tmux --section 1
@@ -229,44 +302,202 @@ mant-cli tmux --section 1
 ## units (1 pages)
 mant-cli units --section 1
 
-## xterm (3 pages)
+## util-linux (69 pages)
+mant-cli addpart --section 8
+mant-cli blkdiscard --section 8
+mant-cli blkzone --section 8
+mant-cli cal --section 1
+mant-cli caller --section 1
+mant-cli cfdisk --section 8
+mant-cli chcpu --section 8
+mant-cli chfn --section 1
+mant-cli chmem --section 8
+mant-cli choom --section 1
+mant-cli chsh --section 1
+mant-cli col --section 1
+mant-cli colcrt --section 1
+mant-cli colors --section n
+mant-cli colrm --section 1
+mant-cli column --section 1
+mant-cli delpart --section 8
+mant-cli eject --section 1
+mant-cli fdisk --section 8
+mant-cli findfs --section 8
+mant-cli fsck.cramfs --section 8
+mant-cli fsck.minix --section 8
+mant-cli fsfreeze --section 8
+mant-cli fstrim --section 8
+mant-cli getopt --section 1
+mant-cli getopts --section 1
+mant-cli hexdump --section 1
+mant-cli hwclock --section 8
+mant-cli isosize --section 8
+mant-cli last --section 1
+mant-cli lastb --section 1
+mant-cli lastlog2 --section 8
+mant-cli ldattach --section 8
+mant-cli look --section 1
+mant-cli lsblk --section 8
+mant-cli lscpu --section 1
+mant-cli lsfd --section 1
+mant-cli lsipc --section 1
+mant-cli lsirq --section 1
+mant-cli lslocks --section 8
+mant-cli lslogins --section 1
+mant-cli lsmem --section 1
+mant-cli lsns --section 8
+mant-cli mcookie --section 1
+mant-cli mesg --section 1
+mant-cli mkfs --section 8
+mant-cli mkfs.cramfs --section 8
+mant-cli mkfs.minix --section 8
+mant-cli namei --section 1
+mant-cli pivot_root --section 8
+mant-cli prlimit --section 1
+mant-cli readprofile --section 8
+mant-cli rename --section 1
+mant-cli rev --section 1
+mant-cli revoutput --section 3am
+mant-cli revtwoway --section 3am
+mant-cli rtcwake --section 8
+mant-cli runuser --section 1
+mant-cli setarch --section 8
+mant-cli setterm --section 1
+mant-cli sfdisk --section 8
+mant-cli su --section 1
+mant-cli suspend --section 1
+mant-cli swaplabel --section 8
+mant-cli uclampset --section 1
+mant-cli utmpdump --section 1
+mant-cli uuidgen --section 1
+mant-cli uuidparse --section 1
+mant-cli zramctl --section 8
+
+## xterm (4 pages)
 mant-cli koi8rxterm --section 1
+mant-cli resizepart --section 8
 mant-cli uxterm --section 1
 mant-cli xterm --section 1
 
-## other (34 pages)
+## zsh (17 pages)
+mant-cli zsh --section 1
+mant-cli zshall --section 1
+mant-cli zshbuiltins --section 1
+mant-cli zshcalsys --section 1
+mant-cli zshcompctl --section 1
+mant-cli zshcompsys --section 1
+mant-cli zshcompwid --section 1
+mant-cli zshcontrib --section 1
+mant-cli zshexpn --section 1
+mant-cli zshmisc --section 1
+mant-cli zshmodules --section 1
+mant-cli zshoptions --section 1
+mant-cli zshparam --section 1
+mant-cli zshroadmap --section 1
+mant-cli zshtcpsys --section 1
+mant-cli zshzftpsys --section 1
+mant-cli zshzle --section 1
+
+## other (101 pages)
+mant-cli . --section 1
+mant-cli : --section 1
+mant-cli [ --section 1
+mant-cli adjtime_config --section 5
+mant-cli alias --section 1
+mant-cli bg --section 1
+mant-cli bind --section 1
+mant-cli bits --section 1
+mant-cli break --section 1
+mant-cli builtin --section 1
+mant-cli builtins --section 1
 mant-cli captoinfo --section 1m
+mant-cli cd --section 1
 mant-cli clear --section 1
+mant-cli compgen --section 1
+mant-cli complete --section 1
+mant-cli compopt --section 1
+mant-cli continue --section 1
+mant-cli coresched --section 1
+mant-cli declare --section 1
+mant-cli disown --section 1
+mant-cli enable --section 1
+mant-cli enosys --section 1
 mant-cli eqn.mandoc --section 7
+mant-cli eval --section 1
+mant-cli exch --section 1
+mant-cli exec --section 1
+mant-cli exit --section 1
+mant-cli export --section 1
+mant-cli fadvise --section 1
+mant-cli fallocate --section 1
+mant-cli fc --section 1
+mant-cli fg --section 1
 mant-cli filefuncs --section 3am
+mant-cli fincore --section 1
 mant-cli fnmatch --section 3am
 mant-cli fork --section 3am
+mant-cli fstab --section 5
+mant-cli hash --section 1
+mant-cli help --section 1
+mant-cli history --section 1
+mant-cli hugetop --section 1
 mant-cli infocmp --section 1m
 mant-cli infotocap --section 1m
 mant-cli inplace --section 3am
+mant-cli irqtop --section 1
+mant-cli jobs --section 1
+mant-cli let --section 1
+mant-cli local --section 1
+mant-cli login --section 1
+mant-cli logout --section 1
 mant-cli man.mandoc --section 1
 mant-cli man.mandoc --section 7
 mant-cli mandoc.conf --section 5
+mant-cli mapfile --section 1
 mant-cli mdoc --section 7
 mant-cli ordchr --section 3am
+mant-cli pidwait --section 1
+mant-cli pipesz --section 1
 mant-cli pm-gawk --section 1
+mant-cli popd --section 1
+mant-cli pushd --section 1
+mant-cli read --section 1
+mant-cli readarray --section 1
 mant-cli readdir --section 3am
 mant-cli readfile --section 3am
-mant-cli revoutput --section 3am
-mant-cli revtwoway --section 3am
+mant-cli readonly --section 1
+mant-cli return --section 1
 mant-cli roff.groff --section 7
 mant-cli roff.mandoc --section 7
 mant-cli rwarray --section 3am
+mant-cli scols-filter --section 5
 mant-cli scr_dump --section 5
+mant-cli set --section 1
+mant-cli setpgid --section 1
+mant-cli setpriv --section 1
+mant-cli shift --section 1
+mant-cli shopt --section 1
+mant-cli skill --section 1
+mant-cli snice --section 1
+mant-cli source --section 1
 mant-cli tabs --section 1
 mant-cli tbl.mandoc --section 7
 mant-cli term --section 5
 mant-cli term --section 7
+mant-cli terminal-colors.d --section 5
 mant-cli terminfo --section 5
 mant-cli tic --section 1m
 mant-cli time --section 3am
+mant-cli times --section 1
 mant-cli toe --section 1m
 mant-cli tput --section 1
 mant-cli tset --section 1
+mant-cli type --section 1
+mant-cli typeset --section 1
+mant-cli ul --section 1
+mant-cli ulimit --section 1
+mant-cli umask --section 1
+mant-cli unalias --section 1
+mant-cli unset --section 1
 mant-cli user_caps --section 5
 
