@@ -44,6 +44,10 @@ mod tests {
         std::env::temp_dir().join(format!("mant-{label}-{}.1", process::id()))
     }
 
+    fn measured_depth(node: &Node) -> usize {
+        1 + node.children.iter().map(measured_depth).max().unwrap_or(0)
+    }
+
     fn parse_file(path: &std::path::Path, allow_includes: bool) -> Result<Document, ParseError> {
         Parser::new(ParseOptions {
             includes: if allow_includes {
@@ -351,6 +355,30 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.level == super::DiagnosticLevel::Unsupported)
+        );
+    }
+
+    #[test]
+    fn deeply_nested_input_is_bounded_instead_of_overflowing_the_stack() {
+        // Far more nesting than the copy cap; the parse must return a finite
+        // tree rather than recursing without limit while copying it out.
+        let depth = 5_000;
+        let mut source = String::from(".TH DEEP 1\n.SH BODY\n");
+        for _ in 0..depth {
+            source.push_str(".RS\n");
+        }
+        source.push_str("deep\n");
+
+        let document = Parser::default()
+            .parse_bytes("deep.1", source.as_bytes())
+            .expect("deeply nested source parses")
+            .document;
+
+        // The owned tree stays well under the input nesting, proving the copy
+        // stopped descending at the cap.
+        assert!(
+            measured_depth(&document.root) <= 300,
+            "tree depth must be bounded by the copy cap"
         );
     }
 

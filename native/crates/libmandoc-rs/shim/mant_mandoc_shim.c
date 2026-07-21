@@ -70,11 +70,23 @@ struct mant_mandoc_document {
 static char *source_root;
 static int source_root_strict;
 
+/*
+ * Maximum node nesting copied out of libmandoc's tree.
+ *
+ * libmandoc bounds .so include depth but not block/inline nesting, so a
+ * pathological or hostile page (thousands of nested .RS or .Bl) yields a tree
+ * deep enough to overflow the stack when it is copied, freed, lowered, or
+ * dropped. Capping depth once at the copy boundary keeps the owned tree finite,
+ * which transitively bounds every later recursive walk on both sides of the
+ * FFI. Real manuals nest only a handful of levels, far below this limit.
+ */
+#define MANT_MANDOC_MAX_COPY_DEPTH 256
+
 static char *copy_string(const char *);
 static struct mant_mandoc_document *parse_input(const char *,
     const unsigned char *, size_t, const char *, int);
 static char *read_diagnostics(FILE *);
-static struct mant_mandoc_node *copy_node(const struct roff_node *);
+static struct mant_mandoc_node *copy_node(const struct roff_node *, int);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
 static void set_source_root_from_path(const char *);
@@ -178,7 +190,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	document->date = copy_string(meta->date);
 	document->alias_target = copy_string(meta->sodest);
 	document->has_body = document_has_body(meta);
-	document->root = copy_node(meta->first);
+	document->root = copy_node(meta->first, 0);
 	document->ok = document->root != NULL;
 	if (!document->ok)
 		document->error = copy_string("libmandoc produced no syntax tree");
@@ -332,12 +344,15 @@ read_diagnostics(FILE *stream)
 }
 
 static struct mant_mandoc_node *
-copy_node(const struct roff_node *source)
+copy_node(const struct roff_node *source, int depth)
 {
 	const struct roff_node		*source_child;
 	struct mant_mandoc_node		*node, **next_child;
 
 	if (source == NULL)
+		return NULL;
+	/* Stop descending past the depth cap so the owned tree stays finite. */
+	if (depth >= MANT_MANDOC_MAX_COPY_DEPTH)
 		return NULL;
 	node = calloc(1, sizeof(*node));
 	if (node == NULL)
@@ -373,7 +388,7 @@ copy_node(const struct roff_node *source)
 	next_child = &node->child;
 	for (source_child = source->child; source_child != NULL;
 	    source_child = source_child->next) {
-		*next_child = copy_node(source_child);
+		*next_child = copy_node(source_child, depth + 1);
 		if (*next_child == NULL)
 			break;
 		next_child = &(*next_child)->next;
