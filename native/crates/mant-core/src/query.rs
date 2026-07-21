@@ -26,9 +26,11 @@ pub enum QueryError {
 /// Host execution policy kept outside the serialized request contract.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QueryPolicy {
-    /// Disable the groff renderer and surface the native parser result.
-    /// Since libmandoc is now the default backend, this flag is retained
-    /// for backward compatibility but has no behavioural effect.
+    /// Request direct libmandoc output for parser diagnostics.
+    ///
+    /// Libmandoc is the default backend. This diagnostic policy additionally
+    /// rejects a tldr-only response when direct parsing cannot provide a
+    /// readable manual.
     pub force_libmandoc: bool,
     /// Use `man -Thtml` + groff HTML parser instead of libmandoc.
     /// This code path has not been comprehensively tested.
@@ -183,6 +185,19 @@ fn load_manual(
     policy: QueryPolicy,
     host: &dyn QueryHost,
 ) -> Result<Option<MantDocument>, String> {
+    // The groff compatibility path needs the located source only as document
+    // provenance. Do not parse it with libmandoc first: this switch is used to
+    // isolate renderer differences and must not pay for or depend on native
+    // lowering.
+    if policy.force_groff {
+        let source_path = host.locate_manual(request).ok();
+        return match host.render_groff(request, source_path.as_deref()) {
+            Ok(fallback) if !fallback.sections.is_empty() => Ok(Some(fallback)),
+            Ok(_) => Ok(None),
+            Err(error) => Err(error),
+        };
+    }
+
     let located = host.locate_manual(request);
     let (source_path, direct) = match located {
         Ok(path) => {
@@ -191,15 +206,6 @@ fn load_manual(
         }
         Err(error) => (None, Err(error)),
     };
-
-    // --force-groff: skip libmandoc, use man -Thtml + groff HTML parser.
-    if policy.force_groff {
-        return match host.render_groff(request, source_path.as_deref()) {
-            Ok(fallback) if !fallback.sections.is_empty() => Ok(Some(fallback)),
-            Ok(_) => Ok(None),
-            Err(error) => Err(error),
-        };
-    }
 
     // Default (and --force-libmandoc): libmandoc only.
     let document = direct.map_err(|error| {
@@ -450,6 +456,30 @@ mod tests {
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
             ["tldr", "locate", "parse"]
+        );
+    }
+
+    #[test]
+    fn forced_groff_never_starts_libmandoc() {
+        let mut host = host(Err("libmandoc must not run".to_owned()));
+        host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
+        let result = query_with(
+            &request(),
+            QueryPolicy {
+                force_libmandoc: false,
+                force_groff: true,
+            },
+            &host,
+        )
+        .expect("forced groff query");
+
+        assert_eq!(
+            result.manual.expect("manual").source.format,
+            SourceFormat::GroffHtml
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["tldr", "locate", "groff"]
         );
     }
 

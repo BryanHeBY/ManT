@@ -75,8 +75,14 @@ describe("native mant-cli client", () => {
       section: "1",
       forceLibmandoc: true,
     });
+    const third = await client.query({
+      topic: "git",
+      section: "1",
+      forceGroff: true,
+    });
     expect(first.schema).toBe("mant.query/v2");
     expect(second.topic).toBe("git");
+    expect(third.topic).toBe("git");
     expect(calls.map((call) => call.command)).toEqual([
       ["/tools/mant-cli", "--protocol-version", "--compact"],
       ["/tools/mant-cli", "--request-json", "--format", "json", "--compact"],
@@ -84,6 +90,14 @@ describe("native mant-cli client", () => {
         "/tools/mant-cli",
         "--request-json",
         "--force-libmandoc",
+        "--format",
+        "json",
+        "--compact",
+      ],
+      [
+        "/tools/mant-cli",
+        "--request-json",
+        "--force-groff",
         "--format",
         "json",
         "--compact",

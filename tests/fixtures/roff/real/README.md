@@ -17,9 +17,10 @@ the host manual database. Fixed compressed roff sources replace the former
 renderer-specific HTML snapshots, making parser regressions reproducible across
 Linux and macOS while retaining upstream notices embedded in the manuals.
 
-Each distribution directory also contains a `VERIFIED_TOPICS.txt` listing
-every man page that has been scanned through `mant-cli --force-libmandoc`
-with the results, methodology, and findings summarised below.
+Each distribution directory also contains a `VERIFIED_TOPICS.txt` list of the
+topic/section requests scanned through `mant-cli --force-libmandoc`. Its header
+is the authoritative count for that distribution; the neighbouring README
+records the package provenance and observed parser behaviour.
 
 ### Known libmandoc limitations found during spot-check
 
@@ -28,7 +29,7 @@ with the results, methodology, and findings summarised below.
 | `ps(1)`, `top(1)`, `free(1)`, `pgrep(1)` (procps-ng) | All `.SH` section titles lost; libmandoc mis-handles `.na`/`.nh` before `.SH` | All procps-ng pages |
 | `ssh(1)` (OpenSSH), `losetup(8)`, `dd(1)`, `swapon(8)`, `sfdisk(8)` | Preformatted code blocks (`.EX`/`.Bd -literal`) rendered as H1 headings | Widespread in util-linux, OpenSSH |
 
-These are upstream libmandoc parser bugs, not ManT framework issues.
+These originate in upstream libmandoc and are currently visible in ManT output.
 
 ## Adding or replacing a fixture source
 

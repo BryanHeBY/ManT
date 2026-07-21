@@ -1,5 +1,5 @@
 # mant-cli verified topics: fedora
-# scanned 2026-07-21, 100% parse success
+# scanned 2026-07-21; no parser crash observed
 # total distinct topics: 879
 
 ## bash (2 pages)

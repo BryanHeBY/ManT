@@ -53,6 +53,7 @@ export async function runCli(
       topic: command.topic,
       ...(command.section === undefined ? {} : { section: command.section }),
       ...(command.forceLibmandoc ? { forceLibmandoc: true } : {}),
+      ...(command.forceGroff ? { forceGroff: true } : {}),
     });
     const startTui = dependencies.runTui ?? (await import("../ui/app")).runTui;
     await startTui(result);

@@ -93,7 +93,8 @@ mant-cli <topic> --outline [sections|options] -> selectable section and option t
 mant-cli <topic> --node <path-or-id>   -> selected section subtrees
 mant-cli <topic> --explain <alias-or-id> -> one option, command, or environment entry
 mant-cli <topic> --search <pattern>    -> matches with node and Markdown locations
-mant-cli <topic> --force-libmandoc     -> disable groff fallback for diagnosis
+mant-cli <topic> --force-libmandoc     -> strict direct-parser diagnosis
+mant-cli <topic> --force-groff         -> opt into the groff HTML compatibility path
 mant-cli --update-tldr                 -> update result JSON
 mant-cli --protocol-version            -> protocol description JSON
 mant-cli --schema <contract>           -> generated JSON Schema
@@ -167,7 +168,7 @@ The TUI keeps its in-memory interaction loop and never spawns a process while
 typing; this result model is the shared semantic basis for future UI indexing,
 not a second parser or a dependency on the system `grep` executable.
 
-## Parsing and fallback policy
+## Parsing and renderer policy
 
 The primary path reads the located manual source and lowers libmandoc's
 validated man(7) or mdoc(7) tree directly into `mant.document/v2`.  Rust owns
@@ -175,22 +176,26 @@ compression handling and preserves the original source path and include base
 directory.  `.so` aliases and includes must work without exposing temporary
 paths in the result.
 
-An unsupported libmandoc diagnostic no longer discards an otherwise complete
-document by itself. ManT renders groff output as a comparison and falls back
-only when the native document loses heading topology or materially less visible
-text. `--force-libmandoc` bypasses that comparison and all groff execution so a
-developer can inspect the native AST and diagnostics directly. This flag is an
-execution policy outside `mant.request/v2`; it treats an empty native manual as
-an error even when tldr content exists and reports recoverable native findings
-on standard error. Identical requests retain identical query semantics
-regardless of the chosen diagnostic policy.
+Libmandoc is the only default parser. An unsupported diagnostic does not
+discard an otherwise complete document, and ManT does not automatically invoke
+groff or choose between renderer outputs. `--force-libmandoc` is a strict
+diagnostic policy outside `mant.request/v2`: it requires a direct native
+manual, prevents a tldr-only response, and prints recoverable parser findings
+on standard error.
+
+`--force-groff` is an explicit compatibility path for investigating renderer
+differences. It calls `man -Thtml` and lowers the resulting HTML without first
+parsing the source through libmandoc. It likewise rejects a tldr-only response
+and prints renderer diagnostics. It is intentionally opt-in because its
+availability depends on the host `man` implementation and its coverage is
+smaller than direct source lowering.
 
 Direct lowering is covered by deterministic native fixtures and was compared
 against the former TypeScript implementation on large installed ls, git, gcc,
-clang, and tar pages before cut-over. The groff HTML compatibility parser now
-lives in Rust and retains the fallback for constructs libmandoc reports as
-unsupported. Best-effort native output is retained together with its
-diagnostics when no higher-fidelity fallback is available.
+clang, and tar pages before cut-over. The groff HTML compatibility parser also
+lives in Rust for the explicit `--force-groff` diagnostic mode. Best-effort
+native output is retained together with its diagnostics rather than being
+silently replaced by a second renderer.
 
 Vertical layout is part of this normalization boundary rather than a TUI
 heuristic. Sections retain the distance requested before `SH`, `SS`, `Sh`, and
@@ -245,7 +250,7 @@ agent-facing output tests.  TypeScript retains process-client, interactive
 command, and UI tests.  Shared contract fixtures are decoded by TypeScript and
 generated or compared by Rust. The one-time native/legacy differential gate
 was removed together with the old parser after the cut-over commit;
-equivalent source-level and renderer-fallback coverage remains in Rust.
+equivalent source-level and renderer-compatibility coverage remains in Rust.
 
 ## Migration rules
 

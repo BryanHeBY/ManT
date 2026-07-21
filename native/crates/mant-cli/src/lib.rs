@@ -10,7 +10,7 @@ mod mcp;
 use std::io::{self, Read, Write};
 
 use mant_ast::{
-    Diagnostic, ExcerptSelection, QueryBundle, QueryRequest, QueryView, SearchQuery,
+    Diagnostic, ExcerptSelection, QueryBundle, QueryRequest, QueryView, SearchQuery, SourceFormat,
     TldrCacheUpdate,
 };
 use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
@@ -226,7 +226,7 @@ fn execute_query(
         },
     )?;
     if command.force_libmandoc || command.force_groff {
-        report_native_diagnostics(&query, diagnostics)?;
+        report_manual_diagnostics(&query, diagnostics)?;
     }
     render_query_view(
         &query,
@@ -320,14 +320,18 @@ fn validate_explanation(excerpt: &mant_ast::QueryExcerpt) -> Result<(), Failure>
     ))
 }
 
-fn report_native_diagnostics(query: &QueryBundle, output: &mut dyn Write) -> Result<(), Failure> {
+fn report_manual_diagnostics(query: &QueryBundle, output: &mut dyn Write) -> Result<(), Failure> {
     let Some(manual) = &query.manual else {
         return Ok(());
+    };
+    let engine = match manual.source.format {
+        SourceFormat::GroffHtml => "groff HTML",
+        SourceFormat::Man | SourceFormat::Mdoc | SourceFormat::MandocHtml => "libmandoc",
     };
     for diagnostic in &manual.diagnostics {
         writeln!(
             output,
-            "mant-cli: libmandoc {}",
+            "mant-cli: {engine} {}",
             format_diagnostic(diagnostic)
         )
         .map_err(Failure::operational)?;
@@ -865,6 +869,28 @@ mod tests {
         assert_eq!(
             diagnostics,
             "mant-cli: libmandoc Unsupported at 42:3: unsupported roff request: xx\n"
+        );
+    }
+
+    #[test]
+    fn forced_groff_labels_renderer_findings_on_stderr() {
+        let mut host = FakeHost::with_manual();
+        let manual = host.manual.as_mut().expect("manual");
+        manual.source.format = SourceFormat::GroffHtml;
+        manual.diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: None,
+            message: "renderer warning".to_owned(),
+            source: None,
+        });
+
+        let (status, _output, diagnostics) =
+            invoke(&["demo", "--outline", "--force-groff"], b"", &host);
+
+        assert_eq!(status, 0);
+        assert_eq!(
+            diagnostics,
+            "mant-cli: groff HTML Warning: renderer warning\n"
         );
     }
 

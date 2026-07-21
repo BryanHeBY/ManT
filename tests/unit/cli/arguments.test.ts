@@ -34,6 +34,11 @@ describe("interactive CLI argument parsing", () => {
       topic: "tar",
       forceLibmandoc: true,
     });
+    expect(parseCliArguments(["tar", "--force-groff"])).toEqual({
+      kind: "query",
+      topic: "tar",
+      forceGroff: true,
+    });
   });
 
   test("joins multi-part topics and honours the option terminator", () => {
@@ -61,5 +66,7 @@ describe("interactive CLI argument parsing", () => {
       .toThrow("only be supplied once");
     expect(() => parseCliArguments(["git", "-s", " "]))
       .toThrow("must not be empty");
+    expect(() => parseCliArguments(["git", "--force-libmandoc", "--force-groff"]))
+      .toThrow("cannot be used together");
   });
 });

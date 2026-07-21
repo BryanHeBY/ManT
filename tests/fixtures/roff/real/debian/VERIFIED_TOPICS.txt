@@ -1,5 +1,5 @@
 # mant-cli verified topics: debian
-# scanned 2026-07-21, 100% parse success
+# scanned 2026-07-21; no parser crash observed
 # total distinct topics: 491
 
 ## bash (3 pages)

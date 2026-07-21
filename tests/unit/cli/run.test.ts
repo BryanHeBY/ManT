@@ -72,7 +72,7 @@ describe("interactive CLI execution", () => {
     ]);
   });
 
-  test("forwards the closed topic, section, and parser policy then starts the TUI", async () => {
+  test("forwards the closed topic, section, and renderer policy then starts the TUI", async () => {
     const output = captureOutput();
     let request: NativeQueryRequest | undefined;
     let received: MantQueryBundle | undefined;
@@ -80,7 +80,7 @@ describe("interactive CLI execution", () => {
       "printf",
       "--section",
       "3",
-      "--force-libmandoc",
+      "--force-groff",
     ], {
       ...output.dependencies,
       isInteractive: () => true,
@@ -97,7 +97,7 @@ describe("interactive CLI execution", () => {
     expect(request).toEqual({
       topic: "printf",
       section: "3",
-      forceLibmandoc: true,
+      forceGroff: true,
     });
     expect(received).toBe(result);
     expect(output.stderr).toEqual([]);

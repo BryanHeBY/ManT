@@ -43,10 +43,11 @@ hash, and applicable license references in the same commit.
 
 ## `mant-cli` 解析验证
 
-2026-07-21 对从 Debian sid 下载的 33 个软件包中的 **~320 页**
-执行了 `mant-cli --force-libmandoc` 批量扫描。
+2026-07-21 对从 Debian sid 下载的 29 个软件包中的 **491 个 topic/section
+请求**执行了 `mant-cli --force-libmandoc` 批量扫描。
 
-结果：**100% 成功**，0 解析崩溃。
+观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
+均完全保真；已知限制见父目录 README。
 
 完整 topic 清单见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
 

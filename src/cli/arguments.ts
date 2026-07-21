@@ -36,7 +36,7 @@ Usage:
 Options:
   -h, --help              Show this help and exit
   -s, --section <value>   Select a manual section, such as 1 or 3p
-  --force-libmandoc       Disable groff fallback for parser diagnostics
+  --force-libmandoc       Require direct libmandoc output and print diagnostics
   --force-groff           Use man -Thtml + groff HTML parser instead of libmandoc
                            (not comprehensively tested)
   --                      Treat all remaining arguments as the topic
@@ -98,6 +98,9 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
 
   const topic = topicParts.join(" ").trim();
   if (!topic) throw new CliUsageError("a manual topic is required");
+  if (forceLibmandoc && forceGroff) {
+    throw new CliUsageError("--force-libmandoc and --force-groff cannot be used together");
+  }
   if (section !== undefined && !section.trim()) {
     throw new CliUsageError("manual section must not be empty");
   }

@@ -99,8 +99,7 @@ pub(crate) enum Command {
         format: QueryFormat,
         pretty: bool,
         force_libmandoc: bool,
-        /// Require the excerpt selected by the direct CLI to be one semantic
-        /// entry rather than a section or the tldr document.
+        /// Use the groff HTML compatibility renderer instead of libmandoc.
         force_groff: bool,
         explain: bool,
     },
@@ -275,7 +274,7 @@ struct Cli {
     )]
     request_json: bool,
 
-    /// Disable groff fallback and expose the bundled libmandoc result.
+    /// Require direct libmandoc output and print its parser diagnostics.
     #[arg(
         long,
         conflicts_with_all = ["update_tldr", "protocol_version", "schema"],
@@ -336,6 +335,7 @@ struct Cli {
             "offset",
             "request_json",
             "force_libmandoc",
+            "force_groff",
             "update_tldr",
             "protocol_version",
             "schema",
@@ -550,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_force_libmandoc_for_direct_and_stdin_queries() {
+    fn parses_renderer_diagnostic_policies_for_direct_and_stdin_queries() {
         for values in [
             vec!["tar", "--force-libmandoc", "--format", "json"],
             vec!["--request-json", "--force-libmandoc", "--format", "json"],
@@ -560,6 +560,20 @@ mod tests {
                 Command::Query {
                     force_libmandoc: true,
                     force_groff: false,
+                    ..
+                }
+            ));
+        }
+
+        for values in [
+            vec!["tar", "--force-groff", "--format", "json"],
+            vec!["--request-json", "--force-groff", "--format", "json"],
+        ] {
+            assert!(matches!(
+                parse(&args(&values)).expect("forced groff query"),
+                Command::Query {
+                    force_libmandoc: false,
+                    force_groff: true,
                     ..
                 }
             ));
@@ -771,7 +785,9 @@ mod tests {
             vec!["--schema", "request", "--format", "json"],
             vec!["--mcp", "git"],
             vec!["--mcp", "--format", "json"],
+            vec!["--mcp", "--force-groff"],
             vec!["--mcp", "--update-tldr"],
+            vec!["git", "--force-libmandoc", "--force-groff"],
             vec!["--schema", "unknown"],
             vec!["update", "tldr"],
             vec!["git", "--json"],
