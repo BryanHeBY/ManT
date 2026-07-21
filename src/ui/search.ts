@@ -39,6 +39,12 @@ export interface SearchRecord {
   title: string;
   text: string;
   normalizedText: string;
+  /**
+   * Maps each `normalizedText` code-unit index to its source `text` index.
+   * Present only when case folding changes length, so matches still highlight
+   * the source characters the renderer draws. See {@link normalizeForSearch}.
+   */
+  sourceOffsets?: readonly number[];
 }
 
 export interface PageSearchIndex {
@@ -65,6 +71,35 @@ export const searchPath = {
 
 function extendPath(parent: string, segment: string): string {
   return parent ? `${parent}.${segment}` : segment;
+}
+
+/**
+ * Case-fold a leaf for matching, keeping a way back to source positions.
+ *
+ * `toLocaleLowerCase` is not length-preserving: characters like `İ` expand to
+ * two code units. Query offsets are measured in the folded string, but matches
+ * highlight the source `text`, so folding a character per source code unit lets
+ * us record which source index every folded index came from. The map is
+ * returned only when folding actually changed length; the common ASCII path
+ * keeps offsets identical and pays nothing.
+ */
+export function normalizeForSearch(
+  text: string,
+): { normalizedText: string; sourceOffsets?: number[] } {
+  const normalizedText = text.toLocaleLowerCase();
+  // Fast path: a length-preserving fold means folded index === source index.
+  if (normalizedText.length === text.length) return { normalizedText };
+
+  let folded = "";
+  const sourceOffsets: number[] = [];
+  for (let index = 0; index < text.length; index++) {
+    const lowered = text[index]!.toLocaleLowerCase();
+    for (let unit = 0; unit < lowered.length; unit++) sourceOffsets.push(index);
+    folded += lowered;
+  }
+  // A terminal position lets a match ending at the last character map its end.
+  sourceOffsets.push(text.length);
+  return { normalizedText: folded, sourceOffsets };
 }
 
 /** Flatten inline formatting while retaining visible hard line breaks. */
@@ -136,6 +171,7 @@ export function buildPageSearchIndex(
     targetId = contentSearchId(sectionId, targetPath),
   ) => {
     if (!text) return;
+    const { normalizedText, sourceOffsets } = normalizeForSearch(text);
     records.push(Object.freeze({
       targetId,
       targetPath,
@@ -143,7 +179,8 @@ export function buildPageSearchIndex(
       sectionPath,
       title,
       text,
-      normalizedText: text.toLocaleLowerCase(),
+      normalizedText,
+      ...(sourceOffsets ? { sourceOffsets: Object.freeze(sourceOffsets) } : {}),
     }));
   };
 
@@ -375,6 +412,10 @@ export function queryPageSearchIndex(index: PageSearchIndex, query: string): Sea
     while (cursor < record.normalizedText.length) {
       const start = record.normalizedText.indexOf(normalizedQuery, cursor);
       if (start < 0) break;
+      const end = start + normalizedQuery.length;
+      // Query offsets live in the folded string; map them back to the source
+      // positions the renderer highlights whenever folding changed length.
+      const sourceOffsets = record.sourceOffsets;
       matches.push({
         targetId: record.targetId,
         targetPath: record.targetPath,
@@ -382,9 +423,11 @@ export function queryPageSearchIndex(index: PageSearchIndex, query: string): Sea
         sectionPath: record.sectionPath,
         title: record.title,
         text: record.text,
-        range: { start, end: start + normalizedQuery.length },
+        range: sourceOffsets
+          ? { start: sourceOffsets[start]!, end: sourceOffsets[end]! }
+          : { start, end },
       });
-      cursor = start + normalizedQuery.length;
+      cursor = end;
     }
   }
   return matches;

@@ -90,6 +90,47 @@ describe("page search index", () => {
     expect(matches[0]?.range).toEqual({ start: 7, end: 25 });
   });
 
+  test("keeps ranges in source positions when case folding changes length", () => {
+    // "İ".toLocaleLowerCase() expands to two code units, so a naive folded
+    // offset would drift right of the source character the renderer draws.
+    const widening: MantSection[] = [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [{
+        type: "paragraph",
+        children: [{ type: "text", value: "İstanbul needle here" }],
+      }],
+      children: [],
+    }];
+    const index = buildPageSearchIndex(widening, undefined);
+    const record = index.records.find((entry) => entry.text.includes("needle"));
+    const [match] = queryPageSearchIndex(index, "needle");
+
+    // The record still folds for matching, but retains a source-offset map.
+    expect(record?.normalizedText.length).toBe(record!.text.length + 1);
+    expect(record?.sourceOffsets).toBeDefined();
+    // Source index of "needle" is 9 ("İstanbul " is nine source characters).
+    expect(match?.range).toEqual({ start: 9, end: 15 });
+    expect(match?.text.slice(match.range.start, match.range.end)).toBe("needle");
+  });
+
+  test("matches a widening character itself at its source position", () => {
+    const widening: MantSection[] = [{
+      id: "options",
+      title: "OPTIONS",
+      blocks: [{
+        type: "paragraph",
+        children: [{ type: "text", value: "aİb" }],
+      }],
+      children: [],
+    }];
+    const index = buildPageSearchIndex(widening, undefined);
+    const [match] = queryPageSearchIndex(index, "İ");
+
+    expect(match?.range).toEqual({ start: 1, end: 2 });
+    expect(match?.text.slice(match.range.start, match.range.end)).toBe("İ");
+  });
+
   test("groups adjacent prose exactly like the shared terminal text buffer", () => {
     const grouped: MantSection[] = [{
       id: "description",
