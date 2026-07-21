@@ -80,10 +80,12 @@ contract.
 
 ## Native process boundary
 
-The project deliberately uses a one-shot process boundary instead of Node-API.
-This avoids ABI-specific addons, isolates native failures, and makes the same
-binary directly useful outside Bun.  The public surface is use-case oriented
-rather than a mirror of parser internals:
+The project deliberately uses a process boundary instead of Node-API. This
+avoids ABI-specific addons, isolates native failures, and makes the same binary
+directly useful outside Bun. One-shot requests serve the TUI and shell usage;
+the same executable also provides a long-lived, read-only MCP stdio server.
+The public surface is use-case oriented rather than a mirror of parser
+internals:
 
 ```text
 mant-cli <topic> [--format <format>]   -> query Markdown, text, or JSON
@@ -95,6 +97,7 @@ mant-cli <topic> --force-libmandoc     -> disable groff fallback for diagnosis
 mant-cli --update-tldr                 -> update result JSON
 mant-cli --protocol-version            -> protocol description JSON
 mant-cli --schema <contract>           -> generated JSON Schema
+mant-cli --mcp                         -> read-only MCP tools over stdio
 ```
 
 For the TUI, `mant-cli --request-json --format json --compact` reads one closed,
@@ -105,6 +108,13 @@ request, and 1 means an operational failure.  The TypeScript client drains
 stdout and stderr concurrently, validates the protocol and schema, and starts
 one process per document query; interactive search and navigation never spawn
 additional native processes.
+
+For agent clients that speak the Model Context Protocol, `mant-cli --mcp`
+keeps standard output exclusively for JSON-RPC and exposes four generated,
+read-only tools: manual outline, selected content, semantic explanation, and
+search. Their input and output schemas derive directly from Rust types, while
+diagnostics remain on standard error. MCP is an alternate process protocol; it
+does not add another executable or a second document interpretation path.
 
 `mant.request/v2` requires a `schema` marker, `topic`, and a closed `view`
 variant; it accepts an optional manual `section` and rejects unknown fields at

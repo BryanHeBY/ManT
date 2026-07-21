@@ -7,7 +7,7 @@ examples live in the [project README](../README.md).
 
 - Linux or macOS with local manual pages and `man`
 - Bun 1.3.14
-- Rust 1.85 or newer with `cargo`, `clippy`, and `rustfmt`
+- Rust 1.88 or newer with `cargo`, `clippy`, and `rustfmt`
 - GCC on Linux or Clang on macOS; set `CC` to override the selected compiler
 
 The workspace vendors libmandoc, so installing system `mandoc` is optional.
@@ -54,7 +54,7 @@ src/                         Bun entry point, native-client boundary, and OpenTU
 native/
   crates/mant-ast/           Versioned document, query, outline, and schema types
   crates/mant-core/          Source loading, libmandoc lowering, projections, output
-  crates/mant-cli/           Agent/script CLI and stdin JSON boundary
+  crates/mant-cli/           Agent/script CLI, request JSON, and MCP stdio boundary
   crates/libmandoc-rs/       Owned libmandoc parse API, private C shim, and vendored source
 scripts/                     Local build, compiler selection, packaging, and dev wrappers
 tests/                       Bun unit/integration/TUI tests and fixed roff fixtures
