@@ -1,0 +1,183 @@
+# mant-cli verified topics: debian
+# scanned 2026-07-21, 100% parse success, 0 crashes
+# total distinct topics: 145
+
+## cpio (2 pages)
+mant-cli cpio --section 1
+mant-cli mt-gnu --section 1
+
+## gawk (2 pages)
+mant-cli gawk --section 1
+mant-cli gawkbug --section 1
+
+## graphviz (5 pages)
+mant-cli dot --section 1
+mant-cli gvpr --section 1
+mant-cli nop --section 1
+mant-cli osage --section 1
+mant-cli patchwork --section 1
+
+## groff (41 pages)
+mant-cli addftinfo --section 1
+mant-cli afmtodit --section 1
+mant-cli chem --section 1
+mant-cli eqn2graph --section 1
+mant-cli gdiffmk --section 1
+mant-cli glilypond --section 1
+mant-cli gperl --section 1
+mant-cli gpinyin --section 1
+mant-cli grap2graph --section 1
+mant-cli grn --section 1
+mant-cli grodvi --section 1
+mant-cli groff --section 7
+mant-cli groff_char --section 7
+mant-cli groff_diff --section 7
+mant-cli groff_font --section 5
+mant-cli groff_hdtbl --section 7
+mant-cli groff_man --section 7
+mant-cli groff_man_style --section 7
+mant-cli groff_mdoc --section 7
+mant-cli groff_me --section 7
+mant-cli groff_mm --section 7
+mant-cli groff_mmse --section 7
+mant-cli groff_mom --section 7
+mant-cli groff_ms --section 7
+mant-cli groff_out --section 5
+mant-cli groff_rfc1345 --section 7
+mant-cli groff_tmac --section 5
+mant-cli groff_trace --section 7
+mant-cli groff_www --section 7
+mant-cli grolbp --section 1
+mant-cli grolj4 --section 1
+mant-cli gropdf --section 1
+mant-cli gxditview --section 1
+mant-cli hpftodit --section 1
+mant-cli indxbib --section 1
+mant-cli lkbib --section 1
+mant-cli lookbib --section 1
+mant-cli pfbtops --section 1
+mant-cli pic2graph --section 1
+mant-cli refer --section 1
+mant-cli tfmtodit --section 1
+
+## mandoc (12 pages)
+mant-cli demandoc --section 1
+mant-cli makewhatis --section 8
+mant-cli man.conf --section 5
+mant-cli mandoc --section 1
+mant-cli mandoc.db --section 5
+mant-cli mandoc_char --section 7
+mant-cli mandoc_eqn --section 7
+mant-cli mandoc_man --section 7
+mant-cli mandoc_mdoc --section 7
+mant-cli mandoc_roff --section 7
+mant-cli mandoc_tbl --section 7
+mant-cli mandocd --section 8
+
+## mtools (30 pages)
+mant-cli mattrib --section 1
+mant-cli mbadblocks --section 1
+mant-cli mcat --section 1
+mant-cli mcatman --section 8
+mant-cli mcd --section 1
+mant-cli mcopy --section 1
+mant-cli mdel --section 1
+mant-cli mdeltree --section 1
+mant-cli mdir --section 1
+mant-cli mdoctorfat --section 1
+mant-cli mdu --section 1
+mant-cli mformat --section 1
+mant-cli minfo --section 1
+mant-cli mkmanifest --section 1
+mant-cli mlabel --section 1
+mant-cli mmd --section 1
+mant-cli mmdf --section 5
+mant-cli mmount --section 1
+mant-cli mmove --section 1
+mant-cli mpartition --section 1
+mant-cli mrd --section 1
+mant-cli mren --section 1
+mant-cli mshortname --section 1
+mant-cli mshowfat --section 1
+mant-cli mtools --section 1
+mant-cli mtools --section 5
+mant-cli mtools.tmpl --section 1
+mant-cli mtoolstest --section 1
+mant-cli mtype --section 1
+mant-cli mzip --section 1
+
+## mutt (6 pages)
+mant-cli mutt --section 1
+mant-cli mutt_dotlock --section 1
+mant-cli mutt_pgpring --section 1
+mant-cli muttrc --section 5
+mant-cli pgpewrap --section 1
+mant-cli smime_keys --section 1
+
+## nmap (2 pages)
+mant-cli nmap --section 1
+mant-cli nping --section 1
+
+## parted (2 pages)
+mant-cli parted --section 8
+mant-cli partprobe --section 8
+
+## recode (1 pages)
+mant-cli recode --section 1
+
+## rsync (4 pages)
+mant-cli rrsync --section 1
+mant-cli rsync --section 1
+mant-cli rsync-ssl --section 1
+mant-cli rsyncd.conf --section 5
+
+## screen (1 pages)
+mant-cli screen --section 1
+
+## socat (1 pages)
+mant-cli socat1 --section 1
+
+## tmux (1 pages)
+mant-cli tmux --section 1
+
+## units (2 pages)
+mant-cli units --section 1
+mant-cli units_cur --section 1
+
+## xterm (5 pages)
+mant-cli koi8rxterm --section 1
+mant-cli lxterm --section 1
+mant-cli resize --section 1
+mant-cli uxterm --section 1
+mant-cli xterm --section 1
+
+## other (28 pages)
+mant-cli filefuncs --section 3am
+mant-cli fnmatch --section 3am
+mant-cli fork --section 3am
+mant-cli graphviz --section 7
+mant-cli inplace --section 3am
+mant-cli lz --section 1
+mant-cli mapropos --section 1
+mant-cli mbox --section 5
+mant-cli mcheck --section 1
+mant-cli mcomp --section 1
+mant-cli mman --section 1
+mant-cli mmroff --section 1
+mant-cli msoelim --section 1
+mant-cli mwhatis --section 1
+mant-cli mxtar --section 1
+mant-cli ordchr --section 3am
+mant-cli pdfmom --section 1
+mant-cli pm-gawk --section 1
+mant-cli readdir --section 3am
+mant-cli readfile --section 3am
+mant-cli revoutput --section 3am
+mant-cli revtwoway --section 3am
+mant-cli roff --section 7
+mant-cli rwarray --section 3am
+mant-cli tgz --section 1
+mant-cli time --section 3am
+mant-cli uz --section 1
+mant-cli xtotroff --section 1
+

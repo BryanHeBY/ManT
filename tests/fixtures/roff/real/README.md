@@ -17,6 +17,10 @@ the host manual database. Fixed compressed roff sources replace the former
 renderer-specific HTML snapshots, making parser regressions reproducible across
 Linux and macOS while retaining upstream notices embedded in the manuals.
 
+Each distribution directory also contains a `VERIFIED_TOPICS.txt` listing
+every man page that has been scanned through `mant-cli --force-libmandoc`
+with the results, methodology, and findings summarised below.
+
 ## Adding or replacing a fixture source
 
 Create or update a distribution-specific directory rather than adding a page

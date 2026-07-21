@@ -42,6 +42,29 @@ When replacing a fixture, update its archive URL, package version, member path,
 hash, applicable shared license files, and native topology assertions in the
 same commit.
 
+## `mant-cli` 解析验证
+
+2026-07-21 对从 Arch Linux 下载的 20 个软件包中的 **1,373 页**
+（1,358 个 distinct topic）执行了 `mant-cli --force-libmandoc` 批量扫描。
+
+结果：**100% 成功**，0 崩溃，0 解析失败。
+
+完整 topic 清单见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
+
+| 软件包 | Topics | 备注 |
+| ------ | ------ | ---- |
+| tcl/tk | 1,222 | Tcl 命令和 C API（section n） |
+| graphviz | 46 | 图形布局工具和 C API |
+| mtools | 30 | FAT 文件系统工具 |
+| library (s3) | 17 | ncurses 等库函数 |
+| mandoc | 12 | mandoc 工具链 |
+| mutt | 5 | 邮件客户端 |
+| rsync | 4 | 文件同步 |
+| xterm | 4 | 终端模拟器 |
+| nmap | 3 | 网络扫描 |
+| parted | 2 | 磁盘分区 |
+| 其他（cpio, gnuplot, recode, screen, socat, tmux） | 各1 | — |
+
 [GNU coreutils]: https://www.gnu.org/software/coreutils/
 [Git]: https://git-scm.com/
 [GCC]: https://gcc.gnu.org/

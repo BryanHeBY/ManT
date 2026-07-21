@@ -52,6 +52,27 @@ When replacing a fixture, update both RPM URLs, source RPM URL, package and
 raw-roff hashes, fixture hash, applicable license files, and topology
 assertions in the same commit.
 
+## `mant-cli` 解析验证
+
+2026-07-21 对从 Fedora Linux 44 下载的 20 个软件包中的 **246 页**
+（232 个 distinct topic）执行了 `mant-cli --force-libmandoc` 批量扫描。
+
+结果：**100% 成功**，0 崩溃，0 解析失败。
+
+完整 topic 清单见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
+
+| 软件包 | Topics | 备注 |
+| ------ | ------ | ---- |
+| tcl/tk | 104 | Tcl 命令和 C API |
+| groff | 36 | groff 工具链和宏包 |
+| mtools | 27 | FAT 文件系统工具 |
+| mandoc | 6 | mandoc 工具链 |
+| mutt | 5 | 邮件客户端 |
+| nmap | 2 | 网络扫描 |
+| rsync / socat | 各3 | — |
+| gawk | 2 | GNU awk |
+| 其他（cpio, gnuplot, graphviz, recode, screen, tmux, units, xterm） | 各1–3 | — |
+
 [clang 22.1.1-2.fc44]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/Packages/c/clang-22.1.1-2.fc44.x86_64.rpm
 [llvm source RPM]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/l/llvm-22.1.1-2.fc44.src.rpm
 [gcc 16.0.1-0.10.fc44]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/Packages/g/gcc-16.0.1-0.10.fc44.x86_64.rpm
