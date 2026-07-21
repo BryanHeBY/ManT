@@ -57,20 +57,80 @@ async function copyExecutable(source: string, destination: string): Promise<void
   await chmod(destination, 0o755);
 }
 
-async function runTar(stagingDirectory: string, archiveRoot: string, archive: string) {
-  const child = Bun.spawn(
+/**
+ * Archive the staging tree reproducibly.
+ *
+ * A published archive should rebuild to the same bytes from the same commit so
+ * its checksum can be independently verified. Plain `tar -czf` embeds per-file
+ * mtime/uid/gid and gzip embeds a timestamp, so two builds diverge. With GNU
+ * tar we pin ownership, sort entries, and zero mtimes, then compress with a
+ * separate `gzip -n` (no name/timestamp). Other tar implementations (for
+ * example BSD tar on macOS) fall back to the previous behavior.
+ */
+export async function runTar(stagingDirectory: string, archiveRoot: string, archive: string) {
+  if (await isGnuTar()) {
+    await runDeterministicGnuTar(stagingDirectory, archiveRoot, archive);
+    return;
+  }
+  await runCommand(
     ["tar", "-czf", archive, "-C", stagingDirectory, archiveRoot],
-    {
-      cwd: root,
-      // Prevent macOS tar from adding AppleDouble metadata files.
-      env: { ...process.env, COPYFILE_DISABLE: "1" },
-      stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
-    },
+    // Prevent macOS tar from adding AppleDouble metadata files.
+    { COPYFILE_DISABLE: "1" },
   );
+}
+
+async function isGnuTar(): Promise<boolean> {
+  const child = Bun.spawn(["tar", "--version"], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const version = await new Response(child.stdout).text();
+  await child.exited;
+  return version.includes("GNU tar");
+}
+
+async function runDeterministicGnuTar(
+  stagingDirectory: string,
+  archiveRoot: string,
+  archive: string,
+) {
+  // Produce the tar and gzip streams separately so gzip can drop its own
+  // name/timestamp header; tar itself pins every source of nondeterminism.
+  await runCommand(
+    [
+      "tar",
+      "--sort=name",
+      "--mtime=@0",
+      "--owner=0",
+      "--group=0",
+      "--numeric-owner",
+      "-cf",
+      archive,
+      "-C",
+      stagingDirectory,
+      archiveRoot,
+    ],
+    { COPYFILE_DISABLE: "1" },
+  );
+  await runCommand(["gzip", "-n", "-f", archive]);
+  // `gzip -f archive` writes `archive.gz`; restore the requested name.
+  const { rename } = await import("node:fs/promises");
+  await rename(`${archive}.gz`, archive);
+}
+
+async function runCommand(command: string[], extraEnv: Record<string, string> = {}) {
+  const child = Bun.spawn(command, {
+    cwd: root,
+    env: { ...process.env, ...extraEnv },
+    stdin: "ignore",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
   const exitCode = await child.exited;
-  if (exitCode !== 0) throw new Error(`tar failed with exit code ${exitCode}`);
+  if (exitCode !== 0) {
+    throw new Error(`${command[0]} failed with exit code ${exitCode}`);
+  }
 }
 
 /** Package the binaries produced by the current host's canonical build. */

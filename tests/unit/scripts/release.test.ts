@@ -2,12 +2,28 @@
  * @file Verifies release naming, native target mapping, and version gates.
  */
 
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
+  runTar,
   versionFromReleaseTag,
   workspaceVersion,
 } from "../../../scripts/package-release";
 import { resolveReleasePlatform } from "../../../scripts/release-platform";
+
+async function hasGnuTar(): Promise<boolean> {
+  const child = Bun.spawn(["tar", "--version"], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const version = await new Response(child.stdout).text();
+  await child.exited;
+  return version.includes("GNU tar");
+}
 
 describe("release platform selection", () => {
   test("maps every supported native runner to matching archive and Bun targets", () => {
@@ -60,5 +76,31 @@ edition = "2024"
 [workspace.dependencies]
 example = "9"
 `)).toBe("0.4.2");
+  });
+});
+
+describe("release archive reproducibility", () => {
+  test("produces byte-identical archives across builds with GNU tar", async () => {
+    if (!(await hasGnuTar())) return;
+
+    const workspace = await mkdtemp(join(tmpdir(), "mant-release-repro-"));
+    try {
+      const archiveRoot = "mant-0.0.0-linux-x64";
+      const packageDirectory = join(workspace, archiveRoot);
+      await Bun.write(join(packageDirectory, "mant"), "binary-one\n");
+      await Bun.write(join(packageDirectory, "mant-cli"), "binary-two\n");
+      await Bun.write(join(packageDirectory, "README.md"), "readme\n");
+
+      const digests: string[] = [];
+      for (const name of ["first.tar.gz", "second.tar.gz"]) {
+        const archive = join(workspace, name);
+        await runTar(workspace, archiveRoot, archive);
+        digests.push(createHash("sha256").update(await readFile(archive)).digest("hex"));
+      }
+
+      expect(digests[0]).toBe(digests[1]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
   });
 });
