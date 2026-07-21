@@ -13,11 +13,11 @@ use mant_core::{
     build_outline, build_outline_with_detail, parse_manual_source, search_query, select_excerpt,
 };
 
-static LS: OnceLock<MantDocument> = OnceLock::new();
-static GIT: OnceLock<MantDocument> = OnceLock::new();
-static GCC: OnceLock<MantDocument> = OnceLock::new();
-static CLANG: OnceLock<MantDocument> = OnceLock::new();
-static TAR: OnceLock<MantDocument> = OnceLock::new();
+static ARCHLINUX_LS: OnceLock<MantDocument> = OnceLock::new();
+static ARCHLINUX_GIT: OnceLock<MantDocument> = OnceLock::new();
+static ARCHLINUX_GCC: OnceLock<MantDocument> = OnceLock::new();
+static ARCHLINUX_CLANG: OnceLock<MantDocument> = OnceLock::new();
+static ARCHLINUX_TAR: OnceLock<MantDocument> = OnceLock::new();
 static FEDORA44_CLANG: OnceLock<MantDocument> = OnceLock::new();
 static FEDORA44_GCC: OnceLock<MantDocument> = OnceLock::new();
 static FEDORA44_GIT: OnceLock<MantDocument> = OnceLock::new();
@@ -101,10 +101,18 @@ const TOPOLOGY_CASES: &[(&str, &[&str])] = &[
 ];
 
 #[test]
-fn fixed_roff_pages_keep_their_complete_section_topology() {
+fn archlinux_gzip_pages_keep_their_complete_section_topology() {
     for (name, expected_titles) in TOPOLOGY_CASES {
-        let document = manual(name);
+        let document = archlinux_manual(name);
         assert_eq!(document.source.format, SourceFormat::Man, "fixture {name}");
+        assert!(
+            document
+                .source
+                .path
+                .as_deref()
+                .is_some_and(|path| path.ends_with(&format!("archlinux/{name}.1.gz"))),
+            "fixture {name} must retain its Arch Linux source location",
+        );
         assert_eq!(
             document
                 .sections
@@ -156,7 +164,7 @@ fn fedora44_zstd_pages_keep_complete_sections_and_semantic_option_outlines() {
                 .source
                 .path
                 .as_deref()
-                .is_some_and(|path| path.ends_with(".1.zst")),
+                .is_some_and(|path| path.ends_with(&format!("fedora44/{name}.1.zst"))),
             "fixture {name} must exercise the zstd source path",
         );
 
@@ -179,7 +187,7 @@ fn fedora44_zstd_pages_keep_complete_sections_and_semantic_option_outlines() {
 
 #[test]
 fn git_keeps_nested_sections_examples_and_inline_grouping() {
-    let document = manual("git");
+    let document = archlinux_manual("git");
     assert_eq!(document.sections.len(), 24);
 
     let environment = section(document, "ENVIRONMENT VARIABLES");
@@ -245,7 +253,7 @@ fn git_keeps_nested_sections_examples_and_inline_grouping() {
     assert!(ancillary_text.contains("git-config(1)"));
     assert!(ancillary_text.contains("git-fast-export(1)"));
 
-    let outline = build_outline_with_detail(&manual_query("git"), OutlineDetail::Options)
+    let outline = build_outline_with_detail(&archlinux_manual_query("git"), OutlineDetail::Options)
         .expect("git option outline");
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());
     assert!(find_outline_entry(&outline.nodes, "-C").is_some());
@@ -253,7 +261,7 @@ fn git_keeps_nested_sections_examples_and_inline_grouping() {
 
 #[test]
 fn gcc_keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
-    let document = manual("gcc");
+    let document = archlinux_manual("gcc");
     let options = section(document, "OPTIONS");
     assert_eq!(options.children.len(), 20);
     assert_eq!(options.children[0].title, "Option Summary");
@@ -327,7 +335,7 @@ fn gcc_keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
 
 #[test]
 fn clang_keeps_option_pairs_and_discards_rst_control_dimensions() {
-    let document = manual("clang");
+    let document = archlinux_manual("clang");
     let stage_options = section(document, "Stage Selection Options");
     for (term, description) in [
         ("-E", "Run the preprocessor stage."),
@@ -426,7 +434,7 @@ fn clang_keeps_option_pairs_and_discards_rst_control_dimensions() {
 
 #[test]
 fn ls_and_tar_keep_definition_lists_subsections_and_inline_styles() {
-    let ls = manual("ls");
+    let ls = archlinux_manual("ls");
     let description = section(ls, "DESCRIPTION");
     let options = definition_items(description);
     assert_eq!(options.len(), 60);
@@ -450,7 +458,7 @@ fn ls_and_tar_keep_definition_lists_subsections_and_inline_styles() {
     assert_eq!(inline_text(&exit_items[0].terms[0]), "0");
     assert!(block_slice_text(&exit_items[2].description).contains("serious trouble"));
 
-    let tar = manual("tar");
+    let tar = archlinux_manual("tar");
     let synopsis = section(tar, "SYNOPSIS");
     assert_eq!(
         synopsis
@@ -471,9 +479,9 @@ fn ls_and_tar_keep_definition_lists_subsections_and_inline_styles() {
 }
 
 #[test]
-fn fixed_roff_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
+fn archlinux_gzip_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
     for name in ["ls", "git", "gcc", "clang", "tar"] {
-        assert_document_has_no_source_markup(name, manual(name));
+        assert_document_has_no_source_markup(name, archlinux_manual(name));
     }
     for name in ["git", "gcc", "clang", "tar"] {
         assert_document_has_no_source_markup(&format!("fedora44/{name}"), fedora44_manual(name));
@@ -482,7 +490,7 @@ fn fixed_roff_pages_do_not_leak_roff_or_html_markup_into_inline_text() {
 
 #[test]
 fn real_nested_manuals_support_outline_discovery_and_targeted_excerpts() {
-    let query = manual_query("git");
+    let query = archlinux_manual_query("git");
     let outline = build_outline(&query).expect("Git outline");
     let git_diffs = &outline.nodes[15].children()[3];
     assert_eq!(git_diffs.path(), "16.4");
@@ -572,23 +580,24 @@ fn fedora44_zstd_tar_search_maps_long_options_to_markdown_lines_and_selectable_n
     ));
 }
 
-fn manual(name: &str) -> &'static MantDocument {
+/// Load one fixed Arch Linux gzip fixture by its documented package name.
+fn archlinux_manual(name: &str) -> &'static MantDocument {
     let slot = match name {
-        "ls" => &LS,
-        "git" => &GIT,
-        "gcc" => &GCC,
-        "clang" => &CLANG,
-        "tar" => &TAR,
-        _ => panic!("unknown real-man fixture {name}"),
+        "ls" => &ARCHLINUX_LS,
+        "git" => &ARCHLINUX_GIT,
+        "gcc" => &ARCHLINUX_GCC,
+        "clang" => &ARCHLINUX_CLANG,
+        "tar" => &ARCHLINUX_TAR,
+        _ => panic!("unknown Arch Linux fixture {name}"),
     };
     slot.get_or_init(|| {
-        parse_manual_source(&fixture_path(name))
-            .unwrap_or_else(|error| panic!("parse {name} roff fixture: {error}"))
+        parse_manual_source(&archlinux_fixture_path(name))
+            .unwrap_or_else(|error| panic!("parse Arch Linux {name} fixture: {error}"))
     })
 }
 
-fn manual_query(name: &str) -> QueryBundle {
-    query_for_document(name, manual(name))
+fn archlinux_manual_query(name: &str) -> QueryBundle {
+    query_for_document(name, archlinux_manual(name))
 }
 
 fn query_for_document(name: &str, document: &MantDocument) -> QueryBundle {
@@ -616,10 +625,10 @@ fn fedora44_manual(name: &str) -> &'static MantDocument {
     })
 }
 
-fn fixture_path(name: &str) -> PathBuf {
+fn archlinux_fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
-        .join("tests/fixtures/roff/real")
+        .join("tests/fixtures/roff/real/archlinux")
         .join(format!("{name}.1.gz"))
 }
 
