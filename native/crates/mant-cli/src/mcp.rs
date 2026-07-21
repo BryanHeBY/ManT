@@ -4,7 +4,12 @@
 //! `mant-cli`. It exposes the same stable outline, excerpt, and search
 //! projections as the direct CLI over MCP's standard-input/output transport.
 
-use std::sync::Arc;
+use std::{
+    io,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use mant_ast::{
     ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryOutline, QueryRequest,
@@ -18,13 +23,30 @@ use rmcp::{
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
-use tokio::{sync::Semaphore, task};
+use tokio::{
+    io::{AsyncRead, ReadBuf},
+    sync::Semaphore,
+    task,
+};
 
 // ── Stdio process boundary ────────────────────────────────────────────────
 
+/// Upper bound on one newline-delimited MCP request, in bytes.
+///
+/// rmcp's stdio transport reads each JSON-RPC message with an unbounded
+/// `read_until(b'\n', ..)`, so a peer that streams bytes without a newline
+/// would grow the read buffer without limit. This cap keeps generous headroom
+/// for large legitimate tool inputs while bounding that growth, mirroring the
+/// intent of the direct CLI's own stdin cap (`MAX_REQUEST_BYTES`).
+const MAX_MCP_LINE_BYTES: usize = 8 * 1024 * 1024;
+
 /// Run the MCP server until the peer closes its standard-input stream.
 pub(super) async fn run_stdio() -> u8 {
-    let service = match MantMcpServer::new().serve(rmcp::transport::stdio()).await {
+    let transport = (
+        LineBoundedReader::new(tokio::io::stdin(), MAX_MCP_LINE_BYTES),
+        tokio::io::stdout(),
+    );
+    let service = match MantMcpServer::new().serve(transport).await {
         Ok(service) => service,
         Err(error) => {
             eprintln!("mant-cli: cannot start MCP stdio server: {error}");
@@ -38,6 +60,61 @@ pub(super) async fn run_stdio() -> u8 {
             eprintln!("mant-cli: MCP stdio server failed: {error}");
             1
         }
+    }
+}
+
+/// Wraps an [`AsyncRead`] and fails once a single line exceeds `max_line`.
+///
+/// The transport frames requests on `\n`, so counting bytes since the last
+/// newline bounds one request. Exceeding the limit surfaces an I/O error that
+/// ends the read loop rather than letting the buffer grow without limit.
+struct LineBoundedReader<R> {
+    inner: R,
+    max_line: usize,
+    since_newline: usize,
+    tripped: bool,
+}
+
+impl<R> LineBoundedReader<R> {
+    fn new(inner: R, max_line: usize) -> Self {
+        Self {
+            inner,
+            max_line,
+            since_newline: 0,
+            tripped: false,
+        }
+    }
+}
+
+impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        // The AsyncRead contract requires that an error poll fill no bytes.
+        // A prior read that pushed the line past the cap therefore reports the
+        // overrun here, on its own poll, before touching the inner reader.
+        if self.tripped {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "MCP request line exceeded the maximum allowed length",
+            )));
+        }
+
+        let start = buf.filled().len();
+        let poll = Pin::new(&mut self.inner).poll_read(cx, buf);
+        if let Poll::Ready(Ok(())) = &poll {
+            let new = &buf.filled()[start..];
+            match new.iter().rposition(|&byte| byte == b'\n') {
+                Some(last_newline) => self.since_newline = new.len() - last_newline - 1,
+                None => self.since_newline += new.len(),
+            }
+            // Trip on overrun; the next poll returns the error with nothing
+            // filled. At most one buffer's worth passes beyond the cap.
+            self.tripped = self.since_newline > self.max_line;
+        }
+        poll
     }
 }
 
@@ -331,6 +408,8 @@ fn non_empty(value: &str, field: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::MantMcpServer;
 
     #[test]
@@ -360,5 +439,43 @@ mod tests {
             assert_eq!(annotations.destructive_hint, Some(false));
             assert_eq!(annotations.open_world_hint, Some(false));
         }
+    }
+
+    // Read the wrapped source to end (or first error) on a current-thread
+    // runtime, so the bound is exercised through the real AsyncRead path.
+    fn read_to_end(source: &'static [u8], max_line: usize) -> io::Result<Vec<u8>> {
+        use tokio::io::AsyncReadExt;
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime");
+        runtime.block_on(async move {
+            let mut reader = super::LineBoundedReader::new(source, max_line);
+            let mut collected = Vec::new();
+            reader.read_to_end(&mut collected).await?;
+            Ok(collected)
+        })
+    }
+
+    #[test]
+    fn line_bounded_reader_passes_lines_within_the_limit() {
+        let source: &[u8] = b"short line\nnext\n";
+        let collected = read_to_end(source, 32).expect("read within limit");
+        assert_eq!(collected, source);
+    }
+
+    #[test]
+    fn line_bounded_reader_rejects_a_line_over_the_limit() {
+        // No newline within the cap, so the running count crosses `max_line`.
+        let error = read_to_end(b"aaaaaaaaaaaaaaaaaaaa", 8).expect_err("oversized line must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn line_bounded_reader_resets_its_count_on_each_newline() {
+        // Every line is under the cap even though the total exceeds it.
+        let source: &[u8] = b"aaaa\nbbbb\ncccc\n";
+        let collected = read_to_end(source, 5).expect("newlines reset the counter");
+        assert_eq!(collected, source);
     }
 }
