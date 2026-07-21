@@ -23,7 +23,7 @@ const ASCII_NBRSP: char = '\u{1f}';
 /// Replace libmandoc's internal ASCII control markers with their
 /// semantic equivalents. These 0x1d–0x1f bytes encode roff-level
 /// line-breaking and hyphenation hints that must never leak into
-/// ManT's document model (anchor IDs, section targets, etc.).
+/// `ManT`'s document model (anchor IDs, section targets, etc.).
 pub(super) fn sanitize_roff_text(raw: &str) -> String {
     let mut output = String::with_capacity(raw.len());
     for ch in raw.chars() {
@@ -223,16 +223,12 @@ fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
     if !node.flags.deep_link_target {
         return None;
     }
-    let id = node
-        .tag
-        .as_deref()
-        .map(sanitize_roff_text)
-        .or_else(|| {
-            plain_text(lowered)
-                .split_whitespace()
-                .next()
-                .map(ToOwned::to_owned)
-        })?;
+    let id = node.tag.as_deref().map(sanitize_roff_text).or_else(|| {
+        plain_text(lowered)
+            .split_whitespace()
+            .next()
+            .map(ToOwned::to_owned)
+    })?;
     (!id.is_empty()).then_some(Inline::Anchor { id })
 }
 
