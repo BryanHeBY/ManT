@@ -137,6 +137,9 @@ pub fn locate_manual_source_with(
         }
         arguments.push(OsString::from(section));
     }
+    // Terminate option parsing so a topic beginning with '-' is treated as a
+    // positional operand rather than an option by man.
+    arguments.push(OsString::from("--"));
     arguments.push(OsString::from(topic));
 
     let output = runner
@@ -237,7 +240,31 @@ mod tests {
                 vec![
                     OsString::from("-w"),
                     OsString::from("1p"),
+                    OsString::from("--"),
                     OsString::from("printf")
+                ]
+            )]
+        );
+    }
+
+    #[test]
+    fn passes_a_dash_prefixed_topic_after_an_option_terminator() {
+        let runner = StubRunner::returning(CommandOutput {
+            stdout: b"/usr/share/man/man1/-dash.1.gz\n".to_vec(),
+            stderr: Vec::new(),
+            exit_code: 0,
+        });
+
+        locate_manual_source_with(&ManualRequest::new("-x", None), &runner).expect("locate source");
+
+        assert_eq!(
+            *runner.calls.lock().expect("recorded calls lock"),
+            vec![(
+                OsString::from("man"),
+                vec![
+                    OsString::from("-w"),
+                    OsString::from("--"),
+                    OsString::from("-x")
                 ]
             )]
         );

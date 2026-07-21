@@ -252,6 +252,9 @@ fn render_groff_document_with(
     if let Some(section) = request.section.as_deref() {
         arguments.push(OsString::from(section));
     }
+    // Terminate option parsing so a topic beginning with '-' stays a
+    // positional operand rather than an option to man.
+    arguments.push(OsString::from("--"));
     arguments.push(OsString::from(&request.topic));
     let output = runner
         .run(OsStr::new("man"), &arguments)
@@ -616,7 +619,7 @@ mod tests {
             *runner.calls.lock().expect("runner calls lock"),
             [(
                 OsString::from("man"),
-                ["-Thtml", "1", "tool"].map(OsString::from).to_vec()
+                ["-Thtml", "1", "--", "tool"].map(OsString::from).to_vec()
             )]
         );
     }
