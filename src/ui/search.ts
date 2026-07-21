@@ -238,7 +238,11 @@ function indexBlocks(
     const blockPath = searchPath.block(parentPath, blockIndex);
     if (block.type === "paragraph" && !hasInteractiveInline(block.children)) {
       const indent = block.layout?.indentColumns ?? 0;
-      if (proseGroup?.indent !== indent) flushProseGroup();
+      // The renderer opens a fresh TextBuffer whenever a block carries leading
+      // spacing, so a spaced paragraph must start a new group here too or the
+      // record's offsets and target would span two on-screen buffers.
+      const spacingBefore = Math.max(0, Math.floor(block.layout?.spacingBeforeLines ?? 0));
+      if (proseGroup?.indent !== indent || spacingBefore > 0) flushProseGroup();
       const text = visibleProseText(block.children);
       if (!text) return;
       proseGroup ??= { targetPath: blockPath, indent, text: [] };

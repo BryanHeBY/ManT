@@ -158,6 +158,36 @@ describe("page search index", () => {
     expect(match?.range).toEqual({ start: 17, end: 23 });
   });
 
+  test("breaks a prose group when leading spacing opens a new text buffer", () => {
+    // The renderer flushes its shared TextBuffer before any block with leading
+    // spacing, so a spaced paragraph at the same indent must start its own
+    // search record; otherwise its offsets span two on-screen buffers.
+    const spaced: MantSection[] = [{
+      id: "description",
+      title: "DESCRIPTION",
+      blocks: [
+        { type: "paragraph", children: [{ type: "text", value: "First paragraph." }] },
+        {
+          type: "paragraph",
+          layout: { spacingBeforeLines: 1 },
+          children: [{ type: "text", value: "Needle paragraph." }],
+        },
+      ],
+      children: [],
+    }];
+    const index = buildPageSearchIndex(spaced, undefined);
+    const match = queryPageSearchIndex(index, "needle")[0];
+
+    expect(index.records.map((record) => record.text)).toEqual([
+      "DESCRIPTION",
+      "First paragraph.",
+      "Needle paragraph.",
+    ]);
+    // The match targets the spaced paragraph's own block, not the group above.
+    expect(match?.targetPath).toBe(searchPath.block("", 1));
+    expect(match?.range).toEqual({ start: 0, end: 6 });
+  });
+
   test("indexes clickable reference fragments as separate text targets", () => {
     const linked: MantSection[] = [{
       id: "see-also",
