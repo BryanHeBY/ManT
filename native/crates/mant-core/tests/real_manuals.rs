@@ -22,6 +22,9 @@ static FEDORA44_CLANG: OnceLock<MantDocument> = OnceLock::new();
 static FEDORA44_GCC: OnceLock<MantDocument> = OnceLock::new();
 static FEDORA44_GIT: OnceLock<MantDocument> = OnceLock::new();
 static FEDORA44_TAR: OnceLock<MantDocument> = OnceLock::new();
+static DEBIAN_MT_GNU: OnceLock<MantDocument> = OnceLock::new();
+static DEBIAN_GROFF_ME: OnceLock<MantDocument> = OnceLock::new();
+static DEBIAN_GROFF_MAN_STYLE: OnceLock<MantDocument> = OnceLock::new();
 
 const LS_SECTIONS: &[&str] = &[
     "NAME",
@@ -91,6 +94,32 @@ const TAR_SECTIONS: &[&str] = &[
     "SEE ALSO",
     "BUG REPORTS",
     "COPYRIGHT",
+];
+
+const DEBIAN_MT_GNU_SECTIONS: &[&str] = &[
+    "NAME",
+    "SYNOPSIS",
+    "DESCRIPTION",
+    "BUG REPORTS",
+    "COPYRIGHT",
+];
+const DEBIAN_GROFF_ME_SECTIONS: &[&str] = &[
+    "Name",
+    "Synopsis",
+    "Description",
+    "Files",
+    "Notes",
+    "See also",
+];
+const DEBIAN_GROFF_MAN_STYLE_SECTIONS: &[&str] = &[
+    "Name",
+    "Synopsis",
+    "Description",
+    "Options",
+    "Files",
+    "Notes",
+    "Authors",
+    "See also",
 ];
 const TOPOLOGY_CASES: &[(&str, &[&str])] = &[
     ("ls", LS_SECTIONS),
@@ -182,6 +211,79 @@ fn fedora44_zstd_pages_keep_complete_sections_and_semantic_option_outlines() {
         );
 
         assert_no_duplicate_vertical_spacing(&document.sections, name);
+    }
+}
+
+#[test]
+fn debian_mt_gnu_anchor_ids_must_not_contain_control_characters() {
+    let document = debian_manual("mt-gnu");
+    for block in document_blocks(document) {
+        visit_block_inlines(block, &mut |inline| {
+            if let Inline::Anchor { id } = inline {
+                assert!(
+                    !id.contains(['\u{1d}', '\u{1e}', '\u{1f}']),
+                    "mt-gnu anchor ID {id:?} bytes {:02x?} leaks roff escape",
+                    id.as_bytes(),
+                );
+            }
+        });
+    }
+}
+
+#[test]
+fn debian_gzip_pages_keep_their_complete_section_topology() {
+    let cases: &[(&str, &[&str])] = &[
+        ("mt-gnu", DEBIAN_MT_GNU_SECTIONS),
+        ("groff_me", DEBIAN_GROFF_ME_SECTIONS),
+        ("groff_man_style", DEBIAN_GROFF_MAN_STYLE_SECTIONS),
+    ];
+
+    for (name, expected_titles) in cases {
+        let document = debian_manual(name);
+        assert_eq!(document.source.format, SourceFormat::Man, "fixture {name}");
+        assert!(
+            document
+                .source
+                .path
+                .as_deref()
+                .is_some_and(|path| path.contains("debian/") && path.contains(name)),
+            "fixture {name} must retain its Debian source location",
+        );
+
+        let section_titles: Vec<&str> = document
+            .sections
+            .iter()
+            .map(|section| section.title.as_str())
+            .collect();
+        assert_eq!(section_titles, *expected_titles, "fixture {name}");
+
+        let mut sections = Vec::new();
+        collect_sections(&document.sections, &mut sections);
+        assert!(
+            sections
+                .iter()
+                .all(|section| !section.blocks.is_empty() || !section.children.is_empty()),
+            "fixture {name} contains an empty section",
+        );
+        let ids: HashSet<&str> = sections.iter().map(|section| section.id.as_str()).collect();
+        assert_eq!(ids.len(), sections.len(), "fixture {name} section IDs");
+    }
+}
+
+#[test]
+fn debian_groff_section7_pages_do_not_leak_roff_markup() {
+    // groff_man_style is a groff macro tutorial: its examples intentionally
+    // contain literal \f font escapes as subject matter, not parser leaks.
+    assert_document_has_no_source_markup("debian/groff_me", debian_manual("groff_me"));
+}
+
+#[test]
+fn debian_gzip_pages_do_not_have_duplicate_vertical_spacing() {
+    for name in ["mt-gnu", "groff_me", "groff_man_style"] {
+        assert_no_duplicate_vertical_spacing(
+            &debian_manual(name).sections,
+            &format!("debian/{name}"),
+        );
     }
 }
 
@@ -625,6 +727,19 @@ fn fedora44_manual(name: &str) -> &'static MantDocument {
     })
 }
 
+fn debian_manual(name: &str) -> &'static MantDocument {
+    let slot = match name {
+        "mt-gnu" => &DEBIAN_MT_GNU,
+        "groff_me" => &DEBIAN_GROFF_ME,
+        "groff_man_style" => &DEBIAN_GROFF_MAN_STYLE,
+        _ => panic!("unknown Debian fixture {name}"),
+    };
+    slot.get_or_init(|| {
+        parse_manual_source(&debian_fixture_path(name))
+            .unwrap_or_else(|error| panic!("parse Debian {name} fixture: {error}"))
+    })
+}
+
 fn archlinux_fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -637,6 +752,18 @@ fn fedora44_fixture_path(name: &str) -> PathBuf {
         .join("../../..")
         .join("tests/fixtures/roff/real/fedora44")
         .join(format!("{name}.1.zst"))
+}
+
+fn debian_fixture_path(name: &str) -> PathBuf {
+    let section = match name {
+        "mt-gnu" => "1",
+        "groff_me" | "groff_man_style" => "7",
+        _ => panic!("unknown Debian fixture {name}"),
+    };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("tests/fixtures/roff/real/debian")
+        .join(format!("{name}.{section}.gz"))
 }
 
 fn collect_sections<'a>(sections: &'a [Section], output: &mut Vec<&'a Section>) {
