@@ -1,0 +1,12 @@
+.\" Minimal reproducer: lines starting with # inside .nf/.fi blocks
+.\" should be preformatted, not markdown H1 headings.
+.TH TEST 1 "2026-01-01" "test"
+.SH NAME
+test \- reproducer
+.SH DESCRIPTION
+.nf
+# this is a shell command, not a heading
+# another command line
+.fi
+.SH SEE ALSO
+nothing
