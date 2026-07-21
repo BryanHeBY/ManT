@@ -39,7 +39,7 @@ describe("interactive CLI execution", () => {
 
     expect(exitCode).toBe(0);
     expect(queried).toBeFalse();
-    expect(output.stdout[0]).toContain("mant-cli <topic>");
+    expect(output.stdout[0]).toContain("mant <topic>");
     expect(output.stderr).toEqual([]);
   });
 
@@ -49,7 +49,7 @@ describe("interactive CLI execution", () => {
 
     expect(exitCode).toBe(2);
     expect(output.stdout).toEqual([]);
-    expect(output.stderr[0]).toContain("non-interactive output is provided by mant-cli");
+    expect(output.stderr[0]).toContain("non-interactive output is provided by mant");
     expect(output.stderr[0]).not.toContain(" at ");
   });
 
@@ -68,7 +68,7 @@ describe("interactive CLI execution", () => {
     expect(exitCode).toBe(1);
     expect(queried).toBeFalse();
     expect(output.stderr).toEqual([
-      "mant: interactive view requires a terminal; use mant-cli for Markdown or JSON output",
+      "mantui: interactive view requires a terminal; use mant for Markdown or JSON output",
     ]);
   });
 
@@ -115,7 +115,7 @@ describe("interactive CLI execution", () => {
 
     expect(exitCode).toBe(1);
     expect(output.stderr).toEqual([
-      "mant: no readable manual content was found for 'missing'",
+      "mantui: no readable manual content was found for 'missing'",
     ]);
     expect(output.stderr[0]).not.toContain("run.test.ts");
   });

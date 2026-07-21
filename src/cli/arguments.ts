@@ -1,8 +1,8 @@
 /**
- * @file Parses the interactive `mant` command line without loading the TUI.
+ * @file Parses the interactive `mantui` command line without loading the TUI.
  *
  * Non-interactive outline, text, JSON, Markdown, and cache operations belong
- * to the separate Rust `mant-cli`, leaving this command focused on TUI use.
+ * to the separate Rust `mant`, leaving this command focused on TUI use.
  */
 
 // ── Public command model ───────────────────────────────────────────────────
@@ -30,8 +30,8 @@ export class CliUsageError extends Error {
 export const CLI_HELP = `ManT — explore local manual pages in a structured terminal UI
 
 Usage:
-  mant <topic> [--section <section>] [--force-libmandoc] [--force-groff]
-  mant -h, --help
+  mantui <topic> [--section <section>] [--force-libmandoc] [--force-groff]
+  mantui -h, --help
 
 Options:
   -h, --help              Show this help and exit
@@ -46,15 +46,15 @@ What ManT provides:
   document search, and optional tldr quick references.
 
 For agents and scripts:
-  mant-cli <topic> --outline               Discover sections and options
-  mant-cli <topic> --explain=--option      Explain one semantic entry
-  mant-cli <topic> --search=<pattern>      Find text with stable locations
-  mant-cli -h                              Show Markdown, text, JSON, and schema output
+  mant <topic> --outline               Discover sections and options
+  mant <topic> --explain=--option      Explain one semantic entry
+  mant <topic> --search=<pattern>      Find text with stable locations
+  mant -h                              Show Markdown, text, JSON, and schema output
 
 Examples:
-  mant git
-  mant printf --section 3
-  mant --force-libmandoc tar`;
+  mantui git
+  mantui printf --section 3
+  mantui --force-libmandoc tar`;
 
 // ── Parser ─────────────────────────────────────────────────────────────────
 
@@ -86,7 +86,7 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
       forceGroff = true;
     } else if (parseOptions && arg.startsWith("-")) {
       throw new CliUsageError(
-        `unknown option '${arg}'; non-interactive output is provided by mant-cli`,
+        `unknown option '${arg}'; non-interactive output is provided by mant`,
       );
     } else {
       topicParts.push(arg);

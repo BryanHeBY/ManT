@@ -42,10 +42,10 @@ When replacing a fixture, update its archive URL, package version, member path,
 hash, applicable shared license files, and native topology assertions in the
 same commit.
 
-## `mant-cli` 解析验证
+## `mant` 解析验证
 
 2026-07-21 对从 Arch Linux 下载的 32 个软件包中的 **2,866 个 topic/section
-请求**执行了 `mant-cli --force-libmandoc` 批量扫描。
+请求**执行了 `mant --force-libmandoc` 批量扫描。
 
 观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
 均完全保真；已知限制见父目录 README。

@@ -1,7 +1,7 @@
 [workspace]
 members = [
   "crates/mant-ast",
-  "crates/mant-cli",
+  "crates/mant",
   "crates/mant-core",
   "crates/libmandoc-rs",
 ]

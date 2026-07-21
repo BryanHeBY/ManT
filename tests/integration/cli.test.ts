@@ -45,7 +45,7 @@ describe("real CLI entry point", () => {
 
     expect(short.exitCode).toBe(0);
     expect(short.stdout).toContain("Usage:");
-    expect(short.stdout).toContain("mant-cli <topic>");
+    expect(short.stdout).toContain("mant <topic>");
     expect(short.stdout).toContain("--explain=--option");
     expect(short.stdout).not.toContain("--roff-ast");
     expect(short.stderr).toBe("");
@@ -56,17 +56,17 @@ describe("real CLI entry point", () => {
     const result = await invokeCli("--definitely-unknown");
 
     expect(result.exitCode).toBe(2);
-    expect(result.stderr).toContain("mant: unknown option '--definitely-unknown'");
+    expect(result.stderr).toContain("mantui: unknown option '--definitely-unknown'");
     expect(result.stderr).not.toContain("src/mant.ts:");
     expect(result.stderr).not.toContain(" at main");
   });
 
-  test("redirected TUI use points callers to mant-cli without loading native code", async () => {
+  test("redirected TUI use points callers to mant without loading native code", async () => {
     const result = await invokeCli("__mant_missing_topic_7f93c1__");
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("use mant-cli for Markdown or JSON output");
+    expect(result.stderr).toContain("use mant for Markdown or JSON output");
     expect(result.stderr).not.toContain("src/");
-    expect(result.stderr).not.toContain("mant-cli was not found");
+    expect(result.stderr).not.toContain("mant was not found");
   });
 });

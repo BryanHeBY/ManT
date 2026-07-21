@@ -143,7 +143,7 @@ pub struct SearchMatch {
     pub context: Vec<SearchContextLine>,
 }
 
-/// Nearest node accepted by `mant-cli --node` for a matching occurrence.
+/// Nearest node accepted by `mant --node` for a matching occurrence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "kind",

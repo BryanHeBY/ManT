@@ -46,7 +46,7 @@ pub enum TldrCacheAction {
     Updated,
 }
 
-/// Result of an explicit `mant-cli --update-tldr` operation.
+/// Result of an explicit `mant --update-tldr` operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrCacheUpdate {

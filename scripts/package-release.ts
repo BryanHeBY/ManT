@@ -172,8 +172,8 @@ export async function packageRelease(
   await rm(stagingDirectory, { recursive: true, force: true });
   await mkdir(licenseDirectory, { recursive: true });
   try {
+    await copyExecutable(join(distDirectory, "mantui"), join(packageDirectory, "mantui"));
     await copyExecutable(join(distDirectory, "mant"), join(packageDirectory, "mant"));
-    await copyExecutable(join(distDirectory, "mant-cli"), join(packageDirectory, "mant-cli"));
     await copyFile(join(root, "README.md"), join(packageDirectory, "README.md"));
     await copyFile(join(root, "LICENSE"), join(packageDirectory, "LICENSE"));
     await copyFile(

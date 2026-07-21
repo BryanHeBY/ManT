@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createNativeCliClient } from "../../src/native/client";
 import { buildPageSearchIndex, queryPageSearchIndex } from "../../src/ui/search";
 
-const nativeCliPath = new URL("../../native/bin/mant-cli", import.meta.url).pathname;
+const nativeCliPath = new URL("../../native/bin/mant", import.meta.url).pathname;
 const nativeCliAvailable = Bun.spawnSync(
   [nativeCliPath, "--protocol-version", "--compact"],
   { stdout: "ignore", stderr: "ignore" },
@@ -29,7 +29,7 @@ const testWithTarManual = tarManualAvailable ? test : test.skip;
 describeNativeCli("real native CLI process boundary", () => {
   test("negotiates the exact protocol through an explicit path", async () => {
     const client = createNativeCliClient({
-      env: { MANT_CLI_PATH: nativeCliPath },
+      env: { MANT_PATH: nativeCliPath },
       which: () => null,
     });
 
@@ -44,7 +44,7 @@ describeNativeCli("real native CLI process boundary", () => {
 
   testWithManual("returns a validated manual through the native query pipeline", async () => {
     const client = createNativeCliClient({
-      env: { MANT_CLI_PATH: nativeCliPath },
+      env: { MANT_PATH: nativeCliPath },
       which: () => null,
     });
 
@@ -60,7 +60,7 @@ describeNativeCli("real native CLI process boundary", () => {
 
   testWithTarManual("passes semantic tar options through the TUI search index", async () => {
     const client = createNativeCliClient({
-      env: { MANT_CLI_PATH: nativeCliPath },
+      env: { MANT_PATH: nativeCliPath },
       which: () => null,
     });
 

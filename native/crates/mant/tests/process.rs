@@ -6,7 +6,7 @@ use std::{
 };
 
 fn executable() -> &'static str {
-    env!("CARGO_BIN_EXE_mant-cli")
+    env!("CARGO_BIN_EXE_mant")
 }
 
 #[test]
@@ -14,12 +14,12 @@ fn help_groups_the_public_query_surface() {
     let output = Command::new(executable())
         .arg("--help")
         .output()
-        .expect("run mant-cli");
+        .expect("run mant");
 
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
-    assert!(help.contains("mant-cli <TOPIC> [OPTIONS]"));
+    assert!(help.contains("mant <TOPIC> [OPTIONS]"));
     assert!(help.contains("Document selection:"));
     assert!(help.contains("Search:"));
     assert!(help.contains("Integration:"));
@@ -40,11 +40,11 @@ fn short_help_alias_matches_long_help() {
     let short = Command::new(executable())
         .arg("-h")
         .output()
-        .expect("run mant-cli -h");
+        .expect("run mant -h");
     let long = Command::new(executable())
         .arg("--help")
         .output()
-        .expect("run mant-cli --help");
+        .expect("run mant --help");
 
     assert!(short.status.success());
     assert!(short.stderr.is_empty());
@@ -58,7 +58,7 @@ fn request_schema_is_discoverable_without_host_state() {
     let output = Command::new(executable())
         .args(["--schema", "request", "--compact"])
         .output()
-        .expect("run mant-cli");
+        .expect("run mant");
 
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
@@ -80,7 +80,7 @@ fn protocol_version_is_a_clean_json_document() {
     let output = Command::new(executable())
         .args(["--protocol-version", "--compact"])
         .output()
-        .expect("run mant-cli");
+        .expect("run mant");
 
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
@@ -101,7 +101,7 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("start mant-cli");
+        .expect("start mant");
     child
         .stdin
         .take()
@@ -110,12 +110,12 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
             br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"full"},"futureField":true}"#,
         )
         .expect("write request");
-    let output = child.wait_with_output().expect("wait for mant-cli");
+    let output = child.wait_with_output().expect("wait for mant");
 
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
-    assert!(diagnostic.starts_with("mant-cli: invalid query request JSON:"));
+    assert!(diagnostic.starts_with("mant: invalid query request JSON:"));
     assert!(!diagnostic.contains("panicked at"));
     assert!(!diagnostic.contains("stack backtrace"));
 }
@@ -125,12 +125,12 @@ fn unknown_options_do_not_expose_rust_source_excerpts() {
     let output = Command::new(executable())
         .arg("--not-an-option")
         .output()
-        .expect("run mant-cli");
+        .expect("run mant");
 
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
     assert!(diagnostic.starts_with("error: unexpected argument '--not-an-option'"));
-    assert!(diagnostic.contains("Usage: mant-cli"));
+    assert!(diagnostic.contains("Usage: mant"));
     assert!(diagnostic.contains("For more information, try '--help'."));
 }

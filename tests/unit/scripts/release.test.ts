@@ -88,7 +88,7 @@ describe("release archive reproducibility", () => {
       const archiveRoot = "mant-0.0.0-linux-x64";
       const packageDirectory = join(workspace, archiveRoot);
       await Bun.write(join(packageDirectory, "mant"), "binary-one\n");
-      await Bun.write(join(packageDirectory, "mant-cli"), "binary-two\n");
+      await Bun.write(join(packageDirectory, "mant"), "binary-two\n");
       await Bun.write(join(packageDirectory, "README.md"), "readme\n");
 
       const digests: string[] = [];

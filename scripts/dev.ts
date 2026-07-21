@@ -3,20 +3,20 @@
  *
  * Development never relies on a globally installed native CLI. The freshly
  * staged artifact is selected explicitly, while release installations use
- * the ordinary `MANT_CLI_PATH` then PATH lookup policy.
+ * the ordinary `MANT_PATH` then PATH lookup policy.
  */
 
-import { buildMantCli } from "./build-mant-cli";
+import { buildMant } from "./build-mant";
 
 const root = new URL("..", import.meta.url).pathname;
 
 try {
-  const nativeCli = await buildMantCli();
+  const nativeCli = await buildMant();
   const child = Bun.spawn(
     [process.execPath, "src/mant.ts", ...process.argv.slice(2)],
     {
       cwd: root,
-      env: { ...process.env, MANT_CLI_PATH: nativeCli },
+      env: { ...process.env, MANT_PATH: nativeCli },
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",

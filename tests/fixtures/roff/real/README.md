@@ -18,7 +18,7 @@ renderer-specific HTML snapshots, making parser regressions reproducible across
 Linux and macOS while retaining upstream notices embedded in the manuals.
 
 Each distribution directory also contains a `VERIFIED_TOPICS.txt` list of the
-topic/section requests scanned through `mant-cli --force-libmandoc`. Its header
+topic/section requests scanned through `mant --force-libmandoc`. Its header
 is the authoritative count for that distribution; the neighbouring README
 records the package provenance and observed parser behaviour.
 

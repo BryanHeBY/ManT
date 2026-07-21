@@ -1,5 +1,5 @@
 /**
- * @file Verifies actionable diagnostics at the mant-cli subprocess boundary.
+ * @file Verifies actionable diagnostics at the mant subprocess boundary.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -49,16 +49,16 @@ describe("native process boundary", () => {
   });
 
   test("uses native diagnostics before a generic exit-code message", () => {
-    expect(commandError(["mant-cli", "missing"], {
+    expect(commandError(["mant", "missing"], {
       stdout: new Uint8Array(),
       stderr: "No manual entry for missing\n",
       exitCode: 1,
     }).message).toBe("No manual entry for missing");
 
-    expect(commandError(["mant-cli", "missing"], {
+    expect(commandError(["mant", "missing"], {
       stdout: new Uint8Array(),
       stderr: "",
       exitCode: 1,
-    }).message).toBe("mant-cli missing failed with code 1");
+    }).message).toBe("mant missing failed with code 1");
   });
 });

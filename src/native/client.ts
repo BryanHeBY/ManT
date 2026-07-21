@@ -1,5 +1,5 @@
 /**
- * @file Calls the standalone Rust `mant-cli` through its versioned stdio API.
+ * @file Calls the standalone Rust `mant` through its versioned stdio API.
  *
  * This is deliberately a process and validation adapter only. Rust owns all
  * source discovery, parsing, query composition, and serialization semantics.
@@ -21,7 +21,7 @@ import {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-// Bound every native invocation so a hung mant-cli cannot leave the TUI
+// Bound every native invocation so a hung mant cannot leave the TUI
 // blocked at startup with no output. Generous enough for large pages (gcc,
 // clang) on a slow host, short enough to surface a stuck process.
 const NATIVE_CLI_TIMEOUT_MS = 30_000;
@@ -48,22 +48,22 @@ export interface NativeCliDependencies {
  * Resolve an explicitly selected CLI before consulting PATH.
  *
  * No repository-relative fallback is used: development goes through
- * `bun run dev`, which builds Rust and supplies MANT_CLI_PATH explicitly.
+ * `bun run dev`, which builds Rust and supplies MANT_PATH explicitly.
  */
 export function resolveMantCliPath(
   environment: Record<string, string | undefined> = process.env,
   which: (command: string) => string | null = Bun.which,
 ): string {
-  if (environment.MANT_CLI_PATH !== undefined) {
-    const override = environment.MANT_CLI_PATH.trim();
-    if (!override) throw new Error("MANT_CLI_PATH is set but empty");
+  if (environment.MANT_PATH !== undefined) {
+    const override = environment.MANT_PATH.trim();
+    if (!override) throw new Error("MANT_PATH is set but empty");
     return override;
   }
 
-  const installed = which("mant-cli");
+  const installed = which("mant");
   if (installed) return installed;
   throw new Error(
-    "mant-cli was not found; install it on PATH or set MANT_CLI_PATH. "
+    "mant was not found; install it on PATH or set MANT_PATH. "
     + "From a source checkout, use 'bun run dev -- <topic>'",
   );
 }
@@ -136,7 +136,7 @@ function nativeCliFailure(
   result: Awaited<ReturnType<CommandRunner>>,
 ): Error {
   const lines = result.stderr.trim().split("\n");
-  const first = lines[0]?.replace(/^mant-cli:\s*/, "");
+  const first = lines[0]?.replace(/^mant:\s*/, "");
   if (first) return new Error(first);
   return commandError(command, result);
 }

@@ -25,7 +25,7 @@ git push origin vMAJOR.MINOR.PATCH
 ```
 
 The release workflow rebuilds and tests each supported Linux target on its
-native GitHub runner. It packages `mant` and `mant-cli` together, uploads their
+native GitHub runner. It packages `mantui` and `mant` together, uploads their
 archives, assembles `SHA256SUMS`, and creates a **draft** GitHub Release with
 generated notes. The draft is intentional: review the notes, archive names,
 checksums, and licenses in GitHub before publishing it manually.

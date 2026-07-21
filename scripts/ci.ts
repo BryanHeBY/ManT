@@ -15,10 +15,10 @@ import { resolveReleasePlatform } from "./release-platform";
 
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
-const nativeCliName = "mant-cli";
+const nativeCliName = "mant";
 const nativeCliSource = join(root, "native", "bin", nativeCliName);
 const nativeCliPath = join(distDirectory, nativeCliName);
-const executableName = "mant";
+const executableName = "mantui";
 const executablePath = join(distDirectory, executableName);
 const executableEntrypoint = join(root, "src", "mant.ts");
 
@@ -62,7 +62,7 @@ async function verifyPackagedExecutable(): Promise<void> {
     new Response(helpProcess.stderr).text(),
     helpProcess.exited,
   ]);
-  if (helpExitCode !== 0 || !helpOutput.includes("mant-cli <topic>")) {
+  if (helpExitCode !== 0 || !helpOutput.includes("mant <topic>")) {
     throw new Error(`packaged TUI help smoke test failed: ${helpStderr.trim()}`);
   }
 
@@ -80,7 +80,7 @@ async function verifyPackagedExecutable(): Promise<void> {
     queryProcess.exited,
   ]);
   if (queryExitCode !== 0) {
-    throw new Error(`packaged mant-cli smoke test failed: ${queryStderr.trim()}`);
+    throw new Error(`packaged mant smoke test failed: ${queryStderr.trim()}`);
   }
   const query = JSON.parse(queryOutput) as {
     schema?: string;
@@ -91,7 +91,7 @@ async function verifyPackagedExecutable(): Promise<void> {
     || query.manual?.schema !== "mant.document/v2"
     || !query.manual.sections?.length
   ) {
-    throw new Error("packaged mant-cli did not return a readable native document");
+    throw new Error("packaged mant did not return a readable native document");
   }
 }
 
@@ -127,9 +127,9 @@ async function main(): Promise<void> {
     "-D",
     "warnings",
   ]);
-  await run("build native mant-cli", [process.execPath, "run", "build:mant-cli"]);
+  await run("build native mant", [process.execPath, "run", "build:mant"]);
   if (!(await isExecutable(nativeCliSource))) {
-    throw new Error("build:mant-cli did not stage an executable native/bin/mant-cli");
+    throw new Error("build:mant did not stage an executable native/bin/mant");
   }
 
   await run("test", [process.execPath, "test"]);

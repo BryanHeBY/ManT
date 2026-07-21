@@ -12,25 +12,25 @@ pub fn query_request_json_schema() -> Schema {
     deserialize_schema::<QueryRequest>()
 }
 
-/// Generate the complete-query JSON representation emitted by `mant-cli`.
+/// Generate the complete-query JSON representation emitted by `mant`.
 #[must_use]
 pub fn query_bundle_json_schema() -> Schema {
     serialize_schema::<QueryBundle>()
 }
 
-/// Generate the outline JSON representation emitted by `mant-cli`.
+/// Generate the outline JSON representation emitted by `mant`.
 #[must_use]
 pub fn query_outline_json_schema() -> Schema {
     serialize_schema::<QueryOutline>()
 }
 
-/// Generate the selected-excerpt JSON representation emitted by `mant-cli`.
+/// Generate the selected-excerpt JSON representation emitted by `mant`.
 #[must_use]
 pub fn query_excerpt_json_schema() -> Schema {
     serialize_schema::<QueryExcerpt>()
 }
 
-/// Generate the structure-aware search result emitted by `mant-cli`.
+/// Generate the structure-aware search result emitted by `mant`.
 #[must_use]
 pub fn query_search_json_schema() -> Schema {
     serialize_schema::<QuerySearch>()

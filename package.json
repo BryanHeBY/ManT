@@ -20,7 +20,7 @@
     "rust:fmt": "cargo fmt --manifest-path native/Cargo.toml --all --check",
     "rust:lint": "cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D warnings",
     "rust:test": "cargo test --manifest-path native/Cargo.toml --workspace",
-    "build:mant-cli": "bun scripts/build-mant-cli.ts",
+    "build:mant": "bun scripts/build-mant.ts",
     "release:pack": "bun scripts/package-release.ts",
     "test": "bun test",
     "test:unit": "bun test tests/unit",

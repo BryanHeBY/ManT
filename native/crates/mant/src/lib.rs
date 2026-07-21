@@ -1,6 +1,6 @@
 //! Public process boundary for `ManT`'s native document CLI.
 //!
-//! `mant-cli` is both an agent-friendly command and the versioned stdio
+//! `mant` is both an agent-friendly command and the versioned stdio
 //! backend used by the interactive TypeScript application. Standard output is
 //! reserved for the requested document; diagnostics go to standard error.
 
@@ -329,12 +329,8 @@ fn report_manual_diagnostics(query: &QueryBundle, output: &mut dyn Write) -> Res
         SourceFormat::Man | SourceFormat::Mdoc | SourceFormat::MandocHtml => "libmandoc",
     };
     for diagnostic in &manual.diagnostics {
-        writeln!(
-            output,
-            "mant-cli: {engine} {}",
-            format_diagnostic(diagnostic)
-        )
-        .map_err(Failure::operational)?;
+        writeln!(output, "mant: {engine} {}", format_diagnostic(diagnostic))
+            .map_err(Failure::operational)?;
     }
     Ok(())
 }
@@ -486,9 +482,9 @@ impl Failure {
 }
 
 fn report_failure(error: &Failure, diagnostics: &mut dyn Write) -> u8 {
-    let _ = writeln!(diagnostics, "mant-cli: {}", error.message);
+    let _ = writeln!(diagnostics, "mant: {}", error.message);
     if error.kind == FailureKind::Usage {
-        let _ = writeln!(diagnostics, "Try 'mant-cli --help' for more information.");
+        let _ = writeln!(diagnostics, "Try 'mant --help' for more information.");
         2
     } else {
         1
@@ -737,7 +733,7 @@ mod tests {
             );
             assert_eq!(status, 2);
             assert!(output.is_empty());
-            assert!(diagnostics.starts_with("mant-cli: "));
+            assert!(diagnostics.starts_with("mant: "));
             assert_eq!(host.query_calls.get(), 0);
         }
     }
@@ -868,7 +864,7 @@ mod tests {
         assert!(output.contains("[name-1] NAME"));
         assert_eq!(
             diagnostics,
-            "mant-cli: libmandoc Unsupported at 42:3: unsupported roff request: xx\n"
+            "mant: libmandoc Unsupported at 42:3: unsupported roff request: xx\n"
         );
     }
 
@@ -888,10 +884,7 @@ mod tests {
             invoke(&["demo", "--outline", "--force-groff"], b"", &host);
 
         assert_eq!(status, 0);
-        assert_eq!(
-            diagnostics,
-            "mant-cli: groff HTML Warning: renderer warning\n"
-        );
+        assert_eq!(diagnostics, "mant: groff HTML Warning: renderer warning\n");
     }
 
     #[test]
@@ -956,7 +949,7 @@ mod tests {
         assert_eq!(status, 2);
         assert!(output.is_empty());
         assert!(diagnostics.contains("document 'demo' has no outline node '9'"));
-        assert!(diagnostics.contains("mant-cli demo --outline"));
+        assert!(diagnostics.contains("mant demo --outline"));
     }
 
     #[test]
@@ -991,7 +984,7 @@ mod tests {
         assert_eq!(status, 2);
         assert!(output.is_empty());
         assert!(diagnostics.starts_with("error: unexpected argument '--unknown'"));
-        assert!(diagnostics.contains("Usage: mant-cli"));
+        assert!(diagnostics.contains("Usage: mant"));
         assert!(diagnostics.contains("For more information, try '--help'."));
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);

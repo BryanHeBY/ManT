@@ -19,9 +19,9 @@ bun install
 bun run dev -- git
 ```
 
-`bun run dev -- <topic>` builds the release `mant-cli` for the current host,
-stages it under `native/bin`, sets `MANT_CLI_PATH`, and starts the Bun TUI. It
-never depends on a globally installed `mant-cli`.
+`bun run dev -- <topic>` builds the release `mant` for the current host,
+stages it under `native/bin`, sets `MANT_PATH`, and starts the Bun TUI. It
+never depends on a globally installed `mant`.
 
 Run the full local verification sequence before handing off a change:
 
@@ -30,9 +30,9 @@ bun run build
 ```
 
 It installs locked dependencies, checks TypeScript, formats/tests/lints the
-Rust workspace, builds the native CLI, runs all Bun tests, compiles `mant`, and
+Rust workspace, builds the native CLI, runs all Bun tests, compiles `mantui`, and
 smoke-tests both binaries. The current-platform artifacts are written to
-`dist/mant` and `dist/mant-cli`.
+`dist/mantui` and `dist/mant`.
 
 Focused commands are available when iterating:
 
@@ -41,20 +41,20 @@ bun test
 bun run lint
 bun run rust:test
 bun run rust:lint
-bun run build:mant-cli
+bun run build:mant
 ```
 
 ## Repository map
 
 ```text
 src/                         Bun entry point, native-client boundary, and OpenTUI UI
-  cli/                       Interactive `mant` grammar and error boundary
-  native/                    `mant-cli` process discovery and response validation
+  cli/                       Interactive `mantui` grammar and error boundary
+  native/                    `mant` process discovery and response validation
   ui/                        Sidebar, content, search, menus, and terminal layout
 native/
   crates/mant-ast/           Versioned document, query, outline, and schema types
   crates/mant-core/          Source loading, libmandoc lowering, projections, output
-  crates/mant-cli/           Agent/script CLI, request JSON, and MCP stdio boundary
+  crates/mant/               Agent/script CLI, request JSON, and MCP stdio boundary
   crates/libmandoc-rs/       Owned libmandoc parse API, private C shim, and vendored source
 scripts/                     Local build, compiler selection, packaging, and dev wrappers
 tests/                       Bun unit/integration/TUI tests and fixed roff fixtures

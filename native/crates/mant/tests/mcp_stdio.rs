@@ -1,4 +1,4 @@
-//! Verifies the public `mant-cli --mcp` stdio handshake without a local man page.
+//! Verifies the public `mant --mcp` stdio handshake without a local man page.
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -10,14 +10,14 @@ use serde_json::{Value, json};
 /// Start the real binary, negotiate MCP, and inspect its discoverable tools.
 #[test]
 fn stdio_mode_exposes_only_read_only_manual_tools() {
-    let executable = env!("CARGO_BIN_EXE_mant-cli");
+    let executable = env!("CARGO_BIN_EXE_mant");
     let mut child = Command::new(executable)
         .arg("--mcp")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("start mant-cli MCP server");
+        .expect("start mant MCP server");
     let mut input = child.stdin.take().expect("MCP stdin");
     let output = child.stdout.take().expect("MCP stdout");
 
@@ -62,7 +62,7 @@ fn stdio_mode_exposes_only_read_only_manual_tools() {
     let mut lines = BufReader::new(output).lines();
     let initialization = parse_reply(lines.next().expect("initialization reply"));
     assert_eq!(initialization["id"], 1);
-    assert_eq!(initialization["result"]["serverInfo"]["name"], "mant-cli");
+    assert_eq!(initialization["result"]["serverInfo"]["name"], "mant");
 
     let tools = parse_reply(lines.next().expect("tools list reply"));
     assert_eq!(tools["id"], 2);

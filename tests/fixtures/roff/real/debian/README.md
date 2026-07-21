@@ -41,10 +41,10 @@ sha256sum groff_me.7.gz
 When replacing a fixture, update its package pool URL, version, member path,
 hash, and applicable license references in the same commit.
 
-## `mant-cli` 解析验证
+## `mant` 解析验证
 
 2026-07-21 对从 Debian sid 下载的 29 个软件包中的 **491 个 topic/section
-请求**执行了 `mant-cli --force-libmandoc` 批量扫描。
+请求**执行了 `mant --force-libmandoc` 批量扫描。
 
 观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
 均完全保真；已知限制见父目录 README。

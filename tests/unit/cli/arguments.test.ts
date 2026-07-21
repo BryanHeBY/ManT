@@ -1,5 +1,5 @@
 /**
- * @file Verifies the intentionally small interactive `mant` grammar.
+ * @file Verifies the intentionally small interactive `mantui` grammar.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -52,11 +52,11 @@ describe("interactive CLI argument parsing", () => {
     });
   });
 
-  test("routes non-interactive options to mant-cli", () => {
+  test("routes non-interactive options to mant", () => {
     expect(() => parseCliArguments(["git", "--format", "json"]))
-      .toThrow("non-interactive output is provided by mant-cli");
+      .toThrow("non-interactive output is provided by mant");
     expect(() => parseCliArguments(["--update-tldr"]))
-      .toThrow("non-interactive output is provided by mant-cli");
+      .toThrow("non-interactive output is provided by mant");
   });
 
   test("rejects missing topics and malformed section options", () => {

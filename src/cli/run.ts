@@ -1,7 +1,7 @@
 /**
- * @file Executes the interactive `mant` command and owns its error boundary.
+ * @file Executes the interactive `mantui` command and owns its error boundary.
  *
- * Query semantics live in Rust's `mant-cli`; this module only checks terminal
+ * Query semantics live in Rust's `mant`; this module only checks terminal
  * suitability, invokes the versioned process client, and starts OpenTUI.
  */
 
@@ -43,7 +43,7 @@ export async function runCli(
       ?? (() => Boolean(process.stdin.isTTY && process.stdout.isTTY));
     if (!isInteractive()) {
       throw new Error(
-        "interactive view requires a terminal; use mant-cli for Markdown or JSON output",
+        "interactive view requires a terminal; use mant for Markdown or JSON output",
       );
     }
 
@@ -73,15 +73,15 @@ export function formatCliError(error: unknown, debug = false): string {
 
   const message = getErrorMessage(error);
   if (error instanceof CliUsageError) {
-    return `mant: ${message}\nTry 'mant --help' for more information.`;
+    return `mantui: ${message}\nTry 'mantui --help' for more information.`;
   }
-  return `mant: ${message}`;
+  return `mantui: ${message}`;
 }
 
 /** Formats failures that somehow escape runCli's defensive boundary. */
 export function formatUnexpectedError(error: unknown, debug = false): string {
   if (debug && error instanceof Error && error.stack) return error.stack;
-  return `mant: unexpected failure: ${getErrorMessage(error)}`;
+  return `mantui: unexpected failure: ${getErrorMessage(error)}`;
 }
 
 function getErrorMessage(error: unknown): string {

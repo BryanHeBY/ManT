@@ -153,7 +153,7 @@ export interface MantQueryBundle {
   tldr?: TldrDocument;
 }
 
-/** Exact request envelope accepted by `mant-cli --request-json`. */
+/** Exact request envelope accepted by `mant --request-json`. */
 export interface MantQueryRequest {
   schema: "mant.request/v2";
   topic: string;
@@ -206,7 +206,7 @@ export function decodeNativeCliProtocol(input: string): NativeCliProtocol {
   try {
     value = JSON.parse(input);
   } catch (error) {
-    throw new Error(`mant-cli protocol probe returned invalid JSON: ${String(error)}`);
+    throw new Error(`mant protocol probe returned invalid JSON: ${String(error)}`);
   }
   const object = expectObject(value, "$protocol");
   expectLiteral(object.protocol, "mant.cli/v2", "$protocol.protocol");

@@ -1,7 +1,7 @@
 //! Implements `ManT`'s read-only Model Context Protocol server.
 //!
 //! This module deliberately calls `mant-core` in-process instead of spawning
-//! `mant-cli`. It exposes the same stable outline, excerpt, and search
+//! `mant`. It exposes the same stable outline, excerpt, and search
 //! projections as the direct CLI over MCP's standard-input/output transport.
 
 use std::{
@@ -49,7 +49,7 @@ pub(super) async fn run_stdio() -> u8 {
     let service = match MantMcpServer::new().serve(transport).await {
         Ok(service) => service,
         Err(error) => {
-            eprintln!("mant-cli: cannot start MCP stdio server: {error}");
+            eprintln!("mant: cannot start MCP stdio server: {error}");
             return 1;
         }
     };
@@ -57,7 +57,7 @@ pub(super) async fn run_stdio() -> u8 {
     match service.waiting().await {
         Ok(_) => 0,
         Err(error) => {
-            eprintln!("mant-cli: MCP stdio server failed: {error}");
+            eprintln!("mant: MCP stdio server failed: {error}");
             1
         }
     }
@@ -364,7 +364,7 @@ impl MantMcpServer {
 impl ServerHandler for MantMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("mant-cli", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new("mant", env!("CARGO_PKG_VERSION")))
             .with_instructions(
                 "Query local manual pages only. Start with mant_manual_outline, then use IDs, paths, or aliases with mant_manual_get or mant_manual_explain.",
             )

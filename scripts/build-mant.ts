@@ -1,9 +1,9 @@
 /**
- * @file Builds and stages the current-platform Rust `mant-cli` executable.
+ * @file Builds and stages the current-platform Rust `mant` executable.
  *
  * Cargo owns compilation and dependency tracking. This wrapper applies ManT's
  * Linux/macOS C-compiler policy and atomically publishes the release artifact
- * under native/bin so development can select it through MANT_CLI_PATH.
+ * under native/bin so development can select it through MANT_PATH.
  */
 
 import { chmod, copyFile, mkdir, rename, rm } from "node:fs/promises";
@@ -12,11 +12,11 @@ import { assertSupportedBuildPlatform, resolveCCompiler } from "./c-compiler";
 
 const root = new URL("..", import.meta.url).pathname;
 const manifest = join(root, "native", "Cargo.toml");
-const cargoArtifact = join(root, "native", "target", "release", "mant-cli");
-const stagedArtifact = join(root, "native", "bin", "mant-cli");
+const cargoArtifact = join(root, "native", "target", "release", "mant");
+const stagedArtifact = join(root, "native", "bin", "mant");
 
 /** Build the native CLI and return the path consumed by the Bun process client. */
-export async function buildMantCli(): Promise<string> {
+export async function buildMant(): Promise<string> {
   assertSupportedBuildPlatform();
   const compiler = resolveCCompiler();
   const origin = compiler.source === "environment"
@@ -32,7 +32,7 @@ export async function buildMantCli(): Promise<string> {
     "--manifest-path",
     manifest,
     "--package",
-    "mant-cli",
+    "mant",
   ];
   console.log(`$ ${command.join(" ")}`);
   const child = Bun.spawn(command, {
@@ -44,7 +44,7 @@ export async function buildMantCli(): Promise<string> {
   });
   const exitCode = await child.exited;
   if (exitCode !== 0) {
-    throw new Error(`cargo failed to build mant-cli (exit ${exitCode})`);
+    throw new Error(`cargo failed to build mant (exit ${exitCode})`);
   }
 
   await stageExecutable(cargoArtifact, stagedArtifact);
@@ -66,10 +66,10 @@ async function stageExecutable(source: string, target: string): Promise<void> {
 
 if (import.meta.main) {
   try {
-    await buildMantCli();
+    await buildMant();
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    console.error(`mant-cli build failed: ${detail}`);
+    console.error(`mant build failed: ${detail}`);
     process.exitCode = 1;
   }
 }

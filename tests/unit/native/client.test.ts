@@ -30,19 +30,19 @@ const protocol = JSON.stringify({
   searchSchema: "mant.search/v1",
 });
 
-describe("native mant-cli client", () => {
-  test("uses MANT_CLI_PATH before PATH and rejects an empty override", () => {
+describe("native mant client", () => {
+  test("uses MANT_PATH before PATH and rejects an empty override", () => {
     expect(resolveMantCliPath(
-      { MANT_CLI_PATH: " /opt/mant/bin/mant-cli " },
-      () => "/usr/bin/mant-cli",
-    )).toBe("/opt/mant/bin/mant-cli");
-    expect(() => resolveMantCliPath({ MANT_CLI_PATH: "  " }, () => null))
-      .toThrow("MANT_CLI_PATH is set but empty");
+      { MANT_PATH: " /opt/mant/bin/mant " },
+      () => "/usr/bin/mant",
+    )).toBe("/opt/mant/bin/mant");
+    expect(() => resolveMantCliPath({ MANT_PATH: "  " }, () => null))
+      .toThrow("MANT_PATH is set but empty");
   });
 
   test("uses PATH and gives source checkouts an actionable missing-binary error", () => {
     expect(resolveMantCliPath({}, (command) => `/tools/${command}`))
-      .toBe("/tools/mant-cli");
+      .toBe("/tools/mant");
     expect(() => resolveMantCliPath({}, () => null))
       .toThrow("bun run dev -- <topic>");
   });
@@ -62,7 +62,7 @@ describe("native mant-cli client", () => {
       }));
     };
     const client = createNativeCliClient({
-      env: { MANT_CLI_PATH: "/tools/mant-cli" },
+      env: { MANT_PATH: "/tools/mant" },
       which: () => {
         throw new Error("PATH must not be consulted");
       },
@@ -84,10 +84,10 @@ describe("native mant-cli client", () => {
     expect(second.topic).toBe("git");
     expect(third.topic).toBe("git");
     expect(calls.map((call) => call.command)).toEqual([
-      ["/tools/mant-cli", "--protocol-version", "--compact"],
-      ["/tools/mant-cli", "--request-json", "--format", "json", "--compact"],
+      ["/tools/mant", "--protocol-version", "--compact"],
+      ["/tools/mant", "--request-json", "--format", "json", "--compact"],
       [
-        "/tools/mant-cli",
+        "/tools/mant",
         "--request-json",
         "--force-libmandoc",
         "--format",
@@ -95,7 +95,7 @@ describe("native mant-cli client", () => {
         "--compact",
       ],
       [
-        "/tools/mant-cli",
+        "/tools/mant",
         "--request-json",
         "--force-groff",
         "--format",
@@ -110,7 +110,7 @@ describe("native mant-cli client", () => {
   test("rejects incompatible binaries before issuing a query", async () => {
     let calls = 0;
     const client = createNativeCliClient({
-      env: { MANT_CLI_PATH: "/tools/mant-cli" },
+      env: { MANT_PATH: "/tools/mant" },
       runCommand: async () => {
         calls += 1;
         return result(protocol.replace("mant.cli/v2", "mant.cli/v1"));
@@ -124,10 +124,10 @@ describe("native mant-cli client", () => {
 
   test("turns native stderr into a concise host error", async () => {
     const client = createNativeCliClient({
-      env: { MANT_CLI_PATH: "/tools/mant-cli" },
+      env: { MANT_PATH: "/tools/mant" },
       runCommand: async (command) => command.includes("--protocol-version")
         ? result(protocol)
-        : result("", "mant-cli: no readable manual content was found for 'missing'\n", 1),
+        : result("", "mant: no readable manual content was found for 'missing'\n", 1),
     });
 
     await expect(client.query({ topic: "missing" }))

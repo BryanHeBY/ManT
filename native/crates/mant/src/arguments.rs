@@ -1,4 +1,4 @@
-//! Defines and validates the public `mant-cli` command line with clap.
+//! Defines and validates the public `mant` command line with clap.
 //!
 //! The interface intentionally has one positional value: the manual topic.
 //! Every action, projection, input mode, and output choice is a long option so
@@ -124,12 +124,12 @@ pub(crate) enum Command {
 // validates their relationships before `Cli` is normalized into `Command`.
 #[allow(clippy::struct_excessive_bools)]
 #[command(
-    name = "mant-cli",
+    name = "mant",
     about = "Query structured local manual pages for agents and scripts",
     disable_help_flag = true,
     disable_version_flag = true,
-    override_usage = "mant-cli <TOPIC> [OPTIONS]\n       mant-cli --request-json [--format <FORMAT>] [--compact]\n       mant-cli --schema <CONTRACT> [--compact]\n       mant-cli --update-tldr [--compact]\n       mant-cli --protocol-version [--compact]\n       mant-cli --mcp",
-    after_help = "Examples:\n  mant-cli git\n  mant-cli gcc --outline\n  mant-cli tar --explain=--exclude\n  mant-cli tar --node acls --format markdown\n  mant-cli tar --search=--acls --context 1\n  mant-cli git --format json --compact\n  mant-cli --schema request\n  mant-cli --update-tldr\n  mant-cli --mcp",
+    override_usage = "mant <TOPIC> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
@@ -362,15 +362,14 @@ struct Cli {
 // ── Normalization and semantic validation ─────────────────────────────────
 
 pub(crate) fn parse(arguments: &[String]) -> Result<Command, clap::Error> {
-    let parsed = match Cli::try_parse_from(
-        iter::once("mant-cli").chain(arguments.iter().map(String::as_str)),
-    ) {
-        Ok(parsed) => parsed,
-        Err(error) if error.kind() == ErrorKind::DisplayHelp => {
-            return Ok(Command::Help(error.to_string()));
-        }
-        Err(error) => return Err(error),
-    };
+    let parsed =
+        match Cli::try_parse_from(iter::once("mant").chain(arguments.iter().map(String::as_str))) {
+            Ok(parsed) => parsed,
+            Err(error) if error.kind() == ErrorKind::DisplayHelp => {
+                return Ok(Command::Help(error.to_string()));
+            }
+            Err(error) => return Err(error),
+        };
 
     normalize(parsed)
 }
@@ -807,7 +806,7 @@ mod tests {
     fn help_is_side_effect_free_and_the_option_terminator_preserves_a_topic() {
         for flag in ["--help", "-h"] {
             let help = parse(&args(&[flag])).expect("help");
-            assert!(matches!(help, Command::Help(text) if text.contains("Usage: mant-cli")));
+            assert!(matches!(help, Command::Help(text) if text.contains("Usage: mant")));
         }
         assert_eq!(
             parse(&args(&["--", "--help"])).expect("query"),
