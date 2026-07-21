@@ -1,28 +1,16 @@
 /**
- * @file Renders the versioned native document and optional tldr reference.
+ * @file Renders structured native blocks while preserving search and link IDs.
  *
- * Rust owns document semantics. This module performs presentation-only work:
- * terminal indentation, colors, wrapping, stable search anchors, and styling.
+ * Adjacent prose deliberately shares one TextBuffer. The page-search index
+ * mirrors that grouping, so visual highlighting and scrolling stay exact.
  */
 
-import { memo, type ReactNode } from "react";
-import type {
-  MantBlock,
-  MantInline,
-  MantSection,
-  TldrCommandPart,
-  TldrDocument,
-} from "../native";
-import {
-  contentAnchorId,
-  contentId,
-  contentSearchId,
-  TLDR_NAV_ID,
-} from "./ids";
+import type { ReactNode } from "react";
+import type { MantBlock, MantInline } from "../native";
+import { contentAnchorId, contentSearchId } from "./ids";
+import { renderInlineContent } from "./inline-content";
 import { Pre } from "./Pre";
 import { searchPath, visibleInlineSegments } from "./search";
-
-// ── Inline layout ─────────────────────────────────────────────
 
 function layoutIndent(block: MantBlock): number {
   return block.type === "vertical-space"
@@ -36,43 +24,11 @@ function layoutSpacing(block: MantBlock): number {
     : Math.max(0, Math.floor(block.layout?.spacingBeforeLines ?? 0));
 }
 
-/** Renders inline semantics without changing the visible source text. */
-function renderInlineContent(nodes: MantInline[], keyPrefix: string): ReactNode[] {
-  let keyCounter = 0;
-  const renderNodes = (children: MantInline[]): ReactNode[] => children.map((node) => {
-    const key = `${keyPrefix}-${keyCounter++}`;
-    switch (node.type) {
-      case "text":
-        return node.value;
-      case "strong":
-        return <span key={key} fg="#cdd6f4"><b>{renderNodes(node.children)}</b></span>;
-      case "emphasis":
-        return <span key={key} fg="#7f849c"><i>{renderNodes(node.children)}</i></span>;
-      case "code":
-        return <span key={key} fg="#94e2d5">{node.value}</span>;
-      case "external-link":
-      case "email-link":
-        return <span key={key} fg="#89b4fa"><u>{renderNodes(node.children)}</u></span>;
-      case "manual-reference":
-        return <span key={key} fg="#89dceb">{renderNodes(node.children)}</span>;
-      case "section-reference":
-        return <span key={key} fg="#89dceb"><u>{renderNodes(node.children)}</u></span>;
-      case "anchor":
-        return null;
-      case "line-break":
-        return "\n";
-    }
-  });
-  return renderNodes(nodes);
-}
-
-// ── Native block renderer ───────────────────────────────────────
-
 /**
  * Merges adjacent prose into larger TextBuffers while retaining structural
  * blocks. Search records use the same grouping and point at these stable IDs.
  */
-function renderBlockNodes(
+export function renderBlockNodes(
   blocks: MantBlock[],
   baseIndent: number,
   sectionId: string,
@@ -369,130 +325,3 @@ function renderBlockNodes(
   flushInline();
   return result;
 }
-
-// ── Section hierarchy ───────────────────────────────────────────
-
-export interface SectionContentProps {
-  node: MantSection;
-  baseIndent?: number;
-  headingIndent?: number;
-  onNavigateInternal?: ((target: string) => void) | undefined;
-}
-
-/** Recursively renders one section and its children in document order. */
-function SectionContentView({
-  node,
-  baseIndent = 3,
-  headingIndent = 0,
-  onNavigateInternal,
-}: SectionContentProps) {
-  return (
-    <box
-      flexDirection="column"
-      gap={0}
-      paddingTop={Math.max(0, Math.floor(node.spacingBeforeLines ?? 0))}
-    >
-      <box paddingLeft={headingIndent}>
-        <text id={contentId(node.id)} fg="#94e2d5"><b>{node.title}</b></text>
-      </box>
-      {renderBlockNodes(node.blocks, baseIndent, node.id, "", onNavigateInternal)}
-      <box flexDirection="column" gap={0}>
-        {node.children.map((child) => (
-          <SectionContent
-            key={child.id}
-            node={child}
-            baseIndent={baseIndent + 4}
-            headingIndent={headingIndent + 4}
-            onNavigateInternal={onNavigateInternal}
-          />
-        ))}
-      </box>
-    </box>
-  );
-}
-
-function sectionContentPropsEqual(previous: SectionContentProps, next: SectionContentProps): boolean {
-  return previous.node === next.node
-    && previous.baseIndent === next.baseIndent
-    && previous.headingIndent === next.headingIndent;
-}
-
-/** App state changes do not rebuild immutable manual sections. */
-export const SectionContent = memo(SectionContentView, sectionContentPropsEqual);
-
-// ── TLDR quick reference ───────────────────────────────────────
-
-function TldrCommand({ parts }: { parts: TldrCommandPart[] }) {
-  return (
-    <text fg="#cdd6f4" wrapMode="char">
-      {parts.map((part, index) => (
-        <span key={index} fg={part.type === "placeholder" ? "#f9e2af" : "#cdd6f4"}>
-          {part.value}
-        </span>
-      ))}
-    </text>
-  );
-}
-
-/** Renders cached community examples before the authoritative man page. */
-function TldrQuickReferenceView({ page }: { page: TldrDocument }) {
-  return (
-    <box
-      id={contentId(TLDR_NAV_ID)}
-      flexDirection="column"
-      backgroundColor="#28243a"
-      border={["top", "right", "bottom", "left"]}
-      borderColor="#cba6f7"
-      paddingLeft={1}
-      paddingRight={1}
-      paddingTop={1}
-      paddingBottom={1}
-    >
-      <text fg="#cba6f7"><b>{`TLDR QUICK REFERENCE · ${page.title}`}</b></text>
-      {page.description.map((line, index) => (
-        <text
-          key={`description-${index}`}
-          id={contentSearchId(TLDR_NAV_ID, searchPath.tldrDescription(index))}
-          fg="#bac2de"
-          wrapMode="word"
-        >
-          {line}
-        </text>
-      ))}
-      {page.examples.map((example, index) => (
-        <box key={`example-${index}`} flexDirection="column" paddingTop={1}>
-          <text
-            id={contentSearchId(TLDR_NAV_ID, searchPath.tldrExampleDescription(index))}
-            fg="#a6e3a1"
-            wrapMode="word"
-          >
-            {example.description}
-          </text>
-          {example.command && (
-            <box
-              id={contentSearchId(TLDR_NAV_ID, searchPath.tldrExampleCommand(index))}
-              paddingLeft={2}
-            >
-              <TldrCommand parts={example.commandParts} />
-            </box>
-          )}
-        </box>
-      ))}
-      {page.moreInformation && (
-        <box paddingTop={1}>
-          <text
-            id={contentSearchId(TLDR_NAV_ID, searchPath.tldrMoreInformation())}
-            fg="#89b4fa"
-            wrapMode="char"
-          >
-            {`More information: ${page.moreInformation}`}
-          </text>
-        </box>
-      )}
-      <text fg="#7f849c">{`tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`}</text>
-    </box>
-  );
-}
-
-/** TLDR is immutable for the lifetime of one page. */
-export const TldrQuickReference = memo(TldrQuickReferenceView);

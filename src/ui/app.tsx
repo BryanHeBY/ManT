@@ -6,11 +6,8 @@
  */
 
 import {
-  type BaseRenderable,
   createCliRenderer,
-  type InputRenderable,
   type ScrollBoxRenderable,
-  TextRenderable,
 } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +21,7 @@ import {
   type MenuEntry,
   type MenuId,
 } from "./menu-bar";
-import { SectionContent, TldrQuickReference } from "./manual-content";
+import { SectionContent } from "./section-content";
 import { ManualSidebar } from "./manual-sidebar";
 import {
   buildNavigationNodes,
@@ -35,20 +32,10 @@ import {
   findParentById,
   flattenVisibleNodes,
 } from "./navigation-tree";
-import {
-  buildPageSearchIndex,
-  queryPageSearchIndex,
-  type SearchMatch,
-} from "./search";
-import {
-  applyActiveSearchHighlight,
-  applySearchMatchHighlights,
-  clearActiveSearchHighlight,
-  clearSearchHighlights,
-  toTextBufferRange,
-} from "./search-highlight";
 import { ManualStatusBar, SearchBar } from "./status-bar";
+import { TldrQuickReference } from "./tldr-quick-reference";
 import { useDeferredNavigationSync } from "./use-deferred-navigation-sync";
+import { usePageSearch } from "./use-page-search";
 import { useSidebarResize } from "./use-sidebar-resize";
 
 interface AppProps {
@@ -56,44 +43,7 @@ interface AppProps {
   onQuit: () => void;
 }
 
-interface AppliedSearch {
-  query: string;
-  matches: SearchMatch[];
-  activeIndex: number;
-}
-
 const EMPTY_SECTIONS: MantSection[] = [];
-
-/** Resolve many stable IDs in one tree walk instead of one walk per match. */
-function collectSearchTargets(
-  root: BaseRenderable,
-  targetIds: ReadonlySet<string>,
-): Map<string, BaseRenderable> {
-  const targets = new Map<string, BaseRenderable>();
-  const pending = [root];
-  while (pending.length > 0 && targets.size < targetIds.size) {
-    const current = pending.pop()!;
-    if (targetIds.has(current.id)) targets.set(current.id, current);
-    pending.push(...current.getChildren());
-  }
-  return targets;
-}
-
-/** Resolve a source offset through OpenTUI's measured word-wrapping metadata. */
-function matchVisualRow(renderable: TextRenderable, match: SearchMatch): number {
-  const prefix = match.text.slice(0, match.range.start);
-  const newlineCount = prefix.split("\n").length - 1;
-  // OpenTUI reports each visual row's offset in flattened display columns;
-  // explicit newline separators occupy one offset but no terminal width.
-  const displayOffset = Bun.stringWidth(prefix) + newlineCount;
-  const { lineStartCols } = renderable.lineInfo;
-  let visualRow = 0;
-  for (let index = 0; index < lineStartCols.length; index++) {
-    if ((lineStartCols[index] ?? 0) > displayOffset) break;
-    visualRow = index;
-  }
-  return visualRow;
-}
 
 export function App({ result, onQuit }: AppProps) {
   const sections = result.manual?.sections ?? EMPTY_SECTIONS;
@@ -112,20 +62,9 @@ export function App({ result, onQuit }: AppProps) {
   const [isNavigationVisible, setIsNavigationVisible] = useState(true);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [menuCursor, setMenuCursor] = useState(0);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isSearchEditing, setIsSearchEditing] = useState(false);
-  const [search, setSearch] = useState<AppliedSearch>({
-    query: "",
-    matches: [],
-    activeIndex: 0,
-  });
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const contentScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const navScrollRef = useRef<ScrollBoxRenderable | null>(null);
-  const searchInputRef = useRef<InputRenderable | null>(null);
-  const highlightedTextsRef = useRef<Set<TextRenderable>>(new Set());
-  const searchTargetTextsRef = useRef<Map<string, TextRenderable>>(new Map());
-  const activeHighlightedTextRef = useRef<TextRenderable | null>(null);
   const { width: terminalWidth, height: terminalHeight } = useTerminalDimensions();
   const {
     navigationWidth,
@@ -161,17 +100,10 @@ export function App({ result, onQuit }: AppProps) {
     () => visibleNodes.filter(({ node }) => node.kind === "section").length,
     [visibleNodes]
   );
-  const pageSearchIndex = useMemo(
-    () => buildPageSearchIndex(sections, result.tldr),
-    [sections, result.tldr]
-  );
   const branchIds = useMemo(
     () => collectBranchIds(navigationRoots),
     [navigationRoots]
   );
-  const searchQuery = search.query;
-  const searchMatches = search.matches;
-  const searchIndex = search.activeIndex;
   // ── Section selection and scrolling ────────────────────────
 
   const scrollToContent = (targetId: string) => {
@@ -192,63 +124,19 @@ export function App({ result, onQuit }: AppProps) {
     });
   };
 
-  const clearAllSearchDecorations = () => {
-    clearSearchHighlights(highlightedTextsRef.current);
-    highlightedTextsRef.current = new Set();
-    searchTargetTextsRef.current = new Map();
-    activeHighlightedTextRef.current = null;
+  const selectSearchSection = (sectionId: string) => {
+    setSelectedId(sectionId);
+    navScrollRef.current?.scrollChildIntoView(navId(sectionId));
   };
-
-  /** Add the low-priority layer once per target TextBuffer for a new query. */
-  const decorateSearchMatches = (matches: readonly SearchMatch[]) => {
-    clearAllSearchDecorations();
-    const content = contentScrollRef.current?.content;
-    if (!content || matches.length === 0) return;
-
-    const grouped = new Map<string, SearchMatch[]>();
-    for (const match of matches) {
-      const group = grouped.get(match.targetId);
-      if (group) group.push(match);
-      else grouped.set(match.targetId, [match]);
-    }
-    const targets = collectSearchTargets(content, new Set(grouped.keys()));
-    for (const [targetId, group] of grouped) {
-      const target = targets.get(targetId);
-      if (!target) continue;
-      const text = applySearchMatchHighlights(
-        target,
-        group.map((match) => toTextBufferRange(match.text, match.range)),
-      );
-      if (!text) continue;
-      highlightedTextsRef.current.add(text);
-      searchTargetTextsRef.current.set(targetId, text);
-    }
-  };
-
-  /** Move only the high-priority active layer, retaining every other match. */
-  const scrollToSearchMatch = (match: SearchMatch) => {
-    const scrollbox = contentScrollRef.current;
-    if (!scrollbox) return;
-    clearActiveSearchHighlight(activeHighlightedTextRef.current);
-    let text = searchTargetTextsRef.current.get(match.targetId);
-    if (!text) {
-      const target = scrollbox.content.findDescendantById(match.targetId);
-      if (!target) return;
-      text = applySearchMatchHighlights(target, [
-        toTextBufferRange(match.text, match.range),
-      ]);
-      if (!text) return;
-      highlightedTextsRef.current.add(text);
-      searchTargetTextsRef.current.set(match.targetId, text);
-    }
-    applyActiveSearchHighlight(text, toTextBufferRange(match.text, match.range));
-    activeHighlightedTextRef.current = text;
-    const targetY = text.y + matchVisualRow(text, match);
-    scrollbox.scrollTo({
-      x: scrollbox.scrollLeft,
-      y: Math.max(0, scrollbox.scrollTop + targetY - scrollbox.viewport.y),
-    });
-  };
+  const pageSearch = usePageSearch({
+    sections,
+    tldr: result.tldr,
+    contentScrollRef,
+    onSelectSection: selectSearchSection,
+  });
+  const searchQuery = pageSearch.query;
+  const searchMatches = pageSearch.matches;
+  const searchIndex = pageSearch.activeIndex;
 
   const scrollToNode = (id: string) => scrollToContent(contentId(id));
 
@@ -302,16 +190,6 @@ export function App({ result, onQuit }: AppProps) {
     scrollToNode(target);
   };
 
-  const selectSearchMatch = (index: number) => {
-    if (searchMatches.length === 0) return;
-    const nextIndex = ((index % searchMatches.length) + searchMatches.length) % searchMatches.length;
-    const match = searchMatches[nextIndex]!;
-    setSearch((current) => ({ ...current, activeIndex: nextIndex }));
-    setSelectedId(match.sectionId);
-    navScrollRef.current?.scrollChildIntoView(navId(match.sectionId));
-    scrollToSearchMatch(match);
-  };
-
   const selectRelativeSection = (offset: number) => {
     const currentIndex = navigationItems.findIndex((item) => item.id === selectedId);
     const nextIndex = clamp(
@@ -328,35 +206,11 @@ export function App({ result, onQuit }: AppProps) {
   const openSearch = () => {
     setOpenMenu(null);
     setIsHelpOpen(false);
-    setIsSearchOpen(true);
-    setIsSearchEditing(false);
+    pageSearch.open();
   };
 
   /** Leave search mode and remove every visual/result state owned by it. */
-  const closeSearch = () => {
-    clearAllSearchDecorations();
-    setSearch({ query: "", matches: [], activeIndex: 0 });
-    setIsSearchOpen(false);
-    setIsSearchEditing(false);
-  };
-
-  /** Apply the input's submitted value instead of a possibly stale render snapshot. */
-  const submitSearch = (submittedDraft: string) => {
-    setIsSearchEditing(false);
-    if (submittedDraft === searchQuery) {
-      selectSearchMatch(searchIndex + 1);
-      return;
-    }
-
-    const matches = queryPageSearchIndex(pageSearchIndex, submittedDraft);
-    setSearch({ query: submittedDraft, matches, activeIndex: 0 });
-    decorateSearchMatches(matches);
-    if (matches[0]) {
-      setSelectedId(matches[0].sectionId);
-      navScrollRef.current?.scrollChildIntoView(navId(matches[0].sectionId));
-      scrollToSearchMatch(matches[0]);
-    }
-  };
+  const closeSearch = () => pageSearch.close();
 
   // ── Tree expansion actions ─────────────────────────────────
 
@@ -422,12 +276,12 @@ export function App({ result, onQuit }: AppProps) {
       {
         label: "Find Next",
         shortcut: "n",
-        action: () => selectSearchMatch(searchIndex + 1),
+        action: () => pageSearch.select(searchIndex + 1),
       },
       {
         label: "Find Previous",
         shortcut: "N",
-        action: () => selectSearchMatch(searchIndex - 1),
+        action: () => pageSearch.select(searchIndex - 1),
       },
     ],
     help: [
@@ -461,10 +315,6 @@ export function App({ result, onQuit }: AppProps) {
   // ── Layout synchronization effects ─────────────────────────
 
   useEffect(() => {
-    if (isSearchOpen) searchInputRef.current?.focus();
-  }, [isSearchOpen]);
-
-  useEffect(() => {
     // A selected long title may grow from one row into several after React
     // commits.  Re-run the visibility adjustment after that layout change.
     if (selectedId) navScrollRef.current?.scrollChildIntoView(navId(selectedId));
@@ -495,22 +345,22 @@ export function App({ result, onQuit }: AppProps) {
       return;
     }
 
-    if (isSearchOpen) {
+    if (pageSearch.isOpen) {
       if (e.name === "escape") {
         e.preventDefault();
         closeSearch();
       } else if (
         e.name === "down"
-        && searchInputRef.current?.value === searchQuery
+        && pageSearch.inputRef.current?.value === searchQuery
       ) {
         e.preventDefault();
-        selectSearchMatch(searchIndex + 1);
+        pageSearch.select(searchIndex + 1);
       } else if (
         e.name === "up"
-        && searchInputRef.current?.value === searchQuery
+        && pageSearch.inputRef.current?.value === searchQuery
       ) {
         e.preventDefault();
-        selectSearchMatch(searchIndex - 1);
+        pageSearch.select(searchIndex - 1);
       } else if (
         !e.ctrl
         && (e.name.length === 1 || e.name === "space" || e.name === "backspace" || e.name === "delete")
@@ -519,7 +369,7 @@ export function App({ result, onQuit }: AppProps) {
         // The native input's delayed onInput notifications may describe an
         // earlier edit after Enter, so using them here makes result status
         // nondeterministic on large documents.
-        setIsSearchEditing(true);
+        pageSearch.markEditing();
       }
       return;
     }
@@ -572,7 +422,7 @@ export function App({ result, onQuit }: AppProps) {
 
     if (e.name === "n" && searchMatches.length > 0) {
       e.preventDefault();
-      selectSearchMatch(searchIndex + (e.shift ? -1 : 1));
+      pageSearch.select(searchIndex + (e.shift ? -1 : 1));
       return;
     }
 
@@ -704,14 +554,14 @@ export function App({ result, onQuit }: AppProps) {
         </box>
       </box>
 
-      {isSearchOpen ? (
+      {pageSearch.isOpen ? (
         <SearchBar
-          inputRef={searchInputRef}
+          inputRef={pageSearch.inputRef}
           appliedQuery={searchQuery}
-          isEditing={isSearchEditing}
+          isEditing={pageSearch.isEditing}
           matchCount={searchMatches.length}
           matchIndex={searchIndex}
-          onSubmit={submitSearch}
+          onSubmit={pageSearch.submit}
         />
       ) : (
         <ManualStatusBar
