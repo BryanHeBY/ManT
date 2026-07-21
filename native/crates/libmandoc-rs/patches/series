@@ -6,4 +6,6 @@
 # - Every patch has a matching tests/<patch-name>.roff reproducer.
 # - Patches are submitted upstream where possible; delete when merged.
 #
-# Currently empty – no C-level patches have been necessary yet.
+# Currently empty — the two issues flagged by the 2026-07-21 bulk scan
+# (.nf # heading, procps-ng empty titles) were both false positives
+# after deeper analysis.  No C-level patches have been necessary yet.

@@ -26,8 +26,11 @@ records the package provenance and observed parser behaviour.
 
 | Page | Issue | Scope |
 | ---- | ----- | ----- |
-| `ps(1)`, `top(1)`, `free(1)`, `pgrep(1)` (procps-ng) | All `.SH` section titles lost; libmandoc mis-handles `.na`/`.nh` before `.SH` | All procps-ng pages |
-| `ssh(1)` (OpenSSH), `losetup(8)`, `dd(1)`, `swapon(8)`, `sfdisk(8)` | Preformatted code blocks (`.EX`/`.Bd -literal`) rendered as H1 headings | Widespread in util-linux, OpenSSH |
+| `ps(1)`, `top(1)`, `free(1)`, `pgrep(1)` (procps-ng) | All `.SH` section titles lost | All procps-ng pages — **fixed** by `sanitize_roff_text` |
+
+Previous scan flagged `.nf`/`.EX` code blocks as H1 heading leaks — this was a
+false positive from the grep detection pattern; lines inside fenced code blocks
+were matched.  The markdown and text output are correct.
 
 These originate in upstream libmandoc and are currently visible in ManT output.
 

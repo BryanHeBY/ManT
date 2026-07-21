@@ -1,5 +1,8 @@
-.\" Minimal reproducer: lines starting with # inside .nf/.fi blocks
-.\" should be preformatted, not markdown H1 headings.
+.\" Analysis fixture: lines starting with # inside .nf/.fi blocks were
+.\" flagged by the scan script as H1 heading leaks.  AST inspection and
+.\" markdown output verification confirm this was a false positive — the
+.\" lines are correctly wrapped in fenced code blocks.  Kept as a regression
+.\" test to prevent actual leaks in future.
 .TH TEST 1 "2026-01-01" "test"
 .SH NAME
 test \- reproducer
