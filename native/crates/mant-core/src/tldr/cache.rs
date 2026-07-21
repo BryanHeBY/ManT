@@ -243,6 +243,21 @@ pub fn normalize_tldr_topic(topic: &str) -> String {
         .join("-")
 }
 
+/// Reject a normalized topic that would escape the platform page directory.
+///
+/// The topic becomes a single `<page>.md` filename joined onto a cache root,
+/// so it must be exactly one ordinary path component. Anything containing a
+/// path separator, a `.`/`..` segment, or an absolute or prefix component is
+/// refused before it reaches the filesystem, which prevents an untrusted topic
+/// (for example one supplied over MCP) from reading files outside the cache.
+fn is_safe_page_name(page_name: &str) -> bool {
+    let mut components = Path::new(page_name).components();
+    matches!(
+        (components.next(), components.next()),
+        (Some(std::path::Component::Normal(_)), None)
+    )
+}
+
 /// Read one cached tldr page using current host conventions; never updates it.
 ///
 /// # Errors
@@ -290,7 +305,7 @@ fn read_cached_tldr_page_with(
     files: &dyn TldrFileReader,
 ) -> Result<Option<TldrDocument>, TldrCacheError> {
     let page_name = normalize_tldr_topic(topic);
-    if page_name.is_empty() {
+    if page_name.is_empty() || !is_safe_page_name(&page_name) {
         return Ok(None);
     }
 
@@ -557,5 +572,40 @@ mod tests {
         .expect("cache read")
         .expect("page");
         assert_eq!(page.source_path, source.to_string_lossy());
+    }
+
+    #[test]
+    fn refuses_topics_that_escape_the_platform_page_directory() {
+        let root = PathBuf::from("/cache");
+        // A page planted where a naive join of a traversal topic would land.
+        let escaped = PathBuf::from("/etc/hostname.md");
+        let files = MemoryFiles {
+            files: [(escaped, PAGE.to_owned())].into_iter().collect(),
+        };
+
+        for topic in ["../../../../etc/hostname", "/etc/hostname", "..", "a/b"] {
+            let result = read_cached_tldr_page_with(
+                topic,
+                std::slice::from_ref(&root),
+                &["en".to_owned()],
+                &["linux".to_owned()],
+                &files,
+            )
+            .expect("cache read must not error");
+            assert!(
+                result.is_none(),
+                "traversal topic {topic:?} must not resolve a page"
+            );
+        }
+    }
+
+    #[test]
+    fn only_single_ordinary_components_are_safe_page_names() {
+        assert!(super::is_safe_page_name("tar"));
+        assert!(super::is_safe_page_name("git-commit"));
+        assert!(!super::is_safe_page_name("../etc/passwd"));
+        assert!(!super::is_safe_page_name("/etc/passwd"));
+        assert!(!super::is_safe_page_name(".."));
+        assert!(!super::is_safe_page_name("a/b"));
     }
 }
