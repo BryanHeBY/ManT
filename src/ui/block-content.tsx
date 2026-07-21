@@ -24,6 +24,16 @@ function layoutSpacing(block: MantBlock): number {
     : Math.max(0, Math.floor(block.layout?.spacingBeforeLines ?? 0));
 }
 
+/** A single non-alphanumeric glyph used as a man(7) bullet marker. */
+function isBulletTerm(terms: MantInline[][]): boolean {
+  const allTerms = terms.flat();
+  if (allTerms.length !== 1) return false;
+  const node = allTerms[0]!;
+  if (node.type !== "text") return false;
+  const trimmed = node.value.trim();
+  return trimmed.length > 0 && !/[\p{L}\p{N}]/u.test(trimmed);
+}
+
 /**
  * Merges adjacent prose into larger TextBuffers while retaining structural
  * blocks. Search records use the same grouping and point at these stable IDs.
@@ -226,6 +236,9 @@ export function renderBlockNodes(
           <box key={`definitions-${keyCounter++}`} flexDirection="column">
             {block.items.map((item, itemIndex) => {
               const itemPath = searchPath.definition(blockPath, itemIndex);
+              const bulletMarker = isBulletTerm(item.terms)
+                ? renderInlineContent(item.terms[0]!, `bullet-${itemIndex}`)
+                : null;
               return (
                 <box
                   key={`definition-${itemIndex}`}
@@ -235,37 +248,60 @@ export function renderBlockNodes(
                       ?? (itemIndex > 0 && !block.compact ? 1 : 0)
                   }
                 >
-                  {item.terms.map((term, termIndex) => {
-                    const termPath = searchPath.term(itemPath, termIndex);
-                    return (
+                  {bulletMarker
+                    ? (
                       <box
-                        key={`term-${termIndex}`}
-                        {...(termIndex === 0 && item.identity
-                          ? { id: contentAnchorId(item.identity.id) }
-                          : {})}
+                        key="bullet-desc"
+                        flexDirection="row"
                         paddingLeft={indent}
                       >
-                        <text
-                          id={contentSearchId(sectionId, termPath)}
-                          fg="#cdd6f4"
-                          wrapMode="word"
-                        >
-                          {renderInlineContent(term, `term-${termIndex}`)}
-                        </text>
+                        <text fg="#94e2d5">{bulletMarker} </text>
+                        <box flexDirection="column" flexGrow={1}>
+                          {renderBlockNodes(
+                            item.description,
+                            0,
+                            sectionId,
+                            itemPath,
+                            onNavigateInternal,
+                          )}
+                        </box>
                       </box>
-                    );
-                  })}
-                  {item.description.length > 0 && (
-                    <box flexDirection="column">
-                      {renderBlockNodes(
-                        item.description,
-                        indent + 4,
-                        sectionId,
-                        itemPath,
-                        onNavigateInternal,
-                      )}
-                    </box>
-                  )}
+                    )
+                    : (
+                      <>
+                        {item.terms.map((term, termIndex) => {
+                          const termPath = searchPath.term(itemPath, termIndex);
+                          return (
+                            <box
+                              key={`term-${termIndex}`}
+                              {...(termIndex === 0 && item.identity
+                                ? { id: contentAnchorId(item.identity.id) }
+                                : {})}
+                              paddingLeft={indent}
+                            >
+                              <text
+                                id={contentSearchId(sectionId, termPath)}
+                                fg="#cdd6f4"
+                                wrapMode="word"
+                              >
+                                {renderInlineContent(term, `term-${termIndex}`)}
+                              </text>
+                            </box>
+                          );
+                        })}
+                        {item.description.length > 0 && (
+                          <box flexDirection="column">
+                            {renderBlockNodes(
+                              item.description,
+                              indent + 4,
+                              sectionId,
+                              itemPath,
+                              onNavigateInternal,
+                            )}
+                          </box>
+                        )}
+                      </>
+                    )}
                 </box>
               );
             })}

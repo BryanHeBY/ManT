@@ -256,7 +256,13 @@ fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usiz
                 .join(", ");
             let description = render_blocks(&item.description, base_indent);
             let value = match (terms.is_empty(), description.is_empty()) {
-                (false, false) => Some(format!("{terms}\n{}", indent_lines(&description, 2))),
+                (false, false) => {
+                    if is_bullet_term_text(&terms) {
+                        Some(format!("{terms} {description}"))
+                    } else {
+                        Some(format!("{terms}\n{}", indent_lines(&description, 2)))
+                    }
+                }
                 (false, true) => Some(terms),
                 (true, false) => Some(description),
                 (true, true) => None,
@@ -275,6 +281,11 @@ fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usiz
         output.push_str(item);
     }
     output
+}
+
+fn is_bullet_term_text(terms: &str) -> bool {
+    let stripped = terms.trim();
+    !stripped.is_empty() && stripped.chars().all(|c| !c.is_alphanumeric())
 }
 
 fn cell_text(cell: &TableCell) -> String {
