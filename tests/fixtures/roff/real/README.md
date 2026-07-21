@@ -23,10 +23,10 @@ with the results, methodology, and findings summarised below.
 
 ### Known libmandoc limitations found during spot-check
 
-| Page | Issue |
-| ---- | ----- |
-| `ps(1)` (procps-ng) | All 20+ `.SH` section titles lost; libmandoc mis-handles `.na`/`.nh` before `.SH` |
-| `ssh(1)` (OpenSSH) | `.Bd -literal` code blocks in VPN section rendered as H1 headings |
+| Page | Issue | Scope |
+| ---- | ----- | ----- |
+| `ps(1)`, `top(1)`, `free(1)`, `pgrep(1)` (procps-ng) | All `.SH` section titles lost; libmandoc mis-handles `.na`/`.nh` before `.SH` | All procps-ng pages |
+| `ssh(1)` (OpenSSH), `losetup(8)`, `dd(1)`, `swapon(8)`, `sfdisk(8)` | Preformatted code blocks (`.EX`/`.Bd -literal`) rendered as H1 headings | Widespread in util-linux, OpenSSH |
 
 These are upstream libmandoc parser bugs, not ManT framework issues.
 
