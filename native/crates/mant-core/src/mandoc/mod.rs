@@ -3,6 +3,7 @@
 mod blocks;
 mod diagnostics;
 pub(crate) mod inline;
+mod layout;
 mod navigation;
 
 use std::path::Path;

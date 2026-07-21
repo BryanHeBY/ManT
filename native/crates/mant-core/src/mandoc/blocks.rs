@@ -11,6 +11,10 @@ use mant_ast::{
 use super::{
     LoweringContext,
     inline::{InlineBuilder, lower_inline_nodes, parse_roff_text, plain_text},
+    layout::{
+        add_leading_spacing, block_indent, display_indent, layout, layout_with_spacing,
+        section_spacing, set_block_spacing, update_paragraph_distance, vertical_distance_lines,
+    },
     part_children, source_span,
 };
 
@@ -80,38 +84,6 @@ fn lower_section(
         blocks,
         children,
         source: source_span(node),
-    }
-}
-
-fn update_paragraph_distance(node: &Node, paragraph_distance: &mut u16) {
-    if node.macro_name.as_deref() == Some("PD")
-        && let Some(lines) = paragraph_distance_lines(node)
-    {
-        *paragraph_distance = lines;
-    }
-}
-
-fn section_spacing(
-    node: &Node,
-    is_first: bool,
-    has_preceding_content: bool,
-    paragraph_distance: u16,
-) -> u16 {
-    match node.macro_name.as_deref() {
-        // man(7) uses the current `.PD` value, except before the first heading
-        // at a level and after an empty peer section.
-        Some("SH" | "SS") => {
-            if has_preceding_content {
-                paragraph_distance
-            } else {
-                0
-            }
-        }
-        // mdoc(7) gives top-level sections one row even before the first Sh;
-        // Ss only receives it when visible content precedes the heading.
-        Some("Sh") => u16::from(is_first || has_preceding_content),
-        Some("Ss") => u16::from(has_preceding_content),
-        _ => 0,
     }
 }
 
@@ -652,53 +624,6 @@ fn extend_blocks_with_spacing(output: &mut Vec<Block>, mut nested: Vec<Block>, l
     output.extend(nested);
 }
 
-fn add_leading_spacing(blocks: &mut [Block], lines: u16) {
-    if lines == 0 {
-        return;
-    }
-    let Some(first) = blocks.first_mut() else {
-        return;
-    };
-    set_block_spacing(first, lines);
-}
-
-fn set_block_spacing(block: &mut Block, lines: u16) {
-    if let Block::VerticalSpace {
-        lines: existing, ..
-    } = block
-    {
-        *existing = (*existing).max(lines);
-    } else if let Some(layout) = block_layout_mut(block) {
-        layout.spacing_before_lines = layout.spacing_before_lines.max(lines);
-    }
-}
-
-fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => Some(layout),
-        Block::VerticalSpace { .. } => None,
-    }
-}
-
-fn block_indent(block: &Block) -> Option<u16> {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => Some(layout.indent_columns),
-        Block::VerticalSpace { .. } => None,
-    }
-}
-
 fn preformatted_block(node: &Node, context: &LoweringContext<'_>, indent_columns: u16) -> Block {
     let children = part_children(node, NodeKind::Body);
     let children = if children.is_empty() {
@@ -784,87 +709,4 @@ fn is_nonprinting_request(node: &Node) -> bool {
         node.macro_name.as_deref(),
         Some("ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta")
     )
-}
-
-/// Convert a `.PD` measurement to terminal rows using mandoc's unit ratios.
-/// Missing arguments restore man(7)'s one-row default; invalid values retain
-/// the previous state.
-fn paragraph_distance_lines(node: &Node) -> Option<u16> {
-    let Some(argument) = first_text(node) else {
-        return Some(1);
-    };
-    distance_lines(argument)
-}
-
-fn vertical_distance_lines(node: &Node) -> Option<u16> {
-    first_text(node).map_or(Some(1), distance_lines)
-}
-
-fn distance_lines(argument: &str) -> Option<u16> {
-    let argument = argument.trim();
-    let number_end = argument
-        .find(|character: char| character.is_ascii_alphabetic())
-        .unwrap_or(argument.len());
-    let scale = argument[..number_end].parse::<f64>().ok()?;
-    if !scale.is_finite() {
-        return None;
-    }
-    let unit = argument[number_end..].trim();
-    let vertical_rows = match unit {
-        "u" => scale / 40.0,
-        "c" => scale * 6.0 / 2.54,
-        "f" => scale * 65_536.0 / 40.0,
-        "i" => scale * 6.0,
-        "M" => scale * 0.006,
-        "p" => scale / 12.0,
-        "m" | "n" => scale * 0.6,
-        // `P`, `v`, no suffix, and unknown suffixes retain the vertical scale.
-        _ => scale,
-    };
-
-    // Equivalent to mandoc's positive rounding in term_vspan(), without a
-    // lossy float cast, including its fallback for unusually large values.
-    for lines in 0_u16..66 {
-        if vertical_rows < f64::from(lines) + 0.5005 {
-            return Some(lines);
-        }
-    }
-    Some(1)
-}
-
-fn first_text(node: &Node) -> Option<&str> {
-    if node.kind == NodeKind::Text {
-        return node.text.as_deref();
-    }
-    node.children.iter().find_map(first_text)
-}
-
-const fn layout(indent_columns: u16) -> LayoutHint {
-    LayoutHint {
-        indent_columns,
-        spacing_before_lines: 0,
-    }
-}
-
-const fn layout_with_spacing(indent_columns: u16, spacing_before_lines: u16) -> LayoutHint {
-    LayoutHint {
-        indent_columns,
-        spacing_before_lines,
-    }
-}
-
-fn display_indent(node: &Node) -> u16 {
-    let Some(offset) = node.offset.as_deref() else {
-        return 4;
-    };
-    if offset == "left" {
-        return 0;
-    }
-    if offset == "indent" {
-        return 4;
-    }
-    offset
-        .trim_end_matches(|character: char| character.is_ascii_alphabetic())
-        .parse()
-        .unwrap_or(4)
 }
