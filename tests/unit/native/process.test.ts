@@ -21,6 +21,23 @@ describe("native process boundary", () => {
     await expect(runCommand([])).rejects.toThrow("cannot run an empty command");
   });
 
+  test("terminates a command that exceeds its timeout", async () => {
+    const error = await runCommand(["/bin/sleep", "30"], { timeoutMs: 50 })
+      .then(() => undefined, (failure: unknown) => failure);
+
+    expect(error).toBeInstanceOf(CommandExecutionError);
+    expect((error as Error).message).toContain("did not respond within 50ms");
+  });
+
+  test("returns normally when a command finishes before its timeout", async () => {
+    const result = await runCommand(["/bin/pwd"], {
+      cwd: import.meta.dir,
+      timeoutMs: 10_000,
+    });
+
+    expect(result.exitCode).toBe(0);
+  });
+
   test("describes a missing executable without exposing a Bun spawn error", async () => {
     const error = await runCommand(["__mant_command_that_does_not_exist__"])
       .then(() => undefined, (failure: unknown) => failure);

@@ -14,6 +14,12 @@ export interface CommandResult {
 export interface CommandOptions {
   stdin?: Uint8Array;
   cwd?: string;
+  /**
+   * Kill the child and reject if it has not exited within this many
+   * milliseconds. Guards the interactive host against a native CLI that hangs
+   * before printing anything. Omitted or non-positive means no timeout.
+   */
+  timeoutMs?: number;
 }
 
 export type CommandRunner = (
@@ -39,24 +45,53 @@ export async function runCommand(
     throw new CommandExecutionError("cannot run an empty command");
   }
 
+  // Populated once the child exists so the catch can terminate it without
+  // widening the strongly-inferred subprocess type (which would lose the
+  // "pipe" narrowing on stdout/stderr).
+  let killChild: (() => void) | undefined;
   try {
-    const process = Bun.spawn(command, {
+    const spawned = Bun.spawn(command, {
       ...(options.cwd ? { cwd: options.cwd } : {}),
       stdin: options.stdin ?? "ignore",
       stdout: "pipe",
       stderr: "pipe",
     });
+    killChild = () => spawned.kill();
 
-    // Reading stdout before stderr can deadlock if diagnostics fill stderr's
-    // pipe, so start both reads before awaiting the exit status.
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(process.stdout).arrayBuffer(),
-      new Response(process.stderr).text(),
-      process.exited,
-    ]);
+    // Kill the child if it exceeds the deadline so a hung native CLI cannot
+    // block the interactive host forever. The flag lets us turn its resulting
+    // exit into a clear timeout message rather than a generic failure.
+    let timedOut = false;
+    const timeout = options.timeoutMs && options.timeoutMs > 0
+      ? setTimeout(() => {
+          timedOut = true;
+          spawned.kill();
+        }, options.timeoutMs)
+      : undefined;
 
-    return { stdout: new Uint8Array(stdout), stderr, exitCode };
+    try {
+      // Reading stdout before stderr can deadlock if diagnostics fill stderr's
+      // pipe, so start both reads before awaiting the exit status.
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(spawned.stdout).arrayBuffer(),
+        new Response(spawned.stderr).text(),
+        spawned.exited,
+      ]);
+
+      if (timedOut) {
+        throw new CommandExecutionError(
+          `'${executable}' did not respond within ${options.timeoutMs}ms and was terminated`,
+        );
+      }
+
+      return { stdout: new Uint8Array(stdout), stderr, exitCode };
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
+    }
   } catch (error) {
+    // Never leave a child running behind a failed read or a timeout.
+    killChild?.();
+    if (error instanceof CommandExecutionError) throw error;
     throw commandExecutionError(executable, error);
   }
 }

@@ -21,6 +21,11 @@ import {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+// Bound every native invocation so a hung mant-cli cannot leave the TUI
+// blocked at startup with no output. Generous enough for large pages (gcc,
+// clang) on a slow host, short enough to surface a stuck process.
+const NATIVE_CLI_TIMEOUT_MS = 30_000;
+
 export interface NativeQueryRequest {
   topic: string;
   section?: string;
@@ -74,7 +79,9 @@ export function createNativeCliClient(
 
   async function verify(): Promise<{ path: string; protocol: NativeCliProtocol }> {
     const path = resolveMantCliPath(environment, which);
-    const result = await execute([path, "--protocol-version", "--compact"]);
+    const result = await execute([path, "--protocol-version", "--compact"], {
+      timeoutMs: NATIVE_CLI_TIMEOUT_MS,
+    });
     if (result.exitCode !== 0) {
       throw nativeCliFailure([path, "--protocol-version", "--compact"], result);
     }
@@ -116,6 +123,7 @@ export function createNativeCliClient(
       };
       const result = await execute(command, {
         stdin: encoder.encode(JSON.stringify(wireRequest)),
+        timeoutMs: NATIVE_CLI_TIMEOUT_MS,
       });
       if (result.exitCode !== 0) throw nativeCliFailure(command, result);
       return decodeMantQuery(decoder.decode(result.stdout));
