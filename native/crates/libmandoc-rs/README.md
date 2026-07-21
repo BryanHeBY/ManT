@@ -55,6 +55,24 @@ native gzip support) and stages `.zst` input through Rust's zstd decoder.
 `Compression::Zstd` requires a zstd frame. Other compression formats are not
 currently part of this crate's supported contract.
 
+## Vendor layering
+
+The vendored C source at `vendor/mandoc-1.14.6/` is derived from the
+[official 1.14.6 snapshot](https://mandoc.bsd.lv/snapshots/) with optional
+local patches applied. End-user `cargo build` compiles this tree directly;
+no network access or external patch tool is required.
+
+Maintainers use `scripts/sync-vendor` to regenerate the vendor tree:
+
+```sh
+./scripts/sync-vendor           # download, patch, replace vendor/
+./scripts/sync-vendor --verify  # CI: check vendor/ matches upstream + patches
+```
+
+The script reads `upstream/SOURCE` for tarball URL and SHA-256, and
+`patches/series` for the ordered patch list. Each patch, when present,
+has a matching roff reproducer under `tests/`.
+
 ## Build requirements and supported targets
 
 The source package vendors libmandoc 1.14.6 and compiles it with the `cc`

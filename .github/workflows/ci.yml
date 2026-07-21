@@ -69,6 +69,9 @@ jobs:
       - name: Build and test
         run: bun run build
 
+      - name: Verify vendored libmandoc matches upstream
+        run: bash native/crates/libmandoc-rs/scripts/sync-vendor --verify
+
   rust-msrv:
     name: Rust MSRV (1.88.0)
     runs-on: ubuntu-24.04

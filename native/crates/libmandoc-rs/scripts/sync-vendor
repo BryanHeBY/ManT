@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# sync-vendor -- maintain the vendored libmandoc source tree.
+#
+# Modes:
+#   sync-vendor                Download upstream tarball, apply patches,
+#                              and overwrite vendor/ with the result.
+#   sync-vendor --verify       Verify that vendor/ matches upstream+patches
+#                              without modifying anything.
+#
+# End-user cargo build never runs this script; it compiles vendor/ directly.
+# CI runs --verify to guard against accidental manual edits to vendor/.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+ROOT="$PWD"
+SOURCE="$ROOT/upstream/SOURCE"
+PATCHES="$ROOT/patches"
+VENDOR="$ROOT/vendor"
+TMPDIR=""
+VERIFY=0
+
+cleanup() { [ -n "${TMPDIR:-}" ] && rm -rf "$TMPDIR"; }
+trap cleanup EXIT
+
+for arg in "$@"; do
+  case "$arg" in
+    --verify) VERIFY=1 ;;
+    *) echo "unknown argument: $arg" >&2; exit 2 ;;
+  esac
+done
+
+# ── Parse SOURCE ────────────────────────────────────────────────────────────
+url=$(grep -E '^url\s*=' "$SOURCE" | head -1 | sed 's/^url\s*=\s*//; s/\s*$//')
+sha256=$(grep -E '^sha256\s*=' "$SOURCE" | head -1 | sed 's/^sha256\s*=\s*//; s/\s*$//')
+version=$(grep -E '^version\s*=' "$SOURCE" | head -1 | sed 's/^version\s*=\s*//; s/\s*$//')
+if [ -z "$url" ] || [ -z "$sha256" ] || [ -z "$version" ]; then
+  echo "sync-vendor: SOURCE file is incomplete" >&2
+  exit 1
+fi
+
+TARBALL="mandoc-${version}.tar.gz"
+UNPACKED="mandoc-${version}"
+
+# ── Download & verify tarball ───────────────────────────────────────────────
+TMPDIR=$(mktemp -d)
+if [ -f "/tmp/$TARBALL" ]; then
+  echo "[sync-vendor] using cached /tmp/$TARBALL"
+  cp "/tmp/$TARBALL" "$TMPDIR/$TARBALL"
+else
+  echo "[sync-vendor] downloading $url"
+  curl -fsSL --max-time 120 -o "$TMPDIR/$TARBALL" "$url"
+  cp "$TMPDIR/$TARBALL" "/tmp/$TARBALL"
+fi
+
+echo "[sync-vendor] verifying SHA-256 ..."
+echo "$sha256  $TMPDIR/$TARBALL" | sha256sum -c --status
+
+# ── Unpack ──────────────────────────────────────────────────────────────────
+echo "[sync-vendor] unpacking $UNPACKED"
+tar -xzf "$TMPDIR/$TARBALL" -C "$TMPDIR"
+
+# ── Apply patches ───────────────────────────────────────────────────────────
+if [ -f "$PATCHES/series" ]; then
+  while read -r patch; do
+    [ -z "$patch" ] && continue
+    [[ "$patch" = \#* ]] && continue
+    echo "[sync-vendor] applying $patch"
+    patch -d "$TMPDIR/$UNPACKED" -p1 < "$PATCHES/$patch"
+  done < "$PATCHES/series"
+fi
+
+# ── Verify or replace vendor/ ───────────────────────────────────────────────
+# Upstream includes regress/ (mandoc integration tests) and other files that
+# are not needed for compilation. We exclude them from the vendor tree.
+EXCLUDE='-x regress'
+if [ "$VERIFY" -eq 1 ]; then
+  echo "[sync-vendor] verifying vendor/ matches upstream + patches ..."
+  if diff -rq $EXCLUDE "$TMPDIR/$UNPACKED" "$VENDOR/$UNPACKED" > /dev/null 2>&1; then
+    echo "[sync-vendor] vendor/ is up-to-date"
+  else
+    echo "[sync-vendor] ERROR: vendor/ differs from upstream + patches" >&2
+    diff -rq $EXCLUDE "$TMPDIR/$UNPACKED" "$VENDOR/$UNPACKED" >&2
+    exit 1
+  fi
+else
+  echo "[sync-vendor] replacing vendor/$UNPACKED"
+  rm -rf "$VENDOR/$UNPACKED"
+  rm -rf "$TMPDIR/$UNPACKED/regress"
+  mv "$TMPDIR/$UNPACKED" "$VENDOR/"
+  echo "[sync-vendor] done"
+fi

@@ -1,0 +1,9 @@
+# Patch series applied to mandoc-1.14.6 before the result becomes vendor/.
+# Each entry references a numbered patch file in this directory.
+#
+# Conventions:
+# - One patch per deterministic roff/man/mdoc semantic error.
+# - Every patch has a matching tests/<patch-name>.roff reproducer.
+# - Patches are submitted upstream where possible; delete when merged.
+#
+# Currently empty – no C-level patches have been necessary yet.

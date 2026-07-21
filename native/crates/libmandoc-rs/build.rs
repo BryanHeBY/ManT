@@ -1,5 +1,9 @@
 //! Build the parsing subset of the pinned mandoc source tree.
 //!
+//! The vendored source at `vendor/mandoc-1.14.6/` is a pre-patched snapshot
+//! maintained by `scripts/sync-vendor`.  See `upstream/SOURCE` for provenance
+//! and `patches/series` for any local modifications.
+//!
 //! Upstream's `configure` script probes the build host by compiling and
 //! executing binaries. That is useful for a system installation, but it makes
 //! cross compilation non-deterministic. `ManT` instead checks in the small
