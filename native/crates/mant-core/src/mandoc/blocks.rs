@@ -10,7 +10,7 @@ use mant_ast::{
 
 use super::{
     LoweringContext,
-    inline::{InlineBuilder, lower_inline_nodes, parse_roff_text, plain_text},
+    inline::{InlineBuilder, lower_inline_nodes, parse_roff_text, plain_text, sanitize_roff_text},
     layout::{
         add_leading_spacing, block_indent, display_indent, layout, layout_with_spacing,
         section_spacing, set_block_spacing, update_paragraph_distance, vertical_distance_lines,
@@ -482,7 +482,7 @@ fn definition_head_anchor(node: &Node, term: &[Inline]) -> Option<String> {
     if !head.flags.deep_link_target {
         return None;
     }
-    head.tag.clone().or_else(|| {
+    head.tag.as_deref().map(sanitize_roff_text).or_else(|| {
         plain_text(term)
             .trim_start_matches('-')
             .split_whitespace()
