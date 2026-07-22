@@ -7,20 +7,22 @@ import { createMantClient } from "../../src/native/client";
 import { buildPageSearchIndex, queryPageSearchIndex } from "../../src/ui/search";
 
 const mantPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
-const mantAvailable = Bun.spawnSync(
-  [mantPath, "--protocol-version", "--compact"],
-  { stdout: "ignore", stderr: "ignore" },
-).exitCode === 0;
-const localManualAvailable = mantAvailable
-  && Bun.spawnSync(["man", "-w", "ls"], {
-    stdout: "ignore",
-    stderr: "ignore",
-  }).exitCode === 0;
-const tarManualAvailable = mantAvailable
-  && Bun.spawnSync(["man", "-w", "tar"], {
-    stdout: "ignore",
-    stderr: "ignore",
-  }).exitCode === 0;
+
+// A missing executable makes spawnSync throw ENOENT rather than return a
+// non-zero code, so a bare probe would crash module load before describe.skip
+// can guard it. Treat any spawn failure as "unavailable" so the suite skips.
+function canRun(command: string[]): boolean {
+  try {
+    return Bun.spawnSync(command, { stdout: "ignore", stderr: "ignore" })
+      .exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+const mantAvailable = canRun([mantPath, "--protocol-version", "--compact"]);
+const localManualAvailable = mantAvailable && canRun(["man", "-w", "ls"]);
+const tarManualAvailable = mantAvailable && canRun(["man", "-w", "tar"]);
 
 const describeMant = mantAvailable ? describe : describe.skip;
 const testWithManual = localManualAvailable ? test : test.skip;

@@ -206,6 +206,12 @@ jobs:
       - name: Collect Rust coverage
         run: cargo llvm-cov --locked --manifest-path engine/Cargo.toml --workspace --lcov --output-path engine-lcov.info
 
+      # The integration suite runs the real staged binary, so stage it before
+      # collecting TypeScript coverage. Without this the native tests skip and
+      # under-report the mantui process boundary.
+      - name: Build native mant for integration tests
+        run: bun run build:mant
+
       - name: Collect TypeScript coverage
         run: bun test --coverage --coverage-reporter=lcov
 

@@ -13,10 +13,19 @@ const queryFixturePath = new URL(
   "../../../../tests/contracts/minimal-query-v2.json",
   import.meta.url,
 ).pathname;
-const mantAvailable = Bun.spawnSync(
-  [mantPath, "--protocol-version", "--compact"],
-  { stdout: "ignore", stderr: "ignore" },
-).exitCode === 0;
+// A missing executable makes spawnSync throw ENOENT rather than return a
+// non-zero code, so a bare probe would crash module load before describe.skip
+// can guard it. Treat any spawn failure as "unavailable" so the suite skips.
+function canRun(command: string[]): boolean {
+  try {
+    return Bun.spawnSync(command, { stdout: "ignore", stderr: "ignore" })
+      .exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+
+const mantAvailable = canRun([mantPath, "--protocol-version", "--compact"]);
 
 const describeMant = mantAvailable ? describe : describe.skip;
 const contracts = ["request", "query", "outline", "excerpt", "search"] as const;
