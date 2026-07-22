@@ -1,11 +1,11 @@
 /**
- * @file Verifies native CLI resolution, handshake, and closed query transport.
+ * @file Verifies mant resolution, handshake, and closed query transport.
  */
 
 import { describe, expect, test } from "bun:test";
 import {
-  createNativeCliClient,
-  resolveMantCliPath,
+  createMantClient,
+  resolveMantPath,
 } from "../../../src/native/client";
 import type {
   CommandOptions,
@@ -32,18 +32,18 @@ const protocol = JSON.stringify({
 
 describe("native mant client", () => {
   test("uses MANT_PATH before PATH and rejects an empty override", () => {
-    expect(resolveMantCliPath(
+    expect(resolveMantPath(
       { MANT_PATH: " /opt/mant/bin/mant " },
       () => "/usr/bin/mant",
     )).toBe("/opt/mant/bin/mant");
-    expect(() => resolveMantCliPath({ MANT_PATH: "  " }, () => null))
+    expect(() => resolveMantPath({ MANT_PATH: "  " }, () => null))
       .toThrow("MANT_PATH is set but empty");
   });
 
   test("uses PATH and gives source checkouts an actionable missing-binary error", () => {
-    expect(resolveMantCliPath({}, (command) => `/tools/${command}`))
+    expect(resolveMantPath({}, (command) => `/tools/${command}`))
       .toBe("/tools/mant");
-    expect(() => resolveMantCliPath({}, () => null))
+    expect(() => resolveMantPath({}, () => null))
       .toThrow("bun run dev -- <topic>");
   });
 
@@ -61,7 +61,7 @@ describe("native mant client", () => {
         section: "1",
       }));
     };
-    const client = createNativeCliClient({
+    const client = createMantClient({
       env: { MANT_PATH: "/tools/mant" },
       which: () => {
         throw new Error("PATH must not be consulted");
@@ -109,7 +109,7 @@ describe("native mant client", () => {
 
   test("rejects incompatible binaries before issuing a query", async () => {
     let calls = 0;
-    const client = createNativeCliClient({
+    const client = createMantClient({
       env: { MANT_PATH: "/tools/mant" },
       runCommand: async () => {
         calls += 1;
@@ -123,7 +123,7 @@ describe("native mant client", () => {
   });
 
   test("turns native stderr into a concise host error", async () => {
-    const client = createNativeCliClient({
+    const client = createMantClient({
       env: { MANT_PATH: "/tools/mant" },
       runCommand: async (command) => command.includes("--protocol-version")
         ? result(protocol)

@@ -1,35 +1,35 @@
 /**
- * @file Exercises the real staged Rust CLI through the TypeScript process client.
+ * @file Exercises the real staged Rust mant through the TypeScript process client.
  */
 
 import { describe, expect, test } from "bun:test";
-import { createNativeCliClient } from "../../src/native/client";
+import { createMantClient } from "../../src/native/client";
 import { buildPageSearchIndex, queryPageSearchIndex } from "../../src/ui/search";
 
-const nativeCliPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
-const nativeCliAvailable = Bun.spawnSync(
-  [nativeCliPath, "--protocol-version", "--compact"],
+const mantPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
+const mantAvailable = Bun.spawnSync(
+  [mantPath, "--protocol-version", "--compact"],
   { stdout: "ignore", stderr: "ignore" },
 ).exitCode === 0;
-const localManualAvailable = nativeCliAvailable
+const localManualAvailable = mantAvailable
   && Bun.spawnSync(["man", "-w", "ls"], {
     stdout: "ignore",
     stderr: "ignore",
   }).exitCode === 0;
-const tarManualAvailable = nativeCliAvailable
+const tarManualAvailable = mantAvailable
   && Bun.spawnSync(["man", "-w", "tar"], {
     stdout: "ignore",
     stderr: "ignore",
   }).exitCode === 0;
 
-const describeNativeCli = nativeCliAvailable ? describe : describe.skip;
+const describeMant = mantAvailable ? describe : describe.skip;
 const testWithManual = localManualAvailable ? test : test.skip;
 const testWithTarManual = tarManualAvailable ? test : test.skip;
 
-describeNativeCli("real native CLI process boundary", () => {
+describeMant("real native mant process boundary", () => {
   test("negotiates the exact protocol through an explicit path", async () => {
-    const client = createNativeCliClient({
-      env: { MANT_PATH: nativeCliPath },
+    const client = createMantClient({
+      env: { MANT_PATH: mantPath },
       which: () => null,
     });
 
@@ -43,8 +43,8 @@ describeNativeCli("real native CLI process boundary", () => {
   });
 
   testWithManual("returns a validated manual through the native query pipeline", async () => {
-    const client = createNativeCliClient({
-      env: { MANT_PATH: nativeCliPath },
+    const client = createMantClient({
+      env: { MANT_PATH: mantPath },
       which: () => null,
     });
 
@@ -59,8 +59,8 @@ describeNativeCli("real native CLI process boundary", () => {
   });
 
   testWithTarManual("passes semantic tar options through the TUI search index", async () => {
-    const client = createNativeCliClient({
-      env: { MANT_PATH: nativeCliPath },
+    const client = createMantClient({
+      env: { MANT_PATH: mantPath },
       which: () => null,
     });
 

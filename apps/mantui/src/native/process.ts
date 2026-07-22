@@ -1,5 +1,5 @@
 /**
- * @file Provides the small subprocess boundary used by the native CLI client.
+ * @file Provides the small subprocess boundary used by the mant client.
  *
  * Keeping process execution here lets the client focus on protocol semantics,
  * while tests can inject a deterministic runner without spawning Rust.
@@ -16,7 +16,7 @@ export interface CommandOptions {
   cwd?: string;
   /**
    * Kill the child and reject if it has not exited within this many
-   * milliseconds. Guards the interactive host against a native CLI that hangs
+   * milliseconds. Guards the interactive host against a mant process that hangs
    * before printing anything. Omitted or non-positive means no timeout.
    */
   timeoutMs?: number;
@@ -58,7 +58,7 @@ export async function runCommand(
     });
     killChild = () => spawned.kill();
 
-    // Kill the child if it exceeds the deadline so a hung native CLI cannot
+    // Kill the child if it exceeds the deadline so a hung mant process cannot
     // block the interactive host forever. The flag lets us turn its resulting
     // exit into a clear timeout message rather than a generic failure.
     let timedOut = false;

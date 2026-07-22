@@ -48,7 +48,7 @@ export async function runCli(
     }
 
     const executeQuery = dependencies.query
-      ?? (await import("../native")).nativeCli.query;
+      ?? (await import("../native")).mantClient.query;
     const result = await executeQuery({
       topic: command.topic,
       ...(command.section === undefined ? {} : { section: command.section }),

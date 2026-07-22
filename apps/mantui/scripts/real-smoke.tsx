@@ -4,11 +4,11 @@
 
 import { createTestRenderer } from "@opentui/core/testing";
 import { createRoot } from "@opentui/react";
-import { nativeCli } from "../src/native";
+import { mantClient } from "../src/native";
 import { App } from "../src/ui/app";
 
 async function main() {
-  const result = await nativeCli.query({ topic: "ls" });
+  const result = await mantClient.query({ topic: "ls" });
 
   const setup = await createTestRenderer({
     width: 80,

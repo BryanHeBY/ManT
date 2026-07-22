@@ -21,10 +21,10 @@ import {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-// Bound every native invocation so a hung mant cannot leave the TUI
+// Bound every mant invocation so a hung process cannot leave the TUI
 // blocked at startup with no output. Generous enough for large pages (gcc,
 // clang) on a slow host, short enough to surface a stuck process.
-const NATIVE_CLI_TIMEOUT_MS = 30_000;
+const MANT_TIMEOUT_MS = 30_000;
 
 export interface NativeQueryRequest {
   topic: string;
@@ -33,24 +33,24 @@ export interface NativeQueryRequest {
   forceGroff?: boolean;
 }
 
-export interface NativeCliClient {
+export interface MantClient {
   protocol(): Promise<NativeCliProtocol>;
   query(request: NativeQueryRequest): Promise<MantQueryBundle>;
 }
 
-export interface NativeCliDependencies {
+export interface MantClientDependencies {
   env?: Record<string, string | undefined>;
   which?: (command: string) => string | null;
   runCommand?: CommandRunner;
 }
 
 /**
- * Resolve an explicitly selected CLI before consulting PATH.
+ * Resolve an explicitly selected mant binary before consulting PATH.
  *
  * No repository-relative fallback is used: development goes through
  * `bun run dev`, which builds Rust and supplies MANT_PATH explicitly.
  */
-export function resolveMantCliPath(
+export function resolveMantPath(
   environment: Record<string, string | undefined> = process.env,
   which: (command: string) => string | null = Bun.which,
 ): string {
@@ -69,21 +69,21 @@ export function resolveMantCliPath(
 }
 
 /** Creates one client whose protocol probe is shared by all of its queries. */
-export function createNativeCliClient(
-  dependencies: NativeCliDependencies = {},
-): NativeCliClient {
+export function createMantClient(
+  dependencies: MantClientDependencies = {},
+): MantClient {
   const environment = dependencies.env ?? process.env;
   const which = dependencies.which ?? Bun.which;
   const execute = dependencies.runCommand ?? runCommand;
   let verified: Promise<{ path: string; protocol: NativeCliProtocol }> | null = null;
 
   async function verify(): Promise<{ path: string; protocol: NativeCliProtocol }> {
-    const path = resolveMantCliPath(environment, which);
+    const path = resolveMantPath(environment, which);
     const result = await execute([path, "--protocol-version", "--compact"], {
-      timeoutMs: NATIVE_CLI_TIMEOUT_MS,
+      timeoutMs: MANT_TIMEOUT_MS,
     });
     if (result.exitCode !== 0) {
-      throw nativeCliFailure([path, "--protocol-version", "--compact"], result);
+      throw mantFailure([path, "--protocol-version", "--compact"], result);
     }
     const protocol = decodeNativeCliProtocol(decoder.decode(result.stdout));
     return { path, protocol };
@@ -123,15 +123,15 @@ export function createNativeCliClient(
       };
       const result = await execute(command, {
         stdin: encoder.encode(JSON.stringify(wireRequest)),
-        timeoutMs: NATIVE_CLI_TIMEOUT_MS,
+        timeoutMs: MANT_TIMEOUT_MS,
       });
-      if (result.exitCode !== 0) throw nativeCliFailure(command, result);
+      if (result.exitCode !== 0) throw mantFailure(command, result);
       return decodeMantQuery(decoder.decode(result.stdout));
     },
   };
 }
 
-function nativeCliFailure(
+function mantFailure(
   command: string[],
   result: Awaited<ReturnType<CommandRunner>>,
 ): Error {
@@ -142,4 +142,4 @@ function nativeCliFailure(
 }
 
 /** Default client used after the native query path becomes authoritative. */
-export const nativeCli = createNativeCliClient();
+export const mantClient = createMantClient();

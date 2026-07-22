@@ -1,5 +1,5 @@
 /**
- * @file Consumes Rust-generated JSON Schemas from the real native CLI.
+ * @file Consumes Rust-generated JSON Schemas from the real mant binary.
  *
  * The validator is test-only: production keeps its small handwritten guard,
  * while this check catches drift between Serde, Schemars, and TypeScript.
@@ -8,17 +8,17 @@
 import { describe, expect, test } from "bun:test";
 import Ajv2020, { type AnySchema, type ValidateFunction } from "ajv/dist/2020.js";
 
-const nativeCliPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
+const mantPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
 const queryFixturePath = new URL(
   "../../../../tests/contracts/minimal-query-v2.json",
   import.meta.url,
 ).pathname;
-const nativeCliAvailable = Bun.spawnSync(
-  [nativeCliPath, "--protocol-version", "--compact"],
+const mantAvailable = Bun.spawnSync(
+  [mantPath, "--protocol-version", "--compact"],
   { stdout: "ignore", stderr: "ignore" },
 ).exitCode === 0;
 
-const describeNativeCli = nativeCliAvailable ? describe : describe.skip;
+const describeMant = mantAvailable ? describe : describe.skip;
 const contracts = ["request", "query", "outline", "excerpt", "search"] as const;
 type Contract = typeof contracts[number];
 type SchemaCatalog = Record<Contract, AnySchema>;
@@ -45,10 +45,10 @@ function expectValid(validate: ValidateFunction, value: unknown): void {
   }
 }
 
-describeNativeCli("generated native JSON Schemas", () => {
+describeMant("generated native JSON Schemas", () => {
   test("compile and validate the TypeScript request and shared query fixture", async () => {
     const output = Bun.spawnSync(
-      [nativeCliPath, "--schema", "all", "--compact"],
+      [mantPath, "--schema", "all", "--compact"],
       { stdout: "pipe", stderr: "pipe" },
     );
     expect(output.exitCode).toBe(0);

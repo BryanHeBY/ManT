@@ -15,9 +15,9 @@ import { resolveReleasePlatform } from "./release-platform";
 
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
-const nativeCliName = "mant";
-const nativeCliSource = join(root, "engine", "bin", nativeCliName);
-const nativeCliPath = join(distDirectory, nativeCliName);
+const mantName = "mant";
+const mantSource = join(root, "engine", "bin", mantName);
+const mantPath = join(distDirectory, mantName);
 const executableName = "mantui";
 const executablePath = join(distDirectory, executableName);
 const executableEntrypoint = join(root, "apps", "mantui", "src", "mantui.ts");
@@ -67,7 +67,7 @@ async function verifyPackagedExecutable(): Promise<void> {
   }
 
   const queryProcess = Bun.spawn(
-    [nativeCliPath, "ls", "--format", "json", "--compact"],
+    [mantPath, "ls", "--format", "json", "--compact"],
     {
     cwd: distDirectory,
     stdout: "pipe",
@@ -128,14 +128,14 @@ async function main(): Promise<void> {
     "warnings",
   ]);
   await run("build native mant", [process.execPath, "run", "build:mant"]);
-  if (!(await isExecutable(nativeCliSource))) {
+  if (!(await isExecutable(mantSource))) {
     throw new Error("build:mant did not stage an executable engine/bin/mant");
   }
 
   await run("test", [process.execPath, "test"]);
   await mkdir(distDirectory, { recursive: true });
-  await copyFile(nativeCliSource, nativeCliPath);
-  await chmod(nativeCliPath, 0o755);
+  await copyFile(mantSource, mantPath);
+  await chmod(mantPath, 0o755);
   await run("compile current-platform executable", [
     process.execPath,
     "build",
@@ -152,7 +152,7 @@ async function main(): Promise<void> {
 
   console.log(`\nlocal CI succeeded: ${dirname(executablePath)}`);
   console.log(`  TUI:        ${executablePath}`);
-  console.log(`  agent CLI:  ${nativeCliPath}`);
+  console.log(`  agent CLI:  ${mantPath}`);
 }
 
 await main();
