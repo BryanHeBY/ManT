@@ -203,8 +203,15 @@ jobs:
       - name: Install frozen Bun dependencies
         run: bun install --frozen-lockfile
 
+      # --remap-path-prefix rewrites absolute source paths to the workspace
+      # root (engine/), leaving them as crates/... . The sed step then prepends
+      # engine/ so every SF: path is repository-relative; Codecov silently
+      # discards a report whose paths do not resolve against the repo tree.
       - name: Collect Rust coverage
-        run: cargo llvm-cov --locked --manifest-path engine/Cargo.toml --workspace --lcov --output-path engine-lcov.info
+        run: |
+          cargo llvm-cov --locked --manifest-path engine/Cargo.toml --workspace \
+            --remap-path-prefix --lcov --output-path engine-lcov.info
+          sed -i -E 's|^SF:crates/|SF:engine/crates/|' engine-lcov.info
 
       # The integration suite runs the real staged binary, so stage it before
       # collecting TypeScript coverage. Without this the native tests skip and
@@ -215,11 +222,15 @@ jobs:
       - name: Collect TypeScript coverage
         run: bun test --coverage --coverage-reporter=lcov
 
+      # disable_search keeps each upload to its single explicit file. Without
+      # it the CLI also auto-discovers the other lcov and uploads both, which
+      # collapses the engine/mantui flag separation and double-counts lines.
       - name: Upload engine coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: engine-lcov.info
           flags: engine
+          disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -228,5 +239,6 @@ jobs:
         with:
           files: coverage/lcov.info
           flags: mantui
+          disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
