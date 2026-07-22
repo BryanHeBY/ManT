@@ -27,7 +27,7 @@ pub fn fedora44_manual(name: &str) -> &'static MantDocument {
 
 pub fn fedora44_fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
+        .join("../..")
         .join("tests/fixtures/roff/real/fedora44")
         .join(format!("{name}.1.zst"))
 }

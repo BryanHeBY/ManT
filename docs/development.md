@@ -20,7 +20,7 @@ bun run dev -- git
 ```
 
 `bun run dev -- <topic>` builds the release `mant` for the current host,
-stages it under `native/bin`, sets `MANT_PATH`, and starts the Bun TUI. It
+stages it under `engine/bin`, sets `MANT_PATH`, and starts the Bun TUI. It
 never depends on a globally installed `mant`.
 
 Run the full local verification sequence before handing off a change:
@@ -47,32 +47,36 @@ bun run build:mant
 ## Repository map
 
 ```text
-src/                         Bun entry point, native-client boundary, and OpenTUI UI
-  cli/                       Interactive `mantui` grammar and error boundary
-  native/                    `mant` process discovery and response validation
-  ui/                        Sidebar, content, search, menus, and terminal layout
-native/
+apps/mantui/                 Bun workspace: the interactive `mantui` TUI
+  src/                       TUI entry point, native-client boundary, and OpenTUI UI
+    cli/                     Interactive `mantui` grammar and error boundary
+    native/                  `mant` process discovery and response validation
+    ui/                      Sidebar, content, search, menus, and terminal layout
+  tests/                     Bun unit/integration/TUI tests for the app
+engine/                      Rust workspace: the `mant` document engine
   crates/mant-ast/           Versioned document, query, outline, and schema types
   crates/mant-core/          Source loading, libmandoc lowering, projections, output
   crates/mant/               Agent/script CLI, request JSON, and MCP stdio boundary
   crates/libmandoc-rs/       Owned libmandoc parse API, private C shim, and vendored source
+  tests/fixtures/roff/       Fixed real roff sources for native integration tests
 scripts/                     Local build, compiler selection, packaging, and dev wrappers
-tests/                       Bun unit/integration/TUI tests and fixed roff fixtures
+tests/contracts/             Cross-language JSON contract fixtures (read by Rust and TS)
+tests/unit/scripts/          Bun tests for the orchestration scripts
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/assets/                 README screenshots and other documentation assets
 ```
 
 Generated paths are intentionally excluded from version control:
 
-- `native/target/` — Cargo build output
-- `native/bin/` — staged local native executable
+- `engine/target/` — Cargo build output
+- `engine/bin/` — staged local native executable
 - `dist/` — compiled and packaged local artifacts
 
 ## Testing boundaries
 
 Rust owns parser correctness, AST contracts, semantic option extraction, and
-rendering. Fixed real roff sources in `tests/fixtures/roff/real/` are covered
-by native integration tests; their provenance and licenses are documented in
+rendering. Fixed real roff sources in `engine/tests/fixtures/roff/real/` are
+covered by native integration tests; their provenance and licenses are documented in
 that directory. Bun tests cover the process protocol, schema validation, and
 the terminal UI's rendering, search, and navigation behavior.
 

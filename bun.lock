@@ -4,13 +4,22 @@
   "workspaces": {
     "": {
       "name": "mant",
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
+    "apps/mantui": {
+      "name": "mantui",
+      "version": "0.2.0",
+      "bin": {
+        "mantui": "./src/mantui.ts",
+      },
       "dependencies": {
         "@opentui/core": "0.4.5",
         "@opentui/react": "0.4.5",
         "react": "^19.2.7",
       },
       "devDependencies": {
-        "@types/bun": "latest",
         "@types/react": "^19.2.17",
         "ajv": "8.20.0",
       },
@@ -64,6 +73,8 @@
     "get-east-asian-width": ["get-east-asian-width@1.6.0", "https://registry.npmmirror.com/get-east-asian-width/-/get-east-asian-width-1.6.0.tgz", {}, "sha512-QRbvDIbx6YklUe6RxeTeleMR0yv3cYH6PsPZHcnVn7xv7zO1BHN8r0XETu8n6Ye3Q+ahtSarc3WgtNWmehIBfA=="],
 
     "json-schema-traverse": ["json-schema-traverse@1.0.0", "", {}, "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug=="],
+
+    "mantui": ["mantui@workspace:apps/mantui"],
 
     "marked": ["marked@17.0.1", "https://registry.npmmirror.com/marked/-/marked-17.0.1.tgz", { "bin": { "marked": "bin/marked.js" } }, "sha512-boeBdiS0ghpWcSwoNm/jJBwdpFaMnZWRzjA6SkUMYb40SVaN1x7mmfGKp0jvexGcx+7y2La5zRZsYFZI6Qpypg=="],
 

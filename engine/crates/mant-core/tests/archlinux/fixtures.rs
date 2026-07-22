@@ -35,7 +35,7 @@ pub fn archlinux_manual_query(name: &str) -> QueryBundle {
 
 pub fn archlinux_fixture_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
+        .join("../..")
         .join("tests/fixtures/roff/real/archlinux")
         .join(format!("{name}.1.gz"))
 }

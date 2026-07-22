@@ -8,9 +8,9 @@
 import { describe, expect, test } from "bun:test";
 import Ajv2020, { type AnySchema, type ValidateFunction } from "ajv/dist/2020.js";
 
-const nativeCliPath = new URL("../../native/bin/mant", import.meta.url).pathname;
+const nativeCliPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
 const queryFixturePath = new URL(
-  "../contracts/minimal-query-v2.json",
+  "../../../../tests/contracts/minimal-query-v2.json",
   import.meta.url,
 ).pathname;
 const nativeCliAvailable = Bun.spawnSync(

@@ -4,36 +4,24 @@
   "description": "A structured document query tool with a modern TUI for man pages",
   "license": "Apache-2.0",
   "type": "module",
-  "bin": {
-    "mant": "./src/mant.ts"
-  },
-  "files": [
-    "src",
-    "scripts",
-    "native/bin"
+  "private": true,
+  "workspaces": [
+    "apps/*"
   ],
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "build": "bun scripts/ci.ts",
     "ci": "bun run build",
-    "lint": "tsc --noEmit",
-    "rust:fmt": "cargo fmt --manifest-path native/Cargo.toml --all --check",
-    "rust:lint": "cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets -- -D warnings",
-    "rust:test": "cargo test --manifest-path native/Cargo.toml --workspace",
+    "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/mantui/tsconfig.json",
+    "rust:fmt": "cargo fmt --manifest-path engine/Cargo.toml --all --check",
+    "rust:lint": "cargo clippy --manifest-path engine/Cargo.toml --workspace --all-targets -- -D warnings",
+    "rust:test": "cargo test --manifest-path engine/Cargo.toml --workspace",
     "build:mant": "bun scripts/build-mant.ts",
     "release:pack": "bun scripts/package-release.ts",
     "test": "bun test",
-    "test:unit": "bun test tests/unit",
-    "test:e2e": "bun test tests/e2e"
-  },
-  "dependencies": {
-    "@opentui/core": "0.4.5",
-    "@opentui/react": "0.4.5",
-    "react": "^19.2.7"
+    "test:e2e": "bun test apps/mantui/tests/e2e"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^19.2.17",
-    "ajv": "8.20.0"
+    "@types/bun": "latest"
   }
 }

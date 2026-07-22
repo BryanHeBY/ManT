@@ -1,0 +1,19 @@
+{
+  "name": "mantui",
+  "version": "0.2.0",
+  "description": "The interactive terminal UI for reading man pages, part of ManT",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "mantui": "./src/mantui.ts"
+  },
+  "dependencies": {
+    "@opentui/core": "0.4.5",
+    "@opentui/react": "0.4.5",
+    "react": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "ajv": "8.20.0"
+  }
+}

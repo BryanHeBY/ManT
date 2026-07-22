@@ -9,7 +9,7 @@ import {
   decodeNativeCliProtocol,
 } from "../../../src/native/schema";
 
-const fixturePath = join(import.meta.dir, "../../contracts/minimal-query-v2.json");
+const fixturePath = join(import.meta.dir, "../../../../../tests/contracts/minimal-query-v2.json");
 
 describe("native query schema", () => {
   test("accepts only the exact native CLI protocol and contract versions", () => {

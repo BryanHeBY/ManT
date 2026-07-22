@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createNativeCliClient } from "../../src/native/client";
 import { buildPageSearchIndex, queryPageSearchIndex } from "../../src/ui/search";
 
-const nativeCliPath = new URL("../../native/bin/mant", import.meta.url).pathname;
+const nativeCliPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
 const nativeCliAvailable = Bun.spawnSync(
   [nativeCliPath, "--protocol-version", "--compact"],
   { stdout: "ignore", stderr: "ignore" },

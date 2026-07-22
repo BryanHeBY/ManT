@@ -30,7 +30,7 @@ pub fn debian_fixture_path(name: &str) -> PathBuf {
         _ => panic!("unknown Debian fixture {name}"),
     };
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
+        .join("../..")
         .join("tests/fixtures/roff/real/debian")
         .join(format!("{name}.{section}.gz"))
 }

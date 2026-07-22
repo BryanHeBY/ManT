@@ -16,11 +16,11 @@ import { resolveReleasePlatform } from "./release-platform";
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const nativeCliName = "mant";
-const nativeCliSource = join(root, "native", "bin", nativeCliName);
+const nativeCliSource = join(root, "engine", "bin", nativeCliName);
 const nativeCliPath = join(distDirectory, nativeCliName);
 const executableName = "mantui";
 const executablePath = join(distDirectory, executableName);
-const executableEntrypoint = join(root, "src", "mant.ts");
+const executableEntrypoint = join(root, "apps", "mantui", "src", "mantui.ts");
 
 async function isExecutable(path: string): Promise<boolean> {
   try {
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     "cargo",
     "fmt",
     "--manifest-path",
-    join(root, "native", "Cargo.toml"),
+    join(root, "engine", "Cargo.toml"),
     "--all",
     "--check",
   ]);
@@ -113,14 +113,14 @@ async function main(): Promise<void> {
     "cargo",
     "test",
     "--manifest-path",
-    join(root, "native", "Cargo.toml"),
+    join(root, "engine", "Cargo.toml"),
     "--workspace",
   ]);
   await run("lint Rust workspace", [
     "cargo",
     "clippy",
     "--manifest-path",
-    join(root, "native", "Cargo.toml"),
+    join(root, "engine", "Cargo.toml"),
     "--workspace",
     "--all-targets",
     "--",
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   ]);
   await run("build native mant", [process.execPath, "run", "build:mant"]);
   if (!(await isExecutable(nativeCliSource))) {
-    throw new Error("build:mant did not stage an executable native/bin/mant");
+    throw new Error("build:mant did not stage an executable engine/bin/mant");
   }
 
   await run("test", [process.execPath, "test"]);

@@ -13,7 +13,7 @@ interface CliProcessResult {
 }
 
 async function invokeCli(...args: string[]): Promise<CliProcessResult> {
-  const entry = join(import.meta.dir, "../../src/mant.ts");
+  const entry = join(import.meta.dir, "../../src/mantui.ts");
   const process = Bun.spawn([processExecPath(), entry, ...args], {
     stdout: "pipe",
     stderr: "pipe",
@@ -57,7 +57,7 @@ describe("real CLI entry point", () => {
 
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("mantui: unknown option '--definitely-unknown'");
-    expect(result.stderr).not.toContain("src/mant.ts:");
+    expect(result.stderr).not.toContain("src/mantui.ts:");
     expect(result.stderr).not.toContain(" at main");
   });
 

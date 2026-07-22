@@ -6,7 +6,7 @@ does not form part of the everyday user installation path.
 ## Before tagging
 
 1. Choose a semantic version and update both `package.json` and the
-   `[workspace.package]` version in `native/Cargo.toml`.
+   `[workspace.package]` version in `engine/Cargo.toml`.
 2. Run the complete local verification boundary:
 
    ```sh
