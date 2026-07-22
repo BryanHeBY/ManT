@@ -1,12 +1,12 @@
 # ManT
 
-[![CI](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/mant/actions/workflows/ci.yml)
+[![CI](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 ManT makes local Unix manual pages easier to explore for people and easier to
-query for software. It presents the complete page in a responsive terminal UI,
-then exposes the same structured document through a native CLI for agents and
-scripts.
+query for software. It presents the complete page in a **responsive terminal UI**,
+then exposes the same structured document through the **`mant` CLI and MCP
+server for agents and scripts**.
 
 ![ManT displaying a tldr quick reference and the structured man(1) page](docs/assets/screenshots/mant-man.png)
 
@@ -26,7 +26,7 @@ data for the topic, ManT puts that quick reference before the manual.
 ### Linux release archive
 
 Download the archive for your architecture from the
-[latest release](https://github.com/BryanHeBY/mant/releases/latest), extract
+[latest release](https://github.com/BryanHeBY/ManT/releases/latest), extract
 it, and put both executables on `PATH`:
 
 ```sh
@@ -53,7 +53,7 @@ PATH="$PWD/dist:$PATH" mantui git
 ```
 
 The build produces `dist/mantui` and `dist/mant`. For a fast development
-loop, use `bun run dev -- git`; it builds and selects the local native CLI
+loop, use `bun run dev -- git`; it builds and selects the local `mant` binary
 automatically.
 
 ## Read manuals interactively
