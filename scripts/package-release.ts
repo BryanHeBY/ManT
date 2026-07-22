@@ -22,6 +22,7 @@ import { resolveReleasePlatform } from "./release-platform";
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const packageManifest = join(root, "package.json");
+const mantuiManifest = join(root, "apps", "mantui", "package.json");
 const cargoManifest = join(root, "engine", "Cargo.toml");
 
 const RELEASE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
@@ -43,6 +44,44 @@ export function workspaceVersion(manifest: string): string {
   const version = workspacePackage?.match(/^version\s*=\s*"([^"]+)"\s*$/m)?.[1];
   if (!version) throw new Error("engine/Cargo.toml has no workspace package version");
   return version;
+}
+
+/**
+ * Validate every independently versioned workspace boundary.
+ *
+ * The root manifest names the distribution, the mantui manifest names the Bun
+ * workspace, and Cargo supplies the version inherited by native crates. A
+ * release is coherent only when all three advance together.
+ */
+export function releaseVersionFromManifests(
+  rootManifest: string,
+  tuiManifest: string,
+  nativeManifest: string,
+): string {
+  const rootVersion = packageVersion(rootManifest, "package.json");
+  const tuiVersion = packageVersion(
+    tuiManifest,
+    "apps/mantui/package.json",
+  );
+  const nativeVersion = workspaceVersion(nativeManifest);
+
+  if (rootVersion !== tuiVersion || rootVersion !== nativeVersion) {
+    throw new Error(
+      "version mismatch: "
+      + `package.json=${rootVersion}, `
+      + `apps/mantui/package.json=${tuiVersion}, `
+      + `engine/Cargo.toml=${nativeVersion}`,
+    );
+  }
+  return rootVersion;
+}
+
+function packageVersion(manifest: string, label: string): string {
+  const parsed = JSON.parse(manifest) as { version?: unknown };
+  if (typeof parsed.version !== "string" || parsed.version.length === 0) {
+    throw new Error(`${label} has no release version`);
+  }
+  return parsed.version;
 }
 
 async function sha256(path: string): Promise<string> {
@@ -138,22 +177,19 @@ export async function packageRelease(
   releaseTag: string | undefined = process.env.MANT_RELEASE_TAG,
   expectedTarget: string | undefined = process.env.MANT_RELEASE_TARGET,
 ): Promise<string> {
-  const packageJson = JSON.parse(await readFile(packageManifest, "utf8")) as {
-    version?: unknown;
-  };
-  if (typeof packageJson.version !== "string" || packageJson.version.length === 0) {
-    throw new Error("package.json has no release version");
-  }
-
-  const cargoVersion = workspaceVersion(await readFile(cargoManifest, "utf8"));
-  if (cargoVersion !== packageJson.version) {
+  const [rootPackage, tuiPackage, cargoWorkspace] = await Promise.all([
+    readFile(packageManifest, "utf8"),
+    readFile(mantuiManifest, "utf8"),
+    readFile(cargoManifest, "utf8"),
+  ]);
+  const releaseVersion = releaseVersionFromManifests(
+    rootPackage,
+    tuiPackage,
+    cargoWorkspace,
+  );
+  if (releaseTag && versionFromReleaseTag(releaseTag) !== releaseVersion) {
     throw new Error(
-      `version mismatch: package.json=${packageJson.version}, engine/Cargo.toml=${cargoVersion}`,
-    );
-  }
-  if (releaseTag && versionFromReleaseTag(releaseTag) !== packageJson.version) {
-    throw new Error(
-      `release tag ${releaseTag} does not match package version ${packageJson.version}`,
+      `release tag ${releaseTag} does not match package version ${releaseVersion}`,
     );
   }
 
@@ -163,7 +199,7 @@ export async function packageRelease(
       `release runner target mismatch: expected ${expectedTarget}, built ${archiveTarget}`,
     );
   }
-  const archiveRoot = `mant-${packageJson.version}-${archiveTarget}`;
+  const archiveRoot = `mant-${releaseVersion}-${archiveTarget}`;
   const stagingDirectory = join(distDirectory, ".release-staging");
   const packageDirectory = join(stagingDirectory, archiveRoot);
   const licenseDirectory = join(packageDirectory, "LICENSES");

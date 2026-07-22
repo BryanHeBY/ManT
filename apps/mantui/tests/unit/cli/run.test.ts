@@ -39,7 +39,7 @@ describe("interactive CLI execution", () => {
 
     expect(exitCode).toBe(0);
     expect(queried).toBeFalse();
-    expect(output.stdout[0]).toContain("mant <topic>");
+    expect(output.stdout[0]).toContain("Usage:\n  mantui <topic>");
     expect(output.stderr).toEqual([]);
   });
 

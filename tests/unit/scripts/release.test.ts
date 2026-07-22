@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
+  releaseVersionFromManifests,
   runTar,
   versionFromReleaseTag,
   workspaceVersion,
@@ -76,6 +77,24 @@ edition = "2024"
 [workspace.dependencies]
 example = "9"
 `)).toBe("0.4.2");
+  });
+
+  test("requires the distribution, TUI, and Rust workspace versions to agree", () => {
+    const root = JSON.stringify({ version: "0.4.2" });
+    const tui = JSON.stringify({ version: "0.4.2" });
+    const cargo = `[workspace.package]\nversion = "0.4.2"\n`;
+
+    expect(releaseVersionFromManifests(root, tui, cargo)).toBe("0.4.2");
+    expect(() => releaseVersionFromManifests(
+      root,
+      JSON.stringify({ version: "0.4.1" }),
+      cargo,
+    )).toThrow("apps/mantui/package.json=0.4.1");
+    expect(() => releaseVersionFromManifests(
+      root,
+      tui,
+      `[workspace.package]\nversion = "0.4.0"\n`,
+    )).toThrow("engine/Cargo.toml=0.4.0");
   });
 });
 

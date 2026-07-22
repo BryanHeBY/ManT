@@ -4,6 +4,7 @@
   "description": "The interactive terminal UI for reading man pages, part of ManT",
   "license": "Apache-2.0",
   "type": "module",
+  "private": true,
   "bin": {
     "mantui": "./src/mantui.ts"
   },

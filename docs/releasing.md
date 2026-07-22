@@ -5,8 +5,9 @@ does not form part of the everyday user installation path.
 
 ## Before tagging
 
-1. Choose a semantic version and update both `package.json` and the
-   `[workspace.package]` version in `engine/Cargo.toml`.
+1. Choose a semantic version and update `package.json`,
+   `apps/mantui/package.json`, and the `[workspace.package]` version in
+   `engine/Cargo.toml`.
 2. Run the complete local verification boundary:
 
    ```sh
@@ -37,9 +38,9 @@ disabled until they can be Developer ID-signed and notarized for Gatekeeper.
 ## Repackaging locally
 
 `bun run release:pack` packages already-tested artifacts; it never builds or
-tests them. It validates the current host platform, package/workspace version
-agreement, and optional release tag before writing the archive and its
-individual SHA-256 checksum under `dist/`.
+tests them. It validates the current host platform, agreement among the root,
+mantui, and Rust workspace versions, and the optional release tag before
+writing the archive and its individual SHA-256 checksum under `dist/`.
 
 ```sh
 bun run build

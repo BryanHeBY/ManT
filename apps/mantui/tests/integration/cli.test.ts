@@ -45,7 +45,7 @@ describe("real CLI entry point", () => {
 
     expect(short.exitCode).toBe(0);
     expect(short.stdout).toContain("Usage:");
-    expect(short.stdout).toContain("mant <topic>");
+    expect(short.stdout).toContain("Usage:\n  mantui <topic>");
     expect(short.stdout).toContain("--explain=--option");
     expect(short.stdout).not.toContain("--roff-ast");
     expect(short.stderr).toBe("");
