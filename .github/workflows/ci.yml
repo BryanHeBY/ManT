@@ -149,3 +149,78 @@ jobs:
 
       - name: Test Rust workspace on MSRV
         run: cargo +"$RUST_MSRV" test --locked --manifest-path engine/Cargo.toml --workspace
+
+  coverage:
+    # Reports line coverage for both language boundaries. This runs beside the
+    # canonical build rather than inside it so coverage instrumentation never
+    # slows or gates the primary verification path. Codecov merges the two
+    # flags (mantui, engine) into a single project number.
+    name: Coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            man-db \
+            zlib1g-dev
+
+      - name: Install stable Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component llvm-tools-preview
+          rustup default stable
+
+      - name: Cache Cargo dependencies and build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            engine/target
+          key: cargo-v1-linux-x64-coverage-${{ hashFiles('engine/Cargo.lock') }}
+          restore-keys: |
+            cargo-v1-linux-x64-coverage-
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9 # v2.84.0
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install frozen Bun dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Collect Rust coverage
+        run: cargo llvm-cov --locked --manifest-path engine/Cargo.toml --workspace --lcov --output-path engine-lcov.info
+
+      - name: Collect TypeScript coverage
+        run: bun test --coverage --coverage-reporter=lcov
+
+      - name: Upload engine coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: engine-lcov.info
+          flags: engine
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Upload mantui coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: coverage/lcov.info
+          flags: mantui
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
