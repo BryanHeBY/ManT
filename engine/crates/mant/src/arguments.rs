@@ -19,6 +19,8 @@ use mant_ast::{
 pub(crate) enum QueryFormat {
     Markdown,
     Text,
+    // `man(1)`-faithful plain text of the full page (no tldr, no page noise).
+    Man,
     Json,
 }
 

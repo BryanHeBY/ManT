@@ -8,13 +8,28 @@ use mant_ast::{
 /// Render a complete query without Markdown or terminal escape sequences.
 #[must_use]
 pub fn render_query_text(query: &QueryBundle) -> String {
+    render_query_body(query, true)
+}
+
+/// Render the manual as `man(1)`-faithful plain text.
+///
+/// Identical to [`render_query_text`] except the prepended tldr block is
+/// omitted, so the output stays a faithful, noise-free subset of the manual
+/// page (no page furniture, overstrike, or hyphenation — those never enter
+/// the document model because the source is parsed directly).
+#[must_use]
+pub fn render_query_man(query: &QueryBundle) -> String {
+    render_query_body(query, false)
+}
+
+fn render_query_body(query: &QueryBundle, include_tldr: bool) -> String {
     let section = query
         .manual
         .as_ref()
         .and_then(|manual| manual.meta.section.as_deref())
         .or(query.section.as_deref());
     let mut parts = vec![document_label(&query.topic, section)];
-    if let Some(tldr) = &query.tldr {
+    if include_tldr && let Some(tldr) = &query.tldr {
         parts.push(render_tldr_text(tldr));
     }
     if let Some(manual) = &query.manual {
@@ -364,7 +379,7 @@ mod tests {
         Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
     };
 
-    use super::{render_excerpt_text, render_outline_text, render_query_text};
+    use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
     use crate::{build_outline, select_excerpt};
 
     fn query() -> QueryBundle {
@@ -472,5 +487,34 @@ mod tests {
             render_excerpt_text(&excerpt),
             "demo\n\nTLDR\n\nA small demonstration."
         );
+    }
+
+    #[test]
+    fn man_format_renders_the_manual_but_omits_the_prepended_tldr() {
+        let mut query = query();
+        query.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["A small demonstration.".to_owned()],
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "/cache/tldr/demo.md".to_owned(),
+        });
+
+        let text = render_query_text(&query);
+        let man = render_query_man(&query);
+
+        // text keeps the tldr block; man drops it entirely.
+        assert!(text.contains("TLDR"));
+        assert!(text.contains("A small demonstration."));
+        assert!(!man.contains("TLDR"));
+        assert!(!man.contains("A small demonstration."));
+
+        // man still renders the manual body verbatim, without markup.
+        assert!(man.starts_with("demo(1)\n\nOPTIONS"));
+        assert!(man.contains("parent details"));
+        assert!(man.contains("Common options"));
+        assert!(!man.contains("**"));
     }
 }

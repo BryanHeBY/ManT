@@ -16,8 +16,8 @@ pub use output::{
     MarkdownOptions, render_excerpt_json, render_excerpt_markdown,
     render_excerpt_markdown_with_options, render_excerpt_text, render_markdown,
     render_markdown_with_options, render_outline_json, render_outline_markdown,
-    render_outline_text, render_query_json, render_query_text, render_search_json,
-    render_search_markdown, render_search_text, render_update_json,
+    render_outline_text, render_query_json, render_query_man, render_query_text,
+    render_search_json, render_search_markdown, render_search_text, render_update_json,
 };
 pub use projection::{ProjectionError, build_outline, build_outline_with_detail, select_excerpt};
 pub use query::{QueryError, QueryPolicy, query, query_with_policy};

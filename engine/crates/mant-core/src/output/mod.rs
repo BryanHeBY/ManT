@@ -15,4 +15,4 @@ pub use markdown::{
     render_markdown, render_markdown_with_options, render_outline_markdown,
 };
 pub use search::{render_search_markdown, render_search_text};
-pub use text::{render_excerpt_text, render_outline_text, render_query_text};
+pub use text::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};

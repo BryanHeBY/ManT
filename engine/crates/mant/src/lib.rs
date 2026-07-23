@@ -257,7 +257,9 @@ fn render_query_view(
                 mant_core::build_outline_with_detail(query, detail).map_err(projection_failure)?;
             match format {
                 QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
-                QueryFormat::Text => Ok(mant_core::render_outline_text(&outline)),
+                QueryFormat::Text | QueryFormat::Man => {
+                    Ok(mant_core::render_outline_text(&outline))
+                }
                 QueryFormat::Json => {
                     mant_core::render_outline_json(&outline, pretty).map_err(Failure::operational)
                 }
@@ -273,7 +275,9 @@ fn render_query_view(
                     &excerpt,
                     mant_core::MarkdownOptions { preserve_anchors },
                 )),
-                QueryFormat::Text => Ok(mant_core::render_excerpt_text(&excerpt)),
+                QueryFormat::Text | QueryFormat::Man => {
+                    Ok(mant_core::render_excerpt_text(&excerpt))
+                }
                 QueryFormat::Json => {
                     mant_core::render_excerpt_json(&excerpt, pretty).map_err(Failure::operational)
                 }
@@ -305,7 +309,7 @@ fn render_query_view(
             .map_err(search_failure)?;
             match format {
                 QueryFormat::Markdown => Ok(mant_core::render_search_markdown(&search)),
-                QueryFormat::Text => Ok(mant_core::render_search_text(&search)),
+                QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_search_text(&search)),
                 QueryFormat::Json => {
                     mant_core::render_search_json(&search, pretty).map_err(Failure::operational)
                 }
@@ -362,6 +366,7 @@ fn render_full_query(
             mant_core::MarkdownOptions { preserve_anchors },
         )),
         QueryFormat::Text => Ok(mant_core::render_query_text(query)),
+        QueryFormat::Man => Ok(mant_core::render_query_man(query)),
         QueryFormat::Json => {
             mant_core::render_query_json(query, pretty).map_err(Failure::operational)
         }
