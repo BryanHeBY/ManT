@@ -659,6 +659,7 @@ mod tests {
             .expect("options section");
         options.blocks.push(Block::DefinitionList {
             items: vec![DefinitionItem {
+                inline_term: false,
                 identity: Some(DefinitionIdentity {
                     id: "exclude".to_owned(),
                     role: DefinitionRole::Option,

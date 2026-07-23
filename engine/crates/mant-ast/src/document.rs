@@ -249,6 +249,11 @@ pub struct DefinitionItem {
     pub identity: Option<DefinitionIdentity>,
     pub terms: Vec<Vec<Inline>>,
     pub description: Vec<Block>,
+    /// Render the term on the same line as the first description line (a man(7)
+    /// hanging tag that fits the indent) instead of on its own line. Decided
+    /// once during lowering so every renderer lays the item out identically.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub inline_term: bool,
     /// Terminal rows requested before this item when man(7) changes `.PD`.
     /// `None` inherits the containing list's compactness policy.
     #[serde(skip_serializing_if = "Option::is_none")]

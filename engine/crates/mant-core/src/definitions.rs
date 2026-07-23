@@ -148,10 +148,12 @@ fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
         for child in &mut description {
             shift_block_indent(child, description_origin);
         }
+        let terms = vec![children];
         normalized.push(Block::DefinitionList {
             items: vec![DefinitionItem {
                 identity: None,
-                terms: vec![children],
+                inline_term: crate::mandoc::inline::terms_fit_inline(&terms),
+                terms,
                 description,
                 spacing_before_lines: Some(layout.spacing_before_lines),
             }],
@@ -360,6 +362,7 @@ mod tests {
     fn item(value: &str) -> DefinitionItem {
         DefinitionItem {
             identity: None,
+            inline_term: false,
             terms: vec![vec![Inline::Text {
                 value: value.into(),
             }]],

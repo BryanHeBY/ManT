@@ -291,6 +291,7 @@ fn parse_definition_list(element: ElementRef<'_>, layout: LayoutHint) -> Option<
                 if !terms.is_empty() || !description.is_empty() {
                     items.push(DefinitionItem {
                         identity: None,
+                        inline_term: crate::mandoc::inline::terms_fit_inline(&terms),
                         terms: std::mem::take(&mut terms),
                         description,
                         spacing_before_lines: None,
@@ -303,6 +304,7 @@ fn parse_definition_list(element: ElementRef<'_>, layout: LayoutHint) -> Option<
     if !terms.is_empty() {
         items.push(DefinitionItem {
             identity: None,
+            inline_term: crate::mandoc::inline::terms_fit_inline(&terms),
             terms,
             description: Vec::new(),
             spacing_before_lines: None,

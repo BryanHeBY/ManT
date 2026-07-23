@@ -514,6 +514,7 @@ mod tests {
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         items: vec![DefinitionItem {
+                            inline_term: false,
                             identity: Some(DefinitionIdentity {
                                 id: "option-acls".to_owned(),
                                 role: DefinitionRole::Option,

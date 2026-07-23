@@ -10,7 +10,10 @@ use mant_ast::{
 
 use super::{
     LoweringContext,
-    inline::{InlineBuilder, lower_inline_nodes, parse_roff_text, plain_text, sanitize_roff_text},
+    inline::{
+        InlineBuilder, lower_inline_nodes, parse_roff_text, plain_text, sanitize_roff_text,
+        terms_fit_inline,
+    },
     layout::{
         add_leading_spacing, block_indent, display_indent, layout, layout_with_spacing,
         section_spacing, set_block_spacing, update_paragraph_distance, vertical_distance_lines,
@@ -45,7 +48,115 @@ pub(super) fn lower_sections(root: &Node, context: &mut LoweringContext<'_>) -> 
             &mut paragraph_distance,
         ));
     }
+    // Bullet tag lists (`.IP o`) are semantically bullet lists; normalize them
+    // once here so every downstream pass and renderer treats them uniformly.
+    normalize_bullet_definition_lists(&mut sections);
     sections
+}
+
+/// Collapse man `.IP`-style tag lists whose designator is a bullet glyph into
+/// real bullet lists.
+///
+/// A tag list such as `.IP o` uses the character `o` (or `*`, `•`, `-`, …) as a
+/// stand-in bullet, so libmandoc lowers it to a `DefinitionList` whose every
+/// term is that lone glyph. Semantically it is a bullet list. Deciding this
+/// once, in the model, lets every renderer (Markdown, plain text, and the TUI)
+/// emit one consistent bullet instead of each guessing from the term glyph and
+/// disagreeing.
+fn normalize_bullet_definition_lists(sections: &mut [Section]) {
+    for section in sections {
+        normalize_blocks(&mut section.blocks);
+        normalize_bullet_definition_lists(&mut section.children);
+    }
+}
+
+fn normalize_blocks(blocks: &mut [Block]) {
+    for block in blocks {
+        match block {
+            Block::List { items, .. } => {
+                for item in items {
+                    normalize_blocks(&mut item.blocks);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    normalize_blocks(&mut item.description);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter_mut().flat_map(|row| row.cells.iter_mut()) {
+                    normalize_blocks(&mut cell.blocks);
+                }
+            }
+            _ => {}
+        }
+        if let Block::DefinitionList { items, .. } = block
+            && is_bullet_tag_list(items)
+        {
+            let placeholder = Block::VerticalSpace {
+                lines: 0,
+                source: None,
+            };
+            *block = definition_list_into_bullets(std::mem::replace(block, placeholder));
+        }
+    }
+}
+
+fn definition_list_into_bullets(block: Block) -> Block {
+    let Block::DefinitionList {
+        items,
+        compact,
+        layout,
+        source,
+    } = block
+    else {
+        return block;
+    };
+    Block::List {
+        kind: ListKind::Bullet,
+        start: None,
+        compact,
+        items: items
+            .into_iter()
+            .map(|item| ListItem {
+                blocks: item.description,
+            })
+            .collect(),
+        layout,
+        source,
+    }
+}
+
+/// A definition list is a disguised bullet list when it is non-empty and every
+/// item's sole term is the same bullet glyph.
+fn is_bullet_tag_list(items: &[DefinitionItem]) -> bool {
+    let mut designator: Option<String> = None;
+    for item in items {
+        let [term] = item.terms.as_slice() else {
+            return false;
+        };
+        let text = plain_text(term);
+        let text = text.trim();
+        if !is_bullet_glyph(text) {
+            return false;
+        }
+        match &designator {
+            None => designator = Some(text.to_owned()),
+            Some(current) if current == text => {}
+            Some(_) => return false,
+        }
+    }
+    designator.is_some()
+}
+
+fn is_bullet_glyph(text: &str) -> bool {
+    let mut chars = text.chars();
+    match (chars.next(), chars.next()) {
+        // `o` is the ASCII bullet convention in man pages; otherwise any single
+        // non-alphanumeric mark (`*`, `•`, `-`, `+`, …) is a bullet.
+        (Some(glyph), None) => glyph == 'o' || !glyph.is_alphanumeric(),
+        _ => false,
+    }
 }
 
 fn lower_section(
@@ -463,9 +574,11 @@ fn definition_item(
     if let Some(id) = definition_head_anchor(node, &term) {
         term.insert(0, Inline::Anchor { id });
     }
+    let terms: Vec<Vec<Inline>> = (!term.is_empty()).then_some(term).into_iter().collect();
     DefinitionItem {
         identity: None,
-        terms: (!term.is_empty()).then_some(term).into_iter().collect(),
+        inline_term: terms_fit_inline(&terms),
+        terms,
         description: lower_blocks(
             part_children(node, NodeKind::Body),
             context,
@@ -714,4 +827,112 @@ fn is_nonprinting_request(node: &Node) -> bool {
         node.macro_name.as_deref(),
         Some("ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use mant_ast::{Block, DefinitionItem, Inline, LayoutHint, ListKind, Section};
+
+    use super::normalize_bullet_definition_lists;
+
+    fn text(value: &str) -> Vec<Inline> {
+        vec![Inline::Text {
+            value: value.to_owned(),
+        }]
+    }
+
+    fn definition(term: &str, description: &str) -> DefinitionItem {
+        DefinitionItem {
+            identity: None,
+            inline_term: false,
+            terms: vec![text(term)],
+            description: vec![Block::Paragraph {
+                children: text(description),
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            spacing_before_lines: None,
+        }
+    }
+
+    fn section_with(block: Block) -> Vec<Section> {
+        vec![Section {
+            id: "s".to_owned(),
+            title: "S".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![block],
+            children: Vec::new(),
+            source: None,
+        }]
+    }
+
+    #[test]
+    fn uniform_bullet_tag_list_becomes_a_bullet_list() {
+        // `.IP o` repeats `o` as a stand-in bullet on every item; the model
+        // must collapse it into a real bullet list, dropping the `o` marker.
+        let mut sections = section_with(Block::DefinitionList {
+            items: vec![definition("o", "first"), definition("o", "second")],
+            compact: false,
+            layout: LayoutHint::default(),
+            source: None,
+        });
+
+        normalize_bullet_definition_lists(&mut sections);
+
+        match &sections[0].blocks[0] {
+            Block::List { kind, items, .. } => {
+                assert_eq!(*kind, ListKind::Bullet);
+                assert_eq!(items.len(), 2);
+                assert!(matches!(items[0].blocks[0], Block::Paragraph { .. }));
+            }
+            other => panic!("expected a bullet list, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn operator_definition_terms_stay_a_definition_list() {
+        // A glossary of distinct operators (`&&`, `*`) is not a bullet list;
+        // it must stay a definition list so the short tags render inline.
+        let mut sections = section_with(Block::DefinitionList {
+            items: vec![definition("&&", "logical and"), definition("*", "multiply")],
+            compact: false,
+            layout: LayoutHint::default(),
+            source: None,
+        });
+
+        normalize_bullet_definition_lists(&mut sections);
+
+        assert!(matches!(
+            sections[0].blocks[0],
+            Block::DefinitionList { .. }
+        ));
+    }
+
+    #[test]
+    fn tagged_option_list_is_left_untouched() {
+        // Real option tags are alphanumeric and must never be seen as bullets.
+        let mut sections = section_with(Block::DefinitionList {
+            items: vec![definition("-a, --all", "show all")],
+            compact: false,
+            layout: LayoutHint::default(),
+            source: None,
+        });
+
+        normalize_bullet_definition_lists(&mut sections);
+
+        assert!(matches!(
+            sections[0].blocks[0],
+            Block::DefinitionList { .. }
+        ));
+    }
+
+    #[test]
+    fn short_terms_hang_inline_but_long_ones_do_not() {
+        // Matches man(1): a tag that fits the default hanging indent shares the
+        // first description line; wider tags take their own line.
+        assert!(super::terms_fit_inline(&[text("space")]));
+        assert!(super::terms_fit_inline(&[text("* / %")]));
+        assert!(!super::terms_fit_inline(&[text("--listed-incremental")]));
+        assert!(!super::terms_fit_inline(&[]));
+    }
 }

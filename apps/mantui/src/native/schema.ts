@@ -48,6 +48,7 @@ export interface MantDefinitionItem {
   };
   terms: MantInline[][];
   description: MantBlock[];
+  inlineTerm?: boolean;
   spacingBeforeLines?: number;
 }
 
@@ -333,6 +334,7 @@ function validateBlock(value: unknown, path: string): asserts value is MantBlock
             expectString(name, `${itemPath}.identity.names[${nameIndex}]`);
           });
         }
+        expectOptionalBoolean(itemObject.inlineTerm, `${itemPath}.inlineTerm`);
         expectOptionalNumber(itemObject.spacingBeforeLines, `${itemPath}.spacingBeforeLines`);
         expectArray(itemObject.terms, `${itemPath}.terms`).forEach((term, termIndex) => {
           validateInlineArray(term, `${itemPath}.terms[${termIndex}]`);

@@ -140,6 +140,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
             identity: None,
+            inline_term: false,
             terms: vec![
                 vec![Inline::Strong {
                     children: vec![Inline::Text {
@@ -189,6 +190,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {
             identity: None,
+            inline_term: false,
             terms: vec![vec![
                 Inline::Strong {
                     children: vec![Inline::Text {

@@ -24,16 +24,6 @@ function layoutSpacing(block: MantBlock): number {
     : Math.max(0, Math.floor(block.layout?.spacingBeforeLines ?? 0));
 }
 
-/** A single non-alphanumeric glyph used as a man(7) bullet marker. */
-function isBulletTerm(terms: MantInline[][]): boolean {
-  const allTerms = terms.flat();
-  if (allTerms.length !== 1) return false;
-  const node = allTerms[0]!;
-  if (node.type !== "text") return false;
-  const trimmed = node.value.trim();
-  return trimmed.length > 0 && !/[\p{L}\p{N}]/u.test(trimmed);
-}
-
 /**
  * Merges adjacent prose into larger TextBuffers while retaining structural
  * blocks. Search records use the same grouping and point at these stable IDs.
@@ -236,9 +226,7 @@ export function renderBlockNodes(
           <box key={`definitions-${keyCounter++}`} flexDirection="column">
             {block.items.map((item, itemIndex) => {
               const itemPath = searchPath.definition(blockPath, itemIndex);
-              const bulletMarker = isBulletTerm(item.terms)
-                ? renderInlineContent(item.terms[0]!, `bullet-${itemIndex}`)
-                : null;
+              const inlineTerm = item.inlineTerm === true;
               return (
                 <box
                   key={`definition-${itemIndex}`}
@@ -248,14 +236,26 @@ export function renderBlockNodes(
                       ?? (itemIndex > 0 && !block.compact ? 1 : 0)
                   }
                 >
-                  {bulletMarker
+                  {inlineTerm
                     ? (
                       <box
-                        key="bullet-desc"
+                        key="inline-term"
                         flexDirection="row"
                         paddingLeft={indent}
+                        {...(item.identity
+                          ? { id: contentAnchorId(item.identity.id) }
+                          : {})}
                       >
-                        <text fg="#94e2d5">{bulletMarker} </text>
+                        <text
+                          id={contentSearchId(sectionId, searchPath.term(itemPath, 0))}
+                          fg="#cdd6f4"
+                          wrapMode="word"
+                        >
+                          {item.terms.map((term, termIndex) =>
+                            renderInlineContent(term, `inline-term-${termIndex}`)
+                          )}
+                          {" "}
+                        </text>
                         <box flexDirection="column" flexGrow={1}>
                           {renderBlockNodes(
                             item.description,

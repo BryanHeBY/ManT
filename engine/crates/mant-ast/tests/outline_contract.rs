@@ -93,6 +93,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
 #[test]
 fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
+        inline_term: false,
         identity: Some(DefinitionIdentity {
             id: "all".to_owned(),
             role: DefinitionRole::Option,
