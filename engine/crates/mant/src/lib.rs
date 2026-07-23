@@ -366,7 +366,14 @@ fn render_full_query(
             mant_core::MarkdownOptions { preserve_anchors },
         )),
         QueryFormat::Text => Ok(mant_core::render_query_text(query)),
-        QueryFormat::Man => Ok(mant_core::render_query_man(query)),
+        QueryFormat::Man => {
+            if query.manual.is_none() {
+                return Err(Failure::operational(
+                    "manual page is unavailable; --format man cannot render tldr-only content",
+                ));
+            }
+            Ok(mant_core::render_query_man(query))
+        }
         QueryFormat::Json => {
             mant_core::render_query_json(query, pretty).map_err(Failure::operational)
         }
@@ -558,6 +565,13 @@ mod tests {
         fn with_manual_and_tldr() -> Self {
             Self {
                 manual: Some(manual()),
+                tldr: Some(tldr()),
+                ..Self::new()
+            }
+        }
+
+        fn with_tldr() -> Self {
+            Self {
                 tldr: Some(tldr()),
                 ..Self::new()
             }
@@ -834,6 +848,19 @@ mod tests {
         assert!(output.contains("<a id=\"name-1\"></a>"));
         assert!(output.contains("<a id=\"options-2\"></a>"));
         assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn man_format_rejects_a_tldr_only_result() {
+        let host = FakeHost::with_tldr();
+        let (status, output, diagnostics) = invoke(&["demo", "--format", "man"], b"", &host);
+
+        assert_eq!(status, 1);
+        assert!(output.is_empty());
+        assert_eq!(
+            diagnostics,
+            "mant: manual page is unavailable; --format man cannot render tldr-only content\n"
+        );
     }
 
     #[test]

@@ -19,6 +19,9 @@ pub fn render_query_text(query: &QueryBundle) -> String {
 /// the document model because the source is parsed directly).
 #[must_use]
 pub fn render_query_man(query: &QueryBundle) -> String {
+    if query.manual.is_none() {
+        return String::new();
+    }
     render_query_body(query, false)
 }
 
@@ -537,6 +540,23 @@ mod tests {
         assert!(man.contains("parent details"));
         assert!(man.contains("Common options"));
         assert!(!man.contains("**"));
+    }
+
+    #[test]
+    fn man_format_does_not_invent_a_document_for_tldr_only_queries() {
+        let mut query = query();
+        query.manual = None;
+        query.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["A small demonstration.".to_owned()],
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "/cache/tldr/demo.md".to_owned(),
+        });
+
+        assert!(render_query_man(&query).is_empty());
     }
 
     #[test]
