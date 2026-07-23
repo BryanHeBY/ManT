@@ -135,6 +135,11 @@ pub fn locate_manual_source_with(
         if section.is_empty() {
             return Err(LocateError::InvalidSection);
         }
+        // Pass the section with an explicit `-s` flag. A bare section operand
+        // (`man -w 1 -- ls`) collides with the `--` option terminator on
+        // man-db: the terminator is then parsed as the page name. `-s`
+        // labels the section unambiguously and coexists with `--`.
+        arguments.push(OsString::from("-s"));
         arguments.push(OsString::from(section));
     }
     // Terminate option parsing so a topic beginning with '-' is treated as a
@@ -239,6 +244,7 @@ mod tests {
                 OsString::from("man"),
                 vec![
                     OsString::from("-w"),
+                    OsString::from("-s"),
                     OsString::from("1p"),
                     OsString::from("--"),
                     OsString::from("printf")
