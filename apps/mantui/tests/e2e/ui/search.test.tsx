@@ -67,8 +67,7 @@ describe("App search (e2e)", () => {
     await flushKeyboard(setup);
     setup.mockInput.typeText("--acls");
     setup.mockInput.pressEnter();
-    await flushKeyboard(setup);
-    expect(setup.captureCharFrame()).toContain("1/1");
+    await waitForFrame(setup, (frame) => frame.includes("1/1"), 1_000);
 
     setup.mockInput.pressEscape();
     await flushEscape(setup);
@@ -76,7 +75,7 @@ describe("App search (e2e)", () => {
     await flushKeyboard(setup);
     setup.mockInput.typeText("-w");
     setup.mockInput.pressEnter();
-    await flushKeyboard(setup);
+    await waitForFrame(setup, (frame) => frame.includes("1/1"), 1_000);
     const active = setup.captureSpans().lines
       .flatMap((line) => line.spans)
       .filter((span) => span.bg.toInts().slice(0, 3).join(",") === "249,226,175")
