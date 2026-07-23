@@ -173,11 +173,35 @@ fn render_section(section: &Section, depth: usize) -> String {
 }
 
 fn render_blocks(blocks: &[Block], base_indent: usize) -> String {
-    blocks
-        .iter()
-        .filter_map(|block| render_block(block, base_indent))
-        .collect::<Vec<_>>()
-        .join("\n\n")
+    // Blocks are separated by a single blank line by default. An explicit
+    // vertical-space node *sets* the gap before the next block rather than
+    // adding to it, so `.sp` and blank input lines are not double-counted
+    // against the default paragraph separation (which previously turned one
+    // requested blank line into several). Leading and trailing gaps are
+    // dropped so a section never opens or closes with blank lines.
+    let mut output = String::new();
+    let mut has_content = false;
+    let mut pending_blank_lines: Option<usize> = None;
+    for block in blocks {
+        if let Block::VerticalSpace { lines, .. } = block {
+            if has_content {
+                let requested = usize::from(*lines);
+                pending_blank_lines = Some(pending_blank_lines.unwrap_or(0).max(requested));
+            }
+            continue;
+        }
+        let Some(text) = render_block(block, base_indent) else {
+            continue;
+        };
+        if has_content {
+            let blank_lines = pending_blank_lines.unwrap_or(1);
+            output.push_str(&"\n".repeat(blank_lines + 1));
+        }
+        output.push_str(&text);
+        has_content = true;
+        pending_blank_lines = None;
+    }
+    output
 }
 
 fn render_block(block: &Block, base_indent: usize) -> Option<String> {
@@ -226,7 +250,9 @@ fn render_block(block: &Block, base_indent: usize) -> Option<String> {
             layout,
             ..
         } => (value.clone(), usize::from(layout.indent_columns)),
-        Block::VerticalSpace { lines, .. } => return Some("\n".repeat(usize::from(*lines))),
+        // Vertical space is handled as an inter-block separator in
+        // `render_blocks`, never as a standalone rendered block.
+        Block::VerticalSpace { .. } => return None,
     };
     let value = value.trim_matches('\n');
     (!value.trim().is_empty()).then(|| indent_lines(value, base_indent + layout_indent))
@@ -516,5 +542,78 @@ mod tests {
         assert!(man.contains("parent details"));
         assert!(man.contains("Common options"));
         assert!(!man.contains("**"));
+    }
+
+    #[test]
+    fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
+        fn document_with(blocks: Vec<Block>) -> QueryBundle {
+            QueryBundle {
+                schema: QuerySchema::V2,
+                topic: "demo".to_owned(),
+                section: Some("1".to_owned()),
+                manual: Some(MantDocument {
+                    schema: DocumentSchema::V2,
+                    producer: Producer {
+                        name: "test".to_owned(),
+                        version: "1".to_owned(),
+                        engine: None,
+                    },
+                    source: DocumentSource {
+                        format: SourceFormat::Man,
+                        path: None,
+                        renderer: None,
+                    },
+                    meta: DocumentMeta {
+                        section: Some("1".to_owned()),
+                        ..DocumentMeta::default()
+                    },
+                    diagnostics: Vec::new(),
+                    sections: vec![Section {
+                        id: "s-1".to_owned(),
+                        title: "S".to_owned(),
+                        spacing_before_lines: 0,
+                        blocks,
+                        children: Vec::new(),
+                        source: None,
+                    }],
+                }),
+                tldr: None,
+            }
+        }
+        fn para(value: &str) -> Block {
+            Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: value.to_owned(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }
+        }
+        let vspace = |lines: u16| Block::VerticalSpace {
+            lines,
+            source: None,
+        };
+
+        // One vertical-space line yields exactly one blank line, not several.
+        let one = render_query_text(&document_with(vec![
+            para("first"),
+            vspace(1),
+            para("second"),
+        ]));
+        assert!(one.contains("first\n\nsecond"), "got: {one:?}");
+        assert!(!one.contains("first\n\n\nsecond"), "got: {one:?}");
+
+        // A larger explicit gap is preserved rather than collapsed.
+        let wide = render_query_text(&document_with(vec![
+            para("first"),
+            vspace(2),
+            para("second"),
+        ]));
+        assert!(wide.contains("first\n\n\nsecond"), "got: {wide:?}");
+
+        // Leading and trailing vertical space never adds blank lines at the edges.
+        let edges = render_query_text(&document_with(vec![vspace(2), para("only"), vspace(3)]));
+        assert!(edges.ends_with("only"), "got: {edges:?}");
+        assert!(edges.contains("S\n\nonly"), "got: {edges:?}");
     }
 }
