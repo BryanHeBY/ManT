@@ -54,7 +54,7 @@ assertions in the same commit.
 
 ## `mant` 解析验证
 
-2026-07-21 对从 Fedora Linux 44 下载的 34 个软件包中的 **879 个 topic/section
+2026-07-21 对从 Fedora Linux 44 下载的 41 个软件包中的 **857 个 topic/section
 请求**执行了 `mant --force-libmandoc` 批量扫描。
 
 观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
