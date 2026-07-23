@@ -299,7 +299,7 @@ fn render_definitions(items: &[DefinitionItem], compact: bool, base_indent: usiz
             let value = match (terms.is_empty(), description.is_empty()) {
                 (false, false) => {
                     if item.inline_term {
-                        Some(format!("{terms} {description}"))
+                        Some(format!("{terms} {}", description.trim_start()))
                     } else {
                         Some(format!("{terms}\n{}", indent_lines(&description, 2)))
                     }
@@ -396,8 +396,8 @@ fn join_parts(parts: Vec<String>) -> String {
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        Block, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument,
-        Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
+        Block, DefinitionItem, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint,
+        MantDocument, Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
     };
 
     use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
@@ -610,5 +610,91 @@ mod tests {
         let edges = render_query_text(&document_with(vec![vspace(2), para("only"), vspace(3)]));
         assert!(edges.ends_with("only"), "got: {edges:?}");
         assert!(edges.contains("S\n\nonly"), "got: {edges:?}");
+    }
+
+    #[test]
+    fn inline_definition_descriptions_are_tight_against_their_terms() {
+        let bundle = QueryBundle {
+            schema: QuerySchema::V2,
+            topic: "demo".to_owned(),
+            section: Some("1".to_owned()),
+            manual: Some(MantDocument {
+                schema: DocumentSchema::V2,
+                producer: Producer {
+                    name: "test".to_owned(),
+                    version: "1".to_owned(),
+                    engine: None,
+                },
+                source: DocumentSource {
+                    format: SourceFormat::Man,
+                    path: None,
+                    renderer: None,
+                },
+                meta: DocumentMeta {
+                    section: Some("1".to_owned()),
+                    ..DocumentMeta::default()
+                },
+                diagnostics: Vec::new(),
+                sections: vec![Section {
+                    id: "ops".to_owned(),
+                    title: "OPERATORS".to_owned(),
+                    spacing_before_lines: 0,
+                    blocks: vec![Block::DefinitionList {
+                        compact: false,
+                        layout: LayoutHint::default(),
+                        source: None,
+                        items: vec![
+                            DefinitionItem {
+                                identity: None,
+                                inline_term: true,
+                                terms: vec![vec![Inline::Text {
+                                    value: "* / %".to_owned(),
+                                }]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![Inline::Text {
+                                        value: "Multiplication, division, and modulus.".to_owned(),
+                                    }],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                                spacing_before_lines: Some(1),
+                            },
+                            DefinitionItem {
+                                identity: None,
+                                inline_term: true,
+                                terms: vec![vec![Inline::Text {
+                                    value: "space".to_owned(),
+                                }]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![Inline::Text {
+                                        value: "String concatenation.".to_owned(),
+                                    }],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                                spacing_before_lines: Some(1),
+                            },
+                        ],
+                    }],
+                    children: Vec::new(),
+                    source: None,
+                }],
+            }),
+            tldr: None,
+        };
+
+        let output = render_query_text(&bundle);
+        // Tight: exactly one space between term and description, no leaked indent.
+        assert!(
+            output.contains("* / % Multiplication, division, and modulus."),
+            "got: {output:?}"
+        );
+        assert!(
+            output.contains("space String concatenation."),
+            "got: {output:?}"
+        );
+        // No double-space gap between term and description.
+        assert!(!output.contains("* / %  "), "got: {output:?}");
+        assert!(!output.contains("space  "), "got: {output:?}");
     }
 }
