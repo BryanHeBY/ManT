@@ -697,6 +697,31 @@ mod tests {
     }
 
     #[test]
+    fn mdoc_definition_layout_uses_the_normalized_list_width() {
+        let path = temporary_source(
+            "mdoc-definition-widths",
+            ".Dd July 23, 2026\n.Dt WIDTHS 1\n.Os\n.Sh ITEMS\n\
+             .Bl -tag -width 20n\n.It tenletters\nwide description\n.El\n\
+             .Bl -tag -width 3n\n.It short\nnarrow description\n.El\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower mdoc definition widths");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let lists = document.sections[0]
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::DefinitionList { items, .. } => Some(items),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(lists.len(), 2);
+        assert!(lists[0][0].inline_term);
+        assert!(!lists[1][0].inline_term);
+    }
+
+    #[test]
     fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
         let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");

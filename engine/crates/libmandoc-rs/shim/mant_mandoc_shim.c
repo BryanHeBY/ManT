@@ -44,6 +44,7 @@ struct mant_mandoc_node {
 	int			 display_kind;
 	int			 compact;
 	char			*offset;
+	char			*width;
 	char			*equation;
 	struct mant_mandoc_table_cell *table_cells;
 	struct mant_mandoc_node	*child;
@@ -458,6 +459,7 @@ free_node(struct mant_mandoc_node *node)
 		free(node->text);
 		free(node->tag);
 		free(node->offset);
+		free(node->width);
 		free(node->equation);
 		free_table_cells(node->table_cells);
 		free(node);
@@ -591,6 +593,7 @@ copy_normalized_data(struct mant_mandoc_node *node,
 	if (source->tok == MDOC_Bl) {
 		node->compact = source->norm->Bl.comp;
 		node->offset = copy_string(source->norm->Bl.offs);
+		node->width = copy_string(source->norm->Bl.width);
 		switch (source->norm->Bl.type) {
 		case LIST_bullet:
 		case LIST_dash:
@@ -741,6 +744,12 @@ const char *
 mant_mandoc_node_offset(const struct mant_mandoc_node *node)
 {
 	return node == NULL ? NULL : node->offset;
+}
+
+const char *
+mant_mandoc_node_width(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? NULL : node->width;
 }
 
 const char *

@@ -147,6 +147,49 @@ fn first_text(node: &Node) -> Option<&str> {
     node.children.iter().find_map(first_text)
 }
 
+/// Convert a horizontal roff measurement to terminal character columns.
+///
+/// mandoc's character device treats em and en units as one column. Physical
+/// units use the same 10-characters-per-inch ratios as its ASCII renderer.
+/// This intentionally accepts only absolute finite values: relative widths
+/// depend on formatter state and should retain the caller's previous value.
+pub(super) fn horizontal_distance_columns(argument: &str) -> Option<usize> {
+    let argument = argument.trim();
+    if argument.starts_with(['+', '-']) {
+        return None;
+    }
+    let number_end = argument
+        .find(|character: char| character.is_ascii_alphabetic())
+        .unwrap_or(argument.len());
+    let scale = argument[..number_end].parse::<f64>().ok()?;
+    if !scale.is_finite() || scale < 0.0 {
+        return None;
+    }
+    let unit = argument[number_end..].trim();
+    let columns = match unit {
+        "u" => scale / 24.0,
+        "c" => scale * 10.0 / 2.54,
+        "f" => scale * 65_536.0 / 24.0,
+        "i" => scale * 10.0,
+        "M" => scale / 100.0,
+        "P" | "v" => scale * 5.0 / 3.0,
+        "p" => scale * 5.0 / 36.0,
+        // Bare man(7) widths default to ens. Character terminals give both
+        // ems and ens one display column.
+        "" | "m" | "n" => scale,
+        _ => return None,
+    };
+    // Real tag widths are tiny. Bounding the conversion also mirrors
+    // libmandoc's refusal of values that cannot fit its signed margin state,
+    // while avoiding architecture-dependent float-to-integer casts.
+    for rounded in 0_u16..=4096 {
+        if columns < f64::from(rounded) + 0.5 {
+            return Some(usize::from(rounded));
+        }
+    }
+    None
+}
+
 /// Construct a zero-spacing layout at a semantic indentation level.
 pub(super) const fn layout(indent_columns: u16) -> LayoutHint {
     LayoutHint {
@@ -187,7 +230,10 @@ pub(super) fn display_indent(node: &Node) -> u16 {
 mod tests {
     use libmandoc_rs::{Node, NodeFlags, NodeKind};
 
-    use super::{display_indent, layout, paragraph_distance_lines, vertical_distance_lines};
+    use super::{
+        display_indent, horizontal_distance_columns, layout, paragraph_distance_lines,
+        vertical_distance_lines,
+    };
 
     fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         Node {
@@ -202,6 +248,7 @@ mod tests {
             display_kind: None,
             compact: false,
             offset: offset.map(ToOwned::to_owned),
+            width: None,
             table_cells: Vec::new(),
             equation: None,
             children: Vec::new(),
@@ -232,5 +279,15 @@ mod tests {
         assert_eq!(display_indent(&node(NodeKind::Root, None, Some("left"))), 0);
         assert_eq!(display_indent(&node(NodeKind::Root, None, Some("8n"))), 8);
         assert_eq!(layout(3).indent_columns, 3);
+    }
+
+    #[test]
+    fn converts_horizontal_roff_widths_to_terminal_columns() {
+        assert_eq!(horizontal_distance_columns("20"), Some(20));
+        assert_eq!(horizontal_distance_columns("8n"), Some(8));
+        assert_eq!(horizontal_distance_columns("1i"), Some(10));
+        assert_eq!(horizontal_distance_columns("24u"), Some(1));
+        assert_eq!(horizontal_distance_columns("+2n"), None);
+        assert_eq!(horizontal_distance_columns("wide"), None);
     }
 }

@@ -15,8 +15,9 @@ use super::{
         terms_fit_inline,
     },
     layout::{
-        add_leading_spacing, block_indent, display_indent, layout, layout_with_spacing,
-        section_spacing, set_block_spacing, update_paragraph_distance, vertical_distance_lines,
+        add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
+        layout_with_spacing, section_spacing, set_block_spacing, update_paragraph_distance,
+        vertical_distance_lines,
     },
     part_children, source_span,
 };
@@ -123,6 +124,10 @@ fn lower_blocks(
     paragraph_distance: &mut u16,
 ) -> Vec<Block> {
     let mut state = BlockState::new(indent_columns);
+    // man(7) starts each section or relative-indent scope with a seven-column
+    // hanging margin. Explicit `.TP`/`.IP` widths update it for following
+    // tagged paragraphs, exactly as mandoc's terminal renderer does.
+    let mut definition_hanging_width = 7;
 
     for node in nodes {
         if node.macro_name.as_deref() == Some("PD") {
@@ -186,6 +191,7 @@ fn lower_blocks(
                 indent_columns,
                 paragraph_distance,
                 &mut state.output,
+                &mut definition_hanging_width,
             );
         }
     }
@@ -198,6 +204,7 @@ fn lower_structural_node(
     indent_columns: u16,
     paragraph_distance: &mut u16,
     output: &mut Vec<Block>,
+    definition_hanging_width: &mut usize,
 ) {
     match node.macro_name.as_deref() {
         Some("PP" | "P" | "LP" | "HP") => {
@@ -214,41 +221,15 @@ fn lower_structural_node(
             );
             extend_blocks_with_spacing(output, nested, spacing_before);
         }
-        Some("TP") => {
-            let spacing_before = *paragraph_distance;
-            let item = definition_item(node, context, indent_columns, paragraph_distance);
-            append_definition(
-                output,
-                item,
+        Some("TP" | "IP" | "TQ") => {
+            lower_man_definition(
+                node,
+                context,
                 indent_columns,
-                spacing_before,
-                source_span(node),
+                paragraph_distance,
+                output,
+                definition_hanging_width,
             );
-        }
-        Some("IP") => {
-            let spacing_before = *paragraph_distance;
-            let item = definition_item(node, context, indent_columns, paragraph_distance);
-            if is_ip_bullet_item(&item) {
-                append_ip_bullet(
-                    output,
-                    item,
-                    indent_columns,
-                    spacing_before,
-                    source_span(node),
-                );
-            } else {
-                append_definition(
-                    output,
-                    item,
-                    indent_columns,
-                    spacing_before,
-                    source_span(node),
-                );
-            }
-        }
-        Some("TQ") => {
-            let item = definition_item(node, context, indent_columns, paragraph_distance);
-            append_definition(output, item, indent_columns, 0, source_span(node));
         }
         Some("Bl") => {
             let mut block = lower_mdoc_list(node, context, indent_columns, paragraph_distance);
@@ -309,6 +290,45 @@ fn lower_structural_node(
                 paragraph_distance,
             ));
         }
+    }
+}
+
+fn lower_man_definition(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+    output: &mut Vec<Block>,
+    definition_hanging_width: &mut usize,
+) {
+    // Capture the distance before lowering the body: a `.PD` request that
+    // follows this item can live inside libmandoc's block scope and updates
+    // spacing for the *next* item, not the current one.
+    let spacing_before = if node.macro_name.as_deref() == Some("TQ") {
+        0
+    } else {
+        *paragraph_distance
+    };
+    update_man_definition_width(node, definition_hanging_width);
+    let max_width = definition_hanging_width.saturating_sub(1);
+    let item = definition_item(node, context, indent_columns, paragraph_distance, max_width);
+    if node.macro_name.as_deref() == Some("IP") && is_ip_bullet_item(&item) {
+        append_ip_bullet(
+            output,
+            item,
+            indent_columns,
+            spacing_before,
+            source_span(node),
+        );
+    } else {
+        append_definition(
+            output,
+            item,
+            indent_columns,
+            spacing_before,
+            source_span(node),
+            max_width,
+        );
     }
 }
 
@@ -452,10 +472,23 @@ fn lower_mdoc_list(
             .any(|item| !part_children(item, NodeKind::Head).is_empty()));
     let list_indent = indent_columns + display_indent(node);
     if is_definition {
+        let max_term_width = node
+            .width
+            .as_deref()
+            .and_then(horizontal_distance_columns)
+            .unwrap_or(6);
         Block::DefinitionList {
             items: items
                 .into_iter()
-                .map(|item| definition_item(item, context, list_indent, paragraph_distance))
+                .map(|item| {
+                    definition_item(
+                        item,
+                        context,
+                        list_indent,
+                        paragraph_distance,
+                        max_term_width,
+                    )
+                })
                 .collect(),
             compact: node.compact,
             layout: layout(indent_columns),
@@ -492,6 +525,7 @@ fn definition_item(
     context: &LoweringContext<'_>,
     indent_columns: u16,
     paragraph_distance: &mut u16,
+    max_term_width: usize,
 ) -> DefinitionItem {
     let mut term = lower_inline_nodes(visible_definition_head(node), context.default_name);
     if let Some(id) = definition_head_anchor(node, &term) {
@@ -500,7 +534,7 @@ fn definition_item(
     let terms: Vec<Vec<Inline>> = (!term.is_empty()).then_some(term).into_iter().collect();
     DefinitionItem {
         identity: None,
-        inline_term: terms_fit_inline(&terms),
+        inline_term: terms_fit_inline(&terms, max_term_width),
         terms,
         description: lower_blocks(
             part_children(node, NodeKind::Body),
@@ -557,6 +591,7 @@ fn append_definition(
     indent_columns: u16,
     paragraph_distance: u16,
     source: Option<mant_ast::SourceSpan>,
+    max_term_width: usize,
 ) {
     if let Some(Block::DefinitionList { items, compact, .. }) = output
         .last_mut()
@@ -574,7 +609,7 @@ fn append_definition(
             // Once they join the described item, layout must be decided from
             // the complete visible term string rather than the final alias
             // alone.
-            item.inline_term = terms_fit_inline(&item.terms);
+            item.inline_term = terms_fit_inline(&item.terms, max_term_width);
         }
         item.spacing_before_lines = Some(if items.is_empty() {
             0
@@ -597,6 +632,27 @@ fn append_definition(
             source,
         });
     }
+}
+
+fn update_man_definition_width(node: &Node, current_width: &mut usize) {
+    let head = part_children(node, NodeKind::Head);
+    let argument = match node.macro_name.as_deref() {
+        Some("TP" | "TQ") => head
+            .iter()
+            .find(|child| !child.flags.line_start)
+            .and_then(first_node_text),
+        Some("IP") => head.get(1).and_then(first_node_text),
+        _ => None,
+    };
+    if let Some(width) = argument.and_then(horizontal_distance_columns) {
+        *current_width = width;
+    }
+}
+
+fn first_node_text(node: &Node) -> Option<&str> {
+    node.text
+        .as_deref()
+        .or_else(|| node.children.iter().find_map(first_node_text))
 }
 
 /// Append a man(7) `.IP` bullet while the source macro is still known.
@@ -848,9 +904,9 @@ mod tests {
     fn short_terms_hang_inline_but_long_ones_do_not() {
         // Matches man(1): a tag that fits the default hanging indent shares the
         // first description line; wider tags take their own line.
-        assert!(super::terms_fit_inline(&[text("space")]));
-        assert!(super::terms_fit_inline(&[text("* / %")]));
-        assert!(!super::terms_fit_inline(&[text("--listed-incremental")]));
-        assert!(!super::terms_fit_inline(&[]));
+        assert!(super::terms_fit_inline(&[text("space")], 6));
+        assert!(super::terms_fit_inline(&[text("* / %")], 6));
+        assert!(!super::terms_fit_inline(&[text("--listed-incremental")], 6));
+        assert!(!super::terms_fit_inline(&[], 6));
     }
 }

@@ -166,6 +166,35 @@ fn tq_aliases_share_one_definition_and_recompute_its_layout() {
     );
 }
 
+#[test]
+fn explicit_tp_widths_control_layout_and_persist() {
+    let widths = common::definition_items(common::section(document(), "WIDTHS"));
+    let find = |needle: &str| {
+        widths
+            .iter()
+            .find(|item| {
+                item.terms
+                    .iter()
+                    .any(|term| common::inline_text(term) == needle)
+            })
+            .copied()
+            .unwrap_or_else(|| panic!("missing width term {needle:?}"))
+    };
+
+    assert!(
+        find("tenletters").inline_term,
+        "a ten-column term fits a `.TP 20` hanging margin"
+    );
+    assert!(
+        !find("short").inline_term,
+        "a five-column term does not fit a `.TP 3` hanging margin"
+    );
+    assert!(
+        find("xy").inline_term,
+        "a width-less `.TP` inherits the preceding three-column margin"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Text / --format man rendering
 // ---------------------------------------------------------------------------

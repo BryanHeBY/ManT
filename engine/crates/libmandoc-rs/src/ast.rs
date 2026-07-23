@@ -103,6 +103,8 @@ pub struct Node {
     pub display_kind: Option<DisplayKind>,
     pub compact: bool,
     pub offset: Option<String>,
+    /// Normalized mdoc(7) list width, including its roff scale suffix.
+    pub width: Option<String>,
     pub table_cells: Vec<TableCell>,
     pub equation: Option<String>,
     pub children: Vec<Self>,

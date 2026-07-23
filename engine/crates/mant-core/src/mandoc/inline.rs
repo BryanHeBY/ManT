@@ -150,14 +150,11 @@ pub(crate) fn plain_text(nodes: &[Inline]) -> String {
     output
 }
 
-/// man(7) hanging tags no wider than this render inline with the first line of
-/// their description, matching man(1)'s default `.TP`/`.IP` indent; wider tags
-/// take their own line. Computed once in the model so every renderer agrees.
-pub(crate) const INLINE_TERM_MAX_WIDTH: usize = 6;
-
 /// Decide whether a definition item's term(s) hang inline with the first line
 /// of the description, mirroring how renderers join multiple terms with `", "`.
-pub(crate) fn terms_fit_inline(terms: &[Vec<Inline>]) -> bool {
+pub(crate) const DEFAULT_INLINE_TERM_MAX_WIDTH: usize = 6;
+
+pub(crate) fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
     let width = terms
         .iter()
         .map(|term| plain_text(term))
@@ -166,7 +163,7 @@ pub(crate) fn terms_fit_inline(terms: &[Vec<Inline>]) -> bool {
         .trim()
         .chars()
         .count();
-    (1..=INLINE_TERM_MAX_WIDTH).contains(&width)
+    (1..=max_width).contains(&width)
 }
 
 fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {

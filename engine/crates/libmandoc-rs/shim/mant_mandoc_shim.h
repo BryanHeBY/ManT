@@ -90,6 +90,7 @@ int mant_mandoc_node_list_kind(const struct mant_mandoc_node *);
 int mant_mandoc_node_display_kind(const struct mant_mandoc_node *);
 int mant_mandoc_node_compact(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_offset(const struct mant_mandoc_node *);
+const char *mant_mandoc_node_width(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_equation(const struct mant_mandoc_node *);
 const struct mant_mandoc_table_cell *mant_mandoc_node_table_cells(
     const struct mant_mandoc_node *);

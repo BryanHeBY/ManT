@@ -152,7 +152,10 @@ fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
         normalized.push(Block::DefinitionList {
             items: vec![DefinitionItem {
                 identity: None,
-                inline_term: crate::mandoc::inline::terms_fit_inline(&terms),
+                inline_term: crate::mandoc::inline::terms_fit_inline(
+                    &terms,
+                    crate::mandoc::inline::DEFAULT_INLINE_TERM_MAX_WIDTH,
+                ),
                 terms,
                 description,
                 spacing_before_lines: Some(layout.spacing_before_lines),

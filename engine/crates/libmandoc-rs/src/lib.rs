@@ -401,7 +401,7 @@ mod tests {
         fs::write(
             &path,
             ".Dd July 19, 2026\n.Dt NORMALIZED 1\n.Os\n.Sh ITEMS\n\
-             .Bl -enum -compact -offset indent\n.It\nfirst\n.El\n\
+             .Bl -tag -compact -offset indent -width 12n\n.It item\nfirst\n.El\n\
              .Bd -literal -offset indent\ncode line\n.Ed\n",
         )
         .expect("write normalized mdoc source");
@@ -410,9 +410,10 @@ mod tests {
         fs::remove_file(path).expect("remove normalized mdoc source");
 
         let list = find_macro(&document.root, "Bl").expect("normalized list node");
-        assert_eq!(list.list_kind, Some(NormalizedListKind::Ordered));
+        assert_eq!(list.list_kind, Some(NormalizedListKind::Definition));
         assert!(list.compact);
         assert_eq!(list.offset.as_deref(), Some("indent"));
+        assert_eq!(list.width.as_deref(), Some("12n"));
         let display = find_macro(&document.root, "Bd").expect("normalized display node");
         assert_eq!(display.display_kind, Some(DisplayKind::Literal));
         assert_eq!(display.offset.as_deref(), Some("indent"));
