@@ -11,7 +11,7 @@ use mant_ast::{MantDocument, QueryBundle, QueryRequest, QuerySchema, TldrDocumen
 
 use crate::{
     CommandRunner, ManualRequest, SystemCommandRunner, locate_manual_source, parse_groff_html,
-    parse_manual_source, read_cached_tldr_page,
+    parse_manual_source, read_cached_tldr_page, source::push_section_filter,
 };
 
 /// A query cannot produce either authoritative manual content or a quick reference.
@@ -250,11 +250,10 @@ fn render_groff_document_with(
 ) -> Result<MantDocument, String> {
     let mut arguments = vec![OsString::from("-Thtml")];
     if let Some(section) = request.section.as_deref() {
-        // Label the section with `-s`. A bare section operand collides with the
-        // `--` terminator below on man-db (the terminator is parsed as the page
-        // name), so `man -Thtml <section> -- <topic>` fails to resolve.
-        arguments.push(OsString::from("-s"));
-        arguments.push(OsString::from(section));
+        // Label the section with portable `-S`. A bare section operand collides
+        // with the `--` terminator below on man-db (the terminator is parsed as
+        // the page name), while lowercase `-s` is unavailable in BSD man.
+        push_section_filter(&mut arguments, section);
     }
     // Terminate option parsing so a topic beginning with '-' stays a
     // positional operand rather than an option to man.
@@ -623,7 +622,9 @@ mod tests {
             *runner.calls.lock().expect("runner calls lock"),
             [(
                 OsString::from("man"),
-                ["-Thtml", "-s", "1", "--", "tool"].map(OsString::from).to_vec()
+                ["-Thtml", "-S", "1", "--", "tool"]
+                    .map(OsString::from)
+                    .to_vec()
             )]
         );
     }
