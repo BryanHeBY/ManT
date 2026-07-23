@@ -10,6 +10,8 @@ mod common;
 mod fixtures;
 
 mod clang;
+mod gawk;
 mod gcc;
 mod git;
+mod rsync;
 mod tar;

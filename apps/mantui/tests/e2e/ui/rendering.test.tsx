@@ -448,4 +448,49 @@ describe("App rendering (e2e)", () => {
     expect(afterLine).toBe(codeLine + 1);
     setup.renderer.destroy();
   });
+
+  test("renders inline-term definitions on a single row", async () => {
+    const result = mockQuery("gawk", [{
+      id: "operators",
+      title: "OPERATORS",
+      blocks: [{
+        type: "definition-list",
+        items: [
+          {
+            inlineTerm: true,
+            terms: [[text("* / %")]],
+            description: [paragraph("Multiplication, division, and modulus.")],
+          },
+          {
+            inlineTerm: true,
+            terms: [[text("space")]],
+            description: [paragraph("String concatenation.")],
+          },
+          {
+            terms: [[text("--long-option-name")]],
+            description: [paragraph("A lengthy flag that goes on its own line.")],
+          },
+        ],
+        compact: false,
+      }],
+      children: [],
+    }]);
+    const setup = await renderApp(result, { width: 100, height: 30 });
+    const frame = setup.captureCharFrame();
+    const lines = frame.split("\n");
+
+    // inlineTerm=true: term and description share the same line.
+    const mulLine = lines.find((line) => line.includes("* / %"));
+    expect(mulLine).toBeDefined();
+    expect(mulLine).toContain("Multiplication, division, and modulus.");
+
+    const spaceLine = lines.find((line) => line.includes("space") && line.includes("concatenation"));
+    expect(spaceLine).toBeDefined();
+
+    // inlineTerm unset (default false): term on its own line, description below.
+    const longTermLine = lines.find((line) => line.includes("--long-option-name"));
+    expect(longTermLine).toBeDefined();
+    expect(longTermLine).not.toContain("A lengthy flag");
+    setup.renderer.destroy();
+  });
 });

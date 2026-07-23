@@ -697,4 +697,85 @@ mod tests {
         assert!(!output.contains("* / %  "), "got: {output:?}");
         assert!(!output.contains("space  "), "got: {output:?}");
     }
+
+    #[test]
+    fn man_format_keeps_inline_definitions_tight() {
+        let bundle = QueryBundle {
+            schema: QuerySchema::V2,
+            topic: "demo".to_owned(),
+            section: Some("1".to_owned()),
+            manual: Some(MantDocument {
+                schema: DocumentSchema::V2,
+                producer: Producer {
+                    name: "test".to_owned(),
+                    version: "1".to_owned(),
+                    engine: None,
+                },
+                source: DocumentSource {
+                    format: SourceFormat::Man,
+                    path: None,
+                    renderer: None,
+                },
+                meta: DocumentMeta {
+                    section: Some("1".to_owned()),
+                    ..DocumentMeta::default()
+                },
+                diagnostics: Vec::new(),
+                sections: vec![Section {
+                    id: "ops".to_owned(),
+                    title: "OPERATORS".to_owned(),
+                    spacing_before_lines: 0,
+                    blocks: vec![Block::DefinitionList {
+                        compact: false,
+                        layout: LayoutHint::default(),
+                        source: None,
+                        items: vec![
+                            DefinitionItem {
+                                identity: None,
+                                inline_term: true,
+                                terms: vec![vec![Inline::Text {
+                                    value: "&&".to_owned(),
+                                }]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![Inline::Text {
+                                        value: "Logical AND.".to_owned(),
+                                    }],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                                spacing_before_lines: Some(1),
+                            },
+                            DefinitionItem {
+                                identity: None,
+                                inline_term: false,
+                                terms: vec![vec![Inline::Text {
+                                    value: "--long-option-name".to_owned(),
+                                }]],
+                                description: vec![Block::Paragraph {
+                                    children: vec![Inline::Text {
+                                        value: "A lengthy flag.".to_owned(),
+                                    }],
+                                    layout: LayoutHint::default(),
+                                    source: None,
+                                }],
+                                spacing_before_lines: Some(1),
+                            },
+                        ],
+                    }],
+                    children: Vec::new(),
+                    source: None,
+                }],
+            }),
+            tldr: None,
+        };
+
+        let man = render_query_man(&bundle);
+        // inline_term=true in --format man: tight single-space.
+        assert!(man.contains("&& Logical AND."), "got: {man:?}");
+        // inline_term=false in --format man: term on its own line.
+        assert!(
+            man.contains("--long-option-name\n  A lengthy flag."),
+            "got: {man:?}"
+        );
+    }
 }

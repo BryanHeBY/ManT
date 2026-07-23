@@ -1,0 +1,33 @@
+.\" Fixture exercising inline-term decisions, block-term layout, and
+.\" bullet-list normalisation across the full lowering pipeline.
+.TH INLINE-TERMS 1 "2026-07-21" "mant test fixtures"
+.SH NAME
+inline-terms \- exercise definition-list term layout heuristics
+.SH OPERATORS
+.TP
+.B "* / %"
+Multiplication, division, and modulus.
+.TP
+.B "&&"
+Logical AND.
+.TP
+.B space
+String concatenation.
+.TP
+.B "< > <= >= == !="
+The regular relational operators.
+.SH OPTIONS
+.TP
+.B \-\-verbose
+Enable verbose diagnostic output.
+.TP
+.BR \-o " file"
+Write output to
+.IR file .
+.SH EXIT STATUS
+.IP o 4
+Successful completion.
+.IP o 4
+An error occurred.
+.IP o 4
+Bad usage.

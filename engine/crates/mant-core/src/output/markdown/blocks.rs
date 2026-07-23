@@ -94,7 +94,7 @@ fn render_definition_list(
             let description = render_blocks(&item.description, options).join("\n\n");
             let content = match (terms.is_empty(), description.is_empty()) {
                 (false, false) => {
-                    let sep = if is_bullet_term(&terms) { " " } else { "\n" };
+                    let sep = if item.inline_term { " " } else { "\n" };
                     format!("{terms}{sep}{description}")
                 }
                 (false, true) => terms,
@@ -105,14 +105,6 @@ fn render_definition_list(
         })
         .collect::<Vec<_>>();
     join_definition_items(rendered, compact)
-}
-
-/// A single non-word character used as a man(7) bullet (`\u{2022}`, `-`,
-/// `*`, etc.) should be rendered inline with its description rather than
-/// on a separate term line.
-fn is_bullet_term(terms: &str) -> bool {
-    let stripped = terms.trim();
-    !stripped.is_empty() && stripped.chars().all(|c| !c.is_alphanumeric())
 }
 
 /// Preserve a man(7) `.PD` override when one is present, otherwise fall back
