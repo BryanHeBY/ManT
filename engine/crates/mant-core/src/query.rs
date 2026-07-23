@@ -250,6 +250,10 @@ fn render_groff_document_with(
 ) -> Result<MantDocument, String> {
     let mut arguments = vec![OsString::from("-Thtml")];
     if let Some(section) = request.section.as_deref() {
+        // Label the section with `-s`. A bare section operand collides with the
+        // `--` terminator below on man-db (the terminator is parsed as the page
+        // name), so `man -Thtml <section> -- <topic>` fails to resolve.
+        arguments.push(OsString::from("-s"));
         arguments.push(OsString::from(section));
     }
     // Terminate option parsing so a topic beginning with '-' stays a
@@ -619,7 +623,7 @@ mod tests {
             *runner.calls.lock().expect("runner calls lock"),
             [(
                 OsString::from("man"),
-                ["-Thtml", "1", "--", "tool"].map(OsString::from).to_vec()
+                ["-Thtml", "-s", "1", "--", "tool"].map(OsString::from).to_vec()
             )]
         );
     }
