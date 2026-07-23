@@ -90,7 +90,7 @@ fn render_definition_list(
                 .map(|term| render_inline(term, options))
                 .filter(|term| !term.is_empty())
                 .collect::<Vec<_>>()
-                .join("  \n");
+                .join(", ");
             let description = render_blocks(&item.description, options).join("\n\n");
             let content = match (terms.is_empty(), description.is_empty()) {
                 (false, false) => {

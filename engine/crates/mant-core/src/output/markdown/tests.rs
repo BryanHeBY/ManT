@@ -181,7 +181,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     assert!(markdown.contains("**demo** reads *files* with ``a`b``"));
     assert!(markdown.contains("a second line; see <https://example.com/docs>."));
     assert!(markdown.contains("- first item"));
-    assert!(markdown.contains("- **-a**  \n  **--all**"));
+    assert!(markdown.contains("- **-a**, **--all**"));
     assert!(markdown.contains("Show all entries."));
 }
 

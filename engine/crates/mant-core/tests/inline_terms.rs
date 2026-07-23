@@ -144,6 +144,28 @@ fn a_literal_tp_bullet_glyph_remains_a_definition_term() {
     );
 }
 
+#[test]
+fn tq_aliases_share_one_definition_and_recompute_its_layout() {
+    let aliases = common::definition_items(common::section(document(), "ALIASES"));
+    let [item] = aliases.as_slice() else {
+        panic!(
+            "expected one merged alias definition, got {}",
+            aliases.len()
+        );
+    };
+    assert_eq!(
+        item.terms
+            .iter()
+            .map(|term| common::inline_text(term))
+            .collect::<Vec<_>>(),
+        ["-a", "--all"]
+    );
+    assert!(
+        !item.inline_term,
+        "combined '-a, --all' width must not inherit --all's stale layout"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Text / --format man rendering
 // ---------------------------------------------------------------------------
@@ -191,6 +213,10 @@ fn man_format_renders_inline_terms_tight() {
     // No leaked double-space between term and description.
     assert!(!output.contains("* / %  "), "got: {output:?}");
     assert!(!output.contains("space  "), "got: {output:?}");
+    assert!(
+        output.contains("-a, --all\n"),
+        "aliases should use the shared term separator, got: {output:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -212,5 +238,9 @@ fn markdown_renders_inline_terms_on_the_same_line() {
     assert!(
         output.contains("**--verbose**\n"),
         "markdown block term should be on its own line, got: {output:?}"
+    );
+    assert!(
+        output.contains("**-a**, **--all**\n"),
+        "aliases should be comma-separated without a Markdown hard break, got: {output:?}"
     );
 }

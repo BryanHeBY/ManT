@@ -570,6 +570,11 @@ fn append_definition(
             for pending in items.drain(first_pending..) {
                 item.terms.splice(0..0, pending.terms);
             }
+            // `.TQ` aliases are collected as pending, description-less items.
+            // Once they join the described item, layout must be decided from
+            // the complete visible term string rather than the final alias
+            // alone.
+            item.inline_term = terms_fit_inline(&item.terms);
         }
         item.spacing_before_lines = Some(if items.is_empty() {
             0

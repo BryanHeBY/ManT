@@ -246,16 +246,23 @@ export function renderBlockNodes(
                           ? { id: contentAnchorId(item.identity.id) }
                           : {})}
                       >
-                        <text
-                          id={contentSearchId(sectionId, searchPath.term(itemPath, 0))}
-                          fg="#cdd6f4"
-                          wrapMode="word"
-                        >
-                          {item.terms.map((term, termIndex) =>
-                            renderInlineContent(term, `inline-term-${termIndex}`)
-                          )}
-                          {" "}
-                        </text>
+                        {item.terms.map((term, termIndex) => {
+                          const suffix = termIndex + 1 < item.terms.length ? ", " : " ";
+                          return (
+                            <text
+                              key={`inline-term-${termIndex}`}
+                              id={contentSearchId(
+                                sectionId,
+                                searchPath.term(itemPath, termIndex),
+                              )}
+                              fg="#cdd6f4"
+                              wrapMode="word"
+                            >
+                              {renderInlineContent(term, `inline-term-${termIndex}`)}
+                              {suffix}
+                            </text>
+                          );
+                        })}
                         <box flexDirection="column" flexGrow={1}>
                           {renderBlockNodes(
                             item.description,

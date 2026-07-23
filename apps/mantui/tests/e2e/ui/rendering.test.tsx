@@ -467,6 +467,11 @@ describe("App rendering (e2e)", () => {
             description: [paragraph("String concatenation.")],
           },
           {
+            inlineTerm: true,
+            terms: [[text("-a")], [text("--all")]],
+            description: [paragraph("Show all entries.")],
+          },
+          {
             terms: [[text("--long-option-name")]],
             description: [paragraph("A lengthy flag that goes on its own line.")],
           },
@@ -486,6 +491,11 @@ describe("App rendering (e2e)", () => {
 
     const spaceLine = lines.find((line) => line.includes("space") && line.includes("concatenation"));
     expect(spaceLine).toBeDefined();
+
+    const aliasesLine = lines.find((line) =>
+      line.includes("-a, --all") && line.includes("Show all entries.")
+    );
+    expect(aliasesLine).toBeDefined();
 
     // inlineTerm unset (default false): term on its own line, description below.
     const longTermLine = lines.find((line) => line.includes("--long-option-name"));
