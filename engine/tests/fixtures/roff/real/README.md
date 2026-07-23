@@ -17,18 +17,20 @@ the host manual database. Fixed compressed roff sources replace the former
 renderer-specific HTML snapshots, making parser regressions reproducible across
 Linux and macOS while retaining upstream notices embedded in the manuals.
 
-Each distribution directory also contains a `VERIFIED_TOPICS.txt` list of the
-topic/section requests scanned through `mant --force-libmandoc`. Its header
-is the authoritative count for that distribution; the neighbouring README
-records the package provenance and observed parser behaviour.
+Each distribution directory also contains a human-readable
+`VERIFIED_TOPICS.txt` summary of the topic/section requests scanned through
+`mant --force-libmandoc`. Its header records the total scan breadth; the
+neighbouring README records the package provenance and observed parser
+behaviour.
 
 ### `VERIFIED_TOPICS.txt` purpose and principles
 
-These lists exist to show **which upstream packages have actually been exercised**
-by the parser, at what breadth, so a reviewer can see coverage at a glance and
-reproduce any request with a plain `mant <topic> --section <n>` invocation.
+These summaries show **which upstream packages have actually been exercised**
+by the parser and at what breadth, so a reviewer can see corpus diversity at a
+glance and reproduce representative requests with a plain
+`mant <topic> --section <n>` invocation.
 
-The lists follow these principles:
+The summaries follow these principles:
 
 - **Grouped by originating package.** Topics are attributed to the distribution
   package that ships them (resolved from the downloaded package archive), the

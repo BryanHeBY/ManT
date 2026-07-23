@@ -50,7 +50,7 @@ same commit.
 观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
 均完全保真；已知限制见父目录 README。
 
-完整 topic 清单见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
+扫描范围与代表性 topic 见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
 
 | 软件包 | Topics | 备注 |
 | ------ | ------ | ---- |
