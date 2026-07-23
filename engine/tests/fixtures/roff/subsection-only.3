@@ -1,0 +1,14 @@
+.\" Synthetic reproducer: a Pandoc-style page whose only structure is .SS
+.\" subsections with no enclosing .SH. libmandoc parses it, but the lowering
+.\" used to drop every root-level .SS and report "no readable sections".
+.TH "subsection_only" "3" "" "Version 1" "ManT fixture"
+.SS Name
+subsection_only \- a page built only from subsections
+.SS Synopsis
+.EX
+int subsection_only(void);
+.EE
+.SS Description
+Body text that lives directly under a subsection heading.
+.SS Return value
+Returns zero on success or a non-zero value on error.
