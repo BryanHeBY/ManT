@@ -47,6 +47,7 @@ struct QueryExecution {
     force_libmandoc: bool,
     force_groff: bool,
     explain: bool,
+    preserve_anchors: bool,
 }
 
 // ── Host boundary ─────────────────────────────────────────────────────────
@@ -192,6 +193,7 @@ fn execute(
             force_libmandoc,
             force_groff,
             explain,
+            preserve_anchors,
         } => execute_query(
             QueryExecution {
                 source,
@@ -200,6 +202,7 @@ fn execute(
                 force_libmandoc,
                 force_groff,
                 explain,
+                preserve_anchors,
             },
             input,
             diagnostics,
@@ -234,6 +237,7 @@ fn execute_query(
         command.format,
         command.pretty,
         command.explain,
+        command.preserve_anchors,
     )
 }
 
@@ -244,9 +248,10 @@ fn render_query_view(
     format: QueryFormat,
     pretty: bool,
     explain: bool,
+    preserve_anchors: bool,
 ) -> Result<String, Failure> {
     match view {
-        QueryView::Full { .. } => render_full_query(query, format, pretty),
+        QueryView::Full { .. } => render_full_query(query, format, pretty, preserve_anchors),
         QueryView::Outline { detail } => {
             let outline =
                 mant_core::build_outline_with_detail(query, detail).map_err(projection_failure)?;
@@ -264,7 +269,10 @@ fn render_query_view(
                 validate_explanation(&excerpt)?;
             }
             match format {
-                QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown(&excerpt)),
+                QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown_with_options(
+                    &excerpt,
+                    mant_core::MarkdownOptions { preserve_anchors },
+                )),
                 QueryFormat::Text => Ok(mant_core::render_excerpt_text(&excerpt)),
                 QueryFormat::Json => {
                     mant_core::render_excerpt_json(&excerpt, pretty).map_err(Failure::operational)
@@ -346,9 +354,13 @@ fn render_full_query(
     query: &QueryBundle,
     format: QueryFormat,
     pretty: bool,
+    preserve_anchors: bool,
 ) -> Result<String, Failure> {
     match format {
-        QueryFormat::Markdown => Ok(mant_core::render_markdown(query)),
+        QueryFormat::Markdown => Ok(mant_core::render_markdown_with_options(
+            query,
+            mant_core::MarkdownOptions { preserve_anchors },
+        )),
         QueryFormat::Text => Ok(mant_core::render_query_text(query)),
         QueryFormat::Json => {
             mant_core::render_query_json(query, pretty).map_err(Failure::operational)
@@ -800,6 +812,21 @@ mod tests {
         assert_eq!(value["selections"][0]["document"]["title"], "demo");
         assert!(value.get("producer").is_none());
         assert!(value.get("diagnostics").is_none());
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn markdown_is_clean_by_default_and_preserves_anchors_on_request() {
+        let host = FakeHost::with_manual();
+        let (status, output, diagnostics) = invoke(&["demo"], b"", &host);
+        assert_eq!(status, 0);
+        assert!(!output.contains("<a "));
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(&["demo", "--preserve-anchors"], b"", &host);
+        assert_eq!(status, 0);
+        assert!(output.contains("<a id=\"name-1\"></a>"));
+        assert!(output.contains("<a id=\"options-2\"></a>"));
         assert!(diagnostics.is_empty());
     }
 

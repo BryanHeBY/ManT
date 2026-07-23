@@ -2,8 +2,10 @@
 
 use mant_ast::Inline;
 
-pub(super) fn render_inline(children: &[Inline]) -> String {
-    render_inline_raw(children)
+use super::MarkdownOptions;
+
+pub(super) fn render_inline(children: &[Inline], options: MarkdownOptions) -> String {
+    render_inline_raw(children, options)
         .split('\n')
         .map(|line| line.trim_matches([' ', '\t']))
         .filter(|line| !line.is_empty())
@@ -87,33 +89,45 @@ pub(super) fn code_span(value: &str) -> String {
     }
 }
 
-fn render_inline_raw(children: &[Inline]) -> String {
+fn render_inline_raw(children: &[Inline], options: MarkdownOptions) -> String {
     let mut output = String::new();
     for child in children {
         match child {
             Inline::Text { value } => output.push_str(&escape_text(value)),
             Inline::Strong { children } => {
-                output.push_str(&render_styled(children, "**", "__", &output));
+                output.push_str(&render_styled(children, "**", "__", &output, options));
             }
             Inline::Emphasis { children } => {
-                output.push_str(&render_styled(children, "*", "_", &output));
+                output.push_str(&render_styled(children, "*", "_", &output, options));
             }
             Inline::Code { value } => output.push_str(&code_span(value)),
             Inline::ExternalLink {
                 uri,
                 title,
                 children,
-            } => output.push_str(&render_link(uri, title.as_deref(), children)),
+            } => output.push_str(&render_link(uri, title.as_deref(), children, options)),
             Inline::EmailLink { address, children } => {
-                output.push_str(&render_link(&format!("mailto:{address}"), None, children));
+                output.push_str(&render_link(
+                    &format!("mailto:{address}"),
+                    None,
+                    children,
+                    options,
+                ));
             }
             Inline::ManualReference { children, .. } => {
-                output.push_str(&render_inline_raw(children));
+                output.push_str(&render_inline_raw(children, options));
             }
             Inline::SectionReference { target, children } => {
-                output.push_str(&render_link(&format!("#{target}"), None, children));
+                if options.preserve_anchors {
+                    output.push_str(&render_link(&format!("#{target}"), None, children, options));
+                } else {
+                    output.push_str(&render_inline_raw(children, options));
+                }
             }
-            Inline::Anchor { id } => output.push_str(&html_anchor(id)),
+            Inline::Anchor { id } if options.preserve_anchors => {
+                output.push_str(&html_anchor(id));
+            }
+            Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),
         }
     }
@@ -129,8 +143,9 @@ fn render_styled(
     primary_marker: &str,
     alternate_marker: &str,
     preceding: &str,
+    options: MarkdownOptions,
 ) -> String {
-    let rendered = render_inline_raw(children);
+    let rendered = render_inline_raw(children, options);
     let core = rendered.trim_matches([' ', '\t']);
     if core.is_empty() {
         return rendered;
@@ -147,8 +162,13 @@ fn render_styled(
     format!("{leading}{marker}{core}{marker}{trailing}")
 }
 
-fn render_link(target: &str, title: Option<&str>, children: &[Inline]) -> String {
-    let label = render_inline_raw(children);
+fn render_link(
+    target: &str,
+    title: Option<&str>,
+    children: &[Inline],
+    options: MarkdownOptions,
+) -> String {
+    let label = render_inline_raw(children, options);
     if (target.starts_with("http://") || target.starts_with("https://"))
         && flatten_inline(children) == target
         && !target.chars().any(char::is_whitespace)

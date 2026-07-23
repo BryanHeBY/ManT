@@ -13,9 +13,29 @@ use self::{
     inline::{code_span, escape_text},
 };
 
-/// Render a complete query without a process-level trailing newline.
+/// Markdown serialization controls that do not alter the query AST.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MarkdownOptions {
+    /// Emit stable raw-HTML destinations and links for document-local references.
+    pub preserve_anchors: bool,
+}
+
+impl MarkdownOptions {
+    /// Addressable Markdown used by consumers of `mant.markdown/v1`.
+    pub const ADDRESSABLE: Self = Self {
+        preserve_anchors: true,
+    };
+}
+
+/// Render a complete query as clean Markdown without a trailing newline.
 #[must_use]
 pub fn render_markdown(query: &QueryBundle) -> String {
+    render_markdown_with_options(query, MarkdownOptions::default())
+}
+
+/// Render a complete query using explicit presentation-only options.
+#[must_use]
+pub fn render_markdown_with_options(query: &QueryBundle, options: MarkdownOptions) -> String {
     let mut output = Vec::new();
     output.push(heading(1, &query.topic));
 
@@ -27,7 +47,7 @@ pub fn render_markdown(query: &QueryBundle) -> String {
     }
 
     if let Some(manual) = &query.manual {
-        render_sections(&mut output, &manual.sections, 2);
+        render_sections(&mut output, &manual.sections, 2, options);
     }
     output
         .into_iter()
@@ -57,6 +77,15 @@ pub fn render_outline_markdown(outline: &QueryOutline) -> String {
 /// Render selected query nodes with their outline context.
 #[must_use]
 pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
+    render_excerpt_markdown_with_options(excerpt, MarkdownOptions::default())
+}
+
+/// Render selected nodes using explicit presentation-only options.
+#[must_use]
+pub fn render_excerpt_markdown_with_options(
+    excerpt: &QueryExcerpt,
+    options: MarkdownOptions,
+) -> String {
     let mut output = vec![heading(
         1,
         &document_label(&excerpt.topic, excerpt.manual_section.as_deref()),
@@ -69,15 +98,18 @@ pub fn render_excerpt_markdown(excerpt: &QueryExcerpt) -> String {
         match selection {
             ExcerptSelection::Tldr { document, .. } => output.extend(render_tldr(document)),
             ExcerptSelection::ManualSection { section, .. } => {
-                render_sections(&mut output, std::slice::from_ref(section), 2);
+                render_sections(&mut output, std::slice::from_ref(section), 2, options);
             }
             ExcerptSelection::ManualEntry { entry, .. } => {
-                output.extend(render_blocks(&[Block::DefinitionList {
-                    items: vec![entry.clone()],
-                    compact: true,
-                    layout: LayoutHint::default(),
-                    source: None,
-                }]));
+                output.extend(render_blocks(
+                    &[Block::DefinitionList {
+                        items: vec![entry.clone()],
+                        compact: true,
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    options,
+                ));
             }
         }
     }
@@ -144,15 +176,24 @@ fn selection_context(selection: &ExcerptSelection) -> String {
     }
 }
 
-fn render_sections(output: &mut Vec<String>, sections: &[Section], depth: usize) {
+fn render_sections(
+    output: &mut Vec<String>,
+    sections: &[Section],
+    depth: usize,
+    options: MarkdownOptions,
+) {
     for section in sections {
-        output.push(format!(
-            "{}\n\n{}",
-            inline::html_anchor(&section.id),
-            heading(depth, &section.title)
-        ));
-        output.extend(render_blocks(&section.blocks));
-        render_sections(output, &section.children, depth.saturating_add(1));
+        if options.preserve_anchors {
+            output.push(format!(
+                "{}\n\n{}",
+                inline::html_anchor(&section.id),
+                heading(depth, &section.title)
+            ));
+        } else {
+            output.push(heading(depth, &section.title));
+        }
+        output.extend(render_blocks(&section.blocks, options));
+        render_sections(output, &section.children, depth.saturating_add(1), options);
     }
 }
 

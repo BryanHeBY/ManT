@@ -102,6 +102,7 @@ pub(crate) enum Command {
         /// Use the groff HTML compatibility renderer instead of libmandoc.
         force_groff: bool,
         explain: bool,
+        preserve_anchors: bool,
     },
     UpdateTldr {
         pretty: bool,
@@ -340,7 +341,8 @@ struct Cli {
             "protocol_version",
             "schema",
             "format",
-            "compact"
+            "compact",
+            "preserve_anchors"
         ],
         help_heading = "Integration"
     )]
@@ -353,6 +355,14 @@ struct Cli {
     /// Omit JSON indentation. Query output also requires `--format json`.
     #[arg(long, help_heading = "Output")]
     compact: bool,
+
+    /// Preserve raw HTML anchors and document-local links in Markdown output.
+    #[arg(
+        long,
+        conflicts_with_all = ["update_tldr", "protocol_version", "schema", "mcp"],
+        help_heading = "Output"
+    )]
+    preserve_anchors: bool,
 
     /// Print help.
     #[arg(short = 'h', long, action = ArgAction::Help, help_heading = "General")]
@@ -436,6 +446,12 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
             "--compact requires --format json for manual queries",
         ));
     }
+    if parsed.preserve_anchors && format != QueryFormat::Markdown {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--preserve-anchors requires Markdown output",
+        ));
+    }
 
     let source = if parsed.request_json {
         QuerySource::StdinJson
@@ -455,6 +471,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         force_libmandoc: parsed.force_libmandoc,
         force_groff: parsed.force_groff,
         explain,
+        preserve_anchors: parsed.preserve_anchors,
     })
 }
 
@@ -500,8 +517,21 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
+    }
+
+    #[test]
+    fn preserves_markdown_anchors_only_when_requested() {
+        assert!(matches!(
+            parse(&args(&["git", "--preserve-anchors"])).expect("addressable Markdown"),
+            Command::Query {
+                format: QueryFormat::Markdown,
+                preserve_anchors: true,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -528,6 +558,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
     }
@@ -544,6 +575,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
     }
@@ -597,6 +629,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
         assert_eq!(
@@ -616,6 +649,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
         assert_eq!(
@@ -637,6 +671,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
     }
@@ -664,6 +699,7 @@ mod tests {
                     force_libmandoc: false,
                     force_groff: false,
                     explain: true,
+                    preserve_anchors: false,
                 }
             );
         }
@@ -694,6 +730,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
         assert_eq!(
@@ -738,6 +775,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
     }
@@ -767,6 +805,7 @@ mod tests {
         let cases = [
             vec!["git", "--format", "json", "--format", "text"],
             vec!["git", "--compact"],
+            vec!["git", "--preserve-anchors", "--format", "json"],
             vec!["--request-json", "git", "--format", "json"],
             vec!["--request-json", "--section", "1", "--format", "json"],
             vec!["--request-json", "--outline", "--format", "json"],
@@ -786,6 +825,7 @@ mod tests {
             vec!["--mcp", "--format", "json"],
             vec!["--mcp", "--force-groff"],
             vec!["--mcp", "--update-tldr"],
+            vec!["--update-tldr", "--preserve-anchors"],
             vec!["git", "--force-libmandoc", "--force-groff"],
             vec!["--schema", "unknown"],
             vec!["update", "tldr"],
@@ -822,6 +862,7 @@ mod tests {
                 force_libmandoc: false,
                 force_groff: false,
                 explain: false,
+                preserve_anchors: false,
             }
         );
     }

@@ -7,8 +7,10 @@ use mant_ast::{
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
-use super::render_markdown;
-use super::{render_excerpt_markdown, render_outline_markdown};
+use super::{
+    MarkdownOptions, render_excerpt_markdown, render_markdown, render_markdown_with_options,
+    render_outline_markdown,
+};
 use crate::{build_outline, select_excerpt};
 
 fn paragraph(children: Vec<Inline>) -> Block {
@@ -80,7 +82,8 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
     assert!(!markdown.contains("{{[-a|--all]}}"));
     assert!(markdown.contains("**More information:** <https://example.com/manual_page.html>."));
     assert!(markdown.contains("*tldr-pages · CC BY 4.0 · common · en*"));
-    assert!(markdown.contains("\n\n---\n\n<a id=\"name\"></a>\n\n## NAME"));
+    assert!(markdown.contains("\n\n---\n\n## NAME"));
+    assert!(!markdown.contains("<a "));
     assert!(!markdown.ends_with('\n'));
 
     let outline = render_outline_markdown(&build_outline(&query).expect("combined outline"));
@@ -347,10 +350,15 @@ fn renders_the_shared_query_contract_without_leaking_json() {
         markdown.contains("[the project site](https://example.test/ls \"Project documentation\")")
     );
     assert!(markdown.contains("[the documentation team](mailto:docs@example.test)"));
-    assert!(markdown.contains("[OPTIONS](#options-1)"));
-    assert!(markdown.contains("<a id=\"options-1\"></a>\n\n## OPTIONS"));
-    assert!(markdown.contains("<a id=\"all-option\"></a>"));
+    assert!(markdown.contains(", or read OPTIONS"));
+    assert!(!markdown.contains("[OPTIONS](#options-1)"));
+    assert!(!markdown.contains("<a "));
     assert!(!markdown.contains("mant.query/v2"));
+
+    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    assert!(addressable.contains("[OPTIONS](#options-1)"));
+    assert!(addressable.contains("<a id=\"options-1\"></a>\n\n## OPTIONS"));
+    assert!(addressable.contains("<a id=\"all-option\"></a>"));
 }
 
 #[test]

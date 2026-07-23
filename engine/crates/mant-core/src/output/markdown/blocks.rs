@@ -2,15 +2,19 @@
 
 use mant_ast::{Block, DefinitionItem, ListItem, ListKind, TableCell, TableRow};
 
+use super::MarkdownOptions;
 use super::inline::{code_span, escape_text, fenced_code, flatten_inline, render_inline};
 
-pub(super) fn render_blocks(blocks: &[Block]) -> Vec<String> {
-    blocks.iter().filter_map(render_block).collect()
+pub(super) fn render_blocks(blocks: &[Block], options: MarkdownOptions) -> Vec<String> {
+    blocks
+        .iter()
+        .filter_map(|block| render_block(block, options))
+        .collect()
 }
 
-fn render_block(block: &Block) -> Option<String> {
+fn render_block(block: &Block, options: MarkdownOptions) -> Option<String> {
     match block {
-        Block::Paragraph { children, .. } => nonempty(render_inline(children)),
+        Block::Paragraph { children, .. } => nonempty(render_inline(children, options)),
         Block::Preformatted {
             children, language, ..
         } => Some(fenced_code(&flatten_inline(children), language.as_deref())),
@@ -20,8 +24,10 @@ fn render_block(block: &Block) -> Option<String> {
             compact,
             items,
             ..
-        } => render_list(*kind, *start, *compact, items),
-        Block::DefinitionList { items, compact, .. } => render_definition_list(items, *compact),
+        } => render_list(*kind, *start, *compact, items, options),
+        Block::DefinitionList { items, compact, .. } => {
+            render_definition_list(items, *compact, options)
+        }
         Block::Table { rows, .. } => render_table(rows),
         Block::Equation { value, display, .. } => {
             if *display {
@@ -49,6 +55,7 @@ fn render_list(
     start: Option<u64>,
     compact: bool,
     items: &[ListItem],
+    options: MarkdownOptions,
 ) -> Option<String> {
     let rendered = items
         .iter()
@@ -63,24 +70,28 @@ fn render_list(
                 ),
                 ListKind::Bullet | ListKind::Plain => "- ".to_owned(),
             };
-            prefix_item(&render_blocks(&item.blocks).join("\n\n"), &marker)
+            prefix_item(&render_blocks(&item.blocks, options).join("\n\n"), &marker)
         })
         .collect::<Vec<_>>();
     (!rendered.is_empty()).then(|| rendered.join(if compact { "\n" } else { "\n\n" }))
 }
 
-fn render_definition_list(items: &[DefinitionItem], compact: bool) -> Option<String> {
+fn render_definition_list(
+    items: &[DefinitionItem],
+    compact: bool,
+    options: MarkdownOptions,
+) -> Option<String> {
     let rendered = items
         .iter()
         .filter_map(|item| {
             let terms = item
                 .terms
                 .iter()
-                .map(|term| render_inline(term))
+                .map(|term| render_inline(term, options))
                 .filter(|term| !term.is_empty())
                 .collect::<Vec<_>>()
                 .join("  \n");
-            let description = render_blocks(&item.description).join("\n\n");
+            let description = render_blocks(&item.description, options).join("\n\n");
             let content = match (terms.is_empty(), description.is_empty()) {
                 (false, false) => {
                     let sep = if is_bullet_term(&terms) { " " } else { "\n" };

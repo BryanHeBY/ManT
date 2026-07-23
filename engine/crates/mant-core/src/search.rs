@@ -15,7 +15,7 @@ use mant_ast::{
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
 
-use crate::output::render_markdown;
+use crate::output::{MarkdownOptions, render_markdown_with_options};
 
 mod owners;
 
@@ -69,7 +69,7 @@ pub fn search_query(
     request: &SearchQuery,
 ) -> Result<QuerySearch, SearchError> {
     validate_request(request)?;
-    let markdown = render_markdown(query);
+    let markdown = render_markdown_with_options(query, MarkdownOptions::ADDRESSABLE);
     let lines = LineIndex::new(&markdown);
     let owners = OwnerIndex::new(query, &markdown);
     let searchable = SearchableText::new(&markdown, request.scope);

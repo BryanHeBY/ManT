@@ -25,6 +25,7 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("Integration:"));
     assert!(help.contains("-h, --help"));
     assert!(help.contains("--format <FORMAT>"));
+    assert!(help.contains("--preserve-anchors"));
     assert!(help.contains("--update-tldr"));
     assert!(help.contains("--protocol-version"));
     assert!(help.contains("--schema <CONTRACT>"));
