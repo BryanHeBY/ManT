@@ -123,6 +123,27 @@ fn uniform_bullet_markers_are_normalised_to_a_bullet_list() {
     );
 }
 
+#[test]
+fn a_literal_tp_bullet_glyph_remains_a_definition_term() {
+    let operators = common::section(document(), "OPERATORS");
+    let literal = common::definition_items(operators)
+        .into_iter()
+        .find(|item| {
+            item.terms
+                .iter()
+                .any(|term| common::inline_text(term) == "*")
+        })
+        .expect("literal .TP * definition");
+
+    let Block::Paragraph { children, .. } = &literal.description[0] else {
+        panic!("literal term description should be a paragraph");
+    };
+    assert_eq!(
+        common::inline_text(children),
+        "A literal punctuation term from a tagged paragraph."
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Text / --format man rendering
 // ---------------------------------------------------------------------------

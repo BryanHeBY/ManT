@@ -48,105 +48,7 @@ pub(super) fn lower_sections(root: &Node, context: &mut LoweringContext<'_>) -> 
             &mut paragraph_distance,
         ));
     }
-    // Bullet tag lists (`.IP o`) are semantically bullet lists; normalize them
-    // once here so every downstream pass and renderer treats them uniformly.
-    normalize_bullet_definition_lists(&mut sections);
     sections
-}
-
-/// Collapse man `.IP`-style tag lists whose designator is a bullet glyph into
-/// real bullet lists.
-///
-/// A tag list such as `.IP o` uses the character `o` (or `*`, `•`, `-`, …) as a
-/// stand-in bullet, so libmandoc lowers it to a `DefinitionList` whose every
-/// term is that lone glyph. Semantically it is a bullet list. Deciding this
-/// once, in the model, lets every renderer (Markdown, plain text, and the TUI)
-/// emit one consistent bullet instead of each guessing from the term glyph and
-/// disagreeing.
-fn normalize_bullet_definition_lists(sections: &mut [Section]) {
-    for section in sections {
-        normalize_blocks(&mut section.blocks);
-        normalize_bullet_definition_lists(&mut section.children);
-    }
-}
-
-fn normalize_blocks(blocks: &mut [Block]) {
-    for block in blocks {
-        match block {
-            Block::List { items, .. } => {
-                for item in items {
-                    normalize_blocks(&mut item.blocks);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    normalize_blocks(&mut item.description);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter_mut().flat_map(|row| row.cells.iter_mut()) {
-                    normalize_blocks(&mut cell.blocks);
-                }
-            }
-            _ => {}
-        }
-        if let Block::DefinitionList { items, .. } = block
-            && is_bullet_tag_list(items)
-        {
-            let placeholder = Block::VerticalSpace {
-                lines: 0,
-                source: None,
-            };
-            *block = definition_list_into_bullets(std::mem::replace(block, placeholder));
-        }
-    }
-}
-
-fn definition_list_into_bullets(block: Block) -> Block {
-    let Block::DefinitionList {
-        items,
-        compact,
-        layout,
-        source,
-    } = block
-    else {
-        return block;
-    };
-    Block::List {
-        kind: ListKind::Bullet,
-        start: None,
-        compact,
-        items: items
-            .into_iter()
-            .map(|item| ListItem {
-                blocks: item.description,
-            })
-            .collect(),
-        layout,
-        source,
-    }
-}
-
-/// A definition list is a disguised bullet list when it is non-empty and every
-/// item's sole term is the same bullet glyph.
-fn is_bullet_tag_list(items: &[DefinitionItem]) -> bool {
-    let mut designator: Option<String> = None;
-    for item in items {
-        let [term] = item.terms.as_slice() else {
-            return false;
-        };
-        let text = plain_text(term);
-        let text = text.trim();
-        if !is_bullet_glyph(text) {
-            return false;
-        }
-        match &designator {
-            None => designator = Some(text.to_owned()),
-            Some(current) if current == text => {}
-            Some(_) => return false,
-        }
-    }
-    designator.is_some()
 }
 
 fn is_bullet_glyph(text: &str) -> bool {
@@ -312,7 +214,7 @@ fn lower_structural_node(
             );
             extend_blocks_with_spacing(output, nested, spacing_before);
         }
-        Some("TP" | "IP") => {
+        Some("TP") => {
             let spacing_before = *paragraph_distance;
             let item = definition_item(node, context, indent_columns, paragraph_distance);
             append_definition(
@@ -322,6 +224,27 @@ fn lower_structural_node(
                 spacing_before,
                 source_span(node),
             );
+        }
+        Some("IP") => {
+            let spacing_before = *paragraph_distance;
+            let item = definition_item(node, context, indent_columns, paragraph_distance);
+            if is_ip_bullet_item(&item) {
+                append_ip_bullet(
+                    output,
+                    item,
+                    indent_columns,
+                    spacing_before,
+                    source_span(node),
+                );
+            } else {
+                append_definition(
+                    output,
+                    item,
+                    indent_columns,
+                    spacing_before,
+                    source_span(node),
+                );
+            }
         }
         Some("TQ") => {
             let item = definition_item(node, context, indent_columns, paragraph_distance);
@@ -671,6 +594,58 @@ fn append_definition(
     }
 }
 
+/// Append a man(7) `.IP` bullet while the source macro is still known.
+///
+/// Inferring this later from the serialized term text is unsafe: a legitimate
+/// `.TP *` glossary entry looks identical after lowering. Keeping the decision
+/// at this boundary preserves real `.IP o`/`.IP \(bu` lists without erasing
+/// punctuation-only definition terms.
+fn append_ip_bullet(
+    output: &mut Vec<Block>,
+    item: DefinitionItem,
+    indent_columns: u16,
+    paragraph_distance: u16,
+    source: Option<mant_ast::SourceSpan>,
+) {
+    let list_item = ListItem {
+        blocks: item.description,
+    };
+    if let Some(Block::List {
+        kind: ListKind::Bullet,
+        compact,
+        items,
+        ..
+    }) = output
+        .last_mut()
+        .filter(|block| block_indent(block) == Some(indent_columns))
+    {
+        *compact = *compact && paragraph_distance == 0;
+        items.push(list_item);
+        return;
+    }
+
+    let spacing_before_lines = if output.is_empty() {
+        0
+    } else {
+        paragraph_distance
+    };
+    output.push(Block::List {
+        kind: ListKind::Bullet,
+        start: None,
+        compact: paragraph_distance == 0,
+        items: vec![list_item],
+        layout: layout_with_spacing(indent_columns, spacing_before_lines),
+        source,
+    });
+}
+
+fn is_ip_bullet_item(item: &DefinitionItem) -> bool {
+    let [term] = item.terms.as_slice() else {
+        return false;
+    };
+    is_bullet_glyph(plain_text(term).trim())
+}
+
 /// Appends blocks lowered through a transparent roff wrapper.
 ///
 /// Sphinx emits each option as its own `.INDENT`/`.UNINDENT` pair.  mandoc
@@ -831,9 +806,7 @@ fn is_nonprinting_request(node: &Node) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{Block, DefinitionItem, Inline, LayoutHint, ListKind, Section};
-
-    use super::normalize_bullet_definition_lists;
+    use mant_ast::{Block, DefinitionItem, Inline, LayoutHint};
 
     fn text(value: &str) -> Vec<Inline> {
         vec![Inline::Text {
@@ -855,75 +828,15 @@ mod tests {
         }
     }
 
-    fn section_with(block: Block) -> Vec<Section> {
-        vec![Section {
-            id: "s".to_owned(),
-            title: "S".to_owned(),
-            spacing_before_lines: 0,
-            blocks: vec![block],
-            children: Vec::new(),
-            source: None,
-        }]
-    }
-
     #[test]
-    fn uniform_bullet_tag_list_becomes_a_bullet_list() {
-        // `.IP o` repeats `o` as a stand-in bullet on every item; the model
-        // must collapse it into a real bullet list, dropping the `o` marker.
-        let mut sections = section_with(Block::DefinitionList {
-            items: vec![definition("o", "first"), definition("o", "second")],
-            compact: false,
-            layout: LayoutHint::default(),
-            source: None,
-        });
-
-        normalize_bullet_definition_lists(&mut sections);
-
-        match &sections[0].blocks[0] {
-            Block::List { kind, items, .. } => {
-                assert_eq!(*kind, ListKind::Bullet);
-                assert_eq!(items.len(), 2);
-                assert!(matches!(items[0].blocks[0], Block::Paragraph { .. }));
-            }
-            other => panic!("expected a bullet list, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn operator_definition_terms_stay_a_definition_list() {
-        // A glossary of distinct operators (`&&`, `*`) is not a bullet list;
-        // it must stay a definition list so the short tags render inline.
-        let mut sections = section_with(Block::DefinitionList {
-            items: vec![definition("&&", "logical and"), definition("*", "multiply")],
-            compact: false,
-            layout: LayoutHint::default(),
-            source: None,
-        });
-
-        normalize_bullet_definition_lists(&mut sections);
-
-        assert!(matches!(
-            sections[0].blocks[0],
-            Block::DefinitionList { .. }
-        ));
-    }
-
-    #[test]
-    fn tagged_option_list_is_left_untouched() {
-        // Real option tags are alphanumeric and must never be seen as bullets.
-        let mut sections = section_with(Block::DefinitionList {
-            items: vec![definition("-a, --all", "show all")],
-            compact: false,
-            layout: LayoutHint::default(),
-            source: None,
-        });
-
-        normalize_bullet_definition_lists(&mut sections);
-
-        assert!(matches!(
-            sections[0].blocks[0],
-            Block::DefinitionList { .. }
-        ));
+    fn only_single_glyph_definition_terms_are_ip_bullets() {
+        assert!(super::is_ip_bullet_item(&definition("*", "multiply")));
+        assert!(super::is_ip_bullet_item(&definition("o", "item")));
+        assert!(!super::is_ip_bullet_item(&definition("&&", "logical and")));
+        assert!(!super::is_ip_bullet_item(&definition(
+            "-a, --all",
+            "show all"
+        )));
     }
 
     #[test]
