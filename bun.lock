@@ -6,6 +6,7 @@
       "name": "mant",
       "devDependencies": {
         "@types/bun": "latest",
+        "typescript": "5.9.3",
       },
     },
     "apps/mantui": {

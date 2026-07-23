@@ -22,6 +22,7 @@
     "test:e2e": "bun test apps/mantui/tests/e2e"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "5.9.3"
   }
 }
