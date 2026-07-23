@@ -1,22 +1,22 @@
-//! Tests for the `rsync(1)` fixture — EXIT VALUES bullet normalisation
-//! (the regression that motivated the normalisation pass).
+//! Tests for the Arch Linux `rsync(1)` fixture — EXIT VALUES bullet
+//! normalisation (the regression that motivated the normalisation pass).
 
 use crate::common::{self, RSYNC_SECTIONS};
-use crate::fixtures::{fedora44_manual, fedora44_manual_query};
+use crate::fixtures::{archlinux_manual, archlinux_manual_query};
 use mant_ast::Block;
 use mant_core::render_query_man;
 
 /// Section topology: 32 sections from NAME through AUTHOR.
 #[test]
 fn keeps_section_topology() {
-    common::assert_section_topology("fedora44/rsync", fedora44_manual("rsync"), RSYNC_SECTIONS);
+    common::assert_section_topology("archlinux/rsync", archlinux_manual("rsync"), RSYNC_SECTIONS);
 }
 
 /// EXIT VALUES uses `.IP o` markers that must be normalised into a bullet
 /// list rather than a definition list with per-item `o` terms.
 #[test]
 fn exit_values_is_normalised_to_bullet_list() {
-    let doc = fedora44_manual("rsync");
+    let doc = archlinux_manual("rsync");
     let exit = common::section(doc, "EXIT VALUES");
 
     let has_bullet_list = exit.blocks.iter().any(|block| {
@@ -47,7 +47,7 @@ fn exit_values_is_normalised_to_bullet_list() {
 /// The bullet list items contain the expected exit codes.
 #[test]
 fn exit_values_contain_expected_codes() {
-    let doc = fedora44_manual("rsync");
+    let doc = archlinux_manual("rsync");
     let exit = common::section(doc, "EXIT VALUES");
     let text = common::block_slice_text(&exit.blocks);
 
@@ -62,7 +62,7 @@ fn exit_values_contain_expected_codes() {
 /// with per-item `o` terms.
 #[test]
 fn man_format_renders_exit_values_as_bullet_list() {
-    let output = render_query_man(&fedora44_manual_query("rsync"));
+    let output = render_query_man(&archlinux_manual_query("rsync"));
 
     // Should NOT contain "o " as a standalone term line.
     let exit_start = output
@@ -85,14 +85,14 @@ fn man_format_renders_exit_values_as_bullet_list() {
 /// No roff escapes leak.
 #[test]
 fn does_not_leak_roff_markup() {
-    common::assert_document_has_no_source_markup("fedora44/rsync", fedora44_manual("rsync"));
+    common::assert_document_has_no_source_markup("archlinux/rsync", archlinux_manual("rsync"));
 }
 
 /// No duplicate vertical spacing.
 #[test]
 fn does_not_have_duplicate_vertical_spacing() {
     common::assert_no_duplicate_vertical_spacing(
-        &fedora44_manual("rsync").sections,
-        "fedora44/rsync",
+        &archlinux_manual("rsync").sections,
+        "archlinux/rsync",
     );
 }

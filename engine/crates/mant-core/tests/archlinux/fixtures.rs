@@ -12,6 +12,8 @@ static LS: OnceLock<MantDocument> = OnceLock::new();
 static GIT: OnceLock<MantDocument> = OnceLock::new();
 static GCC: OnceLock<MantDocument> = OnceLock::new();
 static CLANG: OnceLock<MantDocument> = OnceLock::new();
+static GAWK: OnceLock<MantDocument> = OnceLock::new();
+static RSYNC: OnceLock<MantDocument> = OnceLock::new();
 static TAR: OnceLock<MantDocument> = OnceLock::new();
 
 pub fn archlinux_manual(name: &str) -> &'static MantDocument {
@@ -20,6 +22,8 @@ pub fn archlinux_manual(name: &str) -> &'static MantDocument {
         "git" => &GIT,
         "gcc" => &GCC,
         "clang" => &CLANG,
+        "gawk" => &GAWK,
+        "rsync" => &RSYNC,
         "tar" => &TAR,
         _ => panic!("unknown Arch Linux fixture {name}"),
     };
@@ -34,8 +38,12 @@ pub fn archlinux_manual_query(name: &str) -> QueryBundle {
 }
 
 pub fn archlinux_fixture_path(name: &str) -> PathBuf {
+    let extension = match name {
+        "gawk" | "rsync" => "zst",
+        _ => "gz",
+    };
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("tests/fixtures/roff/real/archlinux")
-        .join(format!("{name}.1.gz"))
+        .join(format!("{name}.1.{extension}"))
 }

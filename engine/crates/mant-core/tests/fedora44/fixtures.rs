@@ -3,16 +3,12 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_ast::{MantDocument, QueryBundle};
+use mant_ast::MantDocument;
 use mant_core::parse_manual_source;
-
-use crate::common::query_for_document;
 
 static CLANG: OnceLock<MantDocument> = OnceLock::new();
 static GCC: OnceLock<MantDocument> = OnceLock::new();
 static GIT: OnceLock<MantDocument> = OnceLock::new();
-static GAWK: OnceLock<MantDocument> = OnceLock::new();
-static RSYNC: OnceLock<MantDocument> = OnceLock::new();
 static TAR: OnceLock<MantDocument> = OnceLock::new();
 
 pub fn fedora44_manual(name: &str) -> &'static MantDocument {
@@ -20,8 +16,6 @@ pub fn fedora44_manual(name: &str) -> &'static MantDocument {
         "clang" => &CLANG,
         "gcc" => &GCC,
         "git" => &GIT,
-        "gawk" => &GAWK,
-        "rsync" => &RSYNC,
         "tar" => &TAR,
         _ => panic!("unknown Fedora Linux 44 fixture {name}"),
     };
@@ -29,10 +23,6 @@ pub fn fedora44_manual(name: &str) -> &'static MantDocument {
         parse_manual_source(&fedora44_fixture_path(name))
             .unwrap_or_else(|error| panic!("parse Fedora Linux 44 {name} fixture: {error}"))
     })
-}
-
-pub fn fedora44_manual_query(name: &str) -> QueryBundle {
-    query_for_document(name, fedora44_manual(name))
 }
 
 pub fn fedora44_fixture_path(name: &str) -> PathBuf {

@@ -8,7 +8,7 @@ required by the third-party manuals.
 
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
-| [`archlinux/`](archlinux/README.md) | Arch Linux Archive packages pinned on 2026-07-19 | Original `*.1.gz` package members | Direct gzip input and broad real-man regression coverage |
+| [`archlinux/`](archlinux/README.md) | Immutable Arch Linux Archive packages | Original gzip members and two documented lossless zstd recompressions | Direct gzip input, zstd input, and broad real-man regression coverage |
 | [`fedora44/`](fedora44/README.md) | Fedora Linux 44 Everything packages acquired 2026-07-20 | Lossless `*.1.zst` recompressions | zstd decoding and a second current generator corpus |
 | [`debian/`](debian/README.md) | Debian sid binary packages acquired 2026-07-21 | Original `*.{1,7}.gz` package members | Third-distribution gzip input and section-7 macro pages |
 
