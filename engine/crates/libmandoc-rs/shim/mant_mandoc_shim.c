@@ -69,6 +69,16 @@ struct mant_mandoc_document {
 
 static char *source_root;
 static int source_root_strict;
+/*
+ * Directory that literally contains the parsed file, kept unstripped.
+ *
+ * source_root drops a trailing man#/cat# component so a redirect written as
+ * `.so man1/foo.1` resolves against the manual hierarchy root. Some stubs
+ * instead write a bare same-directory target such as `.so last.1`, which must
+ * resolve next to the stub (man1/last.1). Keeping the original directory lets
+ * the include resolver try both bases the way man(1) does.
+ */
+static char *source_dir;
 
 /*
  * Maximum node nesting copied out of libmandoc's tree.
@@ -91,6 +101,7 @@ static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
 static void set_source_root_from_path(const char *);
 static void set_source_root_directory(const char *);
+static int open_under_base(const char *, const char *, int, mode_t);
 static void copy_normalized_data(struct mant_mandoc_node *,
     const struct roff_node *);
 static struct mant_mandoc_table_cell *copy_table_cells(
@@ -208,15 +219,40 @@ cleanup:
 	mchars_free();
 	free(source_root);
 	source_root = NULL;
+	free(source_dir);
+	source_dir = NULL;
 	source_root_strict = 0;
 	return document;
+}
+
+/* Open `path` under `base`, leaving errno describing any failure. */
+static int
+open_under_base(const char *base, const char *path, int flags, mode_t mode)
+{
+	char	*resolved;
+	int	 fd, saved_errno;
+
+	if (base == NULL) {
+		errno = ENOENT;
+		return -1;
+	}
+	resolved = malloc(strlen(base) + strlen(path) + 2);
+	if (resolved == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	sprintf(resolved, "%s/%s", base, path);
+	fd = openat(AT_FDCWD, resolved, flags, mode);
+	saved_errno = errno;
+	free(resolved);
+	errno = saved_errno;
+	return fd;
 }
 
 /* Resolve includes against the original source tree without changing cwd. */
 int
 mant_mandoc_source_open(const char *path, int flags, ...)
 {
-	char		*resolved;
 	int		 fd, saved_errno;
 	mode_t		 mode;
 	va_list		 arguments;
@@ -227,19 +263,26 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 		mode = (mode_t)va_arg(arguments, int);
 		va_end(arguments);
 	}
-	if (*path == '/' || source_root == NULL)
+	if (*path == '/' || (source_root == NULL && source_dir == NULL))
 		return openat(AT_FDCWD, path, flags, mode);
-	resolved = malloc(strlen(source_root) + strlen(path) + 2);
-	if (resolved == NULL) {
-		errno = ENOMEM;
-		return -1;
-	}
-	sprintf(resolved, "%s/%s", source_root, path);
-	fd = openat(AT_FDCWD, resolved, flags, mode);
-	saved_errno = errno;
-	free(resolved);
+
+	/*
+	 * Try the stripped hierarchy root first (`.so man1/foo.1`), then the
+	 * unstripped stub directory (`.so last.1` next to the stub). man(1)
+	 * accepts both spellings, and mparse_open retries each base with a
+	 * `.gz` suffix, so compressed targets resolve without extra handling.
+	 */
+	fd = open_under_base(source_root, path, flags, mode);
 	if (fd != -1)
 		return fd;
+	saved_errno = errno;
+	if (source_dir != NULL &&
+	    (source_root == NULL || strcmp(source_dir, source_root) != 0)) {
+		fd = open_under_base(source_dir, path, flags, mode);
+		if (fd != -1)
+			return fd;
+		saved_errno = errno;
+	}
 	if (source_root_strict) {
 		errno = saved_errno;
 		return -1;
@@ -290,6 +333,8 @@ set_source_root_from_path(const char *path)
 	char	*last_slash, *directory_name;
 
 	free(source_root);
+	free(source_dir);
+	source_dir = NULL;
 	source_root_strict = 0;
 	source_root = copy_string(path);
 	if (source_root == NULL)
@@ -305,6 +350,9 @@ set_source_root_from_path(const char *path)
 	else
 		*last_slash = '\0';
 
+	/* Remember the literal stub directory before stripping man#/cat#. */
+	source_dir = copy_string(source_root);
+
 	directory_name = strrchr(source_root, '/');
 	directory_name = directory_name == NULL ? source_root : directory_name + 1;
 	if (strncmp(directory_name, "man", 3) == 0 ||
@@ -319,6 +367,8 @@ static void
 set_source_root_directory(const char *directory)
 {
 	free(source_root);
+	free(source_dir);
+	source_dir = NULL;
 	source_root_strict = 1;
 	source_root = copy_string(directory);
 }
