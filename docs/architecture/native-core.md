@@ -111,10 +111,13 @@ additional native processes.
 
 For agent clients that speak the Model Context Protocol, `mant --mcp`
 keeps standard output exclusively for JSON-RPC and exposes four generated,
-read-only tools: manual outline, selected content, semantic explanation, and
-search. Their input and output schemas derive directly from Rust types, while
-diagnostics remain on standard error. MCP is an alternate process protocol; it
-does not add another executable or a second document interpretation path.
+read-only document tools: outline, selected content, semantic explanation, and
+search. Their shared `target` field reuses `QueryInput`, so generated schemas
+describe both a manual topic and a local Markdown path without duplicating the
+public input contract. Input and output schemas derive directly from Rust
+types, while diagnostics remain on standard error. MCP is an alternate process
+protocol; it does not add another executable or a second document
+interpretation path.
 
 `mant.request/v3` requires a `schema` marker, one closed `input`, and one
 closed `view`. The input is either a manual topic with an optional section or a

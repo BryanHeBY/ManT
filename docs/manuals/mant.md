@@ -106,7 +106,8 @@ is plain manual content without an external tldr preface.
 - `--mcp`: Serve read-only ManT tools over MCP stdio.
 
 Standard output is reserved for the requested result. Concise diagnostics use
-standard error.
+standard error. MCP tools use a generated `target` union for either a manual
+topic or local Markdown path.
 
 ## Data
 

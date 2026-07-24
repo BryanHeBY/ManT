@@ -142,8 +142,9 @@ mant --mcp
 
 Configure an MCP client with command `mant` and arguments `["--mcp"]`.
 `tools/list` exposes generated input and output JSON Schemas for four tools:
-`mant_manual_outline`, `mant_manual_get`, `mant_manual_explain`, and
-`mant_manual_search`. They return the same versioned ManT projections as the
+`mant_document_outline`, `mant_document_get`, `mant_document_explain`, and
+`mant_document_search`. Their shared `target` accepts either a manual topic or
+a local Markdown path, and they return the same versioned ManT projections as the
 direct CLI. The server has no network transport and no mutation tools; its
 standard output is reserved for MCP JSON-RPC, while diagnostics use standard
 error.

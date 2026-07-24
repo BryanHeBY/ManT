@@ -121,22 +121,12 @@ impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
 
 // ── MCP parameter contracts ──────────────────────────────────────────────
 
-/// Common local-manual selector shared by the outline and projection tools.
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ManualTarget {
-    /// Local manual-page name, for example `tar`, `git`, or `printf`.
-    topic: String,
-    /// Optional manual section such as `1`, `3`, or `3p`.
-    section: Option<String>,
-}
-
 /// Parameters for the hierarchy-discovery tool.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OutlineParams {
-    #[serde(flatten)]
-    target: ManualTarget,
+    /// A local manual topic or Markdown file using the public query-input schema.
+    target: QueryInput,
     /// Include only sections, or include addressable option and command entries.
     detail: Option<OutlineDetail>,
 }
@@ -145,9 +135,9 @@ struct OutlineParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GetParams {
-    #[serde(flatten)]
-    target: ManualTarget,
-    /// Outline paths, stable IDs, or entry aliases returned by `mant_manual_outline`.
+    /// A local manual topic or Markdown file using the public query-input schema.
+    target: QueryInput,
+    /// Outline paths, stable IDs, or entry aliases returned by `mant_document_outline`.
     #[schemars(length(min = 1))]
     nodes: Vec<String>,
 }
@@ -156,8 +146,8 @@ struct GetParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ExplainParams {
-    #[serde(flatten)]
-    target: ManualTarget,
+    /// A local manual topic or Markdown file using the public query-input schema.
+    target: QueryInput,
     /// Option spelling, command name, environment variable, outline path, or stable ID.
     entry: String,
 }
@@ -166,8 +156,8 @@ struct ExplainParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SearchParams {
-    #[serde(flatten)]
-    target: ManualTarget,
+    /// A local manual topic or Markdown file using the public query-input schema.
+    target: QueryInput,
     /// Literal text or a regular expression, depending on `syntax`.
     #[schemars(length(min = 1, max = 4096))]
     pattern: String,
@@ -191,7 +181,7 @@ struct SearchParams {
 
 // ── Query execution ──────────────────────────────────────────────────────
 
-/// A bounded, in-process MCP server for local manual data.
+/// A bounded, in-process MCP server for local structured documents.
 ///
 /// `mant-core` performs filesystem reads and native parser calls synchronously.
 /// The semaphore keeps those costly calls serialized, while `spawn_blocking`
@@ -228,16 +218,16 @@ impl MantMcpServer {
 impl MantMcpServer {
     /// Return a hierarchical tree of sections and optional addressable entries.
     #[tool(
-        name = "mant_manual_outline",
+        name = "mant_document_outline",
         annotations(
-            title = "ManT manual outline",
+            title = "ManT document outline",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
             open_world_hint = false
         )
     )]
-    async fn manual_outline(
+    async fn document_outline(
         &self,
         parameters: Parameters<OutlineParams>,
     ) -> Result<Json<QueryOutline>, String> {
@@ -250,18 +240,18 @@ impl MantMcpServer {
         Ok(Json(outline))
     }
 
-    /// Return complete content for one or more nodes from a manual outline.
+    /// Return complete content for one or more nodes from a document outline.
     #[tool(
-        name = "mant_manual_get",
+        name = "mant_document_get",
         annotations(
-            title = "ManT selected manual content",
+            title = "ManT selected document content",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
             open_world_hint = false
         )
     )]
-    async fn manual_get(
+    async fn document_get(
         &self,
         parameters: Parameters<GetParams>,
     ) -> Result<Json<QueryExcerpt>, String> {
@@ -281,7 +271,7 @@ impl MantMcpServer {
 
     /// Explain exactly one option, command, or environment variable by alias or ID.
     #[tool(
-        name = "mant_manual_explain",
+        name = "mant_document_explain",
         annotations(
             title = "ManT option explanation",
             read_only_hint = true,
@@ -290,7 +280,7 @@ impl MantMcpServer {
             open_world_hint = false
         )
     )]
-    async fn manual_explain(
+    async fn document_explain(
         &self,
         parameters: Parameters<ExplainParams>,
     ) -> Result<Json<QueryExcerpt>, String> {
@@ -315,18 +305,18 @@ impl MantMcpServer {
         }
     }
 
-    /// Search manual text and return exact matching nodes and Markdown coordinates.
+    /// Search document text and return exact matching nodes and Markdown coordinates.
     #[tool(
-        name = "mant_manual_search",
+        name = "mant_document_search",
         annotations(
-            title = "ManT manual search",
+            title = "ManT document search",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
             open_world_hint = false
         )
     )]
-    async fn manual_search(
+    async fn document_search(
         &self,
         parameters: Parameters<SearchParams>,
     ) -> Result<Json<mant_ast::QuerySearch>, String> {
@@ -367,22 +357,28 @@ impl ServerHandler for MantMcpServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("mant", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Query local manual pages only. Start with mant_manual_outline, then use IDs, paths, or aliases with mant_manual_get or mant_manual_explain.",
+                "Query local manual pages or Markdown files. Start with mant_document_outline, then use IDs, paths, or aliases with mant_document_get or mant_document_explain.",
             )
     }
 }
 
 // ── Input validation ─────────────────────────────────────────────────────
 
-fn request_for(target: ManualTarget, view: QueryView) -> Result<QueryRequest, String> {
-    let topic = non_empty(&target.topic, "topic")?;
-    let section = target
-        .section
-        .map(|section| non_empty(&section, "section"))
-        .transpose()?;
+fn request_for(target: QueryInput, view: QueryView) -> Result<QueryRequest, String> {
+    let input = match target {
+        QueryInput::Manual { topic, section } => QueryInput::Manual {
+            topic: non_empty(&topic, "topic")?,
+            section: section
+                .map(|section| non_empty(&section, "section"))
+                .transpose()?,
+        },
+        QueryInput::MarkdownFile { path } => QueryInput::MarkdownFile {
+            path: non_empty(&path, "path")?,
+        },
+    };
     Ok(QueryRequest {
         schema: mant_ast::RequestSchema::V3,
-        input: QueryInput::Manual { topic, section },
+        input,
         view,
     })
 }
@@ -413,7 +409,7 @@ mod tests {
     use super::MantMcpServer;
 
     #[test]
-    fn publishes_only_the_read_only_manual_tools_with_generated_schemas() {
+    fn publishes_only_the_read_only_document_tools_with_generated_schemas() {
         let server = MantMcpServer::new();
         let tools = server.tool_router.list_all();
         let mut names = tools
@@ -425,10 +421,10 @@ mod tests {
         assert_eq!(
             names,
             [
-                "mant_manual_explain",
-                "mant_manual_get",
-                "mant_manual_outline",
-                "mant_manual_search",
+                "mant_document_explain",
+                "mant_document_get",
+                "mant_document_outline",
+                "mant_document_search",
             ]
         );
         for tool in tools {
