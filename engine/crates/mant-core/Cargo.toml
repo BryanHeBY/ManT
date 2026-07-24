@@ -12,8 +12,8 @@ grep-regex.workspace = true
 mant-ast = { path = "../mant-ast" }
 libmandoc-rs = { path = "../libmandoc-rs" }
 pulldown-cmark.workspace = true
-# scraper 0.26 and 0.27 use let-chains stabilized after ManT's Rust 1.88 MSRV.
-scraper = "0.25.0"
+# Keep this explicit so parser upgrades remain visible in dependency reviews.
+scraper = "0.27.0"
 serde.workspace = true
 serde_json.workspace = true
 
