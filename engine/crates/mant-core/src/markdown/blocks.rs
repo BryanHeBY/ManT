@@ -7,7 +7,11 @@ use mant_ast::{
 };
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, Tag, TagEnd};
 
-use super::{EventCursor, inline::parse_inlines, source::MarkdownSource};
+use super::{
+    EventCursor,
+    inline::{parse_inline_run, parse_inlines, starts_inline_run},
+    source::MarkdownSource,
+};
 
 pub(super) fn parse_blocks_until(
     cursor: &mut EventCursor<'_>,
@@ -23,6 +27,18 @@ pub(super) fn parse_blocks_until(
                 end_offset = range.end;
             }
             break;
+        }
+        if let Some((event, range)) = cursor.peek()
+            && starts_inline_run(event)
+        {
+            let start = range.start;
+            let (children, inline_end) = parse_inline_run(cursor, source, diagnostics);
+            blocks.push(Block::Paragraph {
+                children,
+                layout: LayoutHint::default(),
+                source: Some(source.span(&(start..inline_end))),
+            });
+            continue;
         }
         let Some(block) = parse_block(cursor, source, diagnostics) else {
             if cursor.peek().is_none() {

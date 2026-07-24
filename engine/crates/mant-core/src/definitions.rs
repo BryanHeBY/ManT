@@ -260,7 +260,7 @@ fn option_names(item: &DefinitionItem) -> Vec<String> {
     option_names_from_terms(&item.terms)
 }
 
-fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
+pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     let mut names = Vec::new();
     for term in terms {
         let text = plain_text(term);

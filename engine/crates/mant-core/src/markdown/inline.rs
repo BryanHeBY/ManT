@@ -11,13 +11,61 @@ pub(super) fn parse_inlines(
     diagnostics: &mut Vec<Diagnostic>,
     end: TagEnd,
 ) -> (Vec<Inline>, usize) {
+    parse_inline_sequence(cursor, source, diagnostics, Some(end))
+}
+
+/// Parse the inline-only event stream emitted for a tight list item.
+pub(super) fn parse_inline_run(
+    cursor: &mut EventCursor<'_>,
+    source: &MarkdownSource<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> (Vec<Inline>, usize) {
+    parse_inline_sequence(cursor, source, diagnostics, None)
+}
+
+pub(super) fn starts_inline_run(event: &Event<'_>) -> bool {
+    match event {
+        Event::Text(_)
+        | Event::Code(_)
+        | Event::SoftBreak
+        | Event::HardBreak
+        | Event::InlineHtml(_)
+        | Event::Html(_)
+        | Event::InlineMath(_)
+        | Event::DisplayMath(_)
+        | Event::FootnoteReference(_)
+        | Event::TaskListMarker(_) => true,
+        Event::Start(tag) => matches!(
+            tag,
+            Tag::Emphasis
+                | Tag::Strong
+                | Tag::Strikethrough
+                | Tag::Link { .. }
+                | Tag::Image { .. }
+                | Tag::Superscript
+                | Tag::Subscript
+        ),
+        Event::End(_) | Event::Rule => false,
+    }
+}
+
+fn parse_inline_sequence(
+    cursor: &mut EventCursor<'_>,
+    source: &MarkdownSource<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+    expected_end: Option<TagEnd>,
+) -> (Vec<Inline>, usize) {
     let mut output = Vec::new();
     let mut end_offset = source.raw(&(0..0)).len();
 
-    while let Some((event, range)) = cursor.next() {
+    while let Some((event, _)) = cursor.peek() {
+        if expected_end.is_none() && !starts_inline_run(event) {
+            break;
+        }
+        let (event, range) = cursor.next().expect("peeked event remains available");
         end_offset = range.end;
         match event {
-            Event::End(actual) if actual == end => break,
+            Event::End(actual) if Some(actual) == expected_end => break,
             Event::End(_) => {}
             Event::Text(value) => push_text(&mut output, value.into_string()),
             Event::Code(value) => output.push(Inline::Code {

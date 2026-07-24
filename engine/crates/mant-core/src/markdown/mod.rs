@@ -5,6 +5,7 @@
 
 mod blocks;
 mod inline;
+mod options;
 mod source;
 
 #[cfg(test)]
@@ -21,6 +22,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use self::{
     blocks::parse_block,
     inline::{inline_text, parse_inlines},
+    options::normalize_option_lists,
     source::MarkdownSource,
 };
 
@@ -92,6 +94,15 @@ pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDoc
     }
 
     let mut sections = nest_sections(flat_sections);
+    normalize_option_lists(&mut root_blocks);
+    normalize_section_options(&mut sections);
+    let retained_targets = crate::definitions::identify_definitions(
+        &mut sections,
+        &ids.targets.keys().cloned().collect(),
+    );
+    for target in retained_targets {
+        ids.targets.insert(target.clone(), target);
+    }
     resolve_local_links(
         &mut root_blocks,
         &mut sections,
@@ -121,6 +132,13 @@ pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDoc
         diagnostics,
         blocks: root_blocks,
         sections,
+    }
+}
+
+fn normalize_section_options(sections: &mut [Section]) {
+    for section in sections {
+        normalize_option_lists(&mut section.blocks);
+        normalize_section_options(&mut section.children);
     }
 }
 
