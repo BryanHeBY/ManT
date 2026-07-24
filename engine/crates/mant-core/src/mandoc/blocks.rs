@@ -99,6 +99,7 @@ fn lower_section(
     Section {
         id,
         title,
+        role: None,
         spacing_before_lines,
         blocks,
         children,

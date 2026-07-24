@@ -659,6 +659,7 @@ mod tests {
                 ..DocumentMeta::default()
             },
             diagnostics: Vec::new(),
+            blocks: Vec::new(),
             sections: vec![
                 section("name-1", "NAME", "demo - a test", Vec::new()),
                 section(
@@ -726,6 +727,7 @@ mod tests {
         Section {
             id: id.to_owned(),
             title: title.to_owned(),
+            role: None,
             spacing_before_lines: 0,
             blocks: vec![Block::Paragraph {
                 children: vec![Inline::Text {

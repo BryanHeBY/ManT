@@ -506,9 +506,11 @@ mod tests {
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
+                blocks: Vec::new(),
                 sections: vec![Section {
                     id: "options-1".to_owned(),
                     title: "OPTIONS".to_owned(),
+                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         items: vec![DefinitionItem {

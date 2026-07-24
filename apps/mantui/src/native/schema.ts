@@ -91,6 +91,7 @@ export type MantBlock =
 export interface MantSection {
   id: string;
   title: string;
+  role?: "quick-reference";
   spacingBeforeLines?: number;
   blocks: MantBlock[];
   children: MantSection[];
@@ -125,6 +126,7 @@ export interface MantDocument {
     message: string;
     source?: SourceSpan;
   }>;
+  blocks?: MantBlock[];
   sections: MantSection[];
 }
 
@@ -278,6 +280,11 @@ function validateDocument(value: unknown, path: string): asserts value is MantDo
     });
   }
 
+  if (object.blocks !== undefined) {
+    expectArray(object.blocks, `${path}.blocks`).forEach((block, index) => {
+      validateBlock(block, `${path}.blocks[${index}]`);
+    });
+  }
   expectArray(object.sections, `${path}.sections`).forEach((section, index) => {
     validateSection(section, `${path}.sections[${index}]`);
   });
@@ -287,6 +294,9 @@ function validateSection(value: unknown, path: string): asserts value is MantSec
   const object = expectObject(value, path);
   expectString(object.id, `${path}.id`);
   expectString(object.title, `${path}.title`);
+  if (object.role !== undefined) {
+    expectOneOf(object.role, ["quick-reference"], `${path}.role`);
+  }
   expectOptionalNumber(object.spacingBeforeLines, `${path}.spacingBeforeLines`);
   expectArray(object.blocks, `${path}.blocks`).forEach((block, index) => {
     validateBlock(block, `${path}.blocks[${index}]`);
@@ -363,6 +373,8 @@ function validateBlock(value: unknown, path: string): asserts value is MantBlock
       return;
     case "vertical-space":
       expectNumber(object.lines, `${path}.lines`);
+      return;
+    case "thematic-break":
       return;
     case "unsupported":
       expectOptionalString(object.name, `${path}.name`);

@@ -135,7 +135,10 @@ fn resolve_blocks(
                     }
                 }
             }
-            Block::Equation { .. } | Block::VerticalSpace { .. } | Block::Unsupported { .. } => {}
+            Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
         }
     }
 }

@@ -77,6 +77,7 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument 
             alias_target: parsed.metadata.alias_target.clone(),
         },
         diagnostics,
+        blocks: Vec::new(),
         sections,
     }
 }

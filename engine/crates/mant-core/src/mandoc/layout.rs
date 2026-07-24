@@ -75,7 +75,7 @@ pub(super) fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
         | Block::Table { layout, .. }
         | Block::Equation { layout, .. }
         | Block::Unsupported { layout, .. } => Some(layout),
-        Block::VerticalSpace { .. } => None,
+        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
     }
 }
 
@@ -89,7 +89,7 @@ pub(super) fn block_indent(block: &Block) -> Option<u16> {
         | Block::Table { layout, .. }
         | Block::Equation { layout, .. }
         | Block::Unsupported { layout, .. } => Some(layout.indent_columns),
-        Block::VerticalSpace { .. } => None,
+        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
     }
 }
 

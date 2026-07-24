@@ -37,6 +37,7 @@ fn render_block(block: &Block, options: MarkdownOptions) -> Option<String> {
             }
         }
         Block::VerticalSpace { .. } => None,
+        Block::ThematicBreak { .. } => Some("---".to_owned()),
         Block::Unsupported { name, text, .. } => {
             let text = escape_text(text.trim());
             if text.is_empty() {
@@ -192,7 +193,7 @@ fn plain_block(block: &Block) -> Option<String> {
         Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
             nonempty(value.trim().to_owned())
         }
-        Block::VerticalSpace { .. } => None,
+        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
     }
 }
 

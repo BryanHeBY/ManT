@@ -34,8 +34,9 @@ fn render_query_body(query: &QueryBundle, include_tldr: bool) -> String {
     if include_tldr && let Some(tldr) = &query.tldr {
         parts.push(render_tldr_text(tldr));
     }
-    if let Some(manual) = &query.document {
-        parts.push(render_sections(&manual.sections, 0));
+    if let Some(document) = &query.document {
+        parts.push(render_blocks(&document.blocks, 0));
+        parts.push(render_sections(&document.sections, 0));
     }
     join_parts(parts)
 }
@@ -261,6 +262,7 @@ fn render_block(block: &Block, base_indent: usize) -> Option<String> {
         // Vertical space is handled as an inter-block separator in
         // `render_blocks`, never as a standalone rendered block.
         Block::VerticalSpace { .. } => return None,
+        Block::ThematicBreak { .. } => ("---".to_owned(), 0),
     };
     let value = value.trim_matches('\n');
     (!value.trim().is_empty()).then(|| indent_lines(value, base_indent + layout_indent))
@@ -432,14 +434,17 @@ mod tests {
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
+                blocks: Vec::new(),
                 sections: vec![Section {
                     id: "options-1".to_owned(),
                     title: "OPTIONS".to_owned(),
+                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![paragraph("parent details", true)],
                     children: vec![Section {
                         id: "common-2".to_owned(),
                         title: "Common options".to_owned(),
+                        role: None,
                         spacing_before_lines: 1,
                         blocks: vec![paragraph("child details", false)],
                         children: Vec::new(),
@@ -586,9 +591,11 @@ mod tests {
                         ..DocumentMeta::default()
                     },
                     diagnostics: Vec::new(),
+                    blocks: Vec::new(),
                     sections: vec![Section {
                         id: "s-1".to_owned(),
                         title: "S".to_owned(),
+                        role: None,
                         spacing_before_lines: 0,
                         blocks,
                         children: Vec::new(),
@@ -657,9 +664,11 @@ mod tests {
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
+                blocks: Vec::new(),
                 sections: vec![Section {
                     id: "ops".to_owned(),
                     title: "OPERATORS".to_owned(),
+                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         compact: false,
@@ -742,9 +751,11 @@ mod tests {
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
+                blocks: Vec::new(),
                 sections: vec![Section {
                     id: "ops".to_owned(),
                     title: "OPERATORS".to_owned(),
+                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         compact: false,

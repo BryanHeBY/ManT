@@ -403,6 +403,7 @@ fn collect_definition_entries<'a>(blocks: &'a [Block], output: &mut Vec<&'a Defi
             | Block::Preformatted { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
     }
@@ -433,6 +434,7 @@ mod tests {
         Section {
             id: id.to_owned(),
             title: title.to_owned(),
+            role: None,
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children,
@@ -461,6 +463,7 @@ mod tests {
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
+                blocks: Vec::new(),
                 sections: vec![
                     section("name-1", "NAME", Vec::new()),
                     section(

@@ -91,6 +91,7 @@ fn identify_blocks(
             | Block::Preformatted { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
     }
@@ -195,7 +196,7 @@ fn block_indent(block: &Block) -> u16 {
         | Block::Table { layout, .. }
         | Block::Equation { layout, .. }
         | Block::Unsupported { layout, .. } => layout.indent_columns,
-        Block::VerticalSpace { .. } => 0,
+        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => 0,
     }
 }
 
@@ -208,7 +209,7 @@ fn shift_block_indent(block: &mut Block, origin: u16) {
         | Block::Table { layout, .. }
         | Block::Equation { layout, .. }
         | Block::Unsupported { layout, .. } => layout,
-        Block::VerticalSpace { .. } => return,
+        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => return,
     };
     layout.indent_columns = layout.indent_columns.saturating_sub(origin);
 }
@@ -398,6 +399,7 @@ mod tests {
         let mut sections = vec![Section {
             id: "options".to_owned(),
             title: "OPTIONS".to_owned(),
+            role: None,
             spacing_before_lines: 0,
             blocks: vec![
                 paragraph("-v, --version", 0),

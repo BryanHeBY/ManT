@@ -36,6 +36,7 @@ fn manual(sections: Vec<Section>) -> MantDocument {
         },
         meta: DocumentMeta::default(),
         diagnostics: Vec::new(),
+        blocks: Vec::new(),
         sections,
     }
 }
@@ -44,6 +45,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
     Section {
         id: title.to_lowercase(),
         title: title.to_owned(),
+        role: None,
         spacing_before_lines: 0,
         blocks,
         children,

@@ -3,6 +3,7 @@
 mod definitions;
 mod groff_html;
 mod mandoc;
+mod markdown;
 mod output;
 mod projection;
 mod query;
@@ -12,6 +13,7 @@ mod tldr;
 
 pub use groff_html::parse_groff_html;
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
+pub use markdown::parse_markdown;
 pub use output::{
     MarkdownOptions, render_excerpt_json, render_excerpt_markdown,
     render_excerpt_markdown_with_options, render_excerpt_text, render_markdown,

@@ -33,6 +33,7 @@ pub fn parse_groff_html(html: &str, source_path: Option<String>) -> MantDocument
             renderer: Some("man -Thtml".to_owned()),
         },
         meta: DocumentMeta::default(),
+        blocks: Vec::new(),
         diagnostics: Vec::new(),
         sections,
     }
@@ -69,6 +70,7 @@ fn parse_body(body: ElementRef<'_>, sections: &mut Vec<FlatSection>, next_id: &m
                     section: Section {
                         id: format!("groff-section-{}", *next_id),
                         title,
+                        role: None,
                         spacing_before_lines: u16::from(!sections.is_empty()),
                         blocks: Vec::new(),
                         children: Vec::new(),
@@ -117,6 +119,7 @@ fn nest_sections(mut flat: Vec<FlatSection>) -> Vec<Section> {
             Section {
                 id: String::new(),
                 title: String::new(),
+                role: None,
                 spacing_before_lines: 0,
                 blocks: Vec::new(),
                 children: Vec::new(),

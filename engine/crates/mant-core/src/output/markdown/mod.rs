@@ -46,8 +46,9 @@ pub fn render_markdown_with_options(query: &QueryBundle, options: MarkdownOption
         }
     }
 
-    if let Some(manual) = &query.document {
-        render_sections(&mut output, &manual.sections, 2, options);
+    if let Some(document) = &query.document {
+        output.extend(render_blocks(&document.blocks, options));
+        render_sections(&mut output, &document.sections, 2, options);
     }
     output
         .into_iter()

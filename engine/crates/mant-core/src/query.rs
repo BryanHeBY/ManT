@@ -379,10 +379,12 @@ mod tests {
                 })
                 .into_iter()
                 .collect(),
+            blocks: Vec::new(),
             sections: readable
                 .then_some(Section {
                     id: "name-1".to_owned(),
                     title: "NAME".to_owned(),
+                    role: None,
                     spacing_before_lines: 0,
                     blocks: Vec::new(),
                     children: Vec::new(),

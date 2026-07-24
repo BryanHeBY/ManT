@@ -216,6 +216,7 @@ fn collect_entries<'a>(
             | Block::Preformatted { .. }
             | Block::Equation { .. }
             | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
             | Block::Unsupported { .. } => {}
         }
     }

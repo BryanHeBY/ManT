@@ -225,6 +225,7 @@ fn collect_blocks<'a>(blocks: &'a [Block], output: &mut Vec<&'a Block>) {
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
             | Block::Equation { .. }
+            | Block::ThematicBreak { .. }
             | Block::VerticalSpace { .. }
             | Block::Unsupported { .. } => {}
         }
@@ -338,6 +339,7 @@ fn assert_block_spacing_is_normalized(blocks: &[Block], fixture: &str, section_n
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
             | Block::Equation { .. }
+            | Block::ThematicBreak { .. }
             | Block::VerticalSpace { .. }
             | Block::Unsupported { .. } => {}
         }
@@ -353,7 +355,7 @@ fn block_spacing_before(block: &Block) -> u16 {
         | Block::Table { layout, .. }
         | Block::Equation { layout, .. }
         | Block::Unsupported { layout, .. } => layout.spacing_before_lines,
-        Block::VerticalSpace { .. } => 0,
+        Block::ThematicBreak { .. } | Block::VerticalSpace { .. } => 0,
     }
 }
 
@@ -465,6 +467,7 @@ fn find_preformatted<'a>(
             Block::Paragraph { .. }
             | Block::Preformatted { .. }
             | Block::Equation { .. }
+            | Block::ThematicBreak { .. }
             | Block::VerticalSpace { .. }
             | Block::Unsupported { .. } => {}
         }
@@ -578,6 +581,7 @@ fn block_text(block: &Block) -> String {
             .join(" "),
         Block::Equation { value, .. } => value.clone(),
         Block::Unsupported { text, .. } => text.clone(),
+        Block::ThematicBreak { .. } => "---".to_owned(),
         Block::VerticalSpace { .. } => String::new(),
     }
 }
@@ -615,7 +619,10 @@ pub fn visit_block_inlines(block: &Block, visitor: &mut impl FnMut(&Inline)) {
                 }
             }
         }
-        Block::Equation { .. } | Block::VerticalSpace { .. } | Block::Unsupported { .. } => {}
+        Block::Equation { .. }
+        | Block::ThematicBreak { .. }
+        | Block::VerticalSpace { .. }
+        | Block::Unsupported { .. } => {}
     }
 }
 
