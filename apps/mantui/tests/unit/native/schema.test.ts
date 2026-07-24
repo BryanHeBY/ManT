@@ -75,6 +75,25 @@ describe("native query schema", () => {
     });
   });
 
+  test("accepts Markdown root blocks, thematic breaks, and quick-reference sections", async () => {
+    const fixture = JSON.parse(await Bun.file(fixturePath).text());
+    fixture.document.source = { format: "markdown", path: "guide.md" };
+    fixture.document.blocks = [
+      {
+        type: "paragraph",
+        children: [{ type: "text", value: "Document preface." }],
+      },
+      { type: "thematic-break" },
+    ];
+    fixture.document.sections[0].role = "quick-reference";
+
+    const query = decodeMantQuery(JSON.stringify(fixture));
+
+    expect(query.document?.source.format).toBe("markdown");
+    expect(query.document?.blocks?.[1]).toEqual({ type: "thematic-break" });
+    expect(query.document?.sections[0]?.role).toBe("quick-reference");
+  });
+
   test("rejects incompatible schema versions", async () => {
     const fixture = await Bun.file(fixturePath).text();
 

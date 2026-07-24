@@ -11,8 +11,15 @@ import {
 } from "@opentui/core";
 import { createRoot, useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MantQueryBundle, MantSection } from "../native";
-import { TLDR_NAV_ID, contentAnchorId, contentId, navId } from "./ids";
+import type { MantBlock, MantQueryBundle, MantSection } from "../native";
+import { renderBlockNodes } from "./block-content";
+import {
+  DOCUMENT_ROOT_ID,
+  TLDR_NAV_ID,
+  contentAnchorId,
+  contentId,
+  navId,
+} from "./ids";
 import {
   KeyboardHelpDialog,
   MENU_BAR,
@@ -44,13 +51,19 @@ interface AppProps {
 }
 
 const EMPTY_SECTIONS: MantSection[] = [];
+const EMPTY_BLOCKS: MantBlock[] = [];
 
 export function App({ result, onQuit }: AppProps) {
   const sections = result.document?.sections ?? EMPTY_SECTIONS;
+  const rootBlocks = result.document?.blocks ?? EMPTY_BLOCKS;
+  const hasRoot = rootBlocks.length > 0;
+  const hasDocumentContent = hasRoot || sections.length > 0;
   // ── View state and render references ──────────────────────
 
   const [selectedId, setSelectedId] = useState<string>(
-    result.tldr ? TLDR_NAV_ID : sections[0]?.id ?? ""
+    result.tldr
+      ? TLDR_NAV_ID
+      : hasRoot ? DOCUMENT_ROOT_ID : sections[0]?.id ?? ""
   );
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const initial = new Set<string>();
@@ -92,9 +105,10 @@ export function App({ result, onQuit }: AppProps) {
       ...(result.tldr
         ? [{ id: TLDR_NAV_ID, title: "TLDR QUICK REFERENCE" }]
         : []),
+      ...(hasRoot ? [{ id: DOCUMENT_ROOT_ID, title: "OVERVIEW" }] : []),
       ...visibleNodes.map(({ node }) => ({ id: node.id, title: node.title })),
     ],
-    [result.tldr, visibleNodes]
+    [hasRoot, result.tldr, visibleNodes]
   );
   const visibleSectionCount = useMemo(
     () => visibleNodes.filter(({ node }) => node.kind === "section").length,
@@ -125,10 +139,16 @@ export function App({ result, onQuit }: AppProps) {
   };
 
   const selectSearchSection = (sectionId: string) => {
+    if (sectionId === DOCUMENT_ROOT_ID) {
+      setSelectedId(DOCUMENT_ROOT_ID);
+      navScrollRef.current?.scrollChildIntoView(navId(DOCUMENT_ROOT_ID));
+      return;
+    }
     setSelectedId(sectionId);
     navScrollRef.current?.scrollChildIntoView(navId(sectionId));
   };
   const pageSearch = usePageSearch({
+    rootBlocks,
     sections,
     tldr: result.tldr,
     contentScrollRef,
@@ -143,6 +163,7 @@ export function App({ result, onQuit }: AppProps) {
   const scheduleNavigationSync = useDeferredNavigationSync({
     sections,
     hasTldr: Boolean(result.tldr),
+    hasRoot,
     contentScrollRef,
     setSelectedId,
     setExpanded,
@@ -155,7 +176,7 @@ export function App({ result, onQuit }: AppProps) {
   };
 
   const selectNavigationNode = (id: string) => {
-    if (id === TLDR_NAV_ID) {
+    if (id === TLDR_NAV_ID || id === DOCUMENT_ROOT_ID) {
       selectSection(id);
       return;
     }
@@ -502,6 +523,8 @@ export function App({ result, onQuit }: AppProps) {
             scrollRef={navScrollRef}
             onActivateNode={activateSidebarNode}
             onActivateTldr={() => selectSection(TLDR_NAV_ID)}
+            hasRoot={hasRoot}
+            onActivateRoot={() => selectSection(DOCUMENT_ROOT_ID)}
           />
         )}
         <box
@@ -523,12 +546,14 @@ export function App({ result, onQuit }: AppProps) {
           >
             <box flexDirection="column" gap={1}>
               {result.tldr && <TldrQuickReference page={result.tldr} />}
-              {result.tldr && sections.length > 0 && (
+              {result.tldr && hasDocumentContent && (
                 <box height={1} border={["top"]} borderColor="#45475a" paddingLeft={1}>
-                  <text fg="#6c7086">MANUAL</text>
+                  <text fg="#6c7086">
+                    {result.document?.source.format === "markdown" ? "MARKDOWN" : "MANUAL"}
+                  </text>
                 </box>
               )}
-              {result.tldr && sections.length === 0 && (
+              {result.tldr && !hasDocumentContent && (
                 <box
                   backgroundColor="#1e1e2e"
                   border={["top"]}
@@ -539,6 +564,17 @@ export function App({ result, onQuit }: AppProps) {
                   <text fg="#f9e2af" wrapMode="word">
                     No local man page was found; showing the cached tldr quick reference.
                   </text>
+                </box>
+              )}
+              {hasRoot && (
+                <box id={contentId(DOCUMENT_ROOT_ID)} flexDirection="column">
+                  {renderBlockNodes(
+                    rootBlocks,
+                    0,
+                    DOCUMENT_ROOT_ID,
+                    "",
+                    navigateWithinPage,
+                  )}
                 </box>
               )}
               {sections.map((node) => (

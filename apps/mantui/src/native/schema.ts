@@ -86,6 +86,7 @@ export type MantBlock =
   | (BlockBase & { type: "table"; rows: MantTableRow[] })
   | (BlockBase & { type: "equation"; value: string; display?: boolean })
   | { type: "vertical-space"; lines: number; source?: SourceSpan }
+  | { type: "thematic-break"; source?: SourceSpan }
   | (BlockBase & { type: "unsupported"; name?: string; text: string });
 
 export interface MantSection {

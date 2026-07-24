@@ -12,7 +12,12 @@ import type {
   MantSection,
   TldrDocument,
 } from "../native";
-import { contentId, contentSearchId, TLDR_NAV_ID } from "./ids";
+import {
+  contentId,
+  contentSearchId,
+  DOCUMENT_ROOT_ID,
+  TLDR_NAV_ID,
+} from "./ids";
 
 export interface SearchRange {
   start: number;
@@ -159,6 +164,7 @@ function hasInteractiveInline(nodes: MantInline[]): boolean {
 export function buildPageSearchIndex(
   sections: MantSection[],
   tldr: TldrDocument | undefined,
+  rootBlocks: MantBlock[] = [],
 ): PageSearchIndex {
   const records: SearchRecord[] = [];
 
@@ -185,6 +191,14 @@ export function buildPageSearchIndex(
   };
 
   if (tldr) indexTldr(tldr, addRecord);
+  indexBlocks(
+    rootBlocks,
+    DOCUMENT_ROOT_ID,
+    [],
+    "OVERVIEW",
+    "",
+    addRecord,
+  );
 
   const indexSection = (section: MantSection, ancestors: readonly string[]) => {
     const sectionIds = Object.freeze([...ancestors, section.id]);
@@ -313,6 +327,7 @@ function indexBlocks(
         addRecord(block.text, sectionId, sectionIds, title, blockPath);
         break;
       case "vertical-space":
+      case "thematic-break":
         break;
     }
   });

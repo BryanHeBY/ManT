@@ -6,6 +6,9 @@
 /** The synthetic navigation entry rendered before a cached tldr page. */
 export const TLDR_NAV_ID = "tldr-quick-reference";
 
+/** Synthetic navigation target for content preceding the first heading. */
+export const DOCUMENT_ROOT_ID = "document-overview";
+
 export function navId(id: string): string {
   return `nav-${id}`;
 }

@@ -39,7 +39,7 @@ describe("interactive CLI execution", () => {
 
     expect(exitCode).toBe(0);
     expect(queried).toBeFalse();
-    expect(output.stdout[0]).toContain("Usage:\n  mantui <topic>");
+    expect(output.stdout[0]).toContain("Usage:\n  mantui <topic|markdown>");
     expect(output.stderr).toEqual([]);
   });
 
@@ -99,6 +99,26 @@ describe("interactive CLI execution", () => {
       forceGroff: true,
     });
     expect(received).toBe(result);
+    expect(output.stderr).toEqual([]);
+  });
+
+  test("forwards a Markdown path through the closed native request", async () => {
+    const output = captureOutput();
+    let request: NativeQueryRequest | undefined;
+    const exitCode = await runCli(["docs/guide.md"], {
+      ...output.dependencies,
+      isInteractive: () => true,
+      query: async (nativeRequest) => {
+        request = nativeRequest;
+        return result;
+      },
+      runTui: async () => {},
+    });
+
+    expect(exitCode).toBe(0);
+    expect(request).toEqual({
+      input: { kind: "markdown-file", path: "docs/guide.md" },
+    });
     expect(output.stderr).toEqual([]);
   });
 

@@ -44,6 +44,32 @@ function parentTreeResult(): MantQueryBundle {
     }]);
 }
 
+function markdownOverviewResult(): MantQueryBundle {
+  return {
+    schema: "mant.query/v3",
+    label: "guide.md",
+    document: {
+      schema: "mant.document/v3",
+      producer: { name: "mant", version: "0.4.0" },
+      source: { format: "markdown", path: "guide.md" },
+      meta: { title: "Guide" },
+      blocks: [{
+        type: "paragraph",
+        children: [{ type: "text", value: "Overview body." }],
+      }],
+      sections: [{
+        id: "guide",
+        title: "Guide",
+        blocks: [{
+          type: "paragraph",
+          children: [{ type: "text", value: "Guide body." }],
+        }],
+        children: [],
+      }],
+    },
+  };
+}
+
 describe("App navigation (e2e)", () => {
   test("selects a section on mouse click", async () => {
     const setup = await renderApp(mockLsResult);
@@ -214,6 +240,19 @@ describe("App navigation (e2e)", () => {
     await flushKeyboard(setup);
     expect(setup.captureCharFrame()).toContain("› · NAME");
 
+    setup.renderer.destroy();
+  });
+
+  test("moves from a Markdown overview to the first heading", async () => {
+    const setup = await renderApp(markdownOverviewResult());
+
+    expect(setup.captureCharFrame()).toContain("› ◇ OVERVIEW");
+    setup.mockInput.pressKey("j");
+    await flushKeyboard(setup);
+
+    const frame = setup.captureCharFrame();
+    expect(navLines(frame).some((line) => line.includes("› · Guide"))).toBe(true);
+    expect(contentPosition(frame, "Guide").y).toBe(2);
     setup.renderer.destroy();
   });
 

@@ -17,26 +17,24 @@ describe("interactive CLI argument parsing", () => {
   test("parses a topic and optional manual section", () => {
     expect(parseCliArguments(["git"])).toEqual({
       kind: "query",
-      topic: "git",
+      input: { kind: "manual", topic: "git" },
     });
     expect(parseCliArguments(["printf", "--section", " 3p "])).toEqual({
       kind: "query",
-      topic: "printf",
-      section: "3p",
+      input: { kind: "manual", topic: "printf", section: "3p" },
     });
     expect(parseCliArguments(["-s", "1", "git"])).toEqual({
       kind: "query",
-      topic: "git",
-      section: "1",
+      input: { kind: "manual", topic: "git", section: "1" },
     });
     expect(parseCliArguments(["tar", "--force-libmandoc"])).toEqual({
       kind: "query",
-      topic: "tar",
+      input: { kind: "manual", topic: "tar" },
       forceLibmandoc: true,
     });
     expect(parseCliArguments(["tar", "--force-groff"])).toEqual({
       kind: "query",
-      topic: "tar",
+      input: { kind: "manual", topic: "tar" },
       forceGroff: true,
     });
   });
@@ -44,12 +42,25 @@ describe("interactive CLI argument parsing", () => {
   test("joins multi-part topics and honours the option terminator", () => {
     expect(parseCliArguments(["git", "commit"])).toEqual({
       kind: "query",
-      topic: "git commit",
+      input: { kind: "manual", topic: "git commit" },
     });
     expect(parseCliArguments(["--", "--help"])).toEqual({
       kind: "query",
-      topic: "--help",
+      input: { kind: "manual", topic: "--help" },
     });
+  });
+
+  test("recognises local Markdown paths without accepting renderer options", () => {
+    for (const path of ["README.md", "./docs/guide", "docs/reference.markdown"]) {
+      expect(parseCliArguments([path])).toEqual({
+        kind: "query",
+        input: { kind: "markdown-file", path },
+      });
+    }
+    expect(() => parseCliArguments(["README.md", "--section", "1"]))
+      .toThrow("--section applies only to manual topics");
+    expect(() => parseCliArguments(["README.md", "--force-libmandoc"]))
+      .toThrow("manual renderer policies do not apply to Markdown input");
   });
 
   test("routes non-interactive options to mant", () => {

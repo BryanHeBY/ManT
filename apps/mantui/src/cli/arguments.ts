@@ -11,8 +11,9 @@ export type CliCommand =
   | { kind: "help" }
   | {
     kind: "query";
-    topic: string;
-    section?: string;
+    input:
+      | { kind: "manual"; topic: string; section?: string }
+      | { kind: "markdown-file"; path: string };
     forceLibmandoc?: boolean;
     forceGroff?: boolean;
   };
@@ -27,10 +28,10 @@ export class CliUsageError extends Error {
 
 // ── Help text ──────────────────────────────────────────────────────────────
 
-export const CLI_HELP = `ManT — explore local manual pages in a structured terminal UI
+export const CLI_HELP = `ManT — explore local manuals and Markdown in a structured terminal UI
 
 Usage:
-  mantui <topic> [--section <section>] [--force-libmandoc] [--force-groff]
+  mantui <topic|markdown> [--section <section>] [--force-libmandoc] [--force-groff]
   mantui -h, --help
 
 Options:
@@ -42,8 +43,8 @@ Options:
   --                      Treat all remaining arguments as the topic
 
 What ManT provides:
-  Complete manuals with a hierarchy-aware sidebar, in-page references,
-  document search, and optional tldr quick references.
+  Structured documents with a hierarchy-aware sidebar, in-page references,
+  document search, and optional or embedded tldr quick references.
 
 For agents and scripts:
   mant <topic> --outline               Discover sections and options
@@ -53,6 +54,7 @@ For agents and scripts:
 
 Examples:
   mantui git
+  mantui README.md
   mantui printf --section 3
   mantui --force-libmandoc tar`;
 
@@ -96,19 +98,40 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
   // Help stays side-effect free even when another token was supplied.
   if (showHelp) return { kind: "help" };
 
-  const topic = topicParts.join(" ").trim();
-  if (!topic) throw new CliUsageError("a manual topic is required");
+  const value = topicParts.join(" ").trim();
+  if (!value) throw new CliUsageError("a manual topic or Markdown path is required");
   if (forceLibmandoc && forceGroff) {
     throw new CliUsageError("--force-libmandoc and --force-groff cannot be used together");
   }
   if (section !== undefined && !section.trim()) {
     throw new CliUsageError("manual section must not be empty");
   }
+  const markdown = isMarkdownPath(value);
+  if (markdown && section !== undefined) {
+    throw new CliUsageError("--section applies only to manual topics");
+  }
+  if (markdown && (forceLibmandoc || forceGroff)) {
+    throw new CliUsageError("manual renderer policies do not apply to Markdown input");
+  }
   return {
     kind: "query",
-    topic,
-    ...(section === undefined ? {} : { section: section.trim() }),
+    input: markdown
+      ? { kind: "markdown-file", path: value }
+      : {
+          kind: "manual",
+          topic: value,
+          ...(section === undefined ? {} : { section: section.trim() }),
+        },
     ...(forceLibmandoc ? { forceLibmandoc: true } : {}),
     ...(forceGroff ? { forceGroff: true } : {}),
   };
+}
+
+function isMarkdownPath(value: string): boolean {
+  const lower = value.toLocaleLowerCase();
+  return lower.endsWith(".md")
+    || lower.endsWith(".markdown")
+    || value.startsWith(".")
+    || value.includes("/")
+    || value.includes("\\");
 }

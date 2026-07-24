@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { TextAttributes } from "@opentui/core";
-import type { MantSection } from "../../../src/native";
+import type { MantQueryBundle, MantSection } from "../../../src/native";
 import {
   mockLsResult,
   mockLsWithTldrResult,
@@ -79,6 +79,57 @@ function clangDefinitionSections(): MantSection[] {
       children: [],
     }],
   }];
+}
+
+function markdownResult(): MantQueryBundle {
+  return {
+    schema: "mant.query/v3",
+    label: "guide.md",
+    document: {
+      schema: "mant.document/v3",
+      producer: {
+        name: "mant",
+        version: "0.4.0",
+        engine: { name: "pulldown-cmark", version: "0.13.0" },
+      },
+      source: { format: "markdown", path: "guide.md" },
+      meta: { title: "Guide" },
+      blocks: [
+        paragraph("Read this preface before choosing a section."),
+        { type: "thematic-break" },
+      ],
+      sections: [
+        {
+          id: "quick-reference",
+          title: "TLDR Quick Reference",
+          role: "quick-reference",
+          blocks: [paragraph("Run the shortest useful command.")],
+          children: [],
+        },
+        {
+          id: "options",
+          title: "Options",
+          blocks: [{
+            type: "definition-list",
+            compact: true,
+            items: [{
+              identity: {
+                id: "help-option",
+                role: "option",
+                names: ["-h", "--help"],
+              },
+              terms: [[{ type: "code", value: "-h" }, text(", "), {
+                type: "code",
+                value: "--help",
+              }]],
+              description: [paragraph("Show command help.")],
+            }],
+          }],
+          children: [],
+        },
+      ],
+    },
+  };
 }
 
 describe("App rendering (e2e)", () => {
@@ -320,6 +371,21 @@ describe("App rendering (e2e)", () => {
     setup.renderer.destroy();
   });
 
+  test("renders Markdown overview content and embedded quick-reference sections", async () => {
+    const setup = await renderApp(markdownResult(), { width: 100, height: 28 });
+    const frame = setup.captureCharFrame();
+
+    expect(frame).toContain("MARKDOWN · guide.md");
+    expect(navLines(frame).some((line) => line.includes("› ◇ OVERVIEW"))).toBe(true);
+    expect(navLines(frame).some((line) => line.includes("◇ TLDR Quick Reference"))).toBe(true);
+    expect(frame).toContain("Read this preface before choosing a section.");
+    expect(frame).toContain("◆ TLDR Quick Reference");
+    expect(frame).toContain("Run the shortest useful command.");
+    expect(frame).toContain("-h, --help");
+    expect(frame).toContain("Show command help.");
+    setup.renderer.destroy();
+  });
+
   test("produces a non-empty frame with menu and compact status bars", async () => {
     const setup = await renderApp(mockLsResult);
     const frame = setup.captureCharFrame();
@@ -329,7 +395,7 @@ describe("App rendering (e2e)", () => {
       expect(frame.split("\n")[0]).toContain(label);
     }
     expect(frame).toContain("1/3 · NAME");
-    expect(frame).toContain("3 visible manual sections");
+    expect(frame).toContain("3 visible sections");
     setup.renderer.destroy();
   });
 

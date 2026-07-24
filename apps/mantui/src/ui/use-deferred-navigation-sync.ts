@@ -9,7 +9,7 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import type { MantSection } from "../native";
-import { TLDR_NAV_ID, contentId } from "./ids";
+import { DOCUMENT_ROOT_ID, TLDR_NAV_ID, contentId } from "./ids";
 import { findNodePath, sectionIdsInDocumentOrder } from "./navigation-tree";
 
 const NAVIGATION_SYNC_DELAY_MS = 180;
@@ -17,6 +17,7 @@ const NAVIGATION_SYNC_DELAY_MS = 180;
 export interface DeferredNavigationSyncOptions {
   sections: MantSection[];
   hasTldr: boolean;
+  hasRoot: boolean;
   contentScrollRef: { current: ScrollBoxRenderable | null };
   setSelectedId: Dispatch<SetStateAction<string>>;
   setExpanded: Dispatch<SetStateAction<Set<string>>>;
@@ -26,6 +27,7 @@ export interface DeferredNavigationSyncOptions {
 export function useDeferredNavigationSync({
   sections,
   hasTldr,
+  hasRoot,
   contentScrollRef,
   setSelectedId,
   setExpanded,
@@ -34,9 +36,10 @@ export function useDeferredNavigationSync({
   const sectionIds = useMemo(
     () => [
       ...(hasTldr ? [TLDR_NAV_ID] : []),
+      ...(hasRoot ? [DOCUMENT_ROOT_ID] : []),
       ...sectionIdsInDocumentOrder(sections),
     ],
-    [hasTldr, sections],
+    [hasRoot, hasTldr, sections],
   );
 
   const sync = useCallback(() => {
@@ -56,7 +59,7 @@ export function useDeferredNavigationSync({
     setSelectedId((current) => (current === activeId ? current : activeId));
 
     // Scrolling to a folded child must reveal its complete ancestry.
-    if (activeId === TLDR_NAV_ID) return;
+    if (activeId === TLDR_NAV_ID || activeId === DOCUMENT_ROOT_ID) return;
     const path = findNodePath(sections, activeId);
     if (!path) return;
     setExpanded((current) => {

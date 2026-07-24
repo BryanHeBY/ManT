@@ -24,14 +24,25 @@ function SectionContentView({
   headingIndent = 0,
   onNavigateInternal,
 }: SectionContentProps) {
+  const quickReference = node.role === "quick-reference";
   return (
     <box
       flexDirection="column"
       gap={0}
       paddingTop={Math.max(0, Math.floor(node.spacingBeforeLines ?? 0))}
+      {...(quickReference
+        ? {
+            backgroundColor: "#1d1a2b",
+            border: ["left"] as const,
+            borderColor: "#cba6f7",
+            paddingRight: 1,
+          }
+        : {})}
     >
       <box paddingLeft={headingIndent}>
-        <text id={contentId(node.id)} fg="#94e2d5"><b>{node.title}</b></text>
+        <text id={contentId(node.id)} fg={quickReference ? "#cba6f7" : "#94e2d5"}>
+          <b>{quickReference ? `◆ ${node.title}` : node.title}</b>
+        </text>
       </box>
       {renderBlockNodes(node.blocks, baseIndent, node.id, "", onNavigateInternal)}
       <box flexDirection="column" gap={0}>

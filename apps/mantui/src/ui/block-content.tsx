@@ -13,13 +13,13 @@ import { Pre } from "./Pre";
 import { searchPath, visibleInlineSegments } from "./search";
 
 function layoutIndent(block: MantBlock): number {
-  return block.type === "vertical-space"
+  return block.type === "vertical-space" || block.type === "thematic-break"
     ? 0
     : block.layout?.indentColumns ?? 0;
 }
 
 function layoutSpacing(block: MantBlock): number {
-  return block.type === "vertical-space"
+  return block.type === "vertical-space" || block.type === "thematic-break"
     ? 0
     : Math.max(0, Math.floor(block.layout?.spacingBeforeLines ?? 0));
 }
@@ -361,6 +361,18 @@ export function renderBlockNodes(
         flushInline();
         result.push(
           <box key={`space-${keyCounter++}`} height={Math.max(1, Math.floor(block.lines))} />,
+        );
+        break;
+
+      case "thematic-break":
+        flushInline();
+        result.push(
+          <box
+            key={`thematic-break-${keyCounter++}`}
+            height={1}
+            border={["top"]}
+            borderColor="#45475a"
+          />,
         );
         break;
     }

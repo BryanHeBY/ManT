@@ -8,7 +8,7 @@
 
 import { type BaseRenderable, type InputRenderable, type ScrollBoxRenderable, TextRenderable } from "@opentui/core";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MantSection, TldrDocument } from "../native";
+import type { MantBlock, MantSection, TldrDocument } from "../native";
 import { buildPageSearchIndex, queryPageSearchIndex, type SearchMatch } from "./search";
 import {
   applyActiveSearchHighlight,
@@ -29,6 +29,7 @@ interface ScrollReference {
 }
 
 export interface PageSearchOptions {
+  rootBlocks: MantBlock[];
   sections: MantSection[];
   tldr: TldrDocument | undefined;
   contentScrollRef: ScrollReference;
@@ -82,6 +83,7 @@ function matchVisualRow(renderable: TextRenderable, match: SearchMatch): number 
 
 /** Build, decorate, and navigate one immutable manual-page search index. */
 export function usePageSearch({
+  rootBlocks,
   sections,
   tldr,
   contentScrollRef,
@@ -99,8 +101,8 @@ export function usePageSearch({
   const searchTargetTextsRef = useRef<Map<string, TextRenderable>>(new Map());
   const activeHighlightedTextRef = useRef<TextRenderable | null>(null);
   const pageSearchIndex = useMemo(
-    () => buildPageSearchIndex(sections, tldr),
-    [sections, tldr],
+    () => buildPageSearchIndex(sections, tldr, rootBlocks),
+    [rootBlocks, sections, tldr],
   );
 
   const clearAllDecorations = () => {

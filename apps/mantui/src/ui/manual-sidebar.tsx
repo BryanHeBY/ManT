@@ -7,7 +7,7 @@
 
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { MantQueryBundle } from "../native";
-import { navId, TLDR_NAV_ID } from "./ids";
+import { DOCUMENT_ROOT_ID, navId, TLDR_NAV_ID } from "./ids";
 import {
   terminalColumnWidth,
   treeContinuationPrefix,
@@ -25,12 +25,15 @@ export interface ManualSidebarProps {
   scrollRef: { current: ScrollBoxRenderable | null };
   onActivateNode: (id: string, hasChildren: boolean) => void;
   onActivateTldr: () => void;
+  hasRoot: boolean;
+  onActivateRoot: () => void;
 }
 
 function navigationTitleColor(flatNode: FlatNode, selected: boolean): string {
   if (selected) return "#f5e0dc";
   if (flatNode.node.kind === "entry-group") return "#f9e2af";
   if (flatNode.node.kind === "option") return "#a6e3a1";
+  if (flatNode.node.role === "quick-reference") return "#cba6f7";
   if (flatNode.depth === 0) return "#cdd6f4";
   if (flatNode.depth === 1) return "#89b4fa";
   return "#a6adc8";
@@ -46,6 +49,8 @@ export function ManualSidebar({
   scrollRef,
   onActivateNode,
   onActivateTldr,
+  hasRoot,
+  onActivateRoot,
 }: ManualSidebarProps) {
   const visibleDocumentSections = visibleNodes.filter(
     ({ node }) => node.kind === "section",
@@ -62,10 +67,10 @@ export function ManualSidebar({
         borderColor="#313244"
       >
         <text height={1} fg="#cdd6f4" truncate wrapMode="none" selectable={false}>
-          {`MANUAL · ${result.label}`}
+          {`${result.document?.source.format === "markdown" ? "MARKDOWN" : "MANUAL"} · ${result.label}`}
         </text>
         <text height={1} fg="#7f849c" selectable={false}>
-          {`${result.document?.sections.length ?? 0} top-level · ${visibleDocumentSections} manual${result.tldr ? " · TLDR" : ""}`}
+          {`${result.document?.sections.length ?? 0} top-level · ${visibleDocumentSections} sections${result.tldr ? " · TLDR" : ""}`}
         </text>
       </box>
       <box height={1} paddingLeft={1} paddingRight={1}>
@@ -104,6 +109,26 @@ export function ManualSidebar({
             </text>
           </box>
         )}
+        {hasRoot && (
+          <box
+            id={navId(DOCUMENT_ROOT_ID)}
+            width="100%"
+            height={1}
+            flexShrink={0}
+            paddingLeft={1}
+            backgroundColor={selectedId === DOCUMENT_ROOT_ID ? "#313244" : "#11111b"}
+            onMouseDown={onActivateRoot}
+          >
+            <text truncate wrapMode="none" selectable={false}>
+              <span fg={selectedId === DOCUMENT_ROOT_ID ? "#fab387" : "#6c7086"}>
+                {selectedId === DOCUMENT_ROOT_ID ? "› ◇ " : "  ◇ "}
+              </span>
+              <span fg={selectedId === DOCUMENT_ROOT_ID ? "#f5e0dc" : "#bac2de"}>
+                OVERVIEW
+              </span>
+            </text>
+          </box>
+        )}
         {/* Each selected row owns one background box per wrapped line. This
             avoids fragment-level highlights that leave tree connectors bare. */}
         {visibleNodes.map((flatNode) => {
@@ -112,7 +137,7 @@ export function ManualSidebar({
           const titleColor = navigationTitleColor(flatNode, isSelected);
           const disclosure = hasChildren
             ? expanded.has(node.id) ? "▾ " : "▸ "
-            : node.kind === "option" ? "◇ " : "· ";
+            : node.kind === "option" || node.role === "quick-reference" ? "◇ " : "· ";
           const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
           const selectedTitleLines = isSelected
             ? wrapNavigationTitle(node.title, width - 1 - terminalColumnWidth(labelPrefix))
@@ -130,7 +155,11 @@ export function ManualSidebar({
               flexDirection={isSelected ? "column" : "row"}
               flexShrink={0}
               paddingLeft={1}
-              backgroundColor={isSelected ? "#313244" : "#11111b"}
+              backgroundColor={
+                isSelected
+                  ? "#313244"
+                  : node.role === "quick-reference" ? "#1d1a2b" : "#11111b"
+              }
             >
               {isSelected ? selectedTitleLines.map((line, index) => {
                 const prefix = index === 0

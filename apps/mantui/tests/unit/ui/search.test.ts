@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { MantSection } from "../../../src/native";
+import type { MantBlock, MantSection } from "../../../src/native";
 import {
   buildPageSearchIndex,
   queryPageSearchIndex,
@@ -42,6 +42,28 @@ const sections: MantSection[] = [{
 }];
 
 describe("page search index", () => {
+  test("indexes Markdown content before the first heading as the document overview", () => {
+    const rootBlocks: MantBlock[] = [
+      paragraphBlock("Preface needle."),
+      { type: "thematic-break" },
+      paragraphBlock("After the divider."),
+    ];
+    const index = buildPageSearchIndex([], undefined, rootBlocks);
+    const [match] = queryPageSearchIndex(index, "needle");
+
+    expect(index.records.map((record) => record.text)).toEqual([
+      "Preface needle.",
+      "After the divider.",
+    ]);
+    expect(match).toMatchObject({
+      sectionId: "document-overview",
+      sectionPath: [],
+      title: "OVERVIEW",
+      targetPath: "block-0",
+      range: { start: 8, end: 14 },
+    });
+  });
+
   test("builds frozen leaf records instead of aggregate definition-list records", () => {
     const index = buildPageSearchIndex(sections, undefined);
 
@@ -218,3 +240,10 @@ describe("page search index", () => {
       .toBe("block-0.inline-1");
   });
 });
+
+function paragraphBlock(value: string): MantBlock {
+  return {
+    type: "paragraph",
+    children: [{ type: "text", value }],
+  };
+}
