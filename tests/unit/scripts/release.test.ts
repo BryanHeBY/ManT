@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
+  RELEASE_MANUALS,
   releaseVersionFromManifests,
   runTar,
   versionFromReleaseTag,
@@ -95,6 +96,20 @@ example = "9"
       tui,
       `[workspace.package]\nversion = "0.4.0"\n`,
     )).toThrow("engine/Cargo.toml=0.4.0");
+  });
+});
+
+describe("release documentation", () => {
+  test("ships both self-hosted Markdown manuals at the archive root", async () => {
+    expect(RELEASE_MANUALS.map(({ destination }) => destination)).toEqual([
+      "mant.md",
+      "mantui.md",
+    ]);
+    for (const manual of RELEASE_MANUALS) {
+      expect(
+        await Bun.file(join(import.meta.dir, "../../..", manual.source)).exists(),
+      ).toBe(true);
+    }
   });
 });
 

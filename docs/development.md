@@ -63,6 +63,7 @@ scripts/                     Local build, compiler selection, packaging, and dev
 tests/contracts/             Cross-language JSON contract fixtures (read by Rust and TS)
 tests/unit/scripts/          Bun tests for the orchestration scripts
 docs/architecture/           Design decisions and stable-boundary documentation
+docs/manuals/                Self-hosted Markdown manuals shipped in releases
 docs/assets/                 README screenshots and other documentation assets
 ```
 
@@ -79,6 +80,10 @@ rendering. Fixed real roff sources in `engine/tests/fixtures/roff/real/` are
 covered by native integration tests; their provenance and licenses are documented in
 that directory. Bun tests cover the process protocol, schema validation, and
 the terminal UI's rendering, search, and navigation behavior.
+
+The files under `docs/manuals/` are executable documentation. Native tests
+parse both through the supported Markdown subset, require their embedded quick
+references and semantic options, and reject any lossy fallback diagnostic.
 
 `libmandoc-rs` also has a self-contained package test boundary: its parser,
 compression, include-policy, diagnostic, and optional `serde` tests must pass

@@ -5,9 +5,10 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 ManT makes local Unix manual pages easier to explore for people and easier to
-query for software. It presents the complete page in a **responsive terminal UI**,
-then exposes the same structured document through the **`mant` CLI and MCP
-server for agents and scripts**.
+query for software. It also accepts local Markdown, lowering both sources into
+one structured document model. Read the complete document in a **responsive
+terminal UI**, or query it through the **`mant` CLI and MCP server for agents
+and scripts**.
 
 ![ManT displaying a tldr quick reference and the structured man(1) page](docs/assets/screenshots/mant-man.png)
 
@@ -15,12 +16,13 @@ server for agents and scripts**.
 
 | Tool | Best for | Highlights |
 | --- | --- | --- |
-| `mantui` | Reading in a terminal | Complete manual, hierarchy-aware sidebar, in-page links, search, and optional tldr quick reference |
+| `mantui` | Reading in a terminal | Complete manuals and Markdown, hierarchy-aware sidebar, in-page links, search, and tldr quick references |
 | `mant` | Agents and automation | Markdown, text, JSON, generated schemas, semantic option lookups, location-aware search, and MCP stdio |
 
-Both tools parse local `man` and `mdoc` sources with bundled libmandoc. A
-system `mandoc` installation is not required. If an installed `tldr` client has
-data for the topic, ManT puts that quick reference before the manual.
+Both tools parse local `man` and `mdoc` sources with bundled libmandoc and
+support a deliberately structured Markdown subset. A system `mandoc`
+installation is not required. If an installed `tldr` client has data for a
+manual topic, ManT puts that quick reference before the manual.
 
 ## Install
 
@@ -38,7 +40,8 @@ install -Dm755 mantui mant -t ~/.local/bin
 
 `mantui` locates its companion CLI through `MANT_PATH` first and then
 `PATH`, so keep `mantui` and `mant` together when installing from an archive.
-The release archive includes the relevant bundled-parser license and a SHA-256
+The release archive includes `mant.md` and `mantui.md` for immediate
+self-hosted browsing, plus the relevant bundled-parser license. A SHA-256
 checksum is published alongside it.
 
 ### Build from source
@@ -63,11 +66,14 @@ automatically.
 mantui git
 mantui printf --section 3
 mantui tar
+mantui README.md
 ```
 
-The UI always shows the complete manual. Its sidebar mirrors nested sections,
-can reveal normalized command-line options on demand, follows page-local
-references, and synchronizes with the reading position after scrolling settles.
+The UI always shows the complete document. Its sidebar mirrors nested
+sections, can reveal normalized command-line options on demand, follows
+page-local references, and synchronizes with the reading position after
+scrolling settles. An embedded `TLDR Quick Reference` Markdown heading keeps
+the quick-reference presentation without creating a separate side document.
 Use `mantui -h` for the focused interactive command reference.
 
 ## Query manuals from agents and scripts
@@ -76,17 +82,21 @@ Direct content queries default to Markdown:
 
 ```sh
 mant git
+mant README.md
+cat guide.md | mant -
 mant printf --section 3 --format text
 mant git --format json --compact
 ```
 
-Discover a document before retrieving only the content you need. Paths are
-one-based; `0` is reserved for an available tldr quick reference.
+Discover a document before retrieving only the content you need. Heading paths
+are one-based; `0` is reserved for an available external tldr quick reference,
+while Markdown content before the first heading is addressable as `root`.
 
 ```sh
 mant gcc --outline
 mant gcc --outline sections
 mant tar --node acls --format markdown
+mant README.md --node root
 mant gcc --node 4.2 --node 4.7 --format json
 ```
 
@@ -159,6 +169,8 @@ native response boundary.
 
 ## Documentation
 
+- [mant self manual](docs/manuals/mant.md)
+- [mantui self manual](docs/manuals/mantui.md)
 - [Native architecture and protocol](docs/architecture/native-core.md)
 - [Development guide and repository map](docs/development.md)
 - [Maintainer release procedure](docs/releasing.md)

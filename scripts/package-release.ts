@@ -27,6 +27,12 @@ const cargoManifest = join(root, "engine", "Cargo.toml");
 
 const RELEASE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
 
+/** Markdown manuals shipped beside the executables for immediate self-hosting. */
+export const RELEASE_MANUALS = [
+  { source: "docs/manuals/mant.md", destination: "mant.md" },
+  { source: "docs/manuals/mantui.md", destination: "mantui.md" },
+] as const;
+
 /** Validate a release tag and return its package version. */
 export function versionFromReleaseTag(tag: string): string {
   const match = RELEASE_TAG_PATTERN.exec(tag);
@@ -210,6 +216,9 @@ export async function packageRelease(
   try {
     await copyExecutable(join(distDirectory, "mantui"), join(packageDirectory, "mantui"));
     await copyExecutable(join(distDirectory, "mant"), join(packageDirectory, "mant"));
+    for (const manual of RELEASE_MANUALS) {
+      await copyFile(join(root, manual.source), join(packageDirectory, manual.destination));
+    }
     await copyFile(join(root, "README.md"), join(packageDirectory, "README.md"));
     await copyFile(join(root, "LICENSE"), join(packageDirectory, "LICENSE"));
     await copyFile(
