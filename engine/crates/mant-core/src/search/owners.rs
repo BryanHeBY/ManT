@@ -8,7 +8,10 @@ use mant_ast::{
     Block, DefinitionItem, QueryBundle, SearchNode, SearchSectionReference, Section, SourceSpan,
 };
 
-use crate::output::html_anchor;
+use crate::{
+    output::html_anchor,
+    projection::{DOCUMENT_ROOT_ID, DOCUMENT_ROOT_PATH, DOCUMENT_ROOT_TITLE},
+};
 
 #[derive(Clone)]
 pub(super) struct Owner {
@@ -24,6 +27,7 @@ pub(super) struct OwnerIndex {
     sections: Vec<Owner>,
     entries: Vec<Owner>,
     entry_prefix_max_end: Vec<usize>,
+    root: Option<Owner>,
     tldr: Option<Owner>,
 }
 
@@ -31,6 +35,7 @@ impl OwnerIndex {
     pub(super) fn new(query: &QueryBundle, markdown: &str) -> Self {
         let mut sections = Vec::new();
         let mut entries = Vec::new();
+        let mut root = None;
         if let Some(manual) = &query.document {
             collect_section_owners(&manual.sections, &[], markdown, &mut sections, &mut entries);
             sections.sort_by_key(|owner| owner.start);
@@ -53,12 +58,33 @@ impl OwnerIndex {
                 }
             }
             entries.sort_by_key(|owner| owner.start);
+            if !manual.blocks.is_empty() {
+                let anchor = html_anchor(DOCUMENT_ROOT_ID);
+                if let Some(start) = markdown.find(&anchor) {
+                    root = Some(Owner {
+                        start,
+                        end: sections
+                            .first()
+                            .map_or(markdown.len(), |section| section.start),
+                        node: SearchNode::DocumentRoot {
+                            path: DOCUMENT_ROOT_PATH.to_owned(),
+                            id: DOCUMENT_ROOT_ID.to_owned(),
+                            title: DOCUMENT_ROOT_TITLE.to_owned(),
+                        },
+                        section: None,
+                        source: None,
+                    });
+                }
+            }
         }
-        let manual_start = sections.first().map_or(markdown.len(), |owner| owner.start);
+        let document_start = root.as_ref().map_or_else(
+            || sections.first().map_or(markdown.len(), |owner| owner.start),
+            |owner| owner.start,
+        );
         let tldr = query.tldr.as_ref().and_then(|_| {
             markdown.find("## TLDR").map(|start| Owner {
                 start,
-                end: manual_start,
+                end: document_start,
                 node: SearchNode::Tldr {
                     path: "0".to_owned(),
                     id: "tldr".to_owned(),
@@ -80,6 +106,7 @@ impl OwnerIndex {
             sections,
             entries,
             entry_prefix_max_end,
+            root,
             tldr,
         }
     }
@@ -95,6 +122,13 @@ impl OwnerIndex {
             .filter(|owner| offset < owner.end)
         {
             return Some(section);
+        }
+        if let Some(root) = self
+            .root
+            .as_ref()
+            .filter(|owner| owner.start <= offset && offset < owner.end)
+        {
+            return Some(root);
         }
         self.tldr
             .as_ref()

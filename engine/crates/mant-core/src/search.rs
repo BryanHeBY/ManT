@@ -606,6 +606,31 @@ mod tests {
     }
 
     #[test]
+    fn root_content_search_resolves_to_an_addressable_document_root() {
+        let mut query = query();
+        let document = query.document.as_mut().expect("document");
+        document.source.format = SourceFormat::Markdown;
+        document.blocks.push(Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "Read the preface needle first.".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        });
+
+        let result = search_query(&query, &request("preface needle")).expect("root search");
+
+        assert_eq!(result.total, 1);
+        assert!(matches!(
+            &result.matches[0].node,
+            mant_ast::SearchNode::DocumentRoot { path, id, .. }
+                if path == "root" && id == "document-overview"
+        ));
+        assert!(result.matches[0].section.is_none());
+        assert!(result.matches[0].preview.contains("preface needle"));
+    }
+
+    #[test]
     fn regex_case_and_pagination_are_reported_without_losing_global_ordinals() {
         let mut request = request("ACLS|control");
         request.syntax = SearchSyntax::Regex;

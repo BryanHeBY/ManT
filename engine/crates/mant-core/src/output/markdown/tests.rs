@@ -100,6 +100,38 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
 }
 
 #[test]
+fn renders_and_selects_content_before_the_first_heading() {
+    let mut document = manual(vec![section("GUIDE", Vec::new(), Vec::new())]);
+    document.source.format = SourceFormat::Markdown;
+    document.blocks = vec![paragraph(vec![Inline::Text {
+        value: "Document preface.".to_owned(),
+    }])];
+    let query = QueryBundle {
+        schema: QuerySchema::V3,
+        label: "guide.md".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("# guide.md\n\nDocument preface.\n\n## GUIDE"));
+    assert!(!markdown.contains("<a "));
+
+    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
+    assert!(addressable.contains("<a id=\"document-overview\"></a>\n\nDocument preface."));
+
+    let outline = build_outline(&query).expect("Markdown outline");
+    assert_eq!(outline.nodes[0].path(), "root");
+    assert_eq!(outline.nodes[1].path(), "1");
+
+    let excerpt = select_excerpt(&query, &["root".to_owned()]).expect("root excerpt");
+    let excerpt = render_excerpt_markdown(&excerpt);
+    assert!(excerpt.contains("*Outline `root`: OVERVIEW*"));
+    assert!(excerpt.contains("Document preface."));
+    assert!(!excerpt.contains("## GUIDE"));
+}
+
+#[test]
 fn preserves_inline_lists_definitions_and_nested_headings() {
     let rich_paragraph = paragraph(vec![
         Inline::Strong {

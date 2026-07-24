@@ -158,6 +158,11 @@ pub enum SearchNode {
         id: String,
         title: String,
     },
+    DocumentRoot {
+        path: String,
+        id: String,
+        title: String,
+    },
     DocumentSection {
         path: String,
         id: String,
@@ -177,6 +182,7 @@ impl SearchNode {
     pub fn path(&self) -> &str {
         match self {
             Self::Tldr { path, .. }
+            | Self::DocumentRoot { path, .. }
             | Self::DocumentSection { path, .. }
             | Self::DocumentEntry { path, .. } => path,
         }
@@ -186,6 +192,7 @@ impl SearchNode {
     pub fn title(&self) -> &str {
         match self {
             Self::Tldr { title, .. }
+            | Self::DocumentRoot { title, .. }
             | Self::DocumentSection { title, .. }
             | Self::DocumentEntry { title, .. } => title,
         }

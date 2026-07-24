@@ -10,6 +10,9 @@ use mant_ast::{
 const TLDR_PATH: &str = "0";
 const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
+pub(crate) const DOCUMENT_ROOT_PATH: &str = "root";
+pub(crate) const DOCUMENT_ROOT_ID: &str = "document-overview";
+pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 
 /// Failure to derive an addressable view from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +75,13 @@ pub fn build_outline_with_detail(
         });
     }
     if let Some(manual) = &query.document {
+        if !manual.blocks.is_empty() {
+            nodes.push(OutlineNode::DocumentRoot {
+                path: DOCUMENT_ROOT_PATH.to_owned(),
+                id: DOCUMENT_ROOT_ID.to_owned(),
+                title: DOCUMENT_ROOT_TITLE.to_owned(),
+            });
+        }
         nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
     Ok(QueryOutline {
@@ -90,7 +100,7 @@ pub fn build_outline_with_detail(
     })
 }
 
-/// Select tldr or complete manual section subtrees by outline path or ID.
+/// Select tldr, document-root content, or complete section subtrees by path or ID.
 ///
 /// Duplicate selections and descendants of another selected node are omitted.
 /// The result always follows source order, independent of argument order.
@@ -116,6 +126,7 @@ pub fn select_excerpt(
     }
 
     let mut tldr_selected = false;
+    let mut document_root_selected = false;
     let mut selected_ids = HashSet::new();
     let mut selected = Vec::new();
     for raw_selector in selectors {
@@ -125,6 +136,15 @@ pub fn select_excerpt(
         }
         if matches!(selector, TLDR_PATH | TLDR_ID) && query.tldr.is_some() {
             tldr_selected = true;
+            continue;
+        }
+        if matches!(selector, DOCUMENT_ROOT_PATH | DOCUMENT_ROOT_ID)
+            && query
+                .document
+                .as_ref()
+                .is_some_and(|document| !document.blocks.is_empty())
+        {
+            document_root_selected = true;
             continue;
         }
         let candidate = located
@@ -156,7 +176,7 @@ pub fn select_excerpt(
     });
     selected.sort_by_key(|candidate| candidate.order());
 
-    let document = if selected.is_empty() {
+    let document = if selected.is_empty() && !document_root_selected {
         None
     } else {
         query.document.as_ref()
@@ -168,6 +188,14 @@ pub fn select_excerpt(
             id: TLDR_ID.to_owned(),
             title: TLDR_TITLE.to_owned(),
             document,
+        });
+    }
+    if let (true, Some(document)) = (document_root_selected, query.document.as_ref()) {
+        selections.push(ExcerptSelection::DocumentRoot {
+            path: DOCUMENT_ROOT_PATH.to_owned(),
+            id: DOCUMENT_ROOT_ID.to_owned(),
+            title: DOCUMENT_ROOT_TITLE.to_owned(),
+            blocks: document.blocks.clone(),
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
@@ -424,8 +452,9 @@ fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        DocumentMeta, DocumentSchema, DocumentSource, ExcerptSelection, MantDocument, OutlineNode,
-        Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
+        Block, DocumentMeta, DocumentSchema, DocumentSource, ExcerptSelection, Inline, LayoutHint,
+        MantDocument, OutlineNode, Producer, QueryBundle, QuerySchema, Section, SourceFormat,
+        TldrDocument,
     };
 
     use super::{ProjectionError, build_outline, select_excerpt};
@@ -525,6 +554,41 @@ mod tests {
     }
 
     #[test]
+    fn addresses_document_content_before_the_first_heading_as_root() {
+        let mut query = query();
+        let document = query.document.as_mut().expect("document");
+        document.source.format = SourceFormat::Markdown;
+        document.blocks.push(Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "Document preface.".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        });
+
+        let outline = build_outline(&query).expect("Markdown outline");
+        assert!(matches!(
+            &outline.nodes[0],
+            OutlineNode::DocumentRoot { path, id, title }
+                if path == "root" && id == "document-overview" && title == "OVERVIEW"
+        ));
+        // Heading paths remain stable and independent from the synthetic root.
+        assert_eq!(outline.nodes[1].path(), "1");
+
+        let excerpt = select_excerpt(&query, &["document-overview".to_owned(), "root".to_owned()])
+            .expect("root excerpt");
+        assert!(matches!(
+            excerpt.selections.as_slice(),
+            [ExcerptSelection::DocumentRoot { path, blocks, .. }]
+                if path == "root" && blocks.len() == 1
+        ));
+        assert_eq!(
+            excerpt.source.as_ref().map(|source| source.format),
+            Some(SourceFormat::Markdown)
+        );
+    }
+
+    #[test]
     fn selects_paths_or_ids_in_source_order_and_suppresses_descendant_duplicates() {
         let excerpt = select_excerpt(
             &query(),
@@ -542,6 +606,7 @@ mod tests {
             .iter()
             .map(|selection| match selection {
                 ExcerptSelection::Tldr { path, .. }
+                | ExcerptSelection::DocumentRoot { path, .. }
                 | ExcerptSelection::DocumentSection { path, .. }
                 | ExcerptSelection::DocumentEntry { path, .. } => path.as_str(),
             })

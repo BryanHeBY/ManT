@@ -89,6 +89,15 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
 fn render_selection(selection: &ExcerptSelection) -> String {
     match selection {
         ExcerptSelection::Tldr { document, .. } => render_tldr_text(document),
+        ExcerptSelection::DocumentRoot {
+            path,
+            title,
+            blocks,
+            ..
+        } => join_parts(vec![
+            format!("Outline {path}: {title}"),
+            render_blocks(blocks, 0),
+        ]),
         ExcerptSelection::DocumentSection {
             path,
             title,

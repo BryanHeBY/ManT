@@ -219,6 +219,50 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     assert_eq!(value["document"]["source"]["format"], "markdown");
 }
 
+#[test]
+fn markdown_root_content_is_discoverable_selectable_and_searchable() {
+    let path = std::env::temp_dir().join(format!(
+        "mant-markdown-root-process-{}.md",
+        std::process::id()
+    ));
+    fs::write(
+        &path,
+        "Read the preface needle first.\n\n# Guide\n\nSection body.\n",
+    )
+    .expect("write Markdown fixture");
+    let path = path.to_str().expect("UTF-8 path");
+
+    let run_json = |arguments: &[&str]| {
+        let output = Command::new(executable())
+            .args(arguments)
+            .args(["--format", "json", "--compact"])
+            .output()
+            .expect("query Markdown projection");
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stderr.is_empty());
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).expect("projection JSON")
+    };
+
+    let outline = run_json(&[path, "--outline=sections"]);
+    assert_eq!(outline["nodes"][0]["kind"], "document-root");
+    assert_eq!(outline["nodes"][0]["path"], "root");
+    assert_eq!(outline["nodes"][1]["kind"], "document-section");
+
+    let excerpt = run_json(&[path, "--node", "root"]);
+    assert_eq!(excerpt["selections"][0]["kind"], "document-root");
+    assert_eq!(
+        excerpt["selections"][0]["blocks"][0]["children"][0]["value"],
+        "Read the preface needle first."
+    );
+
+    let search = run_json(&[path, "--search", "preface needle"]);
+    assert_eq!(search["total"], 1);
+    assert_eq!(search["matches"][0]["node"]["kind"], "document-root");
+    assert_eq!(search["matches"][0]["node"]["path"], "root");
+
+    fs::remove_file(path).expect("remove Markdown fixture");
+}
+
 fn markdown_fixture_path() -> PathBuf {
     std::env::temp_dir().join(format!("mant-markdown-process-{}.md", std::process::id()))
 }

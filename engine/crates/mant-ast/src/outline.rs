@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta, DocumentSource, Producer, Section,
-    TldrDocument,
+    Block, DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta, DocumentSource, Producer,
+    Section, TldrDocument,
 };
 
 /// Exact schema marker for a query outline response.
@@ -51,6 +51,12 @@ pub enum OutlineNode {
         id: String,
         title: String,
     },
+    /// Addressable document content that precedes the first heading.
+    DocumentRoot {
+        path: String,
+        id: String,
+        title: String,
+    },
     DocumentSection {
         path: String,
         id: String,
@@ -71,6 +77,7 @@ impl OutlineNode {
     pub fn path(&self) -> &str {
         match self {
             Self::Tldr { path, .. }
+            | Self::DocumentRoot { path, .. }
             | Self::DocumentSection { path, .. }
             | Self::DocumentEntry { path, .. } => path,
         }
@@ -80,6 +87,7 @@ impl OutlineNode {
     pub fn id(&self) -> &str {
         match self {
             Self::Tldr { id, .. }
+            | Self::DocumentRoot { id, .. }
             | Self::DocumentSection { id, .. }
             | Self::DocumentEntry { id, .. } => id,
         }
@@ -89,6 +97,7 @@ impl OutlineNode {
     pub fn title(&self) -> &str {
         match self {
             Self::Tldr { title, .. }
+            | Self::DocumentRoot { title, .. }
             | Self::DocumentSection { title, .. }
             | Self::DocumentEntry { title, .. } => title,
         }
@@ -98,7 +107,7 @@ impl OutlineNode {
     pub fn children(&self) -> &[Self] {
         match self {
             Self::DocumentSection { children, .. } => children,
-            Self::Tldr { .. } | Self::DocumentEntry { .. } => &[],
+            Self::Tldr { .. } | Self::DocumentRoot { .. } | Self::DocumentEntry { .. } => &[],
         }
     }
 }
@@ -142,6 +151,13 @@ pub enum ExcerptSelection {
         id: String,
         title: String,
         document: TldrDocument,
+    },
+    /// Complete document content that appears before the first heading.
+    DocumentRoot {
+        path: String,
+        id: String,
+        title: String,
+        blocks: Vec<Block>,
     },
     /// Complete selected document node, including all descendant sections.
     DocumentSection {

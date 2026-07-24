@@ -12,6 +12,7 @@ use self::{
     blocks::render_blocks,
     inline::{code_span, escape_text},
 };
+use crate::projection::DOCUMENT_ROOT_ID;
 
 /// Markdown serialization controls that do not alter the query AST.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -47,6 +48,9 @@ pub fn render_markdown_with_options(query: &QueryBundle, options: MarkdownOption
     }
 
     if let Some(document) = &query.document {
+        if options.preserve_anchors && !document.blocks.is_empty() {
+            output.push(inline::html_anchor(DOCUMENT_ROOT_ID));
+        }
         output.extend(render_blocks(&document.blocks, options));
         render_sections(&mut output, &document.sections, 2, options);
     }
@@ -103,6 +107,9 @@ pub fn render_excerpt_markdown_with_options(
         output.push(selection_context(selection));
         match selection {
             ExcerptSelection::Tldr { document, .. } => output.extend(render_tldr(document)),
+            ExcerptSelection::DocumentRoot { blocks, .. } => {
+                output.extend(render_blocks(blocks, options));
+            }
             ExcerptSelection::DocumentSection { section, .. } => {
                 render_sections(&mut output, std::slice::from_ref(section), 2, options);
             }
@@ -148,7 +155,8 @@ fn outline_list(nodes: &[OutlineNode], depth: usize) -> String {
 
 fn selection_context(selection: &ExcerptSelection) -> String {
     match selection {
-        ExcerptSelection::Tldr { path, title, .. } => {
+        ExcerptSelection::Tldr { path, title, .. }
+        | ExcerptSelection::DocumentRoot { path, title, .. } => {
             format!("*Outline {}: {}*", code_span(path), escape_text(title))
         }
         ExcerptSelection::DocumentSection {

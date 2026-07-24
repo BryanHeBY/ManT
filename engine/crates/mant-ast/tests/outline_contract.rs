@@ -1,9 +1,10 @@
 //! Locks the public JSON shapes used for outline discovery and excerpts.
 
 use mant_ast::{
-    DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSource,
-    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference, OutlineSchema,
-    Producer, QueryExcerpt, QueryOutline, Section, SourceFormat, TldrDocument,
+    Block, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSource,
+    ExcerptSchema, ExcerptSelection, Inline, LayoutHint, OutlineDetail, OutlineNode,
+    OutlineReference, OutlineSchema, Producer, QueryExcerpt, QueryOutline, Section, SourceFormat,
+    TldrDocument,
 };
 
 fn source() -> DocumentSource {
@@ -123,6 +124,57 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     assert_eq!(
         value["selections"][0]["entry"]["identity"]["role"],
         "option"
+    );
+}
+
+#[test]
+fn document_root_contract_addresses_content_before_the_first_heading() {
+    let blocks = vec![Block::Paragraph {
+        children: vec![Inline::Text {
+            value: "Document preface.".to_owned(),
+        }],
+        layout: LayoutHint::default(),
+        source: None,
+    }];
+    let outline = QueryOutline {
+        schema: OutlineSchema::V3,
+        detail: OutlineDetail::Sections,
+        label: "guide.md".to_owned(),
+        source: Some(DocumentSource {
+            format: SourceFormat::Markdown,
+            path: Some("guide.md".to_owned()),
+            renderer: None,
+        }),
+        meta: Some(DocumentMeta::default()),
+        nodes: vec![OutlineNode::DocumentRoot {
+            path: "root".to_owned(),
+            id: "document-overview".to_owned(),
+            title: "OVERVIEW".to_owned(),
+        }],
+    };
+    let excerpt = QueryExcerpt {
+        schema: ExcerptSchema::V3,
+        label: "guide.md".to_owned(),
+        producer: None,
+        source: outline.source.clone(),
+        meta: outline.meta.clone(),
+        diagnostics: Vec::new(),
+        selections: vec![ExcerptSelection::DocumentRoot {
+            path: "root".to_owned(),
+            id: "document-overview".to_owned(),
+            title: "OVERVIEW".to_owned(),
+            blocks,
+        }],
+    };
+
+    let outline = serde_json::to_value(outline).expect("root outline JSON");
+    let excerpt = serde_json::to_value(excerpt).expect("root excerpt JSON");
+    assert_eq!(outline["nodes"][0]["kind"], "document-root");
+    assert_eq!(outline["nodes"][0]["path"], "root");
+    assert_eq!(excerpt["selections"][0]["kind"], "document-root");
+    assert_eq!(
+        excerpt["selections"][0]["blocks"][0]["children"][0]["value"],
+        "Document preface."
     );
 }
 
