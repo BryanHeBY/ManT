@@ -27,8 +27,8 @@ grep-matcher = "0.1.8"
 grep-regex = "0.1.14"
 pulldown-cmark = { version = "0.13.0", default-features = false }
 # Keep the SDK and its generated glue on the same upstream minor release.
-rmcp = { version = "=1.7.0", default-features = false, features = ["macros", "server", "transport-io"] }
-rmcp-macros = "=1.7.0"
+rmcp = { version = "=2.2.0", default-features = false, features = ["macros", "server", "transport-io"] }
+rmcp-macros = "=2.2.0"
 schemars = "=1.2.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
