@@ -43,7 +43,7 @@ pub enum QueryInput {
     MarkdownFile { path: String },
 }
 
-/// Projection requested after loading one complete manual query.
+/// Projection requested after loading one complete structured document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "kind",

@@ -1,7 +1,7 @@
 {
   "name": "mantui",
-  "version": "0.3.0",
-  "description": "The interactive terminal UI for reading man pages, part of ManT",
+  "version": "0.4.0",
+  "description": "The interactive ManT reader for local manuals and Markdown",
   "license": "Apache-2.0",
   "type": "module",
   "private": true,

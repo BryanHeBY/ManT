@@ -62,7 +62,11 @@ async function verifyPackagedExecutable(): Promise<void> {
     new Response(helpProcess.stderr).text(),
     helpProcess.exited,
   ]);
-  if (helpExitCode !== 0 || !helpOutput.includes("Usage:\n  mantui <topic>")) {
+  if (
+    helpExitCode !== 0
+    || !helpOutput.includes("Usage:\n  mantui <topic|markdown>")
+    || !helpOutput.includes("mantui README.md")
+  ) {
     throw new Error(`packaged TUI help smoke test failed: ${helpStderr.trim()}`);
   }
 

@@ -190,7 +190,7 @@ struct Cli {
     )]
     explain: Option<String>,
 
-    /// Search visible manual text and report Markdown lines plus outline nodes.
+    /// Search visible document text and report Markdown lines plus outline nodes.
     #[arg(
         long,
         visible_alias = "grep",

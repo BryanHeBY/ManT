@@ -45,6 +45,9 @@ document contract.
 `mant.document/v3` is the stable structured-document contract consumed by the
 UI and output renderers. `mant.query/v3` combines an optional document with an
 optional tldr document while preserving their different sources and licences.
+The document source may be man, mdoc, Markdown, or the explicit groff HTML
+compatibility path. Blocks before the first heading live in the document's
+root `blocks`; heading content remains in the recursive section tree.
 
 All cross-language payloads carry an exact schema identifier.  Rust structs
 are the source of truth, and TypeScript validates the JSON boundary before
@@ -88,6 +91,8 @@ internals:
 
 ```text
 mant <topic> [--format <format>]   -> query Markdown, text, or JSON
+mant <path.md> [--format <format>] -> query one local Markdown file
+mant -                             -> read Markdown directly from stdin
 mant <topic> --outline [sections|options] -> selectable section and option tree
 mant <topic> --node <path-or-id>   -> selected section subtrees
 mant <topic> --explain <alias-or-id> -> one option, command, or environment entry
@@ -122,7 +127,9 @@ interpretation path.
 `mant.request/v3` requires a `schema` marker, one closed `input`, and one
 closed `view`. The input is either a manual topic with an optional section or a
 local Markdown path; raw document content is deliberately not part of the
-process contract. Unknown fields are rejected at every level. `full` returns
+process contract. Direct `mant -` reads bounded UTF-8 input before constructing
+an in-memory query and does not add a third public input variant. Unknown
+fields are rejected at every level. `full` returns
 `mant.query/v3`, `outline` selects either section-only or option-aware
 structure, `excerpt` selects one or more node paths, IDs, or aliases, and
 `search` returns `mant.search/v2`.
@@ -155,6 +162,8 @@ one-based tree path such as `4.2` and the document-local section ID. Passing
 `--outline` includes semantic option entries with paths such as `4.2/o3` by
 default. `--outline sections` is the explicit compact view for callers that
 only need section topology.
+Markdown content before the first heading is exposed as path `root` with ID
+`document-overview`; it does not consume or renumber ordinary heading paths.
 Excerpt selection accepts a section path, option path, document ID, or option
 alias; it includes complete selected content, deduplicates overlaps, and
 preserves source order. Their JSON contracts are `mant.outline/v3` and
@@ -166,13 +175,29 @@ Search is a native projection of the same full query. Rust renders one
 canonical CommonMark document, builds visible-text byte mappings from its
 CommonMark event stream, and applies the same literal or regular-expression
 matcher regardless of output format. Anchors already emitted for sections and
-semantic definitions act as a source map, so every occurrence reports both a
+semantic definitions act as a source map. An internal root anchor covers
+Markdown content before the first heading, so every occurrence reports both a
 stable Markdown range and the nearest path accepted by excerpt selection.
 The TUI keeps its in-memory interaction loop and never spawns a process while
 typing; this result model is the shared semantic basis for future UI indexing,
 not a second parser or a dependency on the system `grep` executable.
 
 ## Parsing and renderer policy
+
+Local Markdown uses `pulldown-cmark` as a source-positioned parser and lowers a
+deliberate subset into the same document contract: headings, paragraphs,
+strong/emphasis/code, links, code blocks, lists, GFM tables, hard breaks, and
+thematic breaks. Unsupported block constructs remain visible as `unsupported`
+blocks with exact source text and diagnostics; unsupported inline constructs
+remain literal text. ManT never silently drops syntax it cannot structure.
+
+An option list is semantic only when every item begins with one or more
+code-formatted option names followed by `:` or a dash separator. Those lists
+become ordinary definition-list entries with stable option identities, so the
+same outline, explain, search, and TUI navigation code works for manuals and
+project documentation. Exact headings named `TLDR`, `TLDR Quick Reference`, or
+`Quick Reference` receive a quick-reference section role but remain part of
+the Markdown document.
 
 The primary path reads the located manual source and lowers libmandoc's
 validated man(7) or mdoc(7) tree directly into `mant.document/v3`.  Rust owns
@@ -228,6 +253,7 @@ capture so one parse cannot contaminate the next.
 Rust owns:
 
 - manual source loading, decompression, aliases, and include context;
+- local Markdown loading, structured-subset parsing, and loss diagnostics;
 - lowering the owned `libmandoc-rs` man/mdoc tree and groff HTML compatibility
   parsing;
 - section, block, inline, layout-hint, link, table, and equation semantics;
@@ -248,6 +274,10 @@ They use checked-in roff, renderer HTML, tldr, and expected JSON fixtures and
 do not require an installed manual page for normal CI.  They also cover
 repeated parser sessions, diagnostic isolation, compression, includes, and
 Markdown escaping.
+
+The shipped `docs/manuals/mant.md` and `mantui.md` files are also fixtures:
+tests require both to parse without lossy fallbacks and to expose their
+embedded quick references and semantic options.
 
 Rust additionally owns `mant` argument, stdio protocol, exit-code, and
 agent-facing output tests.  TypeScript retains process-client, interactive

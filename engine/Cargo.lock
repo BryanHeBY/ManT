@@ -500,7 +500,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "mant"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "clap",
  "mant-ast",
@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ast"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "schemars",
  "serde",
@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "mant-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "grep-matcher",
  "grep-regex",

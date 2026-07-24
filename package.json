@@ -1,7 +1,7 @@
 {
   "name": "mant",
-  "version": "0.3.0",
-  "description": "A structured document query tool with a modern TUI for man pages",
+  "version": "0.4.0",
+  "description": "A structured document query tool and TUI for local manuals and Markdown",
   "license": "Apache-2.0",
   "type": "module",
   "private": true,

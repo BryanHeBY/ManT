@@ -24,6 +24,12 @@ support a deliberately structured Markdown subset. A system `mandoc`
 installation is not required. If an installed `tldr` client has data for a
 manual topic, ManT puts that quick reference before the manual.
 
+The Markdown subset covers headings, prose, emphasis, code, links, code
+blocks, lists, GFM tables, hard breaks, and thematic breaks. Unsupported
+syntax remains visible with a diagnostic instead of being silently discarded.
+Option lists written as ``- `--flag`: description`` become the same semantic,
+addressable entries used by manual pages.
+
 ## Install
 
 ### Linux release archive
@@ -96,7 +102,7 @@ while Markdown content before the first heading is addressable as `root`.
 mant gcc --outline
 mant gcc --outline sections
 mant tar --node acls --format markdown
-mant README.md --node root
+mant README.md --node 1
 mant gcc --node 4.2 --node 4.7 --format json
 ```
 
