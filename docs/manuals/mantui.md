@@ -5,19 +5,21 @@ same reader also opens local Markdown documents.
 
 ## TLDR Quick Reference
 
-Open a local manual:
+- Open a local manual:
 
-```sh
-mantui git
-mantui printf --section 3
-```
+`mantui git`
 
-Open a Markdown document:
+- Open a manual from a specific section:
 
-```sh
-mantui README.md
-mantui mant.md
-```
+`mantui printf --section 3`
+
+- Open a local Markdown document:
+
+`mantui README.md`
+
+- Open ManT's self-hosted interactive manual:
+
+`mantui mantui.md`
 
 ## Synopsis
 

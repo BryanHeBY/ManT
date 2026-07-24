@@ -5,6 +5,7 @@
 
 mod blocks;
 mod inline;
+mod layout;
 mod options;
 mod source;
 
@@ -22,6 +23,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use self::{
     blocks::parse_block,
     inline::{inline_text, parse_inlines},
+    layout::normalize_markdown_layout,
     options::normalize_option_lists,
     source::MarkdownSource,
 };
@@ -64,12 +66,14 @@ pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDoc
                 });
                 continue;
             }
-            if title.is_none() && level == HeadingLevel::H1 {
+            let is_document_title = title.is_none() && level == HeadingLevel::H1;
+            if is_document_title {
                 title = Some(heading.clone());
             }
             let id = ids.allocate(&heading, explicit_id.as_deref());
             flat_sections.push(FlatSection {
                 level: heading_level(level),
+                is_document_title,
                 section: Section {
                     id,
                     title: heading.clone(),
@@ -94,6 +98,7 @@ pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDoc
     }
 
     let mut sections = nest_sections(flat_sections);
+    normalize_markdown_layout(&source, &mut root_blocks, &mut sections);
     normalize_option_lists(&mut root_blocks);
     normalize_section_options(&mut sections);
     let retained_targets = crate::definitions::identify_definitions(
@@ -112,14 +117,7 @@ pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDoc
 
     MantDocument {
         schema: DocumentSchema::V3,
-        producer: Producer {
-            name: "mant".to_owned(),
-            version: env!("CARGO_PKG_VERSION").to_owned(),
-            engine: Some(Engine {
-                name: "pulldown-cmark".to_owned(),
-                version: "0.13".to_owned(),
-            }),
-        },
+        producer: markdown_producer(),
         source: DocumentSource {
             format: SourceFormat::Markdown,
             path: source_path,
@@ -132,6 +130,17 @@ pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDoc
         diagnostics,
         blocks: root_blocks,
         sections,
+    }
+}
+
+fn markdown_producer() -> Producer {
+    Producer {
+        name: "mant".to_owned(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        engine: Some(Engine {
+            name: "pulldown-cmark".to_owned(),
+            version: "0.13".to_owned(),
+        }),
     }
 }
 
@@ -172,12 +181,14 @@ fn heading_level(level: HeadingLevel) -> u8 {
 fn quick_reference_role(title: &str) -> Option<SectionRole> {
     let normalized = title.trim();
     (normalized.eq_ignore_ascii_case("tldr")
-        || normalized.eq_ignore_ascii_case("tldr quick reference"))
+        || normalized.eq_ignore_ascii_case("tldr quick reference")
+        || normalized.eq_ignore_ascii_case("quick reference"))
     .then_some(SectionRole::QuickReference)
 }
 
 struct FlatSection {
     level: u8,
+    is_document_title: bool,
     section: Section,
 }
 
@@ -188,7 +199,7 @@ fn nest_sections(flat: Vec<FlatSection>) -> Vec<Section> {
     for next in flat {
         while stack
             .last()
-            .is_some_and(|current| current.level >= next.level)
+            .is_some_and(|current| current.is_document_title || current.level >= next.level)
         {
             attach_completed(&mut stack, &mut roots);
         }

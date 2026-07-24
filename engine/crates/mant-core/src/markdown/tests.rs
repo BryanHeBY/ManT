@@ -43,9 +43,9 @@ fn main() {}
     assert_eq!(document.source.format, SourceFormat::Markdown);
     assert_eq!(document.meta.title.as_deref(), Some("Tool"));
     assert_eq!(document.blocks.len(), 1);
-    assert_eq!(document.sections.len(), 1);
+    assert_eq!(document.sections.len(), 2);
     assert_eq!(document.sections[0].id, "tool");
-    assert_eq!(document.sections[0].children[0].id, "options");
+    assert_eq!(document.sections[1].id, "options");
 
     let Block::Paragraph { children, .. } = &document.blocks[0] else {
         panic!("intro is a paragraph");
@@ -69,7 +69,7 @@ fn main() {}
             )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak))
     ));
 
-    let options = &tool.children[0];
+    let options = &document.sections[1];
     assert!(matches!(
         &options.blocks[0],
         Block::List { kind: ListKind::Bullet, items, .. }
@@ -93,9 +93,24 @@ fn main() {}
     ));
     assert!(matches!(
         &options.blocks[3],
-        Block::Preformatted { language: Some(language), children, .. }
+        Block::Preformatted {
+            language: Some(language),
+            children,
+            layout,
+            ..
+        }
             if language == "rust"
-                && matches!(&children[0], Inline::Text { value } if value == "fn main() {}\n")
+                && matches!(&children[0], Inline::Text { value } if value == "fn main() {}")
+                && layout.indent_columns == 0
+                && layout.spacing_before_lines == 1
+    ));
+    assert!(matches!(
+        &options.blocks[1],
+        Block::List { layout, .. } if layout.spacing_before_lines == 1
+    ));
+    assert!(matches!(
+        &options.blocks[2],
+        Block::Table { layout, .. } if layout.spacing_before_lines == 1
     ));
     assert!(matches!(&options.blocks[4], Block::ThematicBreak { .. }));
     assert!(document.diagnostics.is_empty());
@@ -158,16 +173,44 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
 #[test]
 fn assigns_unique_heading_ids_and_marks_embedded_quick_references() {
     let document = parse_markdown(
-        "# Demo\n\n## TLDR Quick Reference\n\n## Same\n\n## Same\n",
+        "\
+# Demo
+
+## TLDR Quick Reference
+
+- Show command help:
+
+`demo --help`
+
+## Same
+
+## Same
+",
         None,
     );
 
-    assert_eq!(
-        document.sections[0].children[0].role,
-        Some(SectionRole::QuickReference)
-    );
-    assert_eq!(document.sections[0].children[1].id, "same");
-    assert_eq!(document.sections[0].children[2].id, "same-2");
+    let quick_reference = &document.sections[1];
+    assert_eq!(quick_reference.role, Some(SectionRole::QuickReference));
+    assert!(matches!(
+        &quick_reference.blocks[0],
+        Block::List {
+            kind: ListKind::Plain,
+            compact: false,
+            items,
+            ..
+        }
+            if matches!(
+                items[0].blocks.as_slice(),
+                [
+                    Block::Paragraph { children: description, .. },
+                    Block::Paragraph { children: command, layout, .. },
+                ] if matches!(description.as_slice(), [Inline::Text { value }] if value == "Show command help")
+                    && matches!(command.as_slice(), [Inline::Code { value }] if value == "demo --help")
+                    && layout.spacing_before_lines == 1
+            )
+    ));
+    assert_eq!(document.sections[2].id, "same");
+    assert_eq!(document.sections[3].id, "same-2");
 }
 
 #[test]
@@ -184,7 +227,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
         None,
     );
 
-    let options = &document.sections[0].children[0];
+    let options = &document.sections[1];
     let Block::DefinitionList { items, .. } = &options.blocks[0] else {
         panic!("explicit option list should become a semantic definition list");
     };
@@ -211,11 +254,8 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
         OutlineDetail::Options,
     )
     .expect("Markdown document has an outline");
-    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
-        panic!("top-level heading should remain a section");
-    };
-    let OutlineNode::DocumentSection { children, .. } = &children[0] else {
-        panic!("options should remain a subsection");
+    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[1] else {
+        panic!("options should be a top-level document section");
     };
     assert!(matches!(
         &children[0],

@@ -190,6 +190,10 @@ strong/emphasis/code, links, code blocks, lists, GFM tables, hard breaks, and
 thematic breaks. Unsupported block constructs remain visible as `unsupported`
 blocks with exact source text and diagnostics; unsupported inline constructs
 remain literal text. ManT never silently drops syntax it cannot structure.
+The first H1 supplies document-title metadata without making every following
+H2 an extra-indented child. Blank source lines become ordinary layout hints,
+and the framing newline before a closing code fence is removed before it can
+paint a false empty code row.
 
 An option list is semantic only when every item begins with one or more
 code-formatted option names followed by `:` or a dash separator. Those lists
@@ -197,7 +201,9 @@ become ordinary definition-list entries with stable option identities, so the
 same outline, explain, search, and TUI navigation code works for manuals and
 project documentation. Exact headings named `TLDR`, `TLDR Quick Reference`, or
 `Quick Reference` receive a quick-reference section role but remain part of
-the Markdown document.
+the Markdown document. The real tldr-pages sequence of a bullet description,
+blank line, and standalone code command is normalized into marker-free example
+rows, then rendered by the same highlighted panel as cached tldr content.
 
 The primary path reads the located manual source and lowers libmandoc's
 validated man(7) or mdoc(7) tree directly into `mant.document/v3`.  Rust owns

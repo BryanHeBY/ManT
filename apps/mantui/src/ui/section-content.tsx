@@ -9,6 +9,10 @@ import { memo } from "react";
 import type { MantSection } from "../native";
 import { renderBlockNodes } from "./block-content";
 import { contentId } from "./ids";
+import {
+  embeddedTldrModel,
+  QuickReferencePanel,
+} from "./tldr-quick-reference";
 
 export interface SectionContentProps {
   node: MantSection;
@@ -25,23 +29,67 @@ function SectionContentView({
   onNavigateInternal,
 }: SectionContentProps) {
   const quickReference = node.role === "quick-reference";
+  const spacingBefore = Math.max(0, Math.floor(node.spacingBeforeLines ?? 0));
+  const tldrModel = quickReference ? embeddedTldrModel(node) : undefined;
+
+  if (tldrModel) {
+    return (
+      <box flexDirection="column" gap={0}>
+        {spacingBefore > 0 ? <box height={spacingBefore} /> : null}
+        <QuickReferencePanel model={tldrModel} />
+      </box>
+    );
+  }
+
+  /*
+   * Unusual quick-reference content stays visible through the generic block
+   * renderer. Keep source spacing outside its coloured surface so blank rows
+   * do not look like oversized padding.
+   */
+  if (quickReference) {
+    return (
+      <box flexDirection="column" gap={0}>
+        {spacingBefore > 0 ? <box height={spacingBefore} /> : null}
+        <box
+          flexDirection="column"
+          gap={0}
+          backgroundColor="#1d1a2b"
+          border={["left"]}
+          borderColor="#cba6f7"
+          paddingLeft={1}
+          paddingRight={1}
+        >
+          <box>
+            <text id={contentId(node.id)} fg="#cba6f7">
+              <b>{`◆ ${node.title}`}</b>
+            </text>
+          </box>
+          {renderBlockNodes(node.blocks, 0, node.id, "", onNavigateInternal)}
+          <box flexDirection="column" gap={0}>
+            {node.children.map((child) => (
+              <SectionContent
+                key={child.id}
+                node={child}
+                baseIndent={2}
+                headingIndent={2}
+                onNavigateInternal={onNavigateInternal}
+              />
+            ))}
+          </box>
+        </box>
+      </box>
+    );
+  }
+
   return (
     <box
       flexDirection="column"
       gap={0}
-      paddingTop={Math.max(0, Math.floor(node.spacingBeforeLines ?? 0))}
-      {...(quickReference
-        ? {
-            backgroundColor: "#1d1a2b",
-            border: ["left"] as const,
-            borderColor: "#cba6f7",
-            paddingRight: 1,
-          }
-        : {})}
+      paddingTop={spacingBefore}
     >
       <box paddingLeft={headingIndent}>
-        <text id={contentId(node.id)} fg={quickReference ? "#cba6f7" : "#94e2d5"}>
-          <b>{quickReference ? `◆ ${node.title}` : node.title}</b>
+        <text id={contentId(node.id)} fg="#94e2d5">
+          <b>{node.title}</b>
         </text>
       </box>
       {renderBlockNodes(node.blocks, baseIndent, node.id, "", onNavigateInternal)}

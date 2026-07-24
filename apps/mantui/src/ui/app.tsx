@@ -58,6 +58,7 @@ export function App({ result, onQuit }: AppProps) {
   const rootBlocks = result.document?.blocks ?? EMPTY_BLOCKS;
   const hasRoot = rootBlocks.length > 0;
   const hasDocumentContent = hasRoot || sections.length > 0;
+  const documentGap = result.document?.source.format === "markdown" ? 0 : 1;
   // ── View state and render references ──────────────────────
 
   const [selectedId, setSelectedId] = useState<string>(
@@ -544,7 +545,7 @@ export function App({ result, onQuit }: AppProps) {
             onMouseDrag={scheduleNavigationSync}
             onMouseUp={scheduleNavigationSync}
           >
-            <box flexDirection="column" gap={1}>
+            <box flexDirection="column" gap={documentGap}>
               {result.tldr && <TldrQuickReference page={result.tldr} />}
               {result.tldr && hasDocumentContent && (
                 <box height={1} border={["top"]} borderColor="#45475a" paddingLeft={1}>

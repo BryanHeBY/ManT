@@ -18,6 +18,7 @@ import {
   DOCUMENT_ROOT_ID,
   TLDR_NAV_ID,
 } from "./ids";
+import { visibleEmbeddedTldrCommand } from "./tldr-format";
 
 export interface SearchRange {
   start: number;
@@ -198,6 +199,7 @@ export function buildPageSearchIndex(
     "OVERVIEW",
     "",
     addRecord,
+    false,
   );
 
   const indexSection = (section: MantSection, ancestors: readonly string[]) => {
@@ -210,7 +212,15 @@ export function buildPageSearchIndex(
       SECTION_HEADING_SEARCH_PATH,
       contentId(section.id),
     );
-    indexBlocks(section.blocks, section.id, sectionIds, section.title, "", addRecord);
+    indexBlocks(
+      section.blocks,
+      section.id,
+      sectionIds,
+      section.title,
+      "",
+      addRecord,
+      section.role === "quick-reference",
+    );
     for (const child of section.children) indexSection(child, sectionIds);
   };
 
@@ -234,6 +244,7 @@ function indexBlocks(
   title: string,
   parentPath: string,
   addRecord: AddRecord,
+  quickReference: boolean,
 ): void {
   let proseGroup: { targetPath: string; indent: number; text: string[] } | undefined;
   const flushProseGroup = () => {
@@ -257,7 +268,9 @@ function indexBlocks(
       // record's offsets and target would span two on-screen buffers.
       const spacingBefore = Math.max(0, Math.floor(block.layout?.spacingBeforeLines ?? 0));
       if (proseGroup?.indent !== indent || spacingBefore > 0) flushProseGroup();
-      const text = visibleProseText(block.children);
+      const text = quickReference
+        ? visibleQuickReferenceText(block.children)
+        : visibleProseText(block.children);
       if (!text) return;
       proseGroup ??= { targetPath: blockPath, indent, text: [] };
       proseGroup.text.push(text);
@@ -288,6 +301,7 @@ function indexBlocks(
             title,
             searchPath.listItem(blockPath, itemIndex),
             addRecord,
+            quickReference,
           );
         });
         break;
@@ -303,7 +317,15 @@ function indexBlocks(
               searchPath.term(itemPath, termIndex),
             );
           });
-          indexBlocks(item.description, sectionId, sectionIds, title, itemPath, addRecord);
+          indexBlocks(
+            item.description,
+            sectionId,
+            sectionIds,
+            title,
+            itemPath,
+            addRecord,
+            quickReference,
+          );
         });
         break;
       case "table":
@@ -316,6 +338,7 @@ function indexBlocks(
               title,
               searchPath.cell(searchPath.row(blockPath, rowIndex), cellIndex),
               addRecord,
+              quickReference,
             );
           });
         });
@@ -332,6 +355,18 @@ function indexBlocks(
     }
   });
   flushProseGroup();
+}
+
+function visibleQuickReferenceText(nodes: MantInline[]): string {
+  return matchesEmbeddedCommand(nodes)
+    ? visibleEmbeddedTldrCommand(nodes[0].value)
+    : visibleProseText(nodes);
+}
+
+function matchesEmbeddedCommand(
+  nodes: MantInline[],
+): nodes is [{ type: "code"; value: string }] {
+  return nodes.length === 1 && nodes[0]?.type === "code";
 }
 
 /** Mirror the separate Text renderables used for clickable section links. */

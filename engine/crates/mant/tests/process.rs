@@ -150,8 +150,7 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
     assert!(value["document"]["source"].get("path").is_none());
     assert!(value.get("tldr").is_none());
     assert_eq!(
-        value["document"]["sections"][0]["children"][0]["blocks"][0]["items"][0]["identity"]["names"]
-            [0],
+        value["document"]["sections"][1]["blocks"][0]["items"][0]["identity"]["names"][0],
         "--help"
     );
 }

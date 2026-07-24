@@ -239,6 +239,37 @@ describe("page search index", () => {
     expect(queryPageSearchIndex(index, "options")[0]?.targetPath)
       .toBe("block-0.inline-1");
   });
+
+  test("indexes the same visible placeholder text drawn by embedded tldr panels", () => {
+    const quickReference: MantSection[] = [{
+      id: "quick-reference",
+      title: "TLDR Quick Reference",
+      role: "quick-reference",
+      blocks: [{
+        type: "list",
+        kind: "plain",
+        compact: false,
+        items: [{
+          blocks: [
+            paragraphBlock("Open a document"),
+            {
+              type: "paragraph",
+              layout: { spacingBeforeLines: 1 },
+              children: [{ type: "code", value: "mantui {{path/to/file.md}}" }],
+            },
+          ],
+        }],
+      }],
+      children: [],
+    }];
+    const index = buildPageSearchIndex(quickReference, undefined);
+    const command = index.records.find((record) => record.text.startsWith("mantui"));
+    const [match] = queryPageSearchIndex(index, "path/to/file.md");
+
+    expect(command?.text).toBe("mantui path/to/file.md");
+    expect(match?.targetPath).toBe("block-0.item-0.block-1");
+    expect(match?.text.slice(match.range.start, match.range.end)).toBe("path/to/file.md");
+  });
 });
 
 function paragraphBlock(value: string): MantBlock {

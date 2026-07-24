@@ -5,25 +5,25 @@ and terminal output. The same query model also accepts local Markdown.
 
 ## TLDR Quick Reference
 
-Inspect a manual outline before requesting a small section:
+- Inspect a manual outline:
 
-```sh
-mant tar --outline
-mant tar --node 5.4
-```
+`mant tar --outline`
 
-Explain one option directly:
+- Retrieve one section from that outline:
 
-```sh
-mant tar --explain=--exclude
-```
+`mant tar --node 5.4`
 
-Read a Markdown file or standard input:
+- Explain one option directly:
 
-```sh
-mant README.md
-cat guide.md | mant -
-```
+`mant tar --explain=--exclude`
+
+- Read a local Markdown file:
+
+`mant README.md`
+
+- Read Markdown from standard input:
+
+`cat guide.md | mant -`
 
 ## Synopsis
 

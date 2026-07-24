@@ -3,14 +3,19 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { TextAttributes } from "@opentui/core";
+import { parseColor, TextAttributes } from "@opentui/core";
 import type { MantQueryBundle, MantSection } from "../../../src/native";
 import {
   mockLsResult,
   mockLsWithTldrResult,
   mockQuery,
 } from "../../fixtures/mock-result";
-import { installOpenTuiWarningFilter, navLines, renderApp } from "./test-support";
+import {
+  contentPosition,
+  installOpenTuiWarningFilter,
+  navLines,
+  renderApp,
+} from "./test-support";
 
 installOpenTuiWarningFilter();
 
@@ -103,12 +108,40 @@ function markdownResult(): MantQueryBundle {
           id: "quick-reference",
           title: "TLDR Quick Reference",
           role: "quick-reference",
-          blocks: [paragraph("Run the shortest useful command.")],
+          spacingBeforeLines: 1,
+          blocks: [{
+            type: "list",
+            kind: "plain",
+            compact: false,
+            items: [
+              {
+                blocks: [
+                  paragraph("Run the shortest useful command:"),
+                  {
+                    type: "paragraph",
+                    children: [{ type: "code", value: "guide --help" }],
+                    layout: { spacingBeforeLines: 1 },
+                  },
+                ],
+              },
+              {
+                blocks: [
+                  paragraph("Open the full guide:"),
+                  {
+                    type: "paragraph",
+                    children: [{ type: "code", value: "mantui {{path/to/guide.md}}" }],
+                    layout: { spacingBeforeLines: 1 },
+                  },
+                ],
+              },
+            ],
+          }],
           children: [],
         },
         {
           id: "options",
           title: "Options",
+          spacingBeforeLines: 1,
           blocks: [{
             type: "definition-list",
             compact: true,
@@ -379,10 +412,28 @@ describe("App rendering (e2e)", () => {
     expect(navLines(frame).some((line) => line.includes("› ◇ OVERVIEW"))).toBe(true);
     expect(navLines(frame).some((line) => line.includes("◇ TLDR Quick Reference"))).toBe(true);
     expect(frame).toContain("Read this preface before choosing a section.");
-    expect(frame).toContain("◆ TLDR Quick Reference");
-    expect(frame).toContain("Run the shortest useful command.");
+    expect(frame).toContain("TLDR QUICK REFERENCE");
+    expect(frame).toContain("Run the shortest useful command");
+    expect(frame).toContain("guide --help");
+    expect(frame).toContain("mantui path/to/guide.md");
     expect(frame).toContain("-h, --help");
     expect(frame).toContain("Show command help.");
+
+    const heading = contentPosition(frame, "TLDR QUICK REFERENCE");
+    const firstDescription = contentPosition(frame, "Run the shortest useful command");
+    const firstCommand = contentPosition(frame, "guide --help");
+    const secondDescription = contentPosition(frame, "Open the full guide");
+    const secondCommand = contentPosition(frame, "mantui path/to/guide.md");
+
+    expect(firstDescription.x).toBe(heading.x);
+    expect(firstCommand).toEqual({ x: firstDescription.x + 2, y: firstDescription.y + 1 });
+    expect(secondDescription.y).toBe(firstCommand.y + 2);
+    expect(secondCommand).toEqual({ x: secondDescription.x + 2, y: secondDescription.y + 1 });
+
+    const placeholderSpan = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .find((span) => span.text.includes("path/to/guide.md"));
+    expect(placeholderSpan?.fg).toEqual(parseColor("#f9e2af"));
     setup.renderer.destroy();
   });
 

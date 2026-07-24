@@ -1,6 +1,9 @@
 //! Keeps the shipped Markdown manuals inside the supported document subset.
 
-use mant_ast::{OutlineDetail, OutlineNode, QueryBundle, QuerySchema, Section, SectionRole};
+use mant_ast::{
+    Block, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle, QuerySchema, Section,
+    SectionRole,
+};
 use mant_core::{build_outline_with_detail, parse_markdown, render_markdown, render_query_text};
 
 const MANT_MANUAL: &str = include_str!("../../../../docs/manuals/mant.md");
@@ -28,6 +31,10 @@ fn shipped_manuals_parse_without_lossy_fallbacks() {
         assert!(
             has_quick_reference(&document.sections),
             "{name} keeps its embedded quick reference semantic"
+        );
+        assert!(
+            has_tldr_examples(&document.sections),
+            "{name} quick reference follows the tldr description/command layout"
         );
 
         let query = QueryBundle {
@@ -66,6 +73,32 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
 fn has_quick_reference(sections: &[Section]) -> bool {
     sections.iter().any(|section| {
         section.role == Some(SectionRole::QuickReference) || has_quick_reference(&section.children)
+    })
+}
+
+fn has_tldr_examples(sections: &[Section]) -> bool {
+    sections.iter().any(|section| {
+        if section.role == Some(SectionRole::QuickReference) {
+            return matches!(
+                section.blocks.first(),
+                Some(Block::List {
+                    kind: ListKind::Plain,
+                    compact: false,
+                    items,
+                    ..
+                }) if items.len() >= 4 && items.iter().all(|item| {
+                    matches!(
+                        item.blocks.as_slice(),
+                        [
+                            Block::Paragraph { .. },
+                            Block::Paragraph { children, layout, .. },
+                        ] if matches!(children.as_slice(), [Inline::Code { .. }])
+                            && layout.spacing_before_lines == 1
+                    )
+                })
+            );
+        }
+        has_tldr_examples(&section.children)
     })
 }
 

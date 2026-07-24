@@ -37,6 +37,25 @@ impl<'a> MarkdownSource<'a> {
         }
     }
 
+    /// Whether the exact source boundary between two parsed nodes contains an
+    /// empty line. Parser ranges sometimes include the first newline in the
+    /// preceding block, so inspect both sides of that boundary.
+    pub(super) fn has_blank_line_between(&self, previous: SourceSpan, current: SourceSpan) -> bool {
+        let previous_end = self.offset(
+            previous.end_line.unwrap_or(previous.line),
+            previous.end_column.unwrap_or(previous.column),
+        );
+        let current_start = self.offset(current.line, current.column);
+        let boundary_start = previous_end.saturating_sub(2);
+        let boundary_end = current_start.max(previous_end).min(self.text.len());
+        self.text
+            .get(boundary_start..boundary_end)
+            .unwrap_or_default()
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .contains("\n\n")
+    }
+
     pub(super) fn unsupported_block(
         &self,
         name: &str,
@@ -85,5 +104,20 @@ impl<'a> MarkdownSource<'a> {
             u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
             u32::try_from(offset.saturating_sub(line_start).saturating_add(1)).unwrap_or(u32::MAX),
         )
+    }
+
+    fn offset(&self, line: u32, column: u32) -> usize {
+        let line_index = usize::try_from(line.saturating_sub(1))
+            .unwrap_or(usize::MAX)
+            .min(self.line_starts.len().saturating_sub(1));
+        let line_start = self.line_starts[line_index];
+        let next_line = self
+            .line_starts
+            .get(line_index.saturating_add(1))
+            .copied()
+            .unwrap_or(self.text.len());
+        line_start
+            .saturating_add(usize::try_from(column.saturating_sub(1)).unwrap_or(usize::MAX))
+            .min(next_line)
     }
 }
