@@ -3,7 +3,7 @@
 use std::{
     error::Error,
     ffi::{OsStr, OsString},
-    fmt,
+    fmt, fs,
     path::{Path, PathBuf},
 };
 
@@ -11,7 +11,7 @@ use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema,
 
 use crate::{
     CommandRunner, ManualRequest, SystemCommandRunner, locate_manual_source, parse_groff_html,
-    parse_manual_source, read_cached_tldr_page, source::push_section_filter,
+    parse_manual_source, parse_markdown, read_cached_tldr_page, source::push_section_filter,
 };
 
 /// A query cannot produce either authoritative manual content or a quick reference.
@@ -19,7 +19,9 @@ use crate::{
 pub enum QueryError {
     EmptyTopic,
     InvalidSection,
-    MarkdownUnavailable { path: String },
+    EmptyMarkdownPath,
+    Markdown { path: String, detail: String },
+    EmptyMarkdown { label: String },
     Manual { topic: String, detail: String },
     NoReadableContent { topic: String },
 }
@@ -43,8 +45,18 @@ impl fmt::Display for QueryError {
         match self {
             Self::EmptyTopic => formatter.write_str("manual topic must not be empty"),
             Self::InvalidSection => formatter.write_str("manual section must not be empty"),
-            Self::MarkdownUnavailable { path } => {
-                write!(formatter, "Markdown input is not available yet: {path}")
+            Self::EmptyMarkdownPath => formatter.write_str("Markdown path must not be empty"),
+            Self::Markdown { path, detail } => {
+                write!(
+                    formatter,
+                    "could not load Markdown document '{path}': {detail}"
+                )
+            }
+            Self::EmptyMarkdown { label } => {
+                write!(
+                    formatter,
+                    "Markdown document '{label}' has no readable content"
+                )
             }
             Self::Manual { detail, .. } => formatter.write_str(detail),
             Self::NoReadableContent { topic } => {
@@ -90,6 +102,7 @@ trait QueryHost {
         source_path: Option<&Path>,
     ) -> Result<MantDocument, String>;
     fn read_tldr(&self, topic: &str) -> Result<Option<TldrDocument>, String>;
+    fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }
 
 struct SystemQueryHost;
@@ -114,6 +127,10 @@ impl QueryHost for SystemQueryHost {
     fn read_tldr(&self, topic: &str) -> Result<Option<TldrDocument>, String> {
         read_cached_tldr_page(topic).map_err(|error| error.to_string())
     }
+
+    fn read_markdown(&self, path: &Path) -> Result<String, String> {
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    }
 }
 
 fn query_with(
@@ -125,10 +142,69 @@ fn query_with(
         QueryInput::Manual { topic, section } => {
             query_manual(topic, section.as_deref(), policy, host)
         }
-        QueryInput::MarkdownFile { path } => {
-            Err(QueryError::MarkdownUnavailable { path: path.clone() })
-        }
+        QueryInput::MarkdownFile { path } => query_markdown_file(path, policy, host),
     }
+}
+
+fn query_markdown_file(
+    requested_path: &str,
+    policy: QueryPolicy,
+    host: &dyn QueryHost,
+) -> Result<QueryBundle, QueryError> {
+    let path = requested_path.trim();
+    if path.is_empty() {
+        return Err(QueryError::EmptyMarkdownPath);
+    }
+    if policy.force_libmandoc || policy.force_groff {
+        return Err(QueryError::Markdown {
+            path: path.to_owned(),
+            detail: "manual renderer policies do not apply to Markdown input".to_owned(),
+        });
+    }
+    let source = host
+        .read_markdown(Path::new(path))
+        .map_err(|detail| QueryError::Markdown {
+            path: path.to_owned(),
+            detail,
+        })?;
+    query_markdown_text(&source, Some(path.to_owned()))
+}
+
+/// Parse in-memory Markdown for the direct `mant -` command.
+///
+/// This helper intentionally sits outside [`QueryRequest`]: public protocol
+/// requests reference local files and never embed arbitrary document content.
+///
+/// # Errors
+///
+/// Returns [`QueryError::EmptyMarkdown`] when parsing yields no visible blocks
+/// or sections.
+pub fn query_markdown_text(
+    source: &str,
+    source_path: Option<String>,
+) -> Result<QueryBundle, QueryError> {
+    let label = source_path.as_deref().map_or_else(
+        || "stdin".to_owned(),
+        |path| {
+            Path::new(path)
+                .file_name()
+                .and_then(OsStr::to_str)
+                .unwrap_or(path)
+                .to_owned()
+        },
+    );
+    let document = parse_markdown(source, source_path);
+    if document.blocks.is_empty() && document.sections.is_empty() {
+        return Err(QueryError::EmptyMarkdown {
+            label: label.clone(),
+        });
+    }
+    Ok(QueryBundle {
+        schema: QuerySchema::V3,
+        label,
+        document: Some(document),
+        tldr: None,
+    })
 }
 
 fn query_manual(
@@ -319,7 +395,10 @@ mod tests {
 
     use crate::{CommandOutput, CommandRunner, ManualRequest};
 
-    use super::{QueryError, QueryHost, QueryPolicy, query_with, render_groff_document_with};
+    use super::{
+        QueryError, QueryHost, QueryPolicy, query_markdown_text, query_with,
+        render_groff_document_with,
+    };
 
     #[derive(Clone)]
     struct StubHost {
@@ -327,6 +406,7 @@ mod tests {
         direct: Result<MantDocument, String>,
         fallback: Result<MantDocument, String>,
         tldr: Result<Option<TldrDocument>, String>,
+        markdown: Result<String, String>,
         calls: std::sync::Arc<Mutex<Vec<&'static str>>>,
     }
 
@@ -353,6 +433,11 @@ mod tests {
         fn read_tldr(&self, _topic: &str) -> Result<Option<TldrDocument>, String> {
             self.calls.lock().expect("calls lock").push("tldr");
             self.tldr.clone()
+        }
+
+        fn read_markdown(&self, _path: &Path) -> Result<String, String> {
+            self.calls.lock().expect("calls lock").push("markdown");
+            self.markdown.clone()
         }
     }
 
@@ -413,6 +498,7 @@ mod tests {
             direct,
             fallback: Err("fallback unavailable".to_owned()),
             tldr: Ok(None),
+            markdown: Err("Markdown unavailable".to_owned()),
             calls: std::sync::Arc::default(),
         }
     }
@@ -607,6 +693,46 @@ mod tests {
             Err(QueryError::EmptyTopic)
         );
         assert!(host.calls.lock().expect("calls lock").is_empty());
+    }
+
+    #[test]
+    fn markdown_files_bypass_manual_and_tldr_sources() {
+        let mut host = host(Err("manual parser must not run".to_owned()));
+        host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
+        let result = query_with(
+            &QueryRequest {
+                schema: RequestSchema::V3,
+                input: QueryInput::MarkdownFile {
+                    path: "docs/tool.md".to_owned(),
+                },
+                view: QueryView::Full {},
+            },
+            QueryPolicy::default(),
+            &host,
+        )
+        .expect("Markdown query");
+
+        assert_eq!(result.label, "tool.md");
+        assert!(result.tldr.is_none());
+        let document = result.document.expect("document");
+        assert_eq!(document.source.format, SourceFormat::Markdown);
+        assert_eq!(document.source.path.as_deref(), Some("docs/tool.md"));
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["markdown"],
+            "Markdown must not consult man or tldr"
+        );
+    }
+
+    #[test]
+    fn in_memory_markdown_is_available_without_a_protocol_content_field() {
+        let result = query_markdown_text("# Piped\n\nBody.\n", None).expect("stdin Markdown query");
+
+        assert_eq!(result.label, "stdin");
+        assert!(result.tldr.is_none());
+        let document = result.document.expect("document");
+        assert_eq!(document.meta.title.as_deref(), Some("Piped"));
+        assert_eq!(document.source.path, None);
     }
 
     struct StubRunner {

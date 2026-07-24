@@ -4,7 +4,7 @@
 //! Every action, projection, input mode, and output choice is a long option so
 //! humans and agents do not have to distinguish ad-hoc subcommand grammars.
 
-use std::iter;
+use std::{iter, path::Path};
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
 use mant_ast::{
@@ -90,6 +90,7 @@ impl From<SearchScopeMode> for SearchScope {
 pub(crate) enum QuerySource {
     Arguments(QueryRequest),
     StdinJson,
+    MarkdownStdin { view: QueryView },
 }
 
 /// One validated invocation of the native CLI.
@@ -128,19 +129,19 @@ pub(crate) enum Command {
 #[allow(clippy::struct_excessive_bools)]
 #[command(
     name = "mant",
-    about = "Query structured local manual pages for agents and scripts",
+    about = "Query structured local manuals and Markdown for agents and scripts",
     disable_help_flag = true,
     disable_version_flag = true,
-    override_usage = "mant <TOPIC> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
+    override_usage = "mant <TOPIC|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant README.md\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
 struct Cli {
-    /// Manual page topic. This is the command line's only positional value.
-    #[arg(value_name = "TOPIC", value_parser = non_empty)]
+    /// Manual topic, local Markdown path, or `-` for Markdown on standard input.
+    #[arg(value_name = "TOPIC|MARKDOWN|-", value_parser = non_empty)]
     topic: Option<String>,
 
     /// Select a manual section such as 1 or 3p.
@@ -455,18 +456,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         ));
     }
 
-    let source = if parsed.request_json {
-        QuerySource::StdinJson
-    } else {
-        QuerySource::Arguments(QueryRequest {
-            schema: RequestSchema::V3,
-            input: QueryInput::Manual {
-                topic: parsed.topic.expect("clap requires one input source"),
-                section: parsed.section,
-            },
-            view,
-        })
-    };
+    let source = normalize_query_source(parsed.request_json, parsed.topic, parsed.section, view)?;
 
     Ok(Command::Query {
         source,
@@ -477,6 +467,63 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         explain,
         preserve_anchors: parsed.preserve_anchors,
     })
+}
+
+fn normalize_query_source(
+    request_json: bool,
+    topic: Option<String>,
+    section: Option<String>,
+    view: QueryView,
+) -> Result<QuerySource, clap::Error> {
+    let source = if request_json {
+        QuerySource::StdinJson
+    } else {
+        let value = topic.expect("clap requires one input source");
+        if value == "-" {
+            if section.is_some() {
+                return Err(command_error(
+                    ErrorKind::ArgumentConflict,
+                    "--section applies only to manual topics",
+                ));
+            }
+            QuerySource::MarkdownStdin { view }
+        } else {
+            let input = if is_markdown_path(&value) {
+                if section.is_some() {
+                    return Err(command_error(
+                        ErrorKind::ArgumentConflict,
+                        "--section applies only to manual topics",
+                    ));
+                }
+                QueryInput::MarkdownFile { path: value }
+            } else {
+                QueryInput::Manual {
+                    topic: value,
+                    section,
+                }
+            };
+            QuerySource::Arguments(QueryRequest {
+                schema: RequestSchema::V3,
+                input,
+                view,
+            })
+        }
+    };
+    Ok(source)
+}
+
+fn is_markdown_path(value: &str) -> bool {
+    let markdown_extension = Path::new(value)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
+        });
+    markdown_extension
+        || value.starts_with('.')
+        || value.contains('/')
+        || value.contains('\\')
+        || Path::new(value).is_absolute()
 }
 
 fn non_empty(value: &str) -> Result<String, String> {
@@ -525,6 +572,41 @@ mod tests {
                 explain: false,
                 preserve_anchors: false,
             }
+        );
+    }
+
+    #[test]
+    fn dispatches_markdown_files_and_direct_stdin_without_embedding_content() {
+        for path in ["README.md", "docs/guide", "./notes"] {
+            assert!(matches!(
+                parse(&args(&[path])).expect("Markdown file query"),
+                Command::Query {
+                    source: QuerySource::Arguments(QueryRequest {
+                        input: QueryInput::MarkdownFile { path: parsed },
+                        ..
+                    }),
+                    ..
+                } if parsed == path
+            ));
+        }
+
+        assert!(matches!(
+            parse(&args(&["-", "--outline"])).expect("piped Markdown outline"),
+            Command::Query {
+                source: QuerySource::MarkdownStdin {
+                    view: QueryView::Outline {
+                        detail: OutlineDetail::Options
+                    }
+                },
+                format: QueryFormat::Text,
+                ..
+            }
+        ));
+        assert!(
+            parse(&args(&["README.md", "--section", "1"]))
+                .expect_err("Markdown has no man section selector")
+                .to_string()
+                .contains("--section applies only to manual topics")
         );
     }
 

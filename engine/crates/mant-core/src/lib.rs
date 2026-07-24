@@ -22,7 +22,7 @@ pub use output::{
     render_search_json, render_search_markdown, render_search_text, render_update_json,
 };
 pub use projection::{ProjectionError, build_outline, build_outline_with_detail, select_excerpt};
-pub use query::{QueryError, QueryPolicy, query, query_with_policy};
+pub use query::{QueryError, QueryPolicy, query, query_markdown_text, query_with_policy};
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
     CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,

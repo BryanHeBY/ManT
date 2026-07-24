@@ -24,6 +24,7 @@ use arguments::{Command, QueryFormat, QuerySource, SchemaContract};
 pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v3";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
+const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +55,7 @@ struct QueryExecution {
 
 trait CliHost {
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure>;
+    fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure>;
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
 }
 
@@ -62,9 +64,15 @@ struct SystemHost;
 impl CliHost for SystemHost {
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
         mant_core::query_with_policy(request, policy).map_err(|error| match error {
-            QueryError::EmptyTopic | QueryError::InvalidSection => Failure::usage(error),
+            QueryError::EmptyTopic | QueryError::InvalidSection | QueryError::EmptyMarkdownPath => {
+                Failure::usage(error)
+            }
             _ => Failure::operational(error),
         })
+    }
+
+    fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure> {
+        mant_core::query_markdown_text(source, None).map_err(Failure::operational)
     }
 
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {
@@ -218,16 +226,26 @@ fn execute_query(
     diagnostics: &mut dyn Write,
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
-    let request = read_query_request(command.source, input)?;
-    validate_query_request(&request)?;
-    let view = request.view.clone();
-    let query = host.query(
-        &request,
-        QueryPolicy {
-            force_libmandoc: command.force_libmandoc,
-            force_groff: command.force_groff,
-        },
-    )?;
+    let policy = QueryPolicy {
+        force_libmandoc: command.force_libmandoc,
+        force_groff: command.force_groff,
+    };
+    let (query, view) = match command.source {
+        QuerySource::MarkdownStdin { view } => {
+            validate_markdown_policy(policy)?;
+            let source = read_utf8_input(input, MAX_MARKDOWN_BYTES, "Markdown input")?;
+            (host.query_markdown(&source)?, view)
+        }
+        source => {
+            let request = read_query_request(source, input)?;
+            validate_query_request(&request)?;
+            if matches!(request.input, QueryInput::MarkdownFile { .. }) {
+                validate_markdown_policy(policy)?;
+            }
+            let view = request.view.clone();
+            (host.query(&request, policy)?, view)
+        }
+    };
     if command.force_libmandoc || command.force_groff {
         report_manual_diagnostics(&query, diagnostics)?;
     }
@@ -368,9 +386,14 @@ fn render_full_query(
         )),
         QueryFormat::Text => Ok(mant_core::render_query_text(query)),
         QueryFormat::Man => {
-            if query.document.is_none() {
+            let Some(document) = query.document.as_ref() else {
                 return Err(Failure::operational(
                     "manual page is unavailable; --format man cannot render tldr-only content",
+                ));
+            };
+            if document.source.format == SourceFormat::Markdown {
+                return Err(Failure::usage(
+                    "--format man applies only to roff manual pages",
                 ));
             }
             Ok(mant_core::render_query_man(query))
@@ -395,24 +418,40 @@ fn search_failure(error: SearchError) -> Failure {
 }
 
 fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<QueryRequest, Failure> {
-    if let QuerySource::Arguments(request) = source {
-        return Ok(request);
+    match source {
+        QuerySource::Arguments(request) => return Ok(request),
+        QuerySource::StdinJson => {}
+        QuerySource::MarkdownStdin { .. } => {
+            unreachable!("Markdown stdin is consumed before protocol request decoding");
+        }
     }
 
+    let request = read_utf8_input(input, MAX_REQUEST_BYTES, "request JSON")?;
+    serde_json::from_str(&request)
+        .map_err(|error| Failure::usage(format!("invalid query request JSON: {error}")))
+}
+
+fn read_utf8_input(input: &mut dyn Read, limit: u64, label: &str) -> Result<String, Failure> {
     let mut bytes = Vec::new();
     input
-        .take(MAX_REQUEST_BYTES + 1)
+        .take(limit + 1)
         .read_to_end(&mut bytes)
-        .map_err(|error| Failure::usage(format!("cannot read request JSON: {error}")))?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_REQUEST_BYTES {
+        .map_err(|error| Failure::usage(format!("cannot read {label}: {error}")))?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
         return Err(Failure::usage(format!(
-            "request JSON exceeds the {MAX_REQUEST_BYTES}-byte limit"
+            "{label} exceeds the {limit}-byte limit"
         )));
     }
-    let request =
-        std::str::from_utf8(&bytes).map_err(|_| Failure::usage("request JSON must be UTF-8"))?;
-    serde_json::from_str(request)
-        .map_err(|error| Failure::usage(format!("invalid query request JSON: {error}")))
+    String::from_utf8(bytes).map_err(|_| Failure::usage(format!("{label} must be UTF-8")))
+}
+
+fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
+    if policy.force_libmandoc || policy.force_groff {
+        return Err(Failure::usage(
+            "manual renderer policies do not apply to Markdown input",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
@@ -610,6 +649,16 @@ mod tests {
                 label,
                 document: self.document.clone(),
                 tldr: self.tldr.clone(),
+            })
+        }
+
+        fn query_markdown(&self, _source: &str) -> Result<QueryBundle, Failure> {
+            self.query_calls.set(self.query_calls.get() + 1);
+            Ok(QueryBundle {
+                schema: QuerySchema::V3,
+                label: "stdin".to_owned(),
+                document: self.document.clone(),
+                tldr: None,
             })
         }
 

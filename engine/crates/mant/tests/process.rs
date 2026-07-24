@@ -1,7 +1,9 @@
 //! Black-box checks for the executable's stdout, stderr, and exit-code contract.
 
 use std::{
+    fs,
     io::Write,
+    path::PathBuf,
     process::{Command, Stdio},
 };
 
@@ -19,7 +21,9 @@ fn help_groups_the_public_query_surface() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
-    assert!(help.contains("mant <TOPIC> [OPTIONS]"));
+    assert!(help.contains("mant <TOPIC|MARKDOWN|-> [OPTIONS]"));
+    assert!(help.contains("mant README.md"));
+    assert!(help.contains("cat guide.md | mant -"));
     assert!(help.contains("Document selection:"));
     assert!(help.contains("Search:"));
     assert!(help.contains("Integration:"));
@@ -119,6 +123,104 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
     assert!(diagnostic.starts_with("mant: invalid query request JSON:"));
     assert!(!diagnostic.contains("panicked at"));
     assert!(!diagnostic.contains("stack backtrace"));
+}
+
+#[test]
+fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
+    let mut child = Command::new(executable())
+        .args(["-", "--format", "json", "--compact"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start mant");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(b"# Piped\n\n## Options\n\n- `--help`: Show help.\n")
+        .expect("write Markdown");
+    let output = child.wait_with_output().expect("wait for mant");
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
+    assert_eq!(value["label"], "stdin");
+    assert_eq!(value["document"]["source"]["format"], "markdown");
+    assert!(value["document"]["source"].get("path").is_none());
+    assert!(value.get("tldr").is_none());
+    assert_eq!(
+        value["document"]["sections"][0]["children"][0]["blocks"][0]["items"][0]["identity"]["names"]
+            [0],
+        "--help"
+    );
+}
+
+#[test]
+fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
+    let path = markdown_fixture_path();
+    fs::write(&path, "# Local\n\nBody.\n").expect("write Markdown fixture");
+
+    let direct = Command::new(executable())
+        .args([
+            path.to_str().expect("UTF-8 path"),
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .output()
+        .expect("query Markdown file");
+    assert!(direct.status.success());
+    assert!(direct.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&direct.stdout).expect("query JSON");
+    assert_eq!(value["document"]["meta"]["title"], "Local");
+    assert_eq!(
+        value["document"]["source"]["path"],
+        path.to_str().expect("UTF-8 path")
+    );
+    assert!(value.get("tldr").is_none());
+
+    let mut child = Command::new(executable())
+        .args(["--request-json", "--format", "json", "--compact"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start protocol query");
+    let request = serde_json::json!({
+        "schema": "mant.request/v3",
+        "input": {
+            "kind": "markdown-file",
+            "path": path.to_str().expect("UTF-8 path"),
+        },
+        "view": { "kind": "full" },
+    });
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(request.to_string().as_bytes())
+        .expect("write request");
+    let protocol = child.wait_with_output().expect("wait for protocol query");
+    let _ = fs::remove_file(&path);
+
+    assert!(protocol.status.success());
+    assert!(protocol.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&protocol.stdout).expect("query JSON");
+    assert_eq!(
+        value["label"].as_str(),
+        Some(
+            path.file_name()
+                .expect("filename")
+                .to_str()
+                .expect("UTF-8 filename")
+        )
+    );
+    assert_eq!(value["document"]["source"]["format"], "markdown");
+}
+
+fn markdown_fixture_path() -> PathBuf {
+    std::env::temp_dir().join(format!("mant-markdown-process-{}.md", std::process::id()))
 }
 
 #[test]
