@@ -162,12 +162,10 @@ pub const DEBIAN_GROFF_MAN_STYLE_SECTIONS: &[&str] = &[
 ];
 
 pub fn query_for_document(name: &str, document: &MantDocument) -> QueryBundle {
-    let manual = document.clone();
     QueryBundle {
-        schema: QuerySchema::V2,
-        topic: name.to_owned(),
-        section: manual.meta.section.clone(),
-        manual: Some(manual),
+        schema: QuerySchema::V3,
+        label: name.to_owned(),
+        document: Some(document.clone()),
         tldr: None,
     }
 }
@@ -278,7 +276,7 @@ pub fn semantic_definition_items(document: &MantDocument) -> Vec<&mant_ast::Defi
 
 pub fn find_outline_entry<'a>(nodes: &'a [OutlineNode], name: &str) -> Option<&'a OutlineNode> {
     for node in nodes {
-        if matches!(node, OutlineNode::ManualEntry { names, .. } if names.iter().any(|value| value == name))
+        if matches!(node, OutlineNode::DocumentEntry { names, .. } if names.iter().any(|value| value == name))
         {
             return Some(node);
         }
@@ -293,7 +291,7 @@ pub fn count_outline_entries(nodes: &[OutlineNode]) -> usize {
     nodes
         .iter()
         .map(|node| {
-            usize::from(matches!(node, OutlineNode::ManualEntry { .. }))
+            usize::from(matches!(node, OutlineNode::DocumentEntry { .. }))
                 + count_outline_entries(node.children())
         })
         .sum()

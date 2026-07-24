@@ -105,7 +105,7 @@ fn supports_outline_discovery_and_targeted_excerpts() {
     let excerpt = select_excerpt(&query, &["git-diffs-28".to_owned(), "16.4".to_owned()])
         .expect("Git Diffs excerpt");
     assert_eq!(excerpt.selections.len(), 1);
-    let ExcerptSelection::ManualSection {
+    let ExcerptSelection::DocumentSection {
         path,
         breadcrumbs,
         section,

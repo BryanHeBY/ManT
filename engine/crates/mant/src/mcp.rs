@@ -12,8 +12,9 @@ use std::{
 };
 
 use mant_ast::{
-    ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryOutline, QueryRequest,
-    QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax, default_search_limit,
+    ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryInput, QueryOutline,
+    QueryRequest, QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    default_search_limit,
 };
 use rmcp::{
     Json, ServerHandler, ServiceExt,
@@ -306,7 +307,7 @@ impl MantMcpServer {
             mant_core::select_excerpt(&query, &[entry]).map_err(|error| error.to_string())?;
         if matches!(
             excerpt.selections.as_slice(),
-            [ExcerptSelection::ManualEntry { .. }]
+            [ExcerptSelection::DocumentEntry { .. }]
         ) {
             Ok(Json(excerpt))
         } else {
@@ -380,9 +381,8 @@ fn request_for(target: ManualTarget, view: QueryView) -> Result<QueryRequest, St
         .map(|section| non_empty(&section, "section"))
         .transpose()?;
     Ok(QueryRequest {
-        schema: mant_ast::RequestSchema::V2,
-        topic,
-        section,
+        schema: mant_ast::RequestSchema::V3,
+        input: QueryInput::Manual { topic, section },
         view,
     })
 }

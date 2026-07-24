@@ -21,7 +21,7 @@ pub fn parse_groff_html(html: &str, source_path: Option<String>) -> MantDocument
     let mut sections = nest_sections(sections);
     crate::definitions::identify_definitions(&mut sections, &std::collections::HashSet::new());
     MantDocument {
-        schema: DocumentSchema::V2,
+        schema: DocumentSchema::V3,
         producer: Producer {
             name: "mant".to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),

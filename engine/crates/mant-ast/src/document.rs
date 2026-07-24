@@ -1,17 +1,17 @@
-//! Stable manual-document nodes independent from roff and HTML renderers.
+//! Stable document nodes independent from their source parser.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Exact schema marker for a normalized manual document.
+/// Exact schema marker for a normalized structured document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
-    /// Renderer-neutral model with addressable semantic definition entries.
-    #[serde(rename = "mant.document/v2")]
-    V2,
+    /// Source-neutral model with addressable semantic definition entries.
+    #[serde(rename = "mant.document/v3")]
+    V3,
 }
 
-/// A normalized manual page ready for interactive or textual rendering.
+/// A normalized document ready for interactive or textual rendering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MantDocument {
@@ -48,6 +48,7 @@ pub struct Engine {
 pub enum SourceFormat {
     Man,
     Mdoc,
+    Markdown,
     GroffHtml,
     MandocHtml,
 }

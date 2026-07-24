@@ -42,10 +42,9 @@ document contract.
 
 ## Stable and unstable models
 
-`mant.document/v2` is the stable manual document contract consumed by the UI
-and output renderers.  `mant.query/v2` combines an optional manual document
-with an optional tldr document while preserving their different sources and
-licences.
+`mant.document/v3` is the stable structured-document contract consumed by the
+UI and output renderers. `mant.query/v3` combines an optional document with an
+optional tldr document while preserving their different sources and licences.
 
 All cross-language payloads carry an exact schema identifier.  Rust structs
 are the source of truth, and TypeScript validates the JSON boundary before
@@ -103,7 +102,7 @@ mant --mcp                         -> read-only MCP tools over stdio
 
 For the TUI, `mant --request-json --format json --compact` reads one closed,
 versioned `QueryRequest` object from standard input and emits exactly one
-`mant.query/v2` object on standard output.  Standard error contains concise
+`mant.query/v3` object on standard output.  Standard error contains concise
 diagnostics only.  Status 0 means success, 2 means invalid invocation or
 request, and 1 means an operational failure.  The TypeScript client drains
 stdout and stderr concurrently, validates the protocol and schema, and starts
@@ -117,11 +116,13 @@ search. Their input and output schemas derive directly from Rust types, while
 diagnostics remain on standard error. MCP is an alternate process protocol; it
 does not add another executable or a second document interpretation path.
 
-`mant.request/v2` requires a `schema` marker, `topic`, and a closed `view`
-variant; it accepts an optional manual `section` and rejects unknown fields at
-both the envelope and view levels. `full` returns `mant.query/v2`, `outline`
-selects either section-only or option-aware structure, `excerpt` selects one
-or more node paths, IDs, or aliases, and `search` returns `mant.search/v1`.
+`mant.request/v3` requires a `schema` marker, one closed `input`, and one
+closed `view`. The input is either a manual topic with an optional section or a
+local Markdown path; raw document content is deliberately not part of the
+process contract. Unknown fields are rejected at every level. `full` returns
+`mant.query/v3`, `outline` selects either section-only or option-aware
+structure, `excerpt` selects one or more node paths, IDs, or aliases, and
+`search` returns `mant.search/v2`.
 The direct-only `--explain` convenience flag normalizes to exactly one
 `excerpt` selector, then rejects anything other than a semantic manual entry.
 It deliberately adds no request or response variant, so agents retain one
@@ -153,8 +154,8 @@ default. `--outline sections` is the explicit compact view for callers that
 only need section topology.
 Excerpt selection accepts a section path, option path, document ID, or option
 alias; it includes complete selected content, deduplicates overlaps, and
-preserves source order. Their JSON contracts are `mant.outline/v2` and
-`mant.excerpt/v2`; plain text and CommonMark are also available. The TUI uses
+preserves source order. Their JSON contracts are `mant.outline/v3` and
+`mant.excerpt/v3`; plain text and CommonMark are also available. The TUI uses
 the same `QueryRequest` contract with `view.kind = "full"`; agents can select
 outline and excerpt projections directly through `--request-json`.
 
@@ -171,7 +172,7 @@ not a second parser or a dependency on the system `grep` executable.
 ## Parsing and renderer policy
 
 The primary path reads the located manual source and lowers libmandoc's
-validated man(7) or mdoc(7) tree directly into `mant.document/v2`.  Rust owns
+validated man(7) or mdoc(7) tree directly into `mant.document/v3`.  Rust owns
 compression handling and preserves the original source path and include base
 directory.  `.so` aliases and includes must work without exposing temporary
 paths in the result.
@@ -179,9 +180,9 @@ paths in the result.
 Libmandoc is the only default parser. An unsupported diagnostic does not
 discard an otherwise complete document, and ManT does not automatically invoke
 groff or choose between renderer outputs. `--force-libmandoc` is a strict
-diagnostic policy outside `mant.request/v2`: it requires a direct native
-manual, prevents a tldr-only response, and prints recoverable parser findings
-on standard error.
+diagnostic policy for manual input outside `mant.request/v3`: it requires a
+direct native manual, prevents a tldr-only response, and prints recoverable
+parser findings on standard error.
 
 `--force-groff` is an explicit compatibility path for investigating renderer
 differences. It calls `man -Thtml` and lowers the resulting HTML without first

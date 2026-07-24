@@ -11,8 +11,8 @@ use crate::{
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum OutlineSchema {
-    #[serde(rename = "mant.outline/v2")]
-    V2,
+    #[serde(rename = "mant.outline/v3")]
+    V3,
 }
 
 /// Amount of semantic detail included in an outline projection.
@@ -26,13 +26,11 @@ pub enum OutlineDetail {
 /// A block-free tree used to discover selectable query content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:outline:v2"))]
+#[schemars(extend("$id" = "urn:mant:outline:v3"))]
 pub struct QueryOutline {
     pub schema: OutlineSchema,
     pub detail: OutlineDetail,
-    pub topic: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub manual_section: Option<String>,
+    pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<DocumentSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,13 +51,13 @@ pub enum OutlineNode {
         id: String,
         title: String,
     },
-    ManualSection {
+    DocumentSection {
         path: String,
         id: String,
         title: String,
         children: Vec<OutlineNode>,
     },
-    ManualEntry {
+    DocumentEntry {
         path: String,
         id: String,
         title: String,
@@ -73,8 +71,8 @@ impl OutlineNode {
     pub fn path(&self) -> &str {
         match self {
             Self::Tldr { path, .. }
-            | Self::ManualSection { path, .. }
-            | Self::ManualEntry { path, .. } => path,
+            | Self::DocumentSection { path, .. }
+            | Self::DocumentEntry { path, .. } => path,
         }
     }
 
@@ -82,8 +80,8 @@ impl OutlineNode {
     pub fn id(&self) -> &str {
         match self {
             Self::Tldr { id, .. }
-            | Self::ManualSection { id, .. }
-            | Self::ManualEntry { id, .. } => id,
+            | Self::DocumentSection { id, .. }
+            | Self::DocumentEntry { id, .. } => id,
         }
     }
 
@@ -91,16 +89,16 @@ impl OutlineNode {
     pub fn title(&self) -> &str {
         match self {
             Self::Tldr { title, .. }
-            | Self::ManualSection { title, .. }
-            | Self::ManualEntry { title, .. } => title,
+            | Self::DocumentSection { title, .. }
+            | Self::DocumentEntry { title, .. } => title,
         }
     }
 
     #[must_use]
     pub fn children(&self) -> &[Self] {
         match self {
-            Self::ManualSection { children, .. } => children,
-            Self::Tldr { .. } | Self::ManualEntry { .. } => &[],
+            Self::DocumentSection { children, .. } => children,
+            Self::Tldr { .. } | Self::DocumentEntry { .. } => &[],
         }
     }
 }
@@ -108,19 +106,17 @@ impl OutlineNode {
 /// Exact schema marker for selected query content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExcerptSchema {
-    #[serde(rename = "mant.excerpt/v2")]
-    V2,
+    #[serde(rename = "mant.excerpt/v3")]
+    V3,
 }
 
 /// One or more independently selected nodes from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:excerpt:v2"))]
+#[schemars(extend("$id" = "urn:mant:excerpt:v3"))]
 pub struct QueryExcerpt {
     pub schema: ExcerptSchema,
-    pub topic: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub manual_section: Option<String>,
+    pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub producer: Option<Producer>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -140,15 +136,15 @@ pub struct QueryExcerpt {
     rename_all_fields = "camelCase"
 )]
 pub enum ExcerptSelection {
-    /// Optional quick-reference content preceding the authoritative manual.
+    /// Optional quick-reference content preceding the primary document.
     Tldr {
         path: String,
         id: String,
         title: String,
         document: TldrDocument,
     },
-    /// Complete selected manual node, including all descendant sections.
-    ManualSection {
+    /// Complete selected document node, including all descendant sections.
+    DocumentSection {
         path: String,
         id: String,
         title: String,
@@ -157,7 +153,7 @@ pub enum ExcerptSelection {
         section: Section,
     },
     /// One addressable semantic definition and its complete description.
-    ManualEntry {
+    DocumentEntry {
         path: String,
         id: String,
         title: String,

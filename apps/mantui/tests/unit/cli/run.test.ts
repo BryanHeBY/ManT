@@ -7,8 +7,8 @@ import type { MantQueryBundle, NativeQueryRequest } from "../../../src/native";
 import { runCli } from "../../../src/cli/run";
 
 const result: MantQueryBundle = {
-  schema: "mant.query/v2",
-  topic: "git",
+  schema: "mant.query/v3",
+  label: "git",
 };
 
 function captureOutput() {
@@ -95,8 +95,7 @@ describe("interactive CLI execution", () => {
 
     expect(exitCode).toBe(0);
     expect(request).toEqual({
-      topic: "printf",
-      section: "3",
+      input: { kind: "manual", topic: "printf", section: "3" },
       forceGroff: true,
     });
     expect(received).toBe(result);

@@ -73,20 +73,16 @@ mod tests {
     #[test]
     fn compact_and_pretty_query_output_share_the_same_contract() {
         let query = QueryBundle {
-            schema: QuerySchema::V2,
-            topic: "ls".to_owned(),
-            section: Some("1".to_owned()),
-            manual: None,
+            schema: QuerySchema::V3,
+            label: "ls".to_owned(),
+            document: None,
             tldr: None,
         };
         let compact = render_query_json(&query, false).expect("compact JSON");
         let pretty = render_query_json(&query, true).expect("pretty JSON");
 
-        assert_eq!(
-            compact,
-            r#"{"schema":"mant.query/v2","topic":"ls","section":"1"}"#
-        );
-        assert!(pretty.contains("\n  \"topic\": \"ls\","));
+        assert_eq!(compact, r#"{"schema":"mant.query/v3","label":"ls"}"#);
+        assert!(pretty.contains("\n  \"label\": \"ls\""));
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&compact).expect("compact value"),
             serde_json::from_str::<serde_json::Value>(&pretty).expect("pretty value")

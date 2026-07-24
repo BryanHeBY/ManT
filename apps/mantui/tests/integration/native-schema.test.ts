@@ -10,7 +10,7 @@ import Ajv2020, { type AnySchema, type ValidateFunction } from "ajv/dist/2020.js
 
 const mantPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
 const queryFixturePath = new URL(
-  "../../../../tests/contracts/minimal-query-v2.json",
+  "../../../../tests/contracts/minimal-query-v3.json",
   import.meta.url,
 ).pathname;
 // A missing executable makes spawnSync throw ENOENT rather than return a
@@ -70,24 +70,23 @@ describeMant("generated native JSON Schemas", () => {
 
     const validateRequest = compile(catalog.request);
     expectValid(validateRequest, {
-      schema: "mant.request/v2",
-      topic: "printf",
-      section: "3",
+      schema: "mant.request/v3",
+      input: { kind: "manual", topic: "printf", section: "3" },
       view: { kind: "full" },
     });
     expectValid(validateRequest, {
-      schema: "mant.request/v2",
-      topic: "tar",
+      schema: "mant.request/v3",
+      input: { kind: "manual", topic: "tar" },
       view: { kind: "outline", detail: "options" },
     });
     expectValid(validateRequest, {
-      schema: "mant.request/v2",
-      topic: "tar",
+      schema: "mant.request/v3",
+      input: { kind: "manual", topic: "tar" },
       view: { kind: "excerpt", nodes: ["acls"] },
     });
     expectValid(validateRequest, {
-      schema: "mant.request/v2",
-      topic: "tar",
+      schema: "mant.request/v3",
+      input: { kind: "manual", topic: "tar" },
       view: {
         kind: "search",
         pattern: "--acls",
@@ -101,19 +100,19 @@ describeMant("generated native JSON Schemas", () => {
     });
     expect(validateRequest({ topic: "printf" })).toBe(false);
     expect(validateRequest({
-      schema: "mant.request/v2",
-      topic: "printf",
+      schema: "mant.request/v3",
+      input: { kind: "manual", topic: "printf" },
       view: { kind: "full" },
       renderer: "html",
     })).toBe(false);
     expect(validateRequest({
-      schema: "mant.request/v2",
-      topic: "tar",
+      schema: "mant.request/v3",
+      input: { kind: "manual", topic: "tar" },
       view: { kind: "excerpt", nodes: [] },
     })).toBe(false);
     expect(validateRequest({
-      schema: "mant.request/v2",
-      topic: "tar",
+      schema: "mant.request/v3",
+      input: { kind: "manual", topic: "tar" },
       view: { kind: "full", future: true },
     })).toBe(false);
 
@@ -121,9 +120,8 @@ describeMant("generated native JSON Schemas", () => {
     expectValid(compile(catalog.query), query);
 
     expectValid(compile(catalog.search), {
-      schema: "mant.search/v1",
-      topic: "tar",
-      manualSection: "1",
+      schema: "mant.search/v2",
+      label: "tar",
       query: {
         pattern: "--acls",
         syntax: "literal",

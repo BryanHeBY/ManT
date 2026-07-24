@@ -84,12 +84,12 @@ async function verifyPackagedExecutable(): Promise<void> {
   }
   const query = JSON.parse(queryOutput) as {
     schema?: string;
-    manual?: { schema?: string; sections?: unknown[] };
+    document?: { schema?: string; sections?: unknown[] };
   };
   if (
-    query.schema !== "mant.query/v2"
-    || query.manual?.schema !== "mant.document/v2"
-    || !query.manual.sections?.length
+    query.schema !== "mant.query/v3"
+    || query.document?.schema !== "mant.document/v3"
+    || !query.document.sections?.length
   ) {
     throw new Error("packaged mant did not return a readable native document");
   }

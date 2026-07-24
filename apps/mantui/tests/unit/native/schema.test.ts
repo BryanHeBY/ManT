@@ -9,32 +9,32 @@ import {
   decodeNativeCliProtocol,
 } from "../../../src/native/schema";
 
-const fixturePath = join(import.meta.dir, "../../../../../tests/contracts/minimal-query-v2.json");
+const fixturePath = join(import.meta.dir, "../../../../../tests/contracts/minimal-query-v3.json");
 
 describe("native query schema", () => {
   test("accepts only the exact native CLI protocol and contract versions", () => {
     const protocol = JSON.stringify({
-      protocol: "mant.cli/v2",
-      nativeApiVersion: "2",
-      requestSchema: "mant.request/v2",
-      querySchema: "mant.query/v2",
-      documentSchema: "mant.document/v2",
-      outlineSchema: "mant.outline/v2",
-      excerptSchema: "mant.excerpt/v2",
-      searchSchema: "mant.search/v1",
+      protocol: "mant.cli/v3",
+      nativeApiVersion: "3",
+      requestSchema: "mant.request/v3",
+      querySchema: "mant.query/v3",
+      documentSchema: "mant.document/v3",
+      outlineSchema: "mant.outline/v3",
+      excerptSchema: "mant.excerpt/v3",
+      searchSchema: "mant.search/v2",
     });
-    expect(decodeNativeCliProtocol(protocol).protocol).toBe("mant.cli/v2");
-    expect(() => decodeNativeCliProtocol(protocol.replace("mant.cli/v2", "mant.cli/v1")))
-      .toThrow("expected 'mant.cli/v2'");
+    expect(decodeNativeCliProtocol(protocol).protocol).toBe("mant.cli/v3");
+    expect(() => decodeNativeCliProtocol(protocol.replace("mant.cli/v3", "mant.cli/v1")))
+      .toThrow("expected 'mant.cli/v3'");
   });
 
   test("decodes the shared Rust query fixture", async () => {
     const query = decodeMantQuery(await Bun.file(fixturePath).text());
 
-    expect(query.schema).toBe("mant.query/v2");
-    expect(query.manual?.schema).toBe("mant.document/v2");
-    expect(query.manual?.sections[0]?.title).toBe("NAME");
-    expect(query.manual?.sections[0]?.blocks[0]).toMatchObject({
+    expect(query.schema).toBe("mant.query/v3");
+    expect(query.document?.schema).toBe("mant.document/v3");
+    expect(query.document?.sections[0]?.title).toBe("NAME");
+    expect(query.document?.sections[0]?.blocks[0]).toMatchObject({
       type: "paragraph",
       children: expect.arrayContaining([
         {
@@ -55,11 +55,11 @@ describe("native query schema", () => {
         },
       ]),
     });
-    expect(query.manual?.sections[1]?.blocks[0]).toMatchObject({
+    expect(query.document?.sections[1]?.blocks[0]).toMatchObject({
       type: "paragraph",
       children: expect.arrayContaining([{ type: "anchor", id: "all-option" }]),
     });
-    expect(query.manual?.sections[1]?.blocks[1]).toMatchObject({
+    expect(query.document?.sections[1]?.blocks[1]).toMatchObject({
       type: "definition-list",
       items: [{
         identity: {
@@ -78,13 +78,13 @@ describe("native query schema", () => {
   test("rejects incompatible schema versions", async () => {
     const fixture = await Bun.file(fixturePath).text();
 
-    expect(() => decodeMantQuery(fixture.replace("mant.query/v2", "mant.query/v1")))
-      .toThrow("expected 'mant.query/v2'");
+    expect(() => decodeMantQuery(fixture.replace("mant.query/v3", "mant.query/v1")))
+      .toThrow("expected 'mant.query/v3'");
   });
 
   test("rejects malformed nested nodes before they reach React", async () => {
     const fixture = JSON.parse(await Bun.file(fixturePath).text());
-    fixture.manual.sections[0].blocks[0].children[0].type = "mystery-style";
+    fixture.document.sections[0].blocks[0].children[0].type = "mystery-style";
 
     expect(() => decodeMantQuery(JSON.stringify(fixture)))
       .toThrow("unknown inline type 'mystery-style'");
@@ -92,7 +92,7 @@ describe("native query schema", () => {
 
   test("rejects an unknown semantic definition role", async () => {
     const fixture = JSON.parse(await Bun.file(fixturePath).text());
-    fixture.manual.sections[1].blocks[1].items[0].identity.role = "mystery";
+    fixture.document.sections[1].blocks[1].items[0].identity.role = "mystery";
 
     expect(() => decodeMantQuery(JSON.stringify(fixture)))
       .toThrow("expected one of option, command, environment-variable");

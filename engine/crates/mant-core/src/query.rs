@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use mant_ast::{MantDocument, QueryBundle, QueryRequest, QuerySchema, TldrDocument};
+use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
 use crate::{
     CommandRunner, ManualRequest, SystemCommandRunner, locate_manual_source, parse_groff_html,
@@ -19,6 +19,7 @@ use crate::{
 pub enum QueryError {
     EmptyTopic,
     InvalidSection,
+    MarkdownUnavailable { path: String },
     Manual { topic: String, detail: String },
     NoReadableContent { topic: String },
 }
@@ -42,6 +43,9 @@ impl fmt::Display for QueryError {
         match self {
             Self::EmptyTopic => formatter.write_str("manual topic must not be empty"),
             Self::InvalidSection => formatter.write_str("manual section must not be empty"),
+            Self::MarkdownUnavailable { path } => {
+                write!(formatter, "Markdown input is not available yet: {path}")
+            }
             Self::Manual { detail, .. } => formatter.write_str(detail),
             Self::NoReadableContent { topic } => {
                 write!(
@@ -117,11 +121,27 @@ fn query_with(
     policy: QueryPolicy,
     host: &dyn QueryHost,
 ) -> Result<QueryBundle, QueryError> {
-    let topic = request.topic.trim();
+    match &request.input {
+        QueryInput::Manual { topic, section } => {
+            query_manual(topic, section.as_deref(), policy, host)
+        }
+        QueryInput::MarkdownFile { path } => {
+            Err(QueryError::MarkdownUnavailable { path: path.clone() })
+        }
+    }
+}
+
+fn query_manual(
+    topic: &str,
+    requested_section: Option<&str>,
+    policy: QueryPolicy,
+    host: &dyn QueryHost,
+) -> Result<QueryBundle, QueryError> {
+    let topic = topic.trim();
     if topic.is_empty() {
         return Err(QueryError::EmptyTopic);
     }
-    let section = request.section.as_deref().map(str::trim);
+    let section = requested_section.map(str::trim);
     if section.is_some_and(str::is_empty) {
         return Err(QueryError::InvalidSection);
     }
@@ -139,10 +159,9 @@ fn query_with(
     if policy.force_libmandoc || policy.force_groff {
         return match manual {
             Ok(Some(manual)) => Ok(QueryBundle {
-                schema: QuerySchema::V2,
-                topic: topic.to_owned(),
-                section,
-                manual: Some(manual),
+                schema: QuerySchema::V3,
+                label: topic.to_owned(),
+                document: Some(manual),
                 tldr,
             }),
             Ok(None) => Err(QueryError::NoReadableContent {
@@ -157,17 +176,15 @@ fn query_with(
 
     match manual {
         Ok(Some(manual)) => Ok(QueryBundle {
-            schema: QuerySchema::V2,
-            topic: topic.to_owned(),
-            section,
-            manual: Some(manual),
+            schema: QuerySchema::V3,
+            label: topic.to_owned(),
+            document: Some(manual),
             tldr,
         }),
         Ok(None) | Err(_) if tldr.is_some() => Ok(QueryBundle {
-            schema: QuerySchema::V2,
-            topic: topic.to_owned(),
-            section,
-            manual: None,
+            schema: QuerySchema::V3,
+            label: topic.to_owned(),
+            document: None,
             tldr,
         }),
         Ok(None) => Err(QueryError::NoReadableContent {
@@ -296,7 +313,8 @@ mod tests {
 
     use mant_ast::{
         Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, MantDocument,
-        Producer, QueryRequest, QueryView, RequestSchema, Section, SourceFormat, TldrDocument,
+        Producer, QueryInput, QueryRequest, QueryView, RequestSchema, Section, SourceFormat,
+        TldrDocument,
     };
 
     use crate::{CommandOutput, CommandRunner, ManualRequest};
@@ -340,7 +358,7 @@ mod tests {
 
     fn document(format: SourceFormat, unsupported: bool, readable: bool) -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V2,
+            schema: DocumentSchema::V3,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
@@ -399,9 +417,11 @@ mod tests {
 
     fn request() -> QueryRequest {
         QueryRequest {
-            schema: RequestSchema::V2,
-            topic: " tool ".to_owned(),
-            section: None,
+            schema: RequestSchema::V3,
+            input: QueryInput::Manual {
+                topic: " tool ".to_owned(),
+                section: None,
+            },
             view: QueryView::Full {},
         }
     }
@@ -411,9 +431,9 @@ mod tests {
         let host = host(Ok(document(SourceFormat::Man, false, true)));
         let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
 
-        assert_eq!(result.topic, "tool");
+        assert_eq!(result.label, "tool");
         assert_eq!(
-            result.manual.expect("manual").source.format,
+            result.document.expect("manual").source.format,
             SourceFormat::Man
         );
         assert_eq!(
@@ -432,7 +452,7 @@ mod tests {
         let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
 
         assert_eq!(
-            result.manual.expect("manual").source.format,
+            result.document.expect("manual").source.format,
             SourceFormat::Man
         );
         assert_eq!(
@@ -456,7 +476,7 @@ mod tests {
         .expect("forced native query");
 
         assert_eq!(
-            result.manual.expect("manual").source.format,
+            result.document.expect("manual").source.format,
             SourceFormat::Man
         );
         assert_eq!(
@@ -480,7 +500,7 @@ mod tests {
         .expect("forced groff query");
 
         assert_eq!(
-            result.manual.expect("manual").source.format,
+            result.document.expect("manual").source.format,
             SourceFormat::GroffHtml
         );
         assert_eq!(
@@ -537,7 +557,7 @@ mod tests {
         let host = host(Ok(document(SourceFormat::Mdoc, true, true)));
         let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
         assert_eq!(
-            result.manual.expect("manual").source.format,
+            result.document.expect("manual").source.format,
             SourceFormat::Mdoc
         );
     }
@@ -550,7 +570,7 @@ mod tests {
         let result =
             query_with(&request(), QueryPolicy::default(), &host).expect("tldr-only query");
 
-        assert!(result.manual.is_none());
+        assert!(result.document.is_none());
         assert_eq!(result.tldr.expect("tldr").title, "tool");
     }
 
@@ -572,9 +592,11 @@ mod tests {
         assert_eq!(
             query_with(
                 &QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: " ".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: " ".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Full {},
                 },
                 QueryPolicy::default(),

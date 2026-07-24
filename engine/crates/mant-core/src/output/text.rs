@@ -19,7 +19,7 @@ pub fn render_query_text(query: &QueryBundle) -> String {
 /// the document model because the source is parsed directly).
 #[must_use]
 pub fn render_query_man(query: &QueryBundle) -> String {
-    if query.manual.is_none() {
+    if query.document.is_none() {
         return String::new();
     }
     render_query_body(query, false)
@@ -27,15 +27,14 @@ pub fn render_query_man(query: &QueryBundle) -> String {
 
 fn render_query_body(query: &QueryBundle, include_tldr: bool) -> String {
     let section = query
-        .manual
+        .document
         .as_ref()
-        .and_then(|manual| manual.meta.section.as_deref())
-        .or(query.section.as_deref());
-    let mut parts = vec![document_label(&query.topic, section)];
+        .and_then(|document| document.meta.section.as_deref());
+    let mut parts = vec![document_label(&query.label, section)];
     if include_tldr && let Some(tldr) = &query.tldr {
         parts.push(render_tldr_text(tldr));
     }
-    if let Some(manual) = &query.manual {
+    if let Some(manual) = &query.document {
         parts.push(render_sections(&manual.sections, 0));
     }
     join_parts(parts)
@@ -45,8 +44,11 @@ fn render_query_body(query: &QueryBundle, include_tldr: bool) -> String {
 #[must_use]
 pub fn render_outline_text(outline: &QueryOutline) -> String {
     let mut lines = vec![document_label(
-        &outline.topic,
-        outline.manual_section.as_deref(),
+        &outline.label,
+        outline
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.section.as_deref()),
     )];
     render_outline_nodes(&outline.nodes, "", &mut lines);
     lines.join("\n").trim_end().to_owned()
@@ -56,8 +58,11 @@ pub fn render_outline_text(outline: &QueryOutline) -> String {
 #[must_use]
 pub fn render_excerpt_text(excerpt: &QueryExcerpt) -> String {
     let mut parts = vec![document_label(
-        &excerpt.topic,
-        excerpt.manual_section.as_deref(),
+        &excerpt.label,
+        excerpt
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.section.as_deref()),
     )];
     for selection in &excerpt.selections {
         parts.push(render_selection(selection));
@@ -83,7 +88,7 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
 fn render_selection(selection: &ExcerptSelection) -> String {
     match selection {
         ExcerptSelection::Tldr { document, .. } => render_tldr_text(document),
-        ExcerptSelection::ManualSection {
+        ExcerptSelection::DocumentSection {
             path,
             title,
             breadcrumbs,
@@ -103,7 +108,7 @@ fn render_selection(selection: &ExcerptSelection) -> String {
             parts.push(render_section(section, 0));
             join_parts(parts)
         }
-        ExcerptSelection::ManualEntry {
+        ExcerptSelection::DocumentEntry {
             path,
             title,
             breadcrumbs,
@@ -408,11 +413,10 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V2,
-            topic: "demo".to_owned(),
-            section: None,
-            manual: Some(MantDocument {
-                schema: DocumentSchema::V2,
+            schema: QuerySchema::V3,
+            label: "demo".to_owned(),
+            document: Some(MantDocument {
+                schema: DocumentSchema::V3,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -545,7 +549,7 @@ mod tests {
     #[test]
     fn man_format_does_not_invent_a_document_for_tldr_only_queries() {
         let mut query = query();
-        query.manual = None;
+        query.document = None;
         query.tldr = Some(TldrDocument {
             title: "demo".to_owned(),
             description: vec!["A small demonstration.".to_owned()],
@@ -563,11 +567,10 @@ mod tests {
     fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
         fn document_with(blocks: Vec<Block>) -> QueryBundle {
             QueryBundle {
-                schema: QuerySchema::V2,
-                topic: "demo".to_owned(),
-                section: Some("1".to_owned()),
-                manual: Some(MantDocument {
-                    schema: DocumentSchema::V2,
+                schema: QuerySchema::V3,
+                label: "demo".to_owned(),
+                document: Some(MantDocument {
+                    schema: DocumentSchema::V3,
                     producer: Producer {
                         name: "test".to_owned(),
                         version: "1".to_owned(),
@@ -635,11 +638,10 @@ mod tests {
     #[test]
     fn inline_definition_descriptions_are_tight_against_their_terms() {
         let bundle = QueryBundle {
-            schema: QuerySchema::V2,
-            topic: "demo".to_owned(),
-            section: Some("1".to_owned()),
-            manual: Some(MantDocument {
-                schema: DocumentSchema::V2,
+            schema: QuerySchema::V3,
+            label: "demo".to_owned(),
+            document: Some(MantDocument {
+                schema: DocumentSchema::V3,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -721,11 +723,10 @@ mod tests {
     #[test]
     fn man_format_keeps_inline_definitions_tight() {
         let bundle = QueryBundle {
-            schema: QuerySchema::V2,
-            topic: "demo".to_owned(),
-            section: Some("1".to_owned()),
-            manual: Some(MantDocument {
-                schema: DocumentSchema::V2,
+            schema: QuerySchema::V3,
+            label: "demo".to_owned(),
+            document: Some(MantDocument {
+                schema: DocumentSchema::V3,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),

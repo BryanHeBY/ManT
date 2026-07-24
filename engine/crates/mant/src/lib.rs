@@ -10,8 +10,8 @@ mod mcp;
 use std::io::{self, Read, Write};
 
 use mant_ast::{
-    Diagnostic, ExcerptSelection, QueryBundle, QueryRequest, QueryView, SearchQuery, SourceFormat,
-    TldrCacheUpdate,
+    Diagnostic, ExcerptSelection, QueryBundle, QueryInput, QueryRequest, QueryView, SearchQuery,
+    SourceFormat, TldrCacheUpdate,
 };
 use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
 use serde::Serialize;
@@ -21,7 +21,7 @@ use arguments::{Command, QueryFormat, QuerySource, SchemaContract};
 // ── Stable process protocol ────────────────────────────────────────────────
 
 /// Exact stdio protocol understood by the TypeScript client.
-pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v2";
+pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v3";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 
@@ -164,12 +164,12 @@ fn execute(
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_core::native_api_version(),
-                request_schema: "mant.request/v2",
-                query_schema: "mant.query/v2",
-                document_schema: "mant.document/v2",
-                outline_schema: "mant.outline/v2",
-                excerpt_schema: "mant.excerpt/v2",
-                search_schema: "mant.search/v1",
+                request_schema: "mant.request/v3",
+                query_schema: "mant.query/v3",
+                document_schema: "mant.document/v3",
+                outline_schema: "mant.outline/v3",
+                excerpt_schema: "mant.excerpt/v3",
+                search_schema: "mant.search/v2",
             },
             pretty,
         ),
@@ -323,7 +323,7 @@ fn render_query_view(
 fn validate_explanation(excerpt: &mant_ast::QueryExcerpt) -> Result<(), Failure> {
     if matches!(
         excerpt.selections.as_slice(),
-        [ExcerptSelection::ManualEntry { .. }]
+        [ExcerptSelection::DocumentEntry { .. }]
     ) {
         return Ok(());
     }
@@ -333,12 +333,13 @@ fn validate_explanation(excerpt: &mant_ast::QueryExcerpt) -> Result<(), Failure>
 }
 
 fn report_manual_diagnostics(query: &QueryBundle, output: &mut dyn Write) -> Result<(), Failure> {
-    let Some(manual) = &query.manual else {
+    let Some(manual) = &query.document else {
         return Ok(());
     };
     let engine = match manual.source.format {
         SourceFormat::GroffHtml => "groff HTML",
         SourceFormat::Man | SourceFormat::Mdoc | SourceFormat::MandocHtml => "libmandoc",
+        SourceFormat::Markdown => "Markdown",
     };
     for diagnostic in &manual.diagnostics {
         writeln!(output, "mant: {engine} {}", format_diagnostic(diagnostic))
@@ -367,7 +368,7 @@ fn render_full_query(
         )),
         QueryFormat::Text => Ok(mant_core::render_query_text(query)),
         QueryFormat::Man => {
-            if query.manual.is_none() {
+            if query.document.is_none() {
                 return Err(Failure::operational(
                     "manual page is unavailable; --format man cannot render tldr-only content",
                 ));
@@ -415,15 +416,23 @@ fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<Query
 }
 
 fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
-    if request.topic.trim().is_empty() {
-        return Err(Failure::usage("manual topic must not be empty"));
-    }
-    if request
-        .section
-        .as_deref()
-        .is_some_and(|value| value.trim().is_empty())
-    {
-        return Err(Failure::usage("manual section must not be empty"));
+    match &request.input {
+        QueryInput::Manual { topic, section } => {
+            if topic.trim().is_empty() {
+                return Err(Failure::usage("manual topic must not be empty"));
+            }
+            if section
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(Failure::usage("manual section must not be empty"));
+            }
+        }
+        QueryInput::MarkdownFile { path } => {
+            if path.trim().is_empty() {
+                return Err(Failure::usage("Markdown path must not be empty"));
+            }
+        }
     }
     if let QueryView::Excerpt { nodes } = &request.view {
         if nodes.is_empty() {
@@ -532,8 +541,8 @@ mod tests {
     use mant_ast::{
         Block, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic, DiagnosticLevel,
         DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer,
-        QueryBundle, QueryRequest, QuerySchema, Section, SourceFormat, SourceSpan, TldrCacheAction,
-        TldrCacheUpdate, TldrDocument,
+        QueryBundle, QueryInput, QueryRequest, QuerySchema, Section, SourceFormat, SourceSpan,
+        TldrCacheAction, TldrCacheUpdate, TldrDocument,
     };
 
     use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, run_with_host};
@@ -541,7 +550,7 @@ mod tests {
     struct FakeHost {
         query_calls: Cell<usize>,
         update_calls: Cell<usize>,
-        manual: Option<MantDocument>,
+        document: Option<MantDocument>,
         tldr: Option<TldrDocument>,
     }
 
@@ -550,21 +559,21 @@ mod tests {
             Self {
                 query_calls: Cell::new(0),
                 update_calls: Cell::new(0),
-                manual: None,
+                document: None,
                 tldr: None,
             }
         }
 
         fn with_manual() -> Self {
             Self {
-                manual: Some(manual()),
+                document: Some(manual()),
                 ..Self::new()
             }
         }
 
         fn with_manual_and_tldr() -> Self {
             Self {
-                manual: Some(manual()),
+                document: Some(manual()),
                 tldr: Some(tldr()),
                 ..Self::new()
             }
@@ -579,7 +588,7 @@ mod tests {
 
         fn with_explainable_manual() -> Self {
             Self {
-                manual: Some(explainable_manual()),
+                document: Some(explainable_manual()),
                 ..Self::new()
             }
         }
@@ -592,11 +601,14 @@ mod tests {
             _policy: QueryPolicy,
         ) -> Result<QueryBundle, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
+            let label = match &request.input {
+                QueryInput::Manual { topic, .. } => topic.trim().to_owned(),
+                QueryInput::MarkdownFile { path } => path.clone(),
+            };
             Ok(QueryBundle {
-                schema: QuerySchema::V2,
-                topic: request.topic.trim().to_owned(),
-                section: request.section.clone(),
-                manual: self.manual.clone(),
+                schema: QuerySchema::V3,
+                label,
+                document: self.document.clone(),
                 tldr: self.tldr.clone(),
             })
         }
@@ -631,7 +643,7 @@ mod tests {
 
     fn manual() -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V2,
+            schema: DocumentSchema::V3,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
@@ -732,15 +744,12 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v2","topic":"git","section":"1","view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git","section":"1"},"view":{"kind":"full"}}"#,
             &host,
         );
 
         assert_eq!(status, 0);
-        assert_eq!(
-            output,
-            "{\"schema\":\"mant.query/v2\",\"topic\":\"git\",\"section\":\"1\"}\n"
-        );
+        assert_eq!(output, "{\"schema\":\"mant.query/v3\",\"label\":\"git\"}\n");
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 1);
     }
@@ -749,13 +758,13 @@ mod tests {
     fn malformed_or_extended_requests_fail_before_querying_the_host() {
         for input in [
             br"not-json".as_slice(),
-            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"full"},"renderer":"html"}"#.as_slice(),
-            br#"{"schema":"mant.request/v2","topic":"   ","view":{"kind":"full"}}"#.as_slice(),
-            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
-            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
-            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
-            br#"{"schema":"mant.request/v2","topic":"git","view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"full"},"renderer":"html"}"#.as_slice(),
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"   "},"view":{"kind":"full"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -775,23 +784,23 @@ mod tests {
         let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v2","topic":"demo","view":{"kind":"outline","detail":"sections"}}"#,
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
             &host,
         );
         assert_eq!(status, 0);
         let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
-        assert_eq!(outline["schema"], "mant.outline/v2");
+        assert_eq!(outline["schema"], "mant.outline/v3");
         assert_eq!(outline["detail"], "sections");
         assert!(diagnostics.is_empty());
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v2","topic":"demo","view":{"kind":"excerpt","nodes":["2.1"]}}"#,
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
             &host,
         );
         assert_eq!(status, 0);
         let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(excerpt["schema"], "mant.excerpt/v2");
+        assert_eq!(excerpt["schema"], "mant.excerpt/v3");
         assert_eq!(excerpt["selections"][0]["path"], "2.1");
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 2);
@@ -815,7 +824,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(value["schema"], "mant.excerpt/v2");
+        assert_eq!(value["schema"], "mant.excerpt/v3");
         assert_eq!(value["selections"][0]["path"], "2.1");
         assert_eq!(value["selections"][0]["section"]["title"], "Common options");
         assert!(diagnostics.is_empty());
@@ -887,8 +896,8 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(value["schema"], "mant.excerpt/v2");
-        assert_eq!(value["selections"][0]["kind"], "manual-entry");
+        assert_eq!(value["schema"], "mant.excerpt/v3");
+        assert_eq!(value["selections"][0]["kind"], "document-entry");
         assert_eq!(value["selections"][0]["id"], "exclude");
         assert!(diagnostics.is_empty());
 
@@ -901,7 +910,7 @@ mod tests {
     #[test]
     fn forced_queries_print_native_findings_on_stderr() {
         let mut host = FakeHost::with_manual();
-        host.manual
+        host.document
             .as_mut()
             .expect("manual")
             .diagnostics
@@ -931,7 +940,7 @@ mod tests {
     #[test]
     fn forced_groff_labels_renderer_findings_on_stderr() {
         let mut host = FakeHost::with_manual();
-        let manual = host.manual.as_mut().expect("manual");
+        let manual = host.document.as_mut().expect("manual");
         manual.source.format = SourceFormat::GroffHtml;
         manual.diagnostics.push(Diagnostic {
             level: DiagnosticLevel::Warning,
@@ -965,7 +974,7 @@ mod tests {
 
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-        assert_eq!(value["schema"], "mant.search/v1");
+        assert_eq!(value["schema"], "mant.search/v2");
         assert_eq!(value["total"], 1);
         assert_eq!(value["matches"][0]["node"]["path"], "2.1");
         assert_eq!(value["matches"][0]["section"]["id"], "common-3");
@@ -983,13 +992,13 @@ mod tests {
         let host = FakeHost::with_manual();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v2","topic":"demo","view":{"kind":"search","pattern":"options","limit":10}}"#,
+            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
             &host,
         );
 
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-        assert_eq!(value["schema"], "mant.search/v1");
+        assert_eq!(value["schema"], "mant.search/v2");
         assert_eq!(value["query"]["syntax"], "literal");
         assert_eq!(value["query"]["scope"], "visible");
         assert!(
@@ -1029,11 +1038,11 @@ mod tests {
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
-        assert_eq!(value["nativeApiVersion"], "2");
-        assert_eq!(value["requestSchema"], "mant.request/v2");
-        assert_eq!(value["outlineSchema"], "mant.outline/v2");
-        assert_eq!(value["excerptSchema"], "mant.excerpt/v2");
-        assert_eq!(value["searchSchema"], "mant.search/v1");
+        assert_eq!(value["nativeApiVersion"], "3");
+        assert_eq!(value["requestSchema"], "mant.request/v3");
+        assert_eq!(value["outlineSchema"], "mant.outline/v3");
+        assert_eq!(value["excerptSchema"], "mant.excerpt/v3");
+        assert_eq!(value["searchSchema"], "mant.search/v2");
         assert!(diagnostics.is_empty());
     }
 
@@ -1063,7 +1072,7 @@ mod tests {
             "https://json-schema.org/draft/2020-12/schema"
         );
         assert_eq!(value["additionalProperties"], false);
-        assert!(output.contains("mant.request/v2"));
+        assert!(output.contains("mant.request/v3"));
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);

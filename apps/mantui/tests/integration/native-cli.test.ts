@@ -36,12 +36,12 @@ describeMant("real native mant process boundary", () => {
     });
 
     const protocol = await client.protocol();
-    expect(protocol.protocol).toBe("mant.cli/v2");
-    expect(protocol.requestSchema).toBe("mant.request/v2");
-    expect(protocol.documentSchema).toBe("mant.document/v2");
-    expect(protocol.outlineSchema).toBe("mant.outline/v2");
-    expect(protocol.excerptSchema).toBe("mant.excerpt/v2");
-    expect(protocol.searchSchema).toBe("mant.search/v1");
+    expect(protocol.protocol).toBe("mant.cli/v3");
+    expect(protocol.requestSchema).toBe("mant.request/v3");
+    expect(protocol.documentSchema).toBe("mant.document/v3");
+    expect(protocol.outlineSchema).toBe("mant.outline/v3");
+    expect(protocol.excerptSchema).toBe("mant.excerpt/v3");
+    expect(protocol.searchSchema).toBe("mant.search/v2");
   });
 
   testWithManual("returns a validated manual through the native query pipeline", async () => {
@@ -50,14 +50,14 @@ describeMant("real native mant process boundary", () => {
       which: () => null,
     });
 
-    const query = await client.query({ topic: "ls" });
-    expect(query.schema).toBe("mant.query/v2");
+    const query = await client.query({ input: { kind: "manual", topic: "ls" } });
+    expect(query.schema).toBe("mant.query/v3");
     // Host manual sources vary by operating system and distribution. The
     // native query pipeline prefers libmandoc, but may legitimately fall back
     // to groff HTML for source constructs libmandoc cannot lower. Fixed roff
     // fixtures exercise the libmandoc-only path independently.
-    expect(query.manual?.producer.name).toBe("mant");
-    expect(query.manual?.sections.length).toBeGreaterThan(0);
+    expect(query.document?.producer.name).toBe("mant");
+    expect(query.document?.sections.length).toBeGreaterThan(0);
   });
 
   testWithTarManual("passes semantic tar options through the TUI search index", async () => {
@@ -66,10 +66,10 @@ describeMant("real native mant process boundary", () => {
       which: () => null,
     });
 
-    const query = await client.query({ topic: "tar" });
-    expect(query.manual?.producer.engine?.name).toBe("libmandoc");
+    const query = await client.query({ input: { kind: "manual", topic: "tar" } });
+    expect(query.document?.producer.engine?.name).toBe("libmandoc");
 
-    const index = buildPageSearchIndex(query.manual?.sections ?? [], query.tldr);
+    const index = buildPageSearchIndex(query.document?.sections ?? [], query.tldr);
     const match = queryPageSearchIndex(index, "--acls")[0];
     expect(match?.text).toBe("--acls");
     expect(match?.targetPath).toContain(".definition-");

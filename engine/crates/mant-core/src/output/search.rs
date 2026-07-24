@@ -124,10 +124,14 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
 }
 
 fn document_label(search: &QuerySearch) -> String {
-    search.manual_section.as_ref().map_or_else(
-        || search.topic.clone(),
-        |section| format!("{}({section})", search.topic),
-    )
+    search
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.section.as_deref())
+        .map_or_else(
+            || search.label.clone(),
+            |section| format!("{}({section})", search.label),
+        )
 }
 
 fn code_span(value: &str) -> String {
@@ -163,9 +167,13 @@ mod tests {
 
     fn result() -> QuerySearch {
         QuerySearch {
-            schema: SearchSchema::V1,
-            topic: "tar".to_owned(),
-            manual_section: Some("1".to_owned()),
+            schema: SearchSchema::V2,
+            label: "tar".to_owned(),
+            source: None,
+            meta: Some(mant_ast::DocumentMeta {
+                section: Some("1".to_owned()),
+                ..mant_ast::DocumentMeta::default()
+            }),
             query: SearchQuery {
                 pattern: "--acls".to_owned(),
                 syntax: SearchSyntax::Literal,
@@ -191,7 +199,7 @@ mod tests {
             next_offset: None,
             matches: vec![SearchMatch {
                 ordinal: 1,
-                node: SearchNode::ManualEntry {
+                node: SearchNode::DocumentEntry {
                     path: "5.3/o17".to_owned(),
                     id: "acls-option".to_owned(),
                     title: "--acls".to_owned(),

@@ -115,9 +115,16 @@ pub fn search_query(
     let truncated = consumed < total;
 
     Ok(QuerySearch {
-        schema: SearchSchema::V1,
-        topic: query.topic.clone(),
-        manual_section: resolved_manual_section(query),
+        schema: SearchSchema::V2,
+        label: query.label.clone(),
+        source: query
+            .document
+            .as_ref()
+            .map(|document| document.source.clone()),
+        meta: query
+            .document
+            .as_ref()
+            .map(|document| document.meta.clone()),
         query: request.clone(),
         render: SearchRender {
             schema: MarkdownSchema::V1,
@@ -261,14 +268,6 @@ fn display_markdown_line(line: &str) -> String {
     }
     output.push_str(remaining);
     output
-}
-
-fn resolved_manual_section(query: &QueryBundle) -> Option<String> {
-    query
-        .manual
-        .as_ref()
-        .and_then(|manual| manual.meta.section.clone())
-        .or_else(|| query.section.clone())
 }
 
 struct TextPosition {
@@ -488,11 +487,10 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V2,
-            topic: "demo".to_owned(),
-            section: Some("1".to_owned()),
-            manual: Some(MantDocument {
-                schema: DocumentSchema::V2,
+            schema: QuerySchema::V3,
+            label: "demo".to_owned(),
+            document: Some(MantDocument {
+                schema: DocumentSchema::V3,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -588,7 +586,7 @@ mod tests {
     #[test]
     fn semantic_entry_ownership_ends_before_a_following_section_paragraph() {
         let mut query = query();
-        query.manual.as_mut().expect("manual").sections[0]
+        query.document.as_mut().expect("manual").sections[0]
             .blocks
             .push(Block::Paragraph {
                 children: vec![Inline::Text {
@@ -601,7 +599,7 @@ mod tests {
         let result = search_query(&query, &request("section tail")).expect("search");
         assert!(matches!(
             &result.matches[0].node,
-            mant_ast::SearchNode::ManualSection { path, .. } if path == "1"
+            mant_ast::SearchNode::DocumentSection { path, .. } if path == "1"
         ));
     }
 

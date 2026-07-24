@@ -31,7 +31,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
 /// `--acls` option is addressable through a V2 outline and
 /// `select_excerpt` returns its identity.
 #[test]
-fn options_are_addressable_in_v2_outlines_and_excerpts() {
+fn options_are_addressable_in_v3_outlines_and_excerpts() {
     let document = fedora44_manual("tar");
     let query = query_for_document("tar", document);
     let acls = semantic_definition_items(document)
@@ -53,7 +53,7 @@ fn options_are_addressable_in_v2_outlines_and_excerpts() {
     let excerpt = select_excerpt(&query, &["acls".to_owned()]).expect("--acls excerpt by alias");
     assert!(matches!(
         excerpt.selections.as_slice(),
-        [ExcerptSelection::ManualEntry { entry, .. }]
+        [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.identity.as_ref().is_some_and(|value| value.id == identity.id)
     ));
 }
@@ -84,7 +84,7 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
         .iter()
         .find(|found| {
             matches!(&found.node,
-                mant_ast::SearchNode::ManualEntry { names, .. }
+                mant_ast::SearchNode::DocumentEntry { names, .. }
                 if names.iter().any(|name| name == "--acls"))
         })
         .expect("--acls option match");
@@ -97,7 +97,7 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
         .expect("search node can be passed directly to --node");
     assert!(matches!(
         excerpt.selections.as_slice(),
-        [ExcerptSelection::ManualEntry { entry, .. }]
+        [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.identity.as_ref().is_some_and(|identity| identity.names.iter().any(|name| name == "--acls"))
     ));
 }

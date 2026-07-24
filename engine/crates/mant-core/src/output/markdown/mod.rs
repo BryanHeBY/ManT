@@ -37,16 +37,16 @@ pub fn render_markdown(query: &QueryBundle) -> String {
 #[must_use]
 pub fn render_markdown_with_options(query: &QueryBundle, options: MarkdownOptions) -> String {
     let mut output = Vec::new();
-    output.push(heading(1, &query.topic));
+    output.push(heading(1, &query.label));
 
     if let Some(tldr) = &query.tldr {
         output.extend(render_tldr(tldr));
-        if query.manual.is_some() {
+        if query.document.is_some() {
             output.push("---".to_owned());
         }
     }
 
-    if let Some(manual) = &query.manual {
+    if let Some(manual) = &query.document {
         render_sections(&mut output, &manual.sections, 2, options);
     }
     output
@@ -61,13 +61,14 @@ pub fn render_markdown_with_options(query: &QueryBundle, options: MarkdownOption
 /// Render a complete query outline as a nested `CommonMark` list.
 #[must_use]
 pub fn render_outline_markdown(outline: &QueryOutline) -> String {
-    let mut blocks = vec![heading(
-        1,
-        &format!(
-            "{} outline",
-            document_label(&outline.topic, outline.manual_section.as_deref())
-        ),
-    )];
+    let label = document_label(
+        &outline.label,
+        outline
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.section.as_deref()),
+    );
+    let mut blocks = vec![heading(1, &format!("{label} outline"))];
     if !outline.nodes.is_empty() {
         blocks.push(outline_list(&outline.nodes, 0));
     }
@@ -86,10 +87,14 @@ pub fn render_excerpt_markdown_with_options(
     excerpt: &QueryExcerpt,
     options: MarkdownOptions,
 ) -> String {
-    let mut output = vec![heading(
-        1,
-        &document_label(&excerpt.topic, excerpt.manual_section.as_deref()),
-    )];
+    let label = document_label(
+        &excerpt.label,
+        excerpt
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.section.as_deref()),
+    );
+    let mut output = vec![heading(1, &label)];
     for (index, selection) in excerpt.selections.iter().enumerate() {
         if index > 0 {
             output.push("---".to_owned());
@@ -97,10 +102,10 @@ pub fn render_excerpt_markdown_with_options(
         output.push(selection_context(selection));
         match selection {
             ExcerptSelection::Tldr { document, .. } => output.extend(render_tldr(document)),
-            ExcerptSelection::ManualSection { section, .. } => {
+            ExcerptSelection::DocumentSection { section, .. } => {
                 render_sections(&mut output, std::slice::from_ref(section), 2, options);
             }
-            ExcerptSelection::ManualEntry { entry, .. } => {
+            ExcerptSelection::DocumentEntry { entry, .. } => {
                 output.extend(render_blocks(
                     &[Block::DefinitionList {
                         items: vec![entry.clone()],
@@ -145,7 +150,7 @@ fn selection_context(selection: &ExcerptSelection) -> String {
         ExcerptSelection::Tldr { path, title, .. } => {
             format!("*Outline {}: {}*", code_span(path), escape_text(title))
         }
-        ExcerptSelection::ManualSection {
+        ExcerptSelection::DocumentSection {
             path,
             title,
             breadcrumbs,
@@ -159,7 +164,7 @@ fn selection_context(selection: &ExcerptSelection) -> String {
                 .join(" → ");
             format!("*Outline {}: {breadcrumb}*", code_span(path))
         }
-        ExcerptSelection::ManualEntry {
+        ExcerptSelection::DocumentEntry {
             path,
             title,
             breadcrumbs,
@@ -262,8 +267,8 @@ fn heading(depth: usize, title: &str) -> String {
     format!("{} {}", "#".repeat(depth.clamp(1, 6)), escape_text(title))
 }
 
-fn document_label(topic: &str, section: Option<&str>) -> String {
-    section.map_or_else(|| topic.to_owned(), |section| format!("{topic}({section})"))
+fn document_label(label: &str, section: Option<&str>) -> String {
+    section.map_or_else(|| label.to_owned(), |section| format!("{label}({section})"))
 }
 
 #[cfg(test)]

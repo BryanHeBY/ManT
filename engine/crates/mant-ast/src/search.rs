@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{DefinitionRole, SourceSpan};
+use crate::{DefinitionRole, DocumentMeta, DocumentSource, SourceSpan};
 
 pub const DEFAULT_SEARCH_LIMIT: u32 = 100;
 
@@ -69,8 +69,8 @@ pub const fn default_search_limit() -> u32 {
 /// Exact schema marker for structure-aware search results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum SearchSchema {
-    #[serde(rename = "mant.search/v1")]
-    V1,
+    #[serde(rename = "mant.search/v2")]
+    V2,
 }
 
 /// Markdown contract used as the coordinate space for every search format.
@@ -109,12 +109,14 @@ pub struct SearchRender {
 /// Complete, paginatable search result returned to agents and scripts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:search:v1"))]
+#[schemars(extend("$id" = "urn:mant:search:v2"))]
 pub struct QuerySearch {
     pub schema: SearchSchema,
-    pub topic: String,
+    pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub manual_section: Option<String>,
+    pub source: Option<DocumentSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<DocumentMeta>,
     pub query: SearchQuery,
     pub render: SearchRender,
     pub total: u32,
@@ -156,12 +158,12 @@ pub enum SearchNode {
         id: String,
         title: String,
     },
-    ManualSection {
+    DocumentSection {
         path: String,
         id: String,
         title: String,
     },
-    ManualEntry {
+    DocumentEntry {
         path: String,
         id: String,
         title: String,
@@ -175,8 +177,8 @@ impl SearchNode {
     pub fn path(&self) -> &str {
         match self {
             Self::Tldr { path, .. }
-            | Self::ManualSection { path, .. }
-            | Self::ManualEntry { path, .. } => path,
+            | Self::DocumentSection { path, .. }
+            | Self::DocumentEntry { path, .. } => path,
         }
     }
 
@@ -184,8 +186,8 @@ impl SearchNode {
     pub fn title(&self) -> &str {
         match self {
             Self::Tldr { title, .. }
-            | Self::ManualSection { title, .. }
-            | Self::ManualEntry { title, .. } => title,
+            | Self::DocumentSection { title, .. }
+            | Self::DocumentEntry { title, .. } => title,
         }
     }
 }

@@ -8,7 +8,7 @@ import { mantClient } from "../src/native";
 import { App } from "../src/ui/app";
 
 async function main() {
-  const result = await mantClient.query({ topic: "ls" });
+  const result = await mantClient.query({ input: { kind: "manual", topic: "ls" } });
 
   const setup = await createTestRenderer({
     width: 80,

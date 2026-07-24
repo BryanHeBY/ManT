@@ -1,4 +1,4 @@
-//! Projects complete manual documents into outlines and selectable excerpts.
+//! Projects complete structured documents into outlines and selectable excerpts.
 
 use std::{collections::HashSet, error::Error, fmt};
 
@@ -58,9 +58,9 @@ pub fn build_outline_with_detail(
     query: &QueryBundle,
     detail: OutlineDetail,
 ) -> Result<QueryOutline, ProjectionError> {
-    if query.tldr.is_none() && query.manual.is_none() {
+    if query.tldr.is_none() && query.document.is_none() {
         return Err(ProjectionError::MissingContent {
-            topic: query.topic.clone(),
+            topic: query.label.clone(),
         });
     }
     let mut nodes = Vec::new();
@@ -71,16 +71,21 @@ pub fn build_outline_with_detail(
             title: TLDR_TITLE.to_owned(),
         });
     }
-    if let Some(manual) = &query.manual {
+    if let Some(manual) = &query.document {
         nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V2,
+        schema: OutlineSchema::V3,
         detail,
-        topic: query.topic.clone(),
-        manual_section: resolved_manual_section(query),
-        source: query.manual.as_ref().map(|manual| manual.source.clone()),
-        meta: query.manual.as_ref().map(|manual| manual.meta.clone()),
+        label: query.label.clone(),
+        source: query
+            .document
+            .as_ref()
+            .map(|document| document.source.clone()),
+        meta: query
+            .document
+            .as_ref()
+            .map(|document| document.meta.clone()),
         nodes,
     })
 }
@@ -100,13 +105,13 @@ pub fn select_excerpt(
     if selectors.is_empty() {
         return Err(ProjectionError::EmptySelection);
     }
-    if query.tldr.is_none() && query.manual.is_none() {
+    if query.tldr.is_none() && query.document.is_none() {
         return Err(ProjectionError::MissingContent {
-            topic: query.topic.clone(),
+            topic: query.label.clone(),
         });
     }
     let mut located = Vec::new();
-    if let Some(manual) = &query.manual {
+    if let Some(manual) = &query.document {
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
 
@@ -126,7 +131,7 @@ pub fn select_excerpt(
             .iter()
             .find(|candidate| candidate.matches(selector))
             .ok_or_else(|| ProjectionError::UnknownSelector {
-                topic: query.topic.clone(),
+                topic: query.label.clone(),
                 selector: selector.to_owned(),
             })?;
         if selected_ids.insert(candidate.id()) {
@@ -151,10 +156,10 @@ pub fn select_excerpt(
     });
     selected.sort_by_key(|candidate| candidate.order());
 
-    let manual = if selected.is_empty() {
+    let document = if selected.is_empty() {
         None
     } else {
-        query.manual.as_ref()
+        query.document.as_ref()
     };
     let mut selections = Vec::new();
     if let (true, Some(document)) = (tldr_selected, query.tldr.clone()) {
@@ -168,25 +173,16 @@ pub fn select_excerpt(
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V2,
-        topic: query.topic.clone(),
-        manual_section: manual.and_then(|_| resolved_manual_section(query)),
-        producer: manual.map(|manual| manual.producer.clone()),
-        source: manual.map(|manual| manual.source.clone()),
-        meta: manual.map(|manual| manual.meta.clone()),
-        diagnostics: manual
-            .map(|manual| manual.diagnostics.clone())
+        schema: ExcerptSchema::V3,
+        label: query.label.clone(),
+        producer: document.map(|document| document.producer.clone()),
+        source: document.map(|document| document.source.clone()),
+        meta: document.map(|document| document.meta.clone()),
+        diagnostics: document
+            .map(|document| document.diagnostics.clone())
             .unwrap_or_default(),
         selections,
     })
-}
-
-fn resolved_manual_section(query: &QueryBundle) -> Option<String> {
-    query
-        .manual
-        .as_ref()
-        .and_then(|manual| manual.meta.section.clone())
-        .or_else(|| query.section.clone())
 }
 
 fn outline_nodes(
@@ -211,7 +207,7 @@ fn outline_nodes(
                         .enumerate()
                         .filter_map(|(index, entry)| {
                             let identity = entry.identity.as_ref()?;
-                            Some(OutlineNode::ManualEntry {
+                            Some(OutlineNode::DocumentEntry {
                                 path: format!("{path}/o{}", index + 1),
                                 id: identity.id.clone(),
                                 title: identity.names.join(", "),
@@ -222,7 +218,7 @@ fn outline_nodes(
                 );
             }
             children.extend(outline_nodes(&section.children, &coordinates, detail));
-            OutlineNode::ManualSection {
+            OutlineNode::DocumentSection {
                 path,
                 id: section.id.clone(),
                 title: section.title.clone(),
@@ -308,7 +304,7 @@ impl LocatedNode<'_> {
                 breadcrumbs,
                 section,
                 ..
-            } => ExcerptSelection::ManualSection {
+            } => ExcerptSelection::DocumentSection {
                 path: path.clone(),
                 id: section.id.clone(),
                 title: section.title.clone(),
@@ -321,7 +317,7 @@ impl LocatedNode<'_> {
                 breadcrumbs,
                 entry,
                 ..
-            } => ExcerptSelection::ManualEntry {
+            } => ExcerptSelection::DocumentEntry {
                 path: path.clone(),
                 id: entry
                     .identity
@@ -446,11 +442,10 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V2,
-            topic: "demo".to_owned(),
-            section: None,
-            manual: Some(MantDocument {
-                schema: DocumentSchema::V2,
+            schema: QuerySchema::V3,
+            label: "demo".to_owned(),
+            document: Some(MantDocument {
+                schema: DocumentSchema::V3,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -499,7 +494,13 @@ mod tests {
     fn builds_one_based_tree_paths_without_copying_blocks() {
         let outline = build_outline(&query()).expect("outline");
 
-        assert_eq!(outline.manual_section.as_deref(), Some("1"));
+        assert_eq!(
+            outline
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.section.as_deref()),
+            Some("1")
+        );
         assert_eq!(outline.nodes[1].path(), "2");
         assert_eq!(outline.nodes[1].id(), "options-2");
         assert_eq!(outline.nodes[1].children()[0].path(), "2.1");
@@ -538,12 +539,12 @@ mod tests {
             .iter()
             .map(|selection| match selection {
                 ExcerptSelection::Tldr { path, .. }
-                | ExcerptSelection::ManualSection { path, .. }
-                | ExcerptSelection::ManualEntry { path, .. } => path.as_str(),
+                | ExcerptSelection::DocumentSection { path, .. }
+                | ExcerptSelection::DocumentEntry { path, .. } => path.as_str(),
             })
             .collect::<Vec<_>>();
         assert_eq!(paths, ["2", "3"]);
-        let ExcerptSelection::ManualSection {
+        let ExcerptSelection::DocumentSection {
             section,
             breadcrumbs,
             ..
@@ -559,7 +560,7 @@ mod tests {
     fn child_selection_retains_ancestor_breadcrumbs() {
         let excerpt = select_excerpt(&query(), &["2.2".to_owned()]).expect("excerpt");
 
-        let ExcerptSelection::ManualSection {
+        let ExcerptSelection::DocumentSection {
             title, breadcrumbs, ..
         } = &excerpt.selections[0]
         else {
@@ -581,12 +582,12 @@ mod tests {
         .expect("combined excerpt");
         assert!(matches!(
             excerpt.selections.as_slice(),
-            [ExcerptSelection::Tldr { path, .. }, ExcerptSelection::ManualSection { .. }]
+            [ExcerptSelection::Tldr { path, .. }, ExcerptSelection::DocumentSection { .. }]
                 if path == "0"
         ));
 
         let mut tldr_only = combined;
-        tldr_only.manual = None;
+        tldr_only.document = None;
         let outline = build_outline(&tldr_only).expect("tldr-only outline");
         assert_eq!(outline.nodes.len(), 1);
         assert_eq!(outline.nodes[0].path(), "0");
@@ -597,7 +598,7 @@ mod tests {
     #[test]
     fn reports_missing_content_and_unknown_or_empty_selectors() {
         let mut empty = query();
-        empty.manual = None;
+        empty.document = None;
         assert!(matches!(
             build_outline(&empty),
             Err(ProjectionError::MissingContent { .. })

@@ -358,7 +358,7 @@ describe("App rendering (e2e)", () => {
   });
 
   test("keeps cached tldr content usable without a local man page", async () => {
-    const { manual: _, ...tldrOnly } = mockLsWithTldrResult;
+    const { document: _, ...tldrOnly } = mockLsWithTldrResult;
     const setup = await renderApp(tldrOnly, { width: 100, height: 28 });
     const frame = setup.captureCharFrame();
 

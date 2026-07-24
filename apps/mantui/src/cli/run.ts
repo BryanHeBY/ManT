@@ -50,8 +50,11 @@ export async function runCli(
     const executeQuery = dependencies.query
       ?? (await import("../native")).mantClient.query;
     const result = await executeQuery({
-      topic: command.topic,
-      ...(command.section === undefined ? {} : { section: command.section }),
+      input: {
+        kind: "manual",
+        topic: command.topic,
+        ...(command.section === undefined ? {} : { section: command.section }),
+      },
       ...(command.forceLibmandoc ? { forceLibmandoc: true } : {}),
       ...(command.forceGroff ? { forceGroff: true } : {}),
     });

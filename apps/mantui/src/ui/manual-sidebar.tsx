@@ -47,7 +47,7 @@ export function ManualSidebar({
   onActivateNode,
   onActivateTldr,
 }: ManualSidebarProps) {
-  const visibleManualSections = visibleNodes.filter(
+  const visibleDocumentSections = visibleNodes.filter(
     ({ node }) => node.kind === "section",
   ).length;
   return (
@@ -62,10 +62,10 @@ export function ManualSidebar({
         borderColor="#313244"
       >
         <text height={1} fg="#cdd6f4" truncate wrapMode="none" selectable={false}>
-          {`MANUAL · ${result.topic}`}
+          {`MANUAL · ${result.label}`}
         </text>
         <text height={1} fg="#7f849c" selectable={false}>
-          {`${result.manual?.sections.length ?? 0} top-level · ${visibleManualSections} manual${result.tldr ? " · TLDR" : ""}`}
+          {`${result.document?.sections.length ?? 0} top-level · ${visibleDocumentSections} manual${result.tldr ? " · TLDR" : ""}`}
         </text>
       </box>
       <box height={1} paddingLeft={1} paddingRight={1}>

@@ -8,8 +8,8 @@ use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
 use mant_ast::{
-    OutlineDetail, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
-    default_search_limit,
+    OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope,
+    SearchSyntax, default_search_limit,
 };
 
 // ── Public command model ───────────────────────────────────────────────────
@@ -459,9 +459,11 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         QuerySource::StdinJson
     } else {
         QuerySource::Arguments(QueryRequest {
-            schema: RequestSchema::V2,
-            topic: parsed.topic.expect("clap requires one input source"),
-            section: parsed.section,
+            schema: RequestSchema::V3,
+            input: QueryInput::Manual {
+                topic: parsed.topic.expect("clap requires one input source"),
+                section: parsed.section,
+            },
             view,
         })
     };
@@ -493,7 +495,7 @@ fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Erro
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        OutlineDetail, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope,
+        OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope,
         SearchSyntax,
     };
 
@@ -509,9 +511,11 @@ mod tests {
             parse(&args(&["git"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "git".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "git".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Full {},
                 }),
                 format: QueryFormat::Markdown,
@@ -550,9 +554,11 @@ mod tests {
             .expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "printf".to_owned(),
-                    section: Some("3".to_owned()),
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "printf".to_owned(),
+                        section: Some("3".to_owned()),
+                    },
                     view: QueryView::Full {},
                 }),
                 format: QueryFormat::Json,
@@ -619,9 +625,11 @@ mod tests {
             parse(&args(&["gcc", "--outline"])).expect("outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "gcc".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "gcc".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Outline {
                         detail: OutlineDetail::Options,
                     },
@@ -639,9 +647,11 @@ mod tests {
                 .expect("option outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "tar".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "tar".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Outline {
                         detail: OutlineDetail::Options,
                     },
@@ -661,9 +671,11 @@ mod tests {
             .expect("excerpt"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "gcc".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "gcc".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Excerpt {
                         nodes: vec!["4.2".to_owned(), "files-8".to_owned()],
                     },
@@ -689,9 +701,11 @@ mod tests {
                 parse(&args(&values)).expect("explain query"),
                 Command::Query {
                     source: QuerySource::Arguments(QueryRequest {
-                        schema: RequestSchema::V2,
-                        topic: "tar".to_owned(),
-                        section: None,
+                        schema: RequestSchema::V3,
+                        input: QueryInput::Manual {
+                            topic: "tar".to_owned(),
+                            section: None,
+                        },
                         view: QueryView::Excerpt {
                             nodes: vec![selector.to_owned()],
                         },
@@ -713,9 +727,11 @@ mod tests {
             parse(&args(&["tar", "--search=--acls"])).expect("literal search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "tar".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "tar".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Search {
                         pattern: "--acls".to_owned(),
                         syntax: SearchSyntax::Literal,
@@ -758,9 +774,11 @@ mod tests {
             .expect("regex search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "git".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "git".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Search {
                         pattern: "worktree|branch".to_owned(),
                         syntax: SearchSyntax::Regex,
@@ -854,9 +872,11 @@ mod tests {
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V2,
-                    topic: "--help".to_owned(),
-                    section: None,
+                    schema: RequestSchema::V3,
+                    input: QueryInput::Manual {
+                        topic: "--help".to_owned(),
+                        section: None,
+                    },
                     view: QueryView::Full {},
                 }),
                 format: QueryFormat::Markdown,

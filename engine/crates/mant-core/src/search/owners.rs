@@ -31,7 +31,7 @@ impl OwnerIndex {
     pub(super) fn new(query: &QueryBundle, markdown: &str) -> Self {
         let mut sections = Vec::new();
         let mut entries = Vec::new();
-        if let Some(manual) = &query.manual {
+        if let Some(manual) = &query.document {
             collect_section_owners(&manual.sections, &[], markdown, &mut sections, &mut entries);
             sections.sort_by_key(|owner| owner.start);
             for index in 0..sections.len() {
@@ -140,7 +140,7 @@ fn collect_section_owners(
         section_owners.push(Owner {
             start,
             end: markdown.len(),
-            node: SearchNode::ManualSection {
+            node: SearchNode::DocumentSection {
                 path: path.clone(),
                 id: section.id.clone(),
                 title: section.title.clone(),
@@ -165,7 +165,7 @@ fn collect_section_owners(
             entry_owners.push(Owner {
                 start: entry_start,
                 end: definition_item_end(markdown, entry_start),
-                node: SearchNode::ManualEntry {
+                node: SearchNode::DocumentEntry {
                     path: format!("{path}/o{}", entry_index + 1),
                     id: identity.id.clone(),
                     title: identity.names.join(", "),

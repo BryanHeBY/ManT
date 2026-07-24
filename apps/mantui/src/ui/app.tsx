@@ -46,7 +46,7 @@ interface AppProps {
 const EMPTY_SECTIONS: MantSection[] = [];
 
 export function App({ result, onQuit }: AppProps) {
-  const sections = result.manual?.sections ?? EMPTY_SECTIONS;
+  const sections = result.document?.sections ?? EMPTY_SECTIONS;
   // ── View state and render references ──────────────────────
 
   const [selectedId, setSelectedId] = useState<string>(
@@ -479,8 +479,8 @@ export function App({ result, onQuit }: AppProps) {
   return (
     <box flexDirection="column" shouldFill={true}>
       <MenuBar
-        topic={result.topic}
-        section={result.section}
+        topic={result.label}
+        section={result.document?.meta.section}
         openMenu={openMenu}
         onToggleMenu={openMenuById}
       />

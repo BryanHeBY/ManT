@@ -27,8 +27,9 @@ const decoder = new TextDecoder();
 const MANT_TIMEOUT_MS = 30_000;
 
 export interface NativeQueryRequest {
-  topic: string;
-  section?: string;
+  input:
+    | { kind: "manual"; topic: string; section?: string }
+    | { kind: "markdown-file"; path: string };
   forceLibmandoc?: boolean;
   forceGroff?: boolean;
 }
@@ -116,9 +117,8 @@ export function createMantClient(
         "--compact",
       ];
       const wireRequest: MantQueryRequest = {
-        schema: "mant.request/v2",
-        topic: request.topic,
-        ...(request.section === undefined ? {} : { section: request.section }),
+        schema: "mant.request/v3",
+        input: request.input,
         view: { kind: "full" },
       };
       const result = await execute(command, {

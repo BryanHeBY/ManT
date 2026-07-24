@@ -47,7 +47,7 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument 
     ));
     navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
     MantDocument {
-        schema: DocumentSchema::V2,
+        schema: DocumentSchema::V3,
         producer: Producer {
             name: "mant".to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),

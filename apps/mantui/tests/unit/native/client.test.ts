@@ -20,14 +20,14 @@ function result(stdout: string, stderr = "", exitCode = 0): CommandResult {
 }
 
 const protocol = JSON.stringify({
-  protocol: "mant.cli/v2",
-  nativeApiVersion: "2",
-  requestSchema: "mant.request/v2",
-  querySchema: "mant.query/v2",
-  documentSchema: "mant.document/v2",
-  outlineSchema: "mant.outline/v2",
-  excerptSchema: "mant.excerpt/v2",
-  searchSchema: "mant.search/v1",
+  protocol: "mant.cli/v3",
+  nativeApiVersion: "3",
+  requestSchema: "mant.request/v3",
+  querySchema: "mant.query/v3",
+  documentSchema: "mant.document/v3",
+  outlineSchema: "mant.outline/v3",
+  excerptSchema: "mant.excerpt/v3",
+  searchSchema: "mant.search/v2",
 });
 
 describe("native mant client", () => {
@@ -56,9 +56,8 @@ describe("native mant client", () => {
       calls.push({ command, options });
       if (command.includes("--protocol-version")) return result(protocol);
       return result(JSON.stringify({
-        schema: "mant.query/v2",
-        topic: "git",
-        section: "1",
+        schema: "mant.query/v3",
+        label: "git",
       }));
     };
     const client = createMantClient({
@@ -69,20 +68,19 @@ describe("native mant client", () => {
       runCommand,
     });
 
-    const first = await client.query({ topic: "git", section: "1" });
+    const input = { kind: "manual", topic: "git", section: "1" } as const;
+    const first = await client.query({ input });
     const second = await client.query({
-      topic: "git",
-      section: "1",
+      input,
       forceLibmandoc: true,
     });
     const third = await client.query({
-      topic: "git",
-      section: "1",
+      input,
       forceGroff: true,
     });
-    expect(first.schema).toBe("mant.query/v2");
-    expect(second.topic).toBe("git");
-    expect(third.topic).toBe("git");
+    expect(first.schema).toBe("mant.query/v3");
+    expect(second.label).toBe("git");
+    expect(third.label).toBe("git");
     expect(calls.map((call) => call.command)).toEqual([
       ["/tools/mant", "--protocol-version", "--compact"],
       ["/tools/mant", "--request-json", "--format", "json", "--compact"],
@@ -104,7 +102,7 @@ describe("native mant client", () => {
       ],
     ]);
     expect(new TextDecoder().decode(calls[1]?.options?.stdin))
-      .toBe('{"schema":"mant.request/v2","topic":"git","section":"1","view":{"kind":"full"}}');
+      .toBe('{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git","section":"1"},"view":{"kind":"full"}}');
   });
 
   test("rejects incompatible binaries before issuing a query", async () => {
@@ -113,12 +111,12 @@ describe("native mant client", () => {
       env: { MANT_PATH: "/tools/mant" },
       runCommand: async () => {
         calls += 1;
-        return result(protocol.replace("mant.cli/v2", "mant.cli/v1"));
+        return result(protocol.replace("mant.cli/v3", "mant.cli/v1"));
       },
     });
 
-    await expect(client.query({ topic: "git" }))
-      .rejects.toThrow("expected 'mant.cli/v2'");
+    await expect(client.query({ input: { kind: "manual", topic: "git" } }))
+      .rejects.toThrow("expected 'mant.cli/v3'");
     expect(calls).toBe(1);
   });
 
@@ -130,7 +128,7 @@ describe("native mant client", () => {
         : result("", "mant: no readable manual content was found for 'missing'\n", 1),
     });
 
-    await expect(client.query({ topic: "missing" }))
+    await expect(client.query({ input: { kind: "manual", topic: "missing" } }))
       .rejects.toThrow("no readable manual content was found for 'missing'");
   });
 });

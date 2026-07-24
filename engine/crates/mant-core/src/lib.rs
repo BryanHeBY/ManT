@@ -45,6 +45,6 @@ mod tests {
 
     #[test]
     fn exposes_the_ast_contract_version() {
-        assert_eq!(native_api_version(), "2");
+        assert_eq!(native_api_version(), "3");
     }
 }

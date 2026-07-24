@@ -6,7 +6,7 @@
  * payloads before they enter the UI.
  */
 
-export type SourceFormat = "man" | "mdoc" | "groff-html" | "mandoc-html";
+export type SourceFormat = "man" | "mdoc" | "markdown" | "groff-html" | "mandoc-html";
 export type DiagnosticLevel = "style" | "warning" | "error" | "unsupported";
 export type ListKind = "bullet" | "ordered" | "plain";
 export type TableAlignment = "left" | "center" | "right";
@@ -98,7 +98,7 @@ export interface MantSection {
 }
 
 export interface MantDocument {
-  schema: "mant.document/v2";
+  schema: "mant.document/v3";
   producer: {
     name: string;
     version: string;
@@ -147,18 +147,20 @@ export interface TldrDocument {
 }
 
 export interface MantQueryBundle {
-  schema: "mant.query/v2";
-  topic: string;
-  section?: string;
-  manual?: MantDocument;
+  schema: "mant.query/v3";
+  label: string;
+  document?: MantDocument;
   tldr?: TldrDocument;
 }
 
+export type MantQueryInput =
+  | { kind: "manual"; topic: string; section?: string }
+  | { kind: "markdown-file"; path: string };
+
 /** Exact request envelope accepted by `mant --request-json`. */
 export interface MantQueryRequest {
-  schema: "mant.request/v2";
-  topic: string;
-  section?: string;
+  schema: "mant.request/v3";
+  input: MantQueryInput;
   view:
     | { kind: "full" }
     | { kind: "outline"; detail: "sections" | "options" }
@@ -177,14 +179,14 @@ export interface MantQueryRequest {
 }
 
 export interface NativeCliProtocol {
-  protocol: "mant.cli/v2";
-  nativeApiVersion: "2";
-  requestSchema: "mant.request/v2";
-  querySchema: "mant.query/v2";
-  documentSchema: "mant.document/v2";
-  outlineSchema: "mant.outline/v2";
-  excerptSchema: "mant.excerpt/v2";
-  searchSchema: "mant.search/v1";
+  protocol: "mant.cli/v3";
+  nativeApiVersion: "3";
+  requestSchema: "mant.request/v3";
+  querySchema: "mant.query/v3";
+  documentSchema: "mant.document/v3";
+  outlineSchema: "mant.outline/v3";
+  excerptSchema: "mant.excerpt/v3";
+  searchSchema: "mant.search/v2";
 }
 
 type JsonObject = Record<string, unknown>;
@@ -210,29 +212,28 @@ export function decodeNativeCliProtocol(input: string): NativeCliProtocol {
     throw new Error(`mant protocol probe returned invalid JSON: ${String(error)}`);
   }
   const object = expectObject(value, "$protocol");
-  expectLiteral(object.protocol, "mant.cli/v2", "$protocol.protocol");
-  expectLiteral(object.nativeApiVersion, "2", "$protocol.nativeApiVersion");
-  expectLiteral(object.requestSchema, "mant.request/v2", "$protocol.requestSchema");
-  expectLiteral(object.querySchema, "mant.query/v2", "$protocol.querySchema");
-  expectLiteral(object.documentSchema, "mant.document/v2", "$protocol.documentSchema");
-  expectLiteral(object.outlineSchema, "mant.outline/v2", "$protocol.outlineSchema");
-  expectLiteral(object.excerptSchema, "mant.excerpt/v2", "$protocol.excerptSchema");
-  expectLiteral(object.searchSchema, "mant.search/v1", "$protocol.searchSchema");
+  expectLiteral(object.protocol, "mant.cli/v3", "$protocol.protocol");
+  expectLiteral(object.nativeApiVersion, "3", "$protocol.nativeApiVersion");
+  expectLiteral(object.requestSchema, "mant.request/v3", "$protocol.requestSchema");
+  expectLiteral(object.querySchema, "mant.query/v3", "$protocol.querySchema");
+  expectLiteral(object.documentSchema, "mant.document/v3", "$protocol.documentSchema");
+  expectLiteral(object.outlineSchema, "mant.outline/v3", "$protocol.outlineSchema");
+  expectLiteral(object.excerptSchema, "mant.excerpt/v3", "$protocol.excerptSchema");
+  expectLiteral(object.searchSchema, "mant.search/v2", "$protocol.searchSchema");
   return object as unknown as NativeCliProtocol;
 }
 
 function validateQuery(value: unknown, path: string): asserts value is MantQueryBundle {
   const object = expectObject(value, path);
-  expectLiteral(object.schema, "mant.query/v2", `${path}.schema`);
-  expectString(object.topic, `${path}.topic`);
-  expectOptionalString(object.section, `${path}.section`);
-  if (object.manual !== undefined) validateDocument(object.manual, `${path}.manual`);
+  expectLiteral(object.schema, "mant.query/v3", `${path}.schema`);
+  expectString(object.label, `${path}.label`);
+  if (object.document !== undefined) validateDocument(object.document, `${path}.document`);
   if (object.tldr !== undefined) validateTldr(object.tldr, `${path}.tldr`);
 }
 
 function validateDocument(value: unknown, path: string): asserts value is MantDocument {
   const object = expectObject(value, path);
-  expectLiteral(object.schema, "mant.document/v2", `${path}.schema`);
+  expectLiteral(object.schema, "mant.document/v3", `${path}.schema`);
 
   const producer = expectObject(object.producer, `${path}.producer`);
   expectString(producer.name, `${path}.producer.name`);
@@ -244,7 +245,11 @@ function validateDocument(value: unknown, path: string): asserts value is MantDo
   }
 
   const source = expectObject(object.source, `${path}.source`);
-  expectOneOf(source.format, ["man", "mdoc", "groff-html", "mandoc-html"], `${path}.source.format`);
+  expectOneOf(
+    source.format,
+    ["man", "mdoc", "markdown", "groff-html", "mandoc-html"],
+    `${path}.source.format`,
+  );
   expectOptionalString(source.path, `${path}.source.path`);
   expectOptionalString(source.renderer, `${path}.source.renderer`);
 

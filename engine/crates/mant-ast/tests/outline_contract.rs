@@ -17,17 +17,16 @@ fn source() -> DocumentSource {
 #[test]
 fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
-        schema: OutlineSchema::V2,
+        schema: OutlineSchema::V3,
         detail: OutlineDetail::Options,
-        topic: "demo".to_owned(),
-        manual_section: Some("1".to_owned()),
+        label: "demo(1)".to_owned(),
         source: Some(source()),
         meta: Some(DocumentMeta::default()),
-        nodes: vec![OutlineNode::ManualSection {
+        nodes: vec![OutlineNode::DocumentSection {
             path: "2".to_owned(),
             id: "options-2".to_owned(),
             title: "OPTIONS".to_owned(),
-            children: vec![OutlineNode::ManualEntry {
+            children: vec![OutlineNode::DocumentEntry {
                 path: "2/o1".to_owned(),
                 id: "all".to_owned(),
                 title: "-a, --all".to_owned(),
@@ -38,12 +37,12 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     };
 
     let value = serde_json::to_value(outline).expect("outline JSON");
-    assert_eq!(value["schema"], "mant.outline/v2");
+    assert_eq!(value["schema"], "mant.outline/v3");
     assert_eq!(value["detail"], "options");
-    assert_eq!(value["manualSection"], "1");
-    assert_eq!(value["nodes"][0]["kind"], "manual-section");
+    assert_eq!(value["label"], "demo(1)");
+    assert_eq!(value["nodes"][0]["kind"], "document-section");
     assert_eq!(value["nodes"][0]["path"], "2");
-    assert_eq!(value["nodes"][0]["children"][0]["kind"], "manual-entry");
+    assert_eq!(value["nodes"][0]["children"][0]["kind"], "document-entry");
     assert_eq!(value["nodes"][0]["children"][0]["names"][1], "--all");
 }
 
@@ -58,9 +57,8 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         source: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V2,
-        topic: "demo".to_owned(),
-        manual_section: Some("1".to_owned()),
+        schema: ExcerptSchema::V3,
+        label: "demo(1)".to_owned(),
         producer: Some(Producer {
             name: "mant".to_owned(),
             version: "1".to_owned(),
@@ -69,7 +67,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         source: Some(source()),
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
-        selections: vec![ExcerptSelection::ManualSection {
+        selections: vec![ExcerptSelection::DocumentSection {
             path: "2.1".to_owned(),
             id: section.id.clone(),
             title: section.title.clone(),
@@ -83,8 +81,8 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     };
 
     let value = serde_json::to_value(excerpt).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.excerpt/v2");
-    assert_eq!(value["selections"][0]["kind"], "manual-section");
+    assert_eq!(value["schema"], "mant.excerpt/v3");
+    assert_eq!(value["selections"][0]["kind"], "document-section");
     assert_eq!(value["selections"][0]["breadcrumbs"][0]["path"], "2");
     assert_eq!(value["selections"][0]["section"]["id"], "common-3");
     assert!(value.get("diagnostics").is_none());
@@ -104,14 +102,13 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         spacing_before_lines: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V2,
-        topic: "demo".to_owned(),
-        manual_section: Some("1".to_owned()),
+        schema: ExcerptSchema::V3,
+        label: "demo(1)".to_owned(),
         producer: None,
         source: Some(source()),
         meta: None,
         diagnostics: Vec::new(),
-        selections: vec![ExcerptSelection::ManualEntry {
+        selections: vec![ExcerptSelection::DocumentEntry {
             path: "2/o1".to_owned(),
             id: "all".to_owned(),
             title: "-a, --all".to_owned(),
@@ -121,7 +118,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     };
 
     let value = serde_json::to_value(excerpt).expect("entry excerpt JSON");
-    assert_eq!(value["selections"][0]["kind"], "manual-entry");
+    assert_eq!(value["selections"][0]["kind"], "document-entry");
     assert_eq!(
         value["selections"][0]["entry"]["identity"]["role"],
         "option"
@@ -140,10 +137,9 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         source_path: "/tldr/demo.md".to_owned(),
     };
     let outline = QueryOutline {
-        schema: OutlineSchema::V2,
+        schema: OutlineSchema::V3,
         detail: OutlineDetail::Sections,
-        topic: "demo".to_owned(),
-        manual_section: None,
+        label: "demo".to_owned(),
         source: None,
         meta: None,
         nodes: vec![OutlineNode::Tldr {
@@ -153,9 +149,8 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         }],
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V2,
-        topic: "demo".to_owned(),
-        manual_section: None,
+        schema: ExcerptSchema::V3,
+        label: "demo".to_owned(),
         producer: None,
         source: None,
         meta: None,

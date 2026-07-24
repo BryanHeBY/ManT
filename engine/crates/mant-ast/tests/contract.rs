@@ -1,20 +1,20 @@
-//! Cross-language golden contract tests for the second query schema.
+//! Cross-language golden contract tests for the third query schema.
 
 use mant_ast::{
-    Block, Inline, OutlineDetail, QueryBundle, QueryRequest, QuerySchema, QueryView, RequestSchema,
-    SearchCase, SearchScope, SearchSyntax, SourceFormat,
+    Block, Inline, OutlineDetail, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView,
+    RequestSchema, SearchCase, SearchScope, SearchSyntax, SourceFormat,
 };
 use serde_json::Value;
 
-const MINIMAL_QUERY: &str = include_str!("../../../../tests/contracts/minimal-query-v2.json");
+const MINIMAL_QUERY: &str = include_str!("../../../../tests/contracts/minimal-query-v3.json");
 
 #[test]
 fn shared_query_fixture_round_trips_without_shape_changes() {
     let query: QueryBundle = serde_json::from_str(MINIMAL_QUERY).expect("valid shared fixture");
 
-    assert_eq!(query.schema, QuerySchema::V2);
-    assert_eq!(query.topic, "ls");
-    let manual = query.manual.as_ref().expect("manual document");
+    assert_eq!(query.schema, QuerySchema::V3);
+    assert_eq!(query.label, "ls");
+    let manual = query.document.as_ref().expect("manual document");
     assert_eq!(manual.source.format, SourceFormat::Man);
     assert_eq!(manual.sections[0].title, "NAME");
     assert_eq!(manual.sections[1].id, "options-1");
@@ -48,7 +48,7 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
 
 #[test]
 fn unknown_query_schema_is_rejected() {
-    let incompatible = MINIMAL_QUERY.replace("mant.query/v2", "mant.query/v1");
+    let incompatible = MINIMAL_QUERY.replace("mant.query/v3", "mant.query/v1");
     let error = serde_json::from_str::<QueryBundle>(&incompatible).expect_err("unknown schema");
 
     assert!(error.to_string().contains("unknown variant"));
@@ -57,16 +57,21 @@ fn unknown_query_schema_is_rejected() {
 #[test]
 fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     let request: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v2","topic":"printf","section":"3","view":{"kind":"full"}}"#,
+        r#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"printf","section":"3"},"view":{"kind":"full"}}"#,
     )
     .expect("valid full query request");
-    assert_eq!(request.schema, RequestSchema::V2);
-    assert_eq!(request.topic, "printf");
-    assert_eq!(request.section.as_deref(), Some("3"));
+    assert_eq!(request.schema, RequestSchema::V3);
+    assert_eq!(
+        request.input,
+        QueryInput::Manual {
+            topic: "printf".to_owned(),
+            section: Some("3".to_owned()),
+        }
+    );
     assert_eq!(request.view, QueryView::Full {});
 
     let outline: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"outline","detail":"options"}}"#,
+        r#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
     )
     .expect("valid outline request");
     assert_eq!(
@@ -77,7 +82,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let excerpt: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"excerpt","nodes":["acls"]}}"#,
+        r#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"tar"},"view":{"kind":"excerpt","nodes":["acls"]}}"#,
     )
     .expect("valid excerpt request");
     assert_eq!(
@@ -88,7 +93,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let search: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
+        r#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
     )
     .expect("valid search request");
     assert_eq!(
@@ -106,7 +111,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let search_defaults: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v2","topic":"tar","view":{"kind":"search","pattern":"acls"}}"#,
+        r#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"tar"},"view":{"kind":"search","pattern":"acls"}}"#,
     )
     .expect("search defaults");
     assert_eq!(
@@ -124,23 +129,25 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v2","topic":"ls","view":{"kind":"full"},"mode":"html"}"#,
+        r#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"ls"},"view":{"kind":"full"},"mode":"html"}"#,
     )
     .expect_err("unknown request field");
     assert!(error.to_string().contains("unknown field"));
 
-    let error = serde_json::from_str::<QueryRequest>(r#"{"topic":"ls","view":{"kind":"full"}}"#)
-        .expect_err("missing request schema");
+    let error = serde_json::from_str::<QueryRequest>(
+        r#"{"input":{"kind":"manual","topic":"ls"},"view":{"kind":"full"}}"#,
+    )
+    .expect_err("missing request schema");
     assert!(error.to_string().contains("missing field `schema`"));
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v1","topic":"ls","view":{"kind":"full"}}"#,
+        r#"{"schema":"mant.request/v1","input":{"kind":"manual","topic":"ls"},"view":{"kind":"full"}}"#,
     )
     .expect_err("unknown request schema");
     assert!(error.to_string().contains("unknown variant"));
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v2","topic":"ls","view":{"kind":"full","future":true}}"#,
+        r#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"ls"},"view":{"kind":"full","future":true}}"#,
     )
     .expect_err("unknown view field");
     assert!(error.to_string().contains("unknown field"));

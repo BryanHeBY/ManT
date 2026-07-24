@@ -10,7 +10,7 @@ import type {
 
 function manual(sections: MantSection[]): MantDocument {
   return {
-    schema: "mant.document/v2",
+    schema: "mant.document/v3",
     producer: {
       name: "mant",
       version: "0.2.0",
@@ -56,9 +56,9 @@ export const mockLsSections: MantSection[] = [
 ];
 
 export const mockLsResult: MantQueryBundle = {
-  schema: "mant.query/v2",
-  topic: "ls",
-  manual: manual(mockLsSections),
+  schema: "mant.query/v3",
+  label: "ls",
+  document: manual(mockLsSections),
 };
 
 export const mockLsWithTldrResult: MantQueryBundle = {
@@ -91,10 +91,10 @@ export const mockLsWithTldrResult: MantQueryBundle = {
   },
 };
 
-export function mockQuery(topic: string, sections: MantSection[]): MantQueryBundle {
+export function mockQuery(label: string, sections: MantSection[]): MantQueryBundle {
   return {
-    schema: "mant.query/v2",
-    topic,
-    manual: manual(sections),
+    schema: "mant.query/v3",
+    label,
+    document: manual(sections),
   };
 }
