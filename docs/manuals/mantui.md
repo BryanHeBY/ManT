@@ -1,6 +1,7 @@
 # mantui
 
-Explore local Unix manual pages and Markdown in a structured terminal UI.
+Explore complete local Unix manual pages in a structured terminal UI. The
+same reader also opens local Markdown documents.
 
 ## TLDR Quick Reference
 
@@ -27,9 +28,11 @@ mantui -h
 
 ## Description
 
-`mantui` is ManT's interactive reader. Its resizable sidebar follows the
-document hierarchy and reading position, while the content pane preserves
-structured prose, definitions, code, lists, tables, links, and layout.
+`mantui` is ManT's interactive reader for people. Its resizable sidebar turns
+manual sections and semantic options into navigation, follows the settled
+reading position, and keeps page-local references directly usable. The
+content pane preserves structured prose, definitions, code, lists, tables,
+links, and layout.
 
 Local manual topics and Markdown paths are queried through the companion
 `mant` executable. `mantui` finds that executable through `MANT_PATH` first
@@ -37,12 +40,27 @@ and then `PATH`.
 
 ## Input
 
-Values ending in `.md` or `.markdown`, and other path-like values, are read as
-local Markdown files. Other values are resolved as local manual topics.
+Ordinary values are resolved as local manual topics. Values ending in `.md` or
+`.markdown`, and other path-like values, are read as local Markdown files.
 
-An exact Markdown heading named `TLDR`, `TLDR Quick Reference`, or
-`Quick Reference` remains part of the document but receives the same distinct
-navigation and content styling as ManT's external tldr preface.
+Manual pages can include an external tldr quick reference before the complete
+source document when compatible local tldr data is available.
+
+## Markdown Documents
+
+Markdown uses the same sidebar, search, links, lists, tables, code rendering,
+and reading-position tracking as a manual. Content before the first heading
+appears as an `OVERVIEW` entry.
+
+An exact heading named `TLDR`, `TLDR Quick Reference`, or `Quick Reference`
+remains part of the document but receives the same distinct navigation and
+content styling as ManT's external tldr preface. Option lists written as
+``- `--flag`: description`` become expandable semantic entries in the
+sidebar.
+
+Unsupported Markdown syntax remains visible with a diagnostic rather than
+being silently discarded. Standard-input Markdown belongs to the
+non-interactive `mant -` workflow; `mantui` accepts file paths.
 
 ## Options
 

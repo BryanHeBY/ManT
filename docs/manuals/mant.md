@@ -1,6 +1,7 @@
 # mant
 
-Query local Unix manual pages and Markdown as structured documents.
+Turn local Unix manual pages into structured documents for agents, scripts,
+and terminal output. The same query model also accepts local Markdown.
 
 ## TLDR Quick Reference
 
@@ -37,21 +38,21 @@ mant --mcp
 
 ## Description
 
-`mant` is the native, non-interactive ManT command for agents, scripts, and
-terminal output. It parses local man and mdoc sources through bundled
-libmandoc, and lowers supported Markdown into the same versioned document
-model.
+`mant` is ManT's native, non-interactive command. It parses local man and mdoc
+sources through bundled libmandoc, then exposes their hierarchy, semantic
+options, references, and visible text through stable projections.
 
-Full document queries default to Markdown. Outline, excerpt, search, text, and
-JSON projections all derive from the same parsed document.
+Local Markdown enters the same versioned document model, so outlines,
+excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
+across both sources. Full document queries default to clean Markdown.
 
 ## Input
 
-A value ending in `.md` or `.markdown`, or another path-like value, is read as
-a local Markdown file. The exact value `-` reads Markdown from standard input.
-Other values are resolved as local manual topics.
+Ordinary topic values are resolved through the host's local manual database.
+A value ending in `.md` or `.markdown`, or another path-like value, selects a
+local Markdown file. The exact value `-` reads Markdown from standard input.
 
-### Manual input
+### Manual Pages
 
 - `--section SECTION`: Select a manual section such as `1` or `3p`.
 - `--force-libmandoc`: Require direct libmandoc output and print parser diagnostics.
@@ -59,16 +60,33 @@ Other values are resolved as local manual topics.
 
 Renderer options are rejected for Markdown input.
 
+### Markdown Documents
+
+ManT structures headings, paragraphs, emphasis, code, links, code blocks,
+lists, GFM tables, hard breaks, and thematic breaks. Unsupported syntax stays
+visible and produces a diagnostic instead of disappearing silently.
+
+Option lists written in the following form become semantic entries available
+to `--outline`, `--node`, and `--explain`:
+
+```markdown
+- `--flag`: Description of the option.
+```
+
+An exact heading named `TLDR`, `TLDR Quick Reference`, or `Quick Reference`
+remains inside the document and receives ManT's quick-reference role. Content
+before the first heading is exposed as path `root` with ID
+`document-overview`.
+
 ## Document Selection
 
 - `--outline[=DETAIL]`: Print the addressable tree; `options` is the default and `sections` is the compact form.
 - `--node NODE`: Return a node by path or ID; repeat the option to select several nodes.
 - `--explain ENTRY`: Return exactly one semantic option, command, or environment entry.
 
-Path `0` is reserved for an external tldr quick reference. Markdown content
-before its first heading is exposed as path `root` with ID
-`document-overview`. Ordinary headings use one-based paths such as `2.3`, and
-semantic entries use paths such as `2.3/o4`.
+Path `0` is reserved for an external tldr quick reference. Ordinary headings
+use one-based paths such as `2.3`, and semantic entries use paths such as
+`2.3/o4`.
 
 ## Search
 
