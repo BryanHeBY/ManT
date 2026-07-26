@@ -260,7 +260,16 @@ fn query_manual(
     // A malformed or unreadable community cache must never hide a valid man
     // page. It is an optional augmentation and is never updated during query.
     let tldr = host.read_tldr(topic).ok().flatten();
-    let manual = load_manual(&manual_request, policy, host);
+    let mut manual = load_manual(&manual_request, policy, host);
+
+    // A renderer that cannot recover the section from the page itself (notably
+    // the groff HTML fallback, whose metadata is empty) leaves meta.section
+    // unset. Fall back to the requested section so labels stay `topic(N)`.
+    if let (Ok(Some(document)), Some(section)) = (&mut manual, section.as_deref())
+        && document.meta.section.is_none()
+    {
+        document.meta.section = Some(section.to_owned());
+    }
 
     // Force-libmandoc mode is an explicit parser diagnostic request.
     // A tldr page may augment a successful manual, but must not turn a
@@ -560,6 +569,28 @@ mod tests {
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
             ["tldr", "locate", "parse"]
+        );
+    }
+
+    #[test]
+    fn requested_section_backfills_metadata_a_renderer_left_empty() {
+        // The groff fallback yields DocumentMeta::default(), so meta.section is
+        // None even though the caller asked for a specific section.
+        let host = host(Ok(document(SourceFormat::GroffHtml, false, true)));
+        let request = QueryRequest {
+            schema: RequestSchema::V3,
+            input: QueryInput::Manual {
+                topic: "tool".to_owned(),
+                section: Some("3".to_owned()),
+            },
+            view: QueryView::Full {},
+        };
+
+        let result = query_with(&request, QueryPolicy::default(), &host).expect("query");
+        assert_eq!(
+            result.document.expect("manual").meta.section.as_deref(),
+            Some("3"),
+            "requested section must label output when the renderer omits it"
         );
     }
 
