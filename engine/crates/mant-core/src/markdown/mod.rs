@@ -375,8 +375,13 @@ impl SectionIds {
         } else {
             format!("{base}-{}", *count)
         };
-        self.targets.insert(base, id.clone());
-        self.targets.insert(slug(title), id.clone());
+        // Ambiguous human-facing keys resolve to the first section that
+        // claimed them, matching the bare slug this heading renders as its
+        // anchor. A later duplicate owns only its own disambiguated id.
+        self.targets.entry(base).or_insert_with(|| id.clone());
+        self.targets
+            .entry(slug(title))
+            .or_insert_with(|| id.clone());
         self.targets.insert(id.clone(), id.clone());
         id
     }

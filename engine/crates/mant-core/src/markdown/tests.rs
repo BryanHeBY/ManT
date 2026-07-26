@@ -217,6 +217,38 @@ Document introduction.
 }
 
 #[test]
+fn a_reference_to_a_duplicated_heading_resolves_to_the_first_section() {
+    let markdown = "\
+# Guide
+
+## Options
+
+See [more options](#options).
+
+## Options
+
+Duplicate heading.
+";
+    let document = parse_document(markdown, None);
+
+    assert_eq!(document.sections[0].id, "options");
+    assert_eq!(document.sections[1].id, "options-2");
+
+    // The bare `#options` anchor renders on the first section, so an ambiguous
+    // link must resolve there rather than to the later disambiguated duplicate.
+    let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+        panic!("first Options section holds the reference paragraph");
+    };
+    assert!(
+        children.iter().any(|inline| matches!(
+            inline,
+            Inline::SectionReference { target, .. } if target == "options"
+        )),
+        "a #options link must resolve to the first section, not options-2"
+    );
+}
+
+#[test]
 fn leaves_an_ordinary_tldr_heading_in_the_manual() {
     let document = parse_document(
         "\
