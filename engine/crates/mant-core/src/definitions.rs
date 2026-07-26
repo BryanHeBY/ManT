@@ -399,7 +399,6 @@ mod tests {
         let mut sections = vec![Section {
             id: "options".to_owned(),
             title: "OPTIONS".to_owned(),
-            role: None,
             spacing_before_lines: 0,
             blocks: vec![
                 paragraph("-v, --version", 0),

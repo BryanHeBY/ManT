@@ -193,8 +193,14 @@ pub fn query_markdown_text(
                 .to_owned()
         },
     );
-    let document = parse_markdown(source, source_path);
-    if document.blocks.is_empty() && document.sections.is_empty() {
+    let error_path = source_path.clone().unwrap_or_else(|| "stdin".to_owned());
+    let parsed = parse_markdown(source, source_path).map_err(|error| QueryError::Markdown {
+        path: error_path,
+        detail: error.to_string(),
+    })?;
+    let document_is_empty =
+        parsed.document.blocks.is_empty() && parsed.document.sections.is_empty();
+    if document_is_empty && parsed.tldr.is_none() {
         return Err(QueryError::EmptyMarkdown {
             label: label.clone(),
         });
@@ -202,8 +208,8 @@ pub fn query_markdown_text(
     Ok(QueryBundle {
         schema: QuerySchema::V3,
         label,
-        document: Some(document),
-        tldr: None,
+        document: (!document_is_empty).then_some(parsed.document),
+        tldr: parsed.tldr,
     })
 }
 
@@ -390,7 +396,7 @@ mod tests {
     use mant_ast::{
         Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, MantDocument,
         Producer, QueryInput, QueryRequest, QueryView, RequestSchema, Section, SourceFormat,
-        TldrDocument,
+        TldrDocument, TldrOrigin,
     };
 
     use crate::{CommandOutput, CommandRunner, ManualRequest};
@@ -469,7 +475,6 @@ mod tests {
                 .then_some(Section {
                     id: "name-1".to_owned(),
                     title: "NAME".to_owned(),
-                    role: None,
                     spacing_before_lines: 0,
                     blocks: Vec::new(),
                     children: Vec::new(),
@@ -489,6 +494,7 @@ mod tests {
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "/cache/pages/common/tool.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
         }
     }
 
@@ -733,6 +739,67 @@ mod tests {
         let document = result.document.expect("document");
         assert_eq!(document.meta.title.as_deref(), Some("Piped"));
         assert_eq!(document.source.path, None);
+    }
+
+    #[test]
+    fn leading_tldr_directives_are_independent_from_the_markdown_document() {
+        let source = "\
+:::tldr
+# demo
+
+> Concise embedded help.
+
+- Run the demo:
+
+`demo {{path}}`
+:::
+
+# Demo
+
+Document overview.
+
+## Options
+
+- `--help`: Show help.
+";
+        let result =
+            query_markdown_text(source, Some("docs/demo.md".to_owned())).expect("Markdown query");
+
+        let tldr = result.tldr.expect("embedded tldr");
+        assert_eq!(tldr.title, "demo");
+        assert_eq!(tldr.origin, TldrOrigin::Embedded);
+        assert_eq!(tldr.source_path, "docs/demo.md");
+        assert_eq!(tldr.examples[0].command, "demo {{path}}");
+
+        let document = result.document.expect("document body");
+        assert_eq!(document.meta.title.as_deref(), Some("Demo"));
+        assert_eq!(document.sections[0].title, "Options");
+        assert!(
+            document
+                .blocks
+                .iter()
+                .any(|block| matches!(block, mant_ast::Block::Paragraph { .. }))
+        );
+        assert!(
+            document
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.message.contains(":::tldr"))
+        );
+    }
+
+    #[test]
+    fn malformed_leading_tldr_directives_report_the_source_path() {
+        let error = query_markdown_text(
+            ":::tldr\n# demo\n\n- Run:\n\n`demo`\n",
+            Some("docs/broken.md".to_owned()),
+        )
+        .expect_err("unterminated directive");
+
+        assert_eq!(
+            error.to_string(),
+            "could not load Markdown document 'docs/broken.md': top-level :::tldr directive is missing its closing ::: marker"
+        );
     }
 
     struct StubRunner {

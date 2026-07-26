@@ -454,7 +454,7 @@ mod tests {
     use mant_ast::{
         Block, DocumentMeta, DocumentSchema, DocumentSource, ExcerptSelection, Inline, LayoutHint,
         MantDocument, OutlineNode, Producer, QueryBundle, QuerySchema, Section, SourceFormat,
-        TldrDocument,
+        TldrDocument, TldrOrigin,
     };
 
     use super::{ProjectionError, build_outline, select_excerpt};
@@ -463,7 +463,6 @@ mod tests {
         Section {
             id: id.to_owned(),
             title: title.to_owned(),
-            role: None,
             spacing_before_lines: 0,
             blocks: Vec::new(),
             children,
@@ -519,6 +518,7 @@ mod tests {
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "/tldr/pages/common/demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
         }
     }
 

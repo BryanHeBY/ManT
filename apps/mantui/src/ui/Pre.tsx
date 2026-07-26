@@ -1,5 +1,5 @@
 /**
- * @file Renders preformatted roff blocks with their intended body indentation.
+ * @file Highlights structured code and renders preformatted blocks.
  */
 
 import { memo, type ReactNode } from "react";
@@ -31,7 +31,8 @@ function flattenInline(nodes: MantInline[]): string {
     .join("");
 }
 
-function makeCodeSpans(text: string): ReactNode[] {
+/** Tokenize visible code without changing its text or terminal width. */
+export function renderCodeSpans(text: string, keyPrefix = "code"): ReactNode[] {
   const spans: ReactNode[] = [];
   let key = 0;
   for (const match of text.matchAll(CODE_TOKEN_RE)) {
@@ -59,7 +60,7 @@ function makeCodeSpans(text: string): ReactNode[] {
       color = "#cdd6f4";
     }
     const content = bold ? <b>{token}</b> : italic ? <i>{token}</i> : token;
-    spans.push(<span key={key++} fg={color}>{content}</span>);
+    spans.push(<span key={`${keyPrefix}-${key++}`} fg={color}>{content}</span>);
   }
   return spans;
 }
@@ -79,7 +80,7 @@ interface PreProps {
  */
 function PreView({ children, block = false, indent = 0 }: PreProps): ReactNode {
   const text = flattenInline(children);
-  const spans = makeCodeSpans(text);
+  const spans = renderCodeSpans(text);
   if (block) {
     return (
       <box shouldFill={true} flexDirection="row">

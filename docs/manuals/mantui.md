@@ -1,25 +1,31 @@
+:::tldr
 # mantui
 
-Explore complete local Unix manual pages in a structured terminal UI. The
-same reader also opens local Markdown documents.
-
-## TLDR Quick Reference
+> Explore manuals and Markdown in a structured terminal UI.
 
 - Open a local manual:
 
-`mantui git`
+`mantui {{topic}}`
 
 - Open a manual from a specific section:
 
-`mantui printf --section 3`
+`mantui {{topic}} --section {{section}}`
 
 - Open a local Markdown document:
 
-`mantui README.md`
+`mantui {{path/to/document.md}}`
 
 - Open ManT's self-hosted interactive manual:
 
 `mantui mantui.md`
+:::
+
+# mantui
+
+## Name
+
+`mantui` — explore complete local Unix manual pages and Markdown documents in
+a structured terminal UI.
 
 ## Synopsis
 
@@ -44,25 +50,49 @@ and then `PATH`.
 
 Ordinary values are resolved as local manual topics. Values ending in `.md` or
 `.markdown`, and other path-like values, are read as local Markdown files.
+Manual section and renderer options apply only to manual topics.
 
-Manual pages can include an external tldr quick reference before the complete
-source document when compatible local tldr data is available.
+`mantui` does not accept Markdown on standard input because a full-screen
+reader owns the terminal input stream. Use `mant -` for piped content.
+
+## Quick References
+
+Manual pages can include a compatible local tldr page before the complete
+manual. Markdown files can provide the same experience with a leading
+`:::tldr` container. Both forms occupy reserved navigation path `0`, use the
+same highlighted panel, participate in search, and keep the manual sections
+one-based.
+
+Embedded quick references use standard tldr placeholders such as
+`{{path/to/file}}`. Placeholders, command options, numbers, and strings receive
+code-aware terminal highlighting. Document-owned content does not display the
+tldr-pages licence attribution used for community cache data.
 
 ## Markdown Documents
 
 Markdown uses the same sidebar, search, links, lists, tables, code rendering,
-and reading-position tracking as a manual. Content before the first heading
-appears as an `OVERVIEW` entry.
+and reading-position tracking as a manual. When the first heading is H1 it
+names the document; remaining headings create the navigable hierarchy.
+Non-empty introductory content outside that section tree appears as an
+`OVERVIEW` entry.
 
-An exact heading named `TLDR`, `TLDR Quick Reference`, or `Quick Reference`
-remains part of the document but receives the same distinct navigation and
-content styling as ManT's external tldr preface. Option lists written as
-``- `--flag`: description`` become expandable semantic entries in the
-sidebar.
+The semantic subset includes paragraphs, strong and emphasized text, inline
+code, hard breaks, standard and page-local links, fenced and indented code
+blocks, ordered and unordered nested lists, thematic breaks, and GFM tables.
+Unsupported browser-oriented constructs remain visible with a diagnostic
+instead of disappearing.
 
-Unsupported Markdown syntax remains visible with a diagnostic rather than
-being silently discarded. Standard-input Markdown belongs to the
-non-interactive `mant -` workflow; `mantui` accepts file paths.
+Two explicit ManT extensions add manual-like behavior:
+
+- A `:::tldr` container at the first non-empty line becomes the independent
+  zero-position quick reference. Its contents use the tldr-pages command,
+  description, example, and `{{placeholder}}` conventions.
+- A complete bullet list written as ``- `--flag`: description`` becomes
+  semantic options. These entries expand beneath their section and can be
+  selected like options parsed from roff.
+
+The `mant` manual documents the exact supported syntax, preservation behavior,
+and extension grammar.
 
 ## Options
 
@@ -112,6 +142,20 @@ boundary.
 ## Environment
 
 - `MANT_PATH`: Absolute or relative path to the companion `mant` executable.
+- `MANPATH`: Supply manual-hierarchy roots containing directories such as
+  `man1/` to the companion's host `man -w` lookup.
+- `MANSECT`: Set the host manual implementation's default section order when
+  `--section` is absent.
+- `MANT_TLDR_DIR`: Select an explicit tldr checkout through the companion engine.
+- `MANT_DEBUG`: Include JavaScript stack diagnostics in unexpected TUI failures.
+
+Standard cache and locale variables used by `mant` also apply because the
+companion process inherits the environment.
+
+## Exit Status
+
+`0` indicates a normal exit or successful help request, `2` indicates invalid
+command-line usage, and `1` indicates an operational or TUI failure.
 
 ## See Also
 

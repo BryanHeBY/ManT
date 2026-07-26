@@ -548,7 +548,7 @@ export function App({ result, onQuit }: AppProps) {
             <box flexDirection="column" gap={documentGap}>
               {result.tldr && <TldrQuickReference page={result.tldr} />}
               {result.tldr && hasDocumentContent && (
-                <box height={1} border={["top"]} borderColor="#45475a" paddingLeft={1}>
+                <box height={2} border={["top"]} borderColor="#45475a" paddingLeft={1}>
                   <text fg="#6c7086">
                     {result.document?.source.format === "markdown" ? "MARKDOWN" : "MANUAL"}
                   </text>

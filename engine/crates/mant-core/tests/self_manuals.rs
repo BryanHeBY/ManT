@@ -1,27 +1,34 @@
 //! Keeps the shipped Markdown manuals inside the supported document subset.
 
-use mant_ast::{
-    Block, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle, QuerySchema, Section,
-    SectionRole,
+use mant_ast::{ExcerptSelection, OutlineDetail, OutlineNode, TldrCommandPart, TldrOrigin};
+use mant_core::{
+    build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
+    select_excerpt,
 };
-use mant_core::{build_outline_with_detail, parse_markdown, render_markdown, render_query_text};
 
 const MANT_MANUAL: &str = include_str!("../../../../docs/manuals/mant.md");
 const MANTUI_MANUAL: &str = include_str!("../../../../docs/manuals/mantui.md");
+const PROTOCOL_REFERENCE: &str = include_str!("../../../../docs/protocol.md");
 
 #[test]
 fn shipped_manuals_parse_without_lossy_fallbacks() {
     for (name, source) in [("mant.md", MANT_MANUAL), ("mantui.md", MANTUI_MANUAL)] {
-        let document = parse_markdown(source, Some(format!("docs/manuals/{name}")));
+        let query = query_markdown_text(source, Some(format!("docs/manuals/{name}")))
+            .expect("self manual query");
+        let document = query.document.as_ref().expect("manual body");
+        let tldr = query.tldr.as_ref().expect("embedded tldr");
 
         assert_eq!(
             document.meta.title.as_deref(),
             Some(name.trim_end_matches(".md"))
         );
-        assert!(document.blocks.is_empty(), "{name} starts with its title");
         assert!(
             !document.sections.is_empty(),
             "{name} has a navigable outline"
+        );
+        assert_eq!(
+            document.sections[0].title, "Name",
+            "{name} begins its manual body with a conventional Name section"
         );
         assert!(
             document.diagnostics.is_empty(),
@@ -29,21 +36,47 @@ fn shipped_manuals_parse_without_lossy_fallbacks() {
             document.diagnostics
         );
         assert!(
-            has_quick_reference(&document.sections),
-            "{name} keeps its embedded quick reference semantic"
+            tldr.origin == TldrOrigin::Embedded,
+            "{name} marks its document-owned tldr origin"
         );
         assert!(
-            has_tldr_examples(&document.sections),
+            tldr.examples.len() >= 4
+                && tldr
+                    .examples
+                    .iter()
+                    .all(|example| !example.description.is_empty() && !example.command.is_empty()),
             "{name} quick reference follows the tldr description/command layout"
         );
+        assert!(
+            tldr.examples.iter().any(|example| {
+                example
+                    .command_parts
+                    .iter()
+                    .any(|part| matches!(part, TldrCommandPart::Placeholder { .. }))
+            }),
+            "{name} uses the standard tldr placeholder syntax that drives command highlighting"
+        );
 
-        let query = QueryBundle {
-            schema: QuerySchema::V3,
-            label: name.to_owned(),
-            document: Some(document),
-            tldr: None,
-        };
-        assert!(!render_markdown(&query).contains("<a "));
+        let outline = build_outline_with_detail(&query, OutlineDetail::Sections)
+            .expect("self manual outline");
+        assert_eq!(outline.nodes[0].path(), "0");
+        assert!(matches!(
+            &outline.nodes[1],
+            OutlineNode::DocumentSection { path, title, .. }
+                if path == "1" && title == "Name"
+        ));
+        let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("TLDR alias");
+        assert!(matches!(
+            excerpt.selections.as_slice(),
+            [ExcerptSelection::Tldr { path, document, .. }]
+                if path == "0" && document.origin == TldrOrigin::Embedded
+        ));
+        let markdown = render_markdown(&query);
+        assert!(!markdown.contains("<a "));
+        assert!(
+            !markdown.contains("tldr-pages · CC BY 4.0"),
+            "{name} must not claim the community cache licence for owned content"
+        );
         assert!(!render_query_text(&query).is_empty());
     }
 }
@@ -54,12 +87,8 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
         ("mant.md", MANT_MANUAL, "--search"),
         ("mantui.md", MANTUI_MANUAL, "--help"),
     ] {
-        let query = QueryBundle {
-            schema: QuerySchema::V3,
-            label: name.to_owned(),
-            document: Some(parse_markdown(source, Some(format!("docs/manuals/{name}")))),
-            tldr: None,
-        };
+        let query = query_markdown_text(source, Some(format!("docs/manuals/{name}")))
+            .expect("self manual query");
         let outline =
             build_outline_with_detail(&query, OutlineDetail::Options).expect("manual outline");
 
@@ -70,36 +99,66 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
     }
 }
 
-fn has_quick_reference(sections: &[Section]) -> bool {
-    sections.iter().any(|section| {
-        section.role == Some(SectionRole::QuickReference) || has_quick_reference(&section.children)
-    })
+#[test]
+fn shipped_manuals_explain_project_local_roff_lookup() {
+    for required in [
+        "### Local Roff Trees",
+        "MANPATH",
+        "project-man/man1/widget.1",
+        "man -w widget",
+        "Do not pass `./widget.1`",
+    ] {
+        assert!(
+            MANT_MANUAL.contains(required),
+            "mant.md should document local roff lookup with {required:?}"
+        );
+    }
+    assert!(
+        MANTUI_MANUAL.contains("`MANPATH`"),
+        "mantui.md should expose the inherited manual path"
+    );
+    assert!(
+        PROTOCOL_REFERENCE.contains("The process inherits `MANPATH`, `MANSECT`"),
+        "the request reference should define the manual lookup environment"
+    );
 }
 
-fn has_tldr_examples(sections: &[Section]) -> bool {
-    sections.iter().any(|section| {
-        if section.role == Some(SectionRole::QuickReference) {
-            return matches!(
-                section.blocks.first(),
-                Some(Block::List {
-                    kind: ListKind::Plain,
-                    compact: false,
-                    items,
-                    ..
-                }) if items.len() >= 4 && items.iter().all(|item| {
-                    matches!(
-                        item.blocks.as_slice(),
-                        [
-                            Block::Paragraph { .. },
-                            Block::Paragraph { children, layout, .. },
-                        ] if matches!(children.as_slice(), [Inline::Code { .. }])
-                            && layout.spacing_before_lines == 1
-                    )
-                })
-            );
-        }
-        has_tldr_examples(&section.children)
-    })
+#[test]
+fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
+    let query = query_markdown_text(PROTOCOL_REFERENCE, Some("docs/protocol.md".to_owned()))
+        .expect("protocol reference query");
+    let document = query.document.as_ref().expect("protocol document");
+
+    assert_eq!(
+        document.meta.title.as_deref(),
+        Some("ManT JSON Protocol and Schema Reference")
+    );
+    assert!(
+        document.diagnostics.is_empty(),
+        "the protocol reference must remain inside ManT's supported Markdown subset: {:?}",
+        document.diagnostics
+    );
+    assert!(
+        document
+            .sections
+            .iter()
+            .any(|section| section.title == "Document AST")
+    );
+
+    let mut examples = 0;
+    let mut remaining = PROTOCOL_REFERENCE;
+    while let Some((_, after_opening)) = remaining.split_once("```json\n") {
+        let (json, after_closing) = after_opening
+            .split_once("\n```")
+            .expect("close JSON example");
+        serde_json::from_str::<serde_json::Value>(json).expect("valid JSON example");
+        examples += 1;
+        remaining = after_closing;
+    }
+    assert!(
+        examples >= 10,
+        "the protocol reference should retain comprehensive JSON examples"
+    );
 }
 
 fn contains_entry(nodes: &[OutlineNode], name: &str) -> bool {

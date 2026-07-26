@@ -11,6 +11,8 @@ fn executable() -> &'static str {
     env!("CARGO_BIN_EXE_mant")
 }
 
+const PROTOCOL_REFERENCE: &str = include_str!("../../../../docs/protocol.md");
+
 #[test]
 fn help_groups_the_public_query_surface() {
     let output = Command::new(executable())
@@ -96,6 +98,28 @@ fn protocol_version_is_a_clean_json_document() {
     assert_eq!(value["outlineSchema"], "mant.outline/v3");
     assert_eq!(value["excerptSchema"], "mant.excerpt/v3");
     assert_eq!(value["searchSchema"], "mant.search/v2");
+
+    for (field, marker) in value.as_object().expect("protocol descriptor") {
+        let documented = format!(
+            "\"{field}\": {}",
+            serde_json::to_string(marker).expect("protocol marker")
+        );
+        assert!(
+            PROTOCOL_REFERENCE.contains(&documented),
+            "the protocol reference must document {field}"
+        );
+    }
+    for tool in [
+        "mant_document_outline",
+        "mant_document_get",
+        "mant_document_explain",
+        "mant_document_search",
+    ] {
+        assert!(
+            PROTOCOL_REFERENCE.contains(tool),
+            "the protocol reference must document {tool}"
+        );
+    }
 }
 
 #[test]
@@ -150,7 +174,7 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
     assert!(value["document"]["source"].get("path").is_none());
     assert!(value.get("tldr").is_none());
     assert_eq!(
-        value["document"]["sections"][1]["blocks"][0]["items"][0]["identity"]["names"][0],
+        value["document"]["sections"][0]["blocks"][0]["items"][0]["identity"]["names"][0],
         "--help"
     );
 }
@@ -245,7 +269,7 @@ fn markdown_root_content_is_discoverable_selectable_and_searchable() {
     let outline = run_json(&[path, "--outline=sections"]);
     assert_eq!(outline["nodes"][0]["kind"], "document-root");
     assert_eq!(outline["nodes"][0]["path"], "root");
-    assert_eq!(outline["nodes"][1]["kind"], "document-section");
+    assert_eq!(outline["nodes"].as_array().map(Vec::len), Some(1));
 
     let excerpt = run_json(&[path, "--node", "root"]);
     assert_eq!(excerpt["selections"][0]["kind"], "document-root");

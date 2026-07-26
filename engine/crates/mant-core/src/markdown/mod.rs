@@ -4,6 +4,7 @@
 //! the subset remain visible as exact source text with an attached diagnostic.
 
 mod blocks;
+mod container;
 mod inline;
 mod layout;
 mod options;
@@ -12,92 +13,120 @@ mod source;
 #[cfg(test)]
 mod tests;
 
-use std::{collections::HashMap, ops::Range};
+pub use container::TldrDirectiveError;
+
+use std::{collections::HashMap, error::Error, fmt, ops::Range};
 
 use mant_ast::{
     Block, Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, Engine,
-    Inline, MantDocument, Producer, Section, SectionRole, SourceFormat,
+    Inline, MantDocument, Producer, Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 use self::{
     blocks::parse_block,
+    container::split_markdown,
     inline::{inline_text, parse_inlines},
     layout::normalize_markdown_layout,
     options::normalize_option_lists,
     source::MarkdownSource,
 };
+use crate::{
+    projection::DOCUMENT_ROOT_ID,
+    tldr::{TldrPageLocation, TldrParseError, parse_tldr_page},
+};
 
 type SpannedEvent<'a> = (Event<'a>, Range<usize>);
 
-/// Parse one UTF-8 Markdown document without performing filesystem I/O.
-#[must_use]
-pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDocument {
-    let source = MarkdownSource::new(source_text);
-    let parser = Parser::new_ext(source_text, markdown_options());
-    let mut cursor = EventCursor::new(parser.into_offset_iter().collect());
-    let mut diagnostics = Vec::new();
-    let mut root_blocks = Vec::new();
-    let mut flat_sections = Vec::new();
-    let mut ids = SectionIds::default();
-    let mut title = None;
+/// Complete result of parsing one ManT-flavoured Markdown input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedMarkdown {
+    pub document: MantDocument,
+    pub tldr: Option<TldrDocument>,
+}
 
-    while let Some((event, range)) = cursor.peek().cloned() {
-        if let Event::Start(Tag::Heading {
-            level,
-            id: explicit_id,
-            ..
-        }) = event
-        {
-            let _ = cursor.next();
-            let (children, end) = parse_inlines(
-                &mut cursor,
-                &source,
-                &mut diagnostics,
-                TagEnd::Heading(level),
-            );
-            let heading = inline_text(&children);
-            if heading.is_empty() {
-                diagnostics.push(Diagnostic {
-                    level: DiagnosticLevel::Warning,
-                    code: Some("markdown.empty-heading".to_owned()),
-                    message: "ignored an empty Markdown heading".to_owned(),
-                    source: Some(source.span(&(range.start..end))),
-                });
-                continue;
-            }
-            let is_document_title = title.is_none() && level == HeadingLevel::H1;
-            if is_document_title {
-                title = Some(heading.clone());
-            }
-            let id = ids.allocate(&heading, explicit_id.as_deref());
-            flat_sections.push(FlatSection {
-                level: heading_level(level),
-                is_document_title,
-                section: Section {
-                    id,
-                    title: heading.clone(),
-                    role: quick_reference_role(&heading),
-                    spacing_before_lines: u16::from(!flat_sections.is_empty()),
-                    blocks: Vec::new(),
-                    children: Vec::new(),
-                    source: Some(source.span(&(range.start..end))),
-                },
-            });
-            continue;
-        }
+/// Invalid structure in `ManT`'s optional top-level Markdown extension.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MarkdownParseError {
+    TldrDirective(TldrDirectiveError),
+    TldrPage(TldrParseError),
+}
 
-        let Some(block) = parse_block(&mut cursor, &source, &mut diagnostics) else {
-            continue;
-        };
-        if let Some(current) = flat_sections.last_mut() {
-            current.section.blocks.push(block);
-        } else {
-            root_blocks.push(block);
+impl fmt::Display for MarkdownParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TldrDirective(error) => error.fmt(formatter),
+            Self::TldrPage(error) => write!(formatter, "invalid embedded tldr page: {error}"),
         }
     }
+}
 
+impl Error for MarkdownParseError {}
+
+/// Split `ManT`'s optional leading tldr directive from the Markdown document.
+///
+/// The directive must be the first non-empty construct and uses the existing
+/// tldr-pages Markdown dialect. The remaining source is parsed independently,
+/// so its first H1 remains document metadata rather than part of the preface.
+///
+/// # Errors
+///
+/// Returns [`MarkdownParseError`] for an unterminated directive or malformed
+/// embedded tldr page.
+pub fn parse_markdown(
+    source_text: &str,
+    source_path: Option<String>,
+) -> Result<ParsedMarkdown, MarkdownParseError> {
+    let parts = split_markdown(source_text).map_err(MarkdownParseError::TldrDirective)?;
+    let tldr = parts
+        .tldr
+        .map(|source| {
+            parse_tldr_page(
+                source,
+                TldrPageLocation {
+                    platform: "embedded".to_owned(),
+                    language: "und".to_owned(),
+                    source_path: source_path.clone().unwrap_or_else(|| "<stdin>".to_owned()),
+                },
+            )
+            .map(|mut page| {
+                page.origin = TldrOrigin::Embedded;
+                page
+            })
+            .map_err(MarkdownParseError::TldrPage)
+        })
+        .transpose()?;
+    Ok(ParsedMarkdown {
+        document: parse_document(parts.document.as_ref(), source_path),
+        tldr,
+    })
+}
+
+/// Lower the ordinary document portion after extension extraction.
+fn parse_document(source_text: &str, source_path: Option<String>) -> MantDocument {
+    let source = MarkdownSource::new(source_text);
+    let ParsedDocumentStructure {
+        mut diagnostics,
+        mut root_blocks,
+        flat_sections,
+        mut ids,
+        title,
+        document_title_id,
+    } = lower_document_structure(source_text, &source);
     let mut sections = nest_sections(flat_sections);
+    let extracted_title = extract_document_title(
+        &mut root_blocks,
+        &mut sections,
+        document_title_id.as_deref(),
+    );
+    if extracted_title {
+        let replacement = if root_blocks.is_empty() {
+            sections.first().map(|section| section.id.as_str())
+        } else {
+            Some(DOCUMENT_ROOT_ID)
+        };
+        ids.remap_target(document_title_id.as_deref(), replacement);
+    }
     normalize_markdown_layout(&source, &mut root_blocks, &mut sections);
     normalize_option_lists(&mut root_blocks);
     normalize_section_options(&mut sections);
@@ -130,6 +159,98 @@ pub fn parse_markdown(source_text: &str, source_path: Option<String>) -> MantDoc
         diagnostics,
         blocks: root_blocks,
         sections,
+    }
+}
+
+struct ParsedDocumentStructure {
+    diagnostics: Vec<Diagnostic>,
+    root_blocks: Vec<Block>,
+    flat_sections: Vec<FlatSection>,
+    ids: SectionIds,
+    title: Option<String>,
+    document_title_id: Option<String>,
+}
+
+/// Lower the Markdown event stream without imposing final document layout.
+fn lower_document_structure(
+    source_text: &str,
+    source: &MarkdownSource<'_>,
+) -> ParsedDocumentStructure {
+    let parser = Parser::new_ext(source_text, markdown_options());
+    let mut cursor = EventCursor::new(parser.into_offset_iter().collect());
+    let mut diagnostics = Vec::new();
+    let mut root_blocks = Vec::new();
+    let mut flat_sections = Vec::new();
+    let mut ids = SectionIds::default();
+    let mut title = None;
+    let mut document_title_id = None;
+    let mut saw_heading = false;
+
+    while let Some((event, range)) = cursor.peek().cloned() {
+        if let Event::Start(Tag::Heading {
+            level,
+            id: explicit_id,
+            ..
+        }) = event
+        {
+            let _ = cursor.next();
+            let (children, end) = parse_inlines(
+                &mut cursor,
+                source,
+                &mut diagnostics,
+                TagEnd::Heading(level),
+            );
+            let heading = inline_text(&children);
+            if heading.is_empty() {
+                diagnostics.push(Diagnostic {
+                    level: DiagnosticLevel::Warning,
+                    code: Some("markdown.empty-heading".to_owned()),
+                    message: "ignored an empty Markdown heading".to_owned(),
+                    source: Some(source.span(&(range.start..end))),
+                });
+                continue;
+            }
+            let is_document_title = !saw_heading && level == HeadingLevel::H1;
+            saw_heading = true;
+            if is_document_title {
+                title = Some(heading.clone());
+            }
+            let id = ids.allocate(&heading, explicit_id.as_deref());
+            if is_document_title {
+                document_title_id = Some(id.clone());
+            }
+            flat_sections.push(FlatSection {
+                level: heading_level(level),
+                is_document_title,
+                section: Section {
+                    id,
+                    title: heading.clone(),
+                    spacing_before_lines: u16::from(!flat_sections.is_empty()),
+                    blocks: Vec::new(),
+                    children: Vec::new(),
+                    source: Some(source.span(&(range.start..end))),
+                },
+            });
+            continue;
+        }
+
+        let Some(block) = parse_block(&mut cursor, source, &mut diagnostics) else {
+            continue;
+        };
+        if let Some(current) = flat_sections.last_mut() {
+            current.section.blocks.push(block);
+        } else {
+            root_blocks.push(block);
+        }
+    }
+
+    ParsedDocumentStructure {
+        diagnostics,
+        root_blocks,
+        flat_sections,
+        ids,
+        title,
+        document_title_id,
     }
 }
 
@@ -178,12 +299,22 @@ fn heading_level(level: HeadingLevel) -> u8 {
     }
 }
 
-fn quick_reference_role(title: &str) -> Option<SectionRole> {
-    let normalized = title.trim();
-    (normalized.eq_ignore_ascii_case("tldr")
-        || normalized.eq_ignore_ascii_case("tldr quick reference")
-        || normalized.eq_ignore_ascii_case("quick reference"))
-    .then_some(SectionRole::QuickReference)
+/// A leading H1 names the document; it is metadata rather than manual content.
+fn extract_document_title(
+    root_blocks: &mut Vec<Block>,
+    sections: &mut Vec<Section>,
+    document_title_id: Option<&str>,
+) -> bool {
+    let Some(document_title_id) = document_title_id else {
+        return false;
+    };
+    if sections.first().map(|section| section.id.as_str()) != Some(document_title_id) {
+        return false;
+    }
+    let title = sections.remove(0);
+    root_blocks.extend(title.blocks);
+    sections.splice(0..0, title.children);
+    true
 }
 
 struct FlatSection {
@@ -248,6 +379,21 @@ impl SectionIds {
         self.targets.insert(slug(title), id.clone());
         self.targets.insert(id.clone(), id.clone());
         id
+    }
+
+    fn remap_target(&mut self, current: Option<&str>, replacement: Option<&str>) {
+        let Some(current) = current else {
+            return;
+        };
+        if let Some(replacement) = replacement {
+            for target in self.targets.values_mut() {
+                if target == current {
+                    replacement.clone_into(target);
+                }
+            }
+        } else {
+            self.targets.retain(|_, target| target != current);
+        }
     }
 }
 

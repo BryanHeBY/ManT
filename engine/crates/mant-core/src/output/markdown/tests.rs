@@ -3,7 +3,7 @@
 use mant_ast::{
     Block, DefinitionItem, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint,
     ListItem, ListKind, MantDocument, Producer, QueryBundle, QuerySchema, Section, SourceFormat,
-    TableCell, TableRow, TldrCommandPart, TldrDocument, TldrExample,
+    TableCell, TableRow, TldrCommandPart, TldrDocument, TldrExample, TldrOrigin,
 };
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
@@ -45,7 +45,6 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
     Section {
         id: title.to_lowercase(),
         title: title.to_owned(),
-        role: None,
         spacing_before_lines: 0,
         blocks,
         children,
@@ -73,6 +72,7 @@ fn renders_tldr_before_manual_and_resolves_placeholders() {
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "/cache/pages/common/ls.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
         }),
     };
 

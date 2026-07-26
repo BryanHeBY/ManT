@@ -105,40 +105,6 @@ function markdownResult(): MantQueryBundle {
       ],
       sections: [
         {
-          id: "quick-reference",
-          title: "TLDR Quick Reference",
-          role: "quick-reference",
-          spacingBeforeLines: 1,
-          blocks: [{
-            type: "list",
-            kind: "plain",
-            compact: false,
-            items: [
-              {
-                blocks: [
-                  paragraph("Run the shortest useful command:"),
-                  {
-                    type: "paragraph",
-                    children: [{ type: "code", value: "guide --help" }],
-                    layout: { spacingBeforeLines: 1 },
-                  },
-                ],
-              },
-              {
-                blocks: [
-                  paragraph("Open the full guide:"),
-                  {
-                    type: "paragraph",
-                    children: [{ type: "code", value: "mantui {{path/to/guide.md}}" }],
-                    layout: { spacingBeforeLines: 1 },
-                  },
-                ],
-              },
-            ],
-          }],
-          children: [],
-        },
-        {
           id: "options",
           title: "Options",
           spacingBeforeLines: 1,
@@ -161,6 +127,29 @@ function markdownResult(): MantQueryBundle {
           children: [],
         },
       ],
+    },
+    tldr: {
+      title: "guide",
+      description: [],
+      examples: [
+        {
+          description: "Run the shortest useful command",
+          command: "guide --help",
+          commandParts: [{ type: "text", value: "guide --help" }],
+        },
+        {
+          description: "Open the full guide",
+          command: "mantui {{path/to/guide.md}}",
+          commandParts: [
+            { type: "text", value: "mantui " },
+            { type: "placeholder", value: "path/to/guide.md" },
+          ],
+        },
+      ],
+      platform: "embedded",
+      language: "und",
+      sourcePath: "guide.md",
+      origin: "embedded",
     },
   };
 }
@@ -404,13 +393,13 @@ describe("App rendering (e2e)", () => {
     setup.renderer.destroy();
   });
 
-  test("renders Markdown overview content and embedded quick-reference sections", async () => {
+  test("renders a document-owned tldr preface before Markdown content", async () => {
     const setup = await renderApp(markdownResult(), { width: 100, height: 28 });
     const frame = setup.captureCharFrame();
 
     expect(frame).toContain("MARKDOWN · guide.md");
-    expect(navLines(frame).some((line) => line.includes("› ◇ OVERVIEW"))).toBe(true);
-    expect(navLines(frame).some((line) => line.includes("◇ TLDR Quick Reference"))).toBe(true);
+    expect(navLines(frame).some((line) => line.includes("› ◆ TLDR QUICK REFERENCE"))).toBe(true);
+    expect(navLines(frame).some((line) => line.includes("◇ OVERVIEW"))).toBe(true);
     expect(frame).toContain("Read this preface before choosing a section.");
     expect(frame).toContain("TLDR QUICK REFERENCE");
     expect(frame).toContain("Run the shortest useful command");
@@ -434,6 +423,11 @@ describe("App rendering (e2e)", () => {
       .flatMap((line) => line.spans)
       .find((span) => span.text.includes("path/to/guide.md"));
     expect(placeholderSpan?.fg).toEqual(parseColor("#f9e2af"));
+    const optionSpan = setup.captureSpans().lines
+      .flatMap((line) => line.spans)
+      .find((span) => span.text === "--help");
+    expect(optionSpan?.fg).toEqual(parseColor("#94e2d5"));
+    expect(frame).not.toContain("CC BY 4.0");
     setup.renderer.destroy();
   });
 

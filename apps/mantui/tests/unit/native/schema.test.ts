@@ -75,7 +75,7 @@ describe("native query schema", () => {
     });
   });
 
-  test("accepts Markdown root blocks, thematic breaks, and quick-reference sections", async () => {
+  test("accepts Markdown root blocks and thematic breaks", async () => {
     const fixture = JSON.parse(await Bun.file(fixturePath).text());
     fixture.document.source = { format: "markdown", path: "guide.md" };
     fixture.document.blocks = [
@@ -85,13 +85,20 @@ describe("native query schema", () => {
       },
       { type: "thematic-break" },
     ];
-    fixture.document.sections[0].role = "quick-reference";
-
     const query = decodeMantQuery(JSON.stringify(fixture));
 
     expect(query.document?.source.format).toBe("markdown");
     expect(query.document?.blocks?.[1]).toEqual({ type: "thematic-break" });
-    expect(query.document?.sections[0]?.role).toBe("quick-reference");
+  });
+
+  test("accepts document-owned tldr provenance without requiring it for cached pages", async () => {
+    const fixture = JSON.parse(await Bun.file(fixturePath).text());
+    fixture.tldr.origin = "embedded";
+
+    expect(decodeMantQuery(JSON.stringify(fixture)).tldr?.origin).toBe("embedded");
+    fixture.tldr.origin = "unknown";
+    expect(() => decodeMantQuery(JSON.stringify(fixture)))
+      .toThrow("expected one of tldr-pages, embedded");
   });
 
   test("rejects incompatible schema versions", async () => {

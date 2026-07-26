@@ -417,6 +417,7 @@ mod tests {
     use mant_ast::{
         Block, DefinitionItem, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint,
         MantDocument, Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
+        TldrOrigin,
     };
 
     use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
@@ -447,13 +448,11 @@ mod tests {
                 sections: vec![Section {
                     id: "options-1".to_owned(),
                     title: "OPTIONS".to_owned(),
-                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![paragraph("parent details", true)],
                     children: vec![Section {
                         id: "common-2".to_owned(),
                         title: "Common options".to_owned(),
-                        role: None,
                         spacing_before_lines: 1,
                         blocks: vec![paragraph("child details", false)],
                         children: Vec::new(),
@@ -518,6 +517,7 @@ mod tests {
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "/cache/tldr/demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
         });
 
         let outline = render_outline_text(&build_outline(&query).expect("combined outline"));
@@ -542,6 +542,7 @@ mod tests {
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "/cache/tldr/demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
         });
 
         let text = render_query_text(&query);
@@ -572,6 +573,7 @@ mod tests {
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "/cache/tldr/demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
         });
 
         assert!(render_query_man(&query).is_empty());
@@ -604,7 +606,6 @@ mod tests {
                     sections: vec![Section {
                         id: "s-1".to_owned(),
                         title: "S".to_owned(),
-                        role: None,
                         spacing_before_lines: 0,
                         blocks,
                         children: Vec::new(),
@@ -677,7 +678,6 @@ mod tests {
                 sections: vec![Section {
                     id: "ops".to_owned(),
                     title: "OPERATORS".to_owned(),
-                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         compact: false,
@@ -764,7 +764,6 @@ mod tests {
                 sections: vec![Section {
                     id: "ops".to_owned(),
                     title: "OPERATORS".to_owned(),
-                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         compact: false,

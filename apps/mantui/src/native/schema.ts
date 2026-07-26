@@ -92,7 +92,6 @@ export type MantBlock =
 export interface MantSection {
   id: string;
   title: string;
-  role?: "quick-reference";
   spacingBeforeLines?: number;
   blocks: MantBlock[];
   children: MantSection[];
@@ -147,6 +146,8 @@ export interface TldrDocument {
   platform: string;
   language: string;
   sourcePath: string;
+  /** Omitted for community tldr-pages data. */
+  origin?: "tldr-pages" | "embedded";
 }
 
 export interface MantQueryBundle {
@@ -295,9 +296,6 @@ function validateSection(value: unknown, path: string): asserts value is MantSec
   const object = expectObject(value, path);
   expectString(object.id, `${path}.id`);
   expectString(object.title, `${path}.title`);
-  if (object.role !== undefined) {
-    expectOneOf(object.role, ["quick-reference"], `${path}.role`);
-  }
   expectOptionalNumber(object.spacingBeforeLines, `${path}.spacingBeforeLines`);
   expectArray(object.blocks, `${path}.blocks`).forEach((block, index) => {
     validateBlock(block, `${path}.blocks[${index}]`);
@@ -464,6 +462,9 @@ function validateTldr(value: unknown, path: string): asserts value is TldrDocume
   expectString(object.platform, `${path}.platform`);
   expectString(object.language, `${path}.language`);
   expectString(object.sourcePath, `${path}.sourcePath`);
+  if (object.origin !== undefined) {
+    expectOneOf(object.origin, ["tldr-pages", "embedded"], `${path}.origin`);
+  }
 }
 
 function validateLayout(value: unknown, path: string): void {

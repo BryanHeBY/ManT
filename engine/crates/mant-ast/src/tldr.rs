@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// One cached tldr page included in a query bundle.
+/// One normalized quick reference included in a query bundle.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrDocument {
@@ -15,6 +15,28 @@ pub struct TldrDocument {
     pub platform: String,
     pub language: String,
     pub source_path: String,
+    /// Distinguishes community cache data from a document-owned quick reference.
+    ///
+    /// The field is omitted for tldr-pages data to preserve the established
+    /// wire representation. Absence therefore means [`TldrOrigin::TldrPages`].
+    #[serde(default, skip_serializing_if = "TldrOrigin::is_tldr_pages")]
+    pub origin: TldrOrigin,
+}
+
+/// Provenance controls attribution without changing quick-reference rendering.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum TldrOrigin {
+    #[default]
+    TldrPages,
+    Embedded,
+}
+
+impl TldrOrigin {
+    #[must_use]
+    pub const fn is_tldr_pages(&self) -> bool {
+        matches!(self, Self::TldrPages)
+    }
 }
 
 /// Human explanation paired with one shell command example.
@@ -65,7 +87,7 @@ pub struct TldrCacheUpdate {
 mod tests {
     use serde_json::json;
 
-    use super::{TldrCacheAction, TldrCacheUpdate};
+    use super::{TldrCacheAction, TldrCacheUpdate, TldrDocument, TldrOrigin};
 
     #[test]
     fn cache_update_uses_a_stable_camel_case_shape() {
@@ -85,5 +107,24 @@ mod tests {
                 "revision": "abc123"
             })
         );
+    }
+
+    #[test]
+    fn origin_is_additive_and_omitted_for_tldr_pages() {
+        let page = |origin| TldrDocument {
+            title: "demo".to_owned(),
+            description: Vec::new(),
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "/source/demo.md".to_owned(),
+            origin,
+        };
+
+        let cached = serde_json::to_value(page(TldrOrigin::TldrPages)).expect("cached page");
+        assert!(cached.get("origin").is_none());
+        let embedded = serde_json::to_value(page(TldrOrigin::Embedded)).expect("embedded page");
+        assert_eq!(embedded["origin"], "embedded");
     }
 }

@@ -65,8 +65,9 @@ every destination as an untyped URI:
 - `anchor` marks a zero-width document-local destination such as mdoc `Tg`.
 
 Definition-list entries may also carry a semantic `identity` with a stable
-document-local ID, a role, and normalized names. Version 2 currently assigns
-this identity to recognized command-line options. It preserves the complete
+document-local ID, a role, and normalized names. The current document
+contract assigns this identity to recognized command-line options, commands,
+and environment variables. It preserves the complete
 rendered term and description while making aliases such as `-g` and
 `--listed-incremental` discoverable as one addressable entry.
 
@@ -86,6 +87,8 @@ The project deliberately uses a process boundary instead of Node-API. This
 avoids ABI-specific addons, isolates native failures, and makes the same binary
 directly useful outside Bun. One-shot requests serve the TUI and shell usage;
 the same executable also provides a long-lived, read-only MCP stdio server.
+The field-level contract, version matrix, examples, and client checklist live
+in the [JSON protocol and Schema reference](../protocol.md).
 The public surface is use-case oriented rather than a mirror of parser
 internals:
 
@@ -199,11 +202,21 @@ An option list is semantic only when every item begins with one or more
 code-formatted option names followed by `:` or a dash separator. Those lists
 become ordinary definition-list entries with stable option identities, so the
 same outline, explain, search, and TUI navigation code works for manuals and
-project documentation. Exact headings named `TLDR`, `TLDR Quick Reference`, or
-`Quick Reference` receive a quick-reference section role but remain part of
-the Markdown document. The real tldr-pages sequence of a bullet description,
-blank line, and standalone code command is normalized into marker-free example
-rows, then rendered by the same highlighted panel as cached tldr content.
+project documentation.
+
+ManT's Markdown extension is structurally separate from ordinary headings. An
+optional `:::tldr` container must be the first non-empty construct and is
+parsed with the existing tldr-pages parser into `QueryBundle.tldr`. The
+remaining Markdown is independently lowered into `QueryBundle.document`.
+Consequently outline path `0`, selector `tldr`, search, textual projections,
+and the highlighted TUI panel use exactly the same implementation for cached
+and document-owned quick references. An origin marker suppresses the
+tldr-pages attribution for document-owned content. A same-named ordinary
+heading has no special semantics.
+
+The first H1 in the document portion supplies metadata and its following prose
+becomes root overview content. This explicit two-channel model keeps tldr
+layout conventions out of the general Markdown AST and renderers.
 
 The primary path reads the located manual source and lowers libmandoc's
 validated man(7) or mdoc(7) tree directly into `mant.document/v3`.  Rust owns

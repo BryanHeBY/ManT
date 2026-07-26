@@ -4,11 +4,11 @@
 //! leave blank-line presentation to HTML/CSS. `ManT` has no CSS layer, so this
 //! pass makes those semantics explicit before any renderer sees the document.
 
-use mant_ast::{Block, Inline, LayoutHint, ListItem, ListKind, Section, SectionRole, SourceSpan};
+use mant_ast::{Block, Inline, LayoutHint, Section, SourceSpan};
 
 use super::source::MarkdownSource;
 
-/// Apply source-derived block spacing and quick-reference conventions.
+/// Apply source-derived block spacing to the normalized document.
 pub(super) fn normalize_markdown_layout(
     source: &MarkdownSource<'_>,
     root_blocks: &mut [Block],
@@ -21,9 +21,6 @@ pub(super) fn normalize_markdown_layout(
 fn normalize_sections(source: &MarkdownSource<'_>, sections: &mut [Section]) {
     for section in sections {
         normalize_blocks(source, &mut section.blocks);
-        if section.role == Some(SectionRole::QuickReference) {
-            normalize_quick_reference(&mut section.blocks);
-        }
         normalize_sections(source, &mut section.children);
     }
 }
@@ -71,140 +68,6 @@ fn normalize_nested_blocks(source: &MarkdownSource<'_>, block: &mut Block) {
         | Block::ThematicBreak { .. }
         | Block::Unsupported { .. } => {}
     }
-}
-
-/// Real tldr-pages files alternate a one-item description list with a
-/// standalone code paragraph. Lower that dialect into one marker-free list so
-/// every renderer and the search index sees explicit description/command rows.
-fn normalize_quick_reference(blocks: &mut Vec<Block>) {
-    if blocks.is_empty() || !blocks.len().is_multiple_of(2) {
-        return;
-    }
-
-    let mut examples = Vec::with_capacity(blocks.len() / 2);
-    for pair in blocks.chunks_exact(2) {
-        let Some(example) = tldr_example(pair) else {
-            return;
-        };
-        examples.push(example);
-    }
-
-    let layout = block_layout(blocks.first()).unwrap_or_default();
-    let source = merge_spans(
-        blocks.first().and_then(block_source),
-        blocks.last().and_then(block_source),
-    );
-    *blocks = vec![Block::List {
-        kind: ListKind::Plain,
-        start: None,
-        compact: false,
-        items: examples,
-        layout,
-        source,
-    }];
-}
-
-fn tldr_example(pair: &[Block]) -> Option<ListItem> {
-    let [description_list, command] = pair else {
-        return None;
-    };
-    let Block::List {
-        kind: ListKind::Bullet,
-        items,
-        ..
-    } = description_list
-    else {
-        return None;
-    };
-    let [description_item] = items.as_slice() else {
-        return None;
-    };
-    let [
-        Block::Paragraph {
-            children: description,
-            layout: description_layout,
-            source: description_source,
-        },
-    ] = description_item.blocks.as_slice()
-    else {
-        return None;
-    };
-    let Block::Paragraph {
-        children: command,
-        layout: command_layout,
-        source: command_source,
-    } = command
-    else {
-        return None;
-    };
-    if !matches!(command.as_slice(), [Inline::Code { .. }]) {
-        return None;
-    }
-
-    let mut description = description.clone();
-    trim_tldr_description(&mut description);
-    Some(ListItem {
-        blocks: vec![
-            Block::Paragraph {
-                children: description,
-                layout: *description_layout,
-                source: *description_source,
-            },
-            Block::Paragraph {
-                children: command.clone(),
-                layout: LayoutHint {
-                    spacing_before_lines: command_layout.spacing_before_lines.max(1),
-                    ..*command_layout
-                },
-                source: *command_source,
-            },
-        ],
-    })
-}
-
-fn trim_tldr_description(children: &mut [Inline]) {
-    let Some(last) = children.last_mut() else {
-        return;
-    };
-    match last {
-        Inline::Text { value } | Inline::Code { value } => {
-            let trimmed = value.trim_end();
-            if let Some(description) = trimmed.strip_suffix(':') {
-                *value = description.to_owned();
-            }
-        }
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::ExternalLink { children, .. }
-        | Inline::EmailLink { children, .. }
-        | Inline::ManualReference { children, .. }
-        | Inline::SectionReference { children, .. } => trim_tldr_description(children),
-        Inline::LineBreak | Inline::Anchor { .. } => {}
-    }
-}
-
-fn block_layout(block: Option<&Block>) -> Option<LayoutHint> {
-    match block? {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => Some(*layout),
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
-    }
-}
-
-fn merge_spans(start: Option<SourceSpan>, end: Option<SourceSpan>) -> Option<SourceSpan> {
-    let start = start?;
-    let end = end?;
-    Some(SourceSpan {
-        line: start.line,
-        column: start.column,
-        end_line: end.end_line,
-        end_column: end.end_column,
-    })
 }
 
 /// pulldown-cmark includes the newline before a closing fence in its text

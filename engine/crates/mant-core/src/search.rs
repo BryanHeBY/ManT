@@ -510,7 +510,6 @@ mod tests {
                 sections: vec![Section {
                     id: "options-1".to_owned(),
                     title: "OPTIONS".to_owned(),
-                    role: None,
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         items: vec![DefinitionItem {
@@ -628,6 +627,53 @@ mod tests {
         ));
         assert!(result.matches[0].section.is_none());
         assert!(result.matches[0].preview.contains("preface needle"));
+    }
+
+    #[test]
+    fn embedded_tldr_and_markdown_body_keep_distinct_search_owners() {
+        let query = crate::query_markdown_text(
+            "\
+:::tldr
+# demo
+
+> Quick needle.
+
+- Run:
+
+`demo quick-command`
+:::
+
+# Demo
+
+Read the overview needle.
+
+## Synopsis
+
+Manual needle.
+",
+            Some("demo.md".to_owned()),
+        )
+        .expect("Markdown query");
+
+        let quick = search_query(&query, &request("quick needle")).expect("tldr search");
+        assert!(matches!(
+            &quick.matches[0].node,
+            mant_ast::SearchNode::Tldr { path, id, .. }
+                if path == "0" && id == "tldr"
+        ));
+
+        let overview = search_query(&query, &request("overview needle")).expect("root search");
+        assert!(matches!(
+            &overview.matches[0].node,
+            mant_ast::SearchNode::DocumentRoot { path, .. } if path == "root"
+        ));
+
+        let manual = search_query(&query, &request("manual needle")).expect("section search");
+        assert!(matches!(
+            &manual.matches[0].node,
+            mant_ast::SearchNode::DocumentSection { path, id, .. }
+                if path == "1" && id == "synopsis"
+        ));
     }
 
     #[test]

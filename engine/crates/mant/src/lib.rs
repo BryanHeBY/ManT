@@ -581,7 +581,7 @@ mod tests {
         Block, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic, DiagnosticLevel,
         DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer,
         QueryBundle, QueryInput, QueryRequest, QuerySchema, Section, SourceFormat, SourceSpan,
-        TldrCacheAction, TldrCacheUpdate, TldrDocument,
+        TldrCacheAction, TldrCacheUpdate, TldrDocument, TldrOrigin,
     };
 
     use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, run_with_host};
@@ -769,6 +769,7 @@ mod tests {
             platform: "common".to_owned(),
             language: "en".to_owned(),
             source_path: "/cache/tldr/pages/common/demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
         }
     }
 
@@ -776,7 +777,6 @@ mod tests {
         Section {
             id: id.to_owned(),
             title: title.to_owned(),
-            role: None,
             spacing_before_lines: 0,
             blocks: vec![Block::Paragraph {
                 children: vec![Inline::Text {

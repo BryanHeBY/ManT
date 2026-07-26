@@ -1,20 +1,15 @@
 /**
- * @file Renders cached and Markdown-embedded quick references through one
- * tldr presentation model.
+ * @file Renders cached and document-owned quick references through one model.
  *
- * The adapters keep provenance and search IDs source-specific. The panel owns
- * only the shared colour, spacing, command, and placeholder presentation.
+ * Rust normalizes both sources into TldrDocument. This component only varies
+ * attribution according to provenance; layout and search IDs stay identical.
  */
 
 import { memo } from "react";
-import type {
-  MantSection,
-  TldrCommandPart,
-  TldrDocument,
-} from "../native";
+import type { TldrCommandPart, TldrDocument } from "../native";
 import { contentId, contentSearchId, TLDR_NAV_ID } from "./ids";
-import { flattenInlineText, searchPath } from "./search";
-import { embeddedTldrCommandParts } from "./tldr-format";
+import { renderCodeSpans } from "./Pre";
+import { searchPath } from "./search";
 
 interface QuickReferenceExample {
   description: string;
@@ -24,7 +19,7 @@ interface QuickReferenceExample {
   commandTargetId: string;
 }
 
-export interface QuickReferencePanelModel {
+interface QuickReferencePanelModel {
   contentTargetId: string;
   title: string;
   description: Array<{ text: string; targetId: string }>;
@@ -37,16 +32,16 @@ function TldrCommand({ parts }: { parts: TldrCommandPart[] }) {
   return (
     <text fg="#cdd6f4" wrapMode="char">
       {parts.map((part, index) => (
-        <span key={index} fg={part.type === "placeholder" ? "#f9e2af" : "#cdd6f4"}>
-          {part.value}
-        </span>
+        part.type === "placeholder"
+          ? <span key={index} fg="#f9e2af">{part.value}</span>
+          : renderCodeSpans(part.value, `tldr-command-${index}`)
       ))}
     </text>
   );
 }
 
 /** Shared visual surface for upstream and document-owned quick references. */
-export function QuickReferencePanel({ model }: { model: QuickReferencePanelModel }) {
+function QuickReferencePanel({ model }: { model: QuickReferencePanelModel }) {
   return (
     <box
       id={model.contentTargetId}
@@ -94,7 +89,7 @@ export function QuickReferencePanel({ model }: { model: QuickReferencePanelModel
   );
 }
 
-function cachedTldrModel(page: TldrDocument): QuickReferencePanelModel {
+function tldrModel(page: TldrDocument): QuickReferencePanelModel {
   return {
     contentTargetId: contentId(TLDR_NAV_ID),
     title: `TLDR QUICK REFERENCE · ${page.title}`,
@@ -121,64 +116,17 @@ function cachedTldrModel(page: TldrDocument): QuickReferencePanelModel {
           },
         }
       : {}),
-    attribution: `tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`,
+    ...(page.origin === "embedded"
+      ? {}
+      : {
+          attribution: `tldr-pages · CC BY 4.0 · ${page.platform} · ${page.language}`,
+        }),
   };
 }
 
-/**
- * Adapt the marker-free list emitted by Markdown quick-reference lowering.
- *
- * Returning undefined leaves unusual user-authored sections on the generic
- * block renderer instead of guessing at their meaning.
- */
-export function embeddedTldrModel(section: MantSection): QuickReferencePanelModel | undefined {
-  const [block] = section.blocks;
-  if (section.blocks.length !== 1 || block?.type !== "list" || block.kind !== "plain") {
-    return undefined;
-  }
-
-  const examples: QuickReferenceExample[] = [];
-  for (let itemIndex = 0; itemIndex < block.items.length; itemIndex++) {
-    const item = block.items[itemIndex]!;
-    const [descriptionBlock, commandBlock] = item.blocks;
-    if (
-      item.blocks.length !== 2
-      || descriptionBlock?.type !== "paragraph"
-      || commandBlock?.type !== "paragraph"
-      || commandBlock.children.length !== 1
-      || commandBlock.children[0]?.type !== "code"
-    ) {
-      return undefined;
-    }
-
-    const itemPath = searchPath.listItem(searchPath.block("", 0), itemIndex);
-    const command = commandBlock.children[0].value;
-    examples.push({
-      description: flattenInlineText(descriptionBlock.children).replace(/:\s*$/, ""),
-      command,
-      commandParts: embeddedTldrCommandParts(command),
-      descriptionTargetId: contentSearchId(
-        section.id,
-        searchPath.block(itemPath, 0),
-      ),
-      commandTargetId: contentSearchId(
-        section.id,
-        searchPath.block(itemPath, 1),
-      ),
-    });
-  }
-
-  return {
-    contentTargetId: contentId(section.id),
-    title: section.title.toLocaleUpperCase(),
-    description: [],
-    examples,
-  };
-}
-
-/** Renders one cached community page before the authoritative manual. */
+/** Renders one normalized quick reference before the primary document. */
 function TldrQuickReferenceView({ page }: { page: TldrDocument }) {
-  return <QuickReferencePanel model={cachedTldrModel(page)} />;
+  return <QuickReferencePanel model={tldrModel(page)} />;
 }
 
 /** TLDR is immutable for the lifetime of one page. */

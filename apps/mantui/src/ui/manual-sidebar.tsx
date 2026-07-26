@@ -33,7 +33,6 @@ function navigationTitleColor(flatNode: FlatNode, selected: boolean): string {
   if (selected) return "#f5e0dc";
   if (flatNode.node.kind === "entry-group") return "#f9e2af";
   if (flatNode.node.kind === "option") return "#a6e3a1";
-  if (flatNode.node.role === "quick-reference") return "#cba6f7";
   if (flatNode.depth === 0) return "#cdd6f4";
   if (flatNode.depth === 1) return "#89b4fa";
   return "#a6adc8";
@@ -89,8 +88,8 @@ export function ManualSidebar({
           },
         }}
       >
-        {/* Cached tldr content is a synthetic document root, deliberately
-            styled apart from the authoritative local manual. */}
+        {/* TLDR content is a synthetic document root, deliberately styled
+            apart from the authoritative manual or Markdown document. */}
         {result.tldr && (
           <box
             id={navId(TLDR_NAV_ID)}
@@ -137,7 +136,7 @@ export function ManualSidebar({
           const titleColor = navigationTitleColor(flatNode, isSelected);
           const disclosure = hasChildren
             ? expanded.has(node.id) ? "▾ " : "▸ "
-            : node.kind === "option" || node.role === "quick-reference" ? "◇ " : "· ";
+            : node.kind === "option" ? "◇ " : "· ";
           const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
           const selectedTitleLines = isSelected
             ? wrapNavigationTitle(node.title, width - 1 - terminalColumnWidth(labelPrefix))
@@ -158,7 +157,7 @@ export function ManualSidebar({
               backgroundColor={
                 isSelected
                   ? "#313244"
-                  : node.role === "quick-reference" ? "#1d1a2b" : "#11111b"
+                  : "#11111b"
               }
             >
               {isSelected ? selectedTitleLines.map((line, index) => {

@@ -15,7 +15,6 @@ export interface NavigationNode {
   kind: NavigationNodeKind;
   /** ID of the section heading or inline anchor rendered in the content pane. */
   targetId: string;
-  role?: MantSection["role"];
   children: NavigationNode[];
 }
 
@@ -81,7 +80,6 @@ export function buildNavigationNodes(sections: MantSection[]): NavigationNode[] 
       title: section.title,
       kind: "section" as const,
       targetId: section.id,
-      ...(section.role ? { role: section.role } : {}),
       children,
     };
   });

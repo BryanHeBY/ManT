@@ -5,7 +5,7 @@ mod inline;
 
 use mant_ast::{
     Block, ExcerptSelection, LayoutHint, OutlineNode, QueryBundle, QueryExcerpt, QueryOutline,
-    Section, TldrCommandPart, TldrDocument,
+    Section, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 
 use self::{
@@ -249,11 +249,13 @@ fn render_tldr(page: &TldrDocument) -> Vec<String> {
             }
         }
     }
-    output.push(format!(
-        "*tldr-pages · CC BY 4.0 · {} · {}*",
-        escape_text(&page.platform),
-        escape_text(&page.language)
-    ));
+    if page.origin == TldrOrigin::TldrPages {
+        output.push(format!(
+            "*tldr-pages · CC BY 4.0 · {} · {}*",
+            escape_text(&page.platform),
+            escape_text(&page.language)
+        ));
+    }
     output
 }
 

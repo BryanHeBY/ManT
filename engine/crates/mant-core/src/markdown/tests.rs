@@ -1,13 +1,13 @@
 //! Contract-focused tests for Markdown lowering and source preservation.
 
 use mant_ast::{
-    Block, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle, QuerySchema, SectionRole,
-    SourceFormat, TableAlignment,
+    Block, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle, QuerySchema, SourceFormat,
+    TableAlignment, TldrOrigin,
 };
 
 use crate::build_outline_with_detail;
 
-use super::parse_markdown;
+use super::{parse_document, parse_markdown};
 
 #[test]
 fn lowers_root_content_headings_inlines_lists_tables_and_code() {
@@ -16,7 +16,7 @@ Intro with **bold**, *emphasis*, `code`, and [docs](https://example.test).
 
 # Tool
 
-See [options](#options).  
+See [the top](#tool) and [options](#options).\\
 Next line.
 
 ## Options
@@ -38,14 +38,13 @@ fn main() {}
 
 ---
 ";
-    let document = parse_markdown(markdown, Some("/docs/tool.md".to_owned()));
+    let document = parse_document(markdown, Some("/docs/tool.md".to_owned()));
 
     assert_eq!(document.source.format, SourceFormat::Markdown);
     assert_eq!(document.meta.title.as_deref(), Some("Tool"));
-    assert_eq!(document.blocks.len(), 1);
-    assert_eq!(document.sections.len(), 2);
-    assert_eq!(document.sections[0].id, "tool");
-    assert_eq!(document.sections[1].id, "options");
+    assert_eq!(document.blocks.len(), 2);
+    assert_eq!(document.sections.len(), 1);
+    assert_eq!(document.sections[0].id, "options");
 
     let Block::Paragraph { children, .. } = &document.blocks[0] else {
         panic!("intro is a paragraph");
@@ -59,17 +58,19 @@ fn main() {}
         |inline| matches!(inline, Inline::ExternalLink { uri, .. } if uri == "https://example.test")
     ));
 
-    let tool = &document.sections[0];
     assert!(matches!(
-        &tool.blocks[0],
+        &document.blocks[1],
         Block::Paragraph { children, .. }
             if children.iter().any(|inline| matches!(
                 inline,
                 Inline::SectionReference { target, .. } if target == "options"
+            )) && children.iter().any(|inline| matches!(
+                inline,
+                Inline::SectionReference { target, .. } if target == "document-overview"
             )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak))
     ));
 
-    let options = &document.sections[1];
+    let options = &document.sections[0];
     assert!(matches!(
         &options.blocks[0],
         Block::List { kind: ListKind::Bullet, items, .. }
@@ -129,8 +130,9 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
 
 [^note]: footnote body
 ";
-    let document = parse_markdown(markdown, None);
-    let blocks = &document.sections[0].blocks;
+    let document = parse_document(markdown, None);
+    assert!(document.sections.is_empty());
+    let blocks = &document.blocks;
 
     assert!(matches!(
         &blocks[0],
@@ -171,51 +173,74 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
 }
 
 #[test]
-fn assigns_unique_heading_ids_and_marks_embedded_quick_references() {
-    let document = parse_markdown(
+fn separates_a_leading_tldr_directive_from_the_document_ast() {
+    let parsed = parse_markdown(
         "\
-# Demo
+:::tldr
+# demo
 
-## TLDR Quick Reference
+> A demonstration command.
 
 - Show command help:
 
 `demo --help`
+:::
+
+# Demo
+
+Document introduction.
 
 ## Same
 
 ## Same
 ",
         None,
+    )
+    .expect("embedded tldr");
+
+    let tldr = parsed.tldr.expect("quick reference");
+    assert_eq!(tldr.title, "demo");
+    assert_eq!(tldr.description, ["A demonstration command."]);
+    assert_eq!(tldr.examples[0].description, "Show command help");
+    assert_eq!(tldr.examples[0].command, "demo --help");
+    assert_eq!(tldr.origin, TldrOrigin::Embedded);
+
+    assert_eq!(parsed.document.meta.title.as_deref(), Some("Demo"));
+    assert!(matches!(
+        parsed.document.blocks.as_slice(),
+        [Block::Paragraph { children, source, .. }]
+            if matches!(children.as_slice(), [Inline::Text { value }] if value == "Document introduction.")
+                && source.is_some_and(|span| span.line == 13)
+    ));
+    assert_eq!(parsed.document.sections[0].id, "same");
+    assert_eq!(parsed.document.sections[1].id, "same-2");
+}
+
+#[test]
+fn leaves_an_ordinary_tldr_heading_in_the_manual() {
+    let document = parse_document(
+        "\
+# Demo
+
+## Synopsis
+
+Normal manual content.
+
+## TLDR
+
+- This late heading is ordinary content:
+
+`demo --help`
+",
+        None,
     );
 
-    let quick_reference = &document.sections[1];
-    assert_eq!(quick_reference.role, Some(SectionRole::QuickReference));
-    assert!(matches!(
-        &quick_reference.blocks[0],
-        Block::List {
-            kind: ListKind::Plain,
-            compact: false,
-            items,
-            ..
-        }
-            if matches!(
-                items[0].blocks.as_slice(),
-                [
-                    Block::Paragraph { children: description, .. },
-                    Block::Paragraph { children: command, layout, .. },
-                ] if matches!(description.as_slice(), [Inline::Text { value }] if value == "Show command help")
-                    && matches!(command.as_slice(), [Inline::Code { value }] if value == "demo --help")
-                    && layout.spacing_before_lines == 1
-            )
-    ));
-    assert_eq!(document.sections[2].id, "same");
-    assert_eq!(document.sections[3].id, "same-2");
+    assert_eq!(document.sections[1].title, "TLDR");
 }
 
 #[test]
 fn turns_explicit_option_lists_into_addressable_definitions() {
-    let document = parse_markdown(
+    let document = parse_document(
         "\
 # Tool
 
@@ -227,7 +252,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
         None,
     );
 
-    let options = &document.sections[1];
+    let options = &document.sections[0];
     let Block::DefinitionList { items, .. } = &options.blocks[0] else {
         panic!("explicit option list should become a semantic definition list");
     };
@@ -254,7 +279,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
         OutlineDetail::Options,
     )
     .expect("Markdown document has an outline");
-    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[1] else {
+    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
         panic!("options should be a top-level document section");
     };
     assert!(matches!(

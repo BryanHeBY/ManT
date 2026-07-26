@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { MantBlock, MantSection } from "../../../src/native";
+import type { MantBlock, MantSection, TldrDocument } from "../../../src/native";
 import {
   buildPageSearchIndex,
   queryPageSearchIndex,
@@ -240,34 +240,29 @@ describe("page search index", () => {
       .toBe("block-0.inline-1");
   });
 
-  test("indexes the same visible placeholder text drawn by embedded tldr panels", () => {
-    const quickReference: MantSection[] = [{
-      id: "quick-reference",
-      title: "TLDR Quick Reference",
-      role: "quick-reference",
-      blocks: [{
-        type: "list",
-        kind: "plain",
-        compact: false,
-        items: [{
-          blocks: [
-            paragraphBlock("Open a document"),
-            {
-              type: "paragraph",
-              layout: { spacingBeforeLines: 1 },
-              children: [{ type: "code", value: "mantui {{path/to/file.md}}" }],
-            },
-          ],
-        }],
+  test("indexes the same visible placeholder text drawn by document-owned tldr", () => {
+    const quickReference: TldrDocument = {
+      title: "mantui",
+      description: [],
+      examples: [{
+        description: "Open a document",
+        command: "mantui {{path/to/file.md}}",
+        commandParts: [
+          { type: "text", value: "mantui " },
+          { type: "placeholder", value: "path/to/file.md" },
+        ],
       }],
-      children: [],
-    }];
-    const index = buildPageSearchIndex(quickReference, undefined);
+      platform: "embedded",
+      language: "und",
+      sourcePath: "mantui.md",
+      origin: "embedded",
+    };
+    const index = buildPageSearchIndex([], quickReference);
     const command = index.records.find((record) => record.text.startsWith("mantui"));
     const [match] = queryPageSearchIndex(index, "path/to/file.md");
 
     expect(command?.text).toBe("mantui path/to/file.md");
-    expect(match?.targetPath).toBe("block-0.item-0.block-1");
+    expect(match?.targetPath).toBe("example-0-command");
     expect(match?.text.slice(match.range.start, match.range.end)).toBe("path/to/file.md");
   });
 });

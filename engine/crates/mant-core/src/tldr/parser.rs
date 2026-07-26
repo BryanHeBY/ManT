@@ -2,9 +2,9 @@
 
 use std::{error::Error, fmt};
 
-use mant_ast::{TldrCommandPart, TldrDocument, TldrExample};
+use mant_ast::{TldrCommandPart, TldrDocument, TldrExample, TldrOrigin};
 
-/// Cache identity attached to a parsed tldr page.
+/// Source identity attached to a parsed tldr page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TldrPageLocation {
     pub platform: String,
@@ -70,7 +70,7 @@ pub fn parse_tldr_command(command: &str) -> Vec<TldrCommandPart> {
     parts
 }
 
-/// Parse one cached tldr Markdown page without performing any I/O.
+/// Parse one tldr Markdown page without performing any I/O.
 ///
 /// # Errors
 ///
@@ -146,6 +146,7 @@ pub fn parse_tldr_page(
         platform: location.platform,
         language: location.language,
         source_path: location.source_path,
+        origin: TldrOrigin::TldrPages,
     })
 }
 

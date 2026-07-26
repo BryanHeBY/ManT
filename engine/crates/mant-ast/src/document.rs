@@ -130,8 +130,6 @@ pub struct Section {
     /// Unique within one document; consumers must not treat it as a global ID.
     pub id: String,
     pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub role: Option<SectionRole>,
     /// Terminal rows requested before this heading by the source macro set.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub spacing_before_lines: u16,
@@ -139,14 +137,6 @@ pub struct Section {
     pub children: Vec<Section>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceSpan>,
-}
-
-/// Optional semantic role assigned to a document section.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
-pub enum SectionRole {
-    /// An embedded concise reference that should be visually distinct.
-    QuickReference,
 }
 
 /// Presentation hints retained from roff but optional for semantic outputs.

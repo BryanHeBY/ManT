@@ -44,6 +44,10 @@ pub trait CommandRunner {
 }
 
 /// Production runner backed by [`std::process::Command`].
+///
+/// The child intentionally inherits the current environment. In particular,
+/// this lets the host `man -w` lookup honor `MANPATH`, `MANSECT`, and locale
+/// variables without `ManT` duplicating platform-specific manual-path rules.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SystemCommandRunner;
 

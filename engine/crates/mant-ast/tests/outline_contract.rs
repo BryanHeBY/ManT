@@ -4,7 +4,7 @@ use mant_ast::{
     Block, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSource,
     ExcerptSchema, ExcerptSelection, Inline, LayoutHint, OutlineDetail, OutlineNode,
     OutlineReference, OutlineSchema, Producer, QueryExcerpt, QueryOutline, Section, SourceFormat,
-    TldrDocument,
+    TldrDocument, TldrOrigin,
 };
 
 fn source() -> DocumentSource {
@@ -52,7 +52,6 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     let section = Section {
         id: "common-3".to_owned(),
         title: "Common options".to_owned(),
-        role: None,
         spacing_before_lines: 0,
         blocks: Vec::new(),
         children: Vec::new(),
@@ -188,6 +187,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         platform: "common".to_owned(),
         language: "en".to_owned(),
         source_path: "/tldr/demo.md".to_owned(),
+        origin: TldrOrigin::TldrPages,
     };
     let outline = QueryOutline {
         schema: OutlineSchema::V3,

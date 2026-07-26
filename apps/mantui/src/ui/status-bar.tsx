@@ -107,7 +107,7 @@ export function ManualStatusBar({
       <text fg="#6c7086" truncate wrapMode="none">
         {searchQuery && searchMatchCount > 0
           ? `Find “${searchQuery}” · ${searchMatchCount} matches`
-          : `${visibleSectionCount} visible sections${hasTldr ? " · TLDR cached" : ""}`}
+          : `${visibleSectionCount} visible sections${hasTldr ? " · TLDR" : ""}`}
       </text>
     </box>
   );
