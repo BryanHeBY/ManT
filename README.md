@@ -12,7 +12,7 @@ Read the complete page in the **`mantui` terminal interface**, or ask the
 **`mant` CLI and MCP server** for an outline, one option, a precise excerpt,
 or a location-aware search result.
 
-![ManT displaying a tldr quick reference and the structured man(1) page](docs/assets/screenshots/mant-man.png)
+![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mantui-mant.png)
 
 ## One document model, two workflows
 
@@ -148,8 +148,25 @@ mant --schema all --compact
 mant -h
 ```
 
+The [JSON protocol and Schema reference](docs/protocol.md) documents the
+version matrix, every request and response projection, the normalized AST,
+search coordinates, MCP tools, and complete examples.
+
 Run `mant --update-tldr` to refresh data through the installed client when
 available, otherwise through ManT's private cache.
+
+Project-local roff can be queried without a system-wide install by placing it
+in a manual hierarchy and exposing the hierarchy root through `MANPATH`:
+
+```sh
+mkdir -p ./project-man/man1
+cp ./widget.1 ./project-man/man1/widget.1
+MANPATH="$PWD/project-man" mant widget --section 1
+MANPATH="$PWD/project-man" mantui widget --section 1
+```
+
+See [the `mant` manual](docs/manuals/mant.md#local-roff-trees) for lookup and
+path-layout details.
 
 ## Read project Markdown through the same model
 
@@ -168,11 +185,29 @@ visible with a diagnostic instead of being silently discarded. An option list
 such as ``- `--flag`: description`` becomes the same semantic, addressable
 entry used by a manual page.
 
-An exact heading named `TLDR`, `TLDR Quick Reference`, or `Quick Reference`
-keeps ManT's distinct quick-reference presentation while remaining part of the
-Markdown document. Content before the first heading is addressable as `root`.
-The release archive demonstrates this support directly: its `mant.md` and
-`mantui.md` manuals are Markdown documents consumed by ManT itself.
+An optional `:::tldr` container at the physical start of a Markdown file uses
+the tldr-pages dialect and becomes reserved path `0` plus selector `tldr`:
+
+```markdown
+:::tldr
+# tool
+
+> One-line quick reference.
+
+- Run the tool:
+
+`tool {{path/to/input}}`
+:::
+
+# Tool
+```
+
+The container must be the first non-empty construct. It is parsed separately
+from the manual body, so ordinary headings named `TLDR` have no special
+meaning. The first H1 after the container names the document, while
+introductory prose is addressable as `root`. The release archive demonstrates
+this constrained format directly: its `mant.md` and `mantui.md` manuals are
+consumed by ManT itself.
 
 ## Connect agents over MCP
 
@@ -215,7 +250,8 @@ native response boundary.
 
 - [mant self manual](docs/manuals/mant.md)
 - [mantui self manual](docs/manuals/mantui.md)
-- [Native architecture and protocol](docs/architecture/native-core.md)
+- [JSON protocol and Schema reference](docs/protocol.md)
+- [Native architecture](docs/architecture/native-core.md)
 - [Development guide and repository map](docs/development.md)
 - [Maintainer release procedure](docs/releasing.md)
 
