@@ -46,7 +46,13 @@ impl<'a> MarkdownSource<'a> {
             previous.end_column.unwrap_or(previous.column),
         );
         let current_start = self.offset(current.line, current.column);
-        let boundary_start = previous_end.saturating_sub(2);
+        // Look back far enough to catch a newline the preceding block's range
+        // may have absorbed, then settle onto a char boundary so a multi-byte
+        // character before the boundary cannot make the slice fail.
+        let mut boundary_start = previous_end.saturating_sub(2);
+        while boundary_start > 0 && !self.text.is_char_boundary(boundary_start) {
+            boundary_start -= 1;
+        }
         let boundary_end = current_start.max(previous_end).min(self.text.len());
         self.text
             .get(boundary_start..boundary_end)
@@ -119,5 +125,45 @@ impl<'a> MarkdownSource<'a> {
         line_start
             .saturating_add(usize::try_from(column.saturating_sub(1)).unwrap_or(usize::MAX))
             .min(next_line)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mant_ast::SourceSpan;
+
+    use super::MarkdownSource;
+
+    fn span(line: u32, column: u32, end_line: u32, end_column: u32) -> SourceSpan {
+        SourceSpan {
+            line,
+            column,
+            end_line: Some(end_line),
+            end_column: Some(end_column),
+        }
+    }
+
+    #[test]
+    fn detects_a_blank_line_after_a_multibyte_character() {
+        // "# 中" ends line 1 just past a 3-byte character; the boundary look-back
+        // of two bytes lands inside that character, so the slice must still
+        // settle on a char boundary rather than fail and miss the blank line.
+        let source = MarkdownSource::new("# 中\n\ntext\n");
+        let previous = span(1, 1, 1, 4);
+        let current = span(3, 1, 3, 5);
+
+        assert!(
+            source.has_blank_line_between(previous, current),
+            "a blank line after a multi-byte character must be detected"
+        );
+    }
+
+    #[test]
+    fn reports_no_blank_line_for_directly_adjacent_lines() {
+        let source = MarkdownSource::new("# 中\ntext\n");
+        let previous = span(1, 1, 1, 4);
+        let current = span(2, 1, 2, 5);
+
+        assert!(!source.has_blank_line_between(previous, current));
     }
 }
