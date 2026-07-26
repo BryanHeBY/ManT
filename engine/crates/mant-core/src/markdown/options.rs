@@ -27,11 +27,20 @@ pub(super) fn normalize_option_lists(blocks: &mut Vec<Block>) {
         else {
             continue;
         };
-        if items.is_empty() || !items.iter().all(is_option_item) {
+        if items.is_empty() {
             continue;
         }
-
-        let definitions = std::mem::take(items).into_iter().map(option_item).collect();
+        // Convert every item exactly once, borrowing so a mixed or prose list
+        // is left untouched: a single non-option item yields None and abandons
+        // the whole conversion. This replaces a probe pass that cloned each
+        // item's inlines only to test them and then reparsed on success.
+        let Some(definitions) = items
+            .iter()
+            .map(option_definition)
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
         *block = Block::DefinitionList {
             items: definitions,
             compact: *compact,
@@ -67,44 +76,41 @@ fn normalize_nested_blocks(block: &mut Block) {
     }
 }
 
-fn is_option_item(item: &ListItem) -> bool {
-    let Some(Block::Paragraph { children, .. }) = item.blocks.first() else {
-        return false;
-    };
-    split_option_signature(children.clone()).is_some()
-}
-
-fn option_item(mut item: ListItem) -> DefinitionItem {
-    let Block::Paragraph {
+/// Convert one list item into an option definition, or None if it is not one.
+///
+/// The item's leading paragraph is parsed exactly once; a non-option item
+/// returns None so the caller can abandon the whole list without a separate
+/// probing pass over cloned inlines.
+fn option_definition(item: &ListItem) -> Option<DefinitionItem> {
+    let Some(Block::Paragraph {
         children,
         layout,
         source,
-    } = item.blocks.remove(0)
+    }) = item.blocks.first()
     else {
-        unreachable!("is_option_item accepted only a leading paragraph");
+        return None;
     };
-    let (terms, description_inlines) =
-        split_option_signature(children).expect("is_option_item validated the signature");
+    let (terms, description_inlines) = split_option_signature(children)?;
     let mut description = Vec::new();
     if !description_inlines.is_empty() {
         description.push(Block::Paragraph {
             children: description_inlines,
-            layout,
-            source,
+            layout: *layout,
+            source: *source,
         });
     }
-    description.extend(item.blocks);
+    description.extend(item.blocks.iter().skip(1).cloned());
 
-    DefinitionItem {
+    Some(DefinitionItem {
         identity: None,
         inline_term: false,
         terms: vec![terms],
         description,
         spacing_before_lines: None,
-    }
+    })
 }
 
-fn split_option_signature(children: Vec<Inline>) -> Option<(Vec<Inline>, Vec<Inline>)> {
+fn split_option_signature(children: &[Inline]) -> Option<(Vec<Inline>, Vec<Inline>)> {
     let mut terms = Vec::new();
     let mut description = Vec::new();
     let mut found_option = false;
@@ -112,16 +118,18 @@ fn split_option_signature(children: Vec<Inline>) -> Option<(Vec<Inline>, Vec<Inl
 
     for inline in children {
         if found_delimiter {
-            description.push(inline);
+            description.push(inline.clone());
             continue;
         }
         match inline {
-            Inline::Code { value } if is_option_code(&value) => {
+            Inline::Code { value } if is_option_code(value) => {
                 found_option = true;
-                terms.push(Inline::Code { value });
+                terms.push(Inline::Code {
+                    value: value.clone(),
+                });
             }
             Inline::Text { value } => {
-                if let Some((before, after)) = split_delimiter(&value) {
+                if let Some((before, after)) = split_delimiter(value) {
                     if !found_option || !is_alias_separator(before) {
                         return None;
                     }
@@ -137,8 +145,10 @@ fn split_option_signature(children: Vec<Inline>) -> Option<(Vec<Inline>, Vec<Inl
                         });
                     }
                     found_delimiter = true;
-                } else if found_option && is_alias_separator(&value) {
-                    terms.push(Inline::Text { value });
+                } else if found_option && is_alias_separator(value) {
+                    terms.push(Inline::Text {
+                        value: value.clone(),
+                    });
                 } else {
                     return None;
                 }

@@ -56,7 +56,7 @@ fn parse_inline_sequence(
     expected_end: Option<TagEnd>,
 ) -> (Vec<Inline>, usize) {
     let mut output = Vec::new();
-    let mut end_offset = source.raw(&(0..0)).len();
+    let mut end_offset = 0;
 
     while let Some((event, _)) = cursor.peek() {
         if expected_end.is_none() && !starts_inline_run(event) {

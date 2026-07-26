@@ -96,13 +96,8 @@ fn source_lines(source: &str) -> Vec<SourceLine> {
         });
         start = end;
     }
-    if start < source.len() {
-        lines.push(SourceLine {
-            start,
-            content_end: source.len(),
-            end: source.len(),
-        });
-    }
+    // split_inclusive yields every byte, including a final line without a
+    // trailing newline, so no trailing-segment fixup is needed here.
     lines
 }
 
