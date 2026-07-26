@@ -4,6 +4,7 @@ use std::{
     error::Error,
     ffi::{OsStr, OsString},
     fmt, fs,
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -13,6 +14,14 @@ use crate::{
     CommandRunner, ManualRequest, SystemCommandRunner, locate_manual_source, parse_groff_html,
     parse_manual_source, parse_markdown, read_cached_tldr_page, source::push_section_filter,
 };
+
+/// Upper bound on a single Markdown source, shared by every input path.
+///
+/// File and stdin readers both enforce this so an unbounded source (a pipe, a
+/// character device such as `/dev/zero`, or a pathologically large file) cannot
+/// exhaust memory. A file's reported length is not trusted: some sources report
+/// zero yet stream without end, so readers cap the byte count directly.
+pub const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 
 /// A query cannot produce either authoritative manual content or a quick reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,8 +138,26 @@ impl QueryHost for SystemQueryHost {
     }
 
     fn read_markdown(&self, path: &Path) -> Result<String, String> {
-        fs::read_to_string(path).map_err(|error| error.to_string())
+        let file = fs::File::open(path).map_err(|error| error.to_string())?;
+        read_capped_utf8(file, MAX_MARKDOWN_BYTES)
     }
+}
+
+/// Read at most `limit` bytes of UTF-8, rejecting anything larger.
+///
+/// The reader is bounded directly instead of trusting a reported length: a pipe
+/// or character device such as `/dev/zero` reports no size yet streams without
+/// end, so only capping the byte count keeps the read finite.
+fn read_capped_utf8(reader: impl Read, limit: u64) -> Result<String, String> {
+    let mut bytes = Vec::new();
+    reader
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
+        return Err(format!("Markdown document exceeds the {limit}-byte limit"));
+    }
+    String::from_utf8(bytes).map_err(|_| "Markdown document must be UTF-8".to_owned())
 }
 
 fn query_with(
@@ -402,8 +429,8 @@ mod tests {
     use crate::{CommandOutput, CommandRunner, ManualRequest};
 
     use super::{
-        QueryError, QueryHost, QueryPolicy, query_markdown_text, query_with,
-        render_groff_document_with,
+        MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, query_markdown_text, query_with,
+        read_capped_utf8, render_groff_document_with,
     };
 
     #[derive(Clone)]
@@ -844,5 +871,29 @@ Document overview.
                     .to_vec()
             )]
         );
+    }
+
+    #[test]
+    fn capped_read_accepts_input_up_to_the_limit() {
+        let source = "abcd";
+        assert_eq!(
+            read_capped_utf8(source.as_bytes(), source.len() as u64).expect("within limit"),
+            source
+        );
+    }
+
+    #[test]
+    fn capped_read_rejects_input_past_the_limit_without_buffering_it_whole() {
+        // An unbounded stream (modelled by io::repeat) must fail fast on the
+        // limit rather than read forever, matching the /dev/zero guard.
+        let error = read_capped_utf8(io::repeat(b'a'), 8).expect_err("over limit");
+        assert!(error.contains("exceeds the 8-byte limit"), "{error}");
+    }
+
+    #[test]
+    fn capped_read_rejects_non_utf8_input() {
+        let error =
+            read_capped_utf8(&[0xff, 0xfe][..], MAX_MARKDOWN_BYTES).expect_err("invalid UTF-8");
+        assert!(error.contains("must be UTF-8"), "{error}");
     }
 }

@@ -24,7 +24,6 @@ use arguments::{Command, QueryFormat, QuerySource, SchemaContract};
 pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v3";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
-const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -233,7 +232,7 @@ fn execute_query(
     let (query, view) = match command.source {
         QuerySource::MarkdownStdin { view } => {
             validate_markdown_policy(policy)?;
-            let source = read_utf8_input(input, MAX_MARKDOWN_BYTES, "Markdown input")?;
+            let source = read_utf8_input(input, mant_core::MAX_MARKDOWN_BYTES, "Markdown input")?;
             (host.query_markdown(&source)?, view)
         }
         source => {
