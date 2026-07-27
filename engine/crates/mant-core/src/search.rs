@@ -405,6 +405,16 @@ impl SearchableText {
     }
 }
 
+/// Largest char boundary not exceeding `offset`; stable stand-in for
+/// `str::floor_char_boundary`.
+fn floor_char_boundary(text: &str, offset: usize) -> usize {
+    let mut offset = offset.min(text.len());
+    while offset > 0 && !text.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    offset
+}
+
 struct VisibleBuilder<'a> {
     markdown: &'a str,
     text: String,
@@ -422,15 +432,20 @@ impl<'a> VisibleBuilder<'a> {
 
     fn push_aligned(&mut self, value: &str, source: Range<usize>) {
         let mut markdown_cursor = source.start.min(self.markdown.len());
-        let markdown_end = source.end.min(self.markdown.len());
+        let markdown_end = floor_char_boundary(self.markdown, source.end);
         for character in value.chars() {
-            let found = self.markdown[markdown_cursor..markdown_end]
+            let search_start = floor_char_boundary(self.markdown, markdown_cursor);
+            let search_end = markdown_end.max(search_start);
+            let found = self.markdown[search_start..search_end]
                 .find(character)
-                .map_or(markdown_cursor, |relative| markdown_cursor + relative);
+                .map_or(search_start, |relative| search_start + relative);
             let visible_start = self.text.len();
             self.text.push(character);
             let visible_end = self.text.len();
-            let source_end = found.saturating_add(character.len_utf8()).min(markdown_end);
+            let source_end = floor_char_boundary(
+                self.markdown,
+                found.saturating_add(character.len_utf8()).min(search_end),
+            );
             self.push_segment(OffsetSegment {
                 visible: visible_start..visible_end,
                 markdown: found..source_end,

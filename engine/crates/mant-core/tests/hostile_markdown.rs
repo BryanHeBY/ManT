@@ -130,6 +130,19 @@ fn line_ending_and_control_byte_variants_never_panic() {
 }
 
 #[test]
+#[allow(clippy::single_element_loop)]
+fn fuzz_minimized_regressions_never_panic() {
+    // Each entry is a minimized crash input found by the fuzz targets.
+    for (label, source) in [
+        // Search visible-text mapping advanced into the middle of a
+        // multibyte character when a code span crossed a line break.
+        ("codespan-linebreak-multibyte", "`\n: 节`"),
+    ] {
+        exercise(label, source);
+    }
+}
+
+#[test]
 fn pathological_structures_never_panic() {
     let deep_quotes = format!("{} deep quote\n", ">".repeat(2048));
     exercise("deep-blockquotes", &deep_quotes);
