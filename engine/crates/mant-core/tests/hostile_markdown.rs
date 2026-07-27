@@ -13,8 +13,9 @@ use mant_ast::{
     default_search_limit,
 };
 use mant_core::{
-    build_outline_with_detail, query_markdown_text, render_excerpt_markdown, render_excerpt_text,
-    render_markdown, render_outline_text, render_query_json, render_query_man, render_query_text,
+    MarkdownOptions, build_outline_with_detail, parse_markdown, query_markdown_text,
+    render_excerpt_markdown, render_excerpt_text, render_markdown, render_markdown_with_options,
+    render_outline_text, render_query_json, render_query_man, render_query_text,
     render_search_text, search_query, select_excerpt,
 };
 
@@ -24,7 +25,8 @@ fn hostile_fixture_dir() -> PathBuf {
         .join("tests/fixtures/markdown/hostile")
 }
 
-/// Run one source through every projection and renderer without panicking.
+/// Run one source through every projection and renderer, asserting result
+/// invariants along the way; controlled errors are the only accepted failure.
 fn exercise(label: &str, source: &str) {
     let query = match query_markdown_text(source, Some(format!("hostile/{label}"))) {
         Ok(query) => query,
@@ -37,10 +39,13 @@ fn exercise(label: &str, source: &str) {
         }
     };
 
-    let _ = render_markdown(&query);
+    let rendered = render_markdown(&query);
     let _ = render_query_text(&query);
     let _ = render_query_man(&query);
     render_query_json(&query, true).expect(label);
+    // Rendered CommonMark is a public projection: feeding it back through
+    // the parser must stay inside controlled behavior too.
+    let _ = parse_markdown(&rendered, None);
 
     for detail in [OutlineDetail::Sections, OutlineDetail::Options] {
         let Ok(outline) = build_outline_with_detail(&query, detail) else {
@@ -52,12 +57,25 @@ fn exercise(label: &str, source: &str) {
         if selectors.is_empty() {
             continue;
         }
+        let mut unique = selectors.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            selectors.len(),
+            "{label}: outline paths must be unique"
+        );
+        assert!(
+            selectors.iter().all(|selector| !selector.is_empty()),
+            "{label}: outline paths must be non-empty"
+        );
         let excerpt = select_excerpt(&query, &selectors)
             .unwrap_or_else(|error| panic!("{label}: outline path must be selectable: {error}"));
         let _ = render_excerpt_markdown(&excerpt);
         let _ = render_excerpt_text(&excerpt);
     }
 
+    let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
     for (pattern, syntax) in [
         ("a", SearchSyntax::Literal),
         ("—", SearchSyntax::Literal),
@@ -79,11 +97,91 @@ fn exercise(label: &str, source: &str) {
                 limit: default_search_limit(),
                 offset: 0,
             };
-            if let Ok(result) = search_query(&query, &request) {
-                let _ = render_search_text(&result);
-            }
+            let Ok(result) = search_query(&query, &request) else {
+                continue;
+            };
+            let _ = render_search_text(&result);
+            verify_search_result(label, &query, &result, &addressable, scope);
         }
     }
+
+    // A sample taken from the rendered body must always be findable; the
+    // leading label header is presentation and owns no search node.
+    let body = addressable
+        .split_once('\n')
+        .map_or("", |(_, remainder)| remainder);
+    if let Some(word) = first_ascii_word(body) {
+        let request = SearchQuery {
+            pattern: word.clone(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Markdown,
+            word: false,
+            context_lines: 0,
+            limit: default_search_limit(),
+            offset: 0,
+        };
+        let found = search_query(&query, &request)
+            .unwrap_or_else(|error| panic!("{label}: sampled search failed: {error}"));
+        assert!(
+            found.total >= 1,
+            "{label}: sampled word {word:?} from the render must be found"
+        );
+    }
+}
+
+fn verify_search_result(
+    label: &str,
+    query: &mant_ast::QueryBundle,
+    result: &mant_ast::QuerySearch,
+    addressable: &str,
+    scope: SearchScope,
+) {
+    assert_eq!(
+        result.returned as usize,
+        result.matches.len(),
+        "{label}: returned count must match the match list"
+    );
+    assert!(
+        result.total >= result.returned,
+        "{label}: total covers returned matches"
+    );
+    for found in &result.matches {
+        let start = usize::try_from(found.markdown.start_byte).expect("start fits usize");
+        let end = usize::try_from(found.markdown.end_byte).expect("end fits usize");
+        assert!(
+            start <= end && end <= addressable.len(),
+            "{label}: match byte range must stay inside the render"
+        );
+        assert!(
+            addressable.is_char_boundary(start) && addressable.is_char_boundary(end),
+            "{label}: match byte range must sit on char boundaries"
+        );
+        if scope == SearchScope::Markdown {
+            assert_eq!(
+                &addressable[start..end],
+                found.matched_text,
+                "{label}: markdown-scope coordinates must slice the matched text"
+            );
+        }
+        assert!(
+            found.markdown.start_line >= 1 && found.markdown.start_line <= result.render.line_count,
+            "{label}: match line must exist in the render"
+        );
+        let selector = vec![found.node.path().to_owned()];
+        select_excerpt(query, &selector).unwrap_or_else(|error| {
+            panic!("{label}: match node {selector:?} must be selectable: {error}")
+        });
+    }
+}
+
+fn first_ascii_word(text: &str) -> Option<String> {
+    let word: String = text
+        .chars()
+        .skip_while(|character| !character.is_ascii_alphanumeric())
+        .take_while(char::is_ascii_alphanumeric)
+        .collect();
+    (!word.is_empty()).then_some(word)
 }
 
 fn collect_paths(nodes: &[OutlineNode], selectors: &mut Vec<String>) {
