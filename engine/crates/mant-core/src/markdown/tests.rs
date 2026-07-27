@@ -249,6 +249,46 @@ Duplicate heading.
 }
 
 #[test]
+fn a_leading_byte_order_mark_hides_neither_the_directive_nor_the_title() {
+    let parsed = parse_markdown(
+        "\u{feff}:::tldr\n# demo\n\n> Saved by a Windows editor.\n\n- Run:\n\n`demo`\n:::\n\n# Demo\n\nBody.\n",
+        None,
+    )
+    .expect("embedded tldr behind a BOM");
+    assert_eq!(parsed.tldr.expect("quick reference").title, "demo");
+    assert_eq!(parsed.document.meta.title.as_deref(), Some("Demo"));
+
+    let plain = parse_markdown("\u{feff}# Demo\n\nBody.\n", None).expect("plain document");
+    assert!(plain.tldr.is_none());
+    assert_eq!(plain.document.meta.title.as_deref(), Some("Demo"));
+}
+
+#[test]
+fn terminal_control_characters_are_masked_with_a_diagnostic() {
+    let parsed = parse_markdown(
+        "# Demo\n\nx\u{1b}]0;EVIL\u{7}y \u{1b}[31mred\u{1b}[0m z\u{8}\u{8}\n",
+        None,
+    )
+    .expect("document with control characters");
+    let document = &parsed.document;
+
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("markdown.control-characters"))
+    );
+    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        panic!("prose survives sanitizing");
+    };
+    let Inline::Text { value } = &children[0] else {
+        panic!("text inline survives sanitizing");
+    };
+    assert!(!value.contains('\u{1b}') && !value.contains('\u{8}') && !value.contains('\u{7}'));
+    assert!(value.contains("red") && value.contains('z'));
+}
+
+#[test]
 fn leaves_an_ordinary_tldr_heading_in_the_manual() {
     let document = parse_document(
         "\

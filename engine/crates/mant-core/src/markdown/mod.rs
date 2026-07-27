@@ -77,6 +77,9 @@ pub fn parse_markdown(
     source_text: &str,
     source_path: Option<String>,
 ) -> Result<ParsedMarkdown, MarkdownParseError> {
+    let mut sanitize_diagnostics = Vec::new();
+    let sanitized = sanitize_source(source_text, &mut sanitize_diagnostics);
+    let source_text = sanitized.as_deref().unwrap_or(source_text);
     let parts = split_markdown(source_text).map_err(MarkdownParseError::TldrDirective)?;
     let tldr = parts
         .tldr
@@ -96,10 +99,61 @@ pub fn parse_markdown(
             .map_err(MarkdownParseError::TldrPage)
         })
         .transpose()?;
-    Ok(ParsedMarkdown {
-        document: parse_document(parts.document.as_ref(), source_path),
-        tldr,
-    })
+    let mut document = parse_document(parts.document.as_ref(), source_path);
+    if !sanitize_diagnostics.is_empty() {
+        sanitize_diagnostics.extend(std::mem::take(&mut document.diagnostics));
+        document.diagnostics = sanitize_diagnostics;
+    }
+    Ok(ParsedMarkdown { document, tldr })
+}
+
+/// Mask a leading BOM and terminal-unsafe control characters with spaces.
+///
+/// A BOM would hide the tldr directive and demote the first heading, while
+/// raw control characters would pass escape sequences through to terminals.
+/// Replacements keep every byte offset valid for source coordinates.
+fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<String> {
+    let keeps_character =
+        |character: char| !character.is_control() || matches!(character, '\t' | '\n' | '\r');
+    let bom = source_text.starts_with('\u{feff}');
+    if !bom && source_text.chars().all(keeps_character) {
+        return None;
+    }
+
+    let mut sanitized = String::with_capacity(source_text.len());
+    let mut controls = 0usize;
+    let rest = if bom {
+        sanitized.push_str("   ");
+        &source_text['\u{feff}'.len_utf8()..]
+    } else {
+        source_text
+    };
+    for character in rest.chars() {
+        if keeps_character(character) {
+            sanitized.push(character);
+        } else {
+            controls += 1;
+            sanitized.extend(std::iter::repeat_n(' ', character.len_utf8()));
+        }
+    }
+
+    if bom {
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("markdown.byte-order-mark".to_owned()),
+            message: "masked a leading byte-order mark".to_owned(),
+            source: None,
+        });
+    }
+    if controls > 0 {
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("markdown.control-characters".to_owned()),
+            message: format!("masked {controls} terminal-unsafe control character(s)"),
+            source: None,
+        });
+    }
+    Some(sanitized)
 }
 
 /// Lower the ordinary document portion after extension extraction.
