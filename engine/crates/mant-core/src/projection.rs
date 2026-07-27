@@ -8,7 +8,7 @@ use mant_ast::{
 };
 
 const TLDR_PATH: &str = "0";
-const TLDR_ID: &str = "tldr";
+pub(crate) const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
 pub(crate) const DOCUMENT_ROOT_PATH: &str = "root";
 pub(crate) const DOCUMENT_ROOT_ID: &str = "document-overview";

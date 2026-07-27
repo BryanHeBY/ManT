@@ -419,6 +419,10 @@ impl SectionIds {
             .map_or_else(|| slug(title), ToOwned::to_owned);
         let base = if base.is_empty() {
             "section".to_owned()
+        } else if is_reserved_id(&base) {
+            // Reserved selectors and bare tree paths would shadow this
+            // heading in excerpt selection; keep it addressable instead.
+            format!("{base}-section")
         } else {
             base
         };
@@ -454,6 +458,14 @@ impl SectionIds {
             self.targets.retain(|_, target| target != current);
         }
     }
+}
+
+/// IDs that excerpt selection interprets before document section IDs.
+fn is_reserved_id(base: &str) -> bool {
+    base == crate::projection::TLDR_ID
+        || base == crate::projection::DOCUMENT_ROOT_PATH
+        || base == crate::projection::DOCUMENT_ROOT_ID
+        || base.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn slug(value: &str) -> String {

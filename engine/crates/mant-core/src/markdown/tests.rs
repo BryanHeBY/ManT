@@ -308,6 +308,28 @@ Normal manual content.
     );
 
     assert_eq!(document.sections[1].title, "TLDR");
+    assert_eq!(
+        document.sections[1].id, "tldr-section",
+        "an ordinary TLDR heading must not shadow the reserved tldr selector"
+    );
+}
+
+#[test]
+fn reserved_selectors_never_shadow_section_ids() {
+    let document = parse_document(
+        "# Demo\n\n## root\n\nA.\n\n## document-overview\n\nB.\n\n## 1\n\nC.\n",
+        None,
+    );
+
+    let ids: Vec<&str> = document
+        .sections
+        .iter()
+        .map(|section| section.id.as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        ["root-section", "document-overview-section", "1-section"]
+    );
 }
 
 #[test]
