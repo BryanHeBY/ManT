@@ -1,11 +1,11 @@
 //! Contract-focused tests for Markdown lowering and source preservation.
 
 use mant_ast::{
-    Block, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle, QuerySchema, SourceFormat,
-    TableAlignment, TldrOrigin,
+    Block, ExcerptSelection, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle,
+    QuerySchema, SourceFormat, TableAlignment, TldrOrigin,
 };
 
-use crate::build_outline_with_detail;
+use crate::{build_outline_with_detail, select_excerpt};
 
 use super::{parse_document, parse_markdown};
 
@@ -330,6 +330,79 @@ fn reserved_selectors_never_shadow_section_ids() {
         ids,
         ["root-section", "document-overview-section", "1-section"]
     );
+}
+
+#[test]
+fn explicit_heading_ids_cannot_shadow_paths_and_remain_link_targets() {
+    let document = parse_document(
+        "\
+# Demo
+
+See [entry owner](#1/o1), [path owner](#3.1), and [explicit root](#root).
+
+## Entry owner {#1/o1}
+
+- `--help`: Show help.
+
+## Path owner {#3.1}
+
+Path owner body.
+
+## Parent
+
+### Child
+
+Child body.
+
+## Explicit root {#root}
+
+Root body.
+",
+        None,
+    );
+
+    assert_eq!(document.sections[0].id, "1/o1-section");
+    assert_eq!(document.sections[1].id, "3.1-section");
+    assert_eq!(document.sections[2].children[0].id, "child");
+    assert_eq!(document.sections[3].id, "root-section");
+    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        panic!("document preface contains source links");
+    };
+    let targets = children
+        .iter()
+        .filter_map(|inline| match inline {
+            Inline::SectionReference { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        targets,
+        ["1/o1-section", "3.1-section", "root-section"],
+        "renamed explicit IDs remain valid Markdown link aliases"
+    );
+    assert!(
+        document
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code.as_deref() != Some("markdown.unresolved-reference"))
+    );
+
+    let query = QueryBundle {
+        schema: QuerySchema::V3,
+        label: "demo.md".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let entry = select_excerpt(&query, &["1/o1".to_owned()]).expect("entry path");
+    assert!(matches!(
+        entry.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { title, .. }] if title.contains("--help")
+    ));
+    let child = select_excerpt(&query, &["3.1".to_owned()]).expect("child path");
+    assert!(matches!(
+        child.selections.as_slice(),
+        [ExcerptSelection::DocumentSection { title, .. }] if title == "Child"
+    ));
 }
 
 #[test]

@@ -413,13 +413,14 @@ struct SectionIds {
 
 impl SectionIds {
     fn allocate(&mut self, title: &str, explicit: Option<&str>) -> String {
-        let base = explicit
+        let explicit = explicit
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .map_or_else(|| slug(title), ToOwned::to_owned);
+            .map(ToOwned::to_owned);
+        let base = explicit.clone().unwrap_or_else(|| slug(title));
         let base = if base.is_empty() {
             "section".to_owned()
-        } else if is_reserved_id(&base) {
+        } else if crate::projection::is_reserved_selector(&base) {
             // Reserved selectors and bare tree paths would shadow this
             // heading in excerpt selection; keep it addressable instead.
             format!("{base}-section")
@@ -436,7 +437,15 @@ impl SectionIds {
         // Ambiguous human-facing keys resolve to the first section that
         // claimed them, matching the bare slug this heading renders as its
         // anchor. A later duplicate owns only its own disambiguated id.
-        self.targets.entry(base).or_insert_with(|| id.clone());
+        self.targets
+            .entry(base.clone())
+            .or_insert_with(|| id.clone());
+        // Heading attributes are source-level link aliases. Preserve the
+        // original alias even when its final section ID had to move out of the
+        // selector namespace (`{#root}`, `{#2.1}`, or `{#2.1/o3}`).
+        if let Some(explicit) = explicit {
+            self.targets.entry(explicit).or_insert_with(|| id.clone());
+        }
         self.targets
             .entry(slug(title))
             .or_insert_with(|| id.clone());
@@ -458,14 +467,6 @@ impl SectionIds {
             self.targets.retain(|_, target| target != current);
         }
     }
-}
-
-/// IDs that excerpt selection interprets before document section IDs.
-fn is_reserved_id(base: &str) -> bool {
-    base == crate::projection::TLDR_ID
-        || base == crate::projection::DOCUMENT_ROOT_PATH
-        || base == crate::projection::DOCUMENT_ROOT_ID
-        || base.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn slug(value: &str) -> String {

@@ -14,6 +14,33 @@ pub(crate) const DOCUMENT_ROOT_PATH: &str = "root";
 pub(crate) const DOCUMENT_ROOT_ID: &str = "document-overview";
 pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 
+/// Whether an identifier belongs to the selector namespace rather than a
+/// document-defined node.
+///
+/// Section paths use dotted positive indices (`2.1`), while semantic entries
+/// append an option index (`2.1/o3`). The parser reserves the complete grammar,
+/// not only selectors present in one particular document, so source-defined
+/// IDs can never make excerpt lookup ambiguous.
+pub(crate) fn is_reserved_selector(value: &str) -> bool {
+    matches!(
+        value,
+        TLDR_PATH | TLDR_ID | DOCUMENT_ROOT_PATH | DOCUMENT_ROOT_ID
+    ) || is_outline_path(value)
+}
+
+fn is_outline_path(value: &str) -> bool {
+    let (sections, entry) = value
+        .split_once("/o")
+        .map_or((value, None), |(sections, entry)| (sections, Some(entry)));
+    let section_path = !sections.is_empty()
+        && sections
+            .split('.')
+            .all(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()));
+    let entry_path = entry
+        .is_none_or(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()));
+    section_path && entry_path
+}
+
 /// Failure to derive an addressable view from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectionError {
