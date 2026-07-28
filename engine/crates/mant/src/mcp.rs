@@ -121,12 +121,57 @@ impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
 
 // ── MCP parameter contracts ──────────────────────────────────────────────
 
+/// The query-input `target` argument with tolerance for stringified JSON.
+///
+/// Some function-calling models serialize the nested `target` object as one
+/// JSON string. The public `--request-json` contract stays strict; only this
+/// MCP boundary re-parses such strings before normal validation, and failures
+/// answer with a correct example so the model can retry.
+#[derive(Debug)]
+struct Target(QueryInput);
+
+const TARGET_HINT: &str = r#"target must be an object such as {"kind":"manual","topic":"ls"} or {"kind":"markdown-file","path":"README.md"}"#;
+
+impl<'de> Deserialize<'de> for Target {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error as _;
+
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let value = match value {
+            serde_json::Value::String(text) => serde_json::from_str(&text)
+                .map_err(|error| D::Error::custom(format!("{error}; {TARGET_HINT}")))?,
+            other => other,
+        };
+        serde_json::from_value(value)
+            .map(Self)
+            .map_err(|error| D::Error::custom(format!("{error}; {TARGET_HINT}")))
+    }
+}
+
+impl JsonSchema for Target {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        QueryInput::schema_name()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        QueryInput::schema_id()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        QueryInput::json_schema(generator)
+    }
+
+    fn inline_schema() -> bool {
+        QueryInput::inline_schema()
+    }
+}
+
 /// Parameters for the hierarchy-discovery tool.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OutlineParams {
     /// A local manual topic or Markdown file using the public query-input schema.
-    target: QueryInput,
+    target: Target,
     /// Include only sections, or include addressable option and command entries.
     detail: Option<OutlineDetail>,
 }
@@ -136,9 +181,10 @@ struct OutlineParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GetParams {
     /// A local manual topic or Markdown file using the public query-input schema.
-    target: QueryInput,
+    target: Target,
     /// Outline paths, stable IDs, or entry aliases returned by `mant_document_outline`.
     #[schemars(length(min = 1))]
+    #[serde(deserialize_with = "lenient_nodes")]
     nodes: Vec<String>,
 }
 
@@ -147,7 +193,7 @@ struct GetParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ExplainParams {
     /// A local manual topic or Markdown file using the public query-input schema.
-    target: QueryInput,
+    target: Target,
     /// Option spelling, command name, environment variable, outline path, or stable ID.
     entry: String,
 }
@@ -157,7 +203,7 @@ struct ExplainParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SearchParams {
     /// A local manual topic or Markdown file using the public query-input schema.
-    target: QueryInput,
+    target: Target,
     /// Literal text or a regular expression, depending on `syntax`.
     #[schemars(length(min = 1, max = 4096))]
     pattern: String,
@@ -168,15 +214,65 @@ struct SearchParams {
     /// Search visible text (the default) or generated `CommonMark` source.
     scope: Option<SearchScope>,
     /// Restrict matches to Unicode-aware word boundaries.
+    #[serde(default, deserialize_with = "lenient_scalar")]
     word: Option<bool>,
     /// Full Markdown lines of context before and after each match, at most 100.
     #[schemars(range(max = 100))]
+    #[serde(default, deserialize_with = "lenient_scalar", alias = "context_lines")]
     context_lines: Option<u16>,
     /// Maximum result count from 1 through 10,000. The default is 100.
     #[schemars(range(min = 1, max = 10000))]
+    #[serde(default, deserialize_with = "lenient_scalar")]
     limit: Option<u32>,
     /// Number of matches to skip for deterministic pagination.
+    #[serde(default, deserialize_with = "lenient_scalar")]
     offset: Option<u32>,
+}
+
+/// Accepts a native scalar or its stringified spelling such as `"10"` or `"True"`.
+fn lenient_scalar<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    use serde::de::Error as _;
+
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::String(text) => text
+            .trim()
+            .to_ascii_lowercase()
+            .parse()
+            .map(Some)
+            .map_err(|error| D::Error::custom(format!("cannot parse {text:?}: {error}"))),
+        other => serde_json::from_value(other)
+            .map(Some)
+            .map_err(D::Error::custom),
+    }
+}
+
+const NODES_HINT: &str =
+    r#"nodes must be an array of outline selectors such as ["2","options.-l"]"#;
+
+/// Accepts a selector array, one bare selector, or a stringified JSON array.
+fn lenient_nodes<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let value = match value {
+        serde_json::Value::String(text) => match serde_json::from_str(&text) {
+            Ok(parsed @ serde_json::Value::Array(_)) => parsed,
+            _ => return Ok(vec![text]),
+        },
+        other => other,
+    };
+    serde_json::from_value(value)
+        .map_err(|error| D::Error::custom(format!("{error}; {NODES_HINT}")))
 }
 
 // ── Query execution ──────────────────────────────────────────────────────
@@ -233,7 +329,7 @@ impl MantMcpServer {
     ) -> Result<Json<QueryOutline>, String> {
         let parameters = parameters.0;
         let detail = parameters.detail.unwrap_or(OutlineDetail::Options);
-        let request = request_for(parameters.target, QueryView::Outline { detail })?;
+        let request = request_for(parameters.target.0, QueryView::Outline { detail })?;
         let query = self.query(request).await?;
         let outline = mant_core::build_outline_with_detail(&query, detail)
             .map_err(|error| error.to_string())?;
@@ -258,7 +354,7 @@ impl MantMcpServer {
         let parameters = parameters.0;
         validate_nodes(&parameters.nodes)?;
         let request = request_for(
-            parameters.target,
+            parameters.target.0,
             QueryView::Excerpt {
                 nodes: parameters.nodes.clone(),
             },
@@ -287,7 +383,7 @@ impl MantMcpServer {
         let parameters = parameters.0;
         let entry = non_empty(&parameters.entry, "entry")?;
         let request = request_for(
-            parameters.target,
+            parameters.target.0,
             QueryView::Excerpt {
                 nodes: vec![entry.clone()],
             },
@@ -333,7 +429,7 @@ impl MantMcpServer {
         };
         mant_core::validate_search_query(&search).map_err(|error| error.to_string())?;
         let request = request_for(
-            parameters.target,
+            parameters.target.0,
             QueryView::Search {
                 pattern: search.pattern.clone(),
                 syntax: search.syntax,
@@ -406,7 +502,10 @@ fn non_empty(value: &str, field: &str) -> Result<String, String> {
 mod tests {
     use std::io;
 
-    use super::MantMcpServer;
+    use mant_ast::QueryInput;
+    use serde_json::json;
+
+    use super::{GetParams, MantMcpServer, OutlineParams, SearchParams};
 
     #[test]
     fn publishes_only_the_read_only_document_tools_with_generated_schemas() {
@@ -435,6 +534,121 @@ mod tests {
             assert_eq!(annotations.destructive_hint, Some(false));
             assert_eq!(annotations.open_world_hint, Some(false));
         }
+    }
+
+    #[test]
+    fn the_target_wrapper_publishes_the_public_query_input_schema() {
+        let server = MantMcpServer::new();
+        let tools = server.tool_router.list_all();
+        let outline = tools
+            .iter()
+            .find(|tool| tool.name == "mant_document_outline")
+            .expect("outline tool");
+        let schema = serde_json::to_value(&outline.input_schema).expect("schema JSON");
+        assert_eq!(
+            schema["properties"]["target"]["$ref"],
+            json!("#/$defs/QueryInput")
+        );
+        assert!(schema["$defs"]["QueryInput"]["oneOf"].is_array());
+    }
+
+    #[test]
+    fn a_target_object_deserializes_directly() {
+        let parameters: OutlineParams =
+            serde_json::from_value(json!({"target": {"kind": "manual", "topic": "ls"}}))
+                .expect("object target");
+        assert_eq!(
+            parameters.target.0,
+            QueryInput::Manual {
+                topic: "ls".to_owned(),
+                section: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_stringified_target_object_still_deserializes() {
+        let parameters: OutlineParams = serde_json::from_value(
+            json!({"target": "{\"kind\": \"markdown-file\", \"path\": \"README.md\"}"}),
+        )
+        .expect("stringified target");
+        assert_eq!(
+            parameters.target.0,
+            QueryInput::MarkdownFile {
+                path: "README.md".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn an_invalid_target_reports_a_correct_example() {
+        for target in [json!("ls"), json!(42), json!({"kind": "unknown"})] {
+            let error = serde_json::from_value::<OutlineParams>(json!({"target": target}))
+                .expect_err("invalid target");
+            assert!(
+                error
+                    .to_string()
+                    .contains(r#"{"kind":"manual","topic":"ls"}"#),
+                "missing example in: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn stringified_search_scalars_and_snake_case_context_still_deserialize() {
+        let parameters: SearchParams = serde_json::from_value(json!({
+            "target": {"kind": "manual", "topic": "ls"},
+            "pattern": "sort",
+            "word": "True",
+            "context_lines": "2",
+            "limit": "10",
+            "offset": 5,
+        }))
+        .expect("lenient search parameters");
+        assert_eq!(parameters.word, Some(true));
+        assert_eq!(parameters.context_lines, Some(2));
+        assert_eq!(parameters.limit, Some(10));
+        assert_eq!(parameters.offset, Some(5));
+    }
+
+    #[test]
+    fn unparsable_search_scalars_still_fail() {
+        let error = serde_json::from_value::<SearchParams>(json!({
+            "target": {"kind": "manual", "topic": "ls"},
+            "pattern": "sort",
+            "limit": "ten",
+        }))
+        .expect_err("invalid limit");
+        assert!(error.to_string().contains(r#"cannot parse "ten""#));
+    }
+
+    #[test]
+    fn node_selectors_accept_arrays_bare_strings_and_stringified_arrays() {
+        for (nodes, expected) in [
+            (json!(["2", "options.-l"]), vec!["2", "options.-l"]),
+            (json!("2"), vec!["2"]),
+            (json!("[\"2\", \"options.-l\"]"), vec!["2", "options.-l"]),
+        ] {
+            let parameters: GetParams = serde_json::from_value(json!({
+                "target": {"kind": "manual", "topic": "ls"},
+                "nodes": nodes,
+            }))
+            .expect("lenient nodes");
+            assert_eq!(parameters.nodes, expected);
+        }
+    }
+
+    #[test]
+    fn malformed_node_selectors_report_a_correct_example() {
+        let error = serde_json::from_value::<GetParams>(json!({
+            "target": {"kind": "manual", "topic": "ls"},
+            "nodes": "[1, 2]",
+        }))
+        .expect_err("non-string selectors");
+        assert!(
+            error.to_string().contains(r#"["2","options.-l"]"#),
+            "missing example in: {error}"
+        );
     }
 
     // Read the wrapped source to end (or first error) on a current-thread
