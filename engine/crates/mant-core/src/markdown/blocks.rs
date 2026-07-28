@@ -73,7 +73,13 @@ pub(super) fn parse_block(
                 let whole = cursor.consume_balanced(range);
                 return Some(source.unsupported_block("task list", whole, diagnostics));
             }
-            Some(parse_list(cursor, source, diagnostics, start, range))
+            if !cursor.try_descend() {
+                let whole = cursor.consume_balanced(range);
+                return Some(source.unsupported_block("deeply nested list", whole, diagnostics));
+            }
+            let list = parse_list(cursor, source, diagnostics, start, range);
+            cursor.ascend();
+            Some(list)
         }
         Event::Start(Tag::Table(alignments)) => {
             Some(parse_table(cursor, source, diagnostics, &alignments, range))

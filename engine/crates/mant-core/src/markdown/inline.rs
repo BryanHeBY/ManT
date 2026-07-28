@@ -73,15 +73,24 @@ fn parse_inline_sequence(
             }),
             Event::SoftBreak => push_text(&mut output, " ".to_owned()),
             Event::HardBreak => output.push(Inline::LineBreak),
+            Event::Start(tag @ (Tag::Strong | Tag::Emphasis)) if !cursor.try_descend() => {
+                let name = unsupported_tag_name(&tag);
+                let whole = cursor.consume_balanced(range);
+                end_offset = whole.end;
+                let raw = source.unsupported_inline(name, whole, diagnostics);
+                push_text(&mut output, raw);
+            }
             Event::Start(Tag::Strong) => {
                 let (children, nested_end) =
                     parse_inlines(cursor, source, diagnostics, TagEnd::Strong);
+                cursor.ascend();
                 end_offset = nested_end;
                 output.push(Inline::Strong { children });
             }
             Event::Start(Tag::Emphasis) => {
                 let (children, nested_end) =
                     parse_inlines(cursor, source, diagnostics, TagEnd::Emphasis);
+                cursor.ascend();
                 end_offset = nested_end;
                 output.push(Inline::Emphasis { children });
             }
@@ -90,9 +99,10 @@ fn parse_inline_sequence(
                 dest_url,
                 title,
                 ..
-            }) if supported_link(link_type) => {
+            }) if supported_link(link_type) && cursor.try_descend() => {
                 let (children, nested_end) =
                     parse_inlines(cursor, source, diagnostics, TagEnd::Link);
+                cursor.ascend();
                 end_offset = nested_end;
                 let destination = dest_url.into_string();
                 if let Some(target) = destination.strip_prefix('#') {
@@ -147,7 +157,7 @@ fn unsupported_tag_name(tag: &Tag<'_>) -> &'static str {
         Tag::Strikethrough => "strikethrough",
         Tag::Superscript => "superscript",
         Tag::Subscript => "subscript",
-        Tag::Link { .. } => "wiki link",
+        Tag::Link { .. } => "link",
         _ => "inline construct",
     }
 }

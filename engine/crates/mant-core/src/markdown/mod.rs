@@ -509,14 +509,36 @@ fn resolve_inlines(
 pub(super) struct EventCursor<'a> {
     events: Vec<SpannedEvent<'a>>,
     position: usize,
+    depth: usize,
 }
+
+/// Recursion budget shared by nested block containers and inline spans.
+///
+/// Parsing recurses once per nesting level, so unbounded input depth would
+/// overflow the stack before any allocation limit applies. Subtrees beyond
+/// this depth are preserved as unsupported source text with a diagnostic.
+const MAX_NESTING_DEPTH: usize = 64;
 
 impl<'a> EventCursor<'a> {
     fn new(events: Vec<SpannedEvent<'a>>) -> Self {
         Self {
             events,
             position: 0,
+            depth: 0,
         }
+    }
+
+    /// Reserve one nesting level; callers must pair with [`Self::ascend`].
+    pub(super) fn try_descend(&mut self) -> bool {
+        if self.depth >= MAX_NESTING_DEPTH {
+            return false;
+        }
+        self.depth += 1;
+        true
+    }
+
+    pub(super) fn ascend(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
     }
 
     pub(super) fn peek(&self) -> Option<&SpannedEvent<'a>> {
