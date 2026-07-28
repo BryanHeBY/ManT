@@ -54,7 +54,8 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             engine/target
-          key: cargo-v1-linux-x64-stable-${{ hashFiles('engine/Cargo.lock') }}
+            engine/fuzz/target
+          key: cargo-v1-linux-x64-stable-${{ hashFiles('engine/Cargo.lock', 'engine/fuzz/Cargo.lock') }}
           restore-keys: |
             cargo-v1-linux-x64-stable-
 
@@ -68,6 +69,11 @@ jobs:
       # UI tests, and packaged executable smoke tests all run here.
       - name: Build and test
         run: bun run build
+
+      # Keep the standalone libFuzzer harnesses compiling without adding
+      # instrumented fuzz execution to the normal CI runtime.
+      - name: Compile fuzz targets
+        run: cargo check --locked --manifest-path engine/fuzz/Cargo.toml --bins
 
       - name: Verify vendored libmandoc matches upstream
         run: bash engine/crates/libmandoc-rs/scripts/sync-vendor --verify
