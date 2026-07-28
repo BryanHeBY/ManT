@@ -12,8 +12,8 @@ use std::{
 };
 
 use mant_ast::{
-    ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryInput, QueryOutline,
-    QueryRequest, QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    DiagnosticLevel, ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryInput,
+    QueryOutline, QueryRequest, QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax,
     default_search_limit,
 };
 use rmcp::{
@@ -360,8 +360,9 @@ impl MantMcpServer {
             },
         )?;
         let query = self.query(request).await?;
-        let excerpt = mant_core::select_excerpt(&query, &parameters.nodes)
+        let mut excerpt = mant_core::select_excerpt(&query, &parameters.nodes)
             .map_err(|error| error.to_string())?;
+        retain_consumer_diagnostics(&mut excerpt);
         Ok(Json(excerpt))
     }
 
@@ -389,12 +390,13 @@ impl MantMcpServer {
             },
         )?;
         let query = self.query(request).await?;
-        let excerpt =
+        let mut excerpt =
             mant_core::select_excerpt(&query, &[entry]).map_err(|error| error.to_string())?;
         if matches!(
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { .. }]
         ) {
+            retain_consumer_diagnostics(&mut excerpt);
             Ok(Json(excerpt))
         } else {
             Err("entry does not resolve to one option, command, or environment variable".to_owned())
@@ -459,6 +461,20 @@ impl ServerHandler for MantMcpServer {
 }
 
 // ── Input validation ─────────────────────────────────────────────────────
+
+/// Drops parser lint levels that only concern manual-page authors.
+///
+/// The direct CLI already treats `style` and `warning` findings as opt-in
+/// debug output (`--force-libmandoc`). MCP consumers only need the levels
+/// that signal degraded, best-effort document content.
+fn retain_consumer_diagnostics(excerpt: &mut QueryExcerpt) {
+    excerpt.diagnostics.retain(|diagnostic| {
+        matches!(
+            diagnostic.level,
+            DiagnosticLevel::Error | DiagnosticLevel::Unsupported
+        )
+    });
+}
 
 fn request_for(target: QueryInput, view: QueryView) -> Result<QueryRequest, String> {
     let input = match target {
@@ -648,6 +664,42 @@ mod tests {
         assert!(
             error.to_string().contains(r#"["2","options.-l"]"#),
             "missing example in: {error}"
+        );
+    }
+
+    #[test]
+    fn excerpts_keep_only_degradation_diagnostics() {
+        use mant_ast::{Diagnostic, DiagnosticLevel, ExcerptSchema, QueryExcerpt};
+
+        let diagnostic = |level| Diagnostic {
+            level,
+            code: None,
+            message: "finding".to_owned(),
+            source: None,
+        };
+        let mut excerpt = QueryExcerpt {
+            schema: ExcerptSchema::V3,
+            label: "demo".to_owned(),
+            producer: None,
+            source: None,
+            meta: None,
+            diagnostics: vec![
+                diagnostic(DiagnosticLevel::Style),
+                diagnostic(DiagnosticLevel::Warning),
+                diagnostic(DiagnosticLevel::Error),
+                diagnostic(DiagnosticLevel::Unsupported),
+            ],
+            selections: Vec::new(),
+        };
+
+        super::retain_consumer_diagnostics(&mut excerpt);
+        assert_eq!(
+            excerpt
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.level)
+                .collect::<Vec<_>>(),
+            [DiagnosticLevel::Error, DiagnosticLevel::Unsupported]
         );
     }
 
