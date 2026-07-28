@@ -30,17 +30,22 @@ pub(super) fn normalize_option_lists(blocks: &mut Vec<Block>) {
         if items.is_empty() {
             continue;
         }
-        // Convert every item exactly once, borrowing so a mixed or prose list
-        // is left untouched: a single non-option item yields None and abandons
-        // the whole conversion. This replaces a probe pass that cloned each
-        // item's inlines only to test them and then reparsed on success.
-        let Some(definitions) = items
+        // Plan every signature before taking ownership so a mixed or prose
+        // list remains untouched. Plans retain only delimiter coordinates:
+        // successful conversion can then move the original AST exactly once,
+        // including potentially large nested description blocks.
+        let Some(signatures) = items
             .iter()
-            .map(option_definition)
+            .map(option_signature)
             .collect::<Option<Vec<_>>>()
         else {
             continue;
         };
+        let definitions = std::mem::take(items)
+            .into_iter()
+            .zip(signatures)
+            .map(|(item, signature)| option_definition(item, signature))
+            .collect();
         *block = Block::DefinitionList {
             items: definitions,
             compact: *compact,
@@ -76,88 +81,110 @@ fn normalize_nested_blocks(block: &mut Block) {
     }
 }
 
-/// Convert one list item into an option definition, or None if it is not one.
-///
-/// The item's leading paragraph is parsed exactly once; a non-option item
-/// returns None so the caller can abandon the whole list without a separate
-/// probing pass over cloned inlines.
-fn option_definition(item: &ListItem) -> Option<DefinitionItem> {
-    let Some(Block::Paragraph {
-        children,
-        layout,
-        source,
-    }) = item.blocks.first()
-    else {
-        return None;
-    };
-    let (terms, description_inlines) = split_option_signature(children)?;
-    let mut description = Vec::new();
-    if !description_inlines.is_empty() {
-        description.push(Block::Paragraph {
-            children: description_inlines,
-            layout: *layout,
-            source: *source,
-        });
-    }
-    description.extend(item.blocks.iter().skip(1).cloned());
-
-    Some(DefinitionItem {
-        identity: None,
-        inline_term: false,
-        terms: vec![terms],
-        description,
-        spacing_before_lines: None,
-    })
+#[derive(Clone, Copy)]
+struct OptionSignature {
+    inline_index: usize,
+    byte_index: usize,
+    width: usize,
 }
 
-fn split_option_signature(children: &[Inline]) -> Option<(Vec<Inline>, Vec<Inline>)> {
-    let mut terms = Vec::new();
-    let mut description = Vec::new();
+/// Validate one leading paragraph and record how to split it after ownership
+/// moves out of the source list.
+fn option_signature(item: &ListItem) -> Option<OptionSignature> {
+    let Some(Block::Paragraph { children, .. }) = item.blocks.first() else {
+        return None;
+    };
     let mut found_option = false;
-    let mut found_delimiter = false;
-
-    for inline in children {
-        if found_delimiter {
-            description.push(inline.clone());
-            continue;
-        }
+    for (delimiter_inline, inline) in children.iter().enumerate() {
         match inline {
             Inline::Code { value } if is_option_code(value) => {
                 found_option = true;
-                terms.push(Inline::Code {
-                    value: value.clone(),
-                });
             }
             Inline::Text { value } => {
-                if let Some((before, after)) = split_delimiter(value) {
-                    if !found_option || !is_alias_separator(before) {
+                if let Some((delimiter_byte, delimiter_width)) = delimiter_location(value) {
+                    if !found_option || !is_alias_separator(&value[..delimiter_byte]) {
                         return None;
                     }
-                    if !before.is_empty() {
-                        terms.push(Inline::Text {
-                            value: before.to_owned(),
-                        });
-                    }
-                    let after = after.trim_start();
-                    if !after.is_empty() {
-                        description.push(Inline::Text {
-                            value: after.to_owned(),
-                        });
-                    }
-                    found_delimiter = true;
-                } else if found_option && is_alias_separator(value) {
-                    terms.push(Inline::Text {
-                        value: value.clone(),
+                    return Some(OptionSignature {
+                        inline_index: delimiter_inline,
+                        byte_index: delimiter_byte,
+                        width: delimiter_width,
                     });
-                } else {
+                }
+                if !found_option || !is_alias_separator(value) {
                     return None;
                 }
             }
             _ => return None,
         }
     }
+    None
+}
 
-    (found_option && found_delimiter).then_some((terms, description))
+/// Move one previously validated item into its semantic definition.
+fn option_definition(item: ListItem, signature: OptionSignature) -> DefinitionItem {
+    let mut blocks = item.blocks.into_iter();
+    let Some(Block::Paragraph {
+        children,
+        layout,
+        source,
+    }) = blocks.next()
+    else {
+        unreachable!("option_signature accepts only a leading paragraph");
+    };
+    let (terms, description_inlines) = apply_option_signature(children, signature);
+    let mut description = Vec::new();
+    if !description_inlines.is_empty() {
+        description.push(Block::Paragraph {
+            children: description_inlines,
+            layout,
+            source,
+        });
+    }
+    description.extend(blocks);
+
+    DefinitionItem {
+        identity: None,
+        inline_term: false,
+        terms: vec![terms],
+        description,
+        spacing_before_lines: None,
+    }
+}
+
+fn apply_option_signature(
+    children: Vec<Inline>,
+    signature: OptionSignature,
+) -> (Vec<Inline>, Vec<Inline>) {
+    let mut terms = Vec::new();
+    let mut description = Vec::new();
+    for (index, inline) in children.into_iter().enumerate() {
+        if index < signature.inline_index {
+            terms.push(inline);
+            continue;
+        }
+        if index > signature.inline_index {
+            description.push(inline);
+            continue;
+        }
+        let Inline::Text { value } = inline else {
+            unreachable!("option_signature records a text delimiter");
+        };
+        let after_start = signature.byte_index + signature.width;
+        let before = &value[..signature.byte_index];
+        if !before.is_empty() {
+            terms.push(Inline::Text {
+                value: before.to_owned(),
+            });
+        }
+        let after = value[after_start..].trim_start();
+        if !after.is_empty() {
+            description.push(Inline::Text {
+                value: after.to_owned(),
+            });
+        }
+    }
+    (terms, description)
 }
 
 fn is_option_code(value: &str) -> bool {
@@ -173,11 +200,10 @@ fn is_alias_separator(value: &str) -> bool {
         .all(|character| character.is_whitespace() || matches!(character, ',' | '/' | '|'))
 }
 
-fn split_delimiter(value: &str) -> Option<(&str, &str)> {
-    let (index, width) = value.char_indices().find_map(|(index, character)| {
+fn delimiter_location(value: &str) -> Option<(usize, usize)> {
+    value.char_indices().find_map(|(index, character)| {
         matches!(character, ':' | '—' | '–').then_some((index, character.len_utf8()))
-    })?;
-    Some((&value[..index], &value[index + width..]))
+    })
 }
 
 #[cfg(test)]
@@ -233,6 +259,48 @@ mod tests {
     }
 
     #[test]
+    fn moves_trailing_description_blocks_into_the_definition() {
+        let mut blocks = vec![Block::List {
+            kind: ListKind::Bullet,
+            start: None,
+            compact: false,
+            items: vec![ListItem {
+                blocks: vec![
+                    paragraph(vec![
+                        Inline::Code {
+                            value: "--config".to_owned(),
+                        },
+                        Inline::Text {
+                            value: ": Read configuration.".to_owned(),
+                        },
+                    ]),
+                    Block::Preformatted {
+                        children: vec![Inline::Text {
+                            value: "tool --config path".to_owned(),
+                        }],
+                        language: None,
+                        layout: LayoutHint::default(),
+                        source: None,
+                    },
+                ],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        normalize_option_lists(&mut blocks);
+
+        let Block::DefinitionList { items, .. } = &blocks[0] else {
+            panic!("explicit option list should become definitions");
+        };
+        assert!(matches!(
+            items[0].description.as_slice(),
+            [Block::Paragraph { .. }, Block::Preformatted { children, .. }]
+                if matches!(&children[0], Inline::Text { value } if value == "tool --config path")
+        ));
+    }
+
+    #[test]
     fn leaves_mixed_lists_unchanged() {
         let mut blocks = vec![Block::List {
             kind: ListKind::Bullet,
@@ -258,9 +326,10 @@ mod tests {
             layout: LayoutHint::default(),
             source: None,
         }];
+        let original = blocks.clone();
 
         normalize_option_lists(&mut blocks);
 
-        assert!(matches!(&blocks[0], Block::List { .. }));
+        assert_eq!(blocks, original, "a rejected mixed list remains untouched");
     }
 }
