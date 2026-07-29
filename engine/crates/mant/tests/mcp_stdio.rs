@@ -66,6 +66,7 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
     )
     .expect("write Markdown fixture");
     request_markdown_search(&mut input, &markdown_path);
+    request_markdown_get(&mut input, &markdown_path);
     input.flush().expect("flush tool call");
 
     let search = parse_reply(lines.next().expect("tool search reply"));
@@ -75,6 +76,18 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
     assert_eq!(
         search["result"]["structuredContent"]["matches"][0]["node"]["kind"],
         "document-root"
+    );
+
+    let excerpt = parse_reply(lines.next().expect("tool get reply"));
+    assert_eq!(excerpt["id"], 4);
+    assert_ne!(excerpt["result"]["isError"], true);
+    assert_eq!(
+        excerpt["result"]["structuredContent"]["selections"][0]["kind"],
+        "document-root"
+    );
+    assert_eq!(
+        excerpt["result"]["structuredContent"]["selections"][0]["path"],
+        "root"
     );
 
     drop(input);
@@ -129,15 +142,42 @@ fn request_markdown_search(input: &mut impl Write, path: &PathBuf) {
             "params": {
                 "name": "mant_document_search",
                 "arguments": {
-                    "target": {
-                        "kind": "markdown-file",
-                        "path": path,
-                    },
-                    "pattern": "needle"
+                    "target": stringified_markdown_target(path),
+                    "pattern": "needle",
+                    "word": "True",
+                    "context_lines": "1",
+                    "limit": "10",
+                    "offset": "0"
                 }
             }
         }),
     );
+}
+
+fn request_markdown_get(input: &mut impl Write, path: &PathBuf) {
+    write_message(
+        input,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "mant_document_get",
+                "arguments": {
+                    "target": stringified_markdown_target(path),
+                    "nodes": "[\"root\"]"
+                }
+            }
+        }),
+    );
+}
+
+fn stringified_markdown_target(path: &PathBuf) -> String {
+    json!({
+        "kind": "markdown-file",
+        "path": path,
+    })
+    .to_string()
 }
 
 fn write_message(input: &mut impl Write, message: &Value) {

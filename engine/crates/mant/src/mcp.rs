@@ -253,8 +253,7 @@ where
     }
 }
 
-const NODES_HINT: &str =
-    r#"nodes must be an array of outline selectors such as ["2","options.-l"]"#;
+const NODES_HINT: &str = r#"nodes must be an array of outline selectors such as ["2","1/o1"]"#;
 
 /// Accepts a selector array, one bare selector, or a stringified JSON array.
 fn lenient_nodes<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
@@ -362,7 +361,7 @@ impl MantMcpServer {
         let query = self.query(request).await?;
         let mut excerpt = mant_core::select_excerpt(&query, &parameters.nodes)
             .map_err(|error| error.to_string())?;
-        retain_consumer_diagnostics(&mut excerpt);
+        drop_author_style_diagnostics(&mut excerpt);
         Ok(Json(excerpt))
     }
 
@@ -396,7 +395,7 @@ impl MantMcpServer {
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { .. }]
         ) {
-            retain_consumer_diagnostics(&mut excerpt);
+            drop_author_style_diagnostics(&mut excerpt);
             Ok(Json(excerpt))
         } else {
             Err("entry does not resolve to one option, command, or environment variable".to_owned())
@@ -462,18 +461,14 @@ impl ServerHandler for MantMcpServer {
 
 // ── Input validation ─────────────────────────────────────────────────────
 
-/// Drops parser lint levels that only concern manual-page authors.
+/// Drops author-facing style lints while preserving content-quality signals.
 ///
-/// The direct CLI already treats `style` and `warning` findings as opt-in
-/// debug output (`--force-libmandoc`). MCP consumers only need the levels
-/// that signal degraded, best-effort document content.
-fn retain_consumer_diagnostics(excerpt: &mut QueryExcerpt) {
-    excerpt.diagnostics.retain(|diagnostic| {
-        matches!(
-            diagnostic.level,
-            DiagnosticLevel::Error | DiagnosticLevel::Unsupported
-        )
-    });
+/// Warnings can report masked control characters, unresolved links, or parser
+/// recovery, so consumers need them to judge whether an excerpt is complete.
+fn drop_author_style_diagnostics(excerpt: &mut QueryExcerpt) {
+    excerpt
+        .diagnostics
+        .retain(|diagnostic| diagnostic.level != DiagnosticLevel::Style);
 }
 
 fn request_for(target: QueryInput, view: QueryView) -> Result<QueryRequest, String> {
@@ -641,9 +636,9 @@ mod tests {
     #[test]
     fn node_selectors_accept_arrays_bare_strings_and_stringified_arrays() {
         for (nodes, expected) in [
-            (json!(["2", "options.-l"]), vec!["2", "options.-l"]),
+            (json!(["2", "1/o1"]), vec!["2", "1/o1"]),
             (json!("2"), vec!["2"]),
-            (json!("[\"2\", \"options.-l\"]"), vec!["2", "options.-l"]),
+            (json!("[\"2\", \"1/o1\"]"), vec!["2", "1/o1"]),
         ] {
             let parameters: GetParams = serde_json::from_value(json!({
                 "target": {"kind": "manual", "topic": "ls"},
@@ -662,13 +657,13 @@ mod tests {
         }))
         .expect_err("non-string selectors");
         assert!(
-            error.to_string().contains(r#"["2","options.-l"]"#),
+            error.to_string().contains(r#"["2","1/o1"]"#),
             "missing example in: {error}"
         );
     }
 
     #[test]
-    fn excerpts_keep_only_degradation_diagnostics() {
+    fn excerpts_drop_only_author_style_diagnostics() {
         use mant_ast::{Diagnostic, DiagnosticLevel, ExcerptSchema, QueryExcerpt};
 
         let diagnostic = |level| Diagnostic {
@@ -692,14 +687,18 @@ mod tests {
             selections: Vec::new(),
         };
 
-        super::retain_consumer_diagnostics(&mut excerpt);
+        super::drop_author_style_diagnostics(&mut excerpt);
         assert_eq!(
             excerpt
                 .diagnostics
                 .iter()
                 .map(|diagnostic| diagnostic.level)
                 .collect::<Vec<_>>(),
-            [DiagnosticLevel::Error, DiagnosticLevel::Unsupported]
+            [
+                DiagnosticLevel::Warning,
+                DiagnosticLevel::Error,
+                DiagnosticLevel::Unsupported
+            ]
         );
     }
 
