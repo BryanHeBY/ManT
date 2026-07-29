@@ -190,11 +190,10 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
             lowered
         }),
         Some("Fl") => {
-            let mut content = if plain_text(&lowered).starts_with('-') {
-                Vec::new()
-            } else {
-                vec![Inline::Text { value: "-".into() }]
-            };
+            // mdoc prepends one dash per `Fl` unconditionally: nested
+            // `.Fl Fl acls` is the canonical spelling of `--acls`, and a bare
+            // trailing `.Fl Fl` renders the `--` end-of-options marker.
+            let mut content = vec![Inline::Text { value: "-".into() }];
             content.extend(lowered);
             wrap_strong(content)
         }
