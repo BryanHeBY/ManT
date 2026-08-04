@@ -82,9 +82,16 @@ export function buildNavigationRows(
     const isSelected = node.id === selectedId;
 
     if (isSelected) {
+      // Expanded parents carry one additional subtree guide on continuation
+      // rows. Wrap against the wider rendered prefix so `wrapMode="none"`
+      // never clips the tail of a precomputed title fragment.
+      const renderedPrefixColumns = Math.max(
+        terminalColumnWidth(prefix),
+        terminalColumnWidth(continuationPrefix),
+      );
       const availableColumns = Math.max(
         1,
-        width - 1 - 2 - terminalColumnWidth(prefix),
+        width - 1 - 2 - renderedPrefixColumns,
       );
       const lines = wrapNavigationTitle(node.title, availableColumns);
       for (let index = 0; index < lines.length; index++) {

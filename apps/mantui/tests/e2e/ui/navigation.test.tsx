@@ -506,10 +506,14 @@ describe("App navigation (e2e)", () => {
 
     // The expanded parent draws a continuous vertical guide through its
     // wrapped continuation lines and down to its children.
-    const continuationLine = lines.slice(parentIndex + 1, childIndex).find((line) =>
-      line.includes("ABCDEFGHIJKLM"),
+    const continuationLines = lines.slice(parentIndex + 1, childIndex);
+    const continuationLine = continuationLines.find((line) =>
+      line.includes("ABCDEFGHIJKLMNOPQRSTU"),
     );
     expect(continuationLine).toContain("│ │");
+    // Continuation rows have an extra subtree guide. Their wrap width must
+    // account for it, otherwise the terminal clips `VW` from this long word.
+    expect(continuationLines.some((line) => line.includes("VWXYZ"))).toBe(true);
     expect(lines[childIndex]).toContain("│ │ ╰─· CHILD");
 
     setup.renderer.destroy();
