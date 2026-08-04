@@ -64,7 +64,8 @@ export function resolveMantPath(
   const installed = which("mant");
   if (installed) return installed;
   throw new Error(
-    "mant was not found; install it on PATH or set MANT_PATH. "
+    "mant was not found; run 'cargo install mant --version 0.4.0 --locked', "
+    + "install it on PATH, or set MANT_PATH. "
     + "From a source checkout, use 'bun run dev -- <topic>'",
   );
 }

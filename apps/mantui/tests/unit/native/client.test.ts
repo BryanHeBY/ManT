@@ -44,7 +44,7 @@ describe("native mant client", () => {
     expect(resolveMantPath({}, (command) => `/tools/${command}`))
       .toBe("/tools/mant");
     expect(() => resolveMantPath({}, () => null))
-      .toThrow("bun run dev -- <topic>");
+      .toThrow("cargo install mant --version 0.4.0 --locked");
   });
 
   test("probes once, sends closed JSON on stdin, and validates every response", async () => {

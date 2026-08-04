@@ -46,6 +46,21 @@ Local manual topics and Markdown paths are queried through the companion
 `mant` executable. `mantui` finds that executable through `MANT_PATH` first
 and then `PATH`.
 
+## Installation
+
+The npm package distributes the Bun/OpenTUI reader as TypeScript/TSX source;
+it does not bundle a platform-specific `mant` binary. Install the matching
+native engine from crates.io, then install the reader from npm:
+
+```sh
+cargo install mant --version 0.4.0 --locked
+bun add --global mantui@0.4.0
+```
+
+The npm distribution requires Bun 1.3.14 or newer at runtime. Source and
+release-archive installation alternatives are documented in the repository
+README.
+
 ## Input
 
 Ordinary values are resolved as local manual topics. Values ending in `.md` or

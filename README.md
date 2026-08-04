@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/BryanHeBY/ManT/branch/main/graph/badge.svg)](https://codecov.io/gh/BryanHeBY/ManT)
+[![crates.io](https://img.shields.io/crates/v/mant.svg?logo=rust)](https://crates.io/crates/mant)
+[![npm](https://img.shields.io/npm/v/mantui.svg?logo=npm)](https://www.npmjs.com/package/mantui)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 ManT turns dense local Unix manuals into navigable documents for people and
@@ -45,18 +47,34 @@ manual.
 
 ## Install
 
-### Cargo (`mant` CLI only)
-
-Install the native CLI and MCP server from crates.io:
+Install the native document engine from crates.io and the interactive reader
+from npm:
 
 ```sh
-cargo install mant --locked
+cargo install mant --version 0.4.0 --locked
+bun add --global mantui@0.4.0
+mantui git
 ```
 
-This installs `mant`, not the Bun/OpenTUI-based `mantui` reader. Building the
-bundled parser requires Rust 1.88+, a C compiler, and the zlib development
-library on a supported Linux or macOS host. Install the release archive when
-both executables are wanted together.
+These are two deliberately separate packages:
+
+| Package | Installs | Runtime role |
+| --- | --- | --- |
+| [`mant` on crates.io](https://crates.io/crates/mant) | `mant` | Native CLI, MCP server, parser, schemas, and structured output |
+| [`mantui` on npm](https://www.npmjs.com/package/mantui) | `mantui` | Bun/OpenTUI interactive reader that calls `mant` through stdio |
+
+If only agents, scripts, MCP, or Markdown/text/JSON output are needed, install
+`mant` alone:
+
+```sh
+cargo install mant --version 0.4.0 --locked
+```
+
+Building `mant` from crates.io requires Rust 1.88+, a C compiler, and the zlib
+development library on Linux or macOS. The npm package contains portable
+TypeScript/TSX source rather than a platform binary and requires Bun 1.3.14+
+at runtime. `mantui` resolves its companion through `MANT_PATH` first and then
+`PATH`.
 
 ### Linux release archive
 

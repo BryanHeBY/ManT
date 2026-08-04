@@ -3,7 +3,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -110,6 +110,26 @@ describe("release documentation", () => {
         await Bun.file(join(import.meta.dir, "../../..", manual.source)).exists(),
       ).toBe(true);
     }
+  });
+
+  test("publishes a minimal Bun-only mantui package with an executable shim", async () => {
+    const root = join(import.meta.dir, "../../..");
+    const manifest = JSON.parse(
+      await Bun.file(join(root, "apps/mantui/package.json")).text(),
+    ) as {
+      private: boolean;
+      bin: Record<string, string>;
+      files: string[];
+      engines: Record<string, string>;
+    };
+    const launcher = join(root, "apps/mantui/bin/mantui");
+
+    expect(manifest.private).toBe(false);
+    expect(manifest.bin).toEqual({ mantui: "bin/mantui" });
+    expect(manifest.files).toEqual(["bin", "src", "README.md", "LICENSE"]);
+    expect(manifest.engines.bun).toBe(">=1.3.14");
+    expect(await Bun.file(launcher).text()).toStartWith("#!/usr/bin/env bun\n");
+    expect((await stat(launcher)).mode & 0o111).not.toBe(0);
   });
 });
 

@@ -4,9 +4,42 @@
   "description": "The interactive ManT reader for local manuals and Markdown",
   "license": "Apache-2.0",
   "type": "module",
-  "private": true,
+  "private": false,
   "bin": {
-    "mantui": "./src/mantui.ts"
+    "mantui": "bin/mantui"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.3.14"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "keywords": [
+    "man",
+    "markdown",
+    "terminal",
+    "tui",
+    "bun"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BryanHeBY/ManT.git",
+    "directory": "apps/mantui"
+  },
+  "homepage": "https://github.com/BryanHeBY/ManT",
+  "bugs": {
+    "url": "https://github.com/BryanHeBY/ManT/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
     "@opentui/core": "0.4.5",
