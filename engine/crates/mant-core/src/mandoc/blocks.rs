@@ -11,8 +11,8 @@ use mant_ast::{
 use super::{
     LoweringContext,
     inline::{
-        InlineBuilder, lower_inline_nodes, parse_roff_text, plain_text, sanitize_roff_text,
-        terms_fit_inline,
+        InlineBuilder, append_inline_node, lower_inline_nodes, parse_roff_text, plain_text,
+        sanitize_roff_text, terms_fit_inline,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -779,14 +779,34 @@ fn extend_blocks_with_spacing(output: &mut Vec<Block>, mut nested: Vec<Block>, l
 }
 
 fn preformatted_block(node: &Node, context: &LoweringContext<'_>, indent_columns: u16) -> Block {
-    let children = part_children(node, NodeKind::Body);
-    let children = if children.is_empty() {
-        &node.children
-    } else {
-        children
-    };
+    let body_index = node
+        .children
+        .iter()
+        .position(|child| child.kind == NodeKind::Body);
+    let children = body_index.map_or_else(
+        || node.children.as_slice(),
+        |index| node.children[index].children.as_slice(),
+    );
+    let mut inlines = preformatted_inlines(children, context.default_name);
+
+    // mdoc validation can move a closing delimiter out of the display body
+    // while leaving it as a direct child of the display block.  It still
+    // belongs to the same rendered line (`.Dl return [ exitstatus ]`).
+    if let Some(body_index) = body_index {
+        let tail = &node.children[body_index + 1..];
+        let tail_len = tail
+            .iter()
+            .take_while(|child| child.line == node.line && is_inline(child))
+            .count();
+        if tail
+            .first()
+            .is_some_and(|child| child.flags.delimiter_close)
+        {
+            inlines.extend(lower_inline_nodes(&tail[..tail_len], context.default_name));
+        }
+    }
     Block::Preformatted {
-        children: preformatted_inlines(children, context.default_name),
+        children: inlines,
         language: None,
         layout: layout(indent_columns),
         source: source_span(node),
@@ -795,22 +815,26 @@ fn preformatted_block(node: &Node, context: &LoweringContext<'_>, indent_columns
 
 fn preformatted_inlines(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
     let mut output = Vec::new();
+    let mut line = InlineBuilder::new();
     let mut previous_line = None;
     for node in nodes {
         if node.kind == NodeKind::Comment || node.flags.no_print {
             continue;
         }
-        if previous_line.is_some_and(|line| node.line > line) && !output.is_empty() {
+        if previous_line.is_some_and(|previous| node.line > previous) {
+            output.extend(std::mem::replace(&mut line, InlineBuilder::new()).finish());
+        }
+        if previous_line.is_some_and(|previous| node.line > previous) && !output.is_empty() {
             output.push(Inline::LineBreak);
         }
-        let children = if node.kind == NodeKind::Text || node.macro_name.is_some() {
-            lower_inline_nodes(std::slice::from_ref(node), default_name)
+        if node.kind == NodeKind::Text || node.macro_name.is_some() {
+            append_inline_node(&mut line, node, default_name);
         } else {
-            preformatted_inlines(&node.children, default_name)
-        };
-        output.extend(children);
+            line.append(preformatted_inlines(&node.children, default_name));
+        }
         previous_line = Some(node.line);
     }
+    output.extend(line.finish());
     output
 }
 

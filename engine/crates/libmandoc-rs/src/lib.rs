@@ -201,6 +201,44 @@ mod tests {
     }
 
     #[test]
+    fn parser_preserves_mdoc_delimiter_spacing_roles() {
+        let path = source_path("delimiter-role-mandoc-session");
+        fs::write(
+            &path,
+            ".Dd August 4, 2026\n.Dt DELIMITERS 1\n.Os\n.Sh EXAMPLES\n\
+             .Dl name ( ) command\n\
+             .Dl local [ variable | - ] ...\n\
+             .Dl return [ exitstatus ]\n",
+        )
+        .expect("write delimiter-role source");
+
+        let document = parse_file(&path, false).expect("parse delimiter-role source");
+        fs::remove_file(path).expect("remove delimiter-role source");
+
+        let opening_parenthesis = find_node(&document.root, &|node| {
+            node.line == 5 && node.text.as_deref() == Some("(")
+        })
+        .expect("opening parenthesis");
+        let closing_parenthesis = find_node(&document.root, &|node| {
+            node.line == 5 && node.text.as_deref() == Some(")")
+        })
+        .expect("closing parenthesis");
+        let opening_bracket = find_node(&document.root, &|node| {
+            node.line == 7 && node.text.as_deref() == Some("[")
+        })
+        .expect("opening bracket");
+        let trailing_bracket = find_node(&document.root, &|node| {
+            node.line == 7 && node.text.as_deref() == Some("]")
+        })
+        .expect("trailing bracket");
+
+        assert!(opening_parenthesis.flags.delimiter_open);
+        assert!(closing_parenthesis.flags.delimiter_close);
+        assert!(opening_bracket.flags.delimiter_open);
+        assert!(trailing_bracket.flags.delimiter_close);
+    }
+
+    #[test]
     fn parser_session_reports_file_errors_as_values() {
         let path = source_path("missing-mandoc-session");
         let error = parse_file(&path, false).expect_err("missing source must fail");

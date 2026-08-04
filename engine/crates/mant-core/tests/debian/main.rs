@@ -12,3 +12,4 @@ mod fixtures;
 mod groff_man_style;
 mod groff_me;
 mod mt_gnu;
+mod sh;

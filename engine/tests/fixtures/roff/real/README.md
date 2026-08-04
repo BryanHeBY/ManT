@@ -8,9 +8,9 @@ required by the third-party manuals.
 
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
-| [`archlinux/`](archlinux/README.md) | Immutable Arch Linux Archive packages | Original gzip members and two documented lossless zstd recompressions | Direct gzip input, zstd input, and broad real-man regression coverage |
-| [`fedora44/`](fedora44/README.md) | Fedora Linux 44 Everything packages acquired 2026-07-20 | Lossless `*.1.zst` recompressions | zstd decoding and a second current generator corpus |
-| [`debian/`](debian/README.md) | Debian sid binary packages acquired 2026-07-21 | Original `*.{1,7}.gz` package members | Third-distribution gzip input and section-7 macro pages |
+| [`archlinux/`](archlinux/README.md) | Immutable Arch Linux Archive packages | Original gzip members and two documented lossless zstd recompressions | Direct gzip input, POSIX `sh(1p)`, zstd input, and broad real-man regression coverage |
+| [`fedora44/`](fedora44/README.md) | Fedora Linux 44 Everything packages | Lossless `*.1.zst` recompressions | zstd decoding, Bash-backed `sh(1)`, and a second current generator corpus |
+| [`debian/`](debian/README.md) | Debian sid binary packages | Original gzip package members | Third-distribution gzip input, mdoc-formatted dash `sh(1)`, and section-7 macro pages |
 
 All fixtures are parsed through ManT's bundled libmandoc. Tests never consult
 the host manual database. Fixed compressed roff sources replace the former

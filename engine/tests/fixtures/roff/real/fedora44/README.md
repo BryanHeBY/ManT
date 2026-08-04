@@ -20,6 +20,7 @@ bytes as the parent Arch fixture `tar.1.gz`.
 | `gcc.1.zst` | [gcc 16.0.1-0.10.fc44] / [gcc source RPM] | `usr/share/man/man1/gcc.1.gz` | [GFDL-1.3-invariants-or-later] | `531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034` | `7a1ec76f50702b05c389ba777c5dee70155c05781f05056a9dafb07154625699` |
 | `git.1.zst` | [git-core-doc 2.53.0-1.fc44] / [git source RPM] | `usr/share/man/man1/git.1.gz` | [GPL-2.0-only] | `2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27eb4bb9369c415f3351c1` | `43e55d11719d6b4db16e1da7228e0446a64f4cef4a0fb449ea6c84f8e37f2e03` |
 | `tar.1.zst` | [tar 1.35-8.fc44] / [tar source RPM] | `usr/share/man/man1/tar.1.gz` | [GPL-3.0-or-later] | `3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee` | `97ba77e351ef5561f748b12401f344cfca374998e080dc7db1f8914e0c09e63e` |
+| `sh.1.zst` | [bash 5.3.9-3.fc44] / [bash source RPM] | `usr/share/man/man1/sh.1.gz` → `bash.1.gz` | [GPL-3.0-or-later] | `a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1` | `e22741a5af84dafcd4f196d38da350a6d521a11d072e4f9f975b8f274c3607fb` |
 
 The original binary RPM SHA-256 values are recorded here as an additional
 provenance check:
@@ -28,6 +29,7 @@ provenance check:
 - `gcc-16.0.1-0.10.fc44.x86_64.rpm`: `5410123363bb8a6e3ac5d00448619957f8062e4769a434ba28cf61e9f2524871`
 - `git-core-doc-2.53.0-1.fc44.noarch.rpm`: `12e2db464bfa10726554860c7a63df9216a23d2553cc93126731886de80b114b`
 - `tar-1.35-8.fc44.x86_64.rpm`: `5b9cc358930c4fddec59c3cc13d8ebc9fbb315019a9c96dc24adaa2e38d07568`
+- `bash-5.3.9-3.fc44.x86_64.rpm`: `2ccb046d638f5ad23f5613222a78ee71067dc43f0bdf03b60ce311536bc4bed5`
 
 The complete license texts are shared with the corresponding fixtures in the
 parent `LICENSES/` directory. The GCC manual's invariant sections and cover
@@ -83,6 +85,8 @@ assertions in the same commit.
 [git source RPM]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/g/git-2.53.0-1.fc44.src.rpm
 [tar 1.35-8.fc44]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/Packages/t/tar-1.35-8.fc44.x86_64.rpm
 [tar source RPM]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/t/tar-1.35-8.fc44.src.rpm
+[bash 5.3.9-3.fc44]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/Packages/b/bash-5.3.9-3.fc44.x86_64.rpm
+[bash source RPM]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/b/bash-5.3.9-3.fc44.src.rpm
 [Apache-2.0 WITH LLVM-exception]: ../LICENSES/LLVM.txt
 [GFDL-1.3-invariants-or-later]: ../LICENSES/GFDL-1.3-invariants-or-later.txt
 [GPL-2.0-only]: ../LICENSES/GPL-2.0-only.txt

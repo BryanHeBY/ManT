@@ -2,9 +2,10 @@
 
 These fixtures are the original compressed roff manual members extracted from
 the Debian sid (unstable) binary packages listed below. The package references
-and fixture bytes were recorded in ManT on 2026-07-21. No decompression or
-recompression occurs: each committed `*.gz` file is the package member named
-in its row, so its fixture SHA-256 is also the compressed-member hash.
+and fixture bytes were recorded in ManT on 2026-07-21, with `sh(1)` added on
+2026-08-04. No decompression or recompression occurs. Regular files are copied
+byte for byte; `sh.1.gz` is the packaged symlink to `dash.1.gz`, so the fixture
+stores the target member's original compressed bytes.
 
 They extend the real-man corpus to Debian's generator output and exercise
 section-7 macro reference pages alongside the existing section-1 corpus. The
@@ -16,6 +17,12 @@ cpio's tape-archiver manual with embedded roff escapes.
 | `mt-gnu.1.gz` | [GNU cpio], [Debian `cpio` 2.15+dfsg-2.1] | `usr/share/man/man1/mt-gnu.1.gz` | [GPL-3.0-or-later] | `190561ec27d5b16e5c9ef634e8caac722d60c8635843994297942907c3ff9ba0` |
 | `groff_me.7.gz` | [GNU groff], [Debian `groff` 1.24.1-1] | `usr/share/man/man7/groff_me.7.gz` | BSD-3-Clause (UCB) + [GPL-3.0-or-later] | `170a171a65fd9c3082453b85425f71749ce00535ca7d0dbca7a4668c2799d554` |
 | `groff_man_style.7.gz` | [GNU groff], [Debian `groff` 1.24.1-1] | `usr/share/man/man7/groff_man_style.7.gz` | [GFDL-1.3-invariants-or-later] | `836bb1bf1827fc4d057abb50f254a428b62f3857dc969a200a8fa1a6113a4b2b` |
+| `sh.1.gz` | [dash], [Debian `dash` 0.5.12-12] | `usr/share/man/man1/sh.1.gz` → `dash.1.gz` | [BSD-3-Clause] | `071069ca60a6b2ff4d5bdfdd37f0cf7cd736e56efef665a5ac17cdef4ad25360` |
+
+The decompressed dash roff source has SHA-256
+`0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1`;
+the complete Debian package has SHA-256
+`a8902cb6d8650134764a25fb80aec8589d858ef71ece1680a62e84816c37bb04`.
 
 groff_me.7 retains the Regents of the University of California BSD-3-Clause
 copyright (with the deleted clause 3 marked inline) and the Free Software
@@ -25,6 +32,10 @@ the GFDL without Invariant Sections; the shared
 [GFDL text](../LICENSES/GFDL-1.3-invariants-or-later.txt) supplies the
 referenced license. The mt-gnu page from cpio carries the standard
 GPL-3.0-or-later.
+
+The dash page is covered by the [BSD-3-Clause] terms and the package's
+copyright attributions to the Regents of the University of California,
+Christos Zoulas, and Herbert Xu.
 
 ## Reproducing a fixture
 
@@ -63,7 +74,10 @@ hash, and applicable license references in the same commit.
 
 [GNU cpio]: https://www.gnu.org/software/cpio/
 [GNU groff]: https://www.gnu.org/software/groff/
+[dash]: http://gondor.apana.org.au/~herbert/dash/
 [Debian `cpio` 2.15+dfsg-2.1]: https://packages.debian.org/sid/cpio
 [Debian `groff` 1.24.1-1]: https://packages.debian.org/sid/groff
+[Debian `dash` 0.5.12-12]: https://deb.debian.org/debian/pool/main/d/dash/dash_0.5.12-12_amd64.deb
 [GPL-3.0-or-later]: ../LICENSES/GPL-3.0-or-later.txt
 [GFDL-1.3-invariants-or-later]: ../LICENSES/GFDL-1.3-invariants-or-later.txt
+[BSD-3-Clause]: ../LICENSES/BSD-3-Clause.txt

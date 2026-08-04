@@ -10,6 +10,7 @@ static CLANG: OnceLock<MantDocument> = OnceLock::new();
 static GCC: OnceLock<MantDocument> = OnceLock::new();
 static GIT: OnceLock<MantDocument> = OnceLock::new();
 static TAR: OnceLock<MantDocument> = OnceLock::new();
+static SH: OnceLock<MantDocument> = OnceLock::new();
 
 pub fn fedora44_manual(name: &str) -> &'static MantDocument {
     let slot = match name {
@@ -17,6 +18,7 @@ pub fn fedora44_manual(name: &str) -> &'static MantDocument {
         "gcc" => &GCC,
         "git" => &GIT,
         "tar" => &TAR,
+        "sh" => &SH,
         _ => panic!("unknown Fedora Linux 44 fixture {name}"),
     };
     slot.get_or_init(|| {

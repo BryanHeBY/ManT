@@ -12,4 +12,5 @@ mod fixtures;
 mod clang;
 mod gcc;
 mod git;
+mod sh;
 mod tar;

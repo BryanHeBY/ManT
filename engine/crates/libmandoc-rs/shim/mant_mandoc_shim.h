@@ -53,6 +53,8 @@ enum mant_mandoc_display_kind {
 #define MANT_MANDOC_NODE_DEEP_LINK_TARGET (1U << 4)
 #define MANT_MANDOC_NODE_PERMALINK (1U << 5)
 #define MANT_MANDOC_NODE_LINE_START (1U << 6)
+#define MANT_MANDOC_NODE_DELIMITER_OPEN (1U << 7)
+#define MANT_MANDOC_NODE_DELIMITER_CLOSE (1U << 8)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(
     const char *, const char *, int);

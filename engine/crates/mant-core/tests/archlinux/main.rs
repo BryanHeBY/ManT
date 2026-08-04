@@ -14,4 +14,5 @@ mod gcc;
 mod git;
 mod ls;
 mod rsync;
+mod sh;
 mod tar;

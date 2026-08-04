@@ -85,6 +85,10 @@ pub struct NodeFlags {
     /// Some man macros keep same-line layout arguments and next-line visible
     /// content in one syntax head, so source-line role is semantic data.
     pub line_start: bool,
+    /// This text node is opening punctuation and suppresses spacing after it.
+    pub delimiter_open: bool,
+    /// This text node is closing punctuation and suppresses spacing before it.
+    pub delimiter_close: bool,
 }
 
 /// An owned syntax node with no pointers into the C parser.

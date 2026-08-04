@@ -107,29 +107,49 @@ impl InlineBuilder {
 pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
     let mut builder = InlineBuilder::new();
     for node in nodes {
-        match node.macro_name.as_deref() {
-            Some("Ns" | "Pf") => builder.suppress_next_space(),
-            // A roff break ends the current output line, not the paragraph.
-            // Keeping it inline lets every renderer preserve the same flow.
-            Some("br") => builder.hard_break(),
-            // Formatting requests carry control arguments such as `CW` and
-            // `R`. They change renderer state and are never document text.
-            // Verbatim regions already retain their semantics through
-            // libmandoc's no-fill flag, so leaking these arguments would only
-            // create phantom paragraphs around preformatted blocks.
-            Some(
-                "Sm" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr"
-                | "ta",
-            ) => {}
-            Some("Ap") => {
-                builder.suppress_next_space();
-                builder.append(vec![Inline::Text { value: "'".into() }]);
-                builder.suppress_next_space();
-            }
-            _ => builder.append(lower_inline_node(node, default_name)),
-        }
+        append_inline_node(&mut builder, node, default_name);
     }
     builder.finish()
+}
+
+/// Lower one syntax node into an existing inline flow.
+///
+/// libmandoc classifies bare opening and closing delimiters during parsing.
+/// Preserve those roles instead of re-inferring punctuation from visible
+/// characters: literal displays can intentionally put spaces around the same
+/// glyphs that ordinary prose uses as attached punctuation.
+pub(super) fn append_inline_node(
+    builder: &mut InlineBuilder,
+    node: &Node,
+    default_name: Option<&str>,
+) {
+    if node.flags.delimiter_close {
+        builder.suppress_next_space();
+    }
+    match node.macro_name.as_deref() {
+        Some("Ns" | "Pf") => builder.suppress_next_space(),
+        // A roff break ends the current output line, not the paragraph.
+        // Keeping it inline lets every renderer preserve the same flow.
+        Some("br") => builder.hard_break(),
+        // Formatting requests carry control arguments such as `CW` and
+        // `R`. They change renderer state and are never document text.
+        // Verbatim regions already retain their semantics through
+        // libmandoc's no-fill flag, so leaking these arguments would only
+        // create phantom paragraphs around preformatted blocks.
+        Some(
+            "Sm" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr"
+            | "ta",
+        ) => {}
+        Some("Ap") => {
+            builder.suppress_next_space();
+            builder.append(vec![Inline::Text { value: "'".into() }]);
+            builder.suppress_next_space();
+        }
+        _ => builder.append(lower_inline_node(node, default_name)),
+    }
+    if node.flags.delimiter_open {
+        builder.suppress_next_space();
+    }
 }
 
 pub(crate) fn plain_text(nodes: &[Inline]) -> String {
@@ -545,18 +565,7 @@ fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link
 fn needs_space(existing: &[Inline], incoming: &[Inline]) -> bool {
     let left = plain_text(existing).chars().next_back();
     let right = plain_text(incoming).chars().next();
-    match (left, right) {
-        (Some(left), Some(right)) => {
-            !left.is_whitespace()
-                && !right.is_whitespace()
-                && !matches!(left, '(' | '[' | '{' | '<' | '“' | '‘' | '/' | '-')
-                && !matches!(
-                    right,
-                    ')' | ']' | '}' | '>' | '”' | '’' | ',' | '.' | ':' | ';' | '!' | '?' | '/'
-                )
-        }
-        _ => false,
-    }
+    matches!((left, right), (Some(left), Some(right)) if !left.is_whitespace() && !right.is_whitespace())
 }
 
 fn needs_filled_line_space(existing: &[Inline], incoming: &[Inline]) -> bool {

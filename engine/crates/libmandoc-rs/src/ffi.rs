@@ -80,6 +80,8 @@ const NODE_NO_FILL: u32 = 1 << 3;
 const NODE_DEEP_LINK_TARGET: u32 = 1 << 4;
 const NODE_PERMALINK: u32 = 1 << 5;
 const NODE_LINE_START: u32 = 1 << 6;
+const NODE_DELIMITER_OPEN: u32 = 1 << 7;
+const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
 
 struct DocumentHandle(NonNull<CDocument>);
 
@@ -250,6 +252,8 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
             deep_link_target: raw_flags & NODE_DEEP_LINK_TARGET != 0,
             permalink: raw_flags & NODE_PERMALINK != 0,
             line_start: raw_flags & NODE_LINE_START != 0,
+            delimiter_open: raw_flags & NODE_DELIMITER_OPEN != 0,
+            delimiter_close: raw_flags & NODE_DELIMITER_CLOSE != 0,
         },
         list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,
         display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,
