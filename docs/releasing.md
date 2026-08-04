@@ -7,7 +7,10 @@ does not form part of the everyday user installation path.
 
 1. Choose a semantic version and update `package.json`,
    `apps/mantui/package.json`, and the `[workspace.package]` version in
-   `engine/Cargo.toml`.
+   `engine/Cargo.toml`. The four published Rust crates use one lockstep
+   version; update the exact internal dependency requirements in
+   `engine/crates/mant-core/Cargo.toml` and
+   `engine/crates/mant/Cargo.toml` at the same time.
 2. Run the complete local verification boundary:
 
    ```sh
@@ -15,6 +18,48 @@ does not form part of the everyday user installation path.
    ```
 
 3. Commit the version change and ensure the main branch CI is green.
+
+## Publish the Rust crates
+
+The crates.io packages form one dependency chain and must be published in
+this order:
+
+```text
+libmandoc-rs ─┐
+              ├─> mant-core ─> mant
+mant-ast ─────┘
+```
+
+For the first release, authenticate locally with `cargo login`, review each
+package, and publish it before moving to the next dependent package:
+
+```sh
+cd engine
+
+cargo publish --dry-run --locked -p libmandoc-rs
+cargo publish --locked -p libmandoc-rs
+
+cargo publish --dry-run --locked -p mant-ast
+cargo publish --locked -p mant-ast
+
+cargo publish --dry-run --locked -p mant-core
+cargo publish --locked -p mant-core
+
+cargo publish --dry-run --locked -p mant
+cargo publish --locked -p mant
+```
+
+Wait for each new package to become visible in the crates.io index before
+checking or publishing its dependent package. The `mant` package installs the
+native CLI and MCP server; `mantui` remains part of the GitHub release archive
+and is not installed by Cargo.
+
+After all four package names exist, configure the same crates.io Trusted
+Publisher for each package. Subsequent releases can exchange GitHub's OIDC
+identity for short-lived publishing credentials instead of storing a Cargo
+token in repository secrets. Keep that publishing workflow gated on the
+manually reviewed GitHub Release becoming public, rather than on creation of
+the draft.
 
 ## Tag and draft release
 

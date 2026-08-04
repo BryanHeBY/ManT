@@ -5,12 +5,19 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+description = "Structured manual and Markdown document engine used by ManT"
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["man", "mdoc", "roff", "markdown", "parser"]
+categories = ["parser-implementations", "text-processing"]
+include = ["/Cargo.toml", "/README.md", "/src/**"]
 
 [dependencies]
 grep-matcher.workspace = true
 grep-regex.workspace = true
-mant-ast = { path = "../mant-ast" }
-libmandoc-rs = { path = "../libmandoc-rs" }
+mant-ast = { path = "../mant-ast", version = "=0.4.0" }
+libmandoc-rs = { path = "../libmandoc-rs", version = "=0.4.0" }
 pulldown-cmark.workspace = true
 # Keep this explicit so parser upgrades remain visible in dependency reviews.
 scraper = "0.27.0"

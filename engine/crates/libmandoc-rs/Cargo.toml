@@ -1,11 +1,12 @@
 [package]
 name = "libmandoc-rs"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license = "Apache-2.0 AND ISC AND BSD-2-Clause AND BSD-3-Clause"
 description = "Safe, owned Rust interface to the vendored libmandoc parser"
-repository = "https://github.com/BryanHeBY/ManT"
+repository.workspace = true
+homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "mdoc", "roff", "mandoc", "parser"]
 categories = ["parser-implementations", "text-processing"]
@@ -20,7 +21,7 @@ include = [
   "/src/**",
   "/vendor/mandoc-1.14.6/**",
 ]
-publish = true
+publish.workspace = true
 links = "libmandoc_rs"
 
 [features]

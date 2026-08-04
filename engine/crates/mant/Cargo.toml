@@ -5,11 +5,18 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+description = "Native CLI and MCP server for structured Unix manuals and Markdown"
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["man", "markdown", "cli", "mcp", "documentation"]
+categories = ["command-line-utilities", "text-processing"]
+include = ["/Cargo.toml", "/README.md", "/src/**"]
 
 [dependencies]
 clap.workspace = true
-mant-ast = { path = "../mant-ast" }
-mant-core = { path = "../mant-core" }
+mant-ast = { path = "../mant-ast", version = "=0.4.0" }
+mant-core = { path = "../mant-core", version = "=0.4.0" }
 rmcp.workspace = true
 rmcp-macros.workspace = true
 schemars.workspace = true

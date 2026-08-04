@@ -5,6 +5,13 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+description = "Versioned, renderer-neutral document and query contracts for ManT"
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["man", "markdown", "ast", "schema", "protocol"]
+categories = ["data-structures", "text-processing"]
+include = ["/Cargo.toml", "/README.md", "/src/**"]
 
 [dependencies]
 schemars.workspace = true

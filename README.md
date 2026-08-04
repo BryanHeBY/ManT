@@ -45,6 +45,19 @@ manual.
 
 ## Install
 
+### Cargo (`mant` CLI only)
+
+Install the native CLI and MCP server from crates.io:
+
+```sh
+cargo install mant --locked
+```
+
+This installs `mant`, not the Bun/OpenTUI-based `mantui` reader. Building the
+bundled parser requires Rust 1.88+, a C compiler, and the zlib development
+library on a supported Linux or macOS host. Install the release archive when
+both executables are wanted together.
+
 ### Linux release archive
 
 Download the archive for your architecture from the
