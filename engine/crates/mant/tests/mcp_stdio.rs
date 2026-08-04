@@ -69,7 +69,16 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
     request_markdown_get(&mut input, &markdown_path);
     input.flush().expect("flush tool call");
 
-    let search = parse_reply(lines.next().expect("tool search reply"));
+    // JSON-RPC permits concurrent requests to complete out of order. Select
+    // replies by ID instead of treating stdio arrival order as a contract.
+    let replies = [
+        parse_reply(lines.next().expect("first tool reply")),
+        parse_reply(lines.next().expect("second tool reply")),
+    ];
+    let search = replies
+        .iter()
+        .find(|reply| reply["id"] == 3)
+        .expect("tool search reply");
     assert_eq!(search["id"], 3);
     assert_ne!(search["result"]["isError"], true);
     assert_eq!(search["result"]["structuredContent"]["total"], 1);
@@ -78,7 +87,10 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
         "document-root"
     );
 
-    let excerpt = parse_reply(lines.next().expect("tool get reply"));
+    let excerpt = replies
+        .iter()
+        .find(|reply| reply["id"] == 4)
+        .expect("tool get reply");
     assert_eq!(excerpt["id"], 4);
     assert_ne!(excerpt["result"]["isError"], true);
     assert_eq!(
