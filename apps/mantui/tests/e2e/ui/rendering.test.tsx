@@ -185,7 +185,7 @@ describe("App rendering (e2e)", () => {
       "Option Summary",
     ]) expect(frame).toContain(value);
     expect(
-      navLines(frame).some((line) => line.includes("Options") && line.includes("Kind")),
+      navLines(frame).some((line) => line.includes("Kind")),
     ).toBe(true);
     const emphasisSpan = setup.captureSpans().lines
       .flatMap((line) => line.spans)

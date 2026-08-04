@@ -23,32 +23,98 @@ export interface FlatNode {
   depth: number;
   hasChildren: boolean;
   isLast: boolean;
-  /** Whether each ancestor has another visible sibling after it. */
-  ancestorHasNext: boolean[];
 }
 
 export function flattenVisibleNodes(
   nodes: NavigationNode[],
   expanded: ReadonlySet<string>,
   depth = 0,
-  ancestorHasNext: boolean[] = [],
 ): FlatNode[] {
   const result: FlatNode[] = [];
   for (let index = 0; index < nodes.length; index++) {
     const node = nodes[index]!;
     const isLast = index === nodes.length - 1;
     const hasChildren = node.children.length > 0;
-    result.push({ node, depth, hasChildren, isLast, ancestorHasNext });
+    result.push({ node, depth, hasChildren, isLast });
     if (hasChildren && expanded.has(node.id)) {
-      result.push(
-        ...flattenVisibleNodes(node.children, expanded, depth + 1, [
-          ...ancestorHasNext,
-          !isLast,
-        ]),
-      );
+      result.push(...flattenVisibleNodes(node.children, expanded, depth + 1));
     }
   }
   return result;
+}
+
+/** One rendered row in the sidebar. Every row has height 1. */
+export interface NavigationRow {
+  id: string;
+  nodeId: string;
+  node: NavigationNode;
+  depth: number;
+  isLast: boolean;
+  lineIndex: number;
+  /** First-line prefix: tree guides + disclosure (selection indicator added at render). */
+  prefix: string;
+  /** Prefix for wrapped continuation lines (leading spaces added at render). */
+  continuationPrefix: string;
+  text: string;
+}
+
+/**
+ * Builds a fixed-height row list from logical visible nodes.
+ *
+ * Only the selected node's title is wrapped; all other rows keep the full title
+ * and rely on the renderer to truncate them. This matches the existing sidebar
+ * behavior while giving the scrollbox a homogeneous set of height-1 children.
+ */
+export function buildNavigationRows(
+  visibleNodes: FlatNode[],
+  expanded: ReadonlySet<string>,
+  width: number,
+  selectedId: string,
+): NavigationRow[] {
+  const rows: NavigationRow[] = [];
+  for (const flatNode of visibleNodes) {
+    const { node, hasChildren } = flatNode;
+    const disclosure = hasChildren
+      ? expanded.has(node.id) ? "▾ " : "▸ "
+      : node.kind === "option" ? "◇ " : "· ";
+    const prefix = treePrefix(flatNode, expanded) + disclosure;
+    const continuationPrefix = treeContinuationPrefix(flatNode, expanded);
+    const isSelected = node.id === selectedId;
+
+    if (isSelected) {
+      const availableColumns = Math.max(
+        1,
+        width - 1 - 2 - terminalColumnWidth(prefix),
+      );
+      const lines = wrapNavigationTitle(node.title, availableColumns);
+      for (let index = 0; index < lines.length; index++) {
+        rows.push({
+          id: `${node.id}:L${index}`,
+          nodeId: node.id,
+          node,
+          depth: flatNode.depth,
+          isLast: flatNode.isLast,
+          lineIndex: index,
+          prefix,
+          continuationPrefix,
+          text: lines[index]!,
+        });
+      }
+    } else {
+      rows.push({
+        id: `${node.id}:L0`,
+        nodeId: node.id,
+        node,
+        depth: flatNode.depth,
+        isLast: flatNode.isLast,
+        lineIndex: 0,
+        prefix,
+        continuationPrefix,
+        text: node.title,
+      });
+    }
+  }
+  return rows;
 }
 
 /** Build the sidebar model without mutating the renderer-neutral AST. */
@@ -176,19 +242,46 @@ export function collectBranchIds(nodes: NavigationNode[]): Set<string> {
   return ids;
 }
 
-export function treePrefix({ depth, isLast, ancestorHasNext }: FlatNode): string {
-  if (depth === 0) return "";
+function nodeConnector(isLast: boolean, isExpanded: boolean): string {
+  // An expanded parent is always drawn as a connected branch so the vertical
+  // line continues down to its visible children.
+  return isLast && !isExpanded ? "╰─" : "├─";
+}
 
-  const ancestorGuides = ancestorHasNext
-    .slice(0, -1)
-    .map((hasNext) => (hasNext ? "│ " : "  "))
-    .join("");
-  return `${ancestorGuides}${isLast ? "╰─" : "├─"}`;
+export function treePrefix(flatNode: FlatNode, expanded: ReadonlySet<string>): string {
+  const isExpanded = flatNode.hasChildren && expanded.has(flatNode.node.id);
+  const ancestorGuides = "│ ".repeat(flatNode.depth);
+
+  // Depth-0 nodes have no parent connector. Any node that has children gets a
+  // guide column so its subtree stays connected whether it is expanded or not.
+  if (flatNode.depth === 0) {
+    return flatNode.hasChildren ? "│ " : "";
+  }
+
+  return `${ancestorGuides}${nodeConnector(flatNode.isLast, isExpanded)}`;
 }
 
 /** Keeps guide columns visible after a selected navigation label wraps. */
-export function treeContinuationPrefix({ ancestorHasNext }: FlatNode): string {
-  return `${ancestorHasNext.map((hasNext) => (hasNext ? "│ " : "  ")).join("")}  `;
+export function treeContinuationPrefix(
+  flatNode: FlatNode,
+  expanded: ReadonlySet<string>,
+): string {
+  const isExpanded = flatNode.hasChildren && expanded.has(flatNode.node.id);
+  const ancestorGuides = "│ ".repeat(flatNode.depth);
+
+  // Wrapped continuation lines are still part of this node, so they keep the
+  // node's own guide column at every depth. Depth-0 leaves have no guide
+  // column because there is no parent connector to continue.
+  const ownColumn = flatNode.depth === 0
+    ? (flatNode.hasChildren ? "│ " : "")
+    : "│ ";
+
+  // When this node is expanded, the wrapped continuation lines sit directly
+  // above its visible children, so they also carry the guide column that
+  // connects the node down to its subtree.
+  const subtreeColumn = isExpanded ? "│ " : "";
+
+  return `${ancestorGuides}${ownColumn}${subtreeColumn}  `;
 }
 
 export function terminalColumnWidth(text: string): number {

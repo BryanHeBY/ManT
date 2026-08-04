@@ -140,13 +140,7 @@ export function App({ result, onQuit }: AppProps) {
   };
 
   const selectSearchSection = (sectionId: string) => {
-    if (sectionId === DOCUMENT_ROOT_ID) {
-      setSelectedId(DOCUMENT_ROOT_ID);
-      navScrollRef.current?.scrollChildIntoView(navId(DOCUMENT_ROOT_ID));
-      return;
-    }
     setSelectedId(sectionId);
-    navScrollRef.current?.scrollChildIntoView(navId(sectionId));
   };
   const pageSearch = usePageSearch({
     rootBlocks,
@@ -173,7 +167,6 @@ export function App({ result, onQuit }: AppProps) {
   const selectSection = (id: string) => {
     setSelectedId(id);
     scrollToNode(id);
-    navScrollRef.current?.scrollChildIntoView(navId(id));
   };
 
   const selectNavigationNode = (id: string) => {
@@ -189,7 +182,6 @@ export function App({ result, onQuit }: AppProps) {
         ? contentAnchorId(node.targetId)
         : contentId(node.targetId),
     );
-    navScrollRef.current?.scrollChildIntoView(navId(id));
   };
 
   /** Follow a typed same-page reference without creating browser-like history. */
@@ -337,8 +329,9 @@ export function App({ result, onQuit }: AppProps) {
   // ── Layout synchronization effects ─────────────────────────
 
   useEffect(() => {
-    // A selected long title may grow from one row into several after React
-    // commits.  Re-run the visibility adjustment after that layout change.
+    // Keep the selected node visible whenever the selection or the visible
+    // row list changes. All rows are fixed height, so this runs after the
+    // stable row geometry is known.
     if (selectedId) navScrollRef.current?.scrollChildIntoView(navId(selectedId));
   }, [selectedId, visibleNodes]);
 

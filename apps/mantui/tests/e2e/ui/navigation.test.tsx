@@ -401,11 +401,11 @@ describe("App navigation (e2e)", () => {
 
     setup.mockInput.pressArrow("right");
     await flushKeyboard(setup);
-    expect(setup.captureCharFrame()).toContain("› ╰─· CHILD");
+    expect(setup.captureCharFrame()).toContain("› │ ╰─· CHILD");
 
     setup.mockInput.pressArrow("left");
     await flushKeyboard(setup);
-    expect(setup.captureCharFrame()).toContain("› ▾ PARENT");
+    expect(setup.captureCharFrame()).toContain("› │ ▾ PARENT");
 
     setup.renderer.destroy();
   });
@@ -460,6 +460,57 @@ describe("App navigation (e2e)", () => {
     expect(
       searchedTitleSpans.every((span) => span.bg.toInts().slice(0, 3).join(",") === "49,50,68"),
     ).toBe(true);
+
+    setup.renderer.destroy();
+  });
+
+  test("keeps tree guides continuous when expanding a wrapped selected parent", async () => {
+    const result = mockQuery("wrapped-parent", [
+      {
+        id: "top",
+        title: "TOP LEVEL",
+        blocks: [],
+        children: [
+          {
+            id: "parent",
+            title: "PARENTMARKER ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            blocks: [],
+            children: [{
+              id: "child",
+              title: "CHILD",
+              blocks: [],
+              children: [],
+            }],
+          },
+          { id: "another", title: "ANOTHER", blocks: [], children: [] },
+        ],
+      },
+      { id: "top-sibling", title: "TOP SIBLING", blocks: [], children: [] },
+    ]);
+    const setup = await renderApp(result);
+
+    // Navigate to the parent, then click it to expand while it stays selected.
+    setup.mockInput.pressKey("j");
+    await flushKeyboard(setup);
+    const parent = navPosition(setup.captureCharFrame(), "PARENTMARKER");
+    await setup.mockMouse.click(NAV_WIDTH - 3, parent.y);
+    await setup.flush();
+
+    const lines = navLines(setup.captureCharFrame());
+    const parentIndex = lines.findIndex((line) =>
+      line.includes("›") && line.includes("PARENTMARKER"),
+    );
+    const childIndex = lines.findIndex((line) => line.includes("CHILD"));
+    expect(parentIndex).toBeGreaterThanOrEqual(0);
+    expect(childIndex).toBeGreaterThan(parentIndex);
+
+    // The expanded parent draws a continuous vertical guide through its
+    // wrapped continuation lines and down to its children.
+    const continuationLine = lines.slice(parentIndex + 1, childIndex).find((line) =>
+      line.includes("ABCDEFGHIJKLM"),
+    );
+    expect(continuationLine).toContain("│ │");
+    expect(lines[childIndex]).toContain("│ │ ╰─· CHILD");
 
     setup.renderer.destroy();
   });

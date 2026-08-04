@@ -5,15 +5,14 @@
  * actions are supplied by the application controller.
  */
 
+import { useMemo } from "react";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { MantQueryBundle } from "../native";
 import { DOCUMENT_ROOT_ID, navId, TLDR_NAV_ID } from "./ids";
 import {
-  terminalColumnWidth,
-  treeContinuationPrefix,
-  treePrefix,
+  buildNavigationRows,
   type FlatNode,
-  wrapNavigationTitle,
+  type NavigationRow,
 } from "./navigation-tree";
 
 export interface ManualSidebarProps {
@@ -29,13 +28,19 @@ export interface ManualSidebarProps {
   onActivateRoot: () => void;
 }
 
-function navigationTitleColor(flatNode: FlatNode, selected: boolean): string {
+function navigationTitleColor(row: NavigationRow, selected: boolean): string {
   if (selected) return "#f5e0dc";
-  if (flatNode.node.kind === "entry-group") return "#f9e2af";
-  if (flatNode.node.kind === "option") return "#a6e3a1";
-  if (flatNode.depth === 0) return "#cdd6f4";
-  if (flatNode.depth === 1) return "#89b4fa";
+  if (row.node.kind === "entry-group") return "#f9e2af";
+  if (row.node.kind === "option") return "#a6e3a1";
+  if (row.depth === 0) return "#cdd6f4";
+  if (row.depth === 1) return "#89b4fa";
   return "#a6adc8";
+}
+
+interface RowGroup {
+  nodeId: string;
+  node: NavigationRow["node"];
+  rows: NavigationRow[];
 }
 
 /** Displays document hierarchy and preserves a continuous selected-row background. */
@@ -54,6 +59,25 @@ export function ManualSidebar({
   const visibleDocumentSections = visibleNodes.filter(
     ({ node }) => node.kind === "section",
   ).length;
+
+  const rows = useMemo(
+    () => buildNavigationRows(visibleNodes, expanded, width, selectedId),
+    [visibleNodes, expanded, width, selectedId],
+  );
+
+  const rowGroups = useMemo(() => {
+    const groups: RowGroup[] = [];
+    for (const row of rows) {
+      const last = groups[groups.length - 1];
+      if (last && last.nodeId === row.nodeId) {
+        last.rows.push(row);
+      } else {
+        groups.push({ nodeId: row.nodeId, node: row.node, rows: [row] });
+      }
+    }
+    return groups;
+  }, [rows]);
+
   return (
     <box width={width} flexDirection="column" flexShrink={0} backgroundColor="#11111b">
       <box
@@ -128,67 +152,46 @@ export function ManualSidebar({
             </text>
           </box>
         )}
-        {/* Each selected row owns one background box per wrapped line. This
-            avoids fragment-level highlights that leave tree connectors bare. */}
-        {visibleNodes.map((flatNode) => {
-          const { node, hasChildren } = flatNode;
-          const isSelected = node.id === selectedId;
-          const titleColor = navigationTitleColor(flatNode, isSelected);
-          const disclosure = hasChildren
-            ? expanded.has(node.id) ? "▾ " : "▸ "
-            : node.kind === "option" ? "◇ " : "· ";
-          const labelPrefix = `${isSelected ? "› " : "  "}${treePrefix(flatNode)}${disclosure}`;
-          const selectedTitleLines = isSelected
-            ? wrapNavigationTitle(node.title, width - 1 - terminalColumnWidth(labelPrefix))
-            : [];
+        {/* Each node is rendered as a fixed-height group of one or more rows.
+            The group owns the item background so wrapped titles stay continuous
+            and the scrollbox never sees mixed-height children. */}
+        {rowGroups.map((group) => {
+          const isSelected = group.nodeId === selectedId;
+          const titleColor = navigationTitleColor(group.rows[0]!, isSelected);
 
           return (
             <box
-              key={navId(node.id)}
-              id={navId(node.id)}
-              ref={(element) => {
-                if (element) element.onMouseDown = () => onActivateNode(node.id, hasChildren);
-              }}
+              key={navId(group.nodeId)}
+              id={navId(group.nodeId)}
               width="100%"
-              height={isSelected ? "auto" : 1}
-              flexDirection={isSelected ? "column" : "row"}
+              height={group.rows.length}
+              flexDirection="column"
               flexShrink={0}
               paddingLeft={1}
-              backgroundColor={
-                isSelected
-                  ? "#313244"
-                  : "#11111b"
-              }
+              backgroundColor={isSelected ? "#313244" : "#11111b"}
+              onMouseDown={() => onActivateNode(group.nodeId, group.node.children.length > 0)}
             >
-              {isSelected ? selectedTitleLines.map((line, index) => {
-                const prefix = index === 0
-                  ? labelPrefix
-                  : `  ${treeContinuationPrefix(flatNode)}`;
+              {group.rows.map((row) => {
+                const prefix = row.lineIndex === 0
+                  ? `${isSelected ? "› " : "  "}${row.prefix}`
+                  : `  ${row.continuationPrefix}`;
+                const prefixColor = isSelected
+                  ? row.lineIndex === 0 ? "#fab387" : "#f5c2e7"
+                  : "#6c7086";
+
                 return (
-                  <box
-                    key={`${node.id}-line-${index}`}
-                    width="100%"
+                  <text
+                    key={row.id}
                     height={1}
-                    flexDirection="row"
-                    backgroundColor="#313244"
+                    truncate={row.lineIndex === 0 && !isSelected}
+                    wrapMode="none"
+                    selectable={false}
                   >
-                    <text
-                      width={terminalColumnWidth(prefix)}
-                      fg={index === 0 ? "#fab387" : "#f5c2e7"}
-                      wrapMode="none"
-                      selectable={false}
-                    >
-                      {prefix}
-                    </text>
-                    <text fg={titleColor} wrapMode="none" selectable={false}>{line}</text>
-                  </box>
+                    <span fg={prefixColor}>{prefix}</span>
+                    <span fg={titleColor}>{row.text}</span>
+                  </text>
                 );
-              }) : (
-                <text truncate wrapMode="none" selectable={false}>
-                  <span fg="#6c7086">{labelPrefix}</span>
-                  <span fg={titleColor}>{node.title}</span>
-                </text>
-              )}
+              })}
             </box>
           );
         })}
