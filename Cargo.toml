@@ -6,6 +6,12 @@ members = [
   "crates/mant-ui",
   "crates/libmandoc-rs",
 ]
+default-members = [
+  "crates/mant-ast",
+  "crates/mant",
+  "crates/mant-core",
+  "crates/mant-ui",
+]
 resolver = "3"
 
 [workspace.package]

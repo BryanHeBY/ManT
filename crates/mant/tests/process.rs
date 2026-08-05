@@ -342,9 +342,12 @@ fn unqualified_names_prefer_registered_markdown() {
     assert_eq!(value["label"], "process-registered");
     assert_eq!(value["document"]["meta"]["title"], "Registered");
     assert_eq!(value["document"]["source"]["format"], "markdown");
+    let source_path = value["document"]["source"]["path"]
+        .as_str()
+        .expect("registered source path");
     assert_eq!(
-        value["document"]["source"]["path"],
-        path.to_str().expect("UTF-8 path")
+        fs::canonicalize(source_path).expect("canonical source path"),
+        fs::canonicalize(&path).expect("canonical fixture path")
     );
 
     fs::remove_dir_all(fixture_root).expect("remove registered document fixture");

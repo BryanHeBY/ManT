@@ -38,6 +38,11 @@ On Windows, run the portable product boundary from PowerShell:
 It tests `mant-ast`, `mant-core`, `mant-ui`, and `mant` without building the
 Unix-only `libmandoc-rs` workspace member or roff fixture suites.
 
+Those four portable crates are also the workspace `default-members`, so a bare
+`cargo build`, `cargo test`, or `cargo clippy` works on Windows. Unix verification
+deliberately passes `--workspace` to include the standalone `libmandoc-rs`
+package and its native parser tests.
+
 The script checks formatting, runs every workspace test, runs clippy with all
 targets and features, builds the optimized executable, and smoke-tests its
 human and JSON surfaces. The result is `target/release/mant`.
