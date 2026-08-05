@@ -563,8 +563,12 @@ mod tests {
         )
         .expect("clone cache");
 
+        let expected_cache = PathBuf::from("/cache").join("mant").join("tldr-pages");
         assert_eq!(result.action, TldrCacheAction::Cloned);
-        assert_eq!(result.cache_dir.as_deref(), Some("/cache/mant/tldr-pages"));
+        assert_eq!(
+            result.cache_dir.as_deref().map(Path::new),
+            Some(expected_cache.as_path())
+        );
         assert_eq!(result.revision.as_deref(), Some("abc123"));
         assert_eq!(
             *host.created.lock().expect("created lock"),

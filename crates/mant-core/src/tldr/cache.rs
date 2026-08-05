@@ -586,7 +586,7 @@ mod tests {
             .expect("cache read")
             .expect("page");
 
-            assert_eq!(page.source_path, source.to_string_lossy());
+            assert_eq!(Path::new(&page.source_path), source);
         }
     }
 
@@ -612,7 +612,7 @@ mod tests {
         .expect("cache read")
         .expect("private fallback page");
 
-        assert_eq!(page.source_path, private_page.to_string_lossy());
+        assert_eq!(Path::new(&page.source_path), private_page);
     }
 
     #[test]
@@ -661,7 +661,7 @@ mod tests {
         )
         .expect("cache read")
         .expect("page");
-        assert_eq!(page.source_path, english_linux.to_string_lossy());
+        assert_eq!(Path::new(&page.source_path), english_linux);
         assert_eq!(page.language, "en");
         assert_eq!(page.platform, "linux");
     }
@@ -682,7 +682,7 @@ mod tests {
         )
         .expect("cache read")
         .expect("page");
-        assert_eq!(page.source_path, source.to_string_lossy());
+        assert_eq!(Path::new(&page.source_path), source);
     }
 
     #[test]
