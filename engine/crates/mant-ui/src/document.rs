@@ -112,9 +112,6 @@ struct LogicalLine {
     continuation_indent: usize,
     spans: Vec<Span<'static>>,
     surface: LineSurface,
-    /// Intrinsic width shared by every row of a compact surface such as a
-    /// preformatted block. Full-width surfaces leave this unset.
-    surface_width: Option<usize>,
     wrap_mode: WrapMode,
     table_cells: Option<Vec<Vec<LogicalLine>>>,
     links: Vec<LogicalLinkRange>,
@@ -157,7 +154,6 @@ impl LogicalLine {
             continuation_indent: 0,
             spans: Vec::new(),
             surface: LineSurface::Normal,
-            surface_width: None,
             wrap_mode: WrapMode::Word,
             table_cells: None,
             links: Vec::new(),
@@ -170,7 +166,6 @@ impl LogicalLine {
             continuation_indent: indent,
             spans: vec![Span::styled(value.into(), style)],
             surface: LineSurface::Normal,
-            surface_width: None,
             wrap_mode: WrapMode::Word,
             table_cells: None,
             links: Vec::new(),
@@ -198,7 +193,6 @@ impl LogicalLine {
             continuation_indent,
             spans,
             surface: LineSurface::Normal,
-            surface_width: None,
             wrap_mode: WrapMode::Word,
             table_cells: None,
             links: Vec::new(),
@@ -211,7 +205,6 @@ impl LogicalLine {
             continuation_indent: indent,
             spans: Vec::new(),
             surface: LineSurface::Normal,
-            surface_width: None,
             wrap_mode: WrapMode::Word,
             table_cells: Some(cells),
             links: Vec::new(),
@@ -764,7 +757,6 @@ impl DocumentBuilder {
             continuation_indent: 2,
             spans,
             surface: LineSurface::Tldr,
-            surface_width: None,
             wrap_mode: WrapMode::Word,
             table_cells: None,
             links: Vec::new(),
@@ -1107,7 +1099,7 @@ impl DocumentBuilder {
         for id in inline_anchor_ids(nodes) {
             self.anchors.entry(id).or_insert(self.lines.len());
         }
-        let mut lines = styled_inline_lines(nodes, base_style)
+        let lines = styled_inline_lines(nodes, base_style)
             .into_iter()
             .map(|line| {
                 let spans = if surface == LineSurface::Code {
@@ -1120,7 +1112,6 @@ impl DocumentBuilder {
                     continuation_indent: indent,
                     spans,
                     surface,
-                    surface_width: None,
                     wrap_mode: if surface == LineSurface::Code {
                         WrapMode::Character
                     } else {
@@ -1131,20 +1122,6 @@ impl DocumentBuilder {
                 }
             })
             .collect::<Vec<_>>();
-
-        // Preformatted rows form one visual surface. Measure after syntax
-        // highlighting and tab expansion so every row uses the same compact
-        // width without inheriting the viewport width.
-        if surface == LineSurface::Code {
-            let surface_width = lines
-                .iter()
-                .map(|line| styled_cells(line).iter().map(|cell| cell.width).sum())
-                .max()
-                .unwrap_or(0);
-            for line in &mut lines {
-                line.surface_width = Some(surface_width);
-            }
-        }
 
         for line in lines {
             self.push(line);
@@ -1697,11 +1674,7 @@ fn cells_to_line(
     if let Some(color) = background {
         let content_width = cells.iter().map(|cell| cell.width).sum::<usize>();
         let fill = match line.surface {
-            LineSurface::Code => line
-                .surface_width
-                .unwrap_or(content_width)
-                .min(width.saturating_sub(indent))
-                .saturating_sub(content_width),
+            LineSurface::Code => width.saturating_sub(indent).saturating_sub(content_width),
             LineSurface::Tldr => width
                 .saturating_sub(indent + content_width)
                 .saturating_sub(4),
@@ -1998,18 +1971,19 @@ mod tests {
     }
 
     #[test]
-    fn code_surfaces_cover_only_their_content_after_the_body_indent() {
+    fn code_surfaces_fill_the_document_width_after_the_body_indent() {
         let line = LogicalLine::plain(3, "code", Style::default()).surface(LineSurface::Code);
         let rows = wrap_line(&line, 12);
 
-        assert_eq!(UnicodeWidthStr::width(rows[0].to_string().as_str()), 7);
+        assert_eq!(UnicodeWidthStr::width(rows[0].to_string().as_str()), 12);
         assert_eq!(rows[0].spans[0].content, "   ");
         assert_eq!(rows[0].spans[0].style.bg, None);
         assert_eq!(rows[0].spans[1].style.bg, Some(theme::SURFACE));
+        assert_eq!(rows[0].spans.last().expect("surface fill").content, "     ");
     }
 
     #[test]
-    fn preformatted_rows_share_one_compact_intrinsic_width() {
+    fn preformatted_rows_share_one_full_width_surface() {
         let mut builder = DocumentBuilder::new("demo".to_owned());
         builder.inline_lines_with_surface(
             &[
@@ -2033,10 +2007,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].to_string(), "   short      ");
-        assert_eq!(rows[1].to_string(), "   longer code");
-        assert_eq!(UnicodeWidthStr::width(rows[0].to_string().as_str()), 14);
-        assert_eq!(UnicodeWidthStr::width(rows[1].to_string().as_str()), 14);
+        assert!(rows[0].to_string().starts_with("   short"));
+        assert!(rows[1].to_string().starts_with("   longer code"));
+        assert_eq!(UnicodeWidthStr::width(rows[0].to_string().as_str()), 40);
+        assert_eq!(UnicodeWidthStr::width(rows[1].to_string().as_str()), 40);
         assert_eq!(rows[0].spans[0].style.bg, None);
         assert_eq!(
             rows[0].spans.last().and_then(|span| span.style.bg),
