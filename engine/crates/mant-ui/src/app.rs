@@ -205,6 +205,10 @@ impl App {
             self.handle_overlay_key(key);
             return;
         }
+        if self.search_mode.is_open() && key.code == KeyCode::F(10) {
+            self.open_menu(MenuId::File);
+            return;
+        }
         if self.search_mode.is_open() {
             self.handle_search_key(key);
             return;
@@ -221,14 +225,6 @@ impl App {
         }
         if key.code == KeyCode::Char('?') {
             self.overlay = Overlay::Help;
-            return;
-        }
-        if key.code == KeyCode::Char('n') && !self.search_matches.is_empty() {
-            self.select_search_relative(if key.modifiers.contains(KeyModifiers::SHIFT) {
-                -1
-            } else {
-                1
-            });
             return;
         }
         match key.code {
@@ -347,7 +343,6 @@ impl App {
     }
 
     fn open_menu(&mut self, id: MenuId) {
-        self.close_search();
         self.overlay = Overlay::Menu { id, cursor: 0 };
     }
 
@@ -407,7 +402,6 @@ impl App {
                 mouse.column >= start && mouse.column < end
             })
         {
-            self.close_search();
             self.overlay = if matches!(self.overlay, Overlay::Menu { id: open, .. } if open == id) {
                 Overlay::None
             } else {
@@ -460,7 +454,10 @@ impl App {
             MenuAction::Find => self.open_search(),
             MenuAction::FindNext => self.select_search_relative(1),
             MenuAction::FindPrevious => self.select_search_relative(-1),
-            MenuAction::Help => self.overlay = Overlay::Help,
+            MenuAction::Help => {
+                self.close_search();
+                self.overlay = Overlay::Help;
+            }
         }
     }
 
@@ -936,6 +933,20 @@ impl App {
                     self.refresh_search(self.last_content_area.width.max(1));
                     self.select_active_search_match();
                 }
+            }
+            KeyCode::Char('n' | 'N')
+                if !self.search_mode.is_editing()
+                    && self.search_draft == self.search_query
+                    && !self.search_matches.is_empty() =>
+            {
+                self.select_search_relative(
+                    if key.code == KeyCode::Char('N') || key.modifiers.contains(KeyModifiers::SHIFT)
+                    {
+                        -1
+                    } else {
+                        1
+                    },
+                );
             }
             KeyCode::Backspace => {
                 if let Some(previous) =
@@ -2171,6 +2182,35 @@ mod tests {
         assert_eq!(app.active_search_match, 1);
         app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         assert_eq!(app.active_search_match, 0);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::SHIFT));
+        assert_eq!(app.active_search_match, app.search_matches.len() - 1);
+    }
+
+    #[test]
+    fn search_menu_actions_keep_confirmed_results_available() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "help".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.search_matches.len() >= 2);
+
+        app.handle_key(KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE));
+        for _ in 0..3 {
+            app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert_eq!(app.overlay, Overlay::None);
+        assert!(app.search_mode.is_open());
+        assert_eq!(app.active_search_match, app.search_matches.len() - 1);
     }
 
     #[test]
