@@ -62,6 +62,31 @@ enum SearchMode {
     Open { editing: bool },
 }
 
+#[derive(Debug)]
+struct SearchState {
+    mode: SearchMode,
+    draft: String,
+    cursor: usize,
+    query: String,
+    matches: Vec<RenderedSearchMatch>,
+    active_match: usize,
+    render_width: u16,
+}
+
+impl Default for SearchState {
+    fn default() -> Self {
+        Self {
+            mode: SearchMode::Closed,
+            draft: String::new(),
+            cursor: 0,
+            query: String::new(),
+            matches: Vec::new(),
+            active_match: 0,
+            render_width: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Overlay {
     None,
@@ -121,13 +146,7 @@ pub struct App {
     sidebar_width: u16,
     show_sidebar: bool,
     quit: bool,
-    search_mode: SearchMode,
-    search_draft: String,
-    search_cursor: usize,
-    search_query: String,
-    search_matches: Vec<RenderedSearchMatch>,
-    active_search_match: usize,
-    search_width: u16,
+    search: SearchState,
     overlay: Overlay,
     pointer_drag: PointerDrag,
     geometry: FrameGeometry,
@@ -157,13 +176,7 @@ impl App {
             sidebar_width: DEFAULT_SIDEBAR_WIDTH,
             show_sidebar: true,
             quit: false,
-            search_mode: SearchMode::Closed,
-            search_draft: String::new(),
-            search_cursor: 0,
-            search_query: String::new(),
-            search_matches: Vec::new(),
-            active_search_match: 0,
-            search_width: 0,
+            search: SearchState::default(),
             overlay: Overlay::None,
             pointer_drag: PointerDrag::None,
             geometry: FrameGeometry::default(),
@@ -220,11 +233,11 @@ impl App {
             self.handle_overlay_key(key);
             return UpdateOutcome::Redraw;
         }
-        if self.search_mode.is_open() && key.code == KeyCode::F(10) {
+        if self.search.mode.is_open() && key.code == KeyCode::F(10) {
             self.open_menu(MenuId::File);
             return UpdateOutcome::Redraw;
         }
-        if self.search_mode.is_open() {
+        if self.search.mode.is_open() {
             self.handle_search_key(key);
             return UpdateOutcome::Redraw;
         }
@@ -281,7 +294,7 @@ impl App {
         }
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
-                if self.search_mode.is_open()
+                if self.search.mode.is_open()
                     && self
                         .geometry
                         .status
@@ -468,7 +481,7 @@ impl App {
             }
             self.draw_content(frame, body_area);
         }
-        if self.search_mode.is_open() {
+        if self.search.mode.is_open() {
             self.draw_search(frame, status_area);
         } else {
             self.draw_status(frame, status_area);
@@ -905,7 +918,7 @@ impl App {
         self.rendered_cache
             .entry(render_width)
             .or_insert_with(|| self.document.render(render_width));
-        if !self.search_query.is_empty() && self.search_width != render_width {
+        if !self.search.query.is_empty() && self.search.render_width != render_width {
             self.refresh_search(render_width);
         }
         let rendered = &self.rendered_cache[&render_width];
@@ -922,16 +935,16 @@ impl App {
         let virtual_rows = virtual_content_rows(rendered.row_count, viewport_height);
         let maximum = virtual_rows.saturating_sub(viewport_height);
         self.content_scroll = self.content_scroll.min(maximum);
-        let matches = if self.search_query.is_empty() {
+        let matches = if self.search.query.is_empty() {
             &[]
         } else {
-            self.search_matches.as_slice()
+            self.search.matches.as_slice()
         };
         let text = rendered.viewport_text(
             self.content_scroll,
             viewport_height,
             matches,
-            (!matches.is_empty()).then_some(self.active_search_match),
+            (!matches.is_empty()).then_some(self.search.active_match),
         );
         frame.render_widget(
             Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),
@@ -973,11 +986,11 @@ impl App {
             .style(style.fg(theme::TEXT)),
             area,
         );
-        let suffix = if !self.search_query.is_empty() && !self.search_matches.is_empty() {
+        let suffix = if !self.search.query.is_empty() && !self.search.matches.is_empty() {
             format!(
                 "Find “{}” · {} matches ",
-                self.search_query,
-                self.search_matches.len()
+                self.search.query,
+                self.search.matches.len()
             )
         } else if self.document.has_tldr() {
             format!("{} visible sections · TLDR ", self.visible_section_count())
@@ -995,11 +1008,11 @@ impl App {
     fn draw_search(&self, frame: &mut Frame<'_>, area: Rect) {
         let style = Style::default().bg(theme::MENU);
         frame.render_widget(Block::default().style(style), area);
-        let (before_cursor, after_cursor) = self.search_draft.split_at(self.search_cursor);
+        let (before_cursor, after_cursor) = self.search.draft.split_at(self.search.cursor);
         let cursor_character = after_cursor.chars().next();
         let cursor_bytes = cursor_character.map_or(0, char::len_utf8);
         let after_cursor = &after_cursor[cursor_bytes..];
-        let prompt = format!(" Find: {}", self.search_draft);
+        let prompt = format!(" Find: {}", self.search.draft);
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(" Find: ", style.fg(theme::YELLOW)),
@@ -1018,22 +1031,22 @@ impl App {
             ])),
             area,
         );
-        let suffix = if !self.search_mode.is_editing() && !self.search_query.is_empty() {
-            if self.search_matches.is_empty() {
+        let suffix = if !self.search.mode.is_editing() && !self.search.query.is_empty() {
+            if self.search.matches.is_empty() {
                 " No matches · Edit query · Esc close ".to_owned()
             } else {
                 format!(
                     " {}/{} · Enter next · Esc close ",
-                    self.active_search_match + 1,
-                    self.search_matches.len()
+                    self.search.active_match + 1,
+                    self.search.matches.len()
                 )
             }
         } else {
             " Enter search · Esc cancel ".to_owned()
         };
-        let suffix_style = if self.search_matches.is_empty()
-            && !self.search_mode.is_editing()
-            && !self.search_query.is_empty()
+        let suffix_style = if self.search.matches.is_empty()
+            && !self.search.mode.is_editing()
+            && !self.search.query.is_empty()
         {
             style
                 .fg(theme::BASE)
@@ -1071,38 +1084,32 @@ impl App {
     }
 
     fn open_search(&mut self) {
-        self.search_mode = SearchMode::Open { editing: false };
-        self.search_draft.clone_from(&self.search_query);
-        self.search_cursor = self.search_draft.len();
+        self.search.mode = SearchMode::Open { editing: false };
+        self.search.draft.clone_from(&self.search.query);
+        self.search.cursor = self.search.draft.len();
     }
 
     fn close_search(&mut self) {
-        self.search_mode = SearchMode::Closed;
-        self.search_draft.clear();
-        self.search_cursor = 0;
-        self.search_query.clear();
-        self.search_matches.clear();
-        self.active_search_match = 0;
-        self.search_width = 0;
+        self.search = SearchState::default();
     }
 
     fn handle_search_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => self.close_search(),
             KeyCode::Enter => {
-                if !self.search_mode.is_editing() && self.search_draft == self.search_query {
+                if !self.search.mode.is_editing() && self.search.draft == self.search.query {
                     self.select_search_relative(1);
                 } else {
-                    self.search_query.clone_from(&self.search_draft);
-                    self.search_mode = SearchMode::Open { editing: false };
+                    self.search.query.clone_from(&self.search.draft);
+                    self.search.mode = SearchMode::Open { editing: false };
                     self.refresh_search(self.geometry.content.width.max(1));
                     self.select_active_search_match();
                 }
             }
             KeyCode::Char('n' | 'N')
-                if !self.search_mode.is_editing()
-                    && self.search_draft == self.search_query
-                    && !self.search_matches.is_empty() =>
+                if !self.search.mode.is_editing()
+                    && self.search.draft == self.search.query
+                    && !self.search.matches.is_empty() =>
             {
                 self.select_search_relative(
                     if key.code == KeyCode::Char('N') || key.modifiers.contains(KeyModifiers::SHIFT)
@@ -1115,50 +1122,50 @@ impl App {
             }
             KeyCode::Backspace => {
                 if let Some(previous) =
-                    previous_char_boundary(&self.search_draft, self.search_cursor)
+                    previous_char_boundary(&self.search.draft, self.search.cursor)
                 {
-                    self.search_draft.drain(previous..self.search_cursor);
-                    self.search_cursor = previous;
-                    self.search_mode = SearchMode::Open { editing: true };
+                    self.search.draft.drain(previous..self.search.cursor);
+                    self.search.cursor = previous;
+                    self.search.mode = SearchMode::Open { editing: true };
                 }
             }
             KeyCode::Delete => {
-                if let Some(next) = next_char_boundary(&self.search_draft, self.search_cursor) {
-                    self.search_draft.drain(self.search_cursor..next);
-                    self.search_mode = SearchMode::Open { editing: true };
+                if let Some(next) = next_char_boundary(&self.search.draft, self.search.cursor) {
+                    self.search.draft.drain(self.search.cursor..next);
+                    self.search.mode = SearchMode::Open { editing: true };
                 }
             }
             KeyCode::Left => {
-                self.search_cursor = previous_char_boundary(&self.search_draft, self.search_cursor)
+                self.search.cursor = previous_char_boundary(&self.search.draft, self.search.cursor)
                     .unwrap_or_default();
             }
             KeyCode::Right => {
-                self.search_cursor = next_char_boundary(&self.search_draft, self.search_cursor)
-                    .unwrap_or(self.search_draft.len());
+                self.search.cursor = next_char_boundary(&self.search.draft, self.search.cursor)
+                    .unwrap_or(self.search.draft.len());
             }
-            KeyCode::Home => self.search_cursor = 0,
-            KeyCode::End => self.search_cursor = self.search_draft.len(),
+            KeyCode::Home => self.search.cursor = 0,
+            KeyCode::End => self.search.cursor = self.search.draft.len(),
             KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.search_cursor = 0;
+                self.search.cursor = 0;
             }
             KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.search_cursor = self.search_draft.len();
+                self.search.cursor = self.search.draft.len();
             }
             KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.search_draft.clear();
-                self.search_cursor = 0;
-                self.search_mode = SearchMode::Open { editing: true };
+                self.search.draft.clear();
+                self.search.cursor = 0;
+                self.search.mode = SearchMode::Open { editing: true };
             }
-            KeyCode::Down if !self.search_mode.is_editing() => self.select_search_relative(1),
-            KeyCode::Up if !self.search_mode.is_editing() => self.select_search_relative(-1),
+            KeyCode::Down if !self.search.mode.is_editing() => self.select_search_relative(1),
+            KeyCode::Up if !self.search.mode.is_editing() => self.select_search_relative(-1),
             KeyCode::Char(character)
                 if !key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                self.search_draft.insert(self.search_cursor, character);
-                self.search_cursor += character.len_utf8();
-                self.search_mode = SearchMode::Open { editing: true };
+                self.search.draft.insert(self.search.cursor, character);
+                self.search.cursor += character.len_utf8();
+                self.search.mode = SearchMode::Open { editing: true };
             }
             _ => {}
         }
@@ -1169,26 +1176,27 @@ impl App {
             .rendered_cache
             .entry(width)
             .or_insert_with(|| self.document.render(width));
-        self.search_matches = rendered.search(&self.search_query);
-        self.active_search_match = self
-            .active_search_match
-            .min(self.search_matches.len().saturating_sub(1));
-        self.search_width = width;
+        self.search.matches = rendered.search(&self.search.query);
+        self.search.active_match = self
+            .search
+            .active_match
+            .min(self.search.matches.len().saturating_sub(1));
+        self.search.render_width = width;
     }
 
     fn select_search_relative(&mut self, delta: isize) {
-        if self.search_matches.is_empty() {
+        if self.search.matches.is_empty() {
             return;
         }
-        let length = isize::try_from(self.search_matches.len()).unwrap_or(isize::MAX);
-        let current = isize::try_from(self.active_search_match).unwrap_or_default();
-        self.active_search_match =
+        let length = isize::try_from(self.search.matches.len()).unwrap_or(isize::MAX);
+        let current = isize::try_from(self.search.active_match).unwrap_or_default();
+        self.search.active_match =
             usize::try_from((current + delta).rem_euclid(length)).unwrap_or_default();
         self.select_active_search_match();
     }
 
     fn select_active_search_match(&mut self) {
-        let Some(search_match) = self.search_matches.get(self.active_search_match).cloned() else {
+        let Some(search_match) = self.search.matches.get(self.search.active_match).cloned() else {
             return;
         };
         self.content_scroll = search_match.row;
@@ -1307,7 +1315,7 @@ impl App {
         let text_column = usize::from(
             column.saturating_sub(self.geometry.status.x.saturating_add(SEARCH_PREFIX_WIDTH)),
         );
-        self.search_cursor = cursor_byte_at_column(&self.search_draft, text_column);
+        self.search.cursor = cursor_byte_at_column(&self.search.draft, text_column);
     }
 
     fn jump_content(&mut self, end: bool) {
@@ -2279,18 +2287,18 @@ mod tests {
         for character in "show".chars() {
             app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
-        assert!(app.search_matches.is_empty());
-        assert!(app.search_mode.is_editing());
+        assert!(app.search.matches.is_empty());
+        assert!(app.search.mode.is_editing());
 
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert_eq!(app.search_query, "show");
-        assert_eq!(app.search_matches.len(), 1);
-        assert!(!app.search_mode.is_editing());
+        assert_eq!(app.search.query, "show");
+        assert_eq!(app.search.matches.len(), 1);
+        assert!(!app.search.mode.is_editing());
 
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert_eq!(app.search_mode, SearchMode::Closed);
-        assert!(app.search_query.is_empty());
-        assert!(app.search_matches.is_empty());
+        assert_eq!(app.search.mode, SearchMode::Closed);
+        assert!(app.search.query.is_empty());
+        assert!(app.search.matches.is_empty());
     }
 
     #[test]
@@ -2512,8 +2520,8 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
 
-        assert_eq!(app.search_draft, "ac界");
-        assert_eq!(app.search_cursor, 2);
+        assert_eq!(app.search.draft, "ac界");
+        assert_eq!(app.search.cursor, 2);
     }
 
     #[test]
@@ -2535,8 +2543,8 @@ mod tests {
         });
         app.handle_key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
 
-        assert_eq!(app.search_draft, "aXb界");
-        assert_eq!(app.search_cursor, 2);
+        assert_eq!(app.search.draft, "aXb界");
+        assert_eq!(app.search.cursor, 2);
     }
 
     #[test]
@@ -2550,15 +2558,15 @@ mod tests {
             app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(app.search_matches.len() >= 2);
+        assert!(app.search.matches.len() >= 2);
 
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        assert_eq!(app.active_search_match, 1);
+        assert_eq!(app.search.active_match, 1);
         app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-        assert_eq!(app.active_search_match, 0);
+        assert_eq!(app.search.active_match, 0);
 
         app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::SHIFT));
-        assert_eq!(app.active_search_match, app.search_matches.len() - 1);
+        assert_eq!(app.search.active_match, app.search.matches.len() - 1);
     }
 
     #[test]
@@ -2572,7 +2580,7 @@ mod tests {
             app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(app.search_matches.len() >= 2);
+        assert!(app.search.matches.len() >= 2);
 
         app.handle_key(KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE));
         for _ in 0..3 {
@@ -2583,7 +2591,7 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
         assert_eq!(app.overlay, Overlay::None);
-        assert!(app.search_mode.is_open());
-        assert_eq!(app.active_search_match, app.search_matches.len() - 1);
+        assert!(app.search.mode.is_open());
+        assert_eq!(app.search.active_match, app.search.matches.len() - 1);
     }
 }
