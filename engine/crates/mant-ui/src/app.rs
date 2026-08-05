@@ -84,11 +84,7 @@ enum Overlay {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PointerDrag {
     None,
-    /// Preview the divider without invalidating the committed document layout.
-    /// The pane width changes once, when the pointer is released.
-    Sidebar {
-        preview_width: u16,
-    },
+    Sidebar,
     NavigationScrollbar(ScrollbarDrag),
     ContentScrollbar(ScrollbarDrag),
 }
@@ -158,6 +154,7 @@ pub struct App {
     last_status_area: Rect,
     last_navigation_rows: Vec<usize>,
     navigation_sync_deadline: Option<Instant>,
+    content_render_width: u16,
     rendered_cache: HashMap<u16, RenderedDocument>,
 }
 
@@ -199,6 +196,7 @@ impl App {
             last_status_area: Rect::default(),
             last_navigation_rows: Vec::new(),
             navigation_sync_deadline: None,
+            content_render_width: 0,
             rendered_cache: HashMap::new(),
         }
     }
@@ -356,9 +354,7 @@ impl App {
             MouseEventKind::Down(MouseButton::Left)
                 if self.is_sidebar_boundary(mouse.column, mouse.row) =>
             {
-                self.pointer_drag = PointerDrag::Sidebar {
-                    preview_width: self.sidebar_width,
-                };
+                self.pointer_drag = PointerDrag::Sidebar;
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
@@ -372,7 +368,7 @@ impl App {
                 self.pointer_drag = PointerDrag::ContentScrollbar(drag);
             }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
-                PointerDrag::Sidebar { .. } => self.preview_sidebar_at(mouse.column),
+                PointerDrag::Sidebar => self.commit_sidebar_at(mouse.column),
                 PointerDrag::NavigationScrollbar(drag) => {
                     self.scroll_navigation_to_pointer(mouse.row, drag);
                 }
@@ -383,7 +379,7 @@ impl App {
             },
             MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
                 match self.pointer_drag {
-                    PointerDrag::Sidebar { .. } => self.commit_sidebar_at(mouse.column),
+                    PointerDrag::Sidebar => self.commit_sidebar_at(mouse.column),
                     PointerDrag::NavigationScrollbar(drag) => {
                         self.scroll_navigation_to_pointer(mouse.row, drag);
                     }
@@ -431,13 +427,12 @@ impl App {
             self.last_navigation_rows.clear();
             if matches!(
                 self.pointer_drag,
-                PointerDrag::Sidebar { .. } | PointerDrag::NavigationScrollbar(_)
+                PointerDrag::Sidebar | PointerDrag::NavigationScrollbar(_)
             ) {
                 self.pointer_drag = PointerDrag::None;
             }
             self.draw_content(frame, body_area);
         }
-        self.draw_sidebar_resize_preview(frame);
         if self.search_mode.is_open() {
             self.draw_search(frame, status_area);
         } else {
@@ -733,28 +728,6 @@ impl App {
         );
     }
 
-    fn draw_sidebar_resize_preview(&self, frame: &mut Frame<'_>) {
-        let PointerDrag::Sidebar { preview_width } = self.pointer_drag else {
-            return;
-        };
-        let x = self.last_body_area.x.saturating_add(preview_width);
-        if x >= self.last_body_area.right() {
-            return;
-        }
-        frame.render_widget(
-            Block::default()
-                .borders(Borders::LEFT)
-                .border_style(Style::default().fg(theme::BORDER))
-                .style(Style::default().bg(theme::SIDEBAR)),
-            Rect::new(
-                x,
-                self.last_body_area.y,
-                SIDEBAR_SPLITTER_WIDTH,
-                self.last_body_area.height,
-            ),
-        );
-    }
-
     fn draw_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(
             Block::default().style(Style::default().bg(theme::SIDEBAR)),
@@ -886,6 +859,14 @@ impl App {
         };
         self.last_content_area = document_area;
         let render_width = document_area.width.max(1);
+        let viewport_anchor = (self.content_render_width != 0
+            && self.content_render_width != render_width)
+            .then(|| {
+                self.rendered_cache
+                    .get(&self.content_render_width)
+                    .and_then(|rendered| rendered.viewport_anchor(self.content_scroll))
+            })
+            .flatten();
         self.rendered_cache
             .entry(render_width)
             .or_insert_with(|| self.document.render(render_width));
@@ -893,6 +874,12 @@ impl App {
             self.refresh_search(render_width);
         }
         let rendered = &self.rendered_cache[&render_width];
+        if let Some(anchor) = viewport_anchor
+            && let Some(row) = rendered.row_for_viewport_anchor(anchor)
+        {
+            self.content_scroll = row;
+        }
+        self.content_render_width = render_width;
         // Keep enough virtual trailing space for every addressable row,
         // including the final section heading, to become the viewport's first
         // line. The previous OpenTUI frontend achieved this with a terminal-
@@ -1319,13 +1306,6 @@ impl App {
         column
             .saturating_sub(self.last_body_area.x)
             .clamp(MIN_SIDEBAR_WIDTH, maximum.max(MIN_SIDEBAR_WIDTH))
-    }
-
-    fn preview_sidebar_at(&mut self, column: u16) {
-        let width = self.sidebar_width_at(column);
-        if let PointerDrag::Sidebar { preview_width } = &mut self.pointer_drag {
-            *preview_width = width;
-        }
     }
 
     fn commit_sidebar_at(&mut self, column: u16) {
@@ -2080,7 +2060,6 @@ mod tests {
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
         let initial_render_width = app.last_content_area.width;
-        let initial_cached_widths = app.rendered_cache.keys().copied().collect::<HashSet<_>>();
         let boundary = app.last_sidebar_splitter.x;
         let splitter_row = app.last_sidebar_splitter.y;
         assert_eq!(boundary, DEFAULT_SIDEBAR_WIDTH);
@@ -2094,12 +2073,7 @@ mod tests {
             row: 8,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(
-            app.pointer_drag,
-            PointerDrag::Sidebar {
-                preview_width: DEFAULT_SIDEBAR_WIDTH
-            }
-        );
+        assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),
             column: 40,
@@ -2109,20 +2083,12 @@ mod tests {
         terminal
             .draw(|frame| app.draw(frame))
             .expect("draw intermediate width");
-        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
-        assert_eq!(app.pointer_drag, PointerDrag::Sidebar { preview_width: 40 });
-        assert_eq!(
-            terminal
-                .backend()
-                .buffer()
-                .cell((40, 8))
-                .expect("resize preview")
-                .symbol(),
-            "│"
-        );
+        assert_eq!(app.sidebar_width, 40);
+        assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
+        assert_ne!(app.last_content_area.width, initial_render_width);
         assert_eq!(
             app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
-            initial_cached_widths
+            HashSet::from([app.last_content_area.width])
         );
 
         app.handle_mouse(MouseEvent {
@@ -2133,12 +2099,12 @@ mod tests {
         });
         terminal
             .draw(|frame| app.draw(frame))
-            .expect("draw final preview width");
-        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
-        assert_eq!(app.pointer_drag, PointerDrag::Sidebar { preview_width: 44 });
+            .expect("draw final live width");
+        assert_eq!(app.sidebar_width, 44);
+        assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
         assert_eq!(
             app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
-            initial_cached_widths
+            HashSet::from([app.last_content_area.width])
         );
 
         app.handle_mouse(MouseEvent {
@@ -2150,13 +2116,73 @@ mod tests {
 
         assert_eq!(app.sidebar_width, 44);
         assert_eq!(app.pointer_drag, PointerDrag::None);
+    }
+
+    #[test]
+    fn live_sidebar_resize_keeps_the_visible_code_logically_anchored() {
+        let mut bundle = navigation_bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![
+            AstBlock::Paragraph {
+                children: vec![Inline::Text {
+                    value: "A long paragraph before the example repeats enough words to wrap very differently when the content pane changes width. ".repeat(8),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            },
+            AstBlock::Preformatted {
+                children: vec![Inline::Text {
+                    value: "sentinel_code_block();".to_owned(),
+                }],
+                language: None,
+                layout: LayoutHint::default(),
+                source: None,
+            },
+        ];
+        let backend = TestBackend::new(100, 12);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&bundle);
         terminal
             .draw(|frame| app.draw(frame))
-            .expect("draw committed width");
-        assert_ne!(app.last_content_area.width, initial_render_width);
+            .expect("initial draw");
+
+        let initial_width = app.last_content_area.width;
+        let initial_rendered = &app.rendered_cache[&initial_width];
+        let code_row = initial_rendered.search("sentinel_code_block")[0].row;
+        let logical_anchor = initial_rendered
+            .viewport_anchor(code_row)
+            .expect("code viewport anchor");
+        app.content_scroll = code_row;
+
+        let boundary = app.last_sidebar_splitter.x;
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: boundary,
+            row: 6,
+            modifiers: KeyModifiers::NONE,
+        });
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 50,
+            row: 6,
+            modifiers: KeyModifiers::NONE,
+        });
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("resized draw");
+
+        let resized = &app.rendered_cache[&app.last_content_area.width];
         assert_eq!(
-            app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
-            HashSet::from([app.last_content_area.width])
+            app.content_scroll,
+            resized
+                .row_for_viewport_anchor(logical_anchor)
+                .expect("resized code anchor")
+        );
+        assert!(
+            resized
+                .viewport_text(app.content_scroll, 1, &[], None)
+                .lines[0]
+                .to_string()
+                .contains("sentinel_code_block")
         );
     }
 

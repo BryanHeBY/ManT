@@ -64,6 +64,8 @@ pub struct DocumentView {
 pub struct RenderedDocument {
     pub text: Text<'static>,
     pub row_count: usize,
+    /// First visual row for each logical source row, followed by one sentinel.
+    logical_rows: Vec<usize>,
     anchor_rows: HashMap<String, usize>,
     links: Vec<RenderedLinkRegion>,
     search_records: Vec<RenderedSearchRecord>,
@@ -368,6 +370,7 @@ impl DocumentView {
         RenderedDocument {
             row_count: rows.len(),
             text: Text::from(rows),
+            logical_rows,
             anchor_rows,
             links,
             search_records,
@@ -379,6 +382,28 @@ impl RenderedDocument {
     #[must_use]
     pub fn anchor_row(&self, id: &str) -> Option<usize> {
         self.anchor_rows.get(id).copied()
+    }
+
+    pub(crate) fn viewport_anchor(&self, row: usize) -> Option<(usize, usize)> {
+        if self.logical_rows.len() < 2 {
+            return None;
+        }
+        let logical_line = self
+            .logical_rows
+            .partition_point(|start| *start <= row)
+            .saturating_sub(1)
+            .min(self.logical_rows.len() - 2);
+        Some((
+            logical_line,
+            row.saturating_sub(self.logical_rows[logical_line]),
+        ))
+    }
+
+    pub(crate) fn row_for_viewport_anchor(&self, anchor: (usize, usize)) -> Option<usize> {
+        let (logical_line, wrapped_offset) = anchor;
+        let start = *self.logical_rows.get(logical_line)?;
+        let end = *self.logical_rows.get(logical_line + 1)?;
+        Some(start + wrapped_offset.min(end.saturating_sub(start).saturating_sub(1)))
     }
 
     #[must_use]
@@ -2416,6 +2441,7 @@ mod tests {
         let rendered = RenderedDocument {
             text: Text::from(Line::from("İstanbul")),
             row_count: 1,
+            logical_rows: vec![0, 1],
             anchor_rows: HashMap::new(),
             links: Vec::new(),
             search_records: vec![RenderedSearchRecord {
@@ -2553,12 +2579,17 @@ mod tests {
                 layout: LayoutHint::default(),
                 source: None,
             }];
-        let rendered = DocumentView::new(&bundle).render(10);
+        let view = DocumentView::new(&bundle);
+        for width in [1, 2, 4, 10] {
+            let rendered = view.render(width);
+            let matches = rendered.search("ghijkl");
 
-        let matches = rendered.search("ghijkl");
-
-        assert_eq!(matches.len(), 1);
-        assert!(!matches[0].additional_fragments.is_empty());
+            assert_eq!(matches.len(), 1, "lost code at width {width}");
+            assert!(
+                !matches[0].additional_fragments.is_empty(),
+                "code did not wrap at width {width}"
+            );
+        }
     }
 
     #[test]
