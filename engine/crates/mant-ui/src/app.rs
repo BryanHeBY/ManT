@@ -599,9 +599,7 @@ impl App {
             Overlay::None => {}
             Overlay::Menu { id, cursor } => {
                 let entries = menu_entries(id);
-                let height = u16::try_from(entries.len())
-                    .unwrap_or_default()
-                    .saturating_add(1);
+                let height = u16::try_from(entries.len()).unwrap_or_default();
                 let area = Rect::new(
                     id.left().min(frame.area().width.saturating_sub(1)),
                     1,
@@ -610,18 +608,13 @@ impl App {
                 );
                 frame.render_widget(Clear, area);
                 frame.render_widget(
-                    Block::default()
-                        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
-                        .border_style(Style::default().fg(theme::OVERLAY))
-                        .style(Style::default().bg(theme::BASE)),
+                    Block::default().style(Style::default().bg(theme::BASE)),
                     area,
                 );
-                let inner = Rect::new(
-                    area.x.saturating_add(1),
-                    area.y,
-                    area.width.saturating_sub(2),
-                    area.height.saturating_sub(1),
-                );
+                let inner = area.inner(Margin {
+                    horizontal: 1,
+                    vertical: 0,
+                });
                 for (index, entry) in entries.iter().enumerate().take(usize::from(inner.height)) {
                     let row = Rect::new(
                         inner.x,
@@ -710,12 +703,26 @@ impl App {
     }
 
     fn draw_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        let sidebar = Block::default()
-            .borders(Borders::RIGHT)
-            .border_style(Style::default().fg(theme::BORDER))
-            .style(Style::default().bg(theme::SIDEBAR));
-        let inner = sidebar.inner(area);
-        frame.render_widget(sidebar, area);
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme::SIDEBAR)),
+            area,
+        );
+        let resize_handle = Rect::new(
+            area.right().saturating_sub(1),
+            area.y,
+            u16::from(area.width > 0),
+            area.height,
+        );
+        frame.render_widget(
+            Block::default().style(Style::default().bg(theme::RESIZE_HANDLE)),
+            resize_handle,
+        );
+        let inner = Rect::new(
+            area.x,
+            area.y,
+            area.width.saturating_sub(resize_handle.width),
+            area.height,
+        );
         let [header_area, section_label_area, navigation_area] = Layout::vertical([
             Constraint::Length(3),
             Constraint::Length(1),
@@ -1692,7 +1699,7 @@ mod tests {
 
     #[test]
     fn overflowing_navigation_exposes_a_scrollbar() {
-        let backend = TestBackend::new(80, 7);
+        let backend = TestBackend::new(80, 8);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
 
@@ -1705,7 +1712,28 @@ mod tests {
                     .backend()
                     .buffer()
                     .cell((scrollbar_column, row))
-                    .is_some_and(|cell| cell.symbol() == "█")
+                    .is_some_and(|cell| cell.bg == theme::SCROLLBAR_THUMB)
+            })
+        );
+        let resize_column = app.last_navigation_area.right();
+        assert!(
+            (app.last_navigation_area.y..app.last_navigation_area.bottom()).all(|row| {
+                terminal
+                    .backend()
+                    .buffer()
+                    .cell((resize_column, row))
+                    .is_some_and(|cell| cell.symbol() == " " && cell.bg == theme::RESIZE_HANDLE)
+            })
+        );
+        assert_ne!(theme::RESIZE_HANDLE, theme::SCROLLBAR_TRACK);
+        assert_ne!(theme::RESIZE_HANDLE, theme::SCROLLBAR_THUMB);
+        assert!(
+            (app.last_navigation_area.y..app.last_navigation_area.bottom()).any(|row| {
+                terminal
+                    .backend()
+                    .buffer()
+                    .cell((scrollbar_column, row))
+                    .is_some_and(|cell| cell.bg == theme::SCROLLBAR_TRACK)
             })
         );
     }
@@ -1784,6 +1812,20 @@ mod tests {
         assert_eq!(
             buffer.cell((0, 1)).expect("sidebar cell").bg,
             theme::SIDEBAR
+        );
+        assert_eq!(
+            buffer
+                .cell((DEFAULT_SIDEBAR_WIDTH - 1, 1))
+                .expect("borderless sidebar edge")
+                .symbol(),
+            " "
+        );
+        assert_eq!(
+            buffer
+                .cell((DEFAULT_SIDEBAR_WIDTH - 1, 1))
+                .expect("resize handle")
+                .bg,
+            theme::RESIZE_HANDLE
         );
         assert_eq!(
             buffer.cell((0, 5)).expect("selected tldr navigation").bg,
@@ -2032,6 +2074,15 @@ mod tests {
                 .backend()
                 .to_string()
                 .contains("Reset Sidebar Width")
+        );
+        assert_eq!(
+            terminal
+                .backend()
+                .buffer()
+                .cell((MenuId::View.left(), 1))
+                .expect("borderless menu edge")
+                .symbol(),
+            " "
         );
 
         app.handle_mouse(MouseEvent {

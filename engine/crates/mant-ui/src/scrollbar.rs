@@ -94,6 +94,12 @@ impl VerticalScrollbar {
     }
 
     pub(crate) fn render(self, frame: &mut Frame<'_>) {
+        for row in self.area.y..self.area.bottom() {
+            if let Some(cell) = frame.buffer_mut().cell_mut((self.area.x, row)) {
+                cell.set_symbol(" ").set_bg(theme::SCROLLBAR_TRACK);
+            }
+        }
+
         let (thumb_start, thumb_length) = self.thumb_geometry();
         let first_row = self.area.y.saturating_add(thumb_start);
         for offset in 0..thumb_length {
@@ -101,7 +107,7 @@ impl VerticalScrollbar {
                 .buffer_mut()
                 .cell_mut((self.area.x, first_row.saturating_add(offset)))
             {
-                cell.set_symbol("█").set_fg(theme::OVERLAY);
+                cell.set_symbol(" ").set_bg(theme::SCROLLBAR_THUMB);
             }
         }
     }
@@ -138,7 +144,8 @@ const fn rounding_divide(numerator: usize, denominator: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::VerticalScrollbar;
-    use ratatui::layout::Rect;
+    use crate::theme;
+    use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
     #[test]
     fn thumb_reaches_both_ends_of_the_track() {
@@ -176,5 +183,28 @@ mod tests {
         );
         assert!(position > 0);
         assert!(position < scrollbar.maximum());
+    }
+
+    #[test]
+    fn track_and_thumb_use_distinct_background_colours() {
+        let backend = TestBackend::new(12, 8);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let scrollbar =
+            VerticalScrollbar::new(Rect::new(0, 0, 12, 8), 32, 8, 0).expect("scrollbar");
+
+        terminal
+            .draw(|frame| scrollbar.render(frame))
+            .expect("draw scrollbar");
+        let buffer = terminal.backend().buffer();
+
+        assert_eq!(
+            buffer.cell((11, 0)).expect("thumb").bg,
+            theme::SCROLLBAR_THUMB
+        );
+        assert_eq!(
+            buffer.cell((11, 7)).expect("track").bg,
+            theme::SCROLLBAR_TRACK
+        );
+        assert_ne!(theme::SCROLLBAR_THUMB, theme::SCROLLBAR_TRACK);
     }
 }
