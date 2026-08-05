@@ -84,11 +84,10 @@ enum Overlay {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PointerDrag {
     None,
-    /// Keep using the last committed document width while the divider moves.
-    /// Reflowing a large manual for every intermediate mouse column makes the
-    /// pointer lag behind; the final width is committed on button release.
+    /// Preview the divider without invalidating the committed document layout.
+    /// The pane width changes once, when the pointer is released.
     Sidebar {
-        render_width: u16,
+        preview_width: u16,
     },
     NavigationScrollbar(ScrollbarDrag),
     ContentScrollbar(ScrollbarDrag),
@@ -358,7 +357,7 @@ impl App {
                 if self.is_sidebar_boundary(mouse.column, mouse.row) =>
             {
                 self.pointer_drag = PointerDrag::Sidebar {
-                    render_width: self.last_content_area.width.max(1),
+                    preview_width: self.sidebar_width,
                 };
             }
             MouseEventKind::Down(MouseButton::Left)
@@ -373,7 +372,7 @@ impl App {
                 self.pointer_drag = PointerDrag::ContentScrollbar(drag);
             }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
-                PointerDrag::Sidebar { .. } => self.resize_sidebar_to(mouse.column),
+                PointerDrag::Sidebar { .. } => self.preview_sidebar_at(mouse.column),
                 PointerDrag::NavigationScrollbar(drag) => {
                     self.scroll_navigation_to_pointer(mouse.row, drag);
                 }
@@ -384,7 +383,7 @@ impl App {
             },
             MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
                 match self.pointer_drag {
-                    PointerDrag::Sidebar { .. } => self.resize_sidebar_to(mouse.column),
+                    PointerDrag::Sidebar { .. } => self.commit_sidebar_at(mouse.column),
                     PointerDrag::NavigationScrollbar(drag) => {
                         self.scroll_navigation_to_pointer(mouse.row, drag);
                     }
@@ -438,6 +437,7 @@ impl App {
             }
             self.draw_content(frame, body_area);
         }
+        self.draw_sidebar_resize_preview(frame);
         if self.search_mode.is_open() {
             self.draw_search(frame, status_area);
         } else {
@@ -728,8 +728,30 @@ impl App {
             Block::default()
                 .borders(Borders::LEFT)
                 .border_style(Style::default().fg(theme::BORDER))
-                .style(Style::default().bg(theme::CONTENT)),
+                .style(Style::default().bg(theme::SIDEBAR)),
             area,
+        );
+    }
+
+    fn draw_sidebar_resize_preview(&self, frame: &mut Frame<'_>) {
+        let PointerDrag::Sidebar { preview_width } = self.pointer_drag else {
+            return;
+        };
+        let x = self.last_body_area.x.saturating_add(preview_width);
+        if x >= self.last_body_area.right() {
+            return;
+        }
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::LEFT)
+                .border_style(Style::default().fg(theme::BORDER))
+                .style(Style::default().bg(theme::SIDEBAR)),
+            Rect::new(
+                x,
+                self.last_body_area.y,
+                SIDEBAR_SPLITTER_WIDTH,
+                self.last_body_area.height,
+            ),
         );
     }
 
@@ -842,15 +864,10 @@ impl App {
         // overwriting its final column. This is especially visible on the
         // right border of full-width TLDR panels.
         let scrollbar_gutter = CONTENT_SCROLLBAR_GAP.saturating_add(1);
-        let drag_render_width = match self.pointer_drag {
-            PointerDrag::Sidebar { render_width } => Some(render_width),
-            _ => None,
-        };
         // Test the narrower, scrollbar-bearing layout first. Almost every
         // manual needs its virtual trailing rows, so this avoids rendering a
         // second full-width document merely to discover that fact.
-        let sizing_width = drag_render_width
-            .unwrap_or_else(|| inner.width.saturating_sub(scrollbar_gutter).max(1));
+        let sizing_width = inner.width.saturating_sub(scrollbar_gutter).max(1);
         let sizing_rows = self
             .rendered_cache
             .entry(sizing_width)
@@ -868,11 +885,7 @@ impl App {
             inner
         };
         self.last_content_area = document_area;
-        // During a sidebar drag the viewport follows the pointer immediately,
-        // but its text is clipped from the last committed rendering. Mouse-up
-        // clears the drag state and performs one exact reflow at the final
-        // width on the next frame.
-        let render_width = drag_render_width.unwrap_or_else(|| document_area.width.max(1));
+        let render_width = document_area.width.max(1);
         self.rendered_cache
             .entry(render_width)
             .or_insert_with(|| self.document.render(render_width));
@@ -909,13 +922,11 @@ impl App {
         } else if matches!(self.pointer_drag, PointerDrag::ContentScrollbar(_)) {
             self.pointer_drag = PointerDrag::None;
         }
-        if drag_render_width.is_none() {
-            // A width-dependent rendering can be large (notably for GCC).
-            // Keeping the current width hot is useful; retaining every prior
-            // terminal width turns repeated resizing into unbounded growth.
-            self.rendered_cache
-                .retain(|width, _| *width == render_width);
-        }
+        // A width-dependent rendering can be large (notably for GCC). Keeping
+        // the current width hot is useful; retaining every prior terminal
+        // width turns repeated resizing into unbounded growth.
+        self.rendered_cache
+            .retain(|width, _| *width == render_width);
     }
 
     fn draw_status(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -1303,12 +1314,22 @@ impl App {
         self.show_sidebar && self.last_sidebar_splitter.contains((column, row).into())
     }
 
-    fn resize_sidebar_to(&mut self, column: u16) {
+    fn sidebar_width_at(&self, column: u16) -> u16 {
         let maximum = maximum_sidebar_width(self.last_body_area.width);
-        let width = column
+        column
             .saturating_sub(self.last_body_area.x)
-            .clamp(MIN_SIDEBAR_WIDTH, maximum.max(MIN_SIDEBAR_WIDTH));
-        self.sidebar_width = width;
+            .clamp(MIN_SIDEBAR_WIDTH, maximum.max(MIN_SIDEBAR_WIDTH))
+    }
+
+    fn preview_sidebar_at(&mut self, column: u16) {
+        let width = self.sidebar_width_at(column);
+        if let PointerDrag::Sidebar { preview_width } = &mut self.pointer_drag {
+            *preview_width = width;
+        }
+    }
+
+    fn commit_sidebar_at(&mut self, column: u16) {
+        self.sidebar_width = self.sidebar_width_at(column);
     }
 
     fn visible_navigation_indices(&self) -> Vec<usize> {
@@ -1893,6 +1914,13 @@ mod tests {
             "│"
         );
         assert_eq!(
+            buffer
+                .cell((DEFAULT_SIDEBAR_WIDTH, 1))
+                .expect("sidebar splitter background")
+                .bg,
+            theme::SIDEBAR
+        );
+        assert_eq!(
             buffer.cell((0, 5)).expect("selected tldr navigation").bg,
             theme::TLDR_SELECTED
         );
@@ -2069,7 +2097,7 @@ mod tests {
         assert_eq!(
             app.pointer_drag,
             PointerDrag::Sidebar {
-                render_width: initial_render_width
+                preview_width: DEFAULT_SIDEBAR_WIDTH
             }
         );
         app.handle_mouse(MouseEvent {
@@ -2081,7 +2109,17 @@ mod tests {
         terminal
             .draw(|frame| app.draw(frame))
             .expect("draw intermediate width");
-        assert_eq!(app.sidebar_width, 40);
+        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+        assert_eq!(app.pointer_drag, PointerDrag::Sidebar { preview_width: 40 });
+        assert_eq!(
+            terminal
+                .backend()
+                .buffer()
+                .cell((40, 8))
+                .expect("resize preview")
+                .symbol(),
+            "│"
+        );
         assert_eq!(
             app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
             initial_cached_widths
@@ -2096,7 +2134,8 @@ mod tests {
         terminal
             .draw(|frame| app.draw(frame))
             .expect("draw final preview width");
-        assert_eq!(app.sidebar_width, 44);
+        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+        assert_eq!(app.pointer_drag, PointerDrag::Sidebar { preview_width: 44 });
         assert_eq!(
             app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
             initial_cached_widths
