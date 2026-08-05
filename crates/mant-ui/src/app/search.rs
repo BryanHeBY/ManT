@@ -3,6 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
+use super::App;
 use crate::RenderedSearchMatch;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,6 +145,68 @@ impl SearchMode {
 
     const fn is_editing(self) -> bool {
         matches!(self, Self::Open { editing: true })
+    }
+}
+
+impl App {
+    pub(super) fn open_search(&mut self) {
+        self.search.open();
+    }
+
+    pub(super) fn close_search(&mut self) {
+        self.search.close();
+    }
+
+    pub(super) fn handle_search_key(&mut self, key: KeyEvent) {
+        match self.search.handle_key(key) {
+            SearchCommand::None => {}
+            SearchCommand::Confirm => {
+                self.refresh_search(self.geometry.content.width.max(1));
+                self.select_active_search_match();
+            }
+            SearchCommand::Next => self.select_search_relative(1),
+            SearchCommand::Previous => self.select_search_relative(-1),
+        }
+    }
+
+    pub(super) fn refresh_search(&mut self, width: u16) {
+        let rendered = self
+            .rendered_cache
+            .entry(width)
+            .or_insert_with(|| self.document.render(width));
+        self.search.matches = rendered.search(&self.search.query);
+        self.search.active_match = self
+            .search
+            .active_match
+            .min(self.search.matches.len().saturating_sub(1));
+        self.search.render_width = width;
+    }
+
+    pub(super) fn select_search_relative(&mut self, delta: isize) {
+        if self.search.matches.is_empty() {
+            return;
+        }
+        let length = isize::try_from(self.search.matches.len()).unwrap_or(isize::MAX);
+        let current = isize::try_from(self.search.active_match).unwrap_or_default();
+        self.search.active_match =
+            usize::try_from((current + delta).rem_euclid(length)).unwrap_or_default();
+        self.select_active_search_match();
+    }
+
+    fn select_active_search_match(&mut self) {
+        let Some(search_match) = self.search.matches.get(self.search.active_match).cloned() else {
+            return;
+        };
+        self.content_scroll = search_match.row;
+        self.select_section_at_row(search_match.row);
+    }
+
+    pub(super) fn move_search_cursor_to(&mut self, column: u16) {
+        const SEARCH_PREFIX_WIDTH: u16 = 7;
+        let text_column = usize::from(
+            column.saturating_sub(self.geometry.status.x.saturating_add(SEARCH_PREFIX_WIDTH)),
+        );
+        self.search.move_cursor_to_column(text_column);
     }
 }
 
