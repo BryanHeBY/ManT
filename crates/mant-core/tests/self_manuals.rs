@@ -92,9 +92,10 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
 fn shipped_manuals_explain_project_local_roff_lookup() {
     for required in [
         "### Local Roff Trees",
+        "MANT_MANPATH",
         "MANPATH",
         "project-man/man1/widget.1",
-        "man -w widget",
+        "without invoking `man`",
         "Do not pass `./widget.1`",
     ] {
         assert!(
@@ -103,7 +104,7 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
         );
     }
     assert!(
-        PROTOCOL_REFERENCE.contains("The process inherits `MANPATH`, `MANSECT`"),
+        PROTOCOL_REFERENCE.contains("The native index reads `MANT_MANPATH`"),
         "the request reference should define the manual lookup environment"
     );
 }

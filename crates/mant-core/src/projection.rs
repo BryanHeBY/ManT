@@ -44,23 +44,23 @@ fn is_outline_path(value: &str) -> bool {
 /// Failure to derive an addressable view from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectionError {
-    MissingContent { topic: String },
+    MissingContent { document: String },
     EmptySelection,
     EmptySelector,
-    UnknownSelector { topic: String, selector: String },
+    UnknownSelector { document: String, selector: String },
 }
 
 impl fmt::Display for ProjectionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingContent { topic } => {
-                write!(formatter, "document '{topic}' has no available content")
+            Self::MissingContent { document } => {
+                write!(formatter, "document '{document}' has no available content")
             }
             Self::EmptySelection => formatter.write_str("at least one outline node is required"),
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
-            Self::UnknownSelector { topic, selector } => write!(
+            Self::UnknownSelector { document, selector } => write!(
                 formatter,
-                "document '{topic}' has no outline node '{selector}'; run 'mant {topic} --outline'"
+                "document '{document}' has no outline node '{selector}'; run 'mant {document} --outline'"
             ),
         }
     }
@@ -90,7 +90,7 @@ pub fn build_outline_with_detail(
 ) -> Result<QueryOutline, ProjectionError> {
     if query.tldr.is_none() && query.document.is_none() {
         return Err(ProjectionError::MissingContent {
-            topic: query.label.clone(),
+            document: query.label.clone(),
         });
     }
     let mut nodes = Vec::new();
@@ -144,7 +144,7 @@ pub fn select_excerpt(
     }
     if query.tldr.is_none() && query.document.is_none() {
         return Err(ProjectionError::MissingContent {
-            topic: query.label.clone(),
+            document: query.label.clone(),
         });
     }
     let mut located = Vec::new();
@@ -178,7 +178,7 @@ pub fn select_excerpt(
             .iter()
             .find(|candidate| candidate.matches(selector))
             .ok_or_else(|| ProjectionError::UnknownSelector {
-                topic: query.label.clone(),
+                document: query.label.clone(),
                 selector: selector.to_owned(),
             })?;
         if selected_ids.insert(candidate.id()) {

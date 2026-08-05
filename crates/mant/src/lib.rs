@@ -21,7 +21,7 @@ use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaCont
 // ── Stable process protocol ────────────────────────────────────────────────
 
 /// Exact stdio protocol exposed to external process clients.
-pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v3";
+pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v4";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 
@@ -73,7 +73,7 @@ struct SystemHost;
 impl CliHost for SystemHost {
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
         mant_core::query_with_policy(request, policy).map_err(|error| match error {
-            QueryError::EmptyTopic | QueryError::InvalidSection | QueryError::EmptyMarkdownPath => {
+            QueryError::EmptyName | QueryError::InvalidSection | QueryError::EmptyMarkdownPath => {
                 Failure::usage(error)
             }
             _ => Failure::operational(error),
@@ -94,7 +94,7 @@ impl CliHost for SystemHost {
 /// Run one CLI invocation using explicit streams and return its exit status.
 ///
 /// Keeping the process streams injectable makes malformed protocol requests
-/// testable without consulting the host man database or tldr client.
+/// testable without consulting host manual sources or a tldr client.
 pub fn run(
     arguments: &[String],
     input: &mut dyn Read,
@@ -239,7 +239,7 @@ fn execute(
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_core::native_api_version(),
-                request_schema: "mant.request/v3",
+                request_schema: "mant.request/v4",
                 query_schema: "mant.query/v3",
                 document_schema: "mant.document/v3",
                 outline_schema: "mant.outline/v3",
@@ -352,7 +352,7 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
     };
     let QuerySource::Arguments(request) = source else {
         return report_failure(
-            &Failure::usage("interactive mode requires a topic or Markdown path"),
+            &Failure::usage("interactive mode requires a document name or Markdown path"),
             diagnostics,
         );
     };
@@ -583,9 +583,9 @@ fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
 
 fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
     match &request.input {
-        QueryInput::Manual { topic, section } => {
-            if topic.trim().is_empty() {
-                return Err(Failure::usage("manual topic must not be empty"));
+        QueryInput::Document { name, section } => {
+            if name.trim().is_empty() {
+                return Err(Failure::usage("document name must not be empty"));
             }
             if section
                 .as_deref()
@@ -847,7 +847,7 @@ mod tests {
         ) -> Result<QueryBundle, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
             let label = match &request.input {
-                QueryInput::Manual { topic, .. } => topic.trim().to_owned(),
+                QueryInput::Document { name, .. } => name.trim().to_owned(),
                 QueryInput::MarkdownFile { path } => path.clone(),
             };
             Ok(QueryBundle {
@@ -1001,7 +1001,7 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git","section":"1"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git","section":"1"},"view":{"kind":"full"}}"#,
             &host,
         );
 
@@ -1015,13 +1015,13 @@ mod tests {
     fn malformed_or_extended_requests_fail_before_querying_the_host() {
         for input in [
             br"not-json".as_slice(),
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"full"},"renderer":"html"}"#.as_slice(),
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"   "},"view":{"kind":"full"}}"#.as_slice(),
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"renderer":"html"}"#.as_slice(),
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"   "},"view":{"kind":"full"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -1041,7 +1041,7 @@ mod tests {
         let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1052,7 +1052,7 @@ mod tests {
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1249,7 +1249,7 @@ mod tests {
         let host = FakeHost::with_manual();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
             &host,
         );
 
@@ -1295,8 +1295,8 @@ mod tests {
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
-        assert_eq!(value["nativeApiVersion"], "3");
-        assert_eq!(value["requestSchema"], "mant.request/v3");
+        assert_eq!(value["nativeApiVersion"], "4");
+        assert_eq!(value["requestSchema"], "mant.request/v4");
         assert_eq!(value["outlineSchema"], "mant.outline/v3");
         assert_eq!(value["excerptSchema"], "mant.excerpt/v3");
         assert_eq!(value["searchSchema"], "mant.search/v2");
@@ -1329,7 +1329,7 @@ mod tests {
             "https://json-schema.org/draft/2020-12/schema"
         );
         assert_eq!(value["additionalProperties"], false);
-        assert!(output.contains("mant.request/v3"));
+        assert!(output.contains("mant.request/v4"));
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);

@@ -87,15 +87,15 @@ The public surface is use-case oriented rather than a mirror of parser
 internals:
 
 ```text
-mant <topic> [--format <format>]   -> query Markdown, text, or JSON
+mant <name> [--format <format>]   -> query Markdown, text, or JSON
 mant <path.md> [--format <format>] -> query one local Markdown file
 mant -                             -> read Markdown directly from stdin
-mant <topic> --outline [sections|options] -> selectable section and option tree
-mant <topic> --node <path-or-id>   -> selected section subtrees
-mant <topic> --explain <alias-or-id> -> one option, command, or environment entry
-mant <topic> --search <pattern>    -> matches with node and Markdown locations
-mant <topic> --force-libmandoc     -> strict direct-parser diagnosis
-mant <topic> --force-groff         -> opt into the groff HTML compatibility path
+mant <name> --outline [sections|options] -> selectable section and option tree
+mant <name> --node <path-or-id>   -> selected section subtrees
+mant <name> --explain <alias-or-id> -> one option, command, or environment entry
+mant <name> --search <pattern>    -> matches with node and Markdown locations
+mant <name> --force-libmandoc     -> strict direct-parser diagnosis
+mant <name> --force-groff         -> opt into the groff HTML compatibility path
 mant --update-tldr                 -> update result JSON
 mant --protocol-version            -> protocol description JSON
 mant --schema <contract>           -> generated JSON Schema
@@ -112,19 +112,19 @@ additional processes.
 
 For agent clients that speak the Model Context Protocol, `mant --mcp`
 keeps standard output exclusively for JSON-RPC and exposes five generated,
-read-only tools: registered-topic discovery, outline, selected content,
-semantic explanation, and search. Document tools accept a topic plus an
+read-only tools: local-document discovery, outline, selected content,
+semantic explanation, and search. Document tools accept a name plus an
 optional manual section. That narrower boundary prevents agents from opening
-arbitrary host paths: Markdown must first be registered in an XDG topic
-directory, while ordinary topic names continue to fall back to the local man
-database. Input and output schemas derive directly from Rust types. MCP drops
+arbitrary host paths: Markdown must first be registered in an XDG document
+directory, while ordinary names continue to fall back to the native manual
+index. Input and output schemas derive directly from Rust types. MCP drops
 lowering diagnostics and keeps standard error silent; the ordinary CLI JSON
 surface remains the diagnostic inspection path. MCP is an alternate process
 protocol; it does not add another executable or a second document
 interpretation path.
 
-`mant.request/v3` requires a `schema` marker, one closed `input`, and one
-closed `view`. The input is either a manual topic with an optional section or a
+`mant.request/v4` requires a `schema` marker, one closed `input`, and one
+closed `view`. The input is either a document name with an optional manual section or a
 local Markdown path; raw document content is deliberately not part of the
 process contract. Direct `mant -` reads bounded UTF-8 input before constructing
 an in-memory query and does not add a third public input variant. Unknown
@@ -212,16 +212,22 @@ The first H1 in the document portion supplies metadata and its following prose
 becomes root overview content. This explicit two-channel model keeps tldr
 layout conventions out of the general Markdown AST and renderers.
 
-The primary path reads the located manual source and lowers libmandoc's
-validated man(7) or mdoc(7) tree directly into `mant.document/v3`.  Rust owns
-compression handling and preserves the original source path and include base
-directory.  `.so` aliases and includes must work without exposing temporary
-paths in the result.
+The primary path discovers manual hierarchies in Rust, reads the located
+source, and lowers libmandoc's validated man(7) or mdoc(7) tree directly into
+`mant.document/v3`. Rust owns compression handling and preserves the original
+source path and include base directory. `.so` aliases and includes must work
+without exposing temporary paths in the result.
+
+One immutable `ManualIndex` owns both catalog discovery and exact lookup. It
+derives roots from `MANT_MANPATH`, `MANPATH`, user/XDG data, PATH prefixes, and
+conventional system locations, then indexes only the raw, gzip, and zstd
+formats the parser can consume. Ordinary CLI, TUI, and MCP requests therefore
+do not spawn a host `man` process or depend on its database being initialized.
 
 Libmandoc is the only default parser. An unsupported diagnostic does not
 discard an otherwise complete document, and ManT does not automatically invoke
 groff or choose between renderer outputs. `--force-libmandoc` is a strict
-diagnostic policy for manual input outside `mant.request/v3`: it requires a
+diagnostic policy for manual input outside `mant.request/v4`: it requires a
 direct native manual, prevents a tldr-only response, and prints recoverable
 parser findings on standard error.
 

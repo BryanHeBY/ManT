@@ -398,8 +398,11 @@ fn indent_lines(value: &str, columns: usize) -> String {
         .join("\n")
 }
 
-fn document_label(topic: &str, section: Option<&str>) -> String {
-    section.map_or_else(|| topic.to_owned(), |section| format!("{topic}({section})"))
+fn document_label(document: &str, section: Option<&str>) -> String {
+    section.map_or_else(
+        || document.to_owned(),
+        |section| format!("{document}({section})"),
+    )
 }
 
 fn join_parts(parts: Vec<String>) -> String {

@@ -118,12 +118,12 @@ impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
 
 // ── MCP parameter contracts ──────────────────────────────────────────────
 
-/// A document name resolved through registered Markdown and the man database.
+/// A document name resolved through registered Markdown and native manual paths.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct TopicSelector {
-    /// Registered Markdown or manual topic name, for example `git` or `mant`.
-    topic: String,
+struct DocumentSelector {
+    /// Registered Markdown or manual page name, for example `git` or `mant`.
+    name: String,
     /// Optional man section. Supplying it bypasses registered Markdown.
     section: Option<String>,
 }
@@ -133,7 +133,7 @@ struct TopicSelector {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OutlineParams {
     #[serde(flatten)]
-    selector: TopicSelector,
+    selector: DocumentSelector,
     /// Include only sections, or include addressable option and command entries.
     detail: Option<OutlineDetail>,
 }
@@ -143,7 +143,7 @@ struct OutlineParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GetParams {
     #[serde(flatten)]
-    selector: TopicSelector,
+    selector: DocumentSelector,
     /// Outline paths, stable IDs, or entry aliases returned by `mant_document_outline`.
     #[schemars(length(min = 1))]
     #[serde(deserialize_with = "lenient_nodes")]
@@ -155,7 +155,7 @@ struct GetParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ExplainParams {
     #[serde(flatten)]
-    selector: TopicSelector,
+    selector: DocumentSelector,
     /// Option spelling, command name, environment variable, outline path, or stable ID.
     entry: String,
 }
@@ -165,7 +165,7 @@ struct ExplainParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SearchParams {
     #[serde(flatten)]
-    selector: TopicSelector,
+    selector: DocumentSelector,
     /// Literal text or a regular expression, depending on `syntax`.
     #[schemars(length(min = 1, max = 4096))]
     pattern: String,
@@ -191,18 +191,54 @@ struct SearchParams {
     offset: Option<u32>,
 }
 
-/// Discoverable registered-Markdown catalog returned to MCP clients.
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct TopicCatalog {
-    topics: Vec<TopicSummary>,
+/// Filters and pagination for the unified local document catalog.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DocumentListParams {
+    /// Case-insensitive substring applied to document names.
+    query: Option<String>,
+    /// Restrict discovery to registered Markdown or manual pages.
+    kind: Option<DocumentKindFilter>,
+    /// Restrict manual pages to one exact section; excludes Markdown entries.
+    section: Option<String>,
+    /// Maximum entries returned from 1 through 1,000. The default is 100.
+    #[schemars(range(min = 1, max = 1000))]
+    #[serde(default, deserialize_with = "lenient_scalar")]
+    limit: Option<u32>,
+    /// Number of matching entries to skip for deterministic pagination.
+    #[serde(default, deserialize_with = "lenient_scalar")]
+    offset: Option<u32>,
 }
 
-/// One effective topic after user and system directory precedence is applied.
+/// Optional catalog source-family filter.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+enum DocumentKindFilter {
+    Markdown,
+    Manual,
+}
+
+/// Discoverable local-document catalog returned to MCP clients.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct TopicSummary {
+struct DocumentCatalog {
+    total: u32,
+    returned: u32,
+    offset: u32,
+    truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next_offset: Option<u32>,
+    documents: Vec<DocumentSummary>,
+}
+
+/// One effective document after directory and locale precedence is applied.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct DocumentSummary {
     name: String,
+    kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    section: Option<String>,
     path: String,
     origin: String,
 }
@@ -289,33 +325,26 @@ impl MantMcpServer {
 
 #[tool_router(router = tool_router)]
 impl MantMcpServer {
-    /// List Markdown documents explicitly registered in the topic namespace.
+    /// List registered Markdown and locally indexed manual pages.
     #[tool(
-        name = "mant_topics_list",
+        name = "mant_documents_list",
         annotations(
-            title = "ManT registered topics",
+            title = "ManT local documents",
             read_only_hint = true,
             destructive_hint = false,
             idempotent_hint = true,
             open_world_hint = false
         )
     )]
-    async fn topics_list(&self) -> Result<Json<TopicCatalog>, String> {
-        let topics = task::spawn_blocking(mant_core::list_registered_topics)
+    async fn documents_list(
+        &self,
+        parameters: Parameters<DocumentListParams>,
+    ) -> Result<Json<DocumentCatalog>, String> {
+        let parameters = validate_document_list(parameters.0)?;
+        let documents = task::spawn_blocking(mant_core::list_available_documents)
             .await
-            .map_err(|error| format!("MCP topic discovery worker failed: {error}"))?
-            .into_iter()
-            .map(|topic| TopicSummary {
-                name: topic.name,
-                path: topic.path.to_string_lossy().into_owned(),
-                origin: match topic.origin {
-                    mant_core::RegisteredTopicOrigin::User => "user",
-                    mant_core::RegisteredTopicOrigin::System => "system",
-                }
-                .to_owned(),
-            })
-            .collect();
-        Ok(Json(TopicCatalog { topics }))
+            .map_err(|error| format!("MCP document discovery worker failed: {error}"))?;
+        Ok(Json(build_document_catalog(documents, &parameters)))
     }
 
     /// Return a hierarchical tree of sections and optional addressable entries.
@@ -461,12 +490,93 @@ impl ServerHandler for MantMcpServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("mant", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Query registered Markdown topics and local manual pages by topic. Use mant_topics_list to discover registered Markdown, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain.",
+                "Query registered Markdown documents and local manual pages by name. Use mant_documents_list for paginated discovery, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain.",
             )
     }
 }
 
 // ── Input validation ─────────────────────────────────────────────────────
+
+fn validate_document_list(
+    mut parameters: DocumentListParams,
+) -> Result<DocumentListParams, String> {
+    parameters.query = parameters
+        .query
+        .map(|query| query.trim().to_owned())
+        .filter(|query| !query.is_empty());
+    parameters.section = parameters
+        .section
+        .map(|section| non_empty(&section, "section"))
+        .transpose()?;
+    let limit = parameters.limit.unwrap_or(100);
+    if !(1..=1000).contains(&limit) {
+        return Err("limit must be between 1 and 1000".to_owned());
+    }
+    parameters.limit = Some(limit);
+    parameters.offset = Some(parameters.offset.unwrap_or(0));
+    Ok(parameters)
+}
+
+fn build_document_catalog(
+    documents: Vec<mant_core::AvailableDocument>,
+    parameters: &DocumentListParams,
+) -> DocumentCatalog {
+    let query = parameters.query.as_ref().map(|query| query.to_lowercase());
+    let filtered = documents
+        .into_iter()
+        .filter(|document| {
+            query
+                .as_ref()
+                .is_none_or(|query| document.name.to_lowercase().contains(query))
+                && parameters.kind.is_none_or(|kind| match kind {
+                    DocumentKindFilter::Markdown => {
+                        document.kind == mant_core::AvailableDocumentKind::Markdown
+                    }
+                    DocumentKindFilter::Manual => {
+                        document.kind == mant_core::AvailableDocumentKind::Manual
+                    }
+                })
+                && parameters.section.as_ref().is_none_or(|section| {
+                    document
+                        .section
+                        .as_ref()
+                        .is_some_and(|value| value == section)
+                })
+        })
+        .collect::<Vec<_>>();
+    let total = filtered.len();
+    let offset = usize::try_from(parameters.offset.unwrap_or(0)).unwrap_or(usize::MAX);
+    let limit = usize::try_from(parameters.limit.unwrap_or(100)).unwrap_or(100);
+    let start = offset.min(total);
+    let end = start.saturating_add(limit).min(total);
+    let documents = filtered[start..end]
+        .iter()
+        .map(|document| DocumentSummary {
+            name: document.name.clone(),
+            kind: match document.kind {
+                mant_core::AvailableDocumentKind::Markdown => "markdown",
+                mant_core::AvailableDocumentKind::Manual => "manual",
+            }
+            .to_owned(),
+            section: document.section.clone(),
+            path: document.path.to_string_lossy().into_owned(),
+            origin: match document.origin {
+                mant_core::AvailableDocumentOrigin::User => "user",
+                mant_core::AvailableDocumentOrigin::System => "system",
+                mant_core::AvailableDocumentOrigin::ManualPath => "manual-path",
+            }
+            .to_owned(),
+        })
+        .collect::<Vec<_>>();
+    DocumentCatalog {
+        total: u32::try_from(total).unwrap_or(u32::MAX),
+        returned: u32::try_from(documents.len()).unwrap_or(u32::MAX),
+        offset: u32::try_from(start).unwrap_or(u32::MAX),
+        truncated: end < total,
+        next_offset: (end < total).then(|| u32::try_from(end).unwrap_or(u32::MAX)),
+        documents,
+    }
+}
 
 /// Keep lowering diagnostics out of the agent-facing transport.
 ///
@@ -477,16 +587,16 @@ fn discard_lowering_diagnostics(excerpt: &mut QueryExcerpt) {
     excerpt.diagnostics.clear();
 }
 
-fn request_for(selector: TopicSelector, view: QueryView) -> Result<QueryRequest, String> {
-    let input = QueryInput::Manual {
-        topic: non_empty(&selector.topic, "topic")?,
+fn request_for(selector: DocumentSelector, view: QueryView) -> Result<QueryRequest, String> {
+    let input = QueryInput::Document {
+        name: non_empty(&selector.name, "name")?,
         section: selector
             .section
             .map(|section| non_empty(&section, "section"))
             .transpose()?,
     };
     Ok(QueryRequest {
-        schema: mant_ast::RequestSchema::V3,
+        schema: mant_ast::RequestSchema::V4,
         input,
         view,
     })
@@ -513,11 +623,15 @@ fn non_empty(value: &str, field: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
+    use std::{io, path::PathBuf};
 
+    use mant_core::{AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin};
     use serde_json::json;
 
-    use super::{GetParams, MantMcpServer, OutlineParams, SearchParams};
+    use super::{
+        DocumentKindFilter, DocumentListParams, GetParams, MantMcpServer, OutlineParams,
+        SearchParams, build_document_catalog, validate_document_list,
+    };
 
     #[test]
     fn publishes_only_the_read_only_document_tools_with_generated_schemas() {
@@ -536,7 +650,7 @@ mod tests {
                 "mant_document_get",
                 "mant_document_outline",
                 "mant_document_search",
-                "mant_topics_list",
+                "mant_documents_list",
             ]
         );
         for tool in tools {
@@ -550,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn document_tools_publish_a_topic_without_an_arbitrary_path_target() {
+    fn document_tools_publish_a_name_without_an_arbitrary_path_target() {
         let server = MantMcpServer::new();
         let tools = server.tool_router.list_all();
         let outline = tools
@@ -558,20 +672,20 @@ mod tests {
             .find(|tool| tool.name == "mant_document_outline")
             .expect("outline tool");
         let schema = serde_json::to_value(&outline.input_schema).expect("schema JSON");
-        assert_eq!(schema["properties"]["topic"]["type"], "string");
+        assert_eq!(schema["properties"]["name"]["type"], "string");
         assert!(schema["properties"]["section"].is_object());
         assert!(schema["properties"].get("target").is_none());
         assert!(!schema.to_string().contains("markdown-file"));
     }
 
     #[test]
-    fn a_topic_and_optional_manual_section_deserialize_directly() {
+    fn a_name_and_optional_manual_section_deserialize_directly() {
         let parameters: OutlineParams = serde_json::from_value(json!({
-            "topic": "printf",
+            "name": "printf",
             "section": "3"
         }))
-        .expect("topic selector");
-        assert_eq!(parameters.selector.topic, "printf");
+        .expect("name selector");
+        assert_eq!(parameters.selector.name, "printf");
         assert_eq!(parameters.selector.section.as_deref(), Some("3"));
     }
 
@@ -581,13 +695,58 @@ mod tests {
             "target": {"kind": "markdown-file", "path": "README.md"}
         }))
         .expect_err("path target must be rejected");
-        assert!(error.to_string().contains("topic"));
+        assert!(error.to_string().contains("name"));
+    }
+
+    #[test]
+    fn document_catalog_filters_and_paginates_both_source_families() {
+        let parameters = validate_document_list(DocumentListParams {
+            query: Some("PRINT".to_owned()),
+            kind: Some(DocumentKindFilter::Manual),
+            section: None,
+            limit: Some(1),
+            offset: Some(1),
+        })
+        .expect("catalog parameters");
+        let catalog = build_document_catalog(
+            vec![
+                AvailableDocument {
+                    name: "printf".to_owned(),
+                    kind: AvailableDocumentKind::Markdown,
+                    section: None,
+                    path: PathBuf::from("/data/mant/documents/printf.md"),
+                    origin: AvailableDocumentOrigin::User,
+                },
+                AvailableDocument {
+                    name: "printf".to_owned(),
+                    kind: AvailableDocumentKind::Manual,
+                    section: Some("1".to_owned()),
+                    path: PathBuf::from("/usr/share/man/man1/printf.1.gz"),
+                    origin: AvailableDocumentOrigin::ManualPath,
+                },
+                AvailableDocument {
+                    name: "printf".to_owned(),
+                    kind: AvailableDocumentKind::Manual,
+                    section: Some("3".to_owned()),
+                    path: PathBuf::from("/usr/share/man/man3/printf.3.gz"),
+                    origin: AvailableDocumentOrigin::ManualPath,
+                },
+            ],
+            &parameters,
+        );
+
+        assert_eq!(catalog.total, 2);
+        assert_eq!(catalog.returned, 1);
+        assert_eq!(catalog.offset, 1);
+        assert!(!catalog.truncated);
+        assert_eq!(catalog.documents[0].section.as_deref(), Some("3"));
+        assert_eq!(catalog.documents[0].origin, "manual-path");
     }
 
     #[test]
     fn stringified_search_scalars_and_snake_case_context_still_deserialize() {
         let parameters: SearchParams = serde_json::from_value(json!({
-            "topic": "ls",
+            "name": "ls",
             "pattern": "sort",
             "word": "True",
             "context_lines": "2",
@@ -604,7 +763,7 @@ mod tests {
     #[test]
     fn unparsable_search_scalars_still_fail() {
         let error = serde_json::from_value::<SearchParams>(json!({
-            "topic": "ls",
+            "name": "ls",
             "pattern": "sort",
             "limit": "ten",
         }))
@@ -620,7 +779,7 @@ mod tests {
             (json!("[\"2\", \"1/o1\"]"), vec!["2", "1/o1"]),
         ] {
             let parameters: GetParams = serde_json::from_value(json!({
-                "topic": "ls",
+                "name": "ls",
                 "nodes": nodes,
             }))
             .expect("lenient nodes");
@@ -631,7 +790,7 @@ mod tests {
     #[test]
     fn malformed_node_selectors_report_a_correct_example() {
         let error = serde_json::from_value::<GetParams>(json!({
-            "topic": "ls",
+            "name": "ls",
             "nodes": "[1, 2]",
         }))
         .expect_err("non-string selectors");

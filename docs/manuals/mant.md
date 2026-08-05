@@ -5,19 +5,19 @@
 
 - Read a complete manual interactively:
 
-`mant {{topic}}`
+`mant {{name}}`
 
 - Inspect a manual outline:
 
-`mant {{topic}} --outline`
+`mant {{name}} --outline`
 
 - Retrieve one section from that outline:
 
-`mant {{topic}} --node {{path}}`
+`mant {{name}} --node {{path}}`
 
 - Explain one option directly:
 
-`mant {{topic}} --explain={{option}}`
+`mant {{name}} --explain={{option}}`
 
 - Read a local Markdown file:
 
@@ -37,7 +37,7 @@
 ## Synopsis
 
 ```text
-mant <TOPIC|MARKDOWN|-> [OPTIONS]
+mant <NAME|MARKDOWN|-> [OPTIONS]
 mant --request-json [--format FORMAT] [--compact]
 mant --schema CONTRACT [--compact]
 mant --update-tldr [--compact]
@@ -61,55 +61,54 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 ## Input
 
 Input is resolved before parsing. An ordinary value first selects a registered
-Markdown topic from `${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics`, then
-from each `$XDG_DATA_DIRS/mant/topics` directory, and finally from the local man
-database. Values ending in `.md` or `.markdown`, other path-like values, and
+Markdown document from `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`, then
+from each `$XDG_DATA_DIRS/mant/documents` directory, and finally from the native
+manual index. Values ending in `.md` or `.markdown`, other path-like values, and
 the exact value `-` select Markdown directly instead.
 
-The filename supplies a registered topic name: `mant.md` is queried as
+The filename supplies a registered document name: `mant.md` is queried as
 `mant mant`. User data precedes system data, and the first matching filename
 wins. An explicit `--section`, `--force-libmandoc`, or `--force-groff` request
 bypasses registered Markdown and selects a manual page.
 
 ### Manual Pages
 
-Manual topics are located through the host's `man` database. ManT reads the
-original roff source, including compressed pages, and lowers man or mdoc
-semantics through its bundled libmandoc parser. A system `mandoc` executable
-is not required.
+Manual page names are located through ManT's native manual index. ManT reads
+raw, gzip, and zstd roff sources and lowers man or mdoc semantics through its
+bundled libmandoc parser. Neither a system `man` nor a system `mandoc`
+executable is required for ordinary use.
 
 - `--section SECTION`: Select a manual section such as `1` or `3p`.
 - `--force-libmandoc`: Require direct libmandoc output and print parser diagnostics.
 - `--force-groff`: Use the opt-in `man -Thtml` and groff HTML compatibility path.
 
-Without a forced renderer, unsupported or truncated libmandoc results may use
-the groff compatibility path. Renderer options are rejected for Markdown
-input.
+The groff compatibility path is used only when explicitly requested because it
+depends on a host `man -Thtml` implementation. Renderer options are rejected
+for Markdown input.
 
 ### Local Roff Trees
 
-Use `MANPATH` to make project-local man or mdoc sources visible without
-copying them into a system directory. Each entry must be the root of a manual
-hierarchy containing section directories such as `man1/` or `man3/`; it must
-not name the section directory or source file itself.
+Use `MANT_MANPATH` or `MANPATH` to make project-local man or mdoc sources
+visible without copying them into a system directory. Each entry must be the
+root of a hierarchy containing section directories such as `man1/` or
+`man3/`; it must not name the section directory or source file itself.
 
-For example, expose `widget.1` as topic `widget`:
+For example, expose `widget.1` as document name `widget`:
 
 ```sh
 mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
-MANPATH="$PWD/project-man" mant widget --section 1
+MANT_MANPATH="$PWD/project-man" mant widget --section 1
 ```
 
-Confirm the host lookup independently with
-`MANPATH="$PWD/project-man" man -w widget`. Existing `MANPATH` roots can be
-combined using the syntax documented by the host's `man(1)` implementation.
-Setting `MANPATH` may replace its default search path, so preserve the
-existing value when system manuals must remain visible.
+`MANT_MANPATH` is a complete ManT-specific override. `MANPATH` also replaces
+the derived defaults unless it contains an empty component; an empty component
+inserts user/XDG, PATH-derived, and conventional system roots at that point.
+This preserves familiar colon-list behavior without invoking `man`.
 
 Do not pass `./widget.1` as the input operand: path-like operands are reserved
 for Markdown documents. Register local roff in a manual hierarchy and query
-it by topic instead.
+it by name instead.
 
 ## Markdown Documents
 
@@ -198,7 +197,7 @@ embedded tldr preface does not shift those coordinates.
 
 ## Interactive Reader
 
-With a complete topic or Markdown path and a terminal on stdin and stdout,
+With a complete document name or Markdown path and a terminal on stdin and stdout,
 `mant` opens its Ratatui reader. `--ui` requires this mode explicitly. A
 projection option or `--format` selects deterministic output instead.
 
@@ -288,7 +287,7 @@ valid only with JSON query output.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v3` object from standard input.
+- `--request-json`: Read one closed `mant.request/v4` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
@@ -301,9 +300,9 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v3",
-  "nativeApiVersion": "3",
-  "requestSchema": "mant.request/v3",
+  "protocol": "mant.cli/v4",
+  "nativeApiVersion": "4",
+  "requestSchema": "mant.request/v4",
   "querySchema": "mant.query/v3",
   "documentSchema": "mant.document/v3",
   "outlineSchema": "mant.outline/v3",
@@ -314,18 +313,20 @@ The current protocol descriptor is:
 
 These are independently versioned contracts rather than one shared version.
 Search remains `v2` because its wire shape did not need to change when the
-request and document contracts moved to `v3`. Generated schemas use JSON
+request moved to `v4`; the document model remains `v3`. Generated schemas use JSON
 Schema Draft 2020-12 and remain the authoritative field-level definition.
 The repository's `docs/protocol.md` supplies the complete field reference,
 examples, compatibility policy, coordinate rules, and MCP tool contracts.
 
 Standard output is reserved for the requested result. Concise diagnostics use
 standard error. `--request-json` accepts the same input and projection model
-used by external process integrations. MCP exposes `mant_topics_list`,
+used by external process integrations. MCP exposes `mant_documents_list`,
 `mant_document_outline`, `mant_document_get`, `mant_document_explain`, and
-`mant_document_search`. Document tools accept a topic and optional manual
+`mant_document_search`. Document tools accept a name and optional manual
 section, not an arbitrary local path; register Markdown before exposing it to
-an agent.
+an agent. `mant_documents_list` merges registered Markdown with the native
+manual index and supports a case-insensitive `query`, `markdown` or `manual`
+`kind`, exact `section`, and bounded `limit`/`offset` pagination.
 
 ## Data
 
@@ -337,21 +338,21 @@ tldr page is available.
 
 ## Environment
 
-- `MANPATH`: Supply manual-hierarchy roots to the host `man -w` lookup. Each
-  root contains section directories such as `man1/`, not an individual roff
-  file.
-- `MANSECT`: Set the host manual implementation's default section search order
-  when `--section` is absent. `--section` takes precedence.
+- `MANT_MANPATH`: Completely replace ManT's manual roots with a colon-separated
+  list. Each root contains section directories such as `man1/`, not an
+  individual roff file.
+- `MANPATH`: Override the derived manual roots. Empty components insert the
+  user/XDG, PATH-derived, and conventional system roots.
 - `MANT_TLDR_DIR`: Use one explicit tldr checkout for reads and updates.
 - `XDG_CACHE_HOME`: Relocate cache discovery and ManT's Linux fallback cache.
-- `XDG_DATA_HOME`: Relocate the user topic directory from the default
-  `$HOME/.local/share/mant/topics`.
-- `XDG_DATA_DIRS`: Add system data roots considered during registered-topic and
-  tldr discovery. Registered Markdown is read from each `mant/topics`
+- `XDG_DATA_HOME`: Relocate the user document directory from the default
+  `$HOME/.local/share/mant/documents`.
+- `XDG_DATA_DIRS`: Add system data roots considered during registered-document and
+  tldr discovery. Registered Markdown is read from each `mant/documents`
   subdirectory.
-- `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manuals through the host
-  lookup and translated tldr pages before English fallback.
-- `HOME`: Supply conventional topic and cache locations when their XDG
+- `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manual sources
+  and translated tldr pages before English fallback.
+- `HOME`: Supply conventional document, manual, and cache locations when their XDG
   overrides are absent.
 
 ## General

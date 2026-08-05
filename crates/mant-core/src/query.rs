@@ -11,9 +11,9 @@ use std::{
 use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
 use crate::{
-    CommandRunner, ManualRequest, SystemCommandRunner, find_registered_topic, locate_manual_source,
-    parse_groff_html, parse_manual_source, parse_markdown, read_cached_tldr_page,
-    source::push_section_filter,
+    CommandRunner, ManualRequest, SystemCommandRunner, find_registered_document,
+    locate_manual_source, parse_groff_html, parse_manual_source, parse_markdown,
+    read_cached_tldr_page, source::push_section_filter,
 };
 
 /// Upper bound on a single Markdown source, shared by every input path.
@@ -27,13 +27,13 @@ pub const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 /// A query cannot produce either authoritative manual content or a quick reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryError {
-    EmptyTopic,
+    EmptyName,
     InvalidSection,
     EmptyMarkdownPath,
     Markdown { path: String, detail: String },
     EmptyMarkdown { label: String },
-    Manual { topic: String, detail: String },
-    NoReadableContent { topic: String },
+    Manual { name: String, detail: String },
+    NoReadableContent { name: String },
 }
 
 /// Host execution policy kept outside the serialized request contract.
@@ -53,7 +53,7 @@ pub struct QueryPolicy {
 impl fmt::Display for QueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::EmptyTopic => formatter.write_str("topic must not be empty"),
+            Self::EmptyName => formatter.write_str("name must not be empty"),
             Self::InvalidSection => formatter.write_str("manual section must not be empty"),
             Self::EmptyMarkdownPath => formatter.write_str("Markdown path must not be empty"),
             Self::Markdown { path, detail } => {
@@ -69,10 +69,10 @@ impl fmt::Display for QueryError {
                 )
             }
             Self::Manual { detail, .. } => formatter.write_str(detail),
-            Self::NoReadableContent { topic } => {
+            Self::NoReadableContent { name } => {
                 write!(
                     formatter,
-                    "no readable manual content was found for '{topic}'"
+                    "no readable manual content was found for '{name}'"
                 )
             }
         }
@@ -104,7 +104,7 @@ pub fn query_with_policy(
 }
 
 trait QueryHost {
-    fn locate_registered_topic(&self, topic: &str) -> Option<PathBuf>;
+    fn locate_registered_document(&self, name: &str) -> Option<PathBuf>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String>;
     fn parse_manual(&self, path: &Path) -> Result<MantDocument, String>;
     fn render_groff(
@@ -112,15 +112,15 @@ trait QueryHost {
         request: &ManualRequest,
         source_path: Option<&Path>,
     ) -> Result<MantDocument, String>;
-    fn read_tldr(&self, topic: &str) -> Result<Option<TldrDocument>, String>;
+    fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }
 
 struct SystemQueryHost;
 
 impl QueryHost for SystemQueryHost {
-    fn locate_registered_topic(&self, topic: &str) -> Option<PathBuf> {
-        find_registered_topic(topic).map(|registered| registered.path)
+    fn locate_registered_document(&self, name: &str) -> Option<PathBuf> {
+        find_registered_document(name).map(|registered| registered.path)
     }
 
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String> {
@@ -139,8 +139,8 @@ impl QueryHost for SystemQueryHost {
         render_groff_document_with(request, source_path, &SystemCommandRunner)
     }
 
-    fn read_tldr(&self, topic: &str) -> Result<Option<TldrDocument>, String> {
-        read_cached_tldr_page(topic).map_err(|error| error.to_string())
+    fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String> {
+        read_cached_tldr_page(name).map_err(|error| error.to_string())
     }
 
     fn read_markdown(&self, path: &Path) -> Result<String, String> {
@@ -172,8 +172,8 @@ fn query_with(
     host: &dyn QueryHost,
 ) -> Result<QueryBundle, QueryError> {
     match &request.input {
-        QueryInput::Manual { topic, section } => {
-            query_manual(topic, section.as_deref(), policy, host)
+        QueryInput::Document { name, section } => {
+            query_manual(name, section.as_deref(), policy, host)
         }
         QueryInput::MarkdownFile { path } => query_markdown_file(path, policy, host),
     }
@@ -247,14 +247,14 @@ pub fn query_markdown_text(
 }
 
 fn query_manual(
-    topic: &str,
+    name: &str,
     requested_section: Option<&str>,
     policy: QueryPolicy,
     host: &dyn QueryHost,
 ) -> Result<QueryBundle, QueryError> {
-    let topic = topic.trim();
-    if topic.is_empty() {
-        return Err(QueryError::EmptyTopic);
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(QueryError::EmptyName);
     }
     let section = requested_section.map(str::trim);
     if section.is_some_and(str::is_empty) {
@@ -262,27 +262,27 @@ fn query_manual(
     }
     let section = section.map(ToOwned::to_owned);
 
-    // An unqualified topic first consults the explicit XDG registration
+    // An unqualified name first consults the explicit XDG registration
     // namespace. Section selectors and renderer diagnostics are manual-only
-    // requests and therefore bypass Markdown topic discovery.
+    // requests and therefore bypass Markdown name discovery.
     if section.is_none()
         && !policy.force_libmandoc
         && !policy.force_groff
-        && let Some(path) = host.locate_registered_topic(topic)
+        && let Some(path) = host.locate_registered_document(name)
     {
-        return query_registered_topic(topic, &path, host);
+        return query_registered_document(name, &path, host);
     }
 
-    let manual_request = ManualRequest::new(topic, section.clone());
+    let manual_request = ManualRequest::new(name, section.clone());
 
     // A malformed or unreadable community cache must never hide a valid man
     // page. It is an optional augmentation and is never updated during query.
-    let tldr = host.read_tldr(topic).ok().flatten();
+    let tldr = host.read_tldr(name).ok().flatten();
     let mut manual = load_manual(&manual_request, policy, host);
 
     // A renderer that cannot recover the section from the page itself (notably
     // the groff HTML fallback, whose metadata is empty) leaves meta.section
-    // unset. Fall back to the requested section so labels stay `topic(N)`.
+    // unset. Fall back to the requested section so labels stay `name(N)`.
     if let (Ok(Some(document)), Some(section)) = (&mut manual, section.as_deref())
         && document.meta.section.is_none()
     {
@@ -296,15 +296,15 @@ fn query_manual(
         return match manual {
             Ok(Some(manual)) => Ok(QueryBundle {
                 schema: QuerySchema::V3,
-                label: topic.to_owned(),
+                label: name.to_owned(),
                 document: Some(manual),
                 tldr,
             }),
             Ok(None) => Err(QueryError::NoReadableContent {
-                topic: topic.to_owned(),
+                name: name.to_owned(),
             }),
             Err(detail) => Err(QueryError::Manual {
-                topic: topic.to_owned(),
+                name: name.to_owned(),
                 detail,
             }),
         };
@@ -313,28 +313,28 @@ fn query_manual(
     match manual {
         Ok(Some(manual)) => Ok(QueryBundle {
             schema: QuerySchema::V3,
-            label: topic.to_owned(),
+            label: name.to_owned(),
             document: Some(manual),
             tldr,
         }),
         Ok(None) | Err(_) if tldr.is_some() => Ok(QueryBundle {
             schema: QuerySchema::V3,
-            label: topic.to_owned(),
+            label: name.to_owned(),
             document: None,
             tldr,
         }),
         Ok(None) => Err(QueryError::NoReadableContent {
-            topic: topic.to_owned(),
+            name: name.to_owned(),
         }),
         Err(detail) => Err(QueryError::Manual {
-            topic: topic.to_owned(),
+            name: name.to_owned(),
             detail,
         }),
     }
 }
 
-fn query_registered_topic(
-    topic: &str,
+fn query_registered_document(
+    name: &str,
     path: &Path,
     host: &dyn QueryHost,
 ) -> Result<QueryBundle, QueryError> {
@@ -346,7 +346,7 @@ fn query_registered_topic(
             detail,
         })?;
     let mut query = query_markdown_text(&source, Some(source_path))?;
-    topic.clone_into(&mut query.label);
+    name.clone_into(&mut query.label);
     Ok(query)
 }
 
@@ -381,7 +381,7 @@ fn load_manual(
     let document = direct.map_err(|error| {
         format!(
             "could not load manual '{}': source/libmandoc: {error}",
-            request.topic
+            request.name
         )
     })?;
     if document.sections.is_empty() {
@@ -407,7 +407,7 @@ fn load_manual(
         };
         return Err(format!(
             "could not load manual '{}': libmandoc parsed {path} but produced no readable sections{detail}",
-            request.topic,
+            request.name,
         ));
     }
     Ok(Some(document))
@@ -425,10 +425,10 @@ fn render_groff_document_with(
         // the page name), while lowercase `-s` is unavailable in BSD man.
         push_section_filter(&mut arguments, section);
     }
-    // Terminate option parsing so a topic beginning with '-' stays a
+    // Terminate option parsing so a name beginning with '-' stays a
     // positional operand rather than an option to man.
     arguments.push(OsString::from("--"));
-    arguments.push(OsString::from(&request.topic));
+    arguments.push(OsString::from(&request.name));
     let output = runner
         .run(OsStr::new("man"), &arguments)
         .map_err(|error| format!("cannot run 'man -Thtml': {error}"))?;
@@ -439,7 +439,7 @@ fn render_groff_document_with(
     }
     let html = String::from_utf8_lossy(&output.stdout);
     if html.trim().is_empty() {
-        return Err(format!("man produced no HTML for '{}'", request.topic));
+        return Err(format!("man produced no HTML for '{}'", request.name));
     }
     Ok(parse_groff_html(
         &html,
@@ -479,7 +479,7 @@ mod tests {
 
     #[derive(Clone)]
     struct StubHost {
-        registered_topic: Option<PathBuf>,
+        registered_document: Option<PathBuf>,
         locate: Result<PathBuf, String>,
         direct: Result<MantDocument, String>,
         fallback: Result<MantDocument, String>,
@@ -489,9 +489,9 @@ mod tests {
     }
 
     impl QueryHost for StubHost {
-        fn locate_registered_topic(&self, _topic: &str) -> Option<PathBuf> {
-            self.calls.lock().expect("calls lock").push("topic");
-            self.registered_topic.clone()
+        fn locate_registered_document(&self, _name: &str) -> Option<PathBuf> {
+            self.calls.lock().expect("calls lock").push("name");
+            self.registered_document.clone()
         }
 
         fn locate_manual(&self, _request: &ManualRequest) -> Result<PathBuf, String> {
@@ -513,7 +513,7 @@ mod tests {
             self.fallback.clone()
         }
 
-        fn read_tldr(&self, _topic: &str) -> Result<Option<TldrDocument>, String> {
+        fn read_tldr(&self, _name: &str) -> Result<Option<TldrDocument>, String> {
             self.calls.lock().expect("calls lock").push("tldr");
             self.tldr.clone()
         }
@@ -577,7 +577,7 @@ mod tests {
 
     fn host(direct: Result<MantDocument, String>) -> StubHost {
         StubHost {
-            registered_topic: None,
+            registered_document: None,
             locate: Ok(PathBuf::from("/man/tool.1")),
             direct,
             fallback: Err("fallback unavailable".to_owned()),
@@ -589,9 +589,9 @@ mod tests {
 
     fn request() -> QueryRequest {
         QueryRequest {
-            schema: RequestSchema::V3,
-            input: QueryInput::Manual {
-                topic: " tool ".to_owned(),
+            schema: RequestSchema::V4,
+            input: QueryInput::Document {
+                name: " tool ".to_owned(),
                 section: None,
             },
             view: QueryView::Full {},
@@ -610,7 +610,7 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["topic", "tldr", "locate", "parse"]
+            ["name", "tldr", "locate", "parse"]
         );
     }
 
@@ -620,9 +620,9 @@ mod tests {
         // None even though the caller asked for a specific section.
         let host = host(Ok(document(SourceFormat::GroffHtml, false, true)));
         let request = QueryRequest {
-            schema: RequestSchema::V3,
-            input: QueryInput::Manual {
-                topic: "tool".to_owned(),
+            schema: RequestSchema::V4,
+            input: QueryInput::Document {
+                name: "tool".to_owned(),
                 section: Some("3".to_owned()),
             },
             view: QueryView::Full {},
@@ -656,7 +656,7 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["topic", "tldr", "locate", "parse"]
+            ["name", "tldr", "locate", "parse"]
         );
     }
 
@@ -791,9 +791,9 @@ mod tests {
         assert_eq!(
             query_with(
                 &QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: " ".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: " ".to_owned(),
                         section: None,
                     },
                     view: QueryView::Full {},
@@ -801,19 +801,19 @@ mod tests {
                 QueryPolicy::default(),
                 &host
             ),
-            Err(QueryError::EmptyTopic)
+            Err(QueryError::EmptyName)
         );
         assert!(host.calls.lock().expect("calls lock").is_empty());
     }
 
     #[test]
-    fn registered_markdown_shadows_an_unqualified_manual_topic() {
+    fn registered_markdown_shadows_an_unqualified_manual_name() {
         let mut host = host(Err("manual parser must not run".to_owned()));
-        host.registered_topic = Some(PathBuf::from("/data/mant/topics/tool.md"));
+        host.registered_document = Some(PathBuf::from("/data/mant/documents/tool.md"));
         host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
 
         let result = query_with(&request(), QueryPolicy::default(), &host)
-            .expect("registered Markdown topic");
+            .expect("registered Markdown name");
 
         assert_eq!(result.label, "tool");
         assert!(result.tldr.is_none());
@@ -821,12 +821,12 @@ mod tests {
         assert_eq!(document.source.format, SourceFormat::Markdown);
         assert_eq!(
             document.source.path.as_deref(),
-            Some("/data/mant/topics/tool.md")
+            Some("/data/mant/documents/tool.md")
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["topic", "markdown"],
-            "a registered topic must not consult man or external tldr caches"
+            ["name", "markdown"],
+            "a registered name must not consult man or external tldr caches"
         );
     }
 
@@ -836,7 +836,7 @@ mod tests {
         host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
         let result = query_with(
             &QueryRequest {
-                schema: RequestSchema::V3,
+                schema: RequestSchema::V4,
                 input: QueryInput::MarkdownFile {
                     path: "docs/tool.md".to_owned(),
                 },

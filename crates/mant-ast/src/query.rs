@@ -20,8 +20,8 @@ pub enum QuerySchema {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum RequestSchema {
     /// Query and projection request accepted through `--request-json`.
-    #[serde(rename = "mant.request/v3")]
-    V3,
+    #[serde(rename = "mant.request/v4")]
+    V4,
 }
 
 /// Source selected by one public query request.
@@ -33,9 +33,10 @@ pub enum RequestSchema {
     deny_unknown_fields
 )]
 pub enum QueryInput {
-    /// Resolve registered Markdown first, then the host manual database.
-    Manual {
-        topic: String,
+    /// Resolve a registered Markdown document first, then a local manual page.
+    Document {
+        /// Lookup name shared by registered documents and manual pages.
+        name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         section: Option<String>,
     },
@@ -85,7 +86,7 @@ pub enum QueryView {
 /// Validated use-case input accepted by the native query boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:request:v3"))]
+#[schemars(extend("$id" = "urn:mant:request:v4"))]
 pub struct QueryRequest {
     pub schema: RequestSchema,
     pub input: QueryInput,

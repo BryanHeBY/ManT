@@ -228,7 +228,7 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
     for relative in ["docs/manuals/mant.md"] {
         let path = project_file(relative);
         let bundle = mant_core::query(&QueryRequest {
-            schema: RequestSchema::V3,
+            schema: RequestSchema::V4,
             input: QueryInput::MarkdownFile {
                 path: path.to_string_lossy().into_owned(),
             },

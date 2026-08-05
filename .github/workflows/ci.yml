@@ -37,7 +37,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             build-essential \
-            man-db \
             zlib1g-dev
 
       - name: Install stable Rust toolchain
@@ -104,8 +103,8 @@ jobs:
             cargo-v1-macos-arm64-stable-
 
       # Compile and test the native workspace so the macOS target family is
-      # exercised on every change, not only at release time. clang and `man`
-      # ship with the runner image, so libmandoc builds against config/macos.h.
+      # exercised on every change, not only at release time. clang ships with
+      # the runner image, so libmandoc builds against config/macos.h.
       - name: Test Rust workspace on macOS
         run: cargo test --locked --workspace
 
@@ -128,7 +127,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             build-essential \
-            man-db \
             zlib1g-dev
 
       - name: Install minimum supported Rust toolchain
@@ -167,7 +165,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             build-essential \
-            man-db \
             zlib1g-dev
 
       - name: Install stable Rust toolchain

@@ -1,4 +1,4 @@
-//! Verifies topic-only MCP queries without depending on a local man page.
+//! Verifies MCP discovery and registered-document queries over real stdio.
 
 use std::{
     fs,
@@ -11,13 +11,14 @@ use serde_json::{Value, json};
 
 /// Start the real binary, negotiate MCP, and inspect its discoverable tools.
 #[test]
-fn stdio_mode_lists_and_queries_registered_markdown_topics() {
+fn stdio_mode_lists_and_queries_registered_markdown_documents() {
     let executable = env!("CARGO_BIN_EXE_mant");
-    let data_home = registered_topic_fixture();
+    let data_home = registered_document_fixture();
     let mut child = Command::new(executable)
         .arg("--mcp")
         .env("XDG_DATA_HOME", &data_home)
         .env("XDG_DATA_DIRS", data_home.join("empty-system-data"))
+        .env("MANT_MANPATH", data_home.join("manuals"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -39,6 +40,26 @@ fn stdio_mode_lists_and_queries_registered_markdown_topics() {
     let tools = parse_reply(lines.next().expect("tools list reply"));
     assert_eq!(tools["id"], 2);
     let tools = tools["result"]["tools"].as_array().expect("tool list");
+    assert_tool_catalog(tools);
+
+    request_document_list(&mut input);
+    request_document_search(&mut input);
+    request_document_get(&mut input);
+    input.flush().expect("flush tool call");
+
+    // JSON-RPC permits concurrent requests to complete out of order. Select
+    // replies by ID instead of treating stdio arrival order as a contract.
+    let replies = [
+        parse_reply(lines.next().expect("first tool reply")),
+        parse_reply(lines.next().expect("second tool reply")),
+        parse_reply(lines.next().expect("third tool reply")),
+    ];
+    assert_tool_replies(&replies);
+
+    assert_silent_shutdown(child, input, diagnostics, data_home);
+}
+
+fn assert_tool_catalog(tools: &[Value]) {
     let mut names = tools
         .iter()
         .filter_map(|tool| tool["name"].as_str())
@@ -51,7 +72,7 @@ fn stdio_mode_lists_and_queries_registered_markdown_topics() {
             "mant_document_get",
             "mant_document_outline",
             "mant_document_search",
-            "mant_topics_list",
+            "mant_documents_list",
         ]
     );
     for tool in tools {
@@ -60,31 +81,27 @@ fn stdio_mode_lists_and_queries_registered_markdown_topics() {
         assert_eq!(tool["annotations"]["readOnlyHint"], true);
         assert_eq!(tool["annotations"]["openWorldHint"], false);
     }
+}
 
-    request_topic_list(&mut input);
-    request_topic_search(&mut input);
-    request_topic_get(&mut input);
-    input.flush().expect("flush tool call");
-
-    // JSON-RPC permits concurrent requests to complete out of order. Select
-    // replies by ID instead of treating stdio arrival order as a contract.
-    let replies = [
-        parse_reply(lines.next().expect("first tool reply")),
-        parse_reply(lines.next().expect("second tool reply")),
-        parse_reply(lines.next().expect("third tool reply")),
-    ];
+fn assert_tool_replies(replies: &[Value]) {
     let catalog = replies
         .iter()
         .find(|reply| reply["id"] == 3)
-        .expect("topic list reply");
-    assert_eq!(
-        catalog["result"]["structuredContent"]["topics"][0]["name"],
-        "mcp-registered"
-    );
-    assert_eq!(
-        catalog["result"]["structuredContent"]["topics"][0]["origin"],
-        "user"
-    );
+        .expect("document list reply");
+    let documents = catalog["result"]["structuredContent"]["documents"]
+        .as_array()
+        .expect("document catalog");
+    assert_eq!(documents.len(), 2);
+    assert!(documents.iter().any(|document| {
+        document["name"] == "mcp-registered"
+            && document["kind"] == "markdown"
+            && document["origin"] == "user"
+    }));
+    assert!(documents.iter().any(|document| {
+        document["name"] == "mcp-manual"
+            && document["kind"] == "manual"
+            && document["section"] == "1"
+    }));
     let search = replies
         .iter()
         .find(|reply| reply["id"] == 4)
@@ -117,8 +134,6 @@ fn stdio_mode_lists_and_queries_registered_markdown_topics() {
             .is_none(),
         "MCP excerpts must discard lowering diagnostics"
     );
-
-    assert_silent_shutdown(child, input, diagnostics, data_home);
 }
 
 fn assert_silent_shutdown(
@@ -133,7 +148,7 @@ fn assert_silent_shutdown(
         .lines()
         .collect::<Result<Vec<_>, _>>()
         .expect("read MCP stderr");
-    fs::remove_dir_all(data_home).expect("remove registered topic fixture");
+    fs::remove_dir_all(data_home).expect("remove registered document fixture");
     assert!(status.success(), "MCP server should stop cleanly: {status}");
     assert!(
         diagnostics.is_empty(),
@@ -177,7 +192,7 @@ fn request_tool_list(input: &mut impl Write) {
     );
 }
 
-fn request_topic_list(input: &mut impl Write) {
+fn request_document_list(input: &mut impl Write) {
     write_message(
         input,
         &json!({
@@ -185,14 +200,17 @@ fn request_topic_list(input: &mut impl Write) {
             "id": 3,
             "method": "tools/call",
             "params": {
-                "name": "mant_topics_list",
-                "arguments": {}
+                "name": "mant_documents_list",
+                "arguments": {
+                    "query": "mcp-",
+                    "limit": 10
+                }
             }
         }),
     );
 }
 
-fn request_topic_search(input: &mut impl Write) {
+fn request_document_search(input: &mut impl Write) {
     write_message(
         input,
         &json!({
@@ -202,7 +220,7 @@ fn request_topic_search(input: &mut impl Write) {
             "params": {
                 "name": "mant_document_search",
                 "arguments": {
-                    "topic": "mcp-registered",
+                    "name": "mcp-registered",
                     "pattern": "needle",
                     "word": "True",
                     "context_lines": "1",
@@ -214,7 +232,7 @@ fn request_topic_search(input: &mut impl Write) {
     );
 }
 
-fn request_topic_get(input: &mut impl Write) {
+fn request_document_get(input: &mut impl Write) {
     write_message(
         input,
         &json!({
@@ -224,7 +242,7 @@ fn request_topic_get(input: &mut impl Write) {
             "params": {
                 "name": "mant_document_get",
                 "arguments": {
-                    "topic": "mcp-registered",
+                    "name": "mcp-registered",
                     "nodes": "[\"root\"]"
                 }
             }
@@ -236,16 +254,25 @@ fn write_message(input: &mut impl Write, message: &Value) {
     writeln!(input, "{message}").expect("write MCP request");
 }
 
-fn registered_topic_fixture() -> PathBuf {
-    let data_home =
-        std::env::temp_dir().join(format!("mant-mcp-registered-topic-{}", std::process::id()));
-    let topics = data_home.join("mant/topics");
-    fs::create_dir_all(&topics).expect("create topic directory");
+fn registered_document_fixture() -> PathBuf {
+    let data_home = std::env::temp_dir().join(format!(
+        "mant-mcp-registered-document-{}",
+        std::process::id()
+    ));
+    let documents = data_home.join("mant/documents");
+    fs::create_dir_all(&documents).expect("create document directory");
     fs::write(
-        topics.join("mcp-registered.md"),
+        documents.join("mcp-registered.md"),
         "Read the MCP needle.\n\n> preserved unsupported quote\n\n# Guide\n\nDocument body.\n",
     )
-    .expect("write registered topic");
+    .expect("write registered document");
+    let manual_section = data_home.join("manuals/man1");
+    fs::create_dir_all(&manual_section).expect("create manual section");
+    fs::write(
+        manual_section.join("mcp-manual.1"),
+        ".TH MCP-MANUAL 1\n.SH NAME\nmcp-manual \\- native MCP discovery\n",
+    )
+    .expect("write manual document");
     data_home
 }
 

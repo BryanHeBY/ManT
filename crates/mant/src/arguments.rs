@@ -1,6 +1,6 @@
 //! Defines and validates the public `mant` command line with clap.
 //!
-//! The interface intentionally has one positional value: the manual topic.
+//! The interface intentionally has one positional value: the document name.
 //! Every action, projection, input mode, and output choice is a long option so
 //! humans and agents do not have to distinguish ad-hoc subcommand grammars.
 
@@ -144,24 +144,24 @@ pub(crate) enum Command {
     about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
     version,
-    override_usage = "mant <TOPIC|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
     after_help = "Examples:\n  mant git\n  mant README.md\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("source")
-        .args(["topic", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
+        .args(["name", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
 struct Cli {
-    /// Registered topic, manual topic, local Markdown path, or `-` for standard input.
-    #[arg(value_name = "TOPIC|MARKDOWN|-", value_parser = non_empty)]
-    topic: Option<String>,
+    /// Document name, local Markdown path, or `-` for standard input.
+    #[arg(value_name = "NAME|MARKDOWN|-", value_parser = non_empty)]
+    name: Option<String>,
 
     /// Select a manual section such as 1 or 3p.
     #[arg(
         long,
         value_name = "SECTION",
         value_parser = non_empty,
-        requires = "topic",
+        requires = "name",
         help_heading = "Document selection"
     )]
     section: Option<String>,
@@ -173,7 +173,7 @@ struct Cli {
         value_enum,
         num_args = 0..=1,
         default_missing_value = "options",
-        requires = "topic",
+        requires = "name",
         conflicts_with_all = ["node", "explain"],
         help_heading = "Document selection"
     )]
@@ -184,7 +184,7 @@ struct Cli {
         long,
         value_name = "NODE",
         value_parser = non_empty,
-        requires = "topic",
+        requires = "name",
         conflicts_with = "explain",
         help_heading = "Document selection"
     )]
@@ -196,7 +196,7 @@ struct Cli {
         value_name = "ENTRY",
         value_parser = non_empty,
         allow_hyphen_values = true,
-        requires = "topic",
+        requires = "name",
         conflicts_with_all = ["outline", "node", "search"],
         help_heading = "Document selection"
     )]
@@ -208,7 +208,7 @@ struct Cli {
         visible_alias = "grep",
         value_name = "PATTERN",
         value_parser = non_empty,
-        requires = "topic",
+        requires = "name",
         conflicts_with_all = ["outline", "node", "explain"],
         help_heading = "Search"
     )]
@@ -309,7 +309,7 @@ struct Cli {
     /// Open the interactive terminal reader explicitly.
     #[arg(
         long,
-        requires = "topic",
+        requires = "name",
         conflicts_with_all = [
             "outline",
             "node",
@@ -358,7 +358,7 @@ struct Cli {
     #[arg(
         long,
         conflicts_with_all = [
-            "topic",
+            "name",
             "section",
             "outline",
             "node",
@@ -499,7 +499,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         ));
     }
 
-    let source = normalize_query_source(parsed.request_json, parsed.topic, parsed.section, view)?;
+    let source = normalize_query_source(parsed.request_json, parsed.name, parsed.section, view)?;
     let presentation = if parsed.ui {
         QueryPresentation::Interactive
     } else if let Some(format) = parsed.format {
@@ -531,19 +531,19 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
 
 fn normalize_query_source(
     request_json: bool,
-    topic: Option<String>,
+    name: Option<String>,
     section: Option<String>,
     view: QueryView,
 ) -> Result<QuerySource, clap::Error> {
     let source = if request_json {
         QuerySource::StdinJson
     } else {
-        let value = topic.expect("clap requires one input source");
+        let value = name.expect("clap requires one input source");
         if value == "-" {
             if section.is_some() {
                 return Err(command_error(
                     ErrorKind::ArgumentConflict,
-                    "--section applies only to manual topics",
+                    "--section applies only to document names",
                 ));
             }
             QuerySource::MarkdownStdin { view }
@@ -552,18 +552,18 @@ fn normalize_query_source(
                 if section.is_some() {
                     return Err(command_error(
                         ErrorKind::ArgumentConflict,
-                        "--section applies only to manual topics",
+                        "--section applies only to document names",
                     ));
                 }
                 QueryInput::MarkdownFile { path: value }
             } else {
-                QueryInput::Manual {
-                    topic: value,
+                QueryInput::Document {
+                    name: value,
                     section,
                 }
             };
             QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V3,
+                schema: RequestSchema::V4,
                 input,
                 view,
             })
@@ -618,9 +618,9 @@ mod tests {
             parse(&args(&["git"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "git".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "git".to_owned(),
                         section: None,
                     },
                     view: QueryView::Full {},
@@ -641,13 +641,13 @@ mod tests {
             parse(&args(&["git", "--ui"])).expect("interactive query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    input: QueryInput::Manual { ref topic, .. },
+                    input: QueryInput::Document { ref name, .. },
                     view: QueryView::Full {},
                     ..
                 }),
                 presentation: QueryPresentation::Interactive,
                 ..
-            } if topic == "git"
+            } if name == "git"
         ));
 
         for conflicting in ["--outline", "--search=git", "--format=json"] {
@@ -689,7 +689,7 @@ mod tests {
             parse(&args(&["README.md", "--section", "1"]))
                 .expect_err("Markdown has no man section selector")
                 .to_string()
-                .contains("--section applies only to manual topics")
+                .contains("--section applies only to document names")
         );
     }
 
@@ -719,9 +719,9 @@ mod tests {
             .expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "printf".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "printf".to_owned(),
                         section: Some("3".to_owned()),
                     },
                     view: QueryView::Full {},
@@ -790,9 +790,9 @@ mod tests {
             parse(&args(&["gcc", "--outline"])).expect("outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "gcc".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "gcc".to_owned(),
                         section: None,
                     },
                     view: QueryView::Outline {
@@ -812,9 +812,9 @@ mod tests {
                 .expect("option outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "tar".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "tar".to_owned(),
                         section: None,
                     },
                     view: QueryView::Outline {
@@ -836,9 +836,9 @@ mod tests {
             .expect("excerpt"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "gcc".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "gcc".to_owned(),
                         section: None,
                     },
                     view: QueryView::Excerpt {
@@ -866,9 +866,9 @@ mod tests {
                 parse(&args(&values)).expect("explain query"),
                 Command::Query {
                     source: QuerySource::Arguments(QueryRequest {
-                        schema: RequestSchema::V3,
-                        input: QueryInput::Manual {
-                            topic: "tar".to_owned(),
+                        schema: RequestSchema::V4,
+                        input: QueryInput::Document {
+                            name: "tar".to_owned(),
                             section: None,
                         },
                         view: QueryView::Excerpt {
@@ -892,9 +892,9 @@ mod tests {
             parse(&args(&["tar", "--search=--acls"])).expect("literal search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "tar".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "tar".to_owned(),
                         section: None,
                     },
                     view: QueryView::Search {
@@ -939,9 +939,9 @@ mod tests {
             .expect("regex search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "git".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "git".to_owned(),
                         section: None,
                     },
                     view: QueryView::Search {
@@ -1028,7 +1028,7 @@ mod tests {
     }
 
     #[test]
-    fn help_is_side_effect_free_and_the_option_terminator_preserves_a_topic() {
+    fn help_is_side_effect_free_and_the_option_terminator_preserves_a_name() {
         for flag in ["--help", "-h"] {
             let help = parse(&args(&[flag])).expect("help");
             assert!(matches!(help, Command::Help(text) if text.contains("Usage: mant")));
@@ -1037,9 +1037,9 @@ mod tests {
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V3,
-                    input: QueryInput::Manual {
-                        topic: "--help".to_owned(),
+                    schema: RequestSchema::V4,
+                    input: QueryInput::Document {
+                        name: "--help".to_owned(),
                         section: None,
                     },
                     view: QueryView::Full {},

@@ -1,6 +1,8 @@
 //! Manual source, query, and output engine independent from its process hosts.
 
+mod catalog;
 mod definitions;
+mod documents;
 mod groff_html;
 mod mandoc;
 mod markdown;
@@ -10,8 +12,14 @@ mod query;
 mod search;
 mod source;
 mod tldr;
-mod topics;
 
+pub use catalog::{
+    AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, list_available_documents,
+};
+pub use documents::{
+    RegisteredDocument, RegisteredDocumentOrigin, find_registered_document,
+    list_registered_documents,
+};
 pub use groff_html::parse_groff_html;
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
@@ -28,17 +36,15 @@ pub use query::{
 };
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
-    CommandOutput, CommandRunner, LocateError, ManualRequest, SystemCommandRunner,
-    locate_manual_source, locate_manual_source_with,
+    CommandOutput, CommandRunner, LocateError, ManualIndex, ManualPage, ManualRequest,
+    SystemCommandRunner, discover_manual_roots, locate_manual_source, locate_manual_source_in,
+    system_manual_index,
 };
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, TldrUpdateError,
     get_system_tldr_cache_dirs, get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms,
     get_tldr_read_cache_dirs, normalize_tldr_topic, parse_tldr_command, parse_tldr_page,
     read_cached_tldr_page, update_tldr_cache,
-};
-pub use topics::{
-    RegisteredTopic, RegisteredTopicOrigin, find_registered_topic, list_registered_topics,
 };
 
 /// Reports the native contract version through the engine layer.
@@ -53,6 +59,6 @@ mod tests {
 
     #[test]
     fn exposes_the_ast_contract_version() {
-        assert_eq!(native_api_version(), "3");
+        assert_eq!(native_api_version(), "4");
     }
 }

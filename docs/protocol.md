@@ -20,9 +20,9 @@ The current descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v3",
-  "nativeApiVersion": "3",
-  "requestSchema": "mant.request/v3",
+  "protocol": "mant.cli/v4",
+  "nativeApiVersion": "4",
+  "requestSchema": "mant.request/v4",
   "querySchema": "mant.query/v3",
   "documentSchema": "mant.document/v3",
   "outlineSchema": "mant.outline/v3",
@@ -38,9 +38,9 @@ query the manual database, read tldr data, or start the TUI.
 
 | Identifier | Scope | Where it appears |
 | --- | --- | --- |
-| `mant.cli/v3` | One-shot process invocation and stream behavior | `--protocol-version` |
-| `3` | Native API generation negotiated by process clients | `nativeApiVersion` |
-| `mant.request/v3` | Closed request accepted by `--request-json` | Request `schema` |
+| `mant.cli/v4` | One-shot process invocation and stream behavior | `--protocol-version` |
+| `4` | Native API generation negotiated by process clients | `nativeApiVersion` |
+| `mant.request/v4` | Closed request accepted by `--request-json` | Request `schema` |
 | `mant.query/v3` | Complete document plus optional quick reference | Full response `schema` |
 | `mant.document/v3` | Source-neutral document AST | `QueryBundle.document.schema` |
 | `mant.outline/v3` | Block-free addressable tree | Outline response `schema` |
@@ -92,7 +92,7 @@ commands.
 
 | Catalog key | Root title | Root `$id` |
 | --- | --- | --- |
-| `request` | `QueryRequest` | `urn:mant:request:v3` |
+| `request` | `QueryRequest` | `urn:mant:request:v4` |
 | `query` | `QueryBundle` | `urn:mant:query:v3` |
 | `outline` | `QueryOutline` | `urn:mant:outline:v3` |
 | `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v3` |
@@ -146,7 +146,7 @@ findings belong to `document.diagnostics` or `excerpt.diagnostics`.
 
 ### Renderer Policy
 
-`renderer` is deliberately absent from `mant.request/v3`. Diagnostic renderer
+`renderer` is deliberately absent from `mant.request/v4`. Diagnostic renderer
 selection belongs to the process invocation:
 
 ```sh
@@ -165,31 +165,33 @@ Every request has three required fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema` | Exact string | Must be `mant.request/v3` |
-| `input` | `QueryInput` union | Resolvable topic or local Markdown path |
+| `schema` | Exact string | Must be `mant.request/v4` |
+| `input` | `QueryInput` union | Resolvable document name or local Markdown path |
 | `view` | `QueryView` union | Full, outline, excerpt, or search projection |
 
 ### Input Variants
 
-An unqualified topic first checks registered Markdown below
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics` and each
-`$XDG_DATA_DIRS/mant/topics` directory, then falls back to the host manual
-database:
+An unqualified name first checks registered Markdown below
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents` and each
+`$XDG_DATA_DIRS/mant/documents` directory, then falls back to ManT's native
+manual index:
 
 ```json
 {
-  "kind": "manual",
-  "topic": "printf",
+  "kind": "document",
+  "name": "printf",
   "section": "3"
 }
 ```
 
 `section` is optional and bypasses registered Markdown. Renderer-forcing flags
-also select a manual directly. The process inherits `MANPATH`, `MANSECT`, and
-locale variables for this host `man -w` lookup. To query a project-local roff source,
-place it below a manual-hierarchy root such as `project-man/man1/tool.1`, set
-`MANPATH` to `project-man`, and request topic `tool`; a raw `.1` path is not a
-request input variant.
+also select a manual directly. The native index reads `MANT_MANPATH` as a
+complete root override, otherwise honors `MANPATH`, then checks user/XDG,
+PATH-derived, and conventional system manual roots. To query a project-local
+roff source, place it below a hierarchy such as `project-man/man1/tool.1`, set
+`MANT_MANPATH` to `project-man`, and request name `tool`; a raw `.1` path is not
+a request input variant. Only raw, gzip, and zstd sources are indexed because
+those are the formats the bundled parser can open directly.
 
 A local Markdown file is selected by path:
 
@@ -237,10 +239,10 @@ Request a full manual:
 
 ```json
 {
-  "schema": "mant.request/v3",
+  "schema": "mant.request/v4",
   "input": {
-    "kind": "manual",
-    "topic": "printf",
+    "kind": "document",
+    "name": "printf",
     "section": "3"
   },
   "view": {
@@ -253,10 +255,10 @@ Discover all sections and semantic entries:
 
 ```json
 {
-  "schema": "mant.request/v3",
+  "schema": "mant.request/v4",
   "input": {
-    "kind": "manual",
-    "topic": "tar"
+    "kind": "document",
+    "name": "tar"
   },
   "view": {
     "kind": "outline",
@@ -269,10 +271,10 @@ Retrieve a section and one option by selectors returned from an outline:
 
 ```json
 {
-  "schema": "mant.request/v3",
+  "schema": "mant.request/v4",
   "input": {
-    "kind": "manual",
-    "topic": "tar"
+    "kind": "document",
+    "name": "tar"
   },
   "view": {
     "kind": "excerpt",
@@ -288,7 +290,7 @@ Search a Markdown document:
 
 ```json
 {
-  "schema": "mant.request/v3",
+  "schema": "mant.request/v4",
   "input": {
     "kind": "markdown-file",
     "path": "README.md"
@@ -311,7 +313,7 @@ A shell client can send a request without a temporary file:
 
 ```sh
 printf '%s\n' \
-  '{"schema":"mant.request/v3","input":{"kind":"manual","topic":"tar"},"view":{"kind":"outline","detail":"options"}}' \
+  '{"schema":"mant.request/v4","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}' \
   | mant --request-json --format json --compact
 ```
 
@@ -709,7 +711,7 @@ A complete no-match response is:
 
 `mant --mcp` is a long-running Model Context Protocol server over standard
 input and output. It is an alternate transport over the same `mant-core`
-queries, not `mant.cli/v3` framing and not a separate document model.
+queries, not `mant.cli/v4` framing and not a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
 line is limited to 8 MiB. Standard output is exclusively MCP traffic;
@@ -732,7 +734,7 @@ With the current runtime, a client requesting `2025-11-25` receives:
     "name": "mant",
     "version": "0.4.0"
   },
-  "instructions": "Query registered Markdown topics and local manual pages by topic. Use mant_topics_list to discover registered Markdown, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain."
+  "instructions": "Query registered Markdown documents and local manual pages by name. Use mant_documents_list for paginated discovery, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain."
 }
 ```
 
@@ -747,18 +749,18 @@ read-only tools:
 
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
-| `mant_topics_list` | None | None | Registered topic catalog |
-| `mant_document_outline` | `topic` | `section`; `detail`, default `options` | `mant.outline/v3` |
-| `mant_document_get` | `topic`, non-empty `nodes` | `section` | `mant.excerpt/v3` |
-| `mant_document_explain` | `topic`, `entry` | `section` | `mant.excerpt/v3` |
-| `mant_document_search` | `topic`, `pattern` | `section` and search settings | `mant.search/v2` |
+| `mant_documents_list` | None | `query`, `kind`, `section`, `limit`, `offset` | Paginated document catalog |
+| `mant_document_outline` | `name` | `section`; `detail`, default `options` | `mant.outline/v3` |
+| `mant_document_get` | `name`, non-empty `nodes` | `section` | `mant.excerpt/v3` |
+| `mant_document_explain` | `name`, `entry` | `section` | `mant.excerpt/v3` |
+| `mant_document_search` | `name`, `pattern` | `section` and search settings | `mant.search/v2` |
 
 Every tool is annotated read-only, non-destructive, idempotent, and
-closed-world. Document tools resolve one topic through registered Markdown and
-then the local man database. They intentionally do not accept arbitrary file
+closed-world. Document tools resolve one name through registered Markdown and
+then the native manual index. They intentionally do not accept arbitrary file
 paths. Supplying `section` bypasses registered Markdown and selects a manual.
 
-Discover registered Markdown with:
+Discover both registered Markdown and section-qualified manual pages with:
 
 ```json
 {
@@ -766,11 +768,22 @@ Discover registered Markdown with:
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "mant_topics_list",
-    "arguments": {}
+    "name": "mant_documents_list",
+    "arguments": {
+      "query": "printf",
+      "kind": "manual",
+      "limit": 100,
+      "offset": 0
+    }
   }
 }
 ```
+
+The catalog response reports `total`, `returned`, `offset`, `truncated`, an
+optional `nextOffset`, and `documents`. Each document has `name`, `kind`,
+optional `section`, `path`, and `origin`. `kind` accepts `markdown` or `manual`;
+`section` excludes Markdown entries. `query` is a case-insensitive name
+substring. `limit` defaults to 100 and is capped at 1,000.
 
 An outline tool call is:
 
@@ -782,7 +795,7 @@ An outline tool call is:
   "params": {
     "name": "mant_document_outline",
     "arguments": {
-      "topic": "tar",
+      "name": "tar",
       "detail": "options"
     }
   }
@@ -799,7 +812,7 @@ A structure-aware search tool call is:
   "params": {
     "name": "mant_document_search",
     "arguments": {
-      "topic": "tar",
+      "name": "tar",
       "pattern": "--acls",
       "syntax": "literal",
       "case": "insensitive",
@@ -822,7 +835,7 @@ than inventing a ManT error schema.
 2. Run `mant --protocol-version --compact` and require compatible identifiers.
 3. Obtain `mant --schema request` and the expected response schema, or use a
    schema catalog pinned with the executable.
-4. Construct a closed `mant.request/v3` object.
+4. Construct a closed `mant.request/v4` object.
 5. Spawn `mant --request-json --format json --compact`.
 6. Write one UTF-8 request and close stdin.
 7. Drain stdout and stderr concurrently and apply a timeout.

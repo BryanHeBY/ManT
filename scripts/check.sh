@@ -30,7 +30,7 @@ fi
 
 printf '\n==> smoke-test release executable\n'
 help=$("$MANT" --help)
-grep -Fq 'mant <TOPIC|MARKDOWN|-> [OPTIONS]' <<<"$help"
+grep -Fq 'mant <NAME|MARKDOWN|-> [OPTIONS]' <<<"$help"
 grep -Fq 'mant README.md' <<<"$help"
 grep -Fq -- '--ui' <<<"$help"
 

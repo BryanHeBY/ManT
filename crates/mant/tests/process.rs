@@ -23,7 +23,7 @@ fn help_groups_the_public_query_surface() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
-    assert!(help.contains("mant <TOPIC|MARKDOWN|-> [OPTIONS]"));
+    assert!(help.contains("mant <NAME|MARKDOWN|-> [OPTIONS]"));
     assert!(help.contains("mant README.md"));
     assert!(help.contains("cat guide.md | mant -"));
     assert!(help.contains("Document selection:"));
@@ -110,7 +110,7 @@ fn request_schema_is_discoverable_without_host_state() {
     assert!(
         String::from_utf8(output.stdout)
             .expect("UTF-8 schema")
-            .contains("mant.request/v3")
+            .contains("mant.request/v4")
     );
 }
 
@@ -124,8 +124,8 @@ fn protocol_version_is_a_clean_json_document() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
-    assert_eq!(value["protocol"], "mant.cli/v3");
-    assert_eq!(value["requestSchema"], "mant.request/v3");
+    assert_eq!(value["protocol"], "mant.cli/v4");
+    assert_eq!(value["requestSchema"], "mant.request/v4");
     assert_eq!(value["querySchema"], "mant.query/v3");
     assert_eq!(value["outlineSchema"], "mant.outline/v3");
     assert_eq!(value["excerptSchema"], "mant.excerpt/v3");
@@ -142,6 +142,7 @@ fn protocol_version_is_a_clean_json_document() {
         );
     }
     for tool in [
+        "mant_documents_list",
         "mant_document_outline",
         "mant_document_get",
         "mant_document_explain",
@@ -168,7 +169,7 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v3","input":{"kind":"manual","topic":"git"},"view":{"kind":"full"},"futureField":true}"#,
+            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"futureField":true}"#,
         )
         .expect("write request");
     let output = child.wait_with_output().expect("wait for mant");
@@ -243,7 +244,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
         .spawn()
         .expect("start protocol query");
     let request = serde_json::json!({
-        "schema": "mant.request/v3",
+        "schema": "mant.request/v4",
         "input": {
             "kind": "markdown-file",
             "path": path.to_str().expect("UTF-8 path"),
@@ -307,22 +308,23 @@ fn cli_json_remains_the_lowering_diagnostic_surface() {
 }
 
 #[test]
-fn unqualified_topics_prefer_registered_xdg_markdown() {
+fn unqualified_names_prefer_registered_xdg_markdown() {
     let data_home = std::env::temp_dir().join(format!(
-        "mant-registered-topic-process-{}",
+        "mant-registered-document-process-{}",
         std::process::id()
     ));
-    let topics = data_home.join("mant/topics");
-    fs::create_dir_all(&topics).expect("create registered topic directory");
-    let path = topics.join("process-registered.md");
-    fs::write(&path, "# Registered\n\nBody from the XDG topic.\n").expect("write registered topic");
+    let documents = data_home.join("mant/documents");
+    fs::create_dir_all(&documents).expect("create registered document directory");
+    let path = documents.join("process-registered.md");
+    fs::write(&path, "# Registered\n\nBody from the XDG document.\n")
+        .expect("write registered document");
 
     let output = Command::new(executable())
         .args(["process-registered", "--format", "json", "--compact"])
         .env("XDG_DATA_HOME", &data_home)
         .env("XDG_DATA_DIRS", data_home.join("empty-system-data"))
         .output()
-        .expect("query registered topic");
+        .expect("query registered document");
 
     assert!(output.status.success(), "{output:?}");
     assert!(output.stderr.is_empty());
@@ -335,7 +337,36 @@ fn unqualified_topics_prefer_registered_xdg_markdown() {
         path.to_str().expect("UTF-8 path")
     );
 
-    fs::remove_dir_all(data_home).expect("remove registered topic fixture");
+    fs::remove_dir_all(data_home).expect("remove registered document fixture");
+}
+
+#[test]
+fn manual_queries_use_native_paths_without_a_man_executable() {
+    let root =
+        std::env::temp_dir().join(format!("mant-native-manual-process-{}", std::process::id()));
+    let section = root.join("man1");
+    fs::create_dir_all(&section).expect("create manual section");
+    fs::write(
+        section.join("native-only.1"),
+        ".TH NATIVE-ONLY 1\n.SH NAME\nnative-only \\- indexed without man\n",
+    )
+    .expect("write manual source");
+
+    let output = Command::new(executable())
+        .args(["native-only", "--format", "json", "--compact"])
+        .env("MANT_MANPATH", &root)
+        .env("PATH", "")
+        .output()
+        .expect("query native manual index");
+
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
+    assert_eq!(value["label"], "native-only");
+    assert_eq!(value["document"]["meta"]["section"], "1");
+    assert_eq!(value["document"]["source"]["format"], "man");
+
+    fs::remove_dir_all(root).expect("remove native manual fixture");
 }
 
 #[test]

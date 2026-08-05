@@ -9,53 +9,53 @@ use std::{
 };
 
 const APPLICATION_DIR: &str = "mant";
-const TOPICS_DIR: &str = "topics";
+const DOCUMENTS_DIR: &str = "documents";
 const DEFAULT_SYSTEM_DATA_DIRS: [&str; 2] = ["/usr/local/share", "/usr/share"];
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 
-/// Precedence class for one registered Markdown topic.
+/// Precedence class for one registered Markdown document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RegisteredTopicOrigin {
+pub enum RegisteredDocumentOrigin {
     User,
     System,
 }
 
-/// One Markdown document explicitly registered in `ManT`'s topic namespace.
+/// One Markdown document explicitly registered in `ManT`'s document namespace.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RegisteredTopic {
+pub struct RegisteredDocument {
     pub name: String,
     pub path: PathBuf,
-    pub origin: RegisteredTopicOrigin,
+    pub origin: RegisteredDocumentOrigin,
 }
 
-/// Find the highest-precedence registered Markdown document for `topic`.
+/// Find the highest-precedence registered Markdown document for `document`.
 #[must_use]
-pub fn find_registered_topic(topic: &str) -> Option<RegisteredTopic> {
+pub fn find_registered_document(document: &str) -> Option<RegisteredDocument> {
     let environment = env::vars_os().collect::<HashMap<_, _>>();
-    find_registered_topic_with(topic, &environment)
+    find_registered_document_with(document, &environment)
 }
 
-/// List effective registered topics after applying directory precedence.
+/// List effective registered documents after applying directory precedence.
 #[must_use]
-pub fn list_registered_topics() -> Vec<RegisteredTopic> {
+pub fn list_registered_documents() -> Vec<RegisteredDocument> {
     let environment = env::vars_os().collect::<HashMap<_, _>>();
-    list_registered_topics_with(&environment)
+    list_registered_documents_with(&environment)
 }
 
-fn find_registered_topic_with(
-    topic: &str,
+fn find_registered_document_with(
+    document: &str,
     environment: &HashMap<OsString, OsString>,
-) -> Option<RegisteredTopic> {
-    let topic = topic.trim();
-    if !is_safe_topic_name(topic) {
+) -> Option<RegisteredDocument> {
+    let document = document.trim();
+    if !is_safe_document_name(document) {
         return None;
     }
-    for (directory, origin) in topic_directories(environment) {
+    for (directory, origin) in document_directories(environment) {
         for extension in MARKDOWN_EXTENSIONS {
-            let path = directory.join(format!("{topic}.{extension}"));
+            let path = directory.join(format!("{document}.{extension}"));
             if path.is_file() {
-                return Some(RegisteredTopic {
-                    name: topic.to_owned(),
+                return Some(RegisteredDocument {
+                    name: document.to_owned(),
                     path,
                     origin,
                 });
@@ -65,9 +65,11 @@ fn find_registered_topic_with(
     None
 }
 
-fn list_registered_topics_with(environment: &HashMap<OsString, OsString>) -> Vec<RegisteredTopic> {
-    let mut topics = BTreeMap::<String, RegisteredTopic>::new();
-    for (directory, origin) in topic_directories(environment) {
+fn list_registered_documents_with(
+    environment: &HashMap<OsString, OsString>,
+) -> Vec<RegisteredDocument> {
+    let mut documents = BTreeMap::<String, RegisteredDocument>::new();
+    for (directory, origin) in document_directories(environment) {
         let Ok(entries) = fs::read_dir(directory) else {
             continue;
         };
@@ -75,24 +77,24 @@ fn list_registered_topics_with(environment: &HashMap<OsString, OsString>) -> Vec
             .flatten()
             .filter_map(|entry| {
                 let path = entry.path();
-                let name = path.is_file().then(|| markdown_topic_name(&path))??;
+                let name = path.is_file().then(|| markdown_document_name(&path))??;
                 let priority = markdown_extension_priority(&path)?;
                 Some((name, priority, path))
             })
             .collect::<Vec<_>>();
         candidates.sort_unstable();
         for (name, _, path) in candidates {
-            topics
+            documents
                 .entry(name.clone())
-                .or_insert(RegisteredTopic { name, path, origin });
+                .or_insert(RegisteredDocument { name, path, origin });
         }
     }
-    topics.into_values().collect()
+    documents.into_values().collect()
 }
 
-fn topic_directories(
+fn document_directories(
     environment: &HashMap<OsString, OsString>,
-) -> Vec<(PathBuf, RegisteredTopicOrigin)> {
+) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
     let mut directories = Vec::new();
     let mut seen = HashSet::new();
 
@@ -104,11 +106,11 @@ fn topic_directories(
             .map(|home| home.join(".local/share"))
     });
     if let Some(root) = user_data {
-        push_topic_directory(
+        push_document_directory(
             &mut directories,
             &mut seen,
             &root,
-            RegisteredTopicOrigin::User,
+            RegisteredDocumentOrigin::User,
         );
     }
 
@@ -126,23 +128,23 @@ fn topic_directories(
         },
     );
     for root in system_roots {
-        push_topic_directory(
+        push_document_directory(
             &mut directories,
             &mut seen,
             &root,
-            RegisteredTopicOrigin::System,
+            RegisteredDocumentOrigin::System,
         );
     }
     directories
 }
 
-fn push_topic_directory(
-    directories: &mut Vec<(PathBuf, RegisteredTopicOrigin)>,
+fn push_document_directory(
+    directories: &mut Vec<(PathBuf, RegisteredDocumentOrigin)>,
     seen: &mut HashSet<PathBuf>,
     root: &Path,
-    origin: RegisteredTopicOrigin,
+    origin: RegisteredDocumentOrigin,
 ) {
-    let directory = root.join(APPLICATION_DIR).join(TOPICS_DIR);
+    let directory = root.join(APPLICATION_DIR).join(DOCUMENTS_DIR);
     if seen.insert(directory.clone()) {
         directories.push((directory, origin));
     }
@@ -158,18 +160,18 @@ fn absolute_environment_path(
         .filter(|path| path.is_absolute())
 }
 
-fn is_safe_topic_name(topic: &str) -> bool {
-    !topic.is_empty()
-        && Path::new(topic)
+fn is_safe_document_name(document: &str) -> bool {
+    !document.is_empty()
+        && Path::new(document)
             .components()
             .all(|component| matches!(component, Component::Normal(_)))
-        && Path::new(topic).file_name() == Some(OsStr::new(topic))
+        && Path::new(document).file_name() == Some(OsStr::new(document))
 }
 
-fn markdown_topic_name(path: &Path) -> Option<String> {
+fn markdown_document_name(path: &Path) -> Option<String> {
     markdown_extension_priority(path)?;
     let name = path.file_stem()?.to_str()?;
-    is_safe_topic_name(name).then(|| name.to_owned())
+    is_safe_document_name(name).then(|| name.to_owned())
 }
 
 fn markdown_extension_priority(path: &Path) -> Option<u8> {
@@ -190,8 +192,8 @@ mod tests {
     };
 
     use super::{
-        RegisteredTopicOrigin, find_registered_topic_with, list_registered_topics_with,
-        topic_directories,
+        RegisteredDocumentOrigin, document_directories, find_registered_document_with,
+        list_registered_documents_with,
     };
 
     fn environment(values: &[(&str, &Path)]) -> HashMap<OsString, OsString> {
@@ -203,7 +205,7 @@ mod tests {
 
     fn temporary_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "mant-topic-{label}-{}-{:?}",
+            "mant-document-{label}-{}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ))
@@ -221,10 +223,13 @@ mod tests {
         ]);
 
         assert_eq!(
-            topic_directories(&environment),
+            document_directories(&environment),
             vec![
-                (user.join("mant/topics"), RegisteredTopicOrigin::User),
-                (system.join("mant/topics"), RegisteredTopicOrigin::System),
+                (user.join("mant/documents"), RegisteredDocumentOrigin::User),
+                (
+                    system.join("mant/documents"),
+                    RegisteredDocumentOrigin::System
+                ),
             ]
         );
     }
@@ -234,16 +239,17 @@ mod tests {
         let root = temporary_root("lookup");
         let user = root.join("user");
         let system = root.join("system");
-        fs::create_dir_all(user.join("mant/topics")).expect("user topics");
-        fs::create_dir_all(system.join("mant/topics")).expect("system topics");
-        fs::write(user.join("mant/topics/tool.md"), "# User").expect("user topic");
-        fs::write(system.join("mant/topics/tool.md"), "# System").expect("system topic");
+        fs::create_dir_all(user.join("mant/documents")).expect("user documents");
+        fs::create_dir_all(system.join("mant/documents")).expect("system documents");
+        fs::write(user.join("mant/documents/tool.md"), "# User").expect("user document");
+        fs::write(system.join("mant/documents/tool.md"), "# System").expect("system document");
         let environment = environment(&[("XDG_DATA_HOME", &user), ("XDG_DATA_DIRS", &system)]);
 
-        let topic = find_registered_topic_with("tool", &environment).expect("registered topic");
-        assert_eq!(topic.path, user.join("mant/topics/tool.md"));
-        assert_eq!(topic.origin, RegisteredTopicOrigin::User);
-        assert!(find_registered_topic_with("../tool", &environment).is_none());
+        let document =
+            find_registered_document_with("tool", &environment).expect("registered document");
+        assert_eq!(document.path, user.join("mant/documents/tool.md"));
+        assert_eq!(document.origin, RegisteredDocumentOrigin::User);
+        assert!(find_registered_document_with("../tool", &environment).is_none());
 
         fs::remove_dir_all(root).expect("remove fixture");
     }
@@ -253,25 +259,28 @@ mod tests {
         let root = temporary_root("list");
         let user = root.join("user");
         let system = root.join("system");
-        fs::create_dir_all(user.join("mant/topics")).expect("user topics");
-        fs::create_dir_all(system.join("mant/topics")).expect("system topics");
-        fs::write(user.join("mant/topics/zeta.markdown"), "# Zeta").expect("user topic");
-        fs::write(user.join("mant/topics/alpha.md"), "# Alpha").expect("user topic");
-        fs::write(user.join("mant/topics/alpha.markdown"), "# Lower priority")
-            .expect("alternate user topic");
-        fs::write(system.join("mant/topics/alpha.md"), "# Shadowed").expect("system topic");
-        fs::write(system.join("mant/topics/not-markdown.txt"), "ignored").expect("other file");
+        fs::create_dir_all(user.join("mant/documents")).expect("user documents");
+        fs::create_dir_all(system.join("mant/documents")).expect("system documents");
+        fs::write(user.join("mant/documents/zeta.markdown"), "# Zeta").expect("user document");
+        fs::write(user.join("mant/documents/alpha.md"), "# Alpha").expect("user document");
+        fs::write(
+            user.join("mant/documents/alpha.markdown"),
+            "# Lower priority",
+        )
+        .expect("alternate user document");
+        fs::write(system.join("mant/documents/alpha.md"), "# Shadowed").expect("system document");
+        fs::write(system.join("mant/documents/not-markdown.txt"), "ignored").expect("other file");
         let environment = environment(&[("XDG_DATA_HOME", &user), ("XDG_DATA_DIRS", &system)]);
 
-        let topics = list_registered_topics_with(&environment);
+        let documents = list_registered_documents_with(&environment);
         assert_eq!(
-            topics
+            documents
                 .iter()
-                .map(|topic| topic.name.as_str())
+                .map(|document| document.name.as_str())
                 .collect::<Vec<_>>(),
             ["alpha", "zeta"]
         );
-        assert_eq!(topics[0].path, user.join("mant/topics/alpha.md"));
+        assert_eq!(documents[0].path, user.join("mant/documents/alpha.md"));
 
         fs::remove_dir_all(root).expect("remove fixture");
     }
