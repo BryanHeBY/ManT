@@ -63,10 +63,10 @@ checksums, manual, and licenses before publishing the draft.
 
 The archive keeps `mant.md` beside the executable so installation remains
 transparent. User-facing release notes should recommend copying it to
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics/mant.md`; a system package
-should install it as `/usr/local/share/mant/topics/mant.md` (or the matching
-prefix-relative `share/mant/topics/mant.md`). The document is optional at
-runtime, but installing it makes `mant mant` and MCP topic discovery work
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md`; a system package
+should install it as `/usr/local/share/mant/documents/mant.md` (or the matching
+prefix-relative `share/mant/documents/mant.md`). The document is optional at
+runtime, but installing it makes `mant mant` and MCP document discovery work
 without a repository checkout.
 
 Linux x64 uses the baseline target so the executable does not require AVX2.
@@ -88,7 +88,7 @@ Set `MANT_RELEASE_TARGET=linux-x64` or `linux-arm64` to assert the expected
 runner identity. `MANT_BINARY` may point at another already-built executable.
 Archives and individual SHA-256 files are written under `dist/`.
 
-Before publishing, inspect that both the executable and self-hosted topic are
+Before publishing, inspect that both the executable and self-hosted document are
 present:
 
 ```sh

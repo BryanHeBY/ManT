@@ -24,7 +24,7 @@ mant --mcp                            # read-only MCP over stdio
 
 | Workflow | Selection | Highlights |
 | --- | --- | --- |
-| Interactive reading | `mant TOPIC` in a terminal, or `--ui` | Complete document, hierarchy-aware sidebar, scroll following, page-local links, search, mouse input, and tldr quick references |
+| Interactive reading | `mant NAME` in a terminal, or `--ui` | Complete document, hierarchy-aware sidebar, scroll following, page-local links, search, mouse input, and tldr quick references |
 | Structured queries | Projection options, `--format`, redirection, or `--mcp` | Outlines, excerpts, semantic option explanations, location-aware search, Markdown/text/JSON, generated schemas, and MCP stdio |
 
 A complete query automatically opens the reader only when both standard input
@@ -49,7 +49,7 @@ independent of terminal detection.
 - **Search results are reusable.** Matches include stable outline nodes and
   generated-Markdown line and column coordinates.
 - **Local-first and reproducible.** The primary libmandoc parser is bundled;
-  ordinary use needs no network service or system `mandoc` executable.
+  ordinary use needs no network service or system `man`/`mandoc` executable.
 - **Markdown uses the same model.** Project documentation gains the same
   outline, excerpt, search, TUI, JSON, and MCP capabilities.
 
@@ -63,29 +63,29 @@ mant git
 ```
 
 Building from crates.io requires Rust 1.88+, a C compiler, and the zlib
-development library on Linux or macOS. Local manual pages and the host `man`
-command are required for manual topics; Markdown files work independently.
+development library on Linux or macOS. ManT discovers local manual source trees
+itself; neither a `man` nor a `mandoc` executable is required at runtime.
 
 ### Linux release archive
 
 Download the archive for your architecture from the
 [latest release](https://github.com/BryanHeBY/ManT/releases/latest), then
-install the executable and its bundled `mant` documentation topic:
+install the executable and its bundled `mant` documentation:
 
 ```sh
 tar -xzf mant-<version>-linux-<arch>.tar.gz
 cd mant-<version>-linux-<arch>
 install -Dm755 mant ~/.local/bin/mant
 data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-install -Dm644 mant.md "$data_home/mant/topics/mant.md"
+install -Dm644 mant.md "$data_home/mant/documents/mant.md"
 mant mant
 ```
 
 Installing `mant.md` is recommended but optional: it makes the complete ManT
-manual available as the registered topic `mant`, including in the reader,
-structured CLI, and MCP topic catalog. For a system-wide installation, use
-`/usr/local/bin/mant` and `/usr/local/share/mant/topics/mant.md` instead. User
-topics take precedence over system topics.
+manual available as the registered document `mant`, including in the reader,
+structured CLI, and MCP document catalog. For a system-wide installation, use
+`/usr/local/bin/mant` and `/usr/local/share/mant/documents/mant.md` instead. User
+documents take precedence over system documents.
 
 The archive also includes the project README, the Apache-2.0 license, the
 bundled mandoc license, and a published SHA-256 checksum.
@@ -171,14 +171,14 @@ rule, and MCP tool.
 
 ## Manual sources and tldr
 
-ManT locates manual topics through the host's `man -w` behavior and parses the
-original roff source through bundled libmandoc. Project-local pages can be
-registered through `MANPATH`:
+ManT indexes raw, gzip, and zstd manual sources directly and parses their roff
+through bundled libmandoc. Project-local pages can be exposed through
+`MANT_MANPATH` (a complete override) or `MANPATH`:
 
 ```sh
 mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
-MANPATH="$PWD/project-man" mant widget --section 1
+MANT_MANPATH="$PWD/project-man" mant widget --section 1
 ```
 
 When compatible local tldr data exists, the reader places it before the full
@@ -190,13 +190,13 @@ installed client or ManT's private cache.
 Register reusable Markdown under the XDG data hierarchy:
 
 ```sh
-mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics"
-cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics/mant.md"
+mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents"
+cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md"
 mant mant
 ```
 
-An unqualified topic checks the user directory first, then
-`$XDG_DATA_DIRS/mant/topics`, and finally the local man database. An explicit
+An unqualified name checks the user directory first, then
+`$XDG_DATA_DIRS/mant/documents`, and finally the native manual index. An explicit
 `--section`, `--force-libmandoc`, or `--force-groff` request bypasses registered
 Markdown and selects a manual.
 
@@ -244,10 +244,10 @@ mant --mcp
 ```
 
 Configure the client command as `mant` with arguments `["--mcp"]`. The server
-exposes registered-topic discovery, outline, content, semantic explanation,
-and search tools over stdio. Document tools accept topic names rather than
+exposes registered-document discovery, outline, content, semantic explanation,
+and search tools over stdio. Document tools accept document names rather than
 arbitrary filesystem paths; place agent-readable Markdown in the registered
-topic directories above. It has no network transport or mutation tools;
+document directories above. It has no network transport or mutation tools;
 stdout remains reserved for MCP JSON-RPC and stderr stays silent. Lowering
 diagnostics remain available through ordinary CLI JSON queries.
 

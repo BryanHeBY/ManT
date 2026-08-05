@@ -13,9 +13,9 @@ mant git --format markdown
 mant --mcp
 ```
 
-Reusable Markdown can be registered as a topic by placing `NAME.md` below
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics`; `mant NAME` then resolves it
-before falling back to the local man database. Explicit Markdown paths and
+Reusable Markdown can be registered as a document by placing `NAME.md` below
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`; `mant NAME` then resolves it
+before falling back to ManT's native manual index. Explicit Markdown paths and
 standard input remain available for one-off documents.
 
 Install the native CLI with:

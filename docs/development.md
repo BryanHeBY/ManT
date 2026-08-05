@@ -9,11 +9,11 @@ live in the [project README](../README.md).
 - Rust 1.88 or newer with `cargo`, `clippy`, and `rustfmt`
 - GCC on Linux or Clang on macOS; set `CC` when a non-default compiler is needed
 - zlib development headers
-- local manual pages and `man` for testing installed manual topics
+- local manual source trees for exercising native page discovery
 
-The workspace vendors libmandoc, so a system `mandoc` executable is optional.
-Markdown parsing and the deterministic fixture suite do not require a host man
-database.
+The workspace vendors libmandoc and maintains its own manual index, so system
+`man` and `mandoc` executables are not prerequisites. Markdown parsing and the
+deterministic fixture suite do not require installed manual sources either.
 
 ## Start from a fresh clone
 
