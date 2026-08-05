@@ -92,11 +92,9 @@ impl Arguments {
 
 fn is_markdown_path(input: &str) -> bool {
     let path = Path::new(input);
-    path.is_file()
-        || path.extension().is_some_and(|extension| {
-            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
-        })
-        || input.starts_with('.')
+    path.extension().is_some_and(|extension| {
+        extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
+    }) || input.starts_with('.')
         || input.contains('/')
         || input.contains('\\')
 }
@@ -143,6 +141,17 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn an_existing_bare_path_cannot_silently_change_topic_semantics() {
+        assert_eq!(
+            parse(&["mantui-rs", "Cargo.toml"]).input,
+            QueryInput::Manual {
+                topic: "Cargo.toml".to_owned(),
+                section: None,
+            }
+        );
     }
 
     #[test]

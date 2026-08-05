@@ -2,7 +2,10 @@
 
 mod arguments;
 
-use std::process::ExitCode;
+use std::{
+    io::{self, IsTerminal},
+    process::ExitCode,
+};
 
 use clap::Parser;
 use mant_ast::{QueryRequest, QueryView, RequestSchema};
@@ -16,6 +19,12 @@ fn main() -> ExitCode {
         Ok(invocation) => invocation,
         Err(error) => error.exit(),
     };
+    if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+        eprintln!(
+            "mantui-rs: interactive view requires a terminal; use mant for Markdown or JSON output"
+        );
+        return ExitCode::FAILURE;
+    }
     let request = QueryRequest {
         schema: RequestSchema::V3,
         input: invocation.input,
