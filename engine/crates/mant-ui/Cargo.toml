@@ -1,0 +1,24 @@
+[package]
+name = "mant-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "Ratatui frontend under development for ManT"
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "mantui-rs"
+path = "src/main.rs"
+
+[dependencies]
+crossterm.workspace = true
+mant-ast = { path = "../mant-ast", version = "=0.4.0" }
+mant-core = { path = "../mant-core", version = "=0.4.0" }
+ratatui.workspace = true
+unicode-width.workspace = true
+
+[lints]
+workspace = true
