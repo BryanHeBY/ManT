@@ -143,7 +143,7 @@ pub(crate) enum Command {
     name = "mant",
     about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
-    disable_version_flag = true,
+    version,
     override_usage = "mant <TOPIC|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
     after_help = "Examples:\n  mant git\n  mant README.md\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("source")
@@ -412,7 +412,12 @@ pub(crate) fn parse(arguments: &[String]) -> Result<Command, clap::Error> {
     let parsed =
         match Cli::try_parse_from(iter::once("mant").chain(arguments.iter().map(String::as_str))) {
             Ok(parsed) => parsed,
-            Err(error) if error.kind() == ErrorKind::DisplayHelp => {
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+                ) =>
+            {
                 return Ok(Command::Help(error.to_string()));
             }
             Err(error) => return Err(error),
@@ -1046,6 +1051,14 @@ mod tests {
                 explain: false,
                 preserve_anchors: false,
             }
+        );
+    }
+
+    #[test]
+    fn version_is_side_effect_free() {
+        let version = parse(&args(&["--version"])).expect("version");
+        assert!(
+            matches!(version, Command::Help(text) if text == concat!("mant ", env!("CARGO_PKG_VERSION"), "\n"))
         );
     }
 }

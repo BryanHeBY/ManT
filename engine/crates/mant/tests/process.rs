@@ -29,7 +29,10 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("Document selection:"));
     assert!(help.contains("Search:"));
     assert!(help.contains("Integration:"));
+    assert!(help.contains("Reading:"));
     assert!(help.contains("-h, --help"));
+    assert!(help.contains("--ui"));
+    assert!(help.contains("-V, --version"));
     assert!(help.contains("--format <FORMAT>"));
     assert!(help.contains("--preserve-anchors"));
     assert!(help.contains("--update-tldr"));
@@ -40,6 +43,21 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("--search <PATTERN>"));
     assert!(!help.contains("--json"));
     assert!(!help.contains("update tldr"));
+}
+
+#[test]
+fn version_uses_the_standard_successful_clap_boundary() {
+    let output = Command::new(executable())
+        .arg("--version")
+        .output()
+        .expect("run mant --version");
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("UTF-8 version"),
+        format!("mant {}\n", env!("CARGO_PKG_VERSION"))
+    );
 }
 
 #[test]
