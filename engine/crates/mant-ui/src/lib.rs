@@ -5,10 +5,11 @@
 //! output without making the UI another process boundary.
 
 mod app;
+mod code;
 mod document;
 mod terminal;
 mod theme;
 
 pub use app::App;
-pub use document::{DocumentView, NavItem, RenderedDocument};
+pub use document::{DocumentView, NavItem, NavKind, RenderedDocument};
 pub use terminal::run;

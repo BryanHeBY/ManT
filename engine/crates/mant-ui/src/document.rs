@@ -7,7 +7,8 @@
 use std::collections::HashMap;
 
 use mant_ast::{
-    Block, Inline, ListKind, QueryBundle, Section, TableCell, TldrCommandPart, TldrOrigin,
+    Block, Inline, ListKind, QueryBundle, Section, SourceFormat, TableCell, TldrCommandPart,
+    TldrDocument, TldrOrigin,
 };
 use ratatui::{
     style::{Modifier, Style},
@@ -26,15 +27,30 @@ pub struct NavItem {
     pub id: String,
     pub title: String,
     pub depth: usize,
-    logical_line: usize,
+    pub kind: NavKind,
+    pub has_children: bool,
+    pub is_last: bool,
+}
+
+/// Semantic presentation class for a navigation entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavKind {
+    Tldr,
+    Root,
+    Section,
 }
 
 /// Renderer-independent terminal view before width-dependent wrapping.
 #[derive(Debug, Clone)]
 pub struct DocumentView {
     label: String,
+    source_label: &'static str,
+    top_level_count: usize,
+    section_count: usize,
+    has_tldr: bool,
     lines: Vec<LogicalLine>,
     navigation: Vec<NavItem>,
+    anchors: HashMap<String, usize>,
 }
 
 /// Exact terminal rows and anchor positions for one content width.
@@ -49,6 +65,17 @@ pub struct RenderedDocument {
 struct LogicalLine {
     indent: usize,
     spans: Vec<Span<'static>>,
+    surface: LineSurface,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineSurface {
+    Normal,
+    Code,
+    Tldr,
+    TldrTop,
+    TldrBottom,
+    Divider,
 }
 
 impl LogicalLine {
@@ -56,6 +83,7 @@ impl LogicalLine {
         Self {
             indent: 0,
             spans: Vec::new(),
+            surface: LineSurface::Normal,
         }
     }
 
@@ -63,7 +91,13 @@ impl LogicalLine {
         Self {
             indent,
             spans: vec![Span::styled(value.into(), style)],
+            surface: LineSurface::Normal,
         }
+    }
+
+    fn surface(mut self, surface: LineSurface) -> Self {
+        self.surface = surface;
+        self
     }
 }
 
@@ -72,81 +106,52 @@ impl DocumentView {
     #[must_use]
     pub fn new(bundle: &QueryBundle) -> Self {
         let mut builder = DocumentBuilder::new(bundle.label.clone());
+        let source_label = bundle.document.as_ref().map_or("MANUAL", |document| {
+            if document.source.format == SourceFormat::Markdown {
+                "MARKDOWN"
+            } else {
+                "MANUAL"
+            }
+        });
+        let top_level_count = bundle.document.as_ref().map_or(0, |document| {
+            document.sections.len() + usize::from(!document.blocks.is_empty())
+        });
+        let section_count = bundle
+            .document
+            .as_ref()
+            .map_or(0, |document| count_sections(&document.sections));
 
         if let Some(tldr) = &bundle.tldr {
-            builder.anchor(TLDR_ID, "TLDR QUICK REFERENCE", 0);
-            builder.push(LogicalLine::plain(
-                0,
-                format!("TLDR QUICK REFERENCE · {}", tldr.title),
-                Style::default()
-                    .fg(theme::MAUVE)
-                    .add_modifier(Modifier::BOLD),
-            ));
-            for description in &tldr.description {
-                builder.push(LogicalLine::plain(
-                    0,
-                    description.clone(),
-                    Style::default().fg(theme::TEXT),
-                ));
-            }
-            for example in &tldr.examples {
-                builder.blank();
-                builder.push(LogicalLine::plain(
-                    0,
-                    example.description.clone(),
-                    Style::default().fg(theme::GREEN),
-                ));
-                let spans = example
-                    .command_parts
-                    .iter()
-                    .map(|part| match part {
-                        TldrCommandPart::Text { value } => {
-                            Span::styled(value.clone(), Style::default().fg(theme::TEXT))
-                        }
-                        TldrCommandPart::Placeholder { value } => {
-                            Span::styled(value.clone(), Style::default().fg(theme::YELLOW))
-                        }
-                    })
-                    .collect();
-                builder.push(LogicalLine { indent: 2, spans });
-            }
-            if let Some(link) = &tldr.more_information {
-                builder.blank();
-                builder.push(LogicalLine::plain(
-                    0,
-                    format!("More information: {link}"),
-                    Style::default()
-                        .fg(theme::BLUE)
-                        .add_modifier(Modifier::UNDERLINED),
-                ));
-            }
-            if tldr.origin == TldrOrigin::TldrPages {
-                builder.push(LogicalLine::plain(
-                    0,
-                    format!(
-                        "tldr-pages · CC BY 4.0 · {} · {}",
-                        tldr.platform, tldr.language
-                    ),
-                    Style::default().fg(theme::SUBTEXT),
-                ));
-            }
-            builder.blank();
+            builder.tldr(tldr, bundle.document.is_some(), source_label);
         }
 
         if let Some(document) = &bundle.document {
             if !document.blocks.is_empty() {
-                builder.anchor(ROOT_ID, "OVERVIEW", 0);
+                builder.anchor(
+                    ROOT_ID,
+                    "OVERVIEW",
+                    0,
+                    NavKind::Root,
+                    false,
+                    document.sections.is_empty(),
+                );
                 builder.blocks(&document.blocks, 0);
             }
-            for section in &document.sections {
-                builder.section(section, 0);
+            let section_count = document.sections.len();
+            for (index, section) in document.sections.iter().enumerate() {
+                builder.section_with_position(section, 0, index + 1 == section_count);
             }
         }
 
         Self {
             label: builder.label,
+            source_label,
+            top_level_count,
+            section_count,
+            has_tldr: bundle.tldr.is_some(),
             lines: builder.lines,
             navigation: builder.navigation,
+            anchors: builder.anchors,
         }
     }
 
@@ -158,6 +163,26 @@ impl DocumentView {
     #[must_use]
     pub fn navigation(&self) -> &[NavItem] {
         &self.navigation
+    }
+
+    #[must_use]
+    pub const fn source_label(&self) -> &'static str {
+        self.source_label
+    }
+
+    #[must_use]
+    pub const fn top_level_count(&self) -> usize {
+        self.top_level_count
+    }
+
+    #[must_use]
+    pub const fn section_count(&self) -> usize {
+        self.section_count
+    }
+
+    #[must_use]
+    pub const fn has_tldr(&self) -> bool {
+        self.has_tldr
     }
 
     /// Wrap logical lines to the actual content width and translate anchors.
@@ -174,15 +199,12 @@ impl DocumentView {
         logical_rows.push(rows.len());
 
         let anchor_rows = self
-            .navigation
+            .anchors
             .iter()
-            .map(|item| {
+            .map(|(id, logical_line)| {
                 (
-                    item.id.clone(),
-                    logical_rows
-                        .get(item.logical_line)
-                        .copied()
-                        .unwrap_or_default(),
+                    id.clone(),
+                    logical_rows.get(*logical_line).copied().unwrap_or_default(),
                 )
             })
             .collect();
@@ -206,6 +228,7 @@ struct DocumentBuilder {
     label: String,
     lines: Vec<LogicalLine>,
     navigation: Vec<NavItem>,
+    anchors: HashMap<String, usize>,
 }
 
 impl DocumentBuilder {
@@ -214,11 +237,107 @@ impl DocumentBuilder {
             label,
             lines: Vec::new(),
             navigation: Vec::new(),
+            anchors: HashMap::new(),
         }
     }
 
     fn push(&mut self, line: LogicalLine) {
         self.lines.push(line);
+    }
+
+    fn tldr(&mut self, tldr: &TldrDocument, has_document: bool, source_label: &'static str) {
+        self.anchor(
+            TLDR_ID,
+            "TLDR QUICK REFERENCE",
+            0,
+            NavKind::Tldr,
+            false,
+            false,
+        );
+        self.push(LogicalLine::empty().surface(LineSurface::TldrTop));
+        self.push(
+            LogicalLine::plain(
+                0,
+                format!("TLDR QUICK REFERENCE · {}", tldr.title),
+                Style::default()
+                    .fg(theme::MAUVE)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .surface(LineSurface::Tldr),
+        );
+        for description in &tldr.description {
+            self.push(
+                LogicalLine::plain(0, description.clone(), Style::default().fg(theme::TEXT))
+                    .surface(LineSurface::Tldr),
+            );
+        }
+        for example in &tldr.examples {
+            self.tldr_example(example);
+        }
+        if let Some(link) = &tldr.more_information {
+            self.push(LogicalLine::empty().surface(LineSurface::Tldr));
+            self.push(
+                LogicalLine::plain(
+                    0,
+                    format!("More information: {link}"),
+                    Style::default()
+                        .fg(theme::BLUE)
+                        .add_modifier(Modifier::UNDERLINED),
+                )
+                .surface(LineSurface::Tldr),
+            );
+        }
+        if tldr.origin == TldrOrigin::TldrPages {
+            self.push(
+                LogicalLine::plain(
+                    0,
+                    format!(
+                        "tldr-pages · CC BY 4.0 · {} · {}",
+                        tldr.platform, tldr.language
+                    ),
+                    Style::default().fg(theme::SUBTEXT),
+                )
+                .surface(LineSurface::Tldr),
+            );
+        }
+        self.push(LogicalLine::empty().surface(LineSurface::TldrBottom));
+        if has_document {
+            self.push(LogicalLine::empty().surface(LineSurface::Divider));
+            self.push(LogicalLine::plain(
+                0,
+                source_label,
+                Style::default().fg(theme::SUBTEXT),
+            ));
+        }
+    }
+
+    fn tldr_example(&mut self, example: &mant_ast::TldrExample) {
+        self.push(LogicalLine::empty().surface(LineSurface::Tldr));
+        self.push(
+            LogicalLine::plain(
+                0,
+                example.description.clone(),
+                Style::default().fg(theme::GREEN),
+            )
+            .surface(LineSurface::Tldr),
+        );
+        let spans = example
+            .command_parts
+            .iter()
+            .map(|part| match part {
+                TldrCommandPart::Text { value } => {
+                    Span::styled(value.clone(), Style::default().fg(theme::TEXT))
+                }
+                TldrCommandPart::Placeholder { value } => {
+                    Span::styled(value.clone(), Style::default().fg(theme::YELLOW))
+                }
+            })
+            .collect();
+        self.push(LogicalLine {
+            indent: 2,
+            spans,
+            surface: LineSurface::Tldr,
+        });
     }
 
     fn blank(&mut self) {
@@ -227,30 +346,49 @@ impl DocumentBuilder {
         }
     }
 
-    fn anchor(&mut self, id: &str, title: &str, depth: usize) {
+    fn anchor(
+        &mut self,
+        id: &str,
+        title: &str,
+        depth: usize,
+        kind: NavKind,
+        has_children: bool,
+        is_last: bool,
+    ) {
+        self.anchors.insert(id.to_owned(), self.lines.len());
         self.navigation.push(NavItem {
             id: id.to_owned(),
             title: title.to_owned(),
             depth,
-            logical_line: self.lines.len(),
+            kind,
+            has_children,
+            is_last,
         });
     }
 
-    fn section(&mut self, section: &Section, depth: usize) {
+    fn section_with_position(&mut self, section: &Section, depth: usize, is_last: bool) {
         for _ in 0..section.spacing_before_lines {
             self.blank();
         }
-        self.anchor(&section.id, &section.title, depth);
+        self.anchor(
+            &section.id,
+            &section.title,
+            depth,
+            NavKind::Section,
+            !section.children.is_empty(),
+            is_last,
+        );
         self.push(LogicalLine::plain(
-            depth * 2,
+            depth * 4,
             section.title.clone(),
             Style::default()
                 .fg(theme::HEADING)
                 .add_modifier(Modifier::BOLD),
         ));
-        self.blocks(&section.blocks, depth * 2 + 2);
-        for child in &section.children {
-            self.section(child, depth + 1);
+        self.blocks(&section.blocks, depth * 4 + 3);
+        let child_count = section.children.len();
+        for (index, child) in section.children.iter().enumerate() {
+            self.section_with_position(child, depth + 1, index + 1 == child_count);
         }
     }
 
@@ -277,10 +415,11 @@ impl DocumentBuilder {
                 children, layout, ..
             } => {
                 self.spacing(layout.spacing_before_lines);
-                self.inline_lines(
+                self.inline_lines_with_surface(
                     children,
                     base_indent + usize::from(layout.indent_columns),
-                    Style::default().fg(theme::TEXT).bg(theme::SURFACE),
+                    Style::default().fg(theme::TEXT),
+                    LineSurface::Code,
                 );
             }
             Block::List {
@@ -384,12 +523,37 @@ impl DocumentBuilder {
     }
 
     fn inline_lines(&mut self, nodes: &[Inline], indent: usize, base_style: Style) {
+        self.inline_lines_with_surface(nodes, indent, base_style, LineSurface::Normal);
+    }
+
+    fn inline_lines_with_surface(
+        &mut self,
+        nodes: &[Inline],
+        indent: usize,
+        base_style: Style,
+        surface: LineSurface,
+    ) {
         let mut lines = vec![Vec::new()];
         append_inline(nodes, base_style, &mut lines);
         for spans in lines {
-            self.push(LogicalLine { indent, spans });
+            self.push(LogicalLine {
+                indent,
+                spans: if surface == LineSurface::Code {
+                    crate::code::highlight(spans)
+                } else {
+                    spans
+                },
+                surface,
+            });
         }
     }
+}
+
+fn count_sections(sections: &[Section]) -> usize {
+    sections
+        .iter()
+        .map(|section| 1 + count_sections(&section.children))
+        .sum()
 }
 
 fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<Vec<Span<'static>>>) {
@@ -489,8 +653,24 @@ struct StyledCell {
 }
 
 fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
+    match line.surface {
+        LineSurface::TldrTop => return vec![panel_border(width, '┌', '┐')],
+        LineSurface::TldrBottom => return vec![panel_border(width, '└', '┘')],
+        LineSurface::Divider => {
+            return vec![Line::from(Span::styled(
+                "─".repeat(width),
+                Style::default().fg(theme::OVERLAY),
+            ))];
+        }
+        LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
+    }
+
     let indent = line.indent.min(width.saturating_sub(1));
-    let available = width.saturating_sub(indent).max(1);
+    let decoration_width = usize::from(line.surface == LineSurface::Tldr) * 4;
+    let available = width
+        .saturating_sub(indent)
+        .saturating_sub(decoration_width)
+        .max(1);
     let cells = line
         .spans
         .iter()
@@ -505,7 +685,7 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
         .collect::<Vec<_>>();
 
     if cells.is_empty() {
-        return vec![Line::default()];
+        return vec![cells_to_line(line, width, indent, &[])];
     }
 
     let mut result = Vec::new();
@@ -525,7 +705,7 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
                 {
                     row.pop();
                 }
-                result.push(cells_to_line(indent, &row));
+                result.push(cells_to_line(line, width, indent, &row));
                 while continuation
                     .first()
                     .is_some_and(|item| item.character.is_whitespace())
@@ -535,7 +715,7 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
                 row = continuation;
                 row_width = row.iter().map(|item| item.width).sum();
             } else {
-                result.push(cells_to_line(indent, &row));
+                result.push(cells_to_line(line, width, indent, &row));
                 row.clear();
                 row_width = 0;
             }
@@ -544,38 +724,93 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
         row.push(cell);
     }
     if !row.is_empty() {
-        result.push(cells_to_line(indent, &row));
+        result.push(cells_to_line(line, width, indent, &row));
     }
     result
 }
 
-fn cells_to_line(indent: usize, cells: &[StyledCell]) -> Line<'static> {
-    if cells.is_empty() {
-        return Line::from(" ".repeat(indent));
-    }
+fn cells_to_line(
+    line: &LogicalLine,
+    width: usize,
+    indent: usize,
+    cells: &[StyledCell],
+) -> Line<'static> {
     let mut spans = Vec::new();
+    let background = match line.surface {
+        LineSurface::Code => Some(theme::SURFACE),
+        LineSurface::Tldr => Some(theme::TLDR_SURFACE),
+        LineSurface::Normal
+        | LineSurface::TldrTop
+        | LineSurface::TldrBottom
+        | LineSurface::Divider => None,
+    };
+
+    if line.surface == LineSurface::Tldr {
+        spans.push(Span::styled(
+            "│ ",
+            Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE),
+        ));
+    }
     if indent > 0 {
-        spans.push(Span::raw(" ".repeat(indent)));
+        let style = background.map_or_else(Style::default, |color| Style::default().bg(color));
+        spans.push(Span::styled(" ".repeat(indent), style));
     }
-    let mut current_style = cells[0].style;
-    let mut value = String::new();
-    for cell in cells {
-        if cell.style != current_style {
-            spans.push(Span::styled(std::mem::take(&mut value), current_style));
-            current_style = cell.style;
+
+    if let Some(first) = cells.first() {
+        let mut current_style = with_background(first.style, background);
+        let mut value = String::new();
+        for cell in cells {
+            let style = with_background(cell.style, background);
+            if style != current_style {
+                spans.push(Span::styled(std::mem::take(&mut value), current_style));
+                current_style = style;
+            }
+            value.push(cell.character);
         }
-        value.push(cell.character);
+        spans.push(Span::styled(value, current_style));
     }
-    spans.push(Span::styled(value, current_style));
+
+    if let Some(color) = background {
+        let used = indent + cells.iter().map(|cell| cell.width).sum::<usize>();
+        let reserved = if line.surface == LineSurface::Tldr {
+            4
+        } else {
+            0
+        };
+        let fill = width.saturating_sub(used + reserved);
+        spans.push(Span::styled(" ".repeat(fill), Style::default().bg(color)));
+    }
+    if line.surface == LineSurface::Tldr {
+        spans.push(Span::styled(
+            " │",
+            Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE),
+        ));
+    }
     Line::from(spans)
+}
+
+fn with_background(style: Style, background: Option<ratatui::style::Color>) -> Style {
+    background.map_or(style, |color| style.bg(color))
+}
+
+fn panel_border(width: usize, left: char, right: char) -> Line<'static> {
+    let style = Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE);
+    if width == 1 {
+        return Line::from(Span::styled(left.to_string(), style));
+    }
+    Line::from(Span::styled(
+        format!("{left}{}{right}", "─".repeat(width.saturating_sub(2))),
+        style,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use mant_ast::{
         DocumentMeta, DocumentSchema, DocumentSource, LayoutHint, MantDocument, Producer,
-        QuerySchema, SourceFormat,
+        QuerySchema, SourceFormat, TldrDocument, TldrExample,
     };
+    use unicode_width::UnicodeWidthStr;
 
     use super::*;
 
@@ -644,5 +879,62 @@ mod tests {
 
         assert_eq!(rows[0].to_string(), "  alpha");
         assert_eq!(rows[1].to_string(), "  beta");
+    }
+
+    #[test]
+    fn code_surfaces_fill_the_available_row_after_the_body_indent() {
+        let line = LogicalLine::plain(3, "code", Style::default()).surface(LineSurface::Code);
+        let rows = wrap_line(&line, 12);
+
+        assert_eq!(UnicodeWidthStr::width(rows[0].to_string().as_str()), 12);
+        assert_eq!(rows[0].spans[0].content, "   ");
+        assert_eq!(rows[0].spans[1].style.bg, Some(theme::SURFACE));
+        assert_eq!(
+            rows[0].spans.last().and_then(|span| span.style.bg),
+            Some(theme::SURFACE)
+        );
+    }
+
+    #[test]
+    fn tldr_is_rendered_as_a_bordered_full_width_panel() {
+        let mut bundle = bundle();
+        bundle.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["Quick reference".to_owned()],
+            more_information: None,
+            examples: vec![TldrExample {
+                description: "Run the command".to_owned(),
+                command: "demo file".to_owned(),
+                command_parts: vec![TldrCommandPart::Text {
+                    value: "demo file".to_owned(),
+                }],
+            }],
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
+        });
+
+        let rendered = DocumentView::new(&bundle).render(32);
+
+        assert!(rendered.text.lines[0].to_string().starts_with('┌'));
+        assert_eq!(
+            UnicodeWidthStr::width(rendered.text.lines[0].to_string().as_str()),
+            32
+        );
+        assert!(rendered.text.lines.iter().any(|line| {
+            line.to_string().contains("Quick reference")
+                && line
+                    .spans
+                    .iter()
+                    .all(|span| span.style.bg == Some(theme::TLDR_SURFACE))
+        }));
+        assert!(
+            rendered
+                .text
+                .lines
+                .iter()
+                .any(|line| line.to_string() == "─".repeat(32))
+        );
     }
 }
