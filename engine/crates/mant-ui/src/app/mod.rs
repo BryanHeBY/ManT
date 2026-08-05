@@ -1,6 +1,7 @@
 //! Interactive state machine and Ratatui widget composition.
 
 mod menu;
+mod search;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -18,10 +19,15 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use self::menu::{MenuAction, MenuId, menu_entries};
+#[cfg(test)]
+use self::search::SearchMode;
+use self::{
+    menu::{MenuAction, MenuId, menu_entries},
+    search::{SearchCommand, SearchState},
+};
 
 use crate::{
-    DocumentView, NavKind, RenderedDocument, RenderedSearchMatch,
+    DocumentView, NavKind, RenderedDocument,
     layout::{
         CONTENT_MARGIN, CONTENT_SCROLLBAR_GAP, DEFAULT_SIDEBAR_WIDTH, MIN_CONTENT_WIDTH,
         MIN_SIDEBAR_WIDTH, SIDEBAR_SPLITTER_WIDTH, maximum_sidebar_width,
@@ -53,37 +59,6 @@ impl UpdateOutcome {
     #[must_use]
     pub const fn needs_redraw(self) -> bool {
         matches!(self, Self::Redraw)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SearchMode {
-    Closed,
-    Open { editing: bool },
-}
-
-#[derive(Debug)]
-struct SearchState {
-    mode: SearchMode,
-    draft: String,
-    cursor: usize,
-    query: String,
-    matches: Vec<RenderedSearchMatch>,
-    active_match: usize,
-    render_width: u16,
-}
-
-impl Default for SearchState {
-    fn default() -> Self {
-        Self {
-            mode: SearchMode::Closed,
-            draft: String::new(),
-            cursor: 0,
-            query: String::new(),
-            matches: Vec::new(),
-            active_match: 0,
-            render_width: 0,
-        }
     }
 }
 
@@ -123,16 +98,6 @@ struct FrameGeometry {
     sidebar_splitter: Rect,
     status: Rect,
     navigation_rows: Vec<usize>,
-}
-
-impl SearchMode {
-    const fn is_open(self) -> bool {
-        matches!(self, Self::Open { .. })
-    }
-
-    const fn is_editing(self) -> bool {
-        matches!(self, Self::Open { editing: true })
-    }
 }
 
 /// All mutable interaction state for one `ManT` document.
@@ -233,11 +198,11 @@ impl App {
             self.handle_overlay_key(key);
             return UpdateOutcome::Redraw;
         }
-        if self.search.mode.is_open() && key.code == KeyCode::F(10) {
+        if self.search.is_open() && key.code == KeyCode::F(10) {
             self.open_menu(MenuId::File);
             return UpdateOutcome::Redraw;
         }
-        if self.search.mode.is_open() {
+        if self.search.is_open() {
             self.handle_search_key(key);
             return UpdateOutcome::Redraw;
         }
@@ -294,7 +259,7 @@ impl App {
         }
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
-                if self.search.mode.is_open()
+                if self.search.is_open()
                     && self
                         .geometry
                         .status
@@ -481,7 +446,7 @@ impl App {
             }
             self.draw_content(frame, body_area);
         }
-        if self.search.mode.is_open() {
+        if self.search.is_open() {
             self.draw_search(frame, status_area);
         } else {
             self.draw_status(frame, status_area);
@@ -1031,7 +996,7 @@ impl App {
             ])),
             area,
         );
-        let suffix = if !self.search.mode.is_editing() && !self.search.query.is_empty() {
+        let suffix = if !self.search.is_editing() && !self.search.query.is_empty() {
             if self.search.matches.is_empty() {
                 " No matches · Edit query · Esc close ".to_owned()
             } else {
@@ -1045,7 +1010,7 @@ impl App {
             " Enter search · Esc cancel ".to_owned()
         };
         let suffix_style = if self.search.matches.is_empty()
-            && !self.search.mode.is_editing()
+            && !self.search.is_editing()
             && !self.search.query.is_empty()
         {
             style
@@ -1084,90 +1049,22 @@ impl App {
     }
 
     fn open_search(&mut self) {
-        self.search.mode = SearchMode::Open { editing: false };
-        self.search.draft.clone_from(&self.search.query);
-        self.search.cursor = self.search.draft.len();
+        self.search.open();
     }
 
     fn close_search(&mut self) {
-        self.search = SearchState::default();
+        self.search.close();
     }
 
     fn handle_search_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => self.close_search(),
-            KeyCode::Enter => {
-                if !self.search.mode.is_editing() && self.search.draft == self.search.query {
-                    self.select_search_relative(1);
-                } else {
-                    self.search.query.clone_from(&self.search.draft);
-                    self.search.mode = SearchMode::Open { editing: false };
-                    self.refresh_search(self.geometry.content.width.max(1));
-                    self.select_active_search_match();
-                }
+        match self.search.handle_key(key) {
+            SearchCommand::None => {}
+            SearchCommand::Confirm => {
+                self.refresh_search(self.geometry.content.width.max(1));
+                self.select_active_search_match();
             }
-            KeyCode::Char('n' | 'N')
-                if !self.search.mode.is_editing()
-                    && self.search.draft == self.search.query
-                    && !self.search.matches.is_empty() =>
-            {
-                self.select_search_relative(
-                    if key.code == KeyCode::Char('N') || key.modifiers.contains(KeyModifiers::SHIFT)
-                    {
-                        -1
-                    } else {
-                        1
-                    },
-                );
-            }
-            KeyCode::Backspace => {
-                if let Some(previous) =
-                    previous_char_boundary(&self.search.draft, self.search.cursor)
-                {
-                    self.search.draft.drain(previous..self.search.cursor);
-                    self.search.cursor = previous;
-                    self.search.mode = SearchMode::Open { editing: true };
-                }
-            }
-            KeyCode::Delete => {
-                if let Some(next) = next_char_boundary(&self.search.draft, self.search.cursor) {
-                    self.search.draft.drain(self.search.cursor..next);
-                    self.search.mode = SearchMode::Open { editing: true };
-                }
-            }
-            KeyCode::Left => {
-                self.search.cursor = previous_char_boundary(&self.search.draft, self.search.cursor)
-                    .unwrap_or_default();
-            }
-            KeyCode::Right => {
-                self.search.cursor = next_char_boundary(&self.search.draft, self.search.cursor)
-                    .unwrap_or(self.search.draft.len());
-            }
-            KeyCode::Home => self.search.cursor = 0,
-            KeyCode::End => self.search.cursor = self.search.draft.len(),
-            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.search.cursor = 0;
-            }
-            KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.search.cursor = self.search.draft.len();
-            }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.search.draft.clear();
-                self.search.cursor = 0;
-                self.search.mode = SearchMode::Open { editing: true };
-            }
-            KeyCode::Down if !self.search.mode.is_editing() => self.select_search_relative(1),
-            KeyCode::Up if !self.search.mode.is_editing() => self.select_search_relative(-1),
-            KeyCode::Char(character)
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                self.search.draft.insert(self.search.cursor, character);
-                self.search.cursor += character.len_utf8();
-                self.search.mode = SearchMode::Open { editing: true };
-            }
-            _ => {}
+            SearchCommand::Next => self.select_search_relative(1),
+            SearchCommand::Previous => self.select_search_relative(-1),
         }
     }
 
@@ -1315,7 +1212,7 @@ impl App {
         let text_column = usize::from(
             column.saturating_sub(self.geometry.status.x.saturating_add(SEARCH_PREFIX_WIDTH)),
         );
-        self.search.cursor = cursor_byte_at_column(&self.search.draft, text_column);
+        self.search.move_cursor_to_column(text_column);
     }
 
     fn jump_content(&mut self, end: bool) {
@@ -1479,35 +1376,6 @@ impl App {
             self.scroll_to_selected();
         }
     }
-}
-
-fn previous_char_boundary(value: &str, cursor: usize) -> Option<usize> {
-    value[..cursor]
-        .char_indices()
-        .next_back()
-        .map(|(index, _)| index)
-}
-
-fn next_char_boundary(value: &str, cursor: usize) -> Option<usize> {
-    value[cursor..]
-        .chars()
-        .next()
-        .map(|character| cursor + character.len_utf8())
-}
-
-fn cursor_byte_at_column(value: &str, column: usize) -> usize {
-    let mut used = 0;
-    for (index, character) in value.char_indices() {
-        let next = used + character.width().unwrap_or(0);
-        if column < next {
-            return index;
-        }
-        if column == next {
-            return index + character.len_utf8();
-        }
-        used = next;
-    }
-    value.len()
 }
 
 fn fit_to_width(value: &str, width: usize) -> String {
@@ -2288,12 +2156,12 @@ mod tests {
             app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
         }
         assert!(app.search.matches.is_empty());
-        assert!(app.search.mode.is_editing());
+        assert!(app.search.is_editing());
 
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.search.query, "show");
         assert_eq!(app.search.matches.len(), 1);
-        assert!(!app.search.mode.is_editing());
+        assert!(!app.search.is_editing());
 
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(app.search.mode, SearchMode::Closed);
@@ -2591,7 +2459,7 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
         assert_eq!(app.overlay, Overlay::None);
-        assert!(app.search.mode.is_open());
+        assert!(app.search.is_open());
         assert_eq!(app.search.active_match, app.search.matches.len() - 1);
     }
 }
