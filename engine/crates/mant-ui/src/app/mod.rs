@@ -66,6 +66,23 @@ struct PendingSidebarResize {
     deadline: Instant,
 }
 
+/// Geometry retained from the previous frame for pointer hit testing.
+///
+/// Keeping these values together makes the boundary between layout/rendering
+/// and event handling explicit: input code may inspect the last complete
+/// frame, but it does not partially recompute layout on its own.
+#[derive(Debug, Default)]
+struct FrameGeometry {
+    body: Rect,
+    content: Rect,
+    content_scrollbar: Option<VerticalScrollbar>,
+    navigation: Rect,
+    navigation_scrollbar: Option<VerticalScrollbar>,
+    sidebar_splitter: Rect,
+    status: Rect,
+    navigation_rows: Vec<usize>,
+}
+
 impl SearchMode {
     const fn is_open(self) -> bool {
         matches!(self, Self::Open { .. })
@@ -96,14 +113,7 @@ pub struct App {
     search_width: u16,
     overlay: Overlay,
     pointer_drag: PointerDrag,
-    last_body_area: Rect,
-    last_content_area: Rect,
-    last_content_scrollbar: Option<VerticalScrollbar>,
-    last_navigation_area: Rect,
-    last_navigation_scrollbar: Option<VerticalScrollbar>,
-    last_sidebar_splitter: Rect,
-    last_status_area: Rect,
-    last_navigation_rows: Vec<usize>,
+    geometry: FrameGeometry,
     navigation_sync_deadline: Option<Instant>,
     pending_sidebar_resize: Option<PendingSidebarResize>,
     content_render_width: u16,
@@ -139,14 +149,7 @@ impl App {
             search_width: 0,
             overlay: Overlay::None,
             pointer_drag: PointerDrag::None,
-            last_body_area: Rect::default(),
-            last_content_area: Rect::default(),
-            last_content_scrollbar: None,
-            last_navigation_area: Rect::default(),
-            last_navigation_scrollbar: None,
-            last_sidebar_splitter: Rect::default(),
-            last_status_area: Rect::default(),
-            last_navigation_rows: Vec::new(),
+            geometry: FrameGeometry::default(),
             navigation_sync_deadline: None,
             pending_sidebar_resize: None,
             content_render_width: 0,
@@ -237,7 +240,7 @@ impl App {
                 self.sidebar_width = self
                     .sidebar_width
                     .saturating_add(2)
-                    .min(maximum_sidebar_width(self.last_body_area.width));
+                    .min(maximum_sidebar_width(self.geometry.body.width));
             }
             _ => {}
         }
@@ -254,21 +257,24 @@ impl App {
             MouseEventKind::Down(MouseButton::Left)
                 if self.search_mode.is_open()
                     && self
-                        .last_status_area
+                        .geometry
+                        .status
                         .contains((mouse.column, mouse.row).into()) =>
             {
                 self.move_search_cursor_to(mouse.column);
             }
             MouseEventKind::ScrollDown
                 if self
-                    .last_navigation_area
+                    .geometry
+                    .navigation
                     .contains((mouse.column, mouse.row).into()) =>
             {
                 self.navigation_scroll = self.navigation_scroll.saturating_add(3);
             }
             MouseEventKind::ScrollUp
                 if self
-                    .last_navigation_area
+                    .geometry
+                    .navigation
                     .contains((mouse.column, mouse.row).into()) =>
             {
                 self.navigation_scroll = self.navigation_scroll.saturating_sub(3);
@@ -277,11 +283,12 @@ impl App {
             MouseEventKind::ScrollUp => self.scroll_content(-3),
             MouseEventKind::Down(MouseButton::Left)
                 if self
-                    .last_navigation_area
+                    .geometry
+                    .navigation
                     .contains((mouse.column, mouse.row).into()) =>
             {
-                let local_row = usize::from(mouse.row - self.last_navigation_area.y);
-                if let Some(index) = self.last_navigation_rows.get(local_row).copied() {
+                let local_row = usize::from(mouse.row - self.geometry.navigation.y);
+                if let Some(index) = self.geometry.navigation_rows.get(local_row).copied() {
                     if self.selected == index && self.document.navigation()[index].has_children {
                         self.toggle_selected();
                     } else {
@@ -296,7 +303,8 @@ impl App {
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
-                    .last_content_area
+                    .geometry
+                    .content
                     .contains((mouse.column, mouse.row).into()) =>
             {
                 self.activate_content_link(mouse.column, mouse.row);
@@ -313,10 +321,14 @@ impl App {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
                 if self
-                    .last_navigation_scrollbar
+                    .geometry
+                    .navigation_scrollbar
                     .is_some_and(|scrollbar| scrollbar.contains(mouse.column, mouse.row)) =>
             {
-                let scrollbar = self.last_navigation_scrollbar.expect("guarded scrollbar");
+                let scrollbar = self
+                    .geometry
+                    .navigation_scrollbar
+                    .expect("guarded scrollbar");
                 let (drag, position) = scrollbar.begin_drag(mouse.row);
                 self.navigation_scroll = position;
                 self.pointer_drag = PointerDrag::NavigationScrollbar(drag);
@@ -329,10 +341,11 @@ impl App {
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
-                    .last_content_scrollbar
+                    .geometry
+                    .content_scrollbar
                     .is_some_and(|scrollbar| scrollbar.contains(mouse.column, mouse.row)) =>
             {
-                let scrollbar = self.last_content_scrollbar.expect("guarded scrollbar");
+                let scrollbar = self.geometry.content_scrollbar.expect("guarded scrollbar");
                 let (drag, position) = scrollbar.begin_drag(mouse.row);
                 self.content_scroll = position;
                 self.schedule_navigation_sync();
@@ -375,7 +388,7 @@ impl App {
         .areas(frame.area());
 
         self.draw_menu(frame, menu_area);
-        self.last_body_area = body_area;
+        self.geometry.body = body_area;
         if self.show_sidebar
             && body_area.width > MIN_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + MIN_CONTENT_WIDTH
         {
@@ -392,10 +405,10 @@ impl App {
             self.draw_sidebar_splitter(frame, splitter_area);
             self.draw_content(frame, content_area);
         } else {
-            self.last_navigation_area = Rect::default();
-            self.last_navigation_scrollbar = None;
-            self.last_sidebar_splitter = Rect::default();
-            self.last_navigation_rows.clear();
+            self.geometry.navigation = Rect::default();
+            self.geometry.navigation_scrollbar = None;
+            self.geometry.sidebar_splitter = Rect::default();
+            self.geometry.navigation_rows.clear();
             if matches!(
                 self.pointer_drag,
                 PointerDrag::Sidebar | PointerDrag::NavigationScrollbar(_)
@@ -410,7 +423,7 @@ impl App {
         } else {
             self.draw_status(frame, status_area);
         }
-        self.last_status_area = status_area;
+        self.geometry.status = status_area;
         self.draw_overlay(frame);
     }
 
@@ -690,7 +703,7 @@ impl App {
     }
 
     fn draw_sidebar_splitter(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        self.last_sidebar_splitter = area;
+        self.geometry.sidebar_splitter = area;
         frame.render_widget(
             Block::default()
                 .borders(Borders::LEFT)
@@ -744,7 +757,7 @@ impl App {
             section_label_area,
         );
 
-        self.last_navigation_area = navigation_area;
+        self.geometry.navigation = navigation_area;
         let visible = self.visible_navigation_indices();
         let line_width = usize::from(navigation_area.width);
         let rows = navigation::rows(
@@ -769,7 +782,7 @@ impl App {
             .skip(self.navigation_scroll)
             .take(height)
             .collect::<Vec<_>>();
-        self.last_navigation_rows = visible_rows.iter().map(|row| row.item_index).collect();
+        self.geometry.navigation_rows = visible_rows.iter().map(|row| row.item_index).collect();
         let lines = visible_rows
             .into_iter()
             .map(|row| row.line)
@@ -789,9 +802,9 @@ impl App {
         row_count: usize,
         viewport_height: usize,
     ) {
-        self.last_navigation_scrollbar =
+        self.geometry.navigation_scrollbar =
             VerticalScrollbar::new(area, row_count, viewport_height, self.navigation_scroll);
-        if let Some(scrollbar) = self.last_navigation_scrollbar {
+        if let Some(scrollbar) = self.geometry.navigation_scrollbar {
             scrollbar.render(frame);
         } else if matches!(self.pointer_drag, PointerDrag::NavigationScrollbar(_)) {
             self.pointer_drag = PointerDrag::None;
@@ -829,7 +842,7 @@ impl App {
         } else {
             inner
         };
-        self.last_content_area = document_area;
+        self.geometry.content = document_area;
         let render_width = document_area.width.max(1);
         let viewport_anchor = (self.content_render_width != 0
             && self.content_render_width != render_width)
@@ -874,9 +887,9 @@ impl App {
             Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),
             document_area,
         );
-        self.last_content_scrollbar =
+        self.geometry.content_scrollbar =
             VerticalScrollbar::new(inner, virtual_rows, viewport_height, self.content_scroll);
-        if let Some(scrollbar) = self.last_content_scrollbar {
+        if let Some(scrollbar) = self.geometry.content_scrollbar {
             scrollbar.render(frame);
         } else if matches!(self.pointer_drag, PointerDrag::ContentScrollbar(_)) {
             self.pointer_drag = PointerDrag::None;
@@ -1032,7 +1045,7 @@ impl App {
                 } else {
                     self.search_query.clone_from(&self.search_draft);
                     self.search_mode = SearchMode::Open { editing: false };
-                    self.refresh_search(self.last_content_area.width.max(1));
+                    self.refresh_search(self.geometry.content.width.max(1));
                     self.select_active_search_match();
                 }
             }
@@ -1133,7 +1146,7 @@ impl App {
     }
 
     fn select_section_at_row(&mut self, row: usize) {
-        let width = self.last_content_area.width.max(1);
+        let width = self.geometry.content.width.max(1);
         let visible = self.visible_navigation_indices();
         let rendered = self
             .rendered_cache
@@ -1163,7 +1176,7 @@ impl App {
         let Some(item) = self.document.navigation().get(self.selected) else {
             return;
         };
-        let width = self.last_content_area.width.max(1);
+        let width = self.geometry.content.width.max(1);
         let rendered = self
             .rendered_cache
             .entry(width)
@@ -1174,13 +1187,13 @@ impl App {
     }
 
     fn activate_content_link(&mut self, column: u16, row: u16) {
-        let width = self.last_content_area.width.max(1);
+        let width = self.geometry.content.width.max(1);
         let rendered = self
             .rendered_cache
             .entry(width)
             .or_insert_with(|| self.document.render(width));
-        let document_row = self.content_scroll + usize::from(row - self.last_content_area.y);
-        let document_column = usize::from(column - self.last_content_area.x);
+        let document_row = self.content_scroll + usize::from(row - self.geometry.content.y);
+        let document_column = usize::from(column - self.geometry.content.x);
         let Some(target) = rendered
             .link_target_at(document_row, document_column)
             .map(str::to_owned)
@@ -1227,14 +1240,14 @@ impl App {
     }
 
     fn scroll_content_to_pointer(&mut self, row: u16, drag: ScrollbarDrag) {
-        if let Some(scrollbar) = self.last_content_scrollbar {
+        if let Some(scrollbar) = self.geometry.content_scrollbar {
             self.content_scroll = scrollbar.position_for_pointer(row, drag);
             self.schedule_navigation_sync();
         }
     }
 
     fn scroll_navigation_to_pointer(&mut self, row: u16, drag: ScrollbarDrag) {
-        if let Some(scrollbar) = self.last_navigation_scrollbar {
+        if let Some(scrollbar) = self.geometry.navigation_scrollbar {
             self.navigation_scroll = scrollbar.position_for_pointer(row, drag);
         }
     }
@@ -1242,7 +1255,7 @@ impl App {
     fn move_search_cursor_to(&mut self, column: u16) {
         const SEARCH_PREFIX_WIDTH: u16 = 7;
         let text_column = usize::from(
-            column.saturating_sub(self.last_status_area.x.saturating_add(SEARCH_PREFIX_WIDTH)),
+            column.saturating_sub(self.geometry.status.x.saturating_add(SEARCH_PREFIX_WIDTH)),
         );
         self.search_cursor = cursor_byte_at_column(&self.search_draft, text_column);
     }
@@ -1270,13 +1283,17 @@ impl App {
     }
 
     fn is_sidebar_boundary(&self, column: u16, row: u16) -> bool {
-        self.show_sidebar && self.last_sidebar_splitter.contains((column, row).into())
+        self.show_sidebar
+            && self
+                .geometry
+                .sidebar_splitter
+                .contains((column, row).into())
     }
 
     fn sidebar_width_at(&self, column: u16) -> u16 {
-        let maximum = maximum_sidebar_width(self.last_body_area.width);
+        let maximum = maximum_sidebar_width(self.geometry.body.width);
         column
-            .saturating_sub(self.last_body_area.x)
+            .saturating_sub(self.geometry.body.x)
             .clamp(MIN_SIDEBAR_WIDTH, maximum.max(MIN_SIDEBAR_WIDTH))
     }
 
@@ -1646,7 +1663,7 @@ mod tests {
             .expect("initial draw");
         app.set_selected_index(3);
         app.scroll_to_selected();
-        let width = app.last_content_area.width;
+        let width = app.geometry.content.width;
         let expected = app.rendered_cache[&width]
             .anchor_row("details")
             .expect("details anchor");
@@ -1656,8 +1673,8 @@ mod tests {
             .expect("scrolled draw");
 
         assert_eq!(app.content_scroll, expected);
-        let row = app.last_content_area.y;
-        let content = (app.last_content_area.x..app.last_content_area.right())
+        let row = app.geometry.content.y;
+        let content = (app.geometry.content.x..app.geometry.content.right())
             .filter_map(|column| terminal.backend().buffer().cell((column, row)))
             .map(ratatui::buffer::Cell::symbol)
             .collect::<String>();
@@ -1672,9 +1689,9 @@ mod tests {
 
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
 
-        let scrollbar_column = app.last_navigation_area.right().saturating_sub(1);
+        let scrollbar_column = app.geometry.navigation.right().saturating_sub(1);
         assert!(
-            (app.last_navigation_area.y..app.last_navigation_area.bottom()).any(|row| {
+            (app.geometry.navigation.y..app.geometry.navigation.bottom()).any(|row| {
                 terminal
                     .backend()
                     .buffer()
@@ -1682,9 +1699,9 @@ mod tests {
                     .is_some_and(|cell| cell.bg == theme::SCROLLBAR_THUMB)
             })
         );
-        assert_eq!(app.last_navigation_area.right(), app.sidebar_width);
+        assert_eq!(app.geometry.navigation.right(), app.sidebar_width);
         assert!(
-            (app.last_navigation_area.y..app.last_navigation_area.bottom()).any(|row| {
+            (app.geometry.navigation.y..app.geometry.navigation.bottom()).any(|row| {
                 terminal
                     .backend()
                     .buffer()
@@ -1700,7 +1717,10 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
-        let scrollbar = app.last_navigation_scrollbar.expect("navigation scrollbar");
+        let scrollbar = app
+            .geometry
+            .navigation_scrollbar
+            .expect("navigation scrollbar");
         let area = scrollbar.area();
         let maximum = scrollbar.maximum();
         let sidebar_width = app.sidebar_width;
@@ -1801,7 +1821,7 @@ mod tests {
                 .bg,
             theme::TLDR_SURFACE
         );
-        let panel_right = app.last_content_area.right().saturating_sub(1);
+        let panel_right = app.geometry.content.right().saturating_sub(1);
         assert_eq!(
             buffer
                 .cell((panel_right, 2))
@@ -1810,15 +1830,16 @@ mod tests {
             "┐"
         );
         assert_eq!(
-            app.last_content_scrollbar
+            app.geometry
+                .content_scrollbar
                 .expect("content scrollbar")
                 .area()
                 .x,
-            app.last_content_area.right() + CONTENT_SCROLLBAR_GAP
+            app.geometry.content.right() + CONTENT_SCROLLBAR_GAP
         );
         assert_eq!(
             buffer
-                .cell((app.last_content_area.right(), 2))
+                .cell((app.geometry.content.right(), 2))
                 .expect("content-scrollbar gap")
                 .bg,
             theme::CONTENT
@@ -1834,22 +1855,22 @@ mod tests {
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
 
         assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
-        assert_eq!(app.last_navigation_area.right(), DEFAULT_SIDEBAR_WIDTH);
+        assert_eq!(app.geometry.navigation.right(), DEFAULT_SIDEBAR_WIDTH);
         assert_eq!(
-            app.last_sidebar_splitter,
+            app.geometry.sidebar_splitter,
             Rect::new(DEFAULT_SIDEBAR_WIDTH, 1, SIDEBAR_SPLITTER_WIDTH, 12)
         );
         assert_eq!(
-            app.last_content_area.x,
+            app.geometry.content.x,
             DEFAULT_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + 1
         );
-        assert_eq!(app.last_content_area.y, 2);
-        let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
+        assert_eq!(app.geometry.content.y, 2);
+        let scrollbar = app.geometry.content_scrollbar.expect("content scrollbar");
         assert_eq!(
             scrollbar.area().x,
-            app.last_content_area.right() + CONTENT_SCROLLBAR_GAP
+            app.geometry.content.right() + CONTENT_SCROLLBAR_GAP
         );
-        assert_eq!(scrollbar.area().y, app.last_content_area.y);
+        assert_eq!(scrollbar.area().y, app.geometry.content.y);
     }
 
     #[test]
@@ -1879,7 +1900,7 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(app.document.navigation()[app.selected].id, "details");
-        let width = app.last_content_area.width;
+        let width = app.geometry.content.width;
         assert_eq!(
             app.content_scroll,
             app.rendered_cache[&width]
@@ -1916,8 +1937,8 @@ mod tests {
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
         let buffer = terminal.backend().buffer();
 
-        assert_eq!(app.last_navigation_rows[2], 3);
-        assert_eq!(app.last_navigation_rows[3], 3);
+        assert_eq!(app.geometry.navigation_rows[2], 3);
+        assert_eq!(app.geometry.navigation_rows[3], 3);
         assert_eq!(
             buffer.cell((5, 7)).expect("first selected row").bg,
             theme::SELECTED
@@ -1949,9 +1970,9 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
-        let initial_render_width = app.last_content_area.width;
-        let boundary = app.last_sidebar_splitter.x;
-        let splitter_row = app.last_sidebar_splitter.y;
+        let initial_render_width = app.geometry.content.width;
+        let boundary = app.geometry.sidebar_splitter.x;
+        let splitter_row = app.geometry.sidebar_splitter.y;
         assert_eq!(boundary, DEFAULT_SIDEBAR_WIDTH);
         assert!(!app.is_sidebar_boundary(boundary.saturating_sub(1), splitter_row));
         assert!(app.is_sidebar_boundary(boundary, splitter_row));
@@ -1986,10 +2007,10 @@ mod tests {
             Some(40)
         );
         assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
-        assert_eq!(app.last_content_area.width, initial_render_width);
+        assert_eq!(app.geometry.content.width, initial_render_width);
         assert_eq!(
             app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
-            HashSet::from([app.last_content_area.width])
+            HashSet::from([app.geometry.content.width])
         );
 
         app.handle_pointer_control_at(
@@ -2016,7 +2037,7 @@ mod tests {
         assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
         assert_eq!(
             app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
-            HashSet::from([app.last_content_area.width])
+            HashSet::from([app.geometry.content.width])
         );
 
         app.handle_pointer_control_at(
@@ -2061,7 +2082,7 @@ mod tests {
             .draw(|frame| app.draw(frame))
             .expect("initial draw");
 
-        let initial_width = app.last_content_area.width;
+        let initial_width = app.geometry.content.width;
         let initial_rendered = &app.rendered_cache[&initial_width];
         let code_row = initial_rendered.search("sentinel_code_block")[0].row;
         let logical_anchor = initial_rendered
@@ -2069,7 +2090,7 @@ mod tests {
             .expect("code viewport anchor");
         app.content_scroll = code_row;
 
-        let boundary = app.last_sidebar_splitter.x;
+        let boundary = app.geometry.sidebar_splitter.x;
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: boundary,
@@ -2091,7 +2112,7 @@ mod tests {
             .draw(|frame| app.draw(frame))
             .expect("resized draw");
 
-        let resized = &app.rendered_cache[&app.last_content_area.width];
+        let resized = &app.rendered_cache[&app.geometry.content.width];
         assert_eq!(
             app.content_scroll,
             resized
@@ -2122,7 +2143,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
-        let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
+        let scrollbar = app.geometry.content_scrollbar.expect("content scrollbar");
         let area = scrollbar.area();
         let maximum = scrollbar.maximum();
         assert!(area.height > 1);
@@ -2272,7 +2293,7 @@ mod tests {
     #[test]
     fn content_scrolling_updates_navigation_only_after_the_idle_deadline() {
         let mut app = App::new(&navigation_bundle());
-        app.last_content_area = Rect::new(0, 0, 80, 10);
+        app.geometry.content = Rect::new(0, 0, 80, 10);
         app.content_scroll = 100;
         let deadline = Instant::now() + NAVIGATION_SYNC_IDLE;
         app.navigation_sync_deadline = Some(deadline);
@@ -2317,7 +2338,7 @@ mod tests {
         let mut app = App::new(&bundle);
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
         app.expanded.clear();
-        let width = app.last_content_area.width;
+        let width = app.geometry.content.width;
         let region = app.rendered_cache[&width]
             .search("nested")
             .into_iter()
@@ -2326,9 +2347,9 @@ mod tests {
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: app.last_content_area.x
+            column: app.geometry.content.x
                 + u16::try_from(region.start_column).expect("link column"),
-            row: app.last_content_area.y + u16::try_from(region.row).expect("link row"),
+            row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
             modifiers: KeyModifiers::NONE,
         });
 
@@ -2413,8 +2434,8 @@ mod tests {
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: app.last_status_area.x + 8,
-            row: app.last_status_area.y,
+            column: app.geometry.status.x + 8,
+            row: app.geometry.status.y,
             modifiers: KeyModifiers::NONE,
         });
         app.handle_key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
