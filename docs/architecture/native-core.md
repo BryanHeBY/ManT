@@ -117,9 +117,11 @@ semantic explanation, and search. Document tools accept a topic plus an
 optional manual section. That narrower boundary prevents agents from opening
 arbitrary host paths: Markdown must first be registered in an XDG topic
 directory, while ordinary topic names continue to fall back to the local man
-database. Input and output schemas derive directly from Rust types, while
-diagnostics remain on standard error. MCP is an alternate process protocol; it
-does not add another executable or a second document interpretation path.
+database. Input and output schemas derive directly from Rust types. MCP drops
+lowering diagnostics and keeps standard error silent; the ordinary CLI JSON
+surface remains the diagnostic inspection path. MCP is an alternate process
+protocol; it does not add another executable or a second document
+interpretation path.
 
 `mant.request/v3` requires a `schema` marker, one closed `input`, and one
 closed `view`. The input is either a manual topic with an optional section or a

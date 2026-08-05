@@ -275,6 +275,38 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
 }
 
 #[test]
+fn cli_json_remains_the_lowering_diagnostic_surface() {
+    let path = std::env::temp_dir().join(format!(
+        "mant-markdown-diagnostic-process-{}.md",
+        std::process::id()
+    ));
+    fs::write(
+        &path,
+        "# Diagnostic fixture\n\n> preserved unsupported quote\n",
+    )
+    .expect("write diagnostic Markdown fixture");
+
+    let output = Command::new(executable())
+        .args([
+            path.to_str().expect("UTF-8 path"),
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .output()
+        .expect("query diagnostic Markdown file");
+    fs::remove_file(path).expect("remove diagnostic fixture");
+
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
+    assert_eq!(
+        value["document"]["diagnostics"][0]["code"],
+        "markdown.unsupported"
+    );
+}
+
+#[test]
 fn unqualified_topics_prefer_registered_xdg_markdown() {
     let data_home = std::env::temp_dir().join(format!(
         "mant-registered-topic-process-{}",

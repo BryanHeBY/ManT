@@ -25,4 +25,5 @@ cargo install mant --locked
 ```
 
 The same executable handles interactive manuals, local Markdown, deterministic
-Markdown/text/JSON output, generated schemas, and read-only MCP tools.
+Markdown/text/JSON output, generated schemas, and read-only MCP tools. MCP is
+quiet by design; use CLI JSON output when inspecting lowering diagnostics.

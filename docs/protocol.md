@@ -713,8 +713,11 @@ queries, not `mant.cli/v3` framing and not a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
 line is limited to 8 MiB. Standard output is exclusively MCP traffic;
-diagnostics use standard error. There is no HTTP listener and there are no
-mutation tools.
+standard error is deliberately silent. Lowering diagnostics are omitted from
+MCP excerpts, while tool failures use structured MCP error results and fatal
+transport failures use a non-zero process status. Diagnose source lowering
+through ordinary CLI JSON output, or use `--force-libmandoc` for strict native
+parser findings. There is no HTTP listener and there are no mutation tools.
 
 MCP protocol versions are negotiated by the standard `initialize` exchange.
 With the current runtime, a client requesting `2025-11-25` receives:

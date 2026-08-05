@@ -25,6 +25,7 @@ fn stdio_mode_lists_and_queries_registered_markdown_topics() {
         .expect("start mant MCP server");
     let mut input = child.stdin.take().expect("MCP stdin");
     let output = child.stdout.take().expect("MCP stdout");
+    let diagnostics = child.stderr.take().expect("MCP stderr");
 
     initialize(&mut input);
     request_tool_list(&mut input);
@@ -110,11 +111,34 @@ fn stdio_mode_lists_and_queries_registered_markdown_topics() {
         excerpt["result"]["structuredContent"]["selections"][0]["path"],
         "root"
     );
+    assert!(
+        excerpt["result"]["structuredContent"]
+            .get("diagnostics")
+            .is_none(),
+        "MCP excerpts must discard lowering diagnostics"
+    );
 
+    assert_silent_shutdown(child, input, diagnostics, data_home);
+}
+
+fn assert_silent_shutdown(
+    mut child: std::process::Child,
+    input: std::process::ChildStdin,
+    diagnostics: std::process::ChildStderr,
+    data_home: PathBuf,
+) {
     drop(input);
     let status = child.wait().expect("MCP server exit");
+    let diagnostics = BufReader::new(diagnostics)
+        .lines()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("read MCP stderr");
     fs::remove_dir_all(data_home).expect("remove registered topic fixture");
     assert!(status.success(), "MCP server should stop cleanly: {status}");
+    assert!(
+        diagnostics.is_empty(),
+        "MCP must not emit lowering or transport noise: {diagnostics:?}"
+    );
 }
 
 fn initialize(input: &mut impl Write) {
@@ -219,7 +243,7 @@ fn registered_topic_fixture() -> PathBuf {
     fs::create_dir_all(&topics).expect("create topic directory");
     fs::write(
         topics.join("mcp-registered.md"),
-        "Read the MCP needle.\n\n# Guide\n\nDocument body.\n",
+        "Read the MCP needle.\n\n> preserved unsupported quote\n\n# Guide\n\nDocument body.\n",
     )
     .expect("write registered topic");
     data_home

@@ -12,8 +12,8 @@ use std::{
 };
 
 use mant_ast::{
-    DiagnosticLevel, ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryInput,
-    QueryOutline, QueryRequest, QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryInput, QueryOutline,
+    QueryRequest, QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax,
     default_search_limit,
 };
 use rmcp::{
@@ -42,25 +42,22 @@ use tokio::{
 const MAX_MCP_LINE_BYTES: usize = 8 * 1024 * 1024;
 
 /// Run the MCP server until the peer closes its standard-input stream.
+///
+/// The transport is deliberately silent: MCP hosts own process logging and
+/// tool failures already use structured protocol errors. Native lowering
+/// diagnostics remain available through the ordinary CLI JSON surface.
 pub(super) async fn run_stdio() -> u8 {
     let transport = (
         LineBoundedReader::new(tokio::io::stdin(), MAX_MCP_LINE_BYTES),
         tokio::io::stdout(),
     );
-    let service = match MantMcpServer::new().serve(transport).await {
-        Ok(service) => service,
-        Err(error) => {
-            eprintln!("mant: cannot start MCP stdio server: {error}");
-            return 1;
-        }
+    let Ok(service) = MantMcpServer::new().serve(transport).await else {
+        return 1;
     };
 
     match service.waiting().await {
         Ok(_) => 0,
-        Err(error) => {
-            eprintln!("mant: MCP stdio server failed: {error}");
-            1
-        }
+        Err(_) => 1,
     }
 }
 
@@ -371,7 +368,7 @@ impl MantMcpServer {
         let query = self.query(request).await?;
         let mut excerpt = mant_core::select_excerpt(&query, &parameters.nodes)
             .map_err(|error| error.to_string())?;
-        drop_author_style_diagnostics(&mut excerpt);
+        discard_lowering_diagnostics(&mut excerpt);
         Ok(Json(excerpt))
     }
 
@@ -405,7 +402,7 @@ impl MantMcpServer {
             excerpt.selections.as_slice(),
             [ExcerptSelection::DocumentEntry { .. }]
         ) {
-            drop_author_style_diagnostics(&mut excerpt);
+            discard_lowering_diagnostics(&mut excerpt);
             Ok(Json(excerpt))
         } else {
             Err("entry does not resolve to one option, command, or environment variable".to_owned())
@@ -471,14 +468,13 @@ impl ServerHandler for MantMcpServer {
 
 // ── Input validation ─────────────────────────────────────────────────────
 
-/// Drops author-facing style lints while preserving content-quality signals.
+/// Keep lowering diagnostics out of the agent-facing transport.
 ///
-/// Warnings can report masked control characters, unresolved links, or parser
-/// recovery, so consumers need them to judge whether an excerpt is complete.
-fn drop_author_style_diagnostics(excerpt: &mut QueryExcerpt) {
-    excerpt
-        .diagnostics
-        .retain(|diagnostic| diagnostic.level != DiagnosticLevel::Style);
+/// The ordinary CLI JSON representation remains the inspection surface for
+/// these findings. MCP callers receive only selected document content and
+/// structured tool errors, avoiding repeated parser noise in agent context.
+fn discard_lowering_diagnostics(excerpt: &mut QueryExcerpt) {
+    excerpt.diagnostics.clear();
 }
 
 fn request_for(selector: TopicSelector, view: QueryView) -> Result<QueryRequest, String> {
@@ -646,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn excerpts_drop_only_author_style_diagnostics() {
+    fn excerpts_discard_all_lowering_diagnostics() {
         use mant_ast::{Diagnostic, DiagnosticLevel, ExcerptSchema, QueryExcerpt};
 
         let diagnostic = |level| Diagnostic {
@@ -670,19 +666,8 @@ mod tests {
             selections: Vec::new(),
         };
 
-        super::drop_author_style_diagnostics(&mut excerpt);
-        assert_eq!(
-            excerpt
-                .diagnostics
-                .iter()
-                .map(|diagnostic| diagnostic.level)
-                .collect::<Vec<_>>(),
-            [
-                DiagnosticLevel::Warning,
-                DiagnosticLevel::Error,
-                DiagnosticLevel::Unsupported
-            ]
-        );
+        super::discard_lowering_diagnostics(&mut excerpt);
+        assert!(excerpt.diagnostics.is_empty());
     }
 
     // Read the wrapped source to end (or first error) on a current-thread

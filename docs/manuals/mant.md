@@ -291,7 +291,9 @@ valid only with JSON query output.
 - `--request-json`: Read one closed `mant.request/v3` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
-- `--mcp`: Serve read-only ManT tools over MCP stdio.
+- `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
+  diagnostics are omitted; inspect them with ordinary CLI JSON output or a
+  strict `--force-libmandoc` query.
 
 ### Protocol Discovery
 

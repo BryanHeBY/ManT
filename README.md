@@ -239,7 +239,8 @@ exposes registered-topic discovery, outline, content, semantic explanation,
 and search tools over stdio. Document tools accept topic names rather than
 arbitrary filesystem paths; place agent-readable Markdown in the registered
 topic directories above. It has no network transport or mutation tools;
-stdout remains reserved for MCP JSON-RPC and diagnostics use stderr.
+stdout remains reserved for MCP JSON-RPC and stderr stays silent. Lowering
+diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
