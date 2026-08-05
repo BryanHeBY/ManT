@@ -240,8 +240,8 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => self.toggle_selected(),
             KeyCode::PageDown | KeyCode::Char('d') => self.scroll_content(10),
             KeyCode::PageUp | KeyCode::Char('u') => self.scroll_content(-10),
-            KeyCode::Home => self.content_scroll = 0,
-            KeyCode::End => self.content_scroll = usize::MAX,
+            KeyCode::Home => self.jump_content(false),
+            KeyCode::End => self.jump_content(true),
             KeyCode::Char('b') => self.show_sidebar = !self.show_sidebar,
             KeyCode::Char('<') => {
                 self.sidebar_width = self.sidebar_width.saturating_sub(2).max(MIN_SIDEBAR_WIDTH);
@@ -447,7 +447,10 @@ impl App {
                     .map(|item| item.id.clone())
                     .collect();
             }
-            MenuAction::CollapseAll => self.expanded.clear(),
+            MenuAction::CollapseAll => {
+                self.expanded.clear();
+                self.select_nearest_visible_ancestor();
+            }
             MenuAction::Previous => self.select_relative(-1),
             MenuAction::Next => self.select_relative(1),
             MenuAction::Parent => self.collapse_or_select_parent(),
@@ -573,8 +576,11 @@ impl App {
     }
 
     fn draw_help(frame: &mut Frame<'_>) {
-        let width = 58.min(frame.area().width.saturating_sub(4)).max(20);
-        let height = 13.min(frame.area().height.saturating_sub(2)).max(5);
+        let width = 58.min(frame.area().width.saturating_sub(2));
+        let height = 13.min(frame.area().height);
+        if width < 4 || height < 3 {
+            return;
+        }
         let area = Rect::new(
             frame.area().x + frame.area().width.saturating_sub(width) / 2,
             frame.area().y + frame.area().height.saturating_sub(height) / 2,
@@ -787,9 +793,9 @@ impl App {
                 self.search_matches.len()
             )
         } else if self.document.has_tldr() {
-            format!("{} visible sections · TLDR ", self.document.section_count())
+            format!("{} visible sections · TLDR ", self.visible_section_count())
         } else {
-            format!("{} visible sections ", self.document.section_count())
+            format!("{} visible sections ", self.visible_section_count())
         };
         frame.render_widget(
             Paragraph::new(suffix)
@@ -1078,6 +1084,11 @@ impl App {
         self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
     }
 
+    fn jump_content(&mut self, end: bool) {
+        self.content_scroll = if end { usize::MAX } else { 0 };
+        self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
+    }
+
     fn sync_selection_to_scroll(&mut self) {
         self.select_section_at_row(self.content_scroll);
     }
@@ -1118,6 +1129,43 @@ impl App {
             }
         }
         indices
+    }
+
+    fn visible_section_count(&self) -> usize {
+        self.visible_navigation_indices()
+            .into_iter()
+            .filter(|index| self.document.navigation()[*index].kind == NavKind::Section)
+            .count()
+    }
+
+    fn select_nearest_visible_ancestor(&mut self) {
+        let visible = self.visible_navigation_indices();
+        if visible.contains(&self.selected) {
+            return;
+        }
+
+        let mut parent = self.document.navigation()[self.selected]
+            .parent_id
+            .as_deref();
+        while let Some(parent_id) = parent {
+            if let Some(index) = self
+                .document
+                .navigation()
+                .iter()
+                .position(|item| item.id == parent_id)
+            {
+                if visible.contains(&index) {
+                    self.set_selected_index(index);
+                    return;
+                }
+                parent = self.document.navigation()[index].parent_id.as_deref();
+            } else {
+                break;
+            }
+        }
+        if let Some(index) = visible.first().copied() {
+            self.set_selected_index(index);
+        }
     }
 
     fn toggle_selected(&mut self) {
@@ -1619,6 +1667,42 @@ mod tests {
         assert!(screen.contains("SECTIONS"));
         assert!(screen.contains("MANUAL · demo"));
         assert!(screen.contains("0 visible sections"));
+    }
+
+    #[test]
+    fn status_counts_only_sections_visible_in_the_folded_tree() {
+        let backend = TestBackend::new(80, 14);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("initial draw");
+        assert!(
+            terminal
+                .backend()
+                .to_string()
+                .contains("2 visible sections")
+        );
+
+        app.set_selected_index(1);
+        app.activate_menu_action(MenuAction::CollapseAll);
+        terminal.draw(|frame| app.draw(frame)).expect("folded draw");
+        let screen = terminal.backend().to_string();
+        assert!(screen.contains("1 visible sections"));
+        assert_eq!(app.selected, 0, "hidden child selects its visible parent");
+    }
+
+    #[test]
+    fn help_overlay_is_safe_on_a_tiny_terminal() {
+        let backend = TestBackend::new(12, 4);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&empty_bundle());
+        app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("tiny help draw");
     }
 
     #[test]
