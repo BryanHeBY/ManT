@@ -5,6 +5,7 @@ use mant_core::{
     build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
     select_excerpt,
 };
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
 const MANT_MANUAL: &str = include_str!("../../../docs/manuals/mant.md");
 const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/protocol.md");
@@ -146,20 +147,54 @@ fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
             .any(|section| section.title == "Document AST")
     );
 
-    let mut examples = 0;
-    let mut remaining = PROTOCOL_REFERENCE;
-    while let Some((_, after_opening)) = remaining.split_once("```json\n") {
-        let (json, after_closing) = after_opening
-            .split_once("\n```")
-            .expect("close JSON example");
+    let examples = json_fenced_examples(PROTOCOL_REFERENCE);
+    for json in &examples {
         serde_json::from_str::<serde_json::Value>(json).expect("valid JSON example");
-        examples += 1;
-        remaining = after_closing;
     }
     assert!(
-        examples >= 10,
+        examples.len() >= 10,
         "the protocol reference should retain comprehensive JSON examples"
     );
+}
+
+#[test]
+fn protocol_json_examples_are_independent_from_checkout_line_endings() {
+    for newline in ["\n", "\r\n"] {
+        let markdown = format!("```json{newline}{{\"portable\":true}}{newline}```{newline}");
+        assert_eq!(
+            json_fenced_examples(&markdown),
+            ["{\"portable\":true}\n"],
+            "JSON fences should parse with {newline:?} line endings"
+        );
+    }
+}
+
+/// Read JSON examples through `CommonMark` events instead of checkout-specific
+/// newline bytes. Git may materialize the same tracked Markdown as LF or CRLF.
+fn json_fenced_examples(markdown: &str) -> Vec<String> {
+    let mut examples = Vec::new();
+    let mut current = None;
+
+    for event in Parser::new(markdown) {
+        match event {
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info)))
+                if info.split_whitespace().next() == Some("json") =>
+            {
+                current = Some(String::new());
+            }
+            Event::Text(text) if current.is_some() => {
+                current.as_mut().expect("JSON block state").push_str(&text);
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some(json) = current.take() {
+                    examples.push(json);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    examples
 }
 
 fn contains_entry(nodes: &[OutlineNode], name: &str) -> bool {
