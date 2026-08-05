@@ -6,12 +6,21 @@
 
 use std::path::{Path, PathBuf};
 
-use mant_ast::{Block, Inline, MantDocument, QueryBundle, QuerySchema, Section};
+use mant_ast::{
+    Block, Inline, MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView,
+    RequestSchema, Section,
+};
 use mant_ui::DocumentView;
 
 fn fixture(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real")
+        .join(relative)
+}
+
+fn project_file(relative: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
         .join(relative)
 }
 
@@ -155,6 +164,39 @@ fn real_manual_lowering_preserves_every_substantial_text_fragment() {
                     panic!("{relative} lost or reordered fragment {fragment:?} at width {width}");
                 };
                 cursor += relative_position + expected.len();
+            }
+        }
+    }
+}
+
+#[test]
+fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
+    for relative in ["docs/manuals/mant.md", "docs/manuals/mantui.md"] {
+        let path = project_file(relative);
+        let bundle = mant_core::query(&QueryRequest {
+            schema: RequestSchema::V3,
+            input: QueryInput::MarkdownFile {
+                path: path.to_string_lossy().into_owned(),
+            },
+            view: QueryView::Full {},
+        })
+        .expect("query self-hosted Markdown manual");
+        assert!(bundle.tldr.is_some(), "{relative} has no embedded tldr");
+        let view = DocumentView::new(&bundle);
+
+        for width in [32, 80, 132] {
+            let rendered = view.render(width);
+            assert!(rendered.search("TLDR QUICK REFERENCE").len() == 1);
+            assert!(
+                !rendered.search("Synopsis").is_empty(),
+                "{relative} lost its manual body at width {width}"
+            );
+            for item in view.navigation() {
+                assert!(
+                    rendered.anchor_row(&item.target_id).is_some(),
+                    "{relative} lost target {} at width {width}",
+                    item.target_id
+                );
             }
         }
     }
