@@ -22,6 +22,7 @@ use crate::{
         CONTENT_MARGIN, DEFAULT_SIDEBAR_WIDTH, MIN_CONTENT_WIDTH, MIN_SIDEBAR_WIDTH,
         maximum_sidebar_width,
     },
+    navigation,
     scrollbar::{ScrollbarDrag, VerticalScrollbar},
     theme,
 };
@@ -762,7 +763,7 @@ impl App {
         self.last_navigation_area = navigation_area;
         let visible = self.visible_navigation_indices();
         let line_width = usize::from(navigation_area.width);
-        let rows = navigation_rows(
+        let rows = navigation::rows(
             self.document.navigation(),
             &visible,
             self.selected,
@@ -773,12 +774,11 @@ impl App {
         let height = usize::from(navigation_area.height);
         let maximum = row_count.saturating_sub(height);
         self.navigation_scroll = self.navigation_scroll.min(maximum);
-        if self.navigation_visibility_target.take() == Some(self.selected) {
-            let selected_row = rows
-                .iter()
-                .position(|row| row.item_index == self.selected)
-                .unwrap_or_default();
-            self.keep_selected_navigation_visible(selected_row, height);
+        let selected_range = (self.navigation_visibility_target.take() == Some(self.selected))
+            .then(|| navigation::item_row_range(&rows, self.selected))
+            .flatten();
+        if let Some(range) = selected_range {
+            self.keep_selected_navigation_visible(range, height);
         }
         let visible_rows = rows
             .into_iter()
@@ -1230,11 +1230,16 @@ impl App {
         self.select_section_at_row(self.content_scroll);
     }
 
-    fn keep_selected_navigation_visible(&mut self, selected: usize, height: usize) {
-        if selected < self.navigation_scroll {
-            self.navigation_scroll = selected;
-        } else if selected >= self.navigation_scroll.saturating_add(height) {
-            self.navigation_scroll = selected.saturating_add(1).saturating_sub(height);
+    fn keep_selected_navigation_visible(
+        &mut self,
+        selected: std::ops::Range<usize>,
+        height: usize,
+    ) {
+        let selected_height = selected.end.saturating_sub(selected.start);
+        if selected_height >= height || selected.start < self.navigation_scroll {
+            self.navigation_scroll = selected.start;
+        } else if selected.end > self.navigation_scroll.saturating_add(height) {
+            self.navigation_scroll = selected.end.saturating_sub(height);
         }
     }
 
@@ -1469,210 +1474,6 @@ fn next_char_boundary(value: &str, cursor: usize) -> Option<usize> {
         .chars()
         .next()
         .map(|character| cursor + character.len_utf8())
-}
-
-struct NavigationRow {
-    item_index: usize,
-    line: Line<'static>,
-}
-
-fn navigation_rows(
-    items: &[crate::NavItem],
-    visible: &[usize],
-    selected: usize,
-    expanded: &HashSet<String>,
-    width: usize,
-) -> Vec<NavigationRow> {
-    visible
-        .iter()
-        .flat_map(|index| {
-            let item = &items[*index];
-            navigation_lines(
-                item,
-                *index,
-                *index == selected,
-                expanded.contains(&item.id),
-                width,
-            )
-        })
-        .collect()
-}
-
-fn navigation_lines(
-    item: &crate::NavItem,
-    item_index: usize,
-    selected: bool,
-    expanded: bool,
-    width: usize,
-) -> Vec<NavigationRow> {
-    let selection = if selected { "› " } else { "  " };
-    let prefix = format!("{selection}{}", navigation_tree_prefix(item, expanded));
-    let continuation_prefix = format!("  {}", navigation_continuation_prefix(item, expanded));
-    let foreground = if selected {
-        if item.kind == NavKind::Tldr {
-            theme::MAUVE
-        } else {
-            theme::SELECTED_TEXT
-        }
-    } else {
-        match item.kind {
-            NavKind::Tldr => theme::MAUVE,
-            NavKind::Root | NavKind::Section if item.depth == 0 => theme::SUBTEXT_BRIGHT,
-            NavKind::Root | NavKind::Section => theme::BLUE,
-            NavKind::EntryGroup => theme::YELLOW,
-            NavKind::Option => theme::GREEN,
-        }
-    };
-    let background = if selected {
-        if item.kind == NavKind::Tldr {
-            theme::TLDR_SELECTED
-        } else {
-            theme::SELECTED
-        }
-    } else if item.kind == NavKind::Tldr {
-        theme::TLDR_NAV
-    } else {
-        theme::SIDEBAR
-    };
-    let mut style = Style::default().fg(foreground).bg(background);
-    if selected {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-    let title_width = width
-        .saturating_sub(prefix.width().max(continuation_prefix.width()))
-        .max(1);
-    let titles = if selected {
-        wrap_to_width(&item.title, title_width)
-    } else {
-        vec![item.title.clone()]
-    };
-    titles
-        .into_iter()
-        .enumerate()
-        .map(|(line_index, title)| {
-            let line_prefix = if line_index == 0 {
-                prefix.clone()
-            } else {
-                continuation_prefix.clone()
-            };
-            let used = line_prefix.width() + title.width();
-            let prefix_color = if selected {
-                if line_index == 0 {
-                    theme::PEACH
-                } else {
-                    theme::PINK
-                }
-            } else {
-                theme::OVERLAY
-            };
-            NavigationRow {
-                item_index,
-                line: Line::from(vec![
-                    Span::styled(
-                        line_prefix,
-                        Style::default().fg(prefix_color).bg(background),
-                    ),
-                    Span::styled(title, style),
-                    Span::styled(
-                        " ".repeat(width.saturating_sub(used)),
-                        Style::default().bg(background),
-                    ),
-                ]),
-            }
-        })
-        .collect()
-}
-
-fn navigation_tree_prefix(item: &crate::NavItem, expanded: bool) -> String {
-    if item.kind == NavKind::Tldr {
-        return "◆ ".to_owned();
-    }
-    let mut prefix = "│ ".repeat(item.depth);
-    if item.depth == 0 {
-        if item.has_children {
-            prefix.push_str("│ ");
-        }
-    } else {
-        prefix.push_str(if item.is_last && !expanded {
-            "╰─"
-        } else {
-            "├─"
-        });
-    }
-    prefix.push_str(if item.has_children {
-        if expanded { "▾ " } else { "▸ " }
-    } else if item.kind == NavKind::Option {
-        "◇ "
-    } else {
-        "· "
-    });
-    prefix
-}
-
-fn navigation_continuation_prefix(item: &crate::NavItem, expanded: bool) -> String {
-    if item.kind == NavKind::Tldr {
-        return "  ".to_owned();
-    }
-    let mut prefix = "│ ".repeat(item.depth);
-    if item.depth > 0 || item.has_children {
-        prefix.push_str("│ ");
-    }
-    if item.has_children && expanded {
-        prefix.push_str("│ ");
-    }
-    prefix.push_str("  ");
-    prefix
-}
-
-fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
-    if value.width() <= width {
-        return vec![value.to_owned()];
-    }
-    let mut lines = Vec::new();
-    let mut current = String::new();
-    for word in value.split_whitespace() {
-        let separator = usize::from(!current.is_empty());
-        if current.width() + separator + word.width() <= width {
-            if separator == 1 {
-                current.push(' ');
-            }
-            current.push_str(word);
-            continue;
-        }
-        if !current.is_empty() {
-            lines.push(std::mem::take(&mut current));
-        }
-        let mut remaining = word;
-        while remaining.width() > width {
-            let split = byte_index_at_width(remaining, width);
-            lines.push(remaining[..split].to_owned());
-            remaining = &remaining[split..];
-        }
-        current.push_str(remaining);
-    }
-    if !current.is_empty() {
-        lines.push(current);
-    }
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-    lines
-}
-
-fn byte_index_at_width(value: &str, width: usize) -> usize {
-    let mut used = 0;
-    for (index, character) in value.char_indices() {
-        let character_width = character.width().unwrap_or(0);
-        if used + character_width > width {
-            return if index == 0 {
-                character.len_utf8()
-            } else {
-                index
-            };
-        }
-        used += character_width;
-    }
-    value.len()
 }
 
 fn cursor_byte_at_column(value: &str, column: usize) -> usize {
@@ -2090,6 +1891,21 @@ mod tests {
     }
 
     #[test]
+    fn navigation_visibility_keeps_the_complete_selected_title_on_screen() {
+        let mut app = App::new(&navigation_bundle());
+        app.navigation_scroll = 4;
+
+        app.keep_selected_navigation_visible(8..11, 5);
+        assert_eq!(app.navigation_scroll, 6);
+
+        app.keep_selected_navigation_visible(2..5, 5);
+        assert_eq!(app.navigation_scroll, 2);
+
+        app.keep_selected_navigation_visible(7..14, 5);
+        assert_eq!(app.navigation_scroll, 7);
+    }
+
+    #[test]
     fn dragging_the_sidebar_boundary_changes_its_width() {
         let backend = TestBackend::new(100, 18);
         let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -2447,57 +2263,5 @@ mod tests {
         assert_eq!(app.overlay, Overlay::None);
         assert!(app.search_mode.is_open());
         assert_eq!(app.active_search_match, app.search_matches.len() - 1);
-    }
-
-    #[test]
-    fn wrapped_expanded_navigation_titles_keep_their_subtree_guides() {
-        let item = crate::NavItem {
-            id: "parent".to_owned(),
-            target_id: "parent".to_owned(),
-            title: "A deliberately long expanded parent title".to_owned(),
-            depth: 0,
-            kind: NavKind::Section,
-            has_children: true,
-            is_last: true,
-            parent_id: None,
-        };
-
-        let rows = navigation_lines(&item, 0, true, true, 22);
-        let text = rows
-            .iter()
-            .map(|row| row.line.to_string())
-            .collect::<Vec<_>>();
-
-        assert!(text.len() > 1);
-        assert!(text[0].starts_with("› │ ▾ "));
-        assert!(text[1].starts_with("  │ │   "));
-        assert!(
-            rows[1]
-                .line
-                .spans
-                .iter()
-                .all(|span| span.style.bg == Some(theme::SELECTED))
-        );
-    }
-
-    #[test]
-    fn nested_navigation_rows_use_two_column_tree_guides() {
-        let item = crate::NavItem {
-            id: "leaf".to_owned(),
-            target_id: "leaf".to_owned(),
-            title: "Leaf".to_owned(),
-            depth: 1,
-            kind: NavKind::Section,
-            has_children: false,
-            is_last: false,
-            parent_id: Some("parent".to_owned()),
-        };
-
-        let row = navigation_lines(&item, 0, false, false, 24)
-            .remove(0)
-            .line
-            .to_string();
-
-        assert!(row.starts_with("  │ ├─· Leaf"));
     }
 }
