@@ -713,13 +713,15 @@ impl DocumentBuilder {
         let spans = example
             .command_parts
             .iter()
-            .map(|part| match part {
-                TldrCommandPart::Text { value } => {
-                    Span::styled(value.clone(), Style::default().fg(theme::TEXT))
-                }
-                TldrCommandPart::Placeholder { value } => {
-                    Span::styled(value.clone(), Style::default().fg(theme::YELLOW))
-                }
+            .flat_map(|part| match part {
+                TldrCommandPart::Text { value } => crate::code::highlight(vec![Span::styled(
+                    value.clone(),
+                    Style::default().fg(theme::TEXT),
+                )]),
+                TldrCommandPart::Placeholder { value } => vec![Span::styled(
+                    value.clone(),
+                    Style::default().fg(theme::YELLOW),
+                )],
             })
             .collect();
         self.push(LogicalLine {
@@ -2027,10 +2029,15 @@ mod tests {
             more_information: None,
             examples: vec![TldrExample {
                 description: "Run the command".to_owned(),
-                command: "demo file".to_owned(),
-                command_parts: vec![TldrCommandPart::Text {
-                    value: "demo file".to_owned(),
-                }],
+                command: "demo --output file".to_owned(),
+                command_parts: vec![
+                    TldrCommandPart::Text {
+                        value: "demo --output ".to_owned(),
+                    },
+                    TldrCommandPart::Placeholder {
+                        value: "file".to_owned(),
+                    },
+                ],
             }],
             platform: "common".to_owned(),
             language: "en".to_owned(),
@@ -2072,6 +2079,23 @@ mod tests {
         assert_eq!(
             rendered.text.lines[bottom - 1].to_string(),
             format!("│{}│", " ".repeat(30))
+        );
+        let command = rendered
+            .text
+            .lines
+            .iter()
+            .find(|line| line.to_string().contains("demo --output file"))
+            .expect("tldr command");
+        assert!(
+            command.spans.iter().any(|span| {
+                span.content == "--output" && span.style.fg == Some(theme::HEADING)
+            })
+        );
+        assert!(
+            command
+                .spans
+                .iter()
+                .any(|span| span.content == "file" && span.style.fg == Some(theme::YELLOW))
         );
     }
 
