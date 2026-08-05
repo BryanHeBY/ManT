@@ -20,8 +20,8 @@ bun run dev -- git
 ```
 
 `bun run dev -- <topic>` builds the release `mant` for the current host,
-stages it under `engine/bin`, sets `MANT_PATH`, and starts the Bun TUI. It
-never depends on a globally installed `mant`.
+stages it under `engine/bin`, and executes that exact binary. It never depends
+on a globally installed `mant`.
 
 Run the full local verification sequence before handing off a change:
 
@@ -29,10 +29,10 @@ Run the full local verification sequence before handing off a change:
 bun run build
 ```
 
-It installs locked dependencies, checks TypeScript, formats/tests/lints the
-Rust workspace, builds the native CLI, runs all Bun tests, compiles `mantui`, and
-smoke-tests both binaries. The current-platform artifacts are written to
-`dist/mantui` and `dist/mant`.
+It installs locked dependencies, checks the retained TypeScript reference
+implementation, formats/tests/lints the Rust workspace, runs all Bun tests,
+builds the unified `mant` executable, and smoke-tests it. The current-platform
+artifact is written to `dist/mant`.
 
 Focused commands are available when iterating:
 
@@ -47,23 +47,21 @@ bun run build:mant
 ## Repository map
 
 ```text
-apps/mantui/                 Bun workspace: the interactive `mantui` TUI
-  src/                       TUI entry point, native-client boundary, and OpenTUI UI
-    cli/                     Interactive `mantui` grammar and error boundary
-    native/                  `mant` process discovery and response validation
-    ui/                      Sidebar, content, search, menus, and terminal layout
-  tests/                     Bun unit/integration/TUI tests for the app
-engine/                      Rust workspace: the `mant` document engine
+apps/mantui/                 Retained OpenTUI reference and regression suite
+  src/                       Historical process client and interactive frontend
+  tests/                     Bun contract and terminal-rendering regression tests
+engine/                      Rust workspace: the shipped `mant` command
   crates/mant-ast/           Versioned document, query, outline, and schema types
   crates/mant-core/          Source loading, libmandoc lowering, projections, output
-  crates/mant/               Agent/script CLI, request JSON, and MCP stdio boundary
+  crates/mant-ui/            Ratatui reader, navigation, search, and terminal styling
+  crates/mant/               Mode selection, CLI, request JSON, and MCP stdio boundary
   crates/libmandoc-rs/       Owned libmandoc parse API, private C shim, and vendored source
   tests/fixtures/roff/       Fixed real roff sources for native integration tests
 scripts/                     Local build, compiler selection, packaging, and dev wrappers
 tests/contracts/             Cross-language JSON contract fixtures (read by Rust and TS)
 tests/unit/scripts/          Bun tests for the orchestration scripts
 docs/architecture/           Design decisions and stable-boundary documentation
-docs/manuals/                Self-hosted Markdown manuals shipped in releases
+docs/manuals/                Self-hosted Markdown manual shipped in releases
 docs/assets/                 README screenshots and other documentation assets
 ```
 
@@ -75,21 +73,23 @@ Generated paths are intentionally excluded from version control:
 
 ## Testing boundaries
 
-Rust owns parser correctness, AST contracts, semantic option extraction, and
-rendering. Fixed real roff sources in `engine/tests/fixtures/roff/real/` are
-covered by native integration tests; their provenance and licenses are documented in
-that directory. Bun tests cover the process protocol, schema validation, and
-the terminal UI's rendering, search, and navigation behavior.
+Rust owns parser correctness, AST contracts, semantic option extraction,
+terminal presentation, and output rendering. Fixed real roff sources in
+`engine/tests/fixtures/roff/real/` are covered by native integration tests;
+their provenance and licenses are documented in that directory. Bun tests
+retain cross-language protocol and historical UI coverage while Rust tests are
+authoritative for the shipped reader.
 
-The files under `docs/manuals/` are executable documentation. Native tests
-parse both through the supported Markdown subset, require their embedded quick
-references and semantic options, and reject any lossy fallback diagnostic.
+The file `docs/manuals/mant.md` is executable documentation. Native tests parse
+it through the supported Markdown subset, require its embedded quick reference
+and semantic options, and reject any lossy fallback diagnostic.
 
 `libmandoc-rs` also has a self-contained package test boundary: its parser,
 compression, include-policy, diagnostic, and optional `serde` tests must pass
 from Cargo's staged package directory without ManT fixtures outside the crate.
 
 When changing a versioned AST or protocol type, update its Rust contract tests
-and the TypeScript schema consumer in the same change. Keep the stdio boundary
-closed: unknown request fields and unknown response shapes must fail before UI
-code receives them.
+and the retained TypeScript schema consumer in the same change. Keep the stdio
+boundary closed for external clients: unknown request fields and unknown
+response shapes must fail before application code receives them. The native UI
+does not cross that boundary; it consumes the in-memory `QueryBundle` directly.

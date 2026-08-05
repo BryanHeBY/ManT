@@ -3,6 +3,10 @@
 
 > Turn local Unix manual pages and Markdown into structured documents.
 
+- Read a complete manual interactively:
+
+`mant {{topic}}`
+
 - Inspect a manual outline:
 
 `mant {{topic}} --outline`
@@ -28,8 +32,7 @@
 
 ## Name
 
-`mant` — turn local Unix manual pages and Markdown into structured documents
-for agents, scripts, and terminal output.
+`mant` — read and query structured local Unix manual pages and Markdown.
 
 ## Synopsis
 
@@ -44,13 +47,16 @@ mant --mcp
 
 ## Description
 
-`mant` is ManT's native, non-interactive command. It parses local man and mdoc
-sources through bundled libmandoc, then exposes their hierarchy, semantic
-options, references, and visible text through stable projections.
+`mant` is ManT's native interactive reader, structured command-line interface,
+and MCP server. It parses local man and mdoc sources through bundled libmandoc,
+then exposes their hierarchy, semantic options, references, and visible text
+through one normalized document model.
 
-Local Markdown enters the same versioned document model, so outlines,
+Local Markdown enters the same model, so terminal navigation, outlines,
 excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
-across both sources. Full document queries default to clean Markdown.
+across both sources. A full query opens the interactive reader when stdin and
+stdout are terminals; redirection falls back to clean Markdown. `--ui` and
+`--format` make either behavior explicit.
 
 ## Input
 
@@ -86,12 +92,6 @@ For example, expose `widget.1` as topic `widget`:
 mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
 MANPATH="$PWD/project-man" mant widget --section 1
-```
-
-The same environment reaches the companion process used by the TUI:
-
-```sh
-MANPATH="$PWD/project-man" mantui widget --section 1
 ```
 
 Confirm the host lookup independently with
@@ -130,8 +130,8 @@ implementation.
 Plain text, strong and emphasized text, inline code, explicit hard line
 breaks, standard links, email links, and document-local fragment links remain
 semantic inline nodes. Soft source line breaks become spaces, while hard
-breaks remain visible. A resolved fragment link can be followed directly by
-`mantui`; external and email destinations remain available to other
+breaks remain visible. A resolved fragment link can be followed directly in
+the reader; external and email destinations remain available to other
 consumers.
 
 ### ManT Extensions
@@ -189,6 +189,49 @@ features it does not implement.
 Source spans keep original Markdown line and column positions. Extracting an
 embedded tldr preface does not shift those coordinates.
 
+## Interactive Reader
+
+With a complete topic or Markdown path and a terminal on stdin and stdout,
+`mant` opens its Ratatui reader. `--ui` requires this mode explicitly. A
+projection option or `--format` selects deterministic output instead.
+
+The resizable sidebar mirrors the section hierarchy and semantic options.
+Selecting an item puts its heading at the top of the content pane. After
+content scrolling settles, the sidebar follows the first visible section.
+Page-local references can be followed directly.
+
+### Navigation
+
+- `j`, `Down`: Select the next visible node.
+- `k`, `Up`: Select the previous visible node.
+- `h`, `Left`: Collapse the current branch or select its parent.
+- `l`, `Right`: Expand the current branch or select its first child.
+- `d`, `PageDown`: Scroll the content down.
+- `u`, `PageUp`: Scroll the content up.
+
+Mouse input selects and folds navigation entries, follows page-local links,
+scrolls either pane, drags scrollbars, and resizes the sidebar boundary.
+
+### Page Search
+
+- `Ctrl+F`, `/`: Open the bottom search field.
+- `Enter`: Confirm a query or select the next match.
+- `n`: Select the next confirmed match.
+- `Shift+N`: Select the previous confirmed match.
+- `Escape`: Close search and remove match highlighting.
+
+Search runs only after confirmation. Every match stays highlighted while the
+active match uses a stronger background and moves into view.
+
+### Interface
+
+- `F10`: Open the menu bar.
+- `?`: Show keyboard shortcuts.
+- `q`: Quit.
+
+The View menu can hide the sidebar. Terminal setup is restored on normal exit,
+errors, and Rust panics.
+
 ## Document Selection
 
 - `--outline[=DETAIL]`: Print the addressable tree; `options` is the default and `sections` is the compact form.
@@ -231,9 +274,10 @@ mant tar --explain=--exclude
 - `--preserve-anchors`: Retain addressable HTML anchors in Markdown output.
 
 Clean Markdown output omits internal HTML anchors by default. The `man` format
-is plain manual content without an external tldr preface. Full documents and
-excerpts default to Markdown; outlines and search default to text. JSON must
-be selected explicitly, and `--compact` is valid only with JSON query output.
+is plain manual content without an external tldr preface. Explicit output for
+full documents and excerpts defaults to Markdown; outlines and command-line
+search default to text. JSON must be selected explicitly, and `--compact` is
+valid only with JSON query output.
 
 ## Integration
 
@@ -268,7 +312,7 @@ examples, compatibility policy, coordinate rules, and MCP tool contracts.
 
 Standard output is reserved for the requested result. Concise diagnostics use
 standard error. `--request-json` accepts the same input and projection model
-used by `mantui`. MCP exposes `mant_document_outline`, `mant_document_get`,
+used by external process integrations. MCP exposes `mant_document_outline`, `mant_document_get`,
 `mant_document_explain`, and `mant_document_search`; their generated `target`
 union accepts either a manual topic or a local Markdown path.
 
@@ -296,7 +340,9 @@ tldr page is available.
 
 ## General
 
+- `--ui`: Require the interactive reader instead of automatic terminal detection.
 - `-h`, `--help`: Show command help and exit.
+- `-V`, `--version`: Show the installed ManT version and exit.
 
 ## Exit Status
 
@@ -305,4 +351,5 @@ an operational failure.
 
 ## See Also
 
-`mantui` provides the interactive reader for the same structured documents.
+`docs/protocol.md` documents the JSON and MCP contracts used by external
+integrations.

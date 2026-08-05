@@ -3,221 +3,198 @@
 [![CI](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/BryanHeBY/ManT/branch/main/graph/badge.svg)](https://codecov.io/gh/BryanHeBY/ManT)
 [![crates.io](https://img.shields.io/crates/v/mant.svg?logo=rust)](https://crates.io/crates/mant)
-[![npm](https://img.shields.io/npm/v/mantui.svg?logo=npm)](https://www.npmjs.com/package/mantui)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-ManT turns dense local Unix manuals into navigable documents for people and
-structured knowledge for agents. The same document model also makes local
-Markdown navigable and queryable.
+ManT turns dense local Unix manuals and structurally compatible Markdown into
+navigable documents for people and precise, reusable knowledge for agents.
+One native `mant` executable provides the full-screen reader, deterministic
+Markdown/text/JSON output, generated schemas, and a read-only MCP server.
 
-Read the complete page in the **`mantui` terminal interface**, or ask the
-**`mant` CLI and MCP server** for an outline, one option, a precise excerpt,
-or a location-aware search result.
+```sh
+mant git                              # interactive reader in a terminal
+mant gcc --outline                    # structured outline for a script or agent
+mant tar --explain=--exclude          # one semantic option
+mant git --format markdown            # deterministic standard output
+mant --mcp                            # read-only MCP over stdio
+```
 
 ![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mantui-mant.png)
 
-## One document model, two workflows
+## One command, two workflows
 
-| Tool | Best for | Highlights |
+| Workflow | Selection | Highlights |
 | --- | --- | --- |
-| `mantui` | People reading in a terminal | Complete documents, hierarchy-aware sidebar, scroll following, in-page links, search, and tldr quick references |
-| `mant` | Agents, scripts, and terminal output | Outlines, targeted excerpts, semantic option explanations, location-aware search, Markdown/text/JSON, schemas, and MCP stdio |
+| Interactive reading | `mant TOPIC` in a terminal, or `--ui` | Complete document, hierarchy-aware sidebar, scroll following, page-local links, search, mouse input, and tldr quick references |
+| Structured queries | Projection options, `--format`, redirection, or `--mcp` | Outlines, excerpts, semantic option explanations, location-aware search, Markdown/text/JSON, generated schemas, and MCP stdio |
 
-The native `mant` engine parses local `man` and `mdoc` sources with bundled
-libmandoc, then exposes one versioned document model to both interfaces. A
-system `mandoc` installation is not required. If an installed `tldr` client
-has data for a manual topic, ManT places that quick reference before the full
-manual.
+A complete query automatically opens the reader only when both standard input
+and output are terminals. Redirection remains useful and predictable:
+
+```sh
+mant git > git.md
+mant git | less
+```
+
+Use `--ui` to require the reader or `--format markdown` to require output,
+independent of terminal detection.
 
 ## Why ManT
 
 - **Structure instead of a flat pager.** Sections, subsections, options, and
   page-local references remain navigable.
-- **Reading position stays visible.** The sidebar follows the document after
-  scrolling settles, without blocking content movement.
-- **Options are semantic nodes.** Agents can explain `--exclude` directly
-  instead of retrieving and searching an entire manual.
+- **One interpretation path.** The reader, output renderers, search, schemas,
+  and MCP tools consume the same normalized Rust document model.
+- **Options are semantic nodes.** Retrieve `--exclude` directly instead of
+  searching an entire page.
 - **Search results are reusable.** Matches include stable outline nodes and
-  Markdown line and column coordinates.
-- **Local-first and reproducible.** The primary parser is bundled, the public
-  contracts are generated from Rust types, and normal use needs no network
-  service.
-- **Project docs use the same path.** Local Markdown gains the same outline,
-  excerpt, search, TUI, JSON, and MCP capabilities as manuals.
+  generated-Markdown line and column coordinates.
+- **Local-first and reproducible.** The primary libmandoc parser is bundled;
+  ordinary use needs no network service or system `mandoc` executable.
+- **Markdown uses the same model.** Project documentation gains the same
+  outline, excerpt, search, TUI, JSON, and MCP capabilities.
 
 ## Install
 
-Install the native document engine from crates.io and the interactive reader
-from npm:
+Install the complete native command from crates.io:
 
 ```sh
-cargo install mant --version 0.4.0 --locked
-bun add --global mantui@0.4.0
-mantui git
+cargo install mant --locked
+mant git
 ```
 
-These are two deliberately separate packages:
-
-| Package | Installs | Runtime role |
-| --- | --- | --- |
-| [`mant` on crates.io](https://crates.io/crates/mant) | `mant` | Native CLI, MCP server, parser, schemas, and structured output |
-| [`mantui` on npm](https://www.npmjs.com/package/mantui) | `mantui` | Bun/OpenTUI interactive reader that calls `mant` through stdio |
-
-If only agents, scripts, MCP, or Markdown/text/JSON output are needed, install
-`mant` alone:
-
-```sh
-cargo install mant --version 0.4.0 --locked
-```
-
-Building `mant` from crates.io requires Rust 1.88+, a C compiler, and the zlib
-development library on Linux or macOS. The npm package contains portable
-TypeScript/TSX source rather than a platform binary and requires Bun 1.3.14+
-at runtime. `mantui` resolves its companion through `MANT_PATH` first and then
-`PATH`.
+Building from crates.io requires Rust 1.88+, a C compiler, and the zlib
+development library on Linux or macOS. Local manual pages and the host `man`
+command are required for manual topics; Markdown files work independently.
 
 ### Linux release archive
 
 Download the archive for your architecture from the
-[latest release](https://github.com/BryanHeBY/ManT/releases/latest), extract
-it, and put both executables on `PATH`:
+[latest release](https://github.com/BryanHeBY/ManT/releases/latest), then
+install its single executable:
 
 ```sh
 tar -xzf mant-<version>-linux-<arch>.tar.gz
 cd mant-<version>-linux-<arch>
-install -Dm755 mantui mant -t ~/.local/bin
+install -Dm755 mant ~/.local/bin/mant
 ```
 
-`mantui` locates its companion CLI through `MANT_PATH` first and then
-`PATH`, so keep `mantui` and `mant` together when installing from an archive.
-The release archive includes `mant.md` and `mantui.md` for immediate
-self-hosted browsing, plus the relevant bundled-parser license. A SHA-256
-checksum is published alongside it.
+The archive also includes `mant.md`, the project README, the Apache-2.0
+license, the bundled mandoc license, and a published SHA-256 checksum.
 
 ### Build from source
 
-Source builds support Linux and macOS. They require local manual pages and the
-`man` command, plus Bun, Rust 1.88+, and a C compiler (GCC on Linux or Clang on
-macOS by default).
-
 ```sh
-bun install
-bun run build
-PATH="$PWD/dist:$PATH" mantui git
+cargo build --manifest-path engine/Cargo.toml --release --locked -p mant
+./engine/target/release/mant git
 ```
 
-The build produces `dist/mantui` and `dist/mant`. For a fast development
-loop, use `bun run dev -- git`; it builds and selects the local `mant` binary
-automatically.
+See the [development guide](docs/development.md) for full repository checks
+and fixture requirements.
 
-## Read manuals with `mantui`
-
-```sh
-mantui git
-mantui printf --section 3
-mantui tar
-```
-
-The UI always shows the complete manual. Its sidebar mirrors nested sections,
-reveals normalized command-line options on demand, follows page-local
-references, and synchronizes with the reading position after scrolling
-settles. Use `Ctrl+F` or `/` for confirmed search, and `mantui -h` for the
-focused interactive command reference.
-
-## Query manuals with `mant`
-
-Start with an outline, then retrieve only the section or option that matters:
+## Interactive reader
 
 ```sh
 mant git
+mant printf --section 3
+mant README.md
+mant tar --ui
+```
+
+The sidebar mirrors nested sections and reveals normalized command-line
+options on demand. Selecting an entry places it at the top of the content
+pane; after scrolling settles, the sidebar follows the first visible section.
+
+- `j` / `k` or arrow keys move through visible nodes.
+- `h` / `l` collapse and expand branches.
+- `d` / `u` or page keys scroll the document.
+- `Ctrl+F` or `/` opens confirmed full-page search.
+- `n` and `Shift+N` select the next and previous matches.
+- `F10` opens the menu, `?` opens help, and `q` quits.
+
+The mouse can select and fold navigation entries, follow page-local links,
+scroll both panes, drag scrollbars, and resize the sidebar.
+
+## Agent, script, and terminal output
+
+Start with an outline and retrieve only the section or option that matters:
+
+```sh
 mant gcc --outline
-mant tar --explain=--exclude
-mant gcc --node 4.2 --format markdown
-```
-
-Heading paths are one-based, while `0` is reserved for an available external
-tldr quick reference. The default outline includes semantic options;
-`--outline sections` gives callers a smaller section-only tree.
-
-```sh
 mant gcc --outline sections
-mant tar --node acls --format markdown
-mant gcc --node 4.2 --node 4.7 --format json
-```
-
-Use the `=` form when an option selector starts with `-`:
-
-```sh
+mant gcc --node 4.2 --format markdown
+mant tar --node acls --format json
 mant tar --explain=--exclude
-mant tar --explain exclude
 ```
 
-`--explain` returns one option, command, or environment-variable entry; use
-`--node` for a complete section or tldr content.
+Heading paths are one-based. Path `0` and selector `tldr` are reserved for an
+available quick reference. The default outline includes semantic options;
+`--outline sections` returns only section topology.
 
-Search returns matches with stable Markdown line and column coordinates, plus
-the nearest reusable outline path:
+Search returns the nearest reusable outline node and exact generated-Markdown
+coordinates:
 
 ```sh
 mant tar --search=--acls --context 1
 mant gcc --search 'worktree|branch' --regex --case smart
 ```
 
-Full queries default to clean Markdown. Text and JSON are explicit:
+Full output supports Markdown, text, man-style plain text, and JSON:
 
 ```sh
+mant git --format markdown
 mant printf --section 3 --format text
 mant git --format json --compact
 ```
 
-For machine integration, discover the versioned JSON Schema from the binary
-instead of copying request shapes from documentation:
+Discover machine contracts from the installed binary rather than copying
+request shapes from documentation:
 
 ```sh
 mant --schema request
 mant --schema all --compact
-mant -h
+mant --protocol-version
+mant --version
 ```
 
-The [JSON protocol and Schema reference](docs/protocol.md) documents the
-version matrix, every request and response projection, the normalized AST,
-search coordinates, MCP tools, and complete examples.
+The [JSON protocol and Schema reference](docs/protocol.md) documents every
+versioned request and response projection, normalized AST node, coordinate
+rule, and MCP tool.
 
-Run `mant --update-tldr` to refresh data through the installed client when
-available, otherwise through ManT's private cache.
+## Manual sources and tldr
 
-Project-local roff can be queried without a system-wide install by placing it
-in a manual hierarchy and exposing the hierarchy root through `MANPATH`:
+ManT locates manual topics through the host's `man -w` behavior and parses the
+original roff source through bundled libmandoc. Project-local pages can be
+registered through `MANPATH`:
 
 ```sh
 mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
 MANPATH="$PWD/project-man" mant widget --section 1
-MANPATH="$PWD/project-man" mantui widget --section 1
 ```
 
-See [the `mant` manual](docs/manuals/mant.md#local-roff-trees) for lookup and
-path-layout details.
+When compatible local tldr data exists, the reader places it before the full
+manual as reserved section `0`. Run `mant --update-tldr` to update through an
+installed client or ManT's private cache.
 
-## Read project Markdown through the same model
+## Markdown through the same model
 
-Use a path for local files or `-` for standard input:
+Use a path for local files or `-` for non-interactive standard input:
 
 ```sh
-mantui README.md
+mant README.md
 mant README.md --outline
-mant README.md --node 1
+mant README.md --node 1 --format markdown
 cat guide.md | mant -
 ```
 
 ManT structures headings, prose, emphasis, code, links, code blocks, lists,
-GFM tables, hard breaks, and thematic breaks. Unsupported syntax remains
-visible with a diagnostic instead of being silently discarded. An option list
-such as ``- `--flag`: description`` becomes the same semantic, addressable
-entry used by a manual page.
+GFM tables, hard breaks, and thematic breaks. A complete list such as
+``- `--flag`: description`` becomes the same semantic option entry used by a
+manual page. Unsupported syntax remains visible with a diagnostic instead of
+being silently discarded.
 
 An optional `:::tldr` container at the physical start of a Markdown file uses
-the tldr-pages dialect and becomes reserved path `0` plus selector `tldr`:
+the tldr-pages dialect and becomes reserved path `0`:
 
 ```markdown
 :::tldr
@@ -233,54 +210,43 @@ the tldr-pages dialect and becomes reserved path `0` plus selector `tldr`:
 # Tool
 ```
 
-The container must be the first non-empty construct. It is parsed separately
-from the manual body, so ordinary headings named `TLDR` have no special
-meaning. The first H1 after the container names the document, while
-introductory prose is addressable as `root`. The release archive demonstrates
-this constrained format directly: its `mant.md` and `mantui.md` manuals are
-consumed by ManT itself.
+The shipped [mant manual](docs/manuals/mant.md) uses this constrained format
+and is consumed by ManT itself.
 
-## Connect agents over MCP
+## MCP
 
-Run the same native executable as a read-only MCP server over standard input
-and output:
+Run the same executable as a read-only MCP server:
 
 ```sh
 mant --mcp
 ```
 
-Configure an MCP client with command `mant` and arguments `["--mcp"]`.
-`tools/list` exposes generated input and output JSON Schemas for four tools:
-`mant_document_outline`, `mant_document_get`, `mant_document_explain`, and
-`mant_document_search`. Their shared `target` accepts either a manual topic or
-a local Markdown path, and they return the same versioned ManT projections as
-the direct CLI. The server has no network transport and no mutation tools; its
-standard output is reserved for MCP JSON-RPC, while diagnostics use standard
-error.
+Configure the client command as `mant` with arguments `["--mcp"]`. The server
+exposes outline, content, semantic explanation, and search tools over stdio.
+It has no network transport or mutation tools; stdout remains reserved for
+MCP JSON-RPC and diagnostics use stderr.
 
 ## Architecture
 
 ```text
-mantui (Bun / OpenTUI React)
-  └─ versioned JSON over stdio → mant
-                                  └─ mant-core
-                                       ├─ mant-ast
-                                       └─ libmandoc-rs
-                                            └─ vendored libmandoc + private C shim
-
-MCP client ── stdio JSON-RPC → mant --mcp ──→ mant-core
+mant
+├─ terminal mode ──→ mant-ui (Ratatui)
+├─ output mode ────→ Markdown / text / JSON
+├─ integration ────→ schemas / request JSON / MCP stdio
+└─ mant-core
+   ├─ mant-ast
+   └─ libmandoc-rs
+      └─ vendored libmandoc + private C shim
 ```
 
-Rust owns source discovery, parsing, the stable AST, tldr integration, and
-Markdown/text/JSON output. `libmandoc-rs` exposes an owned, renderer-neutral
-parse tree; `mant-core` lowers that tree into ManT's document contract.
-TypeScript owns only terminal interaction and presentation after validating the
-native response boundary.
+Rust owns source discovery, parsing, the stable AST, tldr integration, output,
+and terminal presentation. Interactive use passes the in-memory `QueryBundle`
+directly to `mant-ui`; external process consumers continue to use the
+versioned JSON and MCP boundaries.
 
 ## Documentation
 
 - [mant self manual](docs/manuals/mant.md)
-- [mantui self manual](docs/manuals/mantui.md)
 - [JSON protocol and Schema reference](docs/protocol.md)
 - [Native architecture](docs/architecture/native-core.md)
 - [Development guide and repository map](docs/development.md)

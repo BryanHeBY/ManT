@@ -39,7 +39,7 @@ query the manual database, read tldr data, or start the TUI.
 | Identifier | Scope | Where it appears |
 | --- | --- | --- |
 | `mant.cli/v3` | One-shot process invocation and stream behavior | `--protocol-version` |
-| `3` | Native API generation negotiated by `mantui` | `nativeApiVersion` |
+| `3` | Native API generation negotiated by process clients | `nativeApiVersion` |
 | `mant.request/v3` | Closed request accepted by `--request-json` | Request `schema` |
 | `mant.query/v3` | Complete document plus optional quick reference | Full response `schema` |
 | `mant.document/v3` | Source-neutral document AST | `QueryBundle.document.schema` |
@@ -69,8 +69,9 @@ every contract shares one number.
 - A process client should probe once per executable, cache the successful
   descriptor, and refuse incompatible identifiers before sending a query.
 
-`mantui` follows this policy: it probes `--protocol-version`, validates the
-complete response boundary, and never sends an unversioned request.
+External clients should follow this policy. ManT's built-in reader uses the
+same typed Rust structures in process and therefore does not negotiate its own
+protocol version.
 
 ## Generated JSON Schemas
 
@@ -129,8 +130,8 @@ concise diagnostics.
 
 One invocation handles one request and then exits. This keeps the boundary
 simple, isolates native parser failures, and lets callers apply ordinary
-process timeouts. `mantui` starts one process while loading a document;
-interactive navigation and search do not start more processes.
+process timeouts. The built-in reader bypasses this external transport and
+operates on one in-memory document.
 
 ### Exit Status
 
@@ -501,8 +502,9 @@ can open another page without parsing display text.
 | `origin` | `embedded`, or omitted for community tldr-pages data |
 
 Every example contains the complete `command` and a `commandParts` array.
-Command parts are `text` or `placeholder`; the latter lets `mantui` highlight
-standard tldr `{{placeholder}}` syntax without reparsing the command.
+Command parts are `text` or `placeholder`; the latter lets interactive and
+external renderers highlight standard tldr `{{placeholder}}` syntax without
+reparsing the command.
 
 ## Outline Projection
 

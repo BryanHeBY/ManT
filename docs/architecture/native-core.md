@@ -17,21 +17,21 @@ and makes Rust the sole owner of document interpretation.
 
 ## Decision
 
-ManT will use a Rust native core with four layers:
+ManT uses one Rust implementation with five layers:
 
 ```text
 mant-ast          versioned document and query contracts
 libmandoc-rs      owned libmandoc parse tree, private C shim, and build logic
 mant-core         source loading, parsing, query, and output renderers
-mant              standalone agent CLI and versioned stdio process boundary
+mant-ui           Ratatui presentation over an in-memory query bundle
+mant              mode selection, CLI, MCP, and versioned stdio boundary
 ```
 
-The TypeScript application becomes a thin host and presentation layer.  It
-owns the interactive `mantui` command, user-facing TUI errors, the OpenTUI React
-interface, navigation, search interaction, and terminal styling.  The native
-`mant` command is independently usable by agents and scripts.  TypeScript
-does not interpret roff or renderer HTML and does not serialize JSON or
-Markdown documents.
+The `mant` executable selects interactive or output presentation after parsing
+arguments. A complete query on terminal stdin and stdout is handed directly to
+`mant-ui`; projections, explicit formats, redirection, request JSON, and MCP
+remain deterministic non-interactive surfaces. The former TypeScript/OpenTUI
+frontend remains only as a regression reference and is not a release artifact.
 
 `libmandoc-rs` is the boundary around the bundled C parser. Its deliberately
 small private C shim hides libmandoc structure layouts and parser handles; the
@@ -49,11 +49,11 @@ The document source may be man, mdoc, Markdown, or the explicit groff HTML
 compatibility path. Blocks before the first heading live in the document's
 root `blocks`; heading content remains in the recursive section tree.
 
-All cross-language payloads carry an exact schema identifier.  Rust structs
-are the source of truth, and TypeScript validates the JSON boundary before
-passing a value to React.  New optional object fields may be added within a
+All external machine payloads carry an exact schema identifier. Rust structs
+are the source of truth. New optional object fields may be added within a
 schema version; incompatible meaning changes and new required node variants
-require a new schema version.
+require a new schema version. The in-process Rust UI consumes the same typed
+model directly and does not serialize it first.
 
 The initial document contract keeps navigation semantic instead of encoding
 every destination as an untyped URI:
@@ -83,10 +83,11 @@ contract.
 
 ## Native process boundary
 
-The project deliberately uses a process boundary instead of Node-API. This
-avoids ABI-specific addons, isolates native failures, and makes the same binary
-directly useful outside Bun. One-shot requests serve the TUI and shell usage;
-the same executable also provides a long-lived, read-only MCP stdio server.
+The project deliberately exposes process protocols instead of Node-API. This
+avoids ABI-specific addons and makes the same binary directly useful to any
+language. One-shot requests serve external integrations; the same executable
+also provides a long-lived, read-only MCP stdio server. The native reader does
+not pay this boundary cost because it calls `mant-core` in process.
 The field-level contract, version matrix, examples, and client checklist live
 in the [JSON protocol and Schema reference](../protocol.md).
 The public surface is use-case oriented rather than a mirror of parser
@@ -108,14 +109,13 @@ mant --schema <contract>           -> generated JSON Schema
 mant --mcp                         -> read-only MCP tools over stdio
 ```
 
-For the TUI, `mant --request-json --format json --compact` reads one closed,
-versioned `QueryRequest` object from standard input and emits exactly one
-`mant.query/v3` object on standard output.  Standard error contains concise
-diagnostics only.  Status 0 means success, 2 means invalid invocation or
-request, and 1 means an operational failure.  The TypeScript client drains
-stdout and stderr concurrently, validates the protocol and schema, and starts
-one process per document query; interactive search and navigation never spawn
-additional native processes.
+For process integrations, `mant --request-json --format json --compact` reads
+one closed, versioned `QueryRequest` object from standard input and emits
+exactly one `mant.query/v3` object on standard output. Standard error contains
+concise diagnostics only. Status 0 means success, 2 means invalid invocation
+or request, and 1 means an operational failure. Interactive search and
+navigation operate on the already loaded in-memory document and never spawn
+additional processes.
 
 For agent clients that speak the Model Context Protocol, `mant --mcp`
 keeps standard output exclusively for JSON-RPC and exposes four generated,
@@ -147,12 +147,11 @@ returns a named catalog. The schemas are derived with
 Schemars from `mant-ast`'s Serde types, explicitly pinned to JSON Schema Draft
 2020-12, and generated separately for deserialize and serialize behavior.
 
-`mantui` and `mant` are separate installed executables.  The TUI resolves
-`MANT_PATH` first and otherwise looks up `mant` on `PATH`; it never
-embeds or extracts the Rust binary.  Local `bun run dev` performs an
-incremental Cargo release build and supplies the staged binary through
-`MANT_PATH`.  Release builds place both executables beside each other in
-`dist/`, ready for an installer to put them on the same `PATH`.
+Interactive and machine-oriented use are modes of one installed `mant`
+executable. Local `bun run dev` performs an incremental Cargo release build and
+executes the staged binary directly. Release builds place that one executable
+in `dist/`; there is no companion command lookup or private executable
+extraction.
 
 Direct `mant` queries default to Markdown for useful terminal and agent
 output. `--format json` is pretty by default and `--compact` is available to
@@ -170,9 +169,9 @@ Markdown content before the first heading is exposed as path `root` with ID
 Excerpt selection accepts a section path, option path, document ID, or option
 alias; it includes complete selected content, deduplicates overlaps, and
 preserves source order. Their JSON contracts are `mant.outline/v3` and
-`mant.excerpt/v3`; plain text and CommonMark are also available. The TUI uses
-the same `QueryRequest` contract with `view.kind = "full"`; agents can select
-outline and excerpt projections directly through `--request-json`.
+`mant.excerpt/v3`; plain text and CommonMark are also available. The TUI
+constructs the same full query in memory; agents can select outline and excerpt
+projections directly through `--request-json`.
 
 Search is a native projection of the same full query. Rust renders one
 canonical CommonMark document, builds visible-text byte mappings from its
@@ -277,14 +276,14 @@ Rust owns:
   parsing;
 - section, block, inline, layout-hint, link, table, and equation semantics;
 - tldr cache discovery, parsing, update behavior, and query composition;
-- versioned JSON and CommonMark serialization.
+- versioned JSON and CommonMark serialization;
+- terminal mode selection, Ratatui rendering, search, navigation, scrolling,
+  menus, and sidebar sizing.
 
-TypeScript owns:
+The retained TypeScript reference owns only historical regression coverage for:
 
-- the interactive `mantui` command, TTY selection, and TUI error presentation;
 - the `mant` process client and runtime schema/version guard;
-- OpenTUI React rendering, colors, syntax highlighting, and input state;
-- interactive search, navigation, scrolling, menus, and sidebar sizing.
+- the former OpenTUI React presentation behavior.
 
 ## Test boundary
 
@@ -294,14 +293,15 @@ do not require an installed manual page for normal CI.  They also cover
 repeated parser sessions, diagnostic isolation, compression, includes, and
 Markdown escaping.
 
-The shipped `docs/manuals/mant.md` and `mantui.md` files are also fixtures:
-tests require both to parse without lossy fallbacks and to expose their
-embedded quick references and semantic options.
+The shipped `docs/manuals/mant.md` file is also a fixture: tests require it to
+parse without lossy fallbacks and to expose its embedded quick reference and
+semantic options.
 
-Rust additionally owns `mant` argument, stdio protocol, exit-code, and
-agent-facing output tests.  TypeScript retains process-client, interactive
-command, and UI tests.  Shared contract fixtures are decoded by TypeScript and
-generated or compared by Rust. The one-time native/legacy differential gate
+Rust additionally owns `mant` argument, stdio protocol, exit-code, interactive
+reader, and agent-facing output tests. TypeScript retains process-client and
+historical UI tests until that reference implementation is removed. Shared
+contract fixtures are decoded by TypeScript and generated or compared by Rust.
+The one-time native/legacy differential gate
 was removed together with the old parser after the cut-over commit;
 equivalent source-level and renderer-compatibility coverage remains in Rust.
 

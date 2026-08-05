@@ -1,14 +1,15 @@
 # mant
 
-`mant` is ManT's native command-line interface and stdio MCP server. It turns
-local Unix manual pages and Markdown documents into structured outlines,
-targeted excerpts, semantic option explanations, location-aware search
-results, and Markdown, text, or JSON output.
+`mant` is ManT's complete native document command. In a terminal it opens the
+Ratatui reader; projections and explicit formats provide structured output for
+agents and scripts, and `--mcp` starts the stdio MCP server.
 
 ```sh
+mant git
 mant gcc --outline
 mant tar --explain=--exclude
 mant README.md --node 1
+mant git --format markdown
 mant --mcp
 ```
 
@@ -18,6 +19,5 @@ Install the native CLI with:
 cargo install mant --locked
 ```
 
-The separate `mantui` executable provides ManT's interactive terminal reader
-and is distributed through the
-[ManT releases](https://github.com/BryanHeBY/ManT/releases).
+The same executable handles interactive manuals, local Markdown, deterministic
+Markdown/text/JSON output, generated schemas, and read-only MCP tools.

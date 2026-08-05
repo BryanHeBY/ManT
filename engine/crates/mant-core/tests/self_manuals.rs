@@ -7,94 +7,83 @@ use mant_core::{
 };
 
 const MANT_MANUAL: &str = include_str!("../../../../docs/manuals/mant.md");
-const MANTUI_MANUAL: &str = include_str!("../../../../docs/manuals/mantui.md");
 const PROTOCOL_REFERENCE: &str = include_str!("../../../../docs/protocol.md");
 
 #[test]
-fn shipped_manuals_parse_without_lossy_fallbacks() {
-    for (name, source) in [("mant.md", MANT_MANUAL), ("mantui.md", MANTUI_MANUAL)] {
-        let query = query_markdown_text(source, Some(format!("docs/manuals/{name}")))
-            .expect("self manual query");
-        let document = query.document.as_ref().expect("manual body");
-        let tldr = query.tldr.as_ref().expect("embedded tldr");
+fn shipped_manual_parses_without_lossy_fallbacks() {
+    let name = "mant.md";
+    let query = query_markdown_text(MANT_MANUAL, Some(format!("docs/manuals/{name}")))
+        .expect("self manual query");
+    let document = query.document.as_ref().expect("manual body");
+    let tldr = query.tldr.as_ref().expect("embedded tldr");
 
-        assert_eq!(
-            document.meta.title.as_deref(),
-            Some(name.trim_end_matches(".md"))
-        );
-        assert!(
-            !document.sections.is_empty(),
-            "{name} has a navigable outline"
-        );
-        assert_eq!(
-            document.sections[0].title, "Name",
-            "{name} begins its manual body with a conventional Name section"
-        );
-        assert!(
-            document.diagnostics.is_empty(),
-            "{name} must not rely on unsupported Markdown: {:?}",
-            document.diagnostics
-        );
-        assert!(
-            tldr.origin == TldrOrigin::Embedded,
-            "{name} marks its document-owned tldr origin"
-        );
-        assert!(
-            tldr.examples.len() >= 4
-                && tldr
-                    .examples
-                    .iter()
-                    .all(|example| !example.description.is_empty() && !example.command.is_empty()),
-            "{name} quick reference follows the tldr description/command layout"
-        );
-        assert!(
-            tldr.examples.iter().any(|example| {
-                example
-                    .command_parts
-                    .iter()
-                    .any(|part| matches!(part, TldrCommandPart::Placeholder { .. }))
-            }),
-            "{name} uses the standard tldr placeholder syntax that drives command highlighting"
-        );
+    assert_eq!(document.meta.title.as_deref(), Some("mant"));
+    assert!(
+        !document.sections.is_empty(),
+        "{name} has a navigable outline"
+    );
+    assert_eq!(
+        document.sections[0].title, "Name",
+        "{name} begins its manual body with a conventional Name section"
+    );
+    assert!(
+        document.diagnostics.is_empty(),
+        "{name} must not rely on unsupported Markdown: {:?}",
+        document.diagnostics
+    );
+    assert_eq!(tldr.origin, TldrOrigin::Embedded);
+    assert!(
+        tldr.examples.len() >= 4
+            && tldr
+                .examples
+                .iter()
+                .all(|example| !example.description.is_empty() && !example.command.is_empty()),
+        "{name} quick reference follows the tldr description/command layout"
+    );
+    assert!(
+        tldr.examples.iter().any(|example| {
+            example
+                .command_parts
+                .iter()
+                .any(|part| matches!(part, TldrCommandPart::Placeholder { .. }))
+        }),
+        "{name} uses the standard tldr placeholder syntax that drives command highlighting"
+    );
 
-        let outline = build_outline_with_detail(&query, OutlineDetail::Sections)
-            .expect("self manual outline");
-        assert_eq!(outline.nodes[0].path(), "0");
-        assert!(matches!(
-            &outline.nodes[1],
-            OutlineNode::DocumentSection { path, title, .. }
-                if path == "1" && title == "Name"
-        ));
-        let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("TLDR alias");
-        assert!(matches!(
-            excerpt.selections.as_slice(),
-            [ExcerptSelection::Tldr { path, document, .. }]
-                if path == "0" && document.origin == TldrOrigin::Embedded
-        ));
-        let markdown = render_markdown(&query);
-        assert!(!markdown.contains("<a "));
-        assert!(
-            !markdown.contains("tldr-pages · CC BY 4.0"),
-            "{name} must not claim the community cache licence for owned content"
-        );
-        assert!(!render_query_text(&query).is_empty());
-    }
+    let outline =
+        build_outline_with_detail(&query, OutlineDetail::Sections).expect("self manual outline");
+    assert_eq!(outline.nodes[0].path(), "0");
+    assert!(matches!(
+        &outline.nodes[1],
+        OutlineNode::DocumentSection { path, title, .. }
+            if path == "1" && title == "Name"
+    ));
+    let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("TLDR alias");
+    assert!(matches!(
+        excerpt.selections.as_slice(),
+        [ExcerptSelection::Tldr { path, document, .. }]
+            if path == "0" && document.origin == TldrOrigin::Embedded
+    ));
+    let markdown = render_markdown(&query);
+    assert!(!markdown.contains("<a "));
+    assert!(
+        !markdown.contains("tldr-pages · CC BY 4.0"),
+        "{name} must not claim the community cache licence for owned content"
+    );
+    assert!(!render_query_text(&query).is_empty());
 }
 
 #[test]
 fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
-    for (name, source, expected) in [
-        ("mant.md", MANT_MANUAL, "--search"),
-        ("mantui.md", MANTUI_MANUAL, "--help"),
-    ] {
-        let query = query_markdown_text(source, Some(format!("docs/manuals/{name}")))
-            .expect("self manual query");
-        let outline =
-            build_outline_with_detail(&query, OutlineDetail::Options).expect("manual outline");
+    let query = query_markdown_text(MANT_MANUAL, Some("docs/manuals/mant.md".to_owned()))
+        .expect("self manual query");
+    let outline =
+        build_outline_with_detail(&query, OutlineDetail::Options).expect("manual outline");
 
+    for expected in ["--search", "--ui", "--help"] {
         assert!(
             contains_entry(&outline.nodes, expected),
-            "{name} should expose {expected} as a semantic entry"
+            "mant.md should expose {expected} as a semantic entry"
         );
     }
 }
@@ -113,10 +102,6 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
             "mant.md should document local roff lookup with {required:?}"
         );
     }
-    assert!(
-        MANTUI_MANUAL.contains("`MANPATH`"),
-        "mantui.md should expose the inherited manual path"
-    );
     assert!(
         PROTOCOL_REFERENCE.contains("The process inherits `MANPATH`, `MANSECT`"),
         "the request reference should define the manual lookup environment"

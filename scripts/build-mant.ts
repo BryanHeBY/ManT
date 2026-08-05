@@ -2,8 +2,8 @@
  * @file Builds and stages the current-platform Rust `mant` executable.
  *
  * Cargo owns compilation and dependency tracking. This wrapper applies ManT's
- * Linux/macOS C-compiler policy and atomically publishes the release artifact
- * under engine/bin so development can select it through MANT_PATH.
+ * Linux/macOS C-compiler policy and atomically stages the unified release
+ * artifact under engine/bin for local development.
  */
 
 import { chmod, copyFile, mkdir, rename, rm } from "node:fs/promises";
@@ -15,7 +15,7 @@ const manifest = join(root, "engine", "Cargo.toml");
 const cargoArtifact = join(root, "engine", "target", "release", "mant");
 const stagedArtifact = join(root, "engine", "bin", "mant");
 
-/** Build the native CLI and return the path consumed by the Bun process client. */
+/** Build the unified command and return its staged executable path. */
 export async function buildMant(): Promise<string> {
   assertSupportedBuildPlatform();
   const compiler = resolveCCompiler();
