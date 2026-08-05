@@ -77,14 +77,14 @@ tar -xzf mant-<version>-linux-<arch>.tar.gz
 cd mant-<version>-linux-<arch>
 install -Dm755 mant ~/.local/bin/mant
 data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-install -Dm644 mant.md "$data_home/mant/documents/mant.md"
+install -Dm644 mant.md "$data_home/mant/mant.md"
 mant mant
 ```
 
 Installing `mant.md` is recommended but optional: it makes the complete ManT
 manual available as the registered document `mant`, including in the reader,
 structured CLI, and MCP document catalog. For a system-wide installation, use
-`/usr/local/bin/mant` and `/usr/local/share/mant/documents/mant.md` instead. User
+`/usr/local/bin/mant` and `/usr/local/share/mant/mant.md` instead. User
 documents take precedence over system documents.
 
 The archive also includes the project README, the Apache-2.0 license, the
@@ -190,15 +190,18 @@ installed client or ManT's private cache.
 Register reusable Markdown under the XDG data hierarchy:
 
 ```sh
-mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents"
-cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md"
+mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant"
+cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/mant.md"
 mant mant
 ```
 
 An unqualified name checks the user directory first, then
-`$XDG_DATA_DIRS/mant/documents`, and finally the native manual index. An explicit
-`--section`, `--force-libmandoc`, or `--force-groff` request bypasses registered
-Markdown and selects a manual.
+each `$XDG_DATA_DIRS/mant` root, and finally the native manual index. Nested
+directories and file or directory symlinks are discovered recursively. The
+filename stem remains the lookup name, so `team/handbook.md` is opened as
+`mant handbook`; directories are organizational rather than namespaces. An
+explicit `--section`, `--force-libmandoc`, or `--force-groff` request bypasses
+registered Markdown and selects a manual.
 
 Use a path for one-off local files or `-` for non-interactive standard input:
 
