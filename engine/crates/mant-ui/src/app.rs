@@ -808,22 +808,42 @@ impl App {
             area,
         );
         let inner = area.inner(CONTENT_MARGIN);
-        self.last_content_area = inner;
-        self.rendered_cache
-            .entry(inner.width)
-            .or_insert_with(|| self.document.render(inner.width));
-        if !self.search_query.is_empty() && self.search_width != inner.width {
-            self.refresh_search(inner.width);
-        }
-        let rendered = &self.rendered_cache[&inner.width];
         let viewport_height = usize::from(inner.height);
+        let full_width = inner.width.max(1);
+        let full_width_rows = self
+            .rendered_cache
+            .entry(full_width)
+            .or_insert_with(|| self.document.render(full_width))
+            .row_count;
+        let needs_scrollbar =
+            virtual_content_rows(full_width_rows, viewport_height) > viewport_height;
+        // The scrollbar owns a gutter beside the document instead of
+        // overwriting its final column. This is especially visible on the
+        // right border of full-width TLDR panels.
+        let document_area = if needs_scrollbar && inner.width > 1 {
+            Rect::new(
+                inner.x,
+                inner.y,
+                inner.width.saturating_sub(1),
+                inner.height,
+            )
+        } else {
+            inner
+        };
+        self.last_content_area = document_area;
+        let render_width = document_area.width.max(1);
+        self.rendered_cache
+            .entry(render_width)
+            .or_insert_with(|| self.document.render(render_width));
+        if !self.search_query.is_empty() && self.search_width != render_width {
+            self.refresh_search(render_width);
+        }
+        let rendered = &self.rendered_cache[&render_width];
         // Keep enough virtual trailing space for every addressable row,
         // including the final section heading, to become the viewport's first
         // line. The previous OpenTUI frontend achieved this with a terminal-
         // height spacer after the document.
-        let virtual_rows = rendered
-            .row_count
-            .saturating_add(viewport_height.saturating_sub(1));
+        let virtual_rows = virtual_content_rows(rendered.row_count, viewport_height);
         let maximum = virtual_rows.saturating_sub(viewport_height);
         self.content_scroll = self.content_scroll.min(maximum);
         let scroll = u16::try_from(self.content_scroll).unwrap_or(u16::MAX);
@@ -839,7 +859,7 @@ impl App {
             Paragraph::new(text)
                 .scroll((scroll, 0))
                 .style(Style::default().bg(theme::CONTENT)),
-            inner,
+            document_area,
         );
         self.last_content_scrollbar =
             VerticalScrollbar::new(inner, virtual_rows, viewport_height, self.content_scroll);
@@ -1496,6 +1516,10 @@ fn fit_to_width(value: &str, width: usize) -> String {
     result
 }
 
+const fn virtual_content_rows(row_count: usize, viewport_height: usize) -> usize {
+    row_count.saturating_add(viewport_height.saturating_sub(1))
+}
+
 #[cfg(test)]
 mod tests {
     use mant_ast::{
@@ -1803,6 +1827,21 @@ mod tests {
                 .bg,
             theme::TLDR_SURFACE
         );
+        let panel_right = app.last_content_area.right().saturating_sub(1);
+        assert_eq!(
+            buffer
+                .cell((panel_right, 2))
+                .expect("tldr right border")
+                .symbol(),
+            "┐"
+        );
+        assert_eq!(
+            app.last_content_scrollbar
+                .expect("content scrollbar")
+                .area()
+                .x,
+            app.last_content_area.right()
+        );
     }
 
     #[test]
@@ -1818,7 +1857,7 @@ mod tests {
         assert_eq!(app.last_content_area.x, DEFAULT_SIDEBAR_WIDTH + 1);
         assert_eq!(app.last_content_area.y, 2);
         let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
-        assert_eq!(scrollbar.area().x, app.last_content_area.right() - 1);
+        assert_eq!(scrollbar.area().x, app.last_content_area.right());
         assert_eq!(scrollbar.area().y, app.last_content_area.y);
     }
 
