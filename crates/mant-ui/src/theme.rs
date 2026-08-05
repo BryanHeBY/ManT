@@ -2,9 +2,8 @@
 
 use ratatui::style::Color;
 
-// Catppuccin Mocha values used by the original OpenTUI frontend. Keeping the
-// palette semantic makes later widgets share one visual language instead of
-// accumulating one-off RGB literals.
+// Catppuccin Mocha values shared through semantic roles so widgets keep one
+// visual language instead of accumulating one-off RGB literals.
 pub const CONTENT: Color = Color::Rgb(0, 0, 0);
 pub const BASE: Color = Color::Rgb(30, 30, 46);
 pub const MENU: Color = Color::Rgb(24, 24, 37);

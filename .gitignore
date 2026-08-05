@@ -1,20 +1,11 @@
-# Dependencies
-node_modules/
-
 # Build output
 dist/
-build/
-*.tsbuildinfo
 
 # Coverage reports
-coverage/
-engine-lcov.info
+rust-lcov.info
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # Environment
 .env
@@ -31,9 +22,6 @@ yarn-error.log*
 # Temporary / scratch files
 tmp-*
 *.tmp
-
-# Locally staged executable.
-bin/
 
 # Cargo workspace output. Cargo.lock remains tracked for reproducible builds.
 target/

@@ -1,8 +1,7 @@
 //! Shared terminal layout measurements for the Ratatui frontend.
 //!
-//! Keeping these values together makes the Rust UI's geometry explicit and
-//! prevents individual widgets from drifting away from the established
-//! `OpenTUI` layout during the migration.
+//! Keeping these values together makes the UI geometry explicit and prevents
+//! individual widgets from accumulating incompatible local measurements.
 
 use ratatui::layout::Margin;
 

@@ -197,12 +197,12 @@ jobs:
       - name: Collect Rust coverage
         run: |
           cargo llvm-cov --locked --workspace \
-            --remap-path-prefix --lcov --output-path engine-lcov.info
+            --remap-path-prefix --lcov --output-path rust-lcov.info
 
       - name: Upload Rust coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
-          files: engine-lcov.info
+          files: rust-lcov.info
           flags: rust
           disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -620,8 +620,7 @@ impl App {
         self.content_render_width = render_width;
         // Keep enough virtual trailing space for every addressable row,
         // including the final section heading, to become the viewport's first
-        // line. The previous OpenTUI frontend achieved this with a terminal-
-        // height spacer after the document.
+        // line by retaining a terminal-height spacer after the document.
         let virtual_rows = virtual_content_rows(rendered.row_count, viewport_height);
         let maximum = virtual_rows.saturating_sub(viewport_height);
         self.content_scroll = self.content_scroll.min(maximum);

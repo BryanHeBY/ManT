@@ -18,7 +18,7 @@ mant git --format markdown            # deterministic standard output
 mant --mcp                            # read-only MCP over stdio
 ```
 
-![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mantui-mant.png)
+![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mant-reader.png)
 
 ## One command, two workflows
 

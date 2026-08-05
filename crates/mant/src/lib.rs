@@ -1,8 +1,8 @@
 //! Public process boundary for `ManT`'s native document CLI.
 //!
-//! `mant` is both an agent-friendly command and the versioned stdio
-//! backend used by the interactive TypeScript application. Standard output is
-//! reserved for the requested document; diagnostics go to standard error.
+//! `mant` is both an interactive reader and an agent-friendly command with a
+//! versioned stdio boundary. Standard output is reserved for the requested
+//! document; diagnostics go to standard error.
 
 mod arguments;
 mod mcp;
@@ -20,7 +20,7 @@ use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaCont
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
-/// Exact stdio protocol understood by the TypeScript client.
+/// Exact stdio protocol exposed to external process clients.
 pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v3";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;

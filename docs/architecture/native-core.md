@@ -4,16 +4,10 @@ Status: implemented.
 
 ## Context
 
-ManT previously obtained HTML from bundled mandoc, an installed mandoc, or
-man-db/groff and then reconstructed a document model in TypeScript. A second
-`mant.roff-ast/v1` sidecar exposed part of libmandoc's internal tree. These
-parallel representations were removed after the native document contract
-became authoritative.
-
-Keeping parsing and serialization rules in both Rust and TypeScript would
-also allow whitespace, list, link, and fallback behavior to diverge.  The
-native migration therefore establishes one renderer-neutral document model
-and makes Rust the sole owner of document interpretation.
+Earlier prototypes reconstructed a document from renderer HTML and maintained
+parallel parser and presentation models. Those representations were removed
+after the native document contract became authoritative. ManT now has one
+renderer-neutral model, and Rust is the sole owner of document interpretation.
 
 ## Decision
 
@@ -30,8 +24,7 @@ mant              mode selection, CLI, MCP, and versioned stdio boundary
 The `mant` executable selects interactive or output presentation after parsing
 arguments. A complete query on terminal stdin and stdout is handed directly to
 `mant-ui`; projections, explicit formats, redirection, request JSON, and MCP
-remain deterministic non-interactive surfaces. The former TypeScript/OpenTUI
-frontend remains only as a regression reference and is not a release artifact.
+remain deterministic non-interactive surfaces.
 
 `libmandoc-rs` is the boundary around the bundled C parser. Its deliberately
 small private C shim hides libmandoc structure layouts and parser handles; the
@@ -148,10 +141,9 @@ Schemars from `mant-ast`'s Serde types, explicitly pinned to JSON Schema Draft
 2020-12, and generated separately for deserialize and serialize behavior.
 
 Interactive and machine-oriented use are modes of one installed `mant`
-executable. Local `bun run dev` performs a Cargo release build and executes the
-staged binary directly. Release builds place that one executable
-in `dist/`; there is no companion command lookup or private executable
-extraction.
+executable. Local development runs it directly through Cargo; release builds
+produce `target/release/mant`. There is no companion command lookup, private
+executable extraction, or runtime outside the native process.
 
 Direct `mant` queries default to Markdown for useful terminal and agent
 output. `--format json` is pretty by default and `--compact` is available to
@@ -237,12 +229,11 @@ and prints renderer diagnostics. It is intentionally opt-in because its
 availability depends on the host `man` implementation and its coverage is
 smaller than direct source lowering.
 
-Direct lowering is covered by deterministic native fixtures and was compared
-against the former TypeScript implementation on large installed ls, git, gcc,
-clang, and tar pages before cut-over. The groff HTML compatibility parser also
-lives in Rust for the explicit `--force-groff` diagnostic mode. Best-effort
-native output is retained together with its diagnostics rather than being
-silently replaced by a second renderer.
+Direct lowering is covered by deterministic native fixtures from multiple
+distributions, including large git, gcc, clang, tar, and shell pages. The groff
+HTML compatibility parser also lives in Rust for the explicit `--force-groff`
+diagnostic mode. Best-effort native output is retained together with its
+diagnostics rather than being silently replaced by a second renderer.
 
 Vertical layout is part of this normalization boundary rather than a TUI
 heuristic. Sections retain the distance requested before `SH`, `SS`, `Sh`, and
@@ -280,11 +271,6 @@ Rust owns:
 - terminal mode selection, Ratatui rendering, search, navigation, scrolling,
   menus, and sidebar sizing.
 
-The retained TypeScript reference owns only historical regression coverage for:
-
-- the `mant` process client and runtime schema/version guard;
-- the former OpenTUI React presentation behavior.
-
 ## Test boundary
 
 Rust tests are authoritative for all parsing and serialization semantics.
@@ -298,17 +284,14 @@ parse without lossy fallbacks and to expose its embedded quick reference and
 semantic options.
 
 Rust additionally owns `mant` argument, stdio protocol, exit-code, interactive
-reader, and agent-facing output tests. TypeScript retains process-client and
-historical UI tests until that reference implementation is removed. Shared
-contract fixtures are decoded by TypeScript and generated or compared by Rust.
-The one-time native/legacy differential gate
-was removed together with the old parser after the cut-over commit;
-equivalent source-level and renderer-compatibility coverage remains in Rust.
+reader, and agent-facing output tests. Shared contract fixtures are decoded,
+generated, and compared by Rust. Source-level and renderer-compatibility
+coverage exercise the current implementation without a duplicate frontend.
 
-## Migration rules
+## Repository boundary
 
-The migration kept the repository buildable at every commit. Third-party
-mandoc sources were committed separately, the native path was introduced and
-tested alongside the legacy path, the TUI was switched in its own commit, and
-only then were the TypeScript parsers, sidecar, and duplicate dependencies
-deleted.
+The repository root is the Cargo workspace. Every shipped behavior belongs to
+one of its five crates, while `tests/fixtures/` and `tests/contracts/` provide
+the only cross-crate external data. Build, test, coverage, and release
+automation invoke Cargo directly; no second application runtime participates
+in compilation or execution.

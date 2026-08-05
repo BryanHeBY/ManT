@@ -1,4 +1,4 @@
-//! Serializes stable native contracts without a TypeScript shape conversion.
+//! Serializes stable native contracts directly from their Rust source types.
 
 use mant_ast::{QueryBundle, QueryExcerpt, QueryOutline, QuerySearch, TldrCacheUpdate};
 

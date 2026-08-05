@@ -1,7 +1,0 @@
-#!/usr/bin/env bun
-/**
- * Stable extensionless command target for npm and Bun.
- * The typed implementation stays the only owner of process startup logic.
- */
-
-import "../src/mantui.ts";

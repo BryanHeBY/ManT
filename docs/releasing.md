@@ -1,18 +1,17 @@
 # Release procedure
 
-This guide is for maintainers. It describes the tagged-release automation and
-does not form part of the everyday user installation path.
+This guide is for maintainers. Tagged automation builds reviewable draft
+releases; publishing remains a deliberate human action.
 
 ## Before tagging
 
-1. Choose a semantic version and update `package.json` and the
-   `[workspace.package]` version in `Cargo.toml`. The five published Rust
-   crates use one lockstep version; update every exact internal dependency in
-   their `Cargo.toml` files at the same time.
+1. Choose a semantic version and update `[workspace.package].version` in
+   `Cargo.toml`. The five published Rust crates use one lockstep version, so
+   update every exact internal dependency in their manifests at the same time.
 2. Run the complete local verification boundary:
 
    ```sh
-   bun run build
+   bash scripts/check.sh
    ```
 
 3. Commit the version change and ensure the main branch CI is green.
@@ -28,8 +27,8 @@ libmandoc-rs ─┐
 mant-ast ─────┘               └────────────> mant
 ```
 
-Authenticate locally with `cargo login`, review each package, and publish it
-before moving to a dependent package:
+Authenticate with `cargo login`, review each package, and publish it before
+moving to a dependent package:
 
 ```sh
 for package in libmandoc-rs mant-ast mant-core mant-ui mant; do
@@ -38,21 +37,18 @@ for package in libmandoc-rs mant-ast mant-core mant-ui mant; do
 done
 ```
 
-The loop documents order, not registry timing: wait for each new package to
-become visible in the crates.io index before checking or publishing its
-dependent package. Installing `mant` installs the complete interactive reader,
-structured CLI, and MCP server as one executable. `mant-ui` is a reusable
-internal frontend crate; it does not install a second command.
+Wait for each package to appear in the crates.io index before publishing its
+dependent package. Installing `mant` installs the reader, structured CLI, and
+MCP server as one executable. `mant-ui` is a reusable library crate and does
+not install a second command.
 
-Configure the same crates.io Trusted Publisher for each package after its
-first release. Subsequent releases can exchange GitHub's OIDC identity for
-short-lived publishing credentials instead of storing a Cargo token in
-repository secrets. Keep publishing gated on the manually reviewed GitHub
-Release becoming public, rather than on creation of the draft.
+Configure crates.io Trusted Publishing for later releases so GitHub Actions
+can exchange its OIDC identity for short-lived credentials. Do not store a
+long-lived Cargo token in the repository.
 
 ## Tag and draft release
 
-The tag must exactly match the package and workspace version:
+The tag must exactly match the Cargo workspace version:
 
 ```sh
 git tag vMAJOR.MINOR.PATCH
@@ -63,24 +59,26 @@ The release workflow rebuilds and tests each supported Linux target on its
 native GitHub runner. It packages one `mant` executable, includes the
 self-hosted `mant.md` manual, assembles `SHA256SUMS`, and creates a **draft**
 GitHub Release with generated notes. Review the notes, archive names,
-checksums, manual, and licenses in GitHub before publishing it manually.
+checksums, manual, and licenses before publishing the draft.
 
-Linux x64 uses the baseline build target so the executable does not require
-AVX2. macOS continues to support Cargo installation and local source builds,
-but public macOS archives stay disabled until they can be Developer ID-signed
-and notarized for Gatekeeper.
+Linux x64 uses the baseline target so the executable does not require AVX2.
+macOS supports Cargo installation and local source builds, but public macOS
+archives remain disabled until they can be Developer ID-signed and notarized.
 
-## Repackaging locally
+## Inspect an archive locally
 
-`bun run release:pack` packages an already-tested `dist/mant`; it never builds
-or tests it. It validates the current host platform, agreement between the
-root and Rust workspace versions, and the optional release tag before writing
-the archive and its individual SHA-256 checksum under `dist/`.
+Packaging never builds or tests. It validates the Cargo version, optional tag,
+and native Linux architecture, then reproducibly archives the already-built
+executable:
 
 ```sh
-bun run build
-MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bun run release:pack
+bash scripts/check.sh
+MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/package-release.sh
 ```
 
-Use this only to inspect a local archive. The tagged GitHub workflow remains
-the public-release source of truth because it rebuilds on every target runner.
+Set `MANT_RELEASE_TARGET=linux-x64` or `linux-arm64` to assert the expected
+runner identity. `MANT_BINARY` may point at another already-built executable.
+Archives and individual SHA-256 files are written under `dist/`.
+
+The tagged GitHub workflow remains the public-release source of truth because
+it rebuilds on every target runner.
