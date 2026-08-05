@@ -1,34 +1,27 @@
 //! Temporary executable for exercising the Rust UI before it becomes `mant`.
 
-use std::{env, path::Path, process::ExitCode};
+mod arguments;
 
-use mant_ast::{QueryInput, QueryRequest, QueryView, RequestSchema};
+use std::process::ExitCode;
+
+use clap::Parser;
+use mant_ast::{QueryRequest, QueryView, RequestSchema};
+use mant_core::query_with_policy;
+
+use crate::arguments::Arguments;
 
 fn main() -> ExitCode {
-    let Some(input) = env::args().nth(1) else {
-        eprintln!("Usage: mantui-rs <TOPIC|MARKDOWN>");
-        return ExitCode::from(2);
-    };
-    if matches!(input.as_str(), "-h" | "--help") {
-        println!("Usage: mantui-rs <TOPIC|MARKDOWN>");
-        println!("\nDevelopment Ratatui frontend for ManT.");
-        return ExitCode::SUCCESS;
-    }
-
-    let query_input = if is_markdown_path(&input) {
-        QueryInput::MarkdownFile { path: input }
-    } else {
-        QueryInput::Manual {
-            topic: input,
-            section: None,
-        }
+    let arguments = Arguments::parse();
+    let invocation = match arguments.invocation() {
+        Ok(invocation) => invocation,
+        Err(error) => error.exit(),
     };
     let request = QueryRequest {
         schema: RequestSchema::V3,
-        input: query_input,
+        input: invocation.input,
         view: QueryView::Full {},
     };
-    let bundle = match mant_core::query(&request) {
+    let bundle = match query_with_policy(&request, invocation.policy) {
         Ok(bundle) => bundle,
         Err(error) => {
             eprintln!("mantui-rs: {error}");
@@ -40,13 +33,4 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     ExitCode::SUCCESS
-}
-
-fn is_markdown_path(input: &str) -> bool {
-    let path = Path::new(input);
-    path.is_file()
-        || path.extension().is_some_and(|extension| {
-            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
-        })
-        || input.contains(std::path::MAIN_SEPARATOR)
 }

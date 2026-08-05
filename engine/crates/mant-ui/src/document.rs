@@ -2072,14 +2072,13 @@ mod tests {
     #[test]
     fn forced_word_splitting_does_not_insert_a_search_space() {
         let mut bundle = bundle();
-        bundle.document.as_mut().expect("document").sections[0].blocks =
-            vec![Block::Paragraph {
-                children: vec![Inline::Text {
-                    value: "supercalifragilistic".to_owned(),
-                }],
-                layout: LayoutHint::default(),
-                source: None,
-            }];
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "supercalifragilistic".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
         let rendered = DocumentView::new(&bundle).render(10);
 
         assert_eq!(rendered.search("fragilistic").len(), 1);

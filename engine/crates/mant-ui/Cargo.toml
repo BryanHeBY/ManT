@@ -14,6 +14,7 @@ name = "mantui-rs"
 path = "src/main.rs"
 
 [dependencies]
+clap.workspace = true
 crossterm.workspace = true
 mant-ast = { path = "../mant-ast", version = "=0.4.0" }
 mant-core = { path = "../mant-core", version = "=0.4.0" }
