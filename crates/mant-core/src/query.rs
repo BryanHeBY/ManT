@@ -11,8 +11,9 @@ use std::{
 use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
 use crate::{
-    CommandRunner, ManualRequest, SystemCommandRunner, locate_manual_source, parse_groff_html,
-    parse_manual_source, parse_markdown, read_cached_tldr_page, source::push_section_filter,
+    CommandRunner, ManualRequest, SystemCommandRunner, find_registered_topic, locate_manual_source,
+    parse_groff_html, parse_manual_source, parse_markdown, read_cached_tldr_page,
+    source::push_section_filter,
 };
 
 /// Upper bound on a single Markdown source, shared by every input path.
@@ -52,7 +53,7 @@ pub struct QueryPolicy {
 impl fmt::Display for QueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::EmptyTopic => formatter.write_str("manual topic must not be empty"),
+            Self::EmptyTopic => formatter.write_str("topic must not be empty"),
             Self::InvalidSection => formatter.write_str("manual section must not be empty"),
             Self::EmptyMarkdownPath => formatter.write_str("Markdown path must not be empty"),
             Self::Markdown { path, detail } => {
@@ -103,6 +104,7 @@ pub fn query_with_policy(
 }
 
 trait QueryHost {
+    fn locate_registered_topic(&self, topic: &str) -> Option<PathBuf>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String>;
     fn parse_manual(&self, path: &Path) -> Result<MantDocument, String>;
     fn render_groff(
@@ -117,6 +119,10 @@ trait QueryHost {
 struct SystemQueryHost;
 
 impl QueryHost for SystemQueryHost {
+    fn locate_registered_topic(&self, topic: &str) -> Option<PathBuf> {
+        find_registered_topic(topic).map(|registered| registered.path)
+    }
+
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String> {
         locate_manual_source(request).map_err(|error| error.to_string())
     }
@@ -255,6 +261,18 @@ fn query_manual(
         return Err(QueryError::InvalidSection);
     }
     let section = section.map(ToOwned::to_owned);
+
+    // An unqualified topic first consults the explicit XDG registration
+    // namespace. Section selectors and renderer diagnostics are manual-only
+    // requests and therefore bypass Markdown topic discovery.
+    if section.is_none()
+        && !policy.force_libmandoc
+        && !policy.force_groff
+        && let Some(path) = host.locate_registered_topic(topic)
+    {
+        return query_registered_topic(topic, &path, host);
+    }
+
     let manual_request = ManualRequest::new(topic, section.clone());
 
     // A malformed or unreadable community cache must never hide a valid man
@@ -313,6 +331,23 @@ fn query_manual(
             detail,
         }),
     }
+}
+
+fn query_registered_topic(
+    topic: &str,
+    path: &Path,
+    host: &dyn QueryHost,
+) -> Result<QueryBundle, QueryError> {
+    let source_path = path.to_string_lossy().into_owned();
+    let source = host
+        .read_markdown(path)
+        .map_err(|detail| QueryError::Markdown {
+            path: source_path.clone(),
+            detail,
+        })?;
+    let mut query = query_markdown_text(&source, Some(source_path))?;
+    topic.clone_into(&mut query.label);
+    Ok(query)
 }
 
 fn load_manual(
@@ -444,6 +479,7 @@ mod tests {
 
     #[derive(Clone)]
     struct StubHost {
+        registered_topic: Option<PathBuf>,
         locate: Result<PathBuf, String>,
         direct: Result<MantDocument, String>,
         fallback: Result<MantDocument, String>,
@@ -453,6 +489,11 @@ mod tests {
     }
 
     impl QueryHost for StubHost {
+        fn locate_registered_topic(&self, _topic: &str) -> Option<PathBuf> {
+            self.calls.lock().expect("calls lock").push("topic");
+            self.registered_topic.clone()
+        }
+
         fn locate_manual(&self, _request: &ManualRequest) -> Result<PathBuf, String> {
             self.calls.lock().expect("calls lock").push("locate");
             self.locate.clone()
@@ -536,6 +577,7 @@ mod tests {
 
     fn host(direct: Result<MantDocument, String>) -> StubHost {
         StubHost {
+            registered_topic: None,
             locate: Ok(PathBuf::from("/man/tool.1")),
             direct,
             fallback: Err("fallback unavailable".to_owned()),
@@ -568,7 +610,7 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "parse"]
+            ["topic", "tldr", "locate", "parse"]
         );
     }
 
@@ -592,6 +634,11 @@ mod tests {
             Some("3"),
             "requested section must label output when the renderer omits it"
         );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["tldr", "locate", "parse"],
+            "an explicit manual section bypasses registered Markdown"
+        );
     }
 
     /// With the old groff-fallback architecture this test verified that an
@@ -609,7 +656,7 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "parse"]
+            ["topic", "tldr", "locate", "parse"]
         );
     }
 
@@ -757,6 +804,30 @@ mod tests {
             Err(QueryError::EmptyTopic)
         );
         assert!(host.calls.lock().expect("calls lock").is_empty());
+    }
+
+    #[test]
+    fn registered_markdown_shadows_an_unqualified_manual_topic() {
+        let mut host = host(Err("manual parser must not run".to_owned()));
+        host.registered_topic = Some(PathBuf::from("/data/mant/topics/tool.md"));
+        host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
+
+        let result = query_with(&request(), QueryPolicy::default(), &host)
+            .expect("registered Markdown topic");
+
+        assert_eq!(result.label, "tool");
+        assert!(result.tldr.is_none());
+        let document = result.document.expect("registered document");
+        assert_eq!(document.source.format, SourceFormat::Markdown);
+        assert_eq!(
+            document.source.path.as_deref(),
+            Some("/data/mant/topics/tool.md")
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["topic", "markdown"],
+            "a registered topic must not consult man or external tldr caches"
+        );
     }
 
     #[test]

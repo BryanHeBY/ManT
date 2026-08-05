@@ -166,12 +166,15 @@ Every request has three required fields:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `schema` | Exact string | Must be `mant.request/v3` |
-| `input` | `QueryInput` union | Manual topic or local Markdown path |
+| `input` | `QueryInput` union | Resolvable topic or local Markdown path |
 | `view` | `QueryView` union | Full, outline, excerpt, or search projection |
 
 ### Input Variants
 
-A manual is resolved through the host manual database:
+An unqualified topic first checks registered Markdown below
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics` and each
+`$XDG_DATA_DIRS/mant/topics` directory, then falls back to the host manual
+database:
 
 ```json
 {
@@ -181,8 +184,9 @@ A manual is resolved through the host manual database:
 }
 ```
 
-`section` is optional. The process inherits `MANPATH`, `MANSECT`, and locale
-variables for this host `man -w` lookup. To query a project-local roff source,
+`section` is optional and bypasses registered Markdown. Renderer-forcing flags
+also select a manual directly. The process inherits `MANPATH`, `MANSECT`, and
+locale variables for this host `man -w` lookup. To query a project-local roff source,
 place it below a manual-hierarchy root such as `project-man/man1/tool.1`, set
 `MANPATH` to `project-man`, and request topic `tool`; a raw `.1` path is not a
 request input variant.

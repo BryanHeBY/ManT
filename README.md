@@ -178,7 +178,20 @@ installed client or ManT's private cache.
 
 ## Markdown through the same model
 
-Use a path for local files or `-` for non-interactive standard input:
+Register reusable Markdown under the XDG data hierarchy:
+
+```sh
+mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics"
+cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics/mant.md"
+mant mant
+```
+
+An unqualified topic checks the user directory first, then
+`$XDG_DATA_DIRS/mant/topics`, and finally the local man database. An explicit
+`--section`, `--force-libmandoc`, or `--force-groff` request bypasses registered
+Markdown and selects a manual.
+
+Use a path for one-off local files or `-` for non-interactive standard input:
 
 ```sh
 mant README.md

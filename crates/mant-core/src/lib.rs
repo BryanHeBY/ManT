@@ -10,6 +10,7 @@ mod query;
 mod search;
 mod source;
 mod tldr;
+mod topics;
 
 pub use groff_html::parse_groff_html;
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
@@ -35,6 +36,9 @@ pub use tldr::{
     get_system_tldr_cache_dirs, get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms,
     get_tldr_read_cache_dirs, normalize_tldr_topic, parse_tldr_command, parse_tldr_page,
     read_cached_tldr_page, update_tldr_cache,
+};
+pub use topics::{
+    RegisteredTopic, RegisteredTopicOrigin, find_registered_topic, list_registered_topics,
 };
 
 /// Reports the native contract version through the engine layer.

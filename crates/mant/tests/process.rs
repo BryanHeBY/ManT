@@ -275,6 +275,38 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
 }
 
 #[test]
+fn unqualified_topics_prefer_registered_xdg_markdown() {
+    let data_home = std::env::temp_dir().join(format!(
+        "mant-registered-topic-process-{}",
+        std::process::id()
+    ));
+    let topics = data_home.join("mant/topics");
+    fs::create_dir_all(&topics).expect("create registered topic directory");
+    let path = topics.join("process-registered.md");
+    fs::write(&path, "# Registered\n\nBody from the XDG topic.\n").expect("write registered topic");
+
+    let output = Command::new(executable())
+        .args(["process-registered", "--format", "json", "--compact"])
+        .env("XDG_DATA_HOME", &data_home)
+        .env("XDG_DATA_DIRS", data_home.join("empty-system-data"))
+        .output()
+        .expect("query registered topic");
+
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
+    assert_eq!(value["label"], "process-registered");
+    assert_eq!(value["document"]["meta"]["title"], "Registered");
+    assert_eq!(value["document"]["source"]["format"], "markdown");
+    assert_eq!(
+        value["document"]["source"]["path"],
+        path.to_str().expect("UTF-8 path")
+    );
+
+    fs::remove_dir_all(data_home).expect("remove registered topic fixture");
+}
+
+#[test]
 fn markdown_root_content_is_discoverable_selectable_and_searchable() {
     let path = std::env::temp_dir().join(format!(
         "mant-markdown-root-process-{}.md",

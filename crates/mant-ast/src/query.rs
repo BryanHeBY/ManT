@@ -33,7 +33,7 @@ pub enum RequestSchema {
     deny_unknown_fields
 )]
 pub enum QueryInput {
-    /// Locate a page through the host's configured manual database.
+    /// Resolve registered Markdown first, then the host manual database.
     Manual {
         topic: String,
         #[serde(skip_serializing_if = "Option::is_none")]

@@ -60,9 +60,16 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 
 ## Input
 
-Input is resolved before parsing. Ordinary values select a local manual topic;
-values ending in `.md` or `.markdown`, other path-like values, and the exact
-value `-` select Markdown instead.
+Input is resolved before parsing. An ordinary value first selects a registered
+Markdown topic from `${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics`, then
+from each `$XDG_DATA_DIRS/mant/topics` directory, and finally from the local man
+database. Values ending in `.md` or `.markdown`, other path-like values, and
+the exact value `-` select Markdown directly instead.
+
+The filename supplies a registered topic name: `mant.md` is queried as
+`mant mant`. User data precedes system data, and the first matching filename
+wins. An explicit `--section`, `--force-libmandoc`, or `--force-groff` request
+bypasses registered Markdown and selects a manual page.
 
 ### Manual Pages
 
@@ -333,10 +340,15 @@ tldr page is available.
   when `--section` is absent. `--section` takes precedence.
 - `MANT_TLDR_DIR`: Use one explicit tldr checkout for reads and updates.
 - `XDG_CACHE_HOME`: Relocate cache discovery and ManT's Linux fallback cache.
-- `XDG_DATA_DIRS`: Add system data roots considered during tldr discovery.
+- `XDG_DATA_HOME`: Relocate the user topic directory from the default
+  `$HOME/.local/share/mant/topics`.
+- `XDG_DATA_DIRS`: Add system data roots considered during registered-topic and
+  tldr discovery. Registered Markdown is read from each `mant/topics`
+  subdirectory.
 - `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manuals through the host
   lookup and translated tldr pages before English fallback.
-- `HOME`: Supply conventional Linux and macOS cache locations.
+- `HOME`: Supply conventional topic and cache locations when their XDG
+  overrides are absent.
 
 ## General
 

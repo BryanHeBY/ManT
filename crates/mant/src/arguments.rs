@@ -152,7 +152,7 @@ pub(crate) enum Command {
         .multiple(false)
 )]
 struct Cli {
-    /// Manual topic, local Markdown path, or `-` for Markdown on standard input.
+    /// Registered topic, manual topic, local Markdown path, or `-` for standard input.
     #[arg(value_name = "TOPIC|MARKDOWN|-", value_parser = non_empty)]
     topic: Option<String>,
 
