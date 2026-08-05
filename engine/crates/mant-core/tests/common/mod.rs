@@ -190,6 +190,42 @@ pub fn section<'a>(document: &'a MantDocument, title: &str) -> &'a Section {
         .unwrap_or_else(|| panic!("missing section {title}"))
 }
 
+/// Assert the authored, indented-line layout shared by distro-generated GCC
+/// manuals.  Fedora and Arch package different snapshots of the page, but the
+/// SYNOPSIS uses the same filled-roff convention and must lower identically.
+pub fn assert_gcc_synopsis_layout(document: &MantDocument) {
+    let synopsis = section(document, "SYNOPSIS");
+    let synopsis_inlines = synopsis
+        .blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(children.as_slice()),
+            _ => None,
+        })
+        .expect("GCC synopsis paragraph");
+    assert!(contains_strong(synopsis_inlines, "-std="));
+    assert!(contains_emphasis(synopsis_inlines, "standard"));
+    assert_eq!(
+        inline_text(synopsis_inlines),
+        concat!(
+            "gcc [-c|-S|-E] [-std=standard]\n",
+            "    [-g] [-pg] [-Olevel]\n",
+            "    [-Wwarn...] [-Wpedantic]\n",
+            "    [-Idir...] [-Ldir...]\n",
+            "    [-Dmacro[=defn]...] [-Umacro]\n",
+            "    [-foption...] [-mmachine-option...]\n",
+            "    [-o outfile] [@file] infile...",
+        )
+    );
+    assert_eq!(
+        synopsis_inlines
+            .iter()
+            .filter(|inline| matches!(inline, Inline::LineBreak))
+            .count(),
+        6
+    );
+}
+
 pub fn document_blocks(document: &MantDocument) -> Vec<&Block> {
     document_blocks_from_sections(&document.sections)
 }

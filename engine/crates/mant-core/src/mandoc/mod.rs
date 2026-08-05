@@ -301,6 +301,53 @@ mod tests {
     }
 
     #[test]
+    fn distinguishes_filled_source_wrapping_from_indented_output_lines() {
+        let path = temporary_source(
+            "filled-line-boundaries",
+            concat!(
+                ".TH TOOL 1\n",
+                ".SH SYNOPSIS\n",
+                "tool [first]\n",
+                "    [second]\n",
+                "    [third]\n",
+                ".PP\n",
+                "Ordinary source wrapping\n",
+                "remains one filled paragraph.\n",
+            ),
+        );
+
+        let document = parse_manual_source(&path).expect("lower filled line boundaries");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [
+            Block::Paragraph {
+                children: synopsis, ..
+            },
+            Block::Paragraph {
+                children: prose, ..
+            },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("expected synopsis and prose paragraphs");
+        };
+        assert_eq!(
+            inline_text(synopsis),
+            "tool [first]\n    [second]\n    [third]"
+        );
+        assert_eq!(
+            synopsis
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            2
+        );
+        assert_eq!(
+            inline_text(prose),
+            "Ordinary source wrapping remains one filled paragraph."
+        );
+    }
+
+    #[test]
     fn lets_explicit_fonts_override_an_alternating_macro_default() {
         let path = temporary_source(
             "alternating-font-reset",

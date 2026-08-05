@@ -11,8 +11,8 @@ use mant_ast::{
 use super::{
     LoweringContext,
     inline::{
-        InlineBuilder, append_inline_node, lower_inline_nodes, parse_roff_text, plain_text,
-        terms_fit_inline,
+        FilledBoundary, InlineBuilder, append_inline_node, lower_inline_nodes, parse_roff_text,
+        plain_text, terms_fit_inline,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -184,6 +184,7 @@ fn lower_blocks(
             state.push_inline(
                 lower_inline_nodes(std::slice::from_ref(node), context.default_name),
                 source_span(node),
+                starts_indented_filled_line(node),
             );
         } else {
             state.flush_paragraph();
@@ -392,7 +393,12 @@ impl BlockState {
         }
     }
 
-    fn push_inline(&mut self, nodes: Vec<Inline>, source: Option<mant_ast::SourceSpan>) {
+    fn push_inline(
+        &mut self,
+        nodes: Vec<Inline>,
+        source: Option<mant_ast::SourceSpan>,
+        starts_indented_line: bool,
+    ) {
         if nodes.is_empty() {
             return;
         }
@@ -400,15 +406,18 @@ impl BlockState {
             self.paragraph_source = source;
         }
         let source_line = source.map(|span| span.line);
-        if self
+        let crossed_source_line = self
             .paragraph_last_line
             .zip(source_line)
-            .is_some_and(|(previous, current)| current > previous)
-        {
-            self.paragraph.append_across_source_line(nodes);
+            .is_some_and(|(previous, current)| current > previous);
+        let boundary = if !crossed_source_line {
+            FilledBoundary::SameLine
+        } else if starts_indented_line {
+            FilledBoundary::LineBreak
         } else {
-            self.paragraph.append(nodes);
-        }
+            FilledBoundary::Word
+        };
+        self.paragraph.append_filled(nodes, boundary);
         if source_line.is_some() {
             self.paragraph_last_line = source_line;
         }
@@ -453,6 +462,28 @@ impl BlockState {
         self.flush_paragraph();
         self.output
     }
+}
+
+/// Match the filled-text line-break rule used by libmandoc's terminal and
+/// HTML renderers: a text node beginning an input line with whitespace starts
+/// a new output line.  The first printable text can sit below an inline macro
+/// wrapper, so inspect the semantic subtree rather than only direct text
+/// siblings.
+fn starts_indented_filled_line(node: &Node) -> bool {
+    if node.flags.no_print || node.kind == NodeKind::Comment {
+        return false;
+    }
+    if node.kind == NodeKind::Text {
+        return node.flags.line_start
+            && node
+                .text
+                .as_deref()
+                .is_some_and(|text| text.starts_with(char::is_whitespace));
+    }
+    node.children
+        .iter()
+        .find(|child| !child.flags.no_print && child.kind != NodeKind::Comment)
+        .is_some_and(starts_indented_filled_line)
 }
 
 fn lower_mdoc_list(

@@ -2,7 +2,7 @@
 
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
-use mant_ast::{Block, OutlineDetail, SourceFormat};
+use mant_ast::{OutlineDetail, SourceFormat};
 use mant_core::build_outline_with_detail;
 
 /// 10 sections, `os = "gcc-16"`, 2,731 option-outline entries.
@@ -20,17 +20,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert_eq!(count_outline_entries(&outline.nodes), 2_731);
     assert!(find_outline_entry(&outline.nodes, "-Wsuggest-final-types").is_some());
 
-    let synopsis = common::section(document, "SYNOPSIS");
-    let synopsis_inlines = synopsis
-        .blocks
-        .iter()
-        .find_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(children.as_slice()),
-            _ => None,
-        })
-        .expect("GCC synopsis paragraph");
-    assert!(common::contains_strong(synopsis_inlines, "-std="));
-    assert!(common::contains_emphasis(synopsis_inlines, "standard"));
+    common::assert_gcc_synopsis_layout(document);
 
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/gcc");
 }

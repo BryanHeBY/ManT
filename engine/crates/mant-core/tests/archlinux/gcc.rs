@@ -26,17 +26,7 @@ fn keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
             .any(|child| child.title == "Options to Request or Suppress Warnings")
     );
 
-    let synopsis = common::section(document, "SYNOPSIS");
-    let synopsis_inlines = synopsis
-        .blocks
-        .iter()
-        .find_map(|block| match block {
-            Block::Paragraph { children, .. } => Some(children.as_slice()),
-            _ => None,
-        })
-        .expect("GCC synopsis paragraph");
-    assert!(common::contains_strong(synopsis_inlines, "-std="));
-    assert!(common::contains_emphasis(synopsis_inlines, "standard"));
+    common::assert_gcc_synopsis_layout(document);
 
     let blocks = common::document_blocks(document);
     let displays = blocks

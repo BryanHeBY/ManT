@@ -13,6 +13,20 @@ pub(super) struct InlineBuilder {
     suppress_space: bool,
 }
 
+/// Semantic boundary between two inline fragments in filled roff mode.
+///
+/// Roff distinguishes ordinary source wrapping from an input line whose first
+/// text character is whitespace.  The former fills as a word boundary; the
+/// latter starts a new output line.  Keeping that distinction here prevents
+/// renderers from having to rediscover formatter semantics from flattened
+/// text.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum FilledBoundary {
+    SameLine,
+    Word,
+    LineBreak,
+}
+
 impl InlineBuilder {
     pub(super) const fn new() -> Self {
         Self {
@@ -42,13 +56,20 @@ impl InlineBuilder {
         self.append_at_boundary(&mut incoming, false);
     }
 
-    /// Append content beginning on a later filled roff input line.
-    ///
-    /// Filled lines contribute a word boundary even when the next visible
-    /// character is punctuation. Macro arguments do not use this path because
-    /// their own concatenation rules are authoritative.
-    pub(super) fn append_across_source_line(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, true);
+    /// Append content using the formatter-level boundary selected by the
+    /// block lowering pass.
+    pub(super) fn append_filled(&mut self, incoming: Vec<Inline>, boundary: FilledBoundary) {
+        match boundary {
+            FilledBoundary::SameLine => self.append(incoming),
+            FilledBoundary::Word => {
+                let mut incoming = incoming;
+                self.append_at_boundary(&mut incoming, true);
+            }
+            FilledBoundary::LineBreak => {
+                self.hard_break();
+                self.append(incoming);
+            }
+        }
     }
 
     fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>, source_line_changed: bool) {
