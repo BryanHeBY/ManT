@@ -13,6 +13,6 @@ mod scrollbar;
 mod terminal;
 mod theme;
 
-pub use app::App;
+pub use app::{App, UpdateOutcome};
 pub use document::{DocumentView, NavItem, NavKind, RenderedDocument, RenderedSearchMatch};
 pub use terminal::run;

@@ -10,7 +10,7 @@ use crossterm::{
 use mant_ast::QueryBundle;
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::App;
+use crate::{App, UpdateOutcome};
 
 /// Run the interactive frontend until the user requests exit.
 ///
@@ -30,18 +30,22 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
     let mut app = App::new(bundle);
 
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<()> {
+        let mut redraw = true;
         while !app.should_quit() {
             let now = Instant::now();
-            app.tick(now);
-            terminal.draw(|frame| app.draw(frame))?;
+            redraw |= app.tick(now).needs_redraw();
+            if redraw {
+                terminal.draw(|frame| app.draw(frame))?;
+                redraw = false;
+            }
             let Some(timeout) = app.next_wakeup(Instant::now()) else {
-                route_event(&mut app, &event::read()?);
+                redraw |= route_event(&mut app, &event::read()?).needs_redraw();
                 continue;
             };
             if !event::poll(timeout)? {
                 continue;
             }
-            route_event(&mut app, &event::read()?);
+            redraw |= route_event(&mut app, &event::read()?).needs_redraw();
         }
         Ok(())
     }));
@@ -56,15 +60,14 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
     }
 }
 
-fn route_event(app: &mut App, event: &Event) {
+fn route_event(app: &mut App, event: &Event) -> UpdateOutcome {
     match event {
         Event::Key(key) if key.is_press() => app.handle_key(*key),
         Event::Mouse(mouse) => app.handle_mouse(*mouse),
-        Event::Resize(_, _)
-        | Event::FocusGained
-        | Event::FocusLost
-        | Event::Paste(_)
-        | Event::Key(_) => {}
+        Event::Resize(_, _) => UpdateOutcome::Redraw,
+        Event::FocusGained | Event::FocusLost | Event::Paste(_) | Event::Key(_) => {
+            UpdateOutcome::Unchanged
+        }
     }
 }
 

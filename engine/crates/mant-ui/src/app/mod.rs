@@ -39,6 +39,23 @@ const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
 /// this short idle window avoids replaying every intermediate width.
 const SIDEBAR_RESIZE_IDLE: Duration = Duration::from_millis(60);
 
+/// Whether an input or timer update changed visible application state.
+///
+/// The terminal loop uses this result to avoid rebuilding large documents for
+/// bookkeeping-only events, notably intermediate sidebar drag coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateOutcome {
+    Unchanged,
+    Redraw,
+}
+
+impl UpdateOutcome {
+    #[must_use]
+    pub const fn needs_redraw(self) -> bool {
+        matches!(self, Self::Redraw)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SearchMode {
     Closed,
@@ -162,13 +179,15 @@ impl App {
         self.quit
     }
 
-    pub(crate) fn tick(&mut self, now: Instant) {
+    pub(crate) fn tick(&mut self, now: Instant) -> UpdateOutcome {
+        let mut outcome = UpdateOutcome::Unchanged;
         if let Some(pending) = self
             .pending_sidebar_resize
             .filter(|pending| pending.deadline <= now)
         {
             self.pending_sidebar_resize = None;
             self.commit_sidebar_at(pending.column);
+            outcome = UpdateOutcome::Redraw;
         }
         if self
             .navigation_sync_deadline
@@ -176,7 +195,9 @@ impl App {
         {
             self.navigation_sync_deadline = None;
             self.sync_selection_to_scroll();
+            outcome = UpdateOutcome::Redraw;
         }
+        outcome
     }
 
     pub(crate) fn next_wakeup(&self, now: Instant) -> Option<Duration> {
@@ -190,36 +211,36 @@ impl App {
         .min()
     }
 
-    pub fn handle_key(&mut self, key: KeyEvent) {
+    pub fn handle_key(&mut self, key: KeyEvent) -> UpdateOutcome {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.quit = true;
-            return;
+            return UpdateOutcome::Unchanged;
         }
         if self.overlay != Overlay::None {
             self.handle_overlay_key(key);
-            return;
+            return UpdateOutcome::Redraw;
         }
         if self.search_mode.is_open() && key.code == KeyCode::F(10) {
             self.open_menu(MenuId::File);
-            return;
+            return UpdateOutcome::Redraw;
         }
         if self.search_mode.is_open() {
             self.handle_search_key(key);
-            return;
+            return UpdateOutcome::Redraw;
         }
         if key.code == KeyCode::F(10) {
             self.open_menu(MenuId::File);
-            return;
+            return UpdateOutcome::Redraw;
         }
         if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('f'))
             || key.code == KeyCode::Char('/')
         {
             self.open_search();
-            return;
+            return UpdateOutcome::Redraw;
         }
         if key.code == KeyCode::Char('?') {
             self.overlay = Overlay::Help;
-            return;
+            return UpdateOutcome::Redraw;
         }
         match key.code {
             KeyCode::Char('q' | 'Q') => self.quit = true,
@@ -242,16 +263,21 @@ impl App {
                     .saturating_add(2)
                     .min(maximum_sidebar_width(self.geometry.body.width));
             }
-            _ => {}
+            _ => return UpdateOutcome::Unchanged,
         }
+        UpdateOutcome::Redraw
     }
 
-    pub fn handle_mouse(&mut self, mouse: MouseEvent) {
+    pub fn handle_mouse(&mut self, mouse: MouseEvent) -> UpdateOutcome {
         if self.handle_overlay_mouse(mouse) {
-            return;
+            return if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+                UpdateOutcome::Redraw
+            } else {
+                UpdateOutcome::Unchanged
+            };
         }
-        if self.handle_pointer_control(mouse) {
-            return;
+        if let Some(outcome) = self.handle_pointer_control(mouse) {
+            return outcome;
         }
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
@@ -262,6 +288,7 @@ impl App {
                         .contains((mouse.column, mouse.row).into()) =>
             {
                 self.move_search_cursor_to(mouse.column);
+                UpdateOutcome::Redraw
             }
             MouseEventKind::ScrollDown
                 if self
@@ -270,6 +297,7 @@ impl App {
                     .contains((mouse.column, mouse.row).into()) =>
             {
                 self.navigation_scroll = self.navigation_scroll.saturating_add(3);
+                UpdateOutcome::Redraw
             }
             MouseEventKind::ScrollUp
                 if self
@@ -278,9 +306,16 @@ impl App {
                     .contains((mouse.column, mouse.row).into()) =>
             {
                 self.navigation_scroll = self.navigation_scroll.saturating_sub(3);
+                UpdateOutcome::Redraw
             }
-            MouseEventKind::ScrollDown => self.scroll_content(3),
-            MouseEventKind::ScrollUp => self.scroll_content(-3),
+            MouseEventKind::ScrollDown => {
+                self.scroll_content(3);
+                UpdateOutcome::Redraw
+            }
+            MouseEventKind::ScrollUp => {
+                self.scroll_content(-3);
+                UpdateOutcome::Redraw
+            }
             MouseEventKind::Down(MouseButton::Left)
                 if self
                     .geometry
@@ -300,6 +335,7 @@ impl App {
                         self.scroll_to_selected();
                     }
                 }
+                UpdateOutcome::Redraw
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
@@ -308,17 +344,22 @@ impl App {
                     .contains((mouse.column, mouse.row).into()) =>
             {
                 self.activate_content_link(mouse.column, mouse.row);
+                UpdateOutcome::Redraw
             }
-            _ => {}
+            _ => UpdateOutcome::Unchanged,
         }
     }
 
-    fn handle_pointer_control(&mut self, mouse: MouseEvent) -> bool {
+    fn handle_pointer_control(&mut self, mouse: MouseEvent) -> Option<UpdateOutcome> {
         self.handle_pointer_control_at(mouse, Instant::now())
     }
 
-    fn handle_pointer_control_at(&mut self, mouse: MouseEvent, now: Instant) -> bool {
-        match mouse.kind {
+    fn handle_pointer_control_at(
+        &mut self,
+        mouse: MouseEvent,
+        now: Instant,
+    ) -> Option<UpdateOutcome> {
+        let outcome = match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
                 if self
                     .geometry
@@ -332,12 +373,14 @@ impl App {
                 let (drag, position) = scrollbar.begin_drag(mouse.row);
                 self.navigation_scroll = position;
                 self.pointer_drag = PointerDrag::NavigationScrollbar(drag);
+                UpdateOutcome::Redraw
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self.is_sidebar_boundary(mouse.column, mouse.row) =>
             {
                 self.pointer_drag = PointerDrag::Sidebar;
                 self.pending_sidebar_resize = None;
+                UpdateOutcome::Unchanged
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
@@ -350,16 +393,22 @@ impl App {
                 self.content_scroll = position;
                 self.schedule_navigation_sync();
                 self.pointer_drag = PointerDrag::ContentScrollbar(drag);
+                UpdateOutcome::Redraw
             }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
-                PointerDrag::Sidebar => self.request_sidebar_resize(mouse.column, now),
+                PointerDrag::Sidebar => {
+                    self.request_sidebar_resize(mouse.column, now);
+                    UpdateOutcome::Unchanged
+                }
                 PointerDrag::NavigationScrollbar(drag) => {
                     self.scroll_navigation_to_pointer(mouse.row, drag);
+                    UpdateOutcome::Redraw
                 }
                 PointerDrag::ContentScrollbar(drag) => {
                     self.scroll_content_to_pointer(mouse.row, drag);
+                    UpdateOutcome::Redraw
                 }
-                PointerDrag::None => return false,
+                PointerDrag::None => return None,
             },
             MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
                 match self.pointer_drag {
@@ -373,10 +422,11 @@ impl App {
                     PointerDrag::None => {}
                 }
                 self.pointer_drag = PointerDrag::None;
+                UpdateOutcome::Redraw
             }
-            _ => return false,
-        }
-        true
+            _ => return None,
+        };
+        Some(outcome)
     }
 
     pub fn draw(&mut self, frame: &mut Frame<'_>) {
@@ -2053,6 +2103,51 @@ mod tests {
         assert_eq!(app.sidebar_width, 46);
         assert_eq!(app.pointer_drag, PointerDrag::None);
         assert!(app.pending_sidebar_resize.is_none());
+    }
+
+    #[test]
+    fn pending_sidebar_drag_requests_redraw_only_after_the_idle_deadline() {
+        let mut app = App::new(&navigation_bundle());
+        app.geometry.body = Rect::new(0, 1, 100, 18);
+        app.geometry.sidebar_splitter = Rect::new(DEFAULT_SIDEBAR_WIDTH, 1, 1, 18);
+        let started = Instant::now();
+        let pointer = |kind, column| MouseEvent {
+            kind,
+            column,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        };
+
+        assert_eq!(
+            app.handle_pointer_control_at(
+                pointer(
+                    MouseEventKind::Down(MouseButton::Left),
+                    DEFAULT_SIDEBAR_WIDTH,
+                ),
+                started,
+            ),
+            Some(UpdateOutcome::Unchanged)
+        );
+        assert_eq!(
+            app.handle_pointer_control_at(
+                pointer(MouseEventKind::Drag(MouseButton::Left), 44),
+                started,
+            ),
+            Some(UpdateOutcome::Unchanged)
+        );
+        assert_eq!(
+            app.tick(
+                (started + SIDEBAR_RESIZE_IDLE)
+                    .checked_sub(Duration::from_millis(1))
+                    .expect("idle deadline is later than the start"),
+            ),
+            UpdateOutcome::Unchanged
+        );
+        assert_eq!(
+            app.tick(started + SIDEBAR_RESIZE_IDLE),
+            UpdateOutcome::Redraw
+        );
+        assert_eq!(app.sidebar_width, 44);
     }
 
     #[test]
