@@ -1156,10 +1156,18 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLin
         match node {
             Inline::Text { value } => append_text(value, style, lines),
             Inline::Strong { children } => {
-                append_inline(children, style.add_modifier(Modifier::BOLD), lines);
+                append_inline(
+                    children,
+                    style.fg(theme::STRONG).add_modifier(Modifier::BOLD),
+                    lines,
+                );
             }
             Inline::Emphasis { children } => {
-                append_inline(children, style.add_modifier(Modifier::ITALIC), lines);
+                append_inline(
+                    children,
+                    style.fg(theme::SUBTEXT).add_modifier(Modifier::ITALIC),
+                    lines,
+                );
             }
             Inline::Code { value } => {
                 append_text(value, Style::default().fg(theme::HEADING), lines);
@@ -1858,7 +1866,9 @@ mod tests {
         let spans = &lines[0].spans;
 
         assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
+        assert_eq!(spans[0].style.fg, Some(theme::STRONG));
         assert!(spans[2].style.add_modifier.contains(Modifier::ITALIC));
+        assert_eq!(spans[2].style.fg, Some(theme::SUBTEXT));
         assert_eq!(spans[4].style.fg, Some(theme::HEADING));
         assert_eq!(spans[6].style.fg, Some(theme::BLUE));
         assert!(spans[6].style.add_modifier.contains(Modifier::UNDERLINED));

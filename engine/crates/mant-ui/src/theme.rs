@@ -17,6 +17,7 @@ pub const OVERLAY: Color = Color::Rgb(69, 71, 90);
 pub const TEXT: Color = Color::Rgb(166, 173, 200);
 pub const SUBTEXT: Color = Color::Rgb(127, 132, 156);
 pub const SUBTEXT_BRIGHT: Color = Color::Rgb(186, 194, 222);
+pub const STRONG: Color = Color::Rgb(205, 214, 244);
 pub const SELECTED_TEXT: Color = Color::Rgb(245, 224, 220);
 pub const HEADING: Color = Color::Rgb(148, 226, 213);
 pub const LINK: Color = Color::Rgb(137, 220, 235);
