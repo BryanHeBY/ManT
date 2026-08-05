@@ -14,12 +14,12 @@ required by the third-party manuals.
 
 All fixtures are parsed through ManT's bundled libmandoc. Tests never consult
 the host manual database. Fixed compressed roff sources replace the former
-renderer-specific HTML snapshots, making parser regressions reproducible across
-Linux and macOS while retaining upstream notices embedded in the manuals.
+generated HTML snapshots, making parser regressions reproducible across Linux
+and macOS while retaining upstream notices embedded in the manuals.
 
 Each distribution directory also contains a human-readable
 `VERIFIED_TOPICS.txt` summary of the topic/section requests scanned through
-`mant --force-libmandoc`. Its header records the total scan breadth; the
+ManT's bundled libmandoc path. Its header records the total scan breadth; the
 neighbouring README records the package provenance and observed parser
 behaviour.
 
@@ -35,9 +35,9 @@ The summaries follow these principles:
 - **Grouped by originating package.** Topics are attributed to the distribution
   package that ships them (resolved from the downloaded package archive), the
   same way a user reaches a page through `man <topic>`.
-- **Verified means no parser crash.** Every listed request was rendered through
-  `mant --force-libmandoc` (the strict, no-groff-fallback path) and produced a
-  document without a parser failure.
+- **Verified means no parser crash.** Every listed request was parsed through
+  ManT's bundled libmandoc path and produced a document without a parser
+  failure.
 - **C-locale only.** Localized `man/<lang>/` copies are excluded; they are locale
   variants of the same topic and are not separately reachable through the default
   `man -w` lookup.

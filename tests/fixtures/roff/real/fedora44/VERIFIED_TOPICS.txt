@@ -1,5 +1,5 @@
 # mant verified topics: fedora
-# scanned 2026-07-21 with --force-libmandoc; no parser crash observed
+# scanned 2026-07-21 through bundled libmandoc; no parser crash observed
 # C-locale topics only (localized man/<lang>/ copies excluded).
 # High-volume same-pattern sections are summarised (count + samples).
 # packages: 41; total pages: 857
