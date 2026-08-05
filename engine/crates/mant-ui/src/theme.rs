@@ -16,7 +16,6 @@ pub const BORDER: Color = Color::Rgb(49, 50, 68);
 pub const OVERLAY: Color = Color::Rgb(69, 71, 90);
 pub const SCROLLBAR_TRACK: Color = BASE;
 pub const SCROLLBAR_THUMB: Color = OVERLAY;
-pub const RESIZE_HANDLE: Color = BORDER;
 pub const TEXT: Color = Color::Rgb(166, 173, 200);
 pub const SUBTEXT: Color = Color::Rgb(127, 132, 156);
 pub const SUBTEXT_BRIGHT: Color = Color::Rgb(186, 194, 222);

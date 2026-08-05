@@ -611,10 +611,7 @@ impl App {
                     Block::default().style(Style::default().bg(theme::BASE)),
                     area,
                 );
-                let inner = area.inner(Margin {
-                    horizontal: 1,
-                    vertical: 0,
-                });
+                let inner = area;
                 for (index, entry) in entries.iter().enumerate().take(usize::from(inner.height)) {
                     let row = Rect::new(
                         inner.x,
@@ -707,28 +704,12 @@ impl App {
             Block::default().style(Style::default().bg(theme::SIDEBAR)),
             area,
         );
-        let resize_handle = Rect::new(
-            area.right().saturating_sub(1),
-            area.y,
-            u16::from(area.width > 0),
-            area.height,
-        );
-        frame.render_widget(
-            Block::default().style(Style::default().bg(theme::RESIZE_HANDLE)),
-            resize_handle,
-        );
-        let inner = Rect::new(
-            area.x,
-            area.y,
-            area.width.saturating_sub(resize_handle.width),
-            area.height,
-        );
         let [header_area, section_label_area, navigation_area] = Layout::vertical([
             Constraint::Length(3),
             Constraint::Length(1),
             Constraint::Min(1),
         ])
-        .areas(inner);
+        .areas(area);
 
         let mut metadata = format!(
             "{} top-level · {} sections",
@@ -1251,16 +1232,18 @@ impl App {
     }
 
     fn is_sidebar_boundary(&self, column: u16) -> bool {
+        // `Rect::right()` is the half-open edge immediately after the sidebar,
+        // so it is draggable without consuming the sidebar's final text or
+        // scrollbar column.
         self.show_sidebar
             && self.last_navigation_area.width > 0
-            && column.abs_diff(self.last_navigation_area.right()) <= 1
+            && column == self.last_navigation_area.right()
     }
 
     fn resize_sidebar_to(&mut self, column: u16) {
         let maximum = maximum_sidebar_width(self.last_body_area.width);
         let width = column
             .saturating_sub(self.last_body_area.x)
-            .saturating_add(1)
             .clamp(MIN_SIDEBAR_WIDTH, maximum.max(MIN_SIDEBAR_WIDTH));
         self.sidebar_width = width;
     }
@@ -1715,18 +1698,7 @@ mod tests {
                     .is_some_and(|cell| cell.bg == theme::SCROLLBAR_THUMB)
             })
         );
-        let resize_column = app.last_navigation_area.right();
-        assert!(
-            (app.last_navigation_area.y..app.last_navigation_area.bottom()).all(|row| {
-                terminal
-                    .backend()
-                    .buffer()
-                    .cell((resize_column, row))
-                    .is_some_and(|cell| cell.symbol() == " " && cell.bg == theme::RESIZE_HANDLE)
-            })
-        );
-        assert_ne!(theme::RESIZE_HANDLE, theme::SCROLLBAR_TRACK);
-        assert_ne!(theme::RESIZE_HANDLE, theme::SCROLLBAR_THUMB);
+        assert_eq!(app.last_navigation_area.right(), app.sidebar_width);
         assert!(
             (app.last_navigation_area.y..app.last_navigation_area.bottom()).any(|row| {
                 terminal
@@ -1817,15 +1789,8 @@ mod tests {
             buffer
                 .cell((DEFAULT_SIDEBAR_WIDTH - 1, 1))
                 .expect("borderless sidebar edge")
-                .symbol(),
-            " "
-        );
-        assert_eq!(
-            buffer
-                .cell((DEFAULT_SIDEBAR_WIDTH - 1, 1))
-                .expect("resize handle")
                 .bg,
-            theme::RESIZE_HANDLE
+            theme::SIDEBAR
         );
         assert_eq!(
             buffer.cell((0, 5)).expect("selected tldr navigation").bg,
@@ -1849,6 +1814,7 @@ mod tests {
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
 
         assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+        assert_eq!(app.last_navigation_area.right(), DEFAULT_SIDEBAR_WIDTH);
         assert_eq!(app.last_content_area.x, DEFAULT_SIDEBAR_WIDTH + 1);
         assert_eq!(app.last_content_area.y, 2);
         let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
@@ -1953,10 +1919,14 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let boundary = app.last_navigation_area.right();
+        assert_eq!(boundary, DEFAULT_SIDEBAR_WIDTH);
+        assert!(!app.is_sidebar_boundary(boundary.saturating_sub(1)));
+        assert!(app.is_sidebar_boundary(boundary));
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: DEFAULT_SIDEBAR_WIDTH,
+            column: boundary,
             row: 8,
             modifiers: KeyModifiers::NONE,
         });
@@ -1973,7 +1943,7 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         });
 
-        assert_eq!(app.sidebar_width, 45);
+        assert_eq!(app.sidebar_width, 44);
         assert_eq!(app.pointer_drag, PointerDrag::None);
     }
 
@@ -2075,14 +2045,16 @@ mod tests {
                 .to_string()
                 .contains("Reset Sidebar Width")
         );
+        let buffer = terminal.backend().buffer();
+        let menu_left = MenuId::View.left();
+        let menu_right = menu_left + 29;
         assert_eq!(
-            terminal
-                .backend()
-                .buffer()
-                .cell((MenuId::View.left(), 1))
-                .expect("borderless menu edge")
-                .symbol(),
-            " "
+            buffer.cell((menu_left, 1)).expect("menu left edge").bg,
+            theme::SELECTED
+        );
+        assert_eq!(
+            buffer.cell((menu_right, 1)).expect("menu right edge").bg,
+            theme::SELECTED
         );
 
         app.handle_mouse(MouseEvent {
