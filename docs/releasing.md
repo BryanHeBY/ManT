@@ -20,7 +20,7 @@ releases; publishing remains a deliberate human action.
 
 The crates.io packages form one dependency graph. `mant-ui` first entered
 crates.io as the `0.4.1` bootstrap release against the existing `0.4.0`
-contracts; later workspace releases keep all five packages on one version:
+contracts. Starting with `0.5.0`, all five packages use one lockstep version:
 
 ```text
 libmandoc-rs ─┐
@@ -43,13 +43,15 @@ non-release refs, and contain no long-lived Cargo token. The release job has
 only `contents: read` and `id-token: write`; the official crates.io action
 exchanges that identity for a short-lived credential.
 
-On a tag push, `scripts/publish-crates.sh` validates all package archives and
-publishes `mant-ast`, `libmandoc-rs`, `mant-core`, `mant-ui`, and `mant` in
-dependency order. It waits for each exact version to reach the registry before
-continuing and skips versions already present, so a partially completed job is
-safe to rerun. Installing `mant` installs the reader, structured CLI, and MCP
-server as one executable. `mant-ui` is a reusable library crate and does not
-install a second command.
+On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ast`,
+`libmandoc-rs`, `mant-core`, `mant-ui`, and `mant` in dependency order. Exact
+internal dependencies require each predecessor to become visible in the
+registry before its dependent can be packaged, so the script validates each
+package immediately before uploading it and then waits for the index before
+continuing. It skips versions already present, making a partially completed
+job safe to rerun. Installing `mant` installs the reader, structured CLI, and
+MCP server as one executable. `mant-ui` is a reusable library crate and does
+not install a second command.
 
 Never move a tag after crates.io publication. Registry versions are immutable.
 
