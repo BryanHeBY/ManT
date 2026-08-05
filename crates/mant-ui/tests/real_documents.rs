@@ -240,7 +240,7 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
 
         for width in [32, 80, 132] {
             let rendered = view.render(width);
-            assert!(rendered.search("TLDR QUICK REFERENCE").len() == 1);
+            assert_eq!(rendered.search("TLDR QUICK REFERENCE").len(), 1);
             assert!(
                 !rendered.search("Synopsis").is_empty(),
                 "{relative} lost its manual body at width {width}"
