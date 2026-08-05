@@ -4,10 +4,7 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use super::{
-    App, Overlay, PendingSidebarResize, PointerDrag, SIDEBAR_RESIZE_IDLE, UpdateOutcome,
-    menu::MenuId,
-};
+use super::{App, Overlay, PointerDrag, UpdateOutcome, menu::MenuId};
 use crate::layout::{MIN_SIDEBAR_WIDTH, maximum_sidebar_width};
 
 impl App {
@@ -175,7 +172,7 @@ impl App {
                 if self.is_sidebar_boundary(mouse.column, mouse.row) =>
             {
                 self.pointer_drag = PointerDrag::Sidebar;
-                self.pending_sidebar_resize = None;
+                self.sidebar_resize.begin();
                 UpdateOutcome::Unchanged
             }
             MouseEventKind::Down(MouseButton::Left)
@@ -192,10 +189,7 @@ impl App {
                 UpdateOutcome::Redraw
             }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
-                PointerDrag::Sidebar => {
-                    self.request_sidebar_resize(mouse.column, now);
-                    UpdateOutcome::Unchanged
-                }
+                PointerDrag::Sidebar => self.request_sidebar_resize(mouse.column, now),
                 PointerDrag::NavigationScrollbar(drag) => {
                     self.scroll_navigation_to_pointer(mouse.row, drag);
                     UpdateOutcome::Redraw
@@ -240,21 +234,28 @@ impl App {
             .clamp(MIN_SIDEBAR_WIDTH, maximum.max(MIN_SIDEBAR_WIDTH))
     }
 
-    pub(super) fn commit_sidebar_at(&mut self, column: u16) {
-        self.sidebar_width = self.sidebar_width_at(column);
+    pub(super) fn commit_sidebar_at(&mut self, column: u16) -> bool {
+        let width = self.sidebar_width_at(column);
+        if self.sidebar_width == width {
+            return false;
+        }
+        self.sidebar_width = width;
+        true
     }
 
-    fn request_sidebar_resize(&mut self, column: u16, now: Instant) {
-        // This is a trailing-edge debounce: every new coordinate replaces the
-        // previous one and postpones reflow until pointer input becomes idle.
-        self.pending_sidebar_resize = Some(PendingSidebarResize {
-            column,
-            deadline: now + SIDEBAR_RESIZE_IDLE,
-        });
+    fn request_sidebar_resize(&mut self, column: u16, now: Instant) -> UpdateOutcome {
+        let Some(column) = self.sidebar_resize.request(column, now) else {
+            return UpdateOutcome::Unchanged;
+        };
+        if self.commit_sidebar_at(column) {
+            UpdateOutcome::Redraw
+        } else {
+            UpdateOutcome::Unchanged
+        }
     }
 
     fn finish_sidebar_resize(&mut self, column: u16) {
+        let column = self.sidebar_resize.finish(column);
         self.commit_sidebar_at(column);
-        self.pending_sidebar_resize = None;
     }
 }

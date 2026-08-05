@@ -24,12 +24,12 @@ use crate::{
 };
 
 const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
-/// Defers expensive width-dependent document reflow until the splitter settles.
+/// Caps expensive width-dependent document reflow while the splitter moves.
 ///
-/// Pointer events can arrive substantially faster than a large manual can be
-/// lowered into visual rows. Keeping only the newest coordinate and restarting
-/// this short idle window avoids replaying every intermediate width.
-const SIDEBAR_RESIZE_IDLE: Duration = Duration::from_millis(60);
+/// The first effective movement is rendered immediately. Further pointer
+/// events are coalesced into at most one intermediate frame per interval, and
+/// releasing the pointer always commits the final coordinate.
+const SIDEBAR_RESIZE_FRAME_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Whether an input or timer update changed visible application state.
 ///
@@ -69,6 +69,59 @@ struct PendingSidebarResize {
     deadline: Instant,
 }
 
+/// Coalesces high-frequency splitter events without turning resize into a
+/// trailing-only debounce.
+#[derive(Debug, Default)]
+struct SidebarResizeSchedule {
+    pending: Option<PendingSidebarResize>,
+    has_live_frame: bool,
+}
+
+impl SidebarResizeSchedule {
+    fn begin(&mut self) {
+        self.pending = None;
+        self.has_live_frame = false;
+    }
+
+    fn request(&mut self, column: u16, now: Instant) -> Option<u16> {
+        if !self.has_live_frame {
+            self.has_live_frame = true;
+            return Some(column);
+        }
+        if let Some(pending) = &mut self.pending {
+            // Do not postpone the deadline: events arriving during an
+            // expensive frame are collapsed into the scheduled frame.
+            pending.column = column;
+        } else {
+            self.pending = Some(PendingSidebarResize {
+                column,
+                deadline: now + SIDEBAR_RESIZE_FRAME_INTERVAL,
+            });
+        }
+        None
+    }
+
+    fn take_due(&mut self, now: Instant) -> Option<u16> {
+        let pending = self.pending.filter(|pending| pending.deadline <= now)?;
+        self.pending = None;
+        Some(pending.column)
+    }
+
+    fn finish(&mut self, column: u16) -> u16 {
+        self.cancel();
+        column
+    }
+
+    fn cancel(&mut self) {
+        self.pending = None;
+        self.has_live_frame = false;
+    }
+
+    fn deadline(&self) -> Option<Instant> {
+        self.pending.map(|pending| pending.deadline)
+    }
+}
+
 /// Geometry retained from the previous frame for pointer hit testing.
 ///
 /// Keeping these values together makes the boundary between layout/rendering
@@ -102,7 +155,7 @@ pub struct App {
     pointer_drag: PointerDrag,
     geometry: FrameGeometry,
     navigation_sync_deadline: Option<Instant>,
-    pending_sidebar_resize: Option<PendingSidebarResize>,
+    sidebar_resize: SidebarResizeSchedule,
     content_render_width: u16,
     rendered_cache: HashMap<u16, RenderedDocument>,
 }
@@ -132,7 +185,7 @@ impl App {
             pointer_drag: PointerDrag::None,
             geometry: FrameGeometry::default(),
             navigation_sync_deadline: None,
-            pending_sidebar_resize: None,
+            sidebar_resize: SidebarResizeSchedule::default(),
             content_render_width: 0,
             rendered_cache: HashMap::new(),
         }
@@ -145,12 +198,9 @@ impl App {
 
     pub(crate) fn tick(&mut self, now: Instant) -> UpdateOutcome {
         let mut outcome = UpdateOutcome::Unchanged;
-        if let Some(pending) = self
-            .pending_sidebar_resize
-            .filter(|pending| pending.deadline <= now)
+        if let Some(column) = self.sidebar_resize.take_due(now)
+            && self.commit_sidebar_at(column)
         {
-            self.pending_sidebar_resize = None;
-            self.commit_sidebar_at(pending.column);
             outcome = UpdateOutcome::Redraw;
         }
         if self
@@ -167,7 +217,7 @@ impl App {
     pub(crate) fn next_wakeup(&self, now: Instant) -> Option<Duration> {
         [
             self.navigation_sync_deadline,
-            self.pending_sidebar_resize.map(|pending| pending.deadline),
+            self.sidebar_resize.deadline(),
         ]
         .into_iter()
         .flatten()

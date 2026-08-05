@@ -55,7 +55,7 @@ impl App {
                 self.pointer_drag,
                 PointerDrag::Sidebar | PointerDrag::NavigationScrollbar(_)
             ) {
-                self.pending_sidebar_resize = None;
+                self.sidebar_resize.cancel();
                 self.pointer_drag = PointerDrag::None;
             }
             self.draw_content(frame, body_area);

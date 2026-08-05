@@ -14,7 +14,7 @@ use mant_ast::{
 use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
 use super::{
-    App, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag, SIDEBAR_RESIZE_IDLE, UpdateOutcome,
+    App, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag, SIDEBAR_RESIZE_FRAME_INTERVAL, UpdateOutcome,
     menu::{MenuAction, MenuId},
     render::sidebar_metadata,
     search::SearchMode,
@@ -482,7 +482,7 @@ fn navigation_visibility_keeps_the_complete_selected_title_on_screen() {
 }
 
 #[test]
-fn dragging_the_sidebar_boundary_debounces_width_updates() {
+fn dragging_the_sidebar_boundary_renders_leading_throttled_and_final_widths() {
     let backend = TestBackend::new(100, 18);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&navigation_bundle());
@@ -506,25 +506,25 @@ fn dragging_the_sidebar_boundary_debounces_width_updates() {
         started,
     );
     assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
-    app.handle_pointer_control_at(
-        MouseEvent {
-            kind: MouseEventKind::Drag(MouseButton::Left),
-            column: 40,
-            row: 8,
-            modifiers: KeyModifiers::NONE,
-        },
-        started,
+    assert_eq!(
+        app.handle_pointer_control_at(
+            MouseEvent {
+                kind: MouseEventKind::Drag(MouseButton::Left),
+                column: 40,
+                row: 8,
+                modifiers: KeyModifiers::NONE,
+            },
+            started,
+        ),
+        Some(UpdateOutcome::Redraw)
     );
     terminal
         .draw(|frame| app.draw(frame))
-        .expect("draw while resize is pending");
-    assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
-    assert_eq!(
-        app.pending_sidebar_resize.map(|pending| pending.column),
-        Some(40)
-    );
+        .expect("draw leading resize frame");
+    assert_eq!(app.sidebar_width, 40);
+    assert!(app.sidebar_resize.pending.is_none());
     assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
-    assert_eq!(app.geometry.content.width, initial_render_width);
+    assert_ne!(app.geometry.content.width, initial_render_width);
     assert_eq!(
         app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
         HashSet::from([app.geometry.content.width])
@@ -539,23 +539,38 @@ fn dragging_the_sidebar_boundary_debounces_width_updates() {
         },
         started + Duration::from_millis(1),
     );
-    assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+    assert_eq!(app.sidebar_width, 40);
     assert_eq!(
-        app.pending_sidebar_resize.map(|pending| pending.column),
+        app.sidebar_resize.pending.map(|pending| pending.column),
         Some(44)
     );
-    app.tick(started + SIDEBAR_RESIZE_IDLE);
-    assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
-    app.tick(started + SIDEBAR_RESIZE_IDLE + Duration::from_millis(1));
+    let deadline = app.sidebar_resize.deadline().expect("scheduled live frame");
+    app.handle_pointer_control_at(
+        MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 48,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        },
+        started + Duration::from_millis(30),
+    );
+    assert_eq!(
+        app.sidebar_resize.pending.map(|pending| pending.column),
+        Some(48)
+    );
+    assert_eq!(app.sidebar_resize.deadline(), Some(deadline));
+    app.tick(
+        deadline
+            .checked_sub(Duration::from_millis(1))
+            .expect("frame deadline follows the request"),
+    );
+    assert_eq!(app.sidebar_width, 40);
+    app.tick(deadline);
     terminal
         .draw(|frame| app.draw(frame))
         .expect("draw final live width");
-    assert_eq!(app.sidebar_width, 44);
+    assert_eq!(app.sidebar_width, 48);
     assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
-    assert_eq!(
-        app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
-        HashSet::from([app.geometry.content.width])
-    );
 
     app.handle_pointer_control_at(
         MouseEvent {
@@ -564,16 +579,16 @@ fn dragging_the_sidebar_boundary_debounces_width_updates() {
             row: 8,
             modifiers: KeyModifiers::NONE,
         },
-        started + SIDEBAR_RESIZE_IDLE + Duration::from_millis(2),
+        started + SIDEBAR_RESIZE_FRAME_INTERVAL + Duration::from_millis(2),
     );
 
     assert_eq!(app.sidebar_width, 46);
     assert_eq!(app.pointer_drag, PointerDrag::None);
-    assert!(app.pending_sidebar_resize.is_none());
+    assert!(app.sidebar_resize.pending.is_none());
 }
 
 #[test]
-fn pending_sidebar_drag_requests_redraw_only_after_the_idle_deadline() {
+fn scheduled_sidebar_drag_requests_redraw_only_at_the_frame_deadline() {
     let mut app = App::new(&navigation_bundle());
     app.geometry.body = Rect::new(0, 1, 100, 18);
     app.geometry.sidebar_splitter = Rect::new(DEFAULT_SIDEBAR_WIDTH, 1, 1, 18);
@@ -600,21 +615,27 @@ fn pending_sidebar_drag_requests_redraw_only_after_the_idle_deadline() {
             pointer(MouseEventKind::Drag(MouseButton::Left), 44),
             started,
         ),
+        Some(UpdateOutcome::Redraw)
+    );
+    assert_eq!(app.sidebar_width, 44);
+    assert_eq!(
+        app.handle_pointer_control_at(
+            pointer(MouseEventKind::Drag(MouseButton::Left), 48),
+            started + Duration::from_millis(1),
+        ),
         Some(UpdateOutcome::Unchanged)
     );
+    let deadline = app.sidebar_resize.deadline().expect("scheduled live frame");
     assert_eq!(
         app.tick(
-            (started + SIDEBAR_RESIZE_IDLE)
+            deadline
                 .checked_sub(Duration::from_millis(1))
-                .expect("idle deadline is later than the start"),
+                .expect("frame deadline follows the request"),
         ),
         UpdateOutcome::Unchanged
     );
-    assert_eq!(
-        app.tick(started + SIDEBAR_RESIZE_IDLE),
-        UpdateOutcome::Redraw
-    );
-    assert_eq!(app.sidebar_width, 44);
+    assert_eq!(app.tick(deadline), UpdateOutcome::Redraw);
+    assert_eq!(app.sidebar_width, 48);
 }
 
 #[test]
@@ -659,17 +680,15 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
         row: 6,
         modifiers: KeyModifiers::NONE,
     });
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Drag(MouseButton::Left),
-        column: 50,
-        row: 6,
-        modifiers: KeyModifiers::NONE,
-    });
-    let deadline = app
-        .pending_sidebar_resize
-        .expect("pending sidebar resize")
-        .deadline;
-    app.tick(deadline);
+    assert_eq!(
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 50,
+            row: 6,
+            modifiers: KeyModifiers::NONE,
+        }),
+        UpdateOutcome::Redraw
+    );
     terminal
         .draw(|frame| app.draw(frame))
         .expect("resized draw");
