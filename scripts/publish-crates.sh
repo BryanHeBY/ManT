@@ -76,17 +76,15 @@ done
 git diff --quiet && git diff --cached --quiet \
   || fail 'the Git worktree must be clean'
 
-# Validate every archive before the first irreversible upload. Full native
-# verification already ran in the release build matrix; dependent packages
-# cannot be registry-verified until their exact predecessors become visible.
-for package in "${PACKAGES[@]}"; do
-  cargo package --locked --no-verify -p "$package"
-done
-
+# Exact internal dependencies make publication inherently sequential: a
+# dependent crate cannot even be packaged against crates.io until its newly
+# published predecessor is visible in the index. Validate each package at the
+# last reversible boundary, then publish and wait before advancing the graph.
 for package in "${PACKAGES[@]}"; do
   if registry_has_version "$package" "$version"; then
     printf 'skipping existing crates.io release %s %s\n' "$package" "$version"
   else
+    cargo package --locked --no-verify -p "$package"
     cargo publish --locked -p "$package"
   fi
   wait_for_registry "$package" "$version"

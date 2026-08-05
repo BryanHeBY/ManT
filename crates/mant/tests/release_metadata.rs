@@ -72,3 +72,22 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
     assert!(windows.contains(r#"$ArchiveRoot = "mant-$Version-$Target""#));
     assert!(windows.contains(r#"Copy-Item $Binary (Join-Path $Package "mant.exe")"#));
 }
+
+#[test]
+fn crates_are_packaged_only_after_their_exact_predecessors_reach_the_registry() {
+    let publish = include_str!("../../../scripts/publish-crates.sh");
+    let publish_loop = publish
+        .split_once("# Exact internal dependencies make publication inherently sequential:")
+        .map(|(_, suffix)| suffix)
+        .expect("sequential publication explanation");
+
+    assert_eq!(
+        publish
+            .matches("cargo package --locked --no-verify")
+            .count(),
+        1
+    );
+    assert!(publish_loop.contains(
+        "else\n    cargo package --locked --no-verify -p \"$package\"\n    cargo publish --locked -p \"$package\"\n  fi\n  wait_for_registry"
+    ));
+}
