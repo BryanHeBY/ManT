@@ -70,16 +70,25 @@ command are required for manual topics; Markdown files work independently.
 
 Download the archive for your architecture from the
 [latest release](https://github.com/BryanHeBY/ManT/releases/latest), then
-install its single executable:
+install the executable and its bundled `mant` documentation topic:
 
 ```sh
 tar -xzf mant-<version>-linux-<arch>.tar.gz
 cd mant-<version>-linux-<arch>
 install -Dm755 mant ~/.local/bin/mant
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+install -Dm644 mant.md "$data_home/mant/topics/mant.md"
+mant mant
 ```
 
-The archive also includes `mant.md`, the project README, the Apache-2.0
-license, the bundled mandoc license, and a published SHA-256 checksum.
+Installing `mant.md` is recommended but optional: it makes the complete ManT
+manual available as the registered topic `mant`, including in the reader,
+structured CLI, and MCP topic catalog. For a system-wide installation, use
+`/usr/local/bin/mant` and `/usr/local/share/mant/topics/mant.md` instead. User
+topics take precedence over system topics.
+
+The archive also includes the project README, the Apache-2.0 license, the
+bundled mandoc license, and a published SHA-256 checksum.
 
 ### Build from source
 

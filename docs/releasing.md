@@ -61,6 +61,14 @@ self-hosted `mant.md` manual, assembles `SHA256SUMS`, and creates a **draft**
 GitHub Release with generated notes. Review the notes, archive names,
 checksums, manual, and licenses before publishing the draft.
 
+The archive keeps `mant.md` beside the executable so installation remains
+transparent. User-facing release notes should recommend copying it to
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/topics/mant.md`; a system package
+should install it as `/usr/local/share/mant/topics/mant.md` (or the matching
+prefix-relative `share/mant/topics/mant.md`). The document is optional at
+runtime, but installing it makes `mant mant` and MCP topic discovery work
+without a repository checkout.
+
 Linux x64 uses the baseline target so the executable does not require AVX2.
 macOS supports Cargo installation and local source builds, but public macOS
 archives remain disabled until they can be Developer ID-signed and notarized.
@@ -79,6 +87,13 @@ MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/package-release.sh
 Set `MANT_RELEASE_TARGET=linux-x64` or `linux-arm64` to assert the expected
 runner identity. `MANT_BINARY` may point at another already-built executable.
 Archives and individual SHA-256 files are written under `dist/`.
+
+Before publishing, inspect that both the executable and self-hosted topic are
+present:
+
+```sh
+tar -tzf dist/mant-MAJOR.MINOR.PATCH-linux-ARCH.tar.gz
+```
 
 The tagged GitHub workflow remains the public-release source of truth because
 it rebuilds on every target runner.
