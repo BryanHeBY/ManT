@@ -1,41 +1,12 @@
-//! Normalizes roff escapes and semantic mdoc macros into inline AST nodes.
+//! Lowers typed roff events and semantic mdoc macros into inline AST nodes.
 
 use libmandoc_rs::{Node, NodeKind};
 use mant_ast::Inline;
 
-use super::part_children;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Font {
-    Regular,
-    Strong,
-    Emphasis,
-    Code,
-}
-
-// libmandoc stores line-breaking semantics in otherwise non-printing ASCII
-// bytes inside text nodes. They are parser-internal markers, not document
-// characters, so translate them before they cross the ManT AST boundary.
-const ASCII_BREAK: char = '\u{1d}';
-const ASCII_HYPH: char = '\u{1e}';
-const ASCII_NBRSP: char = '\u{1f}';
-
-/// Replace libmandoc's internal ASCII control markers with their
-/// semantic equivalents. These 0x1d–0x1f bytes encode roff-level
-/// line-breaking and hyphenation hints that must never leak into
-/// `ManT`'s document model (anchor IDs, section targets, etc.).
-pub(super) fn sanitize_roff_text(raw: &str) -> String {
-    let mut output = String::with_capacity(raw.len());
-    for ch in raw.chars() {
-        match ch {
-            ASCII_BREAK => {}                // non-breaking line break → discard
-            ASCII_HYPH => output.push('-'),  // hyphenation marker → hyphen
-            ASCII_NBRSP => output.push(' '), // non-breaking space → space
-            other => output.push(other),
-        }
-    }
-    output
-}
+use super::{
+    part_children,
+    roff_escape::{RoffFont as Font, RoffInlineEvent, decode, visible_text},
+};
 
 pub(super) struct InlineBuilder {
     nodes: Vec<Inline>,
@@ -258,7 +229,7 @@ fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
     if !node.flags.deep_link_target {
         return None;
     }
-    let id = node.tag.as_deref().map(sanitize_roff_text).or_else(|| {
+    let id = node.tag.as_deref().map(visible_text).or_else(|| {
         plain_text(lowered)
             .split_whitespace()
             .next()
@@ -405,126 +376,33 @@ pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
 /// Explicit `\\f` escapes change `font` while the run is scanned, so a reset
 /// to regular text remains visible even inside an alternating `.BI` argument.
 fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
-    let characters: Vec<char> = source.chars().collect();
     let mut output = Vec::new();
     let mut buffer = String::new();
     let mut font = initial_font;
     let mut link: Option<String> = None;
-    let mut index = 0;
 
-    while index < characters.len() {
-        let character = characters[index];
-        if character != '\\' {
-            match character {
-                ASCII_BREAK => {}
-                ASCII_HYPH => buffer.push('-'),
-                ASCII_NBRSP => buffer.push(' '),
-                _ => buffer.push(character),
-            }
-            index += 1;
-            continue;
-        }
-        index += 1;
-        let Some(escape) = characters.get(index).copied() else {
-            buffer.push('\\');
-            break;
-        };
-        index += 1;
-        match escape {
-            'f' => {
+    for event in decode(source) {
+        match event {
+            RoffInlineEvent::Text(value) => buffer.push_str(&value),
+            RoffInlineEvent::Font(next_font) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                font = parse_font(&characters, &mut index);
+                font = next_font;
             }
-            // GNU roff foreground/background colour requests are presentation
-            // state, not visible text. libmandoc deliberately keeps unknown
-            // groff extensions in text nodes, so consume their opaque operand
-            // here instead of leaking `m[blue]` into every AST consumer.
-            'm' | 'M' => consume_opaque_escape_argument(&characters, &mut index),
-            // Point-size changes likewise have no renderer-neutral textual
-            // value. The following `\u`/`\d` escapes still leave their actual
-            // footnote text visible, for example `[1]` in generated Git pages.
-            's' => consume_size_escape_argument(&characters, &mut index),
-            'X' if characters.get(index) == Some(&'\'') => {
+            RoffInlineEvent::Link(target) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
-                index += 1;
-                let start = index;
-                while characters.get(index) != Some(&'\'') && index < characters.len() {
-                    index += 1;
-                }
-                let command: String = characters[start..index].iter().collect();
-                index += usize::from(index < characters.len());
-                if let Some(target) = command.strip_prefix("tty: link ") {
-                    link = Some(target.to_owned());
-                } else if command == "tty: link" {
-                    link = None;
+                link = target;
+            }
+            RoffInlineEvent::LineBreak => {
+                flush_segment(&mut output, &mut buffer, font, link.as_deref());
+                if !matches!(output.last(), Some(Inline::LineBreak)) {
+                    output.push(Inline::LineBreak);
                 }
             }
-            '(' => {
-                let name: String = characters.iter().skip(index).take(2).collect();
-                index += name.chars().count();
-                buffer.push_str(special_character(&name));
-            }
-            '[' => {
-                let start = index;
-                while characters.get(index) != Some(&']') && index < characters.len() {
-                    index += 1;
-                }
-                let name: String = characters[start..index].iter().collect();
-                index += usize::from(index < characters.len());
-                buffer.push_str(special_character(&name));
-            }
-            '-' => buffer.push('-'),
-            'e' | '\\' => buffer.push('\\'),
-            ' ' | '~' | '0' => buffer.push(' '),
-            // These requests affect formatter state or introduce zero-width
-            // hints. They are not printable versions of their trigger byte.
-            '!' | '?' | '%' | '&' | ')' | ',' | '/' | '^' | ':' | 'a' | 'c' | 'd' | 'r' | 't'
-            | 'u' | '{' | '|' | '}' => {}
-            other => buffer.push(other),
+            RoffInlineEvent::Presentation { .. } => {}
         }
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
     output
-}
-
-/// Consume the argument syntax shared by opaque GNU roff requests such as
-/// `\m[blue]`, `\M(XX`, and their one-character forms.
-fn consume_opaque_escape_argument(characters: &[char], index: &mut usize) {
-    match characters.get(*index) {
-        Some('[') => {
-            *index += 1;
-            while *index < characters.len() && characters[*index] != ']' {
-                *index += 1;
-            }
-            *index += usize::from(*index < characters.len());
-        }
-        Some('(') => {
-            *index += 1;
-            *index = (*index + 2).min(characters.len());
-        }
-        Some(_) => *index += 1,
-        None => {}
-    }
-}
-
-/// Consume all portable point-size spellings without confusing the operand
-/// with document text: `\s2`, `\s-2`, `\s(12`, and `\s[+12]`.
-fn consume_size_escape_argument(characters: &[char], index: &mut usize) {
-    if matches!(characters.get(*index), Some('[' | '(')) {
-        consume_opaque_escape_argument(characters, index);
-        return;
-    }
-
-    if matches!(characters.get(*index), Some('+' | '-')) {
-        *index += 1;
-    }
-    if matches!(characters.get(*index), Some('[' | '(')) {
-        consume_opaque_escape_argument(characters, index);
-        return;
-    }
-    if *index < characters.len() {
-        *index += 1;
-    }
 }
 
 /// Lower a text node after honoring a macro-provided default font. Nodes marked
@@ -534,54 +412,6 @@ fn lower_text_node(node: &Node, initial_font: Font) -> Vec<Inline> {
         Vec::new()
     } else {
         parse_roff_text_with_font(node.text.as_deref().unwrap_or_default(), initial_font)
-    }
-}
-
-fn parse_font(characters: &[char], index: &mut usize) -> Font {
-    let name = match characters.get(*index) {
-        Some('[') => {
-            *index += 1;
-            let start = *index;
-            while characters.get(*index) != Some(&']') && *index < characters.len() {
-                *index += 1;
-            }
-            let name: String = characters[start..*index].iter().collect();
-            *index += usize::from(*index < characters.len());
-            name
-        }
-        Some('(') => {
-            *index += 1;
-            let name: String = characters.iter().skip(*index).take(2).collect();
-            *index += name.chars().count();
-            name
-        }
-        Some(character) => {
-            *index += 1;
-            character.to_string()
-        }
-        None => return Font::Regular,
-    };
-    match name.as_str() {
-        "B" | "3" => Font::Strong,
-        "I" | "2" => Font::Emphasis,
-        "CW" | "C" => Font::Code,
-        _ => Font::Regular,
-    }
-}
-
-fn special_character(name: &str) -> &'static str {
-    match name {
-        "en" => "–",
-        "em" => "—",
-        "aq" | "cq" => "'",
-        "dq" | "lq" | "rq" => "\"",
-        "co" => "©",
-        "rg" => "®",
-        "tm" => "™",
-        "bu" => "•",
-        "ha" => "^",
-        "ti" => "~",
-        _ => "",
     }
 }
 
@@ -637,7 +467,7 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, parse_roff_text, plain_text};
+    use super::{parse_roff_text, plain_text};
     use mant_ast::Inline;
 
     #[test]
@@ -647,13 +477,6 @@ mod tests {
 
         assert_eq!(plain_text(&nodes), "-h FILE");
         assert!(matches!(nodes[0], Inline::ExternalLink { .. }));
-    }
-
-    #[test]
-    fn decodes_libmandoc_internal_breaking_markers() {
-        let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next");
-
-        assert_eq!(plain_text(&parse_roff_text(&source)), "git-config (1)next");
     }
 
     #[test]

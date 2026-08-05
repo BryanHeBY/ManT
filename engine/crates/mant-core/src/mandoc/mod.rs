@@ -5,6 +5,7 @@ mod diagnostics;
 pub(crate) mod inline;
 mod layout;
 mod navigation;
+mod roff_escape;
 
 use std::path::Path;
 
@@ -14,7 +15,7 @@ use mant_ast::{
     SourceSpan,
 };
 
-use self::inline::{parse_roff_text, plain_text};
+use self::roff_escape::visible_text;
 
 pub use libmandoc_rs::ParseError;
 
@@ -87,7 +88,7 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument 
 /// `\&`. Normalize them through the same inline decoder used for document
 /// content before exposing the renderer-neutral contract.
 fn normalize_metadata(value: Option<&str>) -> Option<String> {
-    value.map(|value| plain_text(&parse_roff_text(value)))
+    value.map(visible_text)
 }
 
 struct LoweringContext<'a> {

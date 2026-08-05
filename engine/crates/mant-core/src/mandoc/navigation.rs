@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::inline::sanitize_roff_text;
+use super::roff_escape::visible_text;
 use libmandoc_rs::{Node, NodeKind};
 use mant_ast::{Block, Diagnostic, DiagnosticLevel, Inline, Section};
 
@@ -35,7 +35,7 @@ pub(super) fn explicit_targets(root: &Node) -> HashSet<String> {
         if node.macro_name.as_deref() != Some("Tg") {
             continue;
         }
-        let target = first_text(node).map(sanitize_roff_text).or_else(|| {
+        let target = first_text(node).map(visible_text).or_else(|| {
             // An argument-less `.Tg` names the first argument of its following
             // node. The validated target is the first tagged node after it.
             nodes[index + 1..]
@@ -65,9 +65,9 @@ fn first_text(node: &Node) -> Option<&str> {
 }
 
 fn navigation_name(node: &Node) -> Option<String> {
-    node.tag.as_deref().map(sanitize_roff_text).or_else(|| {
+    node.tag.as_deref().map(visible_text).or_else(|| {
         first_text(node).and_then(|value| {
-            let sanitized = sanitize_roff_text(value);
+            let sanitized = visible_text(value);
             sanitized
                 .trim_start_matches('-')
                 .split_whitespace()

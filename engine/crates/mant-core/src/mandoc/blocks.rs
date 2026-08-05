@@ -12,14 +12,16 @@ use super::{
     LoweringContext,
     inline::{
         InlineBuilder, append_inline_node, lower_inline_nodes, parse_roff_text, plain_text,
-        sanitize_roff_text, terms_fit_inline,
+        terms_fit_inline,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
         layout_with_spacing, section_spacing, set_block_spacing, update_paragraph_distance,
         vertical_distance_lines,
     },
-    part_children, source_span,
+    part_children,
+    roff_escape::visible_text,
+    source_span,
 };
 
 pub(super) fn lower_sections(root: &Node, context: &mut LoweringContext<'_>) -> Vec<Section> {
@@ -557,7 +559,7 @@ fn definition_head_anchor(node: &Node, term: &[Inline]) -> Option<String> {
     if !head.flags.deep_link_target {
         return None;
     }
-    head.tag.as_deref().map(sanitize_roff_text).or_else(|| {
+    head.tag.as_deref().map(visible_text).or_else(|| {
         plain_text(term)
             .trim_start_matches('-')
             .split_whitespace()
