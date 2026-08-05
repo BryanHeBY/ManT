@@ -74,6 +74,13 @@ enum Overlay {
     Help,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PointerDrag {
+    None,
+    Sidebar,
+    ContentScrollbar,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct MenuEntry {
     label: &'static str,
@@ -129,10 +136,13 @@ pub struct App {
     active_search_match: usize,
     search_width: u16,
     overlay: Overlay,
-    resizing_sidebar: bool,
+    pointer_drag: PointerDrag,
     last_body_area: Rect,
     last_content_area: Rect,
+    last_content_scrollbar_area: Rect,
+    last_content_max_scroll: usize,
     last_navigation_area: Rect,
+    last_status_area: Rect,
     last_navigation_rows: Vec<usize>,
     navigation_sync_deadline: Option<Instant>,
     rendered_cache: HashMap<u16, RenderedDocument>,
@@ -166,10 +176,13 @@ impl App {
             active_search_match: 0,
             search_width: 0,
             overlay: Overlay::None,
-            resizing_sidebar: false,
+            pointer_drag: PointerDrag::None,
             last_body_area: Rect::default(),
             last_content_area: Rect::default(),
+            last_content_scrollbar_area: Rect::default(),
+            last_content_max_scroll: 0,
             last_navigation_area: Rect::default(),
+            last_status_area: Rect::default(),
             last_navigation_rows: Vec::new(),
             navigation_sync_deadline: None,
             rendered_cache: HashMap::new(),
@@ -254,15 +267,44 @@ impl App {
             return;
         }
         match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left)
+                if self.search_mode.is_open()
+                    && self
+                        .last_status_area
+                        .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.move_search_cursor_to(mouse.column);
+            }
             MouseEventKind::Down(MouseButton::Left) if self.is_sidebar_boundary(mouse.column) => {
-                self.resizing_sidebar = true;
+                self.pointer_drag = PointerDrag::Sidebar;
             }
-            MouseEventKind::Drag(MouseButton::Left) if self.resizing_sidebar => {
+            MouseEventKind::Drag(MouseButton::Left)
+                if self.pointer_drag == PointerDrag::Sidebar =>
+            {
                 self.resize_sidebar_to(mouse.column);
             }
-            MouseEventKind::Up(MouseButton::Left) if self.resizing_sidebar => {
+            MouseEventKind::Up(MouseButton::Left) if self.pointer_drag == PointerDrag::Sidebar => {
                 self.resize_sidebar_to(mouse.column);
-                self.resizing_sidebar = false;
+                self.pointer_drag = PointerDrag::None;
+            }
+            MouseEventKind::Down(MouseButton::Left)
+                if self
+                    .last_content_scrollbar_area
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.pointer_drag = PointerDrag::ContentScrollbar;
+                self.scroll_content_to_pointer(mouse.row);
+            }
+            MouseEventKind::Drag(MouseButton::Left)
+                if self.pointer_drag == PointerDrag::ContentScrollbar =>
+            {
+                self.scroll_content_to_pointer(mouse.row);
+            }
+            MouseEventKind::Up(MouseButton::Left)
+                if self.pointer_drag == PointerDrag::ContentScrollbar =>
+            {
+                self.scroll_content_to_pointer(mouse.row);
+                self.pointer_drag = PointerDrag::None;
             }
             MouseEventKind::ScrollDown
                 if self
@@ -331,7 +373,9 @@ impl App {
         } else {
             self.last_navigation_area = Rect::default();
             self.last_navigation_rows.clear();
-            self.resizing_sidebar = false;
+            if self.pointer_drag == PointerDrag::Sidebar {
+                self.pointer_drag = PointerDrag::None;
+            }
             self.draw_content(frame, body_area);
         }
         if self.search_mode.is_open() {
@@ -339,6 +383,7 @@ impl App {
         } else {
             self.draw_status(frame, status_area);
         }
+        self.last_status_area = status_area;
         self.draw_overlay(frame);
     }
 
@@ -750,6 +795,7 @@ impl App {
         // line. The previous OpenTUI frontend achieved this with a terminal-
         // height spacer after the document.
         let maximum = rendered.row_count.saturating_sub(1);
+        self.last_content_max_scroll = maximum;
         self.content_scroll = self.content_scroll.min(maximum);
         let scroll = u16::try_from(self.content_scroll).unwrap_or(u16::MAX);
         let text = if self.search_query.is_empty() {
@@ -783,6 +829,17 @@ impl App {
                 area,
                 &mut state,
             );
+            self.last_content_scrollbar_area = Rect::new(
+                area.right().saturating_sub(1),
+                area.y,
+                u16::from(area.width > 0),
+                area.height,
+            );
+        } else {
+            self.last_content_scrollbar_area = Rect::default();
+            if self.pointer_drag == PointerDrag::ContentScrollbar {
+                self.pointer_drag = PointerDrag::None;
+            }
         }
     }
 
@@ -1118,6 +1175,30 @@ impl App {
     fn scroll_content(&mut self, delta: isize) {
         self.content_scroll = self.content_scroll.saturating_add_signed(delta);
         self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
+    }
+
+    fn scroll_content_to_pointer(&mut self, row: u16) {
+        let area = self.last_content_scrollbar_area;
+        if area.height <= 1 {
+            self.content_scroll = 0;
+            return;
+        }
+        let offset = usize::from(row.saturating_sub(area.y).min(area.height - 1));
+        let track = usize::from(area.height - 1);
+        self.content_scroll = self
+            .last_content_max_scroll
+            .saturating_mul(offset)
+            .checked_div(track)
+            .unwrap_or_default();
+        self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
+    }
+
+    fn move_search_cursor_to(&mut self, column: u16) {
+        const SEARCH_PREFIX_WIDTH: u16 = 7;
+        let text_column = usize::from(
+            column.saturating_sub(self.last_status_area.x.saturating_add(SEARCH_PREFIX_WIDTH)),
+        );
+        self.search_cursor = cursor_byte_at_column(&self.search_draft, text_column);
     }
 
     fn jump_content(&mut self, end: bool) {
@@ -1574,6 +1655,21 @@ fn byte_index_at_width(value: &str, width: usize) -> usize {
     value.len()
 }
 
+fn cursor_byte_at_column(value: &str, column: usize) -> usize {
+    let mut used = 0;
+    for (index, character) in value.char_indices() {
+        let next = used + character.width().unwrap_or(0);
+        if column < next {
+            return index;
+        }
+        if column == next {
+            return index + character.len_utf8();
+        }
+        used = next;
+    }
+    value.len()
+}
+
 fn fit_to_width(value: &str, width: usize) -> String {
     let mut result = String::new();
     let mut used = 0;
@@ -1939,7 +2035,41 @@ mod tests {
         });
 
         assert_eq!(app.sidebar_width, 45);
-        assert!(!app.resizing_sidebar);
+        assert_eq!(app.pointer_drag, PointerDrag::None);
+    }
+
+    #[test]
+    fn clicking_and_dragging_the_content_scrollbar_moves_the_document() {
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let area = app.last_content_scrollbar_area;
+        assert!(area.height > 1);
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: area.x,
+            row: area.bottom() - 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(app.content_scroll, app.last_content_max_scroll);
+        assert_eq!(app.pointer_drag, PointerDrag::ContentScrollbar);
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: area.x,
+            row: area.y,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(app.content_scroll, 0);
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: area.x,
+            row: area.y,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(app.pointer_drag, PointerDrag::None);
     }
 
     #[test]
@@ -2162,6 +2292,29 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
 
         assert_eq!(app.search_draft, "ac界");
+        assert_eq!(app.search_cursor, 2);
+    }
+
+    #[test]
+    fn clicking_the_search_field_moves_its_unicode_aware_cursor() {
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "ab界".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        terminal.draw(|frame| app.draw(frame)).expect("draw search");
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: app.last_status_area.x + 8,
+            row: app.last_status_area.y,
+            modifiers: KeyModifiers::NONE,
+        });
+        app.handle_key(KeyEvent::new(KeyCode::Char('X'), KeyModifiers::NONE));
+
+        assert_eq!(app.search_draft, "aXb界");
         assert_eq!(app.search_cursor, 2);
     }
 
