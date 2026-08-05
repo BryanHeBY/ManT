@@ -1097,10 +1097,10 @@ mod tests {
 
     fn bundle() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V3,
+            schema: QuerySchema::V4,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V3,
+                schema: DocumentSchema::V4,
                 producer: Producer {
                     name: "mant".to_owned(),
                     version: "test".to_owned(),
@@ -1109,7 +1109,6 @@ mod tests {
                 source: DocumentSource {
                     format: SourceFormat::Markdown,
                     path: None,
-                    renderer: None,
                 },
                 meta: DocumentMeta::default(),
                 diagnostics: Vec::new(),

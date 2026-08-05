@@ -19,8 +19,6 @@ grep-regex.workspace = true
 mant-ast = { path = "../mant-ast", version = "=0.4.0" }
 libmandoc-rs = { path = "../libmandoc-rs", version = "=0.4.0" }
 pulldown-cmark.workspace = true
-# Keep this explicit so parser upgrades remain visible in dependency reviews.
-scraper = "0.27.0"
 serde.workspace = true
 serde_json.workspace = true
 

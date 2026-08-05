@@ -388,7 +388,7 @@ Root body.
     );
 
     let query = QueryBundle {
-        schema: QuerySchema::V3,
+        schema: QuerySchema::V4,
         label: "demo.md".to_owned(),
         document: Some(document),
         tldr: None,
@@ -438,7 +438,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
 
     let outline = build_outline_with_detail(
         &QueryBundle {
-            schema: QuerySchema::V3,
+            schema: QuerySchema::V4,
             label: "tool.md".to_owned(),
             document: Some(document),
             tldr: None,

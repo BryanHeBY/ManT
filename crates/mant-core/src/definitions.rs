@@ -1,6 +1,6 @@
-//! Identifies addressable semantic entries after renderer-specific lowering.
+//! Identifies addressable semantic entries after source-specific lowering.
 //!
-//! Both libmandoc and the groff HTML fallback produce definition lists. This
+//! Both libmandoc macro sets and Markdown produce definition lists. This
 //! pass assigns one canonical option identity without leaking source macros
 //! into the stable document contract.
 
@@ -100,10 +100,10 @@ fn identify_blocks(
 /// Turn renderer-neutral hanging-indent runs into semantic definitions.
 ///
 /// Some man(7) generators use `.PP` followed by `.RS` instead of `.TP` for
-/// option entries. libmandoc and groff both correctly retain that layout, but
+/// option entries. Native parsers correctly retain that layout, but
 /// neither representation is a definition list on its own. Recognising the
 /// shared visible shape here keeps option identity independent of the source
-/// macro and of the renderer selected by the query pipeline.
+/// macro set or source parser used by the query pipeline.
 fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
     let mut pending: VecDeque<Block> = mem::take(blocks).into();
     let mut normalized = Vec::with_capacity(pending.len());

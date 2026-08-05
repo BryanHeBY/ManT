@@ -199,12 +199,11 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> MantDocumen
     );
 
     MantDocument {
-        schema: DocumentSchema::V3,
+        schema: DocumentSchema::V4,
         producer: markdown_producer(),
         source: DocumentSource {
             format: SourceFormat::Markdown,
             path: source_path,
-            renderer: None,
         },
         meta: DocumentMeta {
             title,

@@ -200,8 +200,8 @@ each `$XDG_DATA_DIRS/mant` root, and finally the native manual index. Nested
 directories and file or directory symlinks are discovered recursively. The
 filename stem remains the lookup name, so `team/handbook.md` is opened as
 `mant handbook`; directories are organizational rather than namespaces. An
-explicit `--section`, `--force-libmandoc`, or `--force-groff` request bypasses
-registered Markdown and selects a manual.
+explicit `--manual` or `--section` request bypasses registered Markdown and
+selects a native manual.
 
 Use a path for one-off local files or `-` for non-interactive standard input:
 

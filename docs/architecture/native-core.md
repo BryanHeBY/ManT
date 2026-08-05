@@ -35,12 +35,12 @@ document contract.
 
 ## Stable and unstable models
 
-`mant.document/v3` is the stable structured-document contract consumed by the
-UI and output renderers. `mant.query/v3` combines an optional document with an
+`mant.document/v4` is the stable structured-document contract consumed by the
+UI and output renderers. `mant.query/v4` combines an optional document with an
 optional tldr document while preserving their different sources and licences.
-The document source may be man, mdoc, Markdown, or the explicit groff HTML
-compatibility path. Blocks before the first heading live in the document's
-root `blocks`; heading content remains in the recursive section tree.
+The document source is man, mdoc, or Markdown. Blocks before the first heading
+live in the document's root `blocks`; heading content remains in the recursive
+section tree.
 
 All external machine payloads carry an exact schema identifier. Rust structs
 are the source of truth. New optional object fields may be added within a
@@ -94,8 +94,7 @@ mant <name> --outline [sections|options] -> selectable section and option tree
 mant <name> --node <path-or-id>   -> selected section subtrees
 mant <name> --explain <alias-or-id> -> one option, command, or environment entry
 mant <name> --search <pattern>    -> matches with node and Markdown locations
-mant <name> --force-libmandoc     -> strict direct-parser diagnosis
-mant <name> --force-groff         -> opt into the groff HTML compatibility path
+mant <name> --manual              -> bypass registered Markdown by the same name
 mant --update-tldr                 -> update result JSON
 mant --protocol-version            -> protocol description JSON
 mant --schema <contract>           -> generated JSON Schema
@@ -104,7 +103,7 @@ mant --mcp                         -> read-only MCP tools over stdio
 
 For process integrations, `mant --request-json --format json --compact` reads
 one closed, versioned `QueryRequest` object from standard input and emits
-exactly one `mant.query/v3` object on standard output. Standard error contains
+exactly one `mant.query/v4` object on standard output. Standard error contains
 concise diagnostics only. Status 0 means success, 2 means invalid invocation
 or request, and 1 means an operational failure. Interactive search and
 navigation operate on the already loaded in-memory document and never spawn
@@ -132,9 +131,9 @@ local Markdown path; raw document content is deliberately not part of the
 process contract. Direct `mant -` reads bounded UTF-8 input before constructing
 an in-memory query and does not add a third public input variant. Unknown
 fields are rejected at every level. `full` returns
-`mant.query/v3`, `outline` selects either section-only or option-aware
+`mant.query/v4`, `outline` selects either section-only or option-aware
 structure, `excerpt` selects one or more node paths, IDs, or aliases, and
-`search` returns `mant.search/v2`.
+`search` returns `mant.search/v4`.
 The direct-only `--explain` convenience flag normalizes to exactly one
 `excerpt` selector, then rejects anything other than a semantic manual entry.
 It deliberately adds no request or response variant, so agents retain one
@@ -166,8 +165,8 @@ Markdown content before the first heading is exposed as path `root` with ID
 `document-overview`; it does not consume or renumber ordinary heading paths.
 Excerpt selection accepts a section path, option path, document ID, or option
 alias; it includes complete selected content, deduplicates overlaps, and
-preserves source order. Their JSON contracts are `mant.outline/v3` and
-`mant.excerpt/v3`; plain text and CommonMark are also available. The TUI
+preserves source order. Their JSON contracts are `mant.outline/v4` and
+`mant.excerpt/v4`; plain text and CommonMark are also available. The TUI
 constructs the same full query in memory; agents can select outline and excerpt
 projections directly through `--request-json`.
 
@@ -182,7 +181,7 @@ The TUI keeps its in-memory interaction loop and never spawns a process while
 typing; this result model is the shared semantic basis for future UI indexing,
 not a second parser or a dependency on the system `grep` executable.
 
-## Parsing and renderer policy
+## Parsing and source policy
 
 Local Markdown uses `pulldown-cmark` as a source-positioned parser and lowers a
 deliberate subset into the same document contract: headings, paragraphs,
@@ -217,7 +216,7 @@ layout conventions out of the general Markdown AST and renderers.
 
 The primary path discovers manual hierarchies in Rust, reads the located
 source, and lowers libmandoc's validated man(7) or mdoc(7) tree directly into
-`mant.document/v3`. Rust owns compression handling and preserves the original
+`mant.document/v4`. Rust owns compression handling and preserves the original
 source path and include base directory. `.so` aliases and includes must work
 without exposing temporary paths in the result.
 
@@ -227,25 +226,20 @@ conventional system locations, then indexes only the raw, gzip, and zstd
 formats the parser can consume. Ordinary CLI, TUI, and MCP requests therefore
 do not spawn a host `man` process or depend on its database being initialized.
 
-Libmandoc is the only default parser. An unsupported diagnostic does not
-discard an otherwise complete document, and ManT does not automatically invoke
-groff or choose between renderer outputs. `--force-libmandoc` is a strict
-diagnostic policy for manual input outside `mant.request/v4`: it requires a
-direct native manual, prevents a tldr-only response, and prints recoverable
-parser findings on standard error.
+Libmandoc is the only manual parser. An unsupported diagnostic does not discard
+an otherwise complete document, and recoverable findings remain structured in
+the document contract. ManT never invokes a host renderer or chooses between
+renderer outputs.
 
-`--force-groff` is an explicit compatibility path for investigating renderer
-differences. It calls `man -Thtml` and lowers the resulting HTML without first
-parsing the source through libmandoc. It likewise rejects a tldr-only response
-and prints renderer diagnostics. It is intentionally opt-in because its
-availability depends on the host `man` implementation and its coverage is
-smaller than direct source lowering.
+`--manual` is an input-resolution policy outside `mant.request/v4`. It bypasses
+registered Markdown with the same filename stem and requires a readable native
+manual instead of accepting a tldr-only result. An explicit `--section` also
+bypasses registered Markdown because sections belong only to native manuals.
 
 Direct lowering is covered by deterministic native fixtures from multiple
-distributions, including large git, gcc, clang, tar, and shell pages. The groff
-HTML compatibility parser also lives in Rust for the explicit `--force-groff`
-diagnostic mode. Best-effort native output is retained together with its
-diagnostics rather than being silently replaced by a second renderer.
+distributions, including large git, gcc, clang, tar, and shell pages.
+Best-effort native output is retained together with its diagnostics rather than
+being silently replaced by another renderer.
 
 Vertical layout is part of this normalization boundary rather than a TUI
 heuristic. Sections retain the distance requested before `SH`, `SS`, `Sh`, and
@@ -275,8 +269,7 @@ Rust owns:
 
 - manual source loading, decompression, aliases, and include context;
 - local Markdown loading, structured-subset parsing, and loss diagnostics;
-- lowering the owned `libmandoc-rs` man/mdoc tree and groff HTML compatibility
-  parsing;
+- lowering the owned `libmandoc-rs` man/mdoc tree;
 - section, block, inline, layout-hint, link, table, and equation semantics;
 - tldr cache discovery, parsing, update behavior, and query composition;
 - versioned JSON and CommonMark serialization;
@@ -286,7 +279,7 @@ Rust owns:
 ## Test boundary
 
 Rust tests are authoritative for all parsing and serialization semantics.
-They use checked-in roff, renderer HTML, tldr, and expected JSON fixtures and
+They use checked-in roff, tldr, and expected JSON fixtures and
 do not require an installed manual page for normal CI.  They also cover
 repeated parser sessions, diagnostic isolation, compression, includes, and
 Markdown escaping.
@@ -297,8 +290,8 @@ semantic options.
 
 Rust additionally owns `mant` argument, stdio protocol, exit-code, interactive
 reader, and agent-facing output tests. Shared contract fixtures are decoded,
-generated, and compared by Rust. Source-level and renderer-compatibility
-coverage exercise the current implementation without a duplicate frontend.
+generated, and compared by Rust. Source-level coverage exercises the current
+implementation without a duplicate frontend.
 
 ## Repository boundary
 

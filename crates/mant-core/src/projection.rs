@@ -112,7 +112,7 @@ pub fn build_outline_with_detail(
         nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V3,
+        schema: OutlineSchema::V4,
         detail,
         label: query.label.clone(),
         source: query
@@ -228,7 +228,7 @@ pub fn select_excerpt(
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V3,
+        schema: ExcerptSchema::V4,
         label: query.label.clone(),
         producer: document.map(|document| document.producer.clone()),
         source: document.map(|document| document.source.clone()),
@@ -499,10 +499,10 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V3,
+            schema: QuerySchema::V4,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V3,
+                schema: DocumentSchema::V4,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -511,7 +511,6 @@ mod tests {
                 source: DocumentSource {
                     format: SourceFormat::Man,
                     path: Some("/man/demo.1".to_owned()),
-                    renderer: None,
                 },
                 meta: DocumentMeta {
                     section: Some("1".to_owned()),

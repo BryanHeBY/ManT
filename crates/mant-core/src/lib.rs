@@ -3,7 +3,6 @@
 mod catalog;
 mod definitions;
 mod documents;
-mod groff_html;
 mod mandoc;
 mod markdown;
 mod output;
@@ -20,7 +19,6 @@ pub use documents::{
     RegisteredDocument, RegisteredDocumentOrigin, find_registered_document,
     list_registered_documents,
 };
-pub use groff_html::parse_groff_html;
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
@@ -36,9 +34,8 @@ pub use query::{
 };
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
-    CommandOutput, CommandRunner, LocateError, ManualIndex, ManualPage, ManualRequest,
-    SystemCommandRunner, discover_manual_roots, locate_manual_source, locate_manual_source_in,
-    system_manual_index,
+    CommandOutput, LocateError, ManualIndex, ManualPage, ManualRequest, discover_manual_roots,
+    locate_manual_source, locate_manual_source_in, system_manual_index,
 };
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, TldrUpdateError,

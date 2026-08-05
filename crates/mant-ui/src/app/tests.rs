@@ -27,7 +27,7 @@ use crate::{
 
 fn empty_bundle() -> QueryBundle {
     QueryBundle {
-        schema: QuerySchema::V3,
+        schema: QuerySchema::V4,
         label: "demo".to_owned(),
         document: None,
         tldr: None,
@@ -36,7 +36,7 @@ fn empty_bundle() -> QueryBundle {
 
 fn tldr_bundle() -> QueryBundle {
     QueryBundle {
-        schema: QuerySchema::V3,
+        schema: QuerySchema::V4,
         label: "demo".to_owned(),
         document: None,
         tldr: Some(TldrDocument {
@@ -61,10 +61,10 @@ fn navigation_bundle() -> QueryBundle {
         source: None,
     };
     QueryBundle {
-        schema: QuerySchema::V3,
+        schema: QuerySchema::V4,
         label: "demo".to_owned(),
         document: Some(MantDocument {
-            schema: DocumentSchema::V3,
+            schema: DocumentSchema::V4,
             producer: Producer {
                 name: "mant".to_owned(),
                 version: "test".to_owned(),
@@ -73,7 +73,6 @@ fn navigation_bundle() -> QueryBundle {
             source: DocumentSource {
                 format: SourceFormat::Man,
                 path: None,
-                renderer: None,
             },
             meta: DocumentMeta::default(),
             diagnostics: Vec::new(),

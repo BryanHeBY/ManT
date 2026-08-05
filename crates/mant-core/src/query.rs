@@ -2,7 +2,7 @@
 
 use std::{
     error::Error,
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     fmt, fs,
     io::Read,
     path::{Path, PathBuf},
@@ -11,9 +11,8 @@ use std::{
 use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
 use crate::{
-    CommandRunner, ManualRequest, SystemCommandRunner, find_registered_document,
-    locate_manual_source, parse_groff_html, parse_manual_source, parse_markdown,
-    read_cached_tldr_page, source::push_section_filter,
+    ManualRequest, find_registered_document, locate_manual_source, parse_manual_source,
+    parse_markdown, read_cached_tldr_page,
 };
 
 /// Upper bound on a single Markdown source, shared by every input path.
@@ -36,18 +35,11 @@ pub enum QueryError {
     NoReadableContent { name: String },
 }
 
-/// Host execution policy kept outside the serialized request contract.
+/// Input-resolution policy kept outside the serialized request contract.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct QueryPolicy {
-    /// Request direct libmandoc output for parser diagnostics.
-    ///
-    /// Libmandoc is the default backend. This diagnostic policy additionally
-    /// rejects a tldr-only response when direct parsing cannot provide a
-    /// readable manual.
-    pub force_libmandoc: bool,
-    /// Use `man -Thtml` + groff HTML parser instead of libmandoc.
-    /// This code path has not been comprehensively tested.
-    pub force_groff: bool,
+    /// Bypass registered Markdown and require a readable native manual.
+    pub manual_only: bool,
 }
 
 impl fmt::Display for QueryError {
@@ -91,7 +83,7 @@ pub fn query(request: &QueryRequest) -> Result<QueryBundle, QueryError> {
     query_with(request, QueryPolicy::default(), &SystemQueryHost)
 }
 
-/// Query with an explicit host policy such as native-parser-only diagnostics.
+/// Query with an explicit input-resolution policy.
 ///
 /// # Errors
 ///
@@ -107,11 +99,6 @@ trait QueryHost {
     fn locate_registered_document(&self, name: &str) -> Option<PathBuf>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String>;
     fn parse_manual(&self, path: &Path) -> Result<MantDocument, String>;
-    fn render_groff(
-        &self,
-        request: &ManualRequest,
-        source_path: Option<&Path>,
-    ) -> Result<MantDocument, String>;
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }
@@ -129,14 +116,6 @@ impl QueryHost for SystemQueryHost {
 
     fn parse_manual(&self, path: &Path) -> Result<MantDocument, String> {
         parse_manual_source(path).map_err(|error| error.to_string())
-    }
-
-    fn render_groff(
-        &self,
-        request: &ManualRequest,
-        source_path: Option<&Path>,
-    ) -> Result<MantDocument, String> {
-        render_groff_document_with(request, source_path, &SystemCommandRunner)
     }
 
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String> {
@@ -188,10 +167,10 @@ fn query_markdown_file(
     if path.is_empty() {
         return Err(QueryError::EmptyMarkdownPath);
     }
-    if policy.force_libmandoc || policy.force_groff {
+    if policy.manual_only {
         return Err(QueryError::Markdown {
             path: path.to_owned(),
-            detail: "manual renderer policies do not apply to Markdown input".to_owned(),
+            detail: "the manual-only policy does not apply to Markdown input".to_owned(),
         });
     }
     let source = host
@@ -239,7 +218,7 @@ pub fn query_markdown_text(
         });
     }
     Ok(QueryBundle {
-        schema: QuerySchema::V3,
+        schema: QuerySchema::V4,
         label,
         document: (!document_is_empty).then_some(parsed.document),
         tldr: parsed.tldr,
@@ -261,13 +240,13 @@ fn query_manual(
         return Err(QueryError::InvalidSection);
     }
     let section = section.map(ToOwned::to_owned);
+    let require_manual = policy.manual_only || section.is_some();
 
     // An unqualified name first consults the explicit XDG registration
-    // namespace. Section selectors and renderer diagnostics are manual-only
-    // requests and therefore bypass Markdown name discovery.
+    // namespace. Section selectors and the explicit manual-only policy bypass
+    // Markdown name discovery.
     if section.is_none()
-        && !policy.force_libmandoc
-        && !policy.force_groff
+        && !policy.manual_only
         && let Some(path) = host.locate_registered_document(name)
     {
         return query_registered_document(name, &path, host);
@@ -278,24 +257,22 @@ fn query_manual(
     // A malformed or unreadable community cache must never hide a valid man
     // page. It is an optional augmentation and is never updated during query.
     let tldr = host.read_tldr(name).ok().flatten();
-    let mut manual = load_manual(&manual_request, policy, host);
+    let mut manual = load_manual(&manual_request, host);
 
-    // A renderer that cannot recover the section from the page itself (notably
-    // the groff HTML fallback, whose metadata is empty) leaves meta.section
-    // unset. Fall back to the requested section so labels stay `name(N)`.
+    // A malformed page may omit its own section metadata. Preserve the
+    // requested section so labels stay `name(N)`.
     if let (Ok(Some(document)), Some(section)) = (&mut manual, section.as_deref())
         && document.meta.section.is_none()
     {
         document.meta.section = Some(section.to_owned());
     }
 
-    // Force-libmandoc mode is an explicit parser diagnostic request.
-    // A tldr page may augment a successful manual, but must not turn a
-    // failed native parse into an apparently successful tldr-only response.
-    if policy.force_libmandoc || policy.force_groff {
+    // An explicit manual request may include tldr beside a successful manual,
+    // but must not degrade into an apparently successful tldr-only response.
+    if require_manual {
         return match manual {
             Ok(Some(manual)) => Ok(QueryBundle {
-                schema: QuerySchema::V3,
+                schema: QuerySchema::V4,
                 label: name.to_owned(),
                 document: Some(manual),
                 tldr,
@@ -312,13 +289,13 @@ fn query_manual(
 
     match manual {
         Ok(Some(manual)) => Ok(QueryBundle {
-            schema: QuerySchema::V3,
+            schema: QuerySchema::V4,
             label: name.to_owned(),
             document: Some(manual),
             tldr,
         }),
         Ok(None) | Err(_) if tldr.is_some() => Ok(QueryBundle {
-            schema: QuerySchema::V3,
+            schema: QuerySchema::V4,
             label: name.to_owned(),
             document: None,
             tldr,
@@ -352,22 +329,8 @@ fn query_registered_document(
 
 fn load_manual(
     request: &ManualRequest,
-    policy: QueryPolicy,
     host: &dyn QueryHost,
 ) -> Result<Option<MantDocument>, String> {
-    // The groff compatibility path needs the located source only as document
-    // provenance. Do not parse it with libmandoc first: this switch is used to
-    // isolate renderer differences and must not pay for or depend on native
-    // lowering.
-    if policy.force_groff {
-        let source_path = host.locate_manual(request).ok();
-        return match host.render_groff(request, source_path.as_deref()) {
-            Ok(fallback) if !fallback.sections.is_empty() => Ok(Some(fallback)),
-            Ok(_) => Ok(None),
-            Err(error) => Err(error),
-        };
-    }
-
     let located = host.locate_manual(request);
     let (source_path, direct) = match located {
         Ok(path) => {
@@ -377,7 +340,6 @@ fn load_manual(
         Err(error) => (None, Err(error)),
     };
 
-    // Default (and --force-libmandoc): libmandoc only.
     let document = direct.map_err(|error| {
         format!(
             "could not load manual '{}': source/libmandoc: {error}",
@@ -413,52 +375,9 @@ fn load_manual(
     Ok(Some(document))
 }
 
-fn render_groff_document_with(
-    request: &ManualRequest,
-    source_path: Option<&Path>,
-    runner: &impl CommandRunner,
-) -> Result<MantDocument, String> {
-    let mut arguments = vec![OsString::from("-Thtml")];
-    if let Some(section) = request.section.as_deref() {
-        // Label the section with portable `-S`. A bare section operand collides
-        // with the `--` terminator below on man-db (the terminator is parsed as
-        // the page name), while lowercase `-s` is unavailable in BSD man.
-        push_section_filter(&mut arguments, section);
-    }
-    // Terminate option parsing so a name beginning with '-' stays a
-    // positional operand rather than an option to man.
-    arguments.push(OsString::from("--"));
-    arguments.push(OsString::from(&request.name));
-    let output = runner
-        .run(OsStr::new("man"), &arguments)
-        .map_err(|error| format!("cannot run 'man -Thtml': {error}"))?;
-    if output.exit_code != 0 {
-        let detail = first_nonempty_line(&output.stderr)
-            .unwrap_or_else(|| format!("man -Thtml failed with code {}", output.exit_code));
-        return Err(detail);
-    }
-    let html = String::from_utf8_lossy(&output.stdout);
-    if html.trim().is_empty() {
-        return Err(format!("man produced no HTML for '{}'", request.name));
-    }
-    Ok(parse_groff_html(
-        &html,
-        source_path.map(|path| path.to_string_lossy().into_owned()),
-    ))
-}
-
-fn first_nonempty_line(output: &[u8]) -> Option<String> {
-    String::from_utf8_lossy(output)
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(ToOwned::to_owned)
-}
-
 #[cfg(test)]
 mod tests {
     use std::{
-        ffi::{OsStr, OsString},
         io,
         path::{Path, PathBuf},
         sync::Mutex,
@@ -470,11 +389,11 @@ mod tests {
         TldrDocument, TldrOrigin,
     };
 
-    use crate::{CommandOutput, CommandRunner, ManualRequest};
+    use crate::ManualRequest;
 
     use super::{
         MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, query_markdown_text, query_with,
-        read_capped_utf8, render_groff_document_with,
+        read_capped_utf8,
     };
 
     #[derive(Clone)]
@@ -482,7 +401,6 @@ mod tests {
         registered_document: Option<PathBuf>,
         locate: Result<PathBuf, String>,
         direct: Result<MantDocument, String>,
-        fallback: Result<MantDocument, String>,
         tldr: Result<Option<TldrDocument>, String>,
         markdown: Result<String, String>,
         calls: std::sync::Arc<Mutex<Vec<&'static str>>>,
@@ -504,15 +422,6 @@ mod tests {
             self.direct.clone()
         }
 
-        fn render_groff(
-            &self,
-            _request: &ManualRequest,
-            _source_path: Option<&Path>,
-        ) -> Result<MantDocument, String> {
-            self.calls.lock().expect("calls lock").push("groff");
-            self.fallback.clone()
-        }
-
         fn read_tldr(&self, _name: &str) -> Result<Option<TldrDocument>, String> {
             self.calls.lock().expect("calls lock").push("tldr");
             self.tldr.clone()
@@ -526,17 +435,13 @@ mod tests {
 
     fn document(format: SourceFormat, unsupported: bool, readable: bool) -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V3,
+            schema: DocumentSchema::V4,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
                 engine: None,
             },
-            source: DocumentSource {
-                format,
-                path: None,
-                renderer: None,
-            },
+            source: DocumentSource { format, path: None },
             meta: DocumentMeta::default(),
             diagnostics: unsupported
                 .then_some(Diagnostic {
@@ -580,7 +485,6 @@ mod tests {
             registered_document: None,
             locate: Ok(PathBuf::from("/man/tool.1")),
             direct,
-            fallback: Err("fallback unavailable".to_owned()),
             tldr: Ok(None),
             markdown: Err("Markdown unavailable".to_owned()),
             calls: std::sync::Arc::default(),
@@ -599,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_direct_document_does_not_start_groff() {
+    fn ordinary_manual_uses_the_native_parser() {
         let host = host(Ok(document(SourceFormat::Man, false, true)));
         let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
 
@@ -615,10 +519,8 @@ mod tests {
     }
 
     #[test]
-    fn requested_section_backfills_metadata_a_renderer_left_empty() {
-        // The groff fallback yields DocumentMeta::default(), so meta.section is
-        // None even though the caller asked for a specific section.
-        let host = host(Ok(document(SourceFormat::GroffHtml, false, true)));
+    fn requested_section_backfills_metadata_the_parser_left_empty() {
+        let host = host(Ok(document(SourceFormat::Man, false, true)));
         let request = QueryRequest {
             schema: RequestSchema::V4,
             input: QueryInput::Document {
@@ -632,7 +534,7 @@ mod tests {
         assert_eq!(
             result.document.expect("manual").meta.section.as_deref(),
             Some("3"),
-            "requested section must label output when the renderer omits it"
+            "requested section must label output when the parser omits it"
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
@@ -641,13 +543,9 @@ mod tests {
         );
     }
 
-    /// With the old groff-fallback architecture this test verified that an
-    /// unsupported diagnostic did not trigger an unnecessary groff call.
-    /// Now libmandoc is the sole default backend so groff is never called.
     #[test]
     fn complete_direct_document_survives_an_unsupported_finding() {
-        let mut host = host(Ok(document(SourceFormat::Man, true, true)));
-        host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
+        let host = host(Ok(document(SourceFormat::Man, true, true)));
         let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
 
         assert_eq!(
@@ -661,18 +559,12 @@ mod tests {
     }
 
     #[test]
-    fn forced_libmandoc_never_starts_groff() {
+    fn manual_only_bypasses_registered_markdown() {
         let mut host = host(Ok(document(SourceFormat::Man, true, true)));
-        host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
-        let result = query_with(
-            &request(),
-            QueryPolicy {
-                force_libmandoc: true,
-                force_groff: false,
-            },
-            &host,
-        )
-        .expect("forced native query");
+        host.registered_document = Some(PathBuf::from("/data/mant/tool.md"));
+        host.markdown = Ok("# Registered".to_owned());
+        let result = query_with(&request(), QueryPolicy { manual_only: true }, &host)
+            .expect("manual-only query");
 
         assert_eq!(
             result.document.expect("manual").source.format,
@@ -680,49 +572,18 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "parse"]
+            ["tldr", "locate", "parse"],
+            "manual-only lookup must not inspect the registered-document namespace"
         );
     }
 
     #[test]
-    fn forced_groff_never_starts_libmandoc() {
-        let mut host = host(Err("libmandoc must not run".to_owned()));
-        host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
-        let result = query_with(
-            &request(),
-            QueryPolicy {
-                force_libmandoc: false,
-                force_groff: true,
-            },
-            &host,
-        )
-        .expect("forced groff query");
-
-        assert_eq!(
-            result.document.expect("manual").source.format,
-            SourceFormat::GroffHtml
-        );
-        assert_eq!(
-            *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "groff"]
-        );
-    }
-
-    #[test]
-    fn forced_libmandoc_failure_is_not_hidden_by_tldr() {
+    fn manual_only_failure_is_not_hidden_by_tldr() {
         let mut host = host(Ok(document(SourceFormat::Man, true, false)));
         host.tldr = Ok(Some(tldr()));
-        host.fallback = Ok(document(SourceFormat::GroffHtml, false, true));
 
-        let error = query_with(
-            &request(),
-            QueryPolicy {
-                force_libmandoc: true,
-                force_groff: false,
-            },
-            &host,
-        )
-        .expect_err("an optional tldr page must not hide native parser failure");
+        let error = query_with(&request(), QueryPolicy { manual_only: true }, &host)
+            .expect_err("an optional tldr page must not hide native parser failure");
 
         let QueryError::Manual { detail, .. } = error else {
             panic!("expected the native parser diagnostic");
@@ -735,9 +596,28 @@ mod tests {
         );
     }
 
-    /// With the old groff-fallback architecture this test verified that a
-    /// truncated native document fell back to groff. Now libmandoc is the
-    /// default and an empty-sections document is an error.
+    #[test]
+    fn requested_section_failure_is_not_hidden_by_tldr() {
+        let mut host = host(Err("libmandoc failed".to_owned()));
+        host.locate = Err("section not found".to_owned());
+        host.tldr = Ok(Some(tldr()));
+        let request = QueryRequest {
+            schema: RequestSchema::V4,
+            input: QueryInput::Document {
+                name: "tool".to_owned(),
+                section: Some("7".to_owned()),
+            },
+            view: QueryView::Full {},
+        };
+
+        let error = query_with(&request, QueryPolicy::default(), &host)
+            .expect_err("an explicit section must require a native manual");
+
+        assert!(matches!(&error, QueryError::Manual { .. }));
+        assert!(error.to_string().contains("section not found"));
+        assert_eq!(*host.calls.lock().expect("calls lock"), ["tldr", "locate"]);
+    }
+
     #[test]
     fn truncated_unsupported_document_is_an_error_by_default() {
         let host = host(Ok(document(SourceFormat::Man, true, false)));
@@ -752,7 +632,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_groff_retains_readable_best_effort_document() {
+    fn readable_best_effort_document_survives_parser_findings() {
         let host = host(Ok(document(SourceFormat::Mdoc, true, true)));
         let result = query_with(&request(), QueryPolicy::default(), &host).expect("query");
         assert_eq!(
@@ -925,50 +805,6 @@ Document overview.
         assert_eq!(
             error.to_string(),
             "could not load Markdown document 'docs/broken.md': top-level :::tldr directive is missing its closing ::: marker"
-        );
-    }
-
-    struct StubRunner {
-        output: CommandOutput,
-        calls: Mutex<Vec<(OsString, Vec<OsString>)>>,
-    }
-
-    impl CommandRunner for StubRunner {
-        fn run(&self, program: &OsStr, arguments: &[OsString]) -> io::Result<CommandOutput> {
-            self.calls
-                .lock()
-                .expect("runner calls lock")
-                .push((program.to_owned(), arguments.to_vec()));
-            Ok(self.output.clone())
-        }
-    }
-
-    #[test]
-    fn groff_renderer_passes_section_and_preserves_source_identity() {
-        let runner = StubRunner {
-            output: CommandOutput {
-                stdout: b"<body><h2>NAME</h2><p>tool</p></body>".to_vec(),
-                stderr: Vec::new(),
-                exit_code: 0,
-            },
-            calls: Mutex::new(Vec::new()),
-        };
-        let document = render_groff_document_with(
-            &ManualRequest::new("tool", Some("1".to_owned())),
-            Some(Path::new("/man/tool.1.gz")),
-            &runner,
-        )
-        .expect("groff document");
-
-        assert_eq!(document.source.path.as_deref(), Some("/man/tool.1.gz"));
-        assert_eq!(
-            *runner.calls.lock().expect("runner calls lock"),
-            [(
-                OsString::from("man"),
-                ["-Thtml", "-S", "1", "--", "tool"]
-                    .map(OsString::from)
-                    .to_vec()
-            )]
         );
     }
 

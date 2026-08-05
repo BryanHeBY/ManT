@@ -811,7 +811,7 @@ mod tests {
             source: None,
         };
         let mut excerpt = QueryExcerpt {
-            schema: ExcerptSchema::V3,
+            schema: ExcerptSchema::V4,
             label: "demo".to_owned(),
             producer: None,
             source: None,

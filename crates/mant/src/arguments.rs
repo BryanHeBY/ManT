@@ -113,9 +113,7 @@ pub(crate) enum Command {
         source: QuerySource,
         presentation: QueryPresentation,
         pretty: bool,
-        force_libmandoc: bool,
-        /// Use the groff HTML compatibility renderer instead of libmandoc.
-        force_groff: bool,
+        manual_only: bool,
         explain: bool,
         preserve_anchors: bool,
     },
@@ -145,7 +143,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     version,
     override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant README.md\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant README.md\n  mant printf --manual\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("source")
         .args(["name", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
@@ -165,6 +163,10 @@ struct Cli {
         help_heading = "Document selection"
     )]
     section: Option<String>,
+
+    /// Bypass registered Markdown and require a native manual page.
+    #[arg(long, requires = "name", help_heading = "Document selection")]
+    manual: bool,
 
     /// Print selectable sections and command-line options by default.
     #[arg(
@@ -290,22 +292,6 @@ struct Cli {
     )]
     request_json: bool,
 
-    /// Require direct libmandoc output and print its parser diagnostics.
-    #[arg(
-        long,
-        conflicts_with_all = ["update_tldr", "protocol_version", "schema"],
-        help_heading = "Diagnostics"
-    )]
-    force_libmandoc: bool,
-
-    /// Use `man -Thtml` + groff HTML parser instead of libmandoc.
-    #[arg(
-        long,
-        conflicts_with_all = ["update_tldr", "protocol_version", "schema", "force_libmandoc"],
-        help_heading = "Diagnostics"
-    )]
-    force_groff: bool,
-
     /// Open the interactive terminal reader explicitly.
     #[arg(
         long,
@@ -372,8 +358,7 @@ struct Cli {
             "limit",
             "offset",
             "request_json",
-            "force_libmandoc",
-            "force_groff",
+            "manual",
             "update_tldr",
             "protocol_version",
             "schema",
@@ -426,7 +411,7 @@ pub(crate) fn parse(arguments: &[String]) -> Result<Command, clap::Error> {
     normalize(parsed)
 }
 
-fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
+fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
     if parsed.mcp {
         return Ok(Command::Mcp);
     }
@@ -447,12 +432,30 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         });
     }
 
+    let (view, explain) = normalize_query_view(&mut parsed);
+    validate_output_options(parsed.compact, parsed.format, parsed.preserve_anchors)?;
+    let source = normalize_query_source(parsed.request_json, parsed.name, parsed.section, view)?;
+    validate_manual_source(parsed.manual, &source)?;
+    let presentation =
+        normalize_presentation(parsed.ui, parsed.format, parsed.preserve_anchors, &source);
+
+    Ok(Command::Query {
+        source,
+        presentation,
+        pretty: !parsed.compact,
+        manual_only: parsed.manual,
+        explain,
+        preserve_anchors: parsed.preserve_anchors,
+    })
+}
+
+fn normalize_query_view(parsed: &mut Cli) -> (QueryView, bool) {
     let explain = parsed.explain.is_some();
-    let view = if let Some(detail) = parsed.outline {
+    let view = if let Some(detail) = parsed.outline.take() {
         QueryView::Outline {
             detail: detail.into(),
         }
-    } else if let Some(pattern) = parsed.search {
+    } else if let Some(pattern) = parsed.search.take() {
         QueryView::Search {
             pattern,
             syntax: if parsed.regex {
@@ -462,49 +465,92 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
             },
             case: parsed
                 .search_case
+                .take()
                 .map_or(SearchCase::Insensitive, Into::into),
-            scope: parsed.search_scope.map_or(SearchScope::Visible, Into::into),
+            scope: parsed
+                .search_scope
+                .take()
+                .map_or(SearchScope::Visible, Into::into),
             word: parsed.word,
-            context_lines: parsed.context.unwrap_or(0),
-            limit: parsed.limit.unwrap_or_else(default_search_limit),
-            offset: parsed.offset.unwrap_or(0),
+            context_lines: parsed.context.take().unwrap_or(0),
+            limit: parsed.limit.take().unwrap_or_else(default_search_limit),
+            offset: parsed.offset.take().unwrap_or(0),
         }
-    } else if let Some(selector) = parsed.explain {
+    } else if let Some(selector) = parsed.explain.take() {
         QueryView::Excerpt {
             nodes: vec![selector],
         }
     } else if parsed.node.is_empty() {
         QueryView::Full {}
     } else {
-        QueryView::Excerpt { nodes: parsed.node }
+        QueryView::Excerpt {
+            nodes: std::mem::take(&mut parsed.node),
+        }
     };
-    let default_format = match &view {
-        QueryView::Outline { .. } | QueryView::Search { .. } => QueryFormat::Text,
-        QueryView::Full { .. } | QueryView::Excerpt { .. } => QueryFormat::Markdown,
-    };
-    if parsed.compact && parsed.format != Some(QueryFormat::Json) {
+    (view, explain)
+}
+
+fn validate_output_options(
+    compact: bool,
+    format: Option<QueryFormat>,
+    preserve_anchors: bool,
+) -> Result<(), clap::Error> {
+    if compact && format != Some(QueryFormat::Json) {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--compact requires --format json for manual queries",
         ));
     }
-    if parsed.preserve_anchors
-        && parsed
-            .format
-            .is_some_and(|format| format != QueryFormat::Markdown)
-    {
+    if preserve_anchors && format.is_some_and(|format| format != QueryFormat::Markdown) {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--preserve-anchors requires Markdown output",
         ));
     }
+    Ok(())
+}
 
-    let source = normalize_query_source(parsed.request_json, parsed.name, parsed.section, view)?;
-    let presentation = if parsed.ui {
+fn validate_manual_source(manual: bool, source: &QuerySource) -> Result<(), clap::Error> {
+    if manual
+        && !matches!(
+            source,
+            QuerySource::Arguments(QueryRequest {
+                input: QueryInput::Document { .. },
+                ..
+            })
+        )
+    {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--manual requires a document name rather than Markdown input",
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_presentation(
+    ui: bool,
+    format: Option<QueryFormat>,
+    preserve_anchors: bool,
+    source: &QuerySource,
+) -> QueryPresentation {
+    let view = match source {
+        QuerySource::Arguments(request) => Some(&request.view),
+        QuerySource::MarkdownStdin { view } => Some(view),
+        QuerySource::StdinJson => None,
+    };
+    let default_format = if view
+        .is_some_and(|view| matches!(view, QueryView::Outline { .. } | QueryView::Search { .. }))
+    {
+        QueryFormat::Text
+    } else {
+        QueryFormat::Markdown
+    };
+    if ui {
         QueryPresentation::Interactive
-    } else if let Some(format) = parsed.format {
+    } else if let Some(format) = format {
         QueryPresentation::Output(format)
-    } else if parsed.preserve_anchors {
+    } else if preserve_anchors {
         QueryPresentation::Output(QueryFormat::Markdown)
     } else if matches!(
         source,
@@ -516,17 +562,7 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
         QueryPresentation::Auto
     } else {
         QueryPresentation::Output(default_format)
-    };
-
-    Ok(Command::Query {
-        source,
-        presentation,
-        pretty: !parsed.compact,
-        force_libmandoc: parsed.force_libmandoc,
-        force_groff: parsed.force_groff,
-        explain,
-        preserve_anchors: parsed.preserve_anchors,
-    })
+    }
 }
 
 fn normalize_query_source(
@@ -627,8 +663,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Auto,
                 pretty: true,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -728,8 +763,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -745,8 +779,7 @@ mod tests {
                 source: QuerySource::StdinJson,
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -754,34 +787,14 @@ mod tests {
     }
 
     #[test]
-    fn parses_renderer_diagnostic_policies_for_direct_and_stdin_queries() {
-        for values in [
-            vec!["tar", "--force-libmandoc", "--format", "json"],
-            vec!["--request-json", "--force-libmandoc", "--format", "json"],
-        ] {
-            assert!(matches!(
-                parse(&args(&values)).expect("forced native query"),
-                Command::Query {
-                    force_libmandoc: true,
-                    force_groff: false,
-                    ..
-                }
-            ));
-        }
-
-        for values in [
-            vec!["tar", "--force-groff", "--format", "json"],
-            vec!["--request-json", "--force-groff", "--format", "json"],
-        ] {
-            assert!(matches!(
-                parse(&args(&values)).expect("forced groff query"),
-                Command::Query {
-                    force_libmandoc: false,
-                    force_groff: true,
-                    ..
-                }
-            ));
-        }
+    fn parses_the_explicit_manual_source_policy() {
+        assert!(matches!(
+            parse(&args(&["tar", "--manual", "--format", "json"])).expect("manual-only query"),
+            Command::Query {
+                manual_only: true,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -801,8 +814,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -823,8 +835,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -847,8 +858,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -877,8 +887,7 @@ mod tests {
                     }),
                     presentation: QueryPresentation::Output(QueryFormat::Markdown),
                     pretty: true,
-                    force_libmandoc: false,
-                    force_groff: false,
+                    manual_only: false,
                     explain: true,
                     preserve_anchors: false,
                 }
@@ -910,8 +919,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -957,8 +965,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }
@@ -1008,10 +1015,12 @@ mod tests {
             vec!["--schema", "request", "--format", "json"],
             vec!["--mcp", "git"],
             vec!["--mcp", "--format", "json"],
-            vec!["--mcp", "--force-groff"],
+            vec!["--mcp", "--manual"],
             vec!["--mcp", "--update-tldr"],
             vec!["--update-tldr", "--preserve-anchors"],
-            vec!["git", "--force-libmandoc", "--force-groff"],
+            vec!["README.md", "--manual"],
+            vec!["-", "--manual"],
+            vec!["--request-json", "--manual", "--format", "json"],
             vec!["--schema", "unknown"],
             vec!["update", "tldr"],
             vec!["git", "--json"],
@@ -1046,8 +1055,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Auto,
                 pretty: true,
-                force_libmandoc: false,
-                force_groff: false,
+                manual_only: false,
                 explain: false,
                 preserve_anchors: false,
             }

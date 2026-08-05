@@ -75,8 +75,8 @@ For duplicate names, user data precedes system data, shallower paths precede
 deeper paths, relative path order breaks remaining ties, and `.md` precedes
 `.markdown` in the same directory. Broken links and unreadable paths are
 ignored; canonical directory identities prevent symbolic-link cycles. An
-explicit `--section`, `--force-libmandoc`, or `--force-groff` request bypasses
-registered Markdown and selects a manual page.
+explicit `--manual` or `--section` request bypasses registered Markdown and
+selects a native manual page.
 
 ### Manual Pages
 
@@ -86,12 +86,11 @@ bundled libmandoc parser. Neither a system `man` nor a system `mandoc`
 executable is required for ordinary use.
 
 - `--section SECTION`: Select a manual section such as `1` or `3p`.
-- `--force-libmandoc`: Require direct libmandoc output and print parser diagnostics.
-- `--force-groff`: Use the opt-in `man -Thtml` and groff HTML compatibility path.
+- `--manual`: Require a native manual instead of registered Markdown with the
+  same name.
 
-The groff compatibility path is used only when explicitly requested because it
-depends on a host `man -Thtml` implementation. Renderer options are rejected
-for Markdown input.
+Recoverable parser findings remain structured in JSON output. ManT does not
+invoke a host renderer or maintain an alternate HTML parsing path.
 
 ### Local Roff Trees
 
@@ -298,8 +297,7 @@ valid only with JSON query output.
 - `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
-  diagnostics are omitted; inspect them with ordinary CLI JSON output or a
-  strict `--force-libmandoc` query.
+  diagnostics are omitted; inspect them with ordinary CLI JSON output.
 
 ### Protocol Discovery
 
@@ -310,18 +308,19 @@ The current protocol descriptor is:
   "protocol": "mant.cli/v4",
   "nativeApiVersion": "4",
   "requestSchema": "mant.request/v4",
-  "querySchema": "mant.query/v3",
-  "documentSchema": "mant.document/v3",
-  "outlineSchema": "mant.outline/v3",
-  "excerptSchema": "mant.excerpt/v3",
-  "searchSchema": "mant.search/v2"
+  "querySchema": "mant.query/v4",
+  "documentSchema": "mant.document/v4",
+  "outlineSchema": "mant.outline/v4",
+  "excerptSchema": "mant.excerpt/v4",
+  "searchSchema": "mant.search/v4"
 }
 ```
 
-These are independently versioned contracts rather than one shared version.
-Search remains `v2` because its wire shape did not need to change when the
-request moved to `v4`; the document model remains `v3`. Generated schemas use JSON
-Schema Draft 2020-12 and remain the authoritative field-level definition.
+These contracts use one coherent unpublished `v4` suite for the first public
+protocol release. Future revisions may advance individual contracts only when
+their wire shapes change, so consumers must still compare every exact schema
+identifier. Generated schemas use JSON Schema Draft 2020-12 and remain the
+authoritative field-level definition.
 The repository's `docs/protocol.md` supplies the complete field reference,
 examples, compatibility policy, coordinate rules, and MCP tool contracts.
 

@@ -4,9 +4,8 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env,
     ffi::{OsStr, OsString},
-    fmt, fs, io,
+    fmt, fs,
     path::{Path, PathBuf},
-    process::Command,
     sync::OnceLock,
 };
 
@@ -99,37 +98,12 @@ impl ManualIndex {
     }
 }
 
-/// Minimal subprocess result retained for the opt-in groff compatibility path.
+/// Minimal subprocess result shared by external data update operations.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CommandOutput {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
     pub exit_code: i32,
-}
-
-/// Injectable boundary around process execution.
-pub trait CommandRunner {
-    /// Run one executable with already-separated arguments.
-    ///
-    /// # Errors
-    ///
-    /// Returns an I/O error when the executable cannot be started or waited.
-    fn run(&self, program: &OsStr, arguments: &[OsString]) -> io::Result<CommandOutput>;
-}
-
-/// Production subprocess runner used only by explicit compatibility features.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SystemCommandRunner;
-
-impl CommandRunner for SystemCommandRunner {
-    fn run(&self, program: &OsStr, arguments: &[OsString]) -> io::Result<CommandOutput> {
-        let output = Command::new(program).args(arguments).output()?;
-        Ok(CommandOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
-            exit_code: output.status.code().unwrap_or(-1),
-        })
-    }
 }
 
 /// Expected source-discovery failures suitable for a user-facing CLI error.
@@ -199,11 +173,6 @@ pub fn locate_manual_source_in(
         .ok_or_else(|| LocateError::NotFound {
             name: name.to_owned(),
         })
-}
-
-pub(crate) fn push_section_filter(arguments: &mut Vec<OsString>, section: &str) {
-    arguments.push(OsString::from("-S"));
-    arguments.push(OsString::from(section));
 }
 
 fn discover_manual_roots_with(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {

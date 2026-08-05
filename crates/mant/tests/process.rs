@@ -41,6 +41,9 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("--mcp"));
     assert!(help.contains("--explain <ENTRY>"));
     assert!(help.contains("--search <PATTERN>"));
+    assert!(help.contains("--manual"));
+    assert!(!help.contains("--force-libmandoc"));
+    assert!(!help.contains("--force-groff"));
     assert!(!help.contains("--json"));
     assert!(!help.contains("update tldr"));
 }
@@ -126,10 +129,10 @@ fn protocol_version_is_a_clean_json_document() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
     assert_eq!(value["protocol"], "mant.cli/v4");
     assert_eq!(value["requestSchema"], "mant.request/v4");
-    assert_eq!(value["querySchema"], "mant.query/v3");
-    assert_eq!(value["outlineSchema"], "mant.outline/v3");
-    assert_eq!(value["excerptSchema"], "mant.excerpt/v3");
-    assert_eq!(value["searchSchema"], "mant.search/v2");
+    assert_eq!(value["querySchema"], "mant.query/v4");
+    assert_eq!(value["outlineSchema"], "mant.outline/v4");
+    assert_eq!(value["excerptSchema"], "mant.excerpt/v4");
+    assert_eq!(value["searchSchema"], "mant.search/v4");
 
     for (field, marker) in value.as_object().expect("protocol descriptor") {
         let documented = format!(
@@ -338,6 +341,55 @@ fn unqualified_names_prefer_registered_xdg_markdown() {
     );
 
     fs::remove_dir_all(data_home).expect("remove registered document fixture");
+}
+
+#[test]
+fn manual_option_bypasses_registered_markdown_with_the_same_name() {
+    let root = std::env::temp_dir().join(format!(
+        "mant-manual-source-policy-process-{}",
+        std::process::id()
+    ));
+    let data_home = root.join("data");
+    let manual_root = root.join("manuals");
+    fs::create_dir_all(data_home.join("mant")).expect("create registration root");
+    fs::create_dir_all(manual_root.join("man1")).expect("create manual root");
+    fs::write(
+        data_home.join("mant/source-policy.md"),
+        "# Registered document\n\nRegistered body.\n",
+    )
+    .expect("write registered document");
+    fs::write(
+        manual_root.join("man1/source-policy.1"),
+        ".TH SOURCE-POLICY 1\n.SH NAME\nsource-policy \\- native manual\n",
+    )
+    .expect("write native manual");
+
+    let run = |manual: bool| {
+        let mut command = Command::new(executable());
+        command
+            .arg("source-policy")
+            .args(manual.then_some("--manual"))
+            .args(["--format", "json", "--compact"])
+            .env("XDG_DATA_HOME", &data_home)
+            .env("XDG_DATA_DIRS", root.join("empty-system-data"))
+            .env("MANT_MANPATH", &manual_root);
+        command.output().expect("query source policy")
+    };
+
+    let registered = run(false);
+    assert!(registered.status.success(), "{registered:?}");
+    let registered: serde_json::Value =
+        serde_json::from_slice(&registered.stdout).expect("registered JSON");
+    assert_eq!(registered["document"]["source"]["format"], "markdown");
+
+    let manual = run(true);
+    assert!(manual.status.success(), "{manual:?}");
+    assert!(manual.stderr.is_empty());
+    let manual: serde_json::Value = serde_json::from_slice(&manual.stdout).expect("manual JSON");
+    assert_eq!(manual["document"]["source"]["format"], "man");
+    assert_eq!(manual["document"]["meta"]["section"], "1");
+
+    fs::remove_dir_all(root).expect("remove source-policy fixture");
 }
 
 #[cfg(unix)]

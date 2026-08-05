@@ -23,11 +23,11 @@ The current descriptor is:
   "protocol": "mant.cli/v4",
   "nativeApiVersion": "4",
   "requestSchema": "mant.request/v4",
-  "querySchema": "mant.query/v3",
-  "documentSchema": "mant.document/v3",
-  "outlineSchema": "mant.outline/v3",
-  "excerptSchema": "mant.excerpt/v3",
-  "searchSchema": "mant.search/v2"
+  "querySchema": "mant.query/v4",
+  "documentSchema": "mant.document/v4",
+  "outlineSchema": "mant.outline/v4",
+  "excerptSchema": "mant.excerpt/v4",
+  "searchSchema": "mant.search/v4"
 }
 ```
 
@@ -41,17 +41,16 @@ query the manual database, read tldr data, or start the TUI.
 | `mant.cli/v4` | One-shot process invocation and stream behavior | `--protocol-version` |
 | `4` | Native API generation negotiated by process clients | `nativeApiVersion` |
 | `mant.request/v4` | Closed request accepted by `--request-json` | Request `schema` |
-| `mant.query/v3` | Complete document plus optional quick reference | Full response `schema` |
-| `mant.document/v3` | Source-neutral document AST | `QueryBundle.document.schema` |
-| `mant.outline/v3` | Block-free addressable tree | Outline response `schema` |
-| `mant.excerpt/v3` | One or more selected nodes | Excerpt response `schema` |
-| `mant.search/v2` | Search results and pagination | Search response `schema` |
+| `mant.query/v4` | Complete document plus optional quick reference | Full response `schema` |
+| `mant.document/v4` | Source-neutral document AST | `QueryBundle.document.schema` |
+| `mant.outline/v4` | Block-free addressable tree | Outline response `schema` |
+| `mant.excerpt/v4` | One or more selected nodes | Excerpt response `schema` |
+| `mant.search/v4` | Search results and pagination | Search response `schema` |
 | `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
 
-The suffixes are independent contract versions, not the ManT release number.
-For example, search can remain `v2` while a request or document contract moves
-to `v3`. A client must compare the complete identifier rather than assume that
-every contract shares one number.
+The suffixes are contract versions, not the ManT release number. The v4 suite
+is aligned for its first publication, but clients must still compare every
+complete identifier rather than infer one contract from another.
 
 ### Compatibility Rules
 
@@ -93,10 +92,10 @@ commands.
 | Catalog key | Root title | Root `$id` |
 | --- | --- | --- |
 | `request` | `QueryRequest` | `urn:mant:request:v4` |
-| `query` | `QueryBundle` | `urn:mant:query:v3` |
-| `outline` | `QueryOutline` | `urn:mant:outline:v3` |
-| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v3` |
-| `search` | `QuerySearch` | `urn:mant:search:v2` |
+| `query` | `QueryBundle` | `urn:mant:query:v4` |
+| `outline` | `QueryOutline` | `urn:mant:outline:v4` |
+| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v4` |
+| `search` | `QuerySearch` | `urn:mant:search:v4` |
 
 The request schema is generated for deserialization, while response schemas
 are generated for serialization. This distinction matters because input
@@ -144,20 +143,17 @@ operates on one in-memory document.
 Fatal failures do not return a partial JSON error envelope. Recoverable parser
 findings belong to `document.diagnostics` or `excerpt.diagnostics`.
 
-### Renderer Policy
+### Source Resolution Policy
 
-`renderer` is deliberately absent from `mant.request/v4`. Diagnostic renderer
-selection belongs to the process invocation:
+Manual pages have one parser path: the located roff source is lowered directly
+through `libmandoc-rs`. Renderer selection is deliberately absent from
+`mant.request/v4`.
 
-```sh
-mant --request-json --force-libmandoc --format json --compact
-mant --request-json --force-groff --format json --compact
-```
-
-These flags apply only to manual input and are mutually exclusive.
-`--force-libmandoc` requires direct native parsing and exposes recoverable
-findings on stderr. `--force-groff` opts into the host-dependent
-`man -Thtml` compatibility path.
+For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
+with the same name and requires readable native manual content. A request JSON
+client can select the same source unambiguously by supplying its discovered
+manual `section`; sections apply only to native manuals and therefore bypass
+registered Markdown.
 
 ## Request Contract
 
@@ -212,10 +208,10 @@ mode does not change the versioned request schema.
 
 | `kind` | Additional fields | Defaults and bounds | Response |
 | --- | --- | --- | --- |
-| `full` | None | None | `mant.query/v3` |
-| `outline` | `detail` | Required: `sections` or `options` | `mant.outline/v3` |
-| `excerpt` | `nodes` | Non-empty string array | `mant.excerpt/v3` |
-| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v2` |
+| `full` | None | None | `mant.query/v4` |
+| `outline` | `detail` | Required: `sections` or `options` | `mant.outline/v4` |
+| `excerpt` | `nodes` | Non-empty string array | `mant.excerpt/v4` |
+| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v4` |
 
 Search view fields are:
 
@@ -325,9 +321,9 @@ printf '%s\n' \
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `schema` | Yes | `mant.query/v3` |
+| `schema` | Yes | `mant.query/v4` |
 | `label` | Yes | Human-readable source label |
-| `document` | No | Normalized `mant.document/v3` document |
+| `document` | No | Normalized `mant.document/v4` document |
 | `tldr` | No | Normalized external or embedded quick reference |
 
 A successful runtime result contains useful `document`, `tldr`, or both.
@@ -339,10 +335,10 @@ An abbreviated but structurally valid Markdown result is:
 
 ```json
 {
-  "schema": "mant.query/v3",
+  "schema": "mant.query/v4",
   "label": "guide.md",
   "document": {
-    "schema": "mant.document/v3",
+    "schema": "mant.document/v4",
     "producer": {
       "name": "mant",
       "version": "0.4.0",
@@ -376,21 +372,19 @@ components.
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | Exact `mant.document/v3` marker |
+| `schema` | Exact `mant.document/v4` marker |
 | `producer` | ManT version and parser engine |
-| `source` | Original source format, path, and optional compatibility renderer |
+| `source` | Original source format and path |
 | `meta` | Normalized title, section, date, volume, OS, architecture, names, and alias target |
 | `diagnostics` | Optional recoverable parser findings |
 | `blocks` | Optional content before the first addressable section |
 | `sections` | Recursive section tree |
 
-`producer.engine` is normally `libmandoc` for man/mdoc input,
-`pulldown-cmark` for Markdown, or an HTML compatibility parser for forced
-renderer input.
+`producer.engine` is `libmandoc` for man/mdoc input and `pulldown-cmark` for
+Markdown.
 
-`source.format` is one of `man`, `mdoc`, `markdown`, `groff-html`, or
-`mandoc-html`. Temporary decompression paths never replace the original
-`source.path`.
+`source.format` is one of `man`, `mdoc`, or `markdown`. Temporary decompression
+paths never replace the original `source.path`.
 
 Diagnostic levels are `style`, `warning`, `error`, and `unsupported`.
 A diagnostic can include a stable code and an original `SourceSpan`.
@@ -521,7 +515,7 @@ before an agent requests content:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.outline/v3` |
+| `schema` | `mant.outline/v4` |
 | `detail` | Echoed `sections` or `options` mode |
 | `label` | Query label |
 | `source`, `meta` | Optional document identity |
@@ -547,7 +541,7 @@ An illustrative response is:
 
 ```json
 {
-  "schema": "mant.outline/v3",
+  "schema": "mant.outline/v4",
   "detail": "options",
   "label": "tool.md",
   "source": {
@@ -589,12 +583,12 @@ An illustrative response is:
 
 ## Excerpt Projection
 
-`mant.excerpt/v3` returns complete selected content without returning unrelated
+`mant.excerpt/v4` returns complete selected content without returning unrelated
 sections:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.excerpt/v3` |
+| `schema` | `mant.excerpt/v4` |
 | `label` | Query label |
 | `producer`, `source`, `meta` | Optional document identity |
 | `diagnostics` | Relevant recoverable findings |
@@ -618,14 +612,14 @@ There is intentionally no separate explanation response schema.
 
 ## Search Projection
 
-`mant.search/v2` searches one canonical full CommonMark render and returns
+`mant.search/v4` searches one canonical full CommonMark render and returns
 both structural locations and rendered coordinates.
 
 ### Result Envelope
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.search/v2` |
+| `schema` | `mant.search/v4` |
 | `label`, `source`, `meta` | Source identity |
 | `query` | Fully normalized search settings |
 | `render` | Coordinate-space descriptor |
@@ -681,7 +675,7 @@ A complete no-match response is:
 
 ```json
 {
-  "schema": "mant.search/v2",
+  "schema": "mant.search/v4",
   "label": "tar",
   "query": {
     "pattern": "definitely-not-present",
@@ -720,8 +714,8 @@ line is limited to 8 MiB. Standard output is exclusively MCP traffic;
 standard error is deliberately silent. Lowering diagnostics are omitted from
 MCP excerpts, while tool failures use structured MCP error results and fatal
 transport failures use a non-zero process status. Diagnose source lowering
-through ordinary CLI JSON output, or use `--force-libmandoc` for strict native
-parser findings. There is no HTTP listener and there are no mutation tools.
+through ordinary CLI JSON output, whose document contains structured parser
+findings. There is no HTTP listener and there are no mutation tools.
 
 MCP protocol versions are negotiated by the standard `initialize` exchange.
 With the current runtime, a client requesting `2025-11-25` receives:
@@ -752,10 +746,10 @@ read-only tools:
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
 | `mant_documents_list` | None | `query`, `kind`, `section`, `limit`, `offset` | Paginated document catalog |
-| `mant_document_outline` | `name` | `section`; `detail`, default `options` | `mant.outline/v3` |
-| `mant_document_get` | `name`, non-empty `nodes` | `section` | `mant.excerpt/v3` |
-| `mant_document_explain` | `name`, `entry` | `section` | `mant.excerpt/v3` |
-| `mant_document_search` | `name`, `pattern` | `section` and search settings | `mant.search/v2` |
+| `mant_document_outline` | `name` | `section`; `detail`, default `options` | `mant.outline/v4` |
+| `mant_document_get` | `name`, non-empty `nodes` | `section` | `mant.excerpt/v4` |
+| `mant_document_explain` | `name`, `entry` | `section` | `mant.excerpt/v4` |
+| `mant_document_search` | `name`, `pattern` | `section` and search settings | `mant.search/v4` |
 
 Every tool is annotated read-only, non-destructive, idempotent, and
 closed-world. Document tools resolve one name through registered Markdown and

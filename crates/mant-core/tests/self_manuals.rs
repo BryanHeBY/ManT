@@ -80,7 +80,7 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
     let outline =
         build_outline_with_detail(&query, OutlineDetail::Options).expect("manual outline");
 
-    for expected in ["--search", "--ui", "--help"] {
+    for expected in ["--manual", "--search", "--ui", "--help"] {
         assert!(
             contains_entry(&outline.nodes, expected),
             "mant.md should expose {expected} as a semantic entry"

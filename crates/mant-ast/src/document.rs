@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
     /// Source-neutral model with addressable semantic definition entries.
-    #[serde(rename = "mant.document/v3")]
-    V3,
+    #[serde(rename = "mant.document/v4")]
+    V4,
 }
 
 /// A normalized document ready for interactive or textual rendering.
@@ -52,8 +52,6 @@ pub enum SourceFormat {
     Man,
     Mdoc,
     Markdown,
-    GroffHtml,
-    MandocHtml,
 }
 
 /// Original source identity; temporary decompression paths must not appear.
@@ -63,8 +61,6 @@ pub struct DocumentSource {
     pub format: SourceFormat,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub renderer: Option<String>,
 }
 
 /// Metadata normalized from TH, Dt, and the validated libmandoc result.
@@ -337,7 +333,7 @@ pub enum Inline {
     Code {
         value: String,
     },
-    /// An external URI from mdoc `Lk`, man `UR`, or renderer-derived input.
+    /// An external URI from mdoc `Lk`, man `UR`, or Markdown links.
     ///
     /// Roff section references use [`Inline::SectionReference`] instead so
     /// consumers never have to infer navigation semantics from URI syntax.
