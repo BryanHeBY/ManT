@@ -1820,6 +1820,51 @@ mod tests {
     }
 
     #[test]
+    fn inline_styles_preserve_the_renderer_neutral_ast_semantics() {
+        let lines = styled_inline_lines(
+            &[
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "strong".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: " ".to_owned(),
+                },
+                Inline::Emphasis {
+                    children: vec![Inline::Text {
+                        value: "emphasis".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: " ".to_owned(),
+                },
+                Inline::Code {
+                    value: "--option".to_owned(),
+                },
+                Inline::Text {
+                    value: " ".to_owned(),
+                },
+                Inline::ExternalLink {
+                    uri: "https://example.test".to_owned(),
+                    title: None,
+                    children: vec![Inline::Text {
+                        value: "link".to_owned(),
+                    }],
+                },
+            ],
+            Style::default().fg(theme::TEXT),
+        );
+        let spans = &lines[0].spans;
+
+        assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
+        assert!(spans[2].style.add_modifier.contains(Modifier::ITALIC));
+        assert_eq!(spans[4].style.fg, Some(theme::HEADING));
+        assert_eq!(spans[6].style.fg, Some(theme::BLUE));
+        assert!(spans[6].style.add_modifier.contains(Modifier::UNDERLINED));
+    }
+
+    #[test]
     fn wrapped_rows_preserve_their_indent() {
         let line = LogicalLine::plain(3, "abcdefgh", Style::default());
         let rows = wrap_line(&line, 7);
@@ -1980,6 +2025,101 @@ mod tests {
         assert_eq!(rendered.anchor_row("help-option"), Some(1));
         assert_eq!(rows[1], "   -h Show");
         assert!(rows[2].starts_with("      detailed"));
+    }
+
+    #[test]
+    fn definition_lists_honour_compact_and_per_item_spacing() {
+        let definition = |term: &str, description: &str, spacing_before_lines| DefinitionItem {
+            identity: None,
+            terms: vec![vec![Inline::Text {
+                value: term.to_owned(),
+            }]],
+            description: vec![Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: description.to_owned(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            inline_term: false,
+            spacing_before_lines,
+        };
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks =
+            vec![Block::DefinitionList {
+                items: vec![
+                    definition("-E", "Run the preprocessor.", None),
+                    definition("-S", "Run the compiler.", Some(2)),
+                ],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }];
+
+        let rows = DocumentView::new(&bundle)
+            .render(80)
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let first_description = rows
+            .iter()
+            .position(|row| row.contains("Run the preprocessor."))
+            .expect("first description");
+        let second_term = rows
+            .iter()
+            .position(|row| row.contains("-S"))
+            .expect("second term");
+
+        assert_eq!(second_term, first_description + 3);
+        assert!(rows[first_description + 1].trim().is_empty());
+        assert!(rows[first_description + 2].trim().is_empty());
+    }
+
+    #[test]
+    fn adjacent_blocks_add_only_explicit_vertical_space() {
+        let paragraph = |value: &str| Block::Paragraph {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![
+            paragraph("before"),
+            Block::Preformatted {
+                children: vec![Inline::Text {
+                    value: "display".to_owned(),
+                }],
+                language: None,
+                layout: LayoutHint::default(),
+                source: None,
+            },
+            paragraph("after"),
+            Block::VerticalSpace {
+                lines: 1,
+                source: None,
+            },
+            paragraph("spaced"),
+        ];
+
+        let rows = DocumentView::new(&bundle)
+            .render(80)
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let before = rows.iter().position(|row| row.contains("before")).unwrap();
+        let display = rows.iter().position(|row| row.contains("display")).unwrap();
+        let after = rows.iter().position(|row| row.contains("after")).unwrap();
+        let spaced = rows.iter().position(|row| row.contains("spaced")).unwrap();
+
+        assert_eq!(display, before + 1);
+        assert_eq!(after, display + 1);
+        assert_eq!(spaced, after + 2);
     }
 
     #[test]
