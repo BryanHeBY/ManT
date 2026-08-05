@@ -20,8 +20,11 @@ use crate::App;
 pub fn run(bundle: &QueryBundle) -> io::Result<()> {
     let mut stdout = io::stdout();
     enable_raw_mode()?;
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let mut guard = TerminalGuard { active: true };
+    // Install the restoration guard before either terminal command can fail.
+    // Otherwise an unsupported mouse/alternate-screen sequence could leave the
+    // caller in raw mode without ever entering the event loop.
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut app = App::new(bundle);
@@ -31,7 +34,7 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
             let now = Instant::now();
             app.tick(now);
             terminal.draw(|frame| app.draw(frame))?;
-            let Some(timeout) = app.next_wakeup(now) else {
+            let Some(timeout) = app.next_wakeup(Instant::now()) else {
                 route_event(&mut app, &event::read()?);
                 continue;
             };
