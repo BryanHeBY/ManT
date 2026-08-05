@@ -61,10 +61,14 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 ## Input
 
 Input is resolved before parsing. An ordinary value first selects a registered
-Markdown document from `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, then
-from each `$XDG_DATA_DIRS/mant` directory, and finally from the native
-manual index. Values ending in `.md` or `.markdown`, other path-like values, and
-the exact value `-` select Markdown directly instead.
+Markdown document from
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`, then from each
+`$XDG_DATA_DIRS/mant/documents` directory, and finally from the native manual
+index. On macOS the user and system roots are
+`~/Library/Application Support/ManT/documents` and
+`/Library/Application Support/ManT/documents`. Values ending in `.md` or
+`.markdown`, other path-like values, and the exact value `-` select Markdown
+directly instead.
 
 The filename supplies a registered document name: `mant.md` is queried as
 `mant mant`. Registration roots are scanned recursively, including file and
@@ -342,9 +346,25 @@ manual index and supports a case-insensitive `query`, `markdown` or `manual`
 
 - `--update-tldr`: Update through an installed tldr client when available, otherwise through ManT's private cache.
 
-Normal queries prefer compatible installed-client data. If no client is
-installed, ManT reads its private cache. Manual content remains usable when no
-tldr page is available.
+Normal queries prefer compatible installed-client data and always retain
+ManT's private cache as the final fallback. Manual content remains usable when
+no tldr page is available.
+
+## Storage
+
+ManT keeps durable registered documents separate from disposable caches. On
+Linux, registered Markdown lives below
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`; system roots are each
+`mant/documents` directory below `XDG_DATA_DIRS`. ManT's private tldr checkout
+lives below `${XDG_CACHE_HOME:-$HOME/.cache}/mant/tldr-pages`.
+
+On macOS, registered Markdown lives below
+`~/Library/Application Support/ManT/documents`, system documents live below
+`/Library/Application Support/ManT/documents`, and the private tldr checkout
+lives below `~/Library/Caches/ManT/tldr-pages`.
+
+Configuration and state, when introduced, use the same platform conventions
+without sharing the document scanner or cache lifecycle.
 
 ## Environment
 
@@ -356,10 +376,10 @@ tldr page is available.
 - `MANT_TLDR_DIR`: Use one explicit tldr checkout for reads and updates.
 - `XDG_CACHE_HOME`: Relocate cache discovery and ManT's Linux fallback cache.
 - `XDG_DATA_HOME`: Relocate the user document directory from the default
-  `$HOME/.local/share/mant`.
+  `$HOME/.local/share/mant/documents` on Linux.
 - `XDG_DATA_DIRS`: Add system data roots considered during
   registered-document and tldr discovery. Registered Markdown is read
-  recursively from each `mant` subdirectory.
+  recursively from each `mant/documents` subdirectory on Linux.
 - `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manual sources
   and translated tldr pages before English fallback.
 - `HOME`: Supply conventional document, manual, and cache locations when their

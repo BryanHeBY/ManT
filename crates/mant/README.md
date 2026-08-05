@@ -14,11 +14,12 @@ mant --mcp
 ```
 
 Reusable Markdown can be registered as a document by placing `NAME.md` below
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant`; `mant NAME` then resolves it
-before falling back to ManT's native manual index. Nested directories and
-symlinks are discovered recursively without changing the filename-based public
-name. Explicit Markdown paths and standard input remain available for one-off
-documents.
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents` on Linux or
+`~/Library/Application Support/ManT/documents` on macOS; `mant NAME` then
+resolves it before falling back to ManT's native manual index. Nested
+directories and symlinks are discovered recursively without changing the
+filename-based public name. Explicit Markdown paths and standard input remain
+available for one-off documents.
 
 Install the native CLI with:
 

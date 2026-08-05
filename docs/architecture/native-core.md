@@ -114,8 +114,9 @@ keeps standard output exclusively for JSON-RPC and exposes five generated,
 read-only tools: local-document discovery, outline, selected content,
 semantic explanation, and search. Document tools accept a name plus an
 optional manual section. That narrower boundary prevents agents from opening
-arbitrary host paths: Markdown must first be registered in an XDG document
-root. Registration recursively follows file and directory symlinks, but
+arbitrary host paths: Markdown must first be registered in the platform
+document root, below `mant/documents` on Linux or Application Support on
+macOS. Registration recursively follows file and directory symlinks, but
 canonical-directory deduplication and explicit traversal bounds prevent loops
 or unbounded trees. Nested directories are organizational: the filename stem
 remains the flat public name. Ordinary names continue to fall back to the
@@ -243,6 +244,13 @@ Direct lowering is covered by deterministic native fixtures from multiple
 distributions, including large git, gcc, clang, tar, and shell pages.
 Best-effort native output is retained together with its diagnostics rather than
 being silently replaced by another renderer.
+
+Registered documents and caches have distinct lifecycles. Linux discovers
+documents below each XDG data root's `mant/documents` directory and keeps the
+private tldr checkout below the XDG cache root. macOS uses Application Support
+for documents and Library Caches for tldr. Installed-client tldr roots precede
+the private checkout, which remains the final read fallback even when a client
+executable is present.
 
 Vertical layout is part of this normalization boundary rather than a TUI
 heuristic. Sections retain the distance requested before `SH`, `SS`, `Sh`, and

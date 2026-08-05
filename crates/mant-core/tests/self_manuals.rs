@@ -112,7 +112,7 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
 #[test]
 fn shipped_manual_explains_recursive_registered_documents() {
     for required in [
-        "$HOME/.local/share/mant",
+        "$HOME/.local/share/mant/documents",
         "team/handbook.md",
         "Directories organize documents but do not form",
         "symbolic-link cycles",

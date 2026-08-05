@@ -127,7 +127,7 @@ pub fn get_tldr_cache_dir(
         HostPlatform::Macos => home
             .join("Library")
             .join("Caches")
-            .join("mant")
+            .join("ManT")
             .join("tldr-pages"),
     })
 }
@@ -180,7 +180,7 @@ pub fn get_system_tldr_cache_dirs(
     Ok(deduplicate_paths(candidates))
 }
 
-/// Select installed-client caches or `ManT`'s private fallback checkout.
+/// Select installed-client caches followed by `ManT`'s private fallback.
 ///
 /// # Errors
 ///
@@ -193,11 +193,13 @@ pub fn get_tldr_read_cache_dirs(
     if environment.contains_key("MANT_TLDR_DIR") {
         return get_tldr_cache_dir(environment, platform).map(|path| vec![path]);
     }
-    if tldr_installed {
-        get_system_tldr_cache_dirs(environment, platform)
-    } else {
-        get_tldr_cache_dir(environment, platform).map(|path| vec![path])
+    let private_cache = get_tldr_cache_dir(environment, platform)?;
+    if !tldr_installed {
+        return Ok(vec![private_cache]);
     }
+    let mut caches = get_system_tldr_cache_dirs(environment, platform)?;
+    caches.push(private_cache);
+    Ok(deduplicate_paths(caches))
 }
 
 /// Resolve locale candidates, retaining first occurrence priority.
@@ -454,7 +456,7 @@ mod tests {
         );
         assert_eq!(
             get_tldr_cache_dir(&environment, HostPlatform::Macos).expect("cache dir"),
-            PathBuf::from("/home/test/Library/Caches/mant/tldr-pages")
+            PathBuf::from("/home/test/Library/Caches/ManT/tldr-pages")
         );
         assert_eq!(
             get_system_tldr_cache_dirs(&environment, HostPlatform::Linux).expect("system caches"),
@@ -474,6 +476,22 @@ mod tests {
             get_tldr_read_cache_dirs(&environment, HostPlatform::Linux, false)
                 .expect("fallback cache"),
             [PathBuf::from("/cache/mant/tldr-pages")]
+        );
+        assert_eq!(
+            get_tldr_read_cache_dirs(&environment, HostPlatform::Linux, true)
+                .expect("client caches and fallback"),
+            [
+                "/cache/tldr",
+                "/cache/tlrc",
+                "/cache/tealdeer/tldr-pages",
+                "/home/test/.tldrc/tldr",
+                "/home/test/.tldr/cache",
+                "/home/test/.tldr",
+                "/usr/local/share/tldr",
+                "/usr/share/tldr",
+                "/cache/mant/tldr-pages",
+            ]
+            .map(PathBuf::from)
         );
     }
 
@@ -502,6 +520,31 @@ mod tests {
 
             assert_eq!(page.source_path, source.to_string_lossy());
         }
+    }
+
+    #[test]
+    fn installed_client_miss_falls_back_to_mant_private_cache() {
+        let environment = env(&[("HOME", "/home/test"), ("XDG_CACHE_HOME", "/cache")]);
+        let cache_dirs = get_tldr_read_cache_dirs(&environment, HostPlatform::Linux, true)
+            .expect("client and private caches");
+        let private_page = PathBuf::from("/cache/mant/tldr-pages/pages/common/tar.md");
+        let files = MemoryFiles {
+            files: [(private_page.clone(), PAGE.to_owned())]
+                .into_iter()
+                .collect(),
+        };
+
+        let page = read_cached_tldr_page_with(
+            "tar",
+            &cache_dirs,
+            &["en".to_owned()],
+            &["linux".to_owned(), "common".to_owned()],
+            &files,
+        )
+        .expect("cache read")
+        .expect("private fallback page");
+
+        assert_eq!(page.source_path, private_page.to_string_lossy());
     }
 
     #[test]

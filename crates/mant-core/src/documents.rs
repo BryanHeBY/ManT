@@ -1,4 +1,4 @@
-//! Discovers user-registered Markdown documents through the XDG data hierarchy.
+//! Discovers registered Markdown below platform-native application data roots.
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -8,8 +8,11 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-const APPLICATION_DIR: &str = "mant";
+const LINUX_APPLICATION_DIR: &str = "mant";
+const MACOS_APPLICATION_DIR: &str = "ManT";
+const DOCUMENTS_DIR: &str = "documents";
 const DEFAULT_SYSTEM_DATA_DIRS: [&str; 2] = ["/usr/local/share", "/usr/share"];
+const MACOS_SYSTEM_DATA_DIR: &str = "/Library/Application Support";
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 const MAX_DIRECTORY_DEPTH: usize = 32;
 const MAX_VISITED_DIRECTORIES: usize = 4096;
@@ -87,6 +90,15 @@ fn list_registered_documents_with(
 fn registration_roots(
     environment: &HashMap<OsString, OsString>,
 ) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
+    if cfg!(target_os = "macos") {
+        return macos_registration_roots(environment);
+    }
+    linux_registration_roots(environment)
+}
+
+fn linux_registration_roots(
+    environment: &HashMap<OsString, OsString>,
+) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
     let mut roots = Vec::new();
     let mut seen = HashSet::new();
 
@@ -98,7 +110,13 @@ fn registration_roots(
             .map(|home| home.join(".local/share"))
     });
     if let Some(root) = user_data {
-        push_registration_root(&mut roots, &mut seen, &root, RegisteredDocumentOrigin::User);
+        push_registration_root(
+            &mut roots,
+            &mut seen,
+            &root,
+            LINUX_APPLICATION_DIR,
+            RegisteredDocumentOrigin::User,
+        );
     }
 
     let system_roots = environment.get(OsStr::new("XDG_DATA_DIRS")).map_or_else(
@@ -119,9 +137,34 @@ fn registration_roots(
             &mut roots,
             &mut seen,
             &root,
+            LINUX_APPLICATION_DIR,
             RegisteredDocumentOrigin::System,
         );
     }
+    roots
+}
+
+fn macos_registration_roots(
+    environment: &HashMap<OsString, OsString>,
+) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
+    let mut roots = Vec::new();
+    let mut seen = HashSet::new();
+    if let Some(home) = absolute_environment_path(environment, "HOME") {
+        push_registration_root(
+            &mut roots,
+            &mut seen,
+            &home.join("Library/Application Support"),
+            MACOS_APPLICATION_DIR,
+            RegisteredDocumentOrigin::User,
+        );
+    }
+    push_registration_root(
+        &mut roots,
+        &mut seen,
+        Path::new(MACOS_SYSTEM_DATA_DIR),
+        MACOS_APPLICATION_DIR,
+        RegisteredDocumentOrigin::System,
+    );
     roots
 }
 
@@ -129,9 +172,10 @@ fn push_registration_root(
     roots: &mut Vec<(PathBuf, RegisteredDocumentOrigin)>,
     seen: &mut HashSet<PathBuf>,
     root: &Path,
+    application_dir: &str,
     origin: RegisteredDocumentOrigin,
 ) {
-    let root = root.join(APPLICATION_DIR);
+    let root = root.join(application_dir).join(DOCUMENTS_DIR);
     if seen.insert(root.clone()) {
         roots.push((root, origin));
     }
@@ -255,8 +299,8 @@ mod tests {
     };
 
     use super::{
-        RegisteredDocumentOrigin, find_registered_document_with, list_registered_documents_with,
-        registration_roots,
+        RegisteredDocumentOrigin, find_registered_document_with, linux_registration_roots,
+        list_registered_documents_with, macos_registration_roots,
     };
 
     fn environment(values: &[(&str, &Path)]) -> HashMap<OsString, OsString> {
@@ -286,10 +330,33 @@ mod tests {
         ]);
 
         assert_eq!(
-            registration_roots(&environment),
+            linux_registration_roots(&environment),
             vec![
-                (user.join("mant"), RegisteredDocumentOrigin::User),
-                (system.join("mant"), RegisteredDocumentOrigin::System),
+                (user.join("mant/documents"), RegisteredDocumentOrigin::User),
+                (
+                    system.join("mant/documents"),
+                    RegisteredDocumentOrigin::System
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn macos_uses_application_support_document_roots() {
+        let home = Path::new("/Users/demo");
+        let environment = environment(&[("HOME", home)]);
+
+        assert_eq!(
+            macos_registration_roots(&environment),
+            vec![
+                (
+                    home.join("Library/Application Support/ManT/documents"),
+                    RegisteredDocumentOrigin::User,
+                ),
+                (
+                    PathBuf::from("/Library/Application Support/ManT/documents"),
+                    RegisteredDocumentOrigin::System,
+                ),
             ]
         );
     }
@@ -299,15 +366,15 @@ mod tests {
         let root = temporary_root("lookup");
         let user = root.join("user");
         let system = root.join("system");
-        fs::create_dir_all(user.join("mant")).expect("user documents");
-        fs::create_dir_all(system.join("mant")).expect("system documents");
-        fs::write(user.join("mant/tool.md"), "# User").expect("user document");
-        fs::write(system.join("mant/tool.md"), "# System").expect("system document");
+        fs::create_dir_all(user.join("mant/documents")).expect("user documents");
+        fs::create_dir_all(system.join("mant/documents")).expect("system documents");
+        fs::write(user.join("mant/documents/tool.md"), "# User").expect("user document");
+        fs::write(system.join("mant/documents/tool.md"), "# System").expect("system document");
         let environment = environment(&[("XDG_DATA_HOME", &user), ("XDG_DATA_DIRS", &system)]);
 
         let document =
             find_registered_document_with("tool", &environment).expect("registered document");
-        assert_eq!(document.path, user.join("mant/tool.md"));
+        assert_eq!(document.path, user.join("mant/documents/tool.md"));
         assert_eq!(document.origin, RegisteredDocumentOrigin::User);
         assert!(find_registered_document_with("../tool", &environment).is_none());
 
@@ -319,14 +386,17 @@ mod tests {
         let root = temporary_root("list");
         let user = root.join("user");
         let system = root.join("system");
-        fs::create_dir_all(user.join("mant")).expect("user documents");
-        fs::create_dir_all(system.join("mant")).expect("system documents");
-        fs::write(user.join("mant/zeta.markdown"), "# Zeta").expect("user document");
-        fs::write(user.join("mant/alpha.md"), "# Alpha").expect("user document");
-        fs::write(user.join("mant/alpha.markdown"), "# Lower priority")
-            .expect("alternate user document");
-        fs::write(system.join("mant/alpha.md"), "# Shadowed").expect("system document");
-        fs::write(system.join("mant/not-markdown.txt"), "ignored").expect("other file");
+        fs::create_dir_all(user.join("mant/documents")).expect("user documents");
+        fs::create_dir_all(system.join("mant/documents")).expect("system documents");
+        fs::write(user.join("mant/documents/zeta.markdown"), "# Zeta").expect("user document");
+        fs::write(user.join("mant/documents/alpha.md"), "# Alpha").expect("user document");
+        fs::write(
+            user.join("mant/documents/alpha.markdown"),
+            "# Lower priority",
+        )
+        .expect("alternate user document");
+        fs::write(system.join("mant/documents/alpha.md"), "# Shadowed").expect("system document");
+        fs::write(system.join("mant/documents/not-markdown.txt"), "ignored").expect("other file");
         let environment = environment(&[("XDG_DATA_HOME", &user), ("XDG_DATA_DIRS", &system)]);
 
         let documents = list_registered_documents_with(&environment);
@@ -337,7 +407,25 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["alpha", "zeta"]
         );
-        assert_eq!(documents[0].path, user.join("mant/alpha.md"));
+        assert_eq!(documents[0].path, user.join("mant/documents/alpha.md"));
+
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn document_discovery_is_confined_to_the_documents_layer() {
+        let root = temporary_root("documents-layer");
+        let user = root.join("user");
+        fs::create_dir_all(user.join("mant/documents")).expect("document directory");
+        fs::write(user.join("mant/current.md"), "# Outside scanner")
+            .expect("non-document application data");
+        fs::write(user.join("mant/documents/current.md"), "# Current")
+            .expect("registered document");
+        let environment = environment(&[("XDG_DATA_HOME", &user)]);
+
+        let documents = list_registered_documents_with(&environment);
+        assert_eq!(documents.len(), 1);
+        assert_eq!(documents[0].path, user.join("mant/documents/current.md"));
 
         fs::remove_dir_all(root).expect("remove fixture");
     }
@@ -349,7 +437,7 @@ mod tests {
 
         let root = temporary_root("nested-links");
         let user = root.join("user");
-        let registration = user.join("mant");
+        let registration = user.join("mant/documents");
         let external = root.join("external");
         fs::create_dir_all(registration.join("team")).expect("nested registration");
         fs::create_dir_all(&external).expect("external documents");

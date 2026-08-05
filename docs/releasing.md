@@ -63,9 +63,9 @@ checksums, manual, and licenses before publishing the draft.
 
 The archive keeps `mant.md` beside the executable so installation remains
 transparent. User-facing release notes should recommend copying it to
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/mant.md`; a system package should
-install it as `/usr/local/share/mant/mant.md` (or the matching prefix-relative
-`share/mant/mant.md`). The document is optional at
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md`; a system package
+should install it as `/usr/local/share/mant/documents/mant.md` (or the matching
+prefix-relative `share/mant/documents/mant.md`). The document is optional at
 runtime, but installing it makes `mant mant` and MCP document discovery work
 without a repository checkout.
 

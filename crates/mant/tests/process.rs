@@ -316,7 +316,7 @@ fn unqualified_names_prefer_registered_xdg_markdown() {
         "mant-registered-document-process-{}",
         std::process::id()
     ));
-    let documents = data_home.join("mant");
+    let documents = data_home.join("mant/documents");
     fs::create_dir_all(&documents).expect("create registered document directory");
     let path = documents.join("process-registered.md");
     fs::write(&path, "# Registered\n\nBody from the XDG document.\n")
@@ -351,10 +351,10 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
     ));
     let data_home = root.join("data");
     let manual_root = root.join("manuals");
-    fs::create_dir_all(data_home.join("mant")).expect("create registration root");
+    fs::create_dir_all(data_home.join("mant/documents")).expect("create registration root");
     fs::create_dir_all(manual_root.join("man1")).expect("create manual root");
     fs::write(
-        data_home.join("mant/source-policy.md"),
+        data_home.join("mant/documents/source-policy.md"),
         "# Registered document\n\nRegistered body.\n",
     )
     .expect("write registered document");
@@ -403,14 +403,14 @@ fn registered_names_resolve_through_nested_directory_symlinks() {
     ));
     let data_home = root.join("user-data");
     let provider = root.join("provider-docs");
-    fs::create_dir_all(data_home.join("mant")).expect("create registration root");
+    fs::create_dir_all(data_home.join("mant/documents")).expect("create registration root");
     fs::create_dir_all(&provider).expect("create provider directory");
     fs::write(
         provider.join("process-linked.md"),
         "# Linked\n\nBody from another tool.\n",
     )
     .expect("write provider document");
-    symlink(&provider, data_home.join("mant/provider")).expect("link provider directory");
+    symlink(&provider, data_home.join("mant/documents/provider")).expect("link provider directory");
 
     let output = Command::new(executable())
         .args(["process-linked", "--format", "json", "--compact"])
@@ -426,7 +426,7 @@ fn registered_names_resolve_through_nested_directory_symlinks() {
     assert_eq!(
         value["document"]["source"]["path"],
         data_home
-            .join("mant/provider/process-linked.md")
+            .join("mant/documents/provider/process-linked.md")
             .to_str()
             .expect("UTF-8 path")
     );

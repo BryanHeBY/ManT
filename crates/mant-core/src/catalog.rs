@@ -78,7 +78,7 @@ mod tests {
         let documents = list_available_documents_from(
             vec![RegisteredDocument {
                 name: "printf".to_owned(),
-                path: PathBuf::from("/home/demo/.local/share/mant/printf.md"),
+                path: PathBuf::from("/home/demo/.local/share/mant/documents/printf.md"),
                 origin: RegisteredDocumentOrigin::User,
             }],
             &[
