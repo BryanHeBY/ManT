@@ -18,7 +18,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUN_VERSION: 1.3.14
   RUST_MSRV: 1.88.0
 
 jobs:
@@ -59,16 +58,10 @@ jobs:
           restore-keys: |
             cargo-v1-linux-x64-stable-
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      # The local build is the canonical verification boundary: frozen Bun
-      # dependencies, TypeScript, Rust fmt/test/clippy, native release builds,
-      # UI tests, and packaged executable smoke tests all run here.
+      # The local script is the canonical verification boundary: formatting,
+      # workspace tests, clippy, a release build, and executable smoke tests.
       - name: Build and test
-        run: bun run build
+        run: bash scripts/check.sh
 
       # Keep the standalone libFuzzer harnesses compiling without adding
       # instrumented fuzz execution to the normal CI runtime.
@@ -157,10 +150,8 @@ jobs:
         run: cargo +"$RUST_MSRV" test --locked --workspace
 
   coverage:
-    # Reports line coverage for both language boundaries. This runs beside the
-    # canonical build rather than inside it so coverage instrumentation never
-    # slows or gates the primary verification path. Codecov merges the two
-    # flags (mantui, engine) into a single project number.
+    # Coverage runs beside the canonical build so instrumentation never slows
+    # or gates the primary verification path.
     name: Coverage
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -201,14 +192,6 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install frozen Bun dependencies
-        run: bun install --frozen-lockfile
-
       # --remap-path-prefix rewrites absolute source paths to the repository
       # root, leaving every LCOV source path directly repository-relative.
       - name: Collect Rust coverage
@@ -216,32 +199,11 @@ jobs:
           cargo llvm-cov --locked --workspace \
             --remap-path-prefix --lcov --output-path engine-lcov.info
 
-      # The integration suite runs the real staged binary, so stage it before
-      # collecting TypeScript coverage. Without this the native tests skip and
-      # under-report the mantui process boundary.
-      - name: Build native mant for integration tests
-        run: bun run build:mant
-
-      - name: Collect TypeScript coverage
-        run: bun test --coverage --coverage-reporter=lcov
-
-      # disable_search keeps each upload to its single explicit file. Without
-      # it the CLI also auto-discovers the other lcov and uploads both, which
-      # collapses the engine/mantui flag separation and double-counts lines.
-      - name: Upload engine coverage to Codecov
+      - name: Upload Rust coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: engine-lcov.info
-          flags: engine
-          disable_search: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-
-      - name: Upload mantui coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          files: coverage/lcov.info
-          flags: mantui
+          flags: rust
           disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false

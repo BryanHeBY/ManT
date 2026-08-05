@@ -1,6 +1,5 @@
-# Merges the two language boundaries into one project number. Coverage is a
-# signal here, not a gate: an unreleased solo project should not block work on
-# a percentage, so status checks are informational and never fail a PR.
+# Coverage is a signal, not a gate: an unreleased solo project should not block
+# work on a percentage, so status checks are informational and never fail a PR.
 coverage:
   status:
     project:
@@ -10,19 +9,14 @@ coverage:
       default:
         informational: true
 
-# Each CI upload tags its language boundary. carryforward keeps the other
-# flag's last value when only one side changes, so the merged total stays
-# meaningful on partial runs.
+# The single Rust upload covers the parser, AST, CLI, and terminal UI crates.
 flag_management:
   default_rules:
-    carryforward: true
+    carryforward: false
   individual_flags:
-    - name: engine
+    - name: rust
       paths:
         - crates/
-    - name: mantui
-      paths:
-        - apps/mantui/src/
 
 comment:
   layout: "reach, flags, files"
