@@ -11,7 +11,7 @@ fn executable() -> &'static str {
     env!("CARGO_BIN_EXE_mant")
 }
 
-const PROTOCOL_REFERENCE: &str = include_str!("../../../../docs/protocol.md");
+const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/protocol.md");
 
 #[test]
 fn help_groups_the_public_query_surface() {

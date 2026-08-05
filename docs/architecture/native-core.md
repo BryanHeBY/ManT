@@ -148,8 +148,8 @@ Schemars from `mant-ast`'s Serde types, explicitly pinned to JSON Schema Draft
 2020-12, and generated separately for deserialize and serialize behavior.
 
 Interactive and machine-oriented use are modes of one installed `mant`
-executable. Local `bun run dev` performs an incremental Cargo release build and
-executes the staged binary directly. Release builds place that one executable
+executable. Local `bun run dev` performs a Cargo release build and executes the
+staged binary directly. Release builds place that one executable
 in `dist/`; there is no companion command lookup or private executable
 extraction.
 

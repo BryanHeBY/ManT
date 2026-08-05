@@ -19,7 +19,7 @@ flag_management:
   individual_flags:
     - name: engine
       paths:
-        - engine/crates/
+        - crates/
     - name: mantui
       paths:
         - apps/mantui/src/

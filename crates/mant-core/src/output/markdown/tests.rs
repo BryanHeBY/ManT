@@ -367,7 +367,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
 #[test]
 fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
+        .join("../..")
         .join("tests/contracts/minimal-query-v3.json");
     let query: QueryBundle =
         serde_json::from_str(&std::fs::read_to_string(fixture).expect("shared query fixture"))

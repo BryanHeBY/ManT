@@ -34,7 +34,7 @@ test = false
 doc = false
 bench = false
 
-# Standalone root: the engine workspace pins release settings that do not
+# Standalone root: the main workspace pins release settings that do not
 # apply to libFuzzer instrumentation builds.
 [workspace]
 members = ["."]

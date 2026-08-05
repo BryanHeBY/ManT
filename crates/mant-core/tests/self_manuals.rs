@@ -6,8 +6,8 @@ use mant_core::{
     select_excerpt,
 };
 
-const MANT_MANUAL: &str = include_str!("../../../../docs/manuals/mant.md");
-const PROTOCOL_REFERENCE: &str = include_str!("../../../../docs/protocol.md");
+const MANT_MANUAL: &str = include_str!("../../../docs/manuals/mant.md");
+const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/protocol.md");
 
 #[test]
 fn shipped_manual_parses_without_lossy_fallbacks() {

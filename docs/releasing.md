@@ -6,7 +6,7 @@ does not form part of the everyday user installation path.
 ## Before tagging
 
 1. Choose a semantic version and update `package.json` and the
-   `[workspace.package]` version in `engine/Cargo.toml`. The five published Rust
+   `[workspace.package]` version in `Cargo.toml`. The five published Rust
    crates use one lockstep version; update every exact internal dependency in
    their `Cargo.toml` files at the same time.
 2. Run the complete local verification boundary:
@@ -32,8 +32,6 @@ Authenticate locally with `cargo login`, review each package, and publish it
 before moving to a dependent package:
 
 ```sh
-cd engine
-
 for package in libmandoc-rs mant-ast mant-core mant-ui mant; do
   cargo publish --dry-run --locked -p "$package"
   cargo publish --locked -p "$package"

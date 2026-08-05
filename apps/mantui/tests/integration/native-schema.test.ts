@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import Ajv2020, { type AnySchema, type ValidateFunction } from "ajv/dist/2020.js";
 
-const mantPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
+const mantPath = new URL("../../../../bin/mant", import.meta.url).pathname;
 const queryFixturePath = new URL(
   "../../../../tests/contracts/minimal-query-v3.json",
   import.meta.url,

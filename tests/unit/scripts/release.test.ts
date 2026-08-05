@@ -84,7 +84,7 @@ example = "9"
     expect(() => releaseVersionFromManifests(
       root,
       `[workspace.package]\nversion = "0.4.0"\n`,
-    )).toThrow("engine/Cargo.toml=0.4.0");
+    )).toThrow("Cargo.toml=0.4.0");
   });
 });
 

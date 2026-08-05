@@ -84,8 +84,8 @@ license, the bundled mandoc license, and a published SHA-256 checksum.
 ### Build from source
 
 ```sh
-cargo build --manifest-path engine/Cargo.toml --release --locked -p mant
-./engine/target/release/mant git
+cargo build --release --locked -p mant
+./target/release/mant git
 ```
 
 See the [development guide](docs/development.md) for full repository checks

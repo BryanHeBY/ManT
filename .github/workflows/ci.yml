@@ -53,9 +53,9 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            engine/target
-            engine/fuzz/target
-          key: cargo-v1-linux-x64-stable-${{ hashFiles('engine/Cargo.lock', 'engine/fuzz/Cargo.lock') }}
+            target
+            fuzz/target
+          key: cargo-v1-linux-x64-stable-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock') }}
           restore-keys: |
             cargo-v1-linux-x64-stable-
 
@@ -73,10 +73,10 @@ jobs:
       # Keep the standalone libFuzzer harnesses compiling without adding
       # instrumented fuzz execution to the normal CI runtime.
       - name: Compile fuzz targets
-        run: cargo check --locked --manifest-path engine/fuzz/Cargo.toml --bins
+        run: cargo check --locked --manifest-path fuzz/Cargo.toml --bins
 
       - name: Verify vendored libmandoc matches upstream
-        run: bash engine/crates/libmandoc-rs/scripts/sync-vendor --verify
+        run: bash crates/libmandoc-rs/scripts/sync-vendor --verify
 
   macos-native:
     # Guards the checked-in macOS C configuration (config/macos.h and its
@@ -105,8 +105,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            engine/target
-          key: cargo-v1-macos-arm64-stable-${{ hashFiles('engine/Cargo.lock') }}
+            target
+          key: cargo-v1-macos-arm64-stable-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             cargo-v1-macos-arm64-stable-
 
@@ -114,10 +114,10 @@ jobs:
       # exercised on every change, not only at release time. clang and `man`
       # ship with the runner image, so libmandoc builds against config/macos.h.
       - name: Test Rust workspace on macOS
-        run: cargo test --locked --manifest-path engine/Cargo.toml --workspace
+        run: cargo test --locked --workspace
 
       - name: Lint Rust workspace on macOS
-        run: cargo clippy --locked --manifest-path engine/Cargo.toml --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   rust-msrv:
     name: Rust MSRV (1.88.0)
@@ -148,13 +148,13 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            engine/target
-          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_MSRV }}-${{ hashFiles('engine/Cargo.lock') }}
+            target
+          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_MSRV }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_MSRV }}-
 
       - name: Test Rust workspace on MSRV
-        run: cargo +"$RUST_MSRV" test --locked --manifest-path engine/Cargo.toml --workspace
+        run: cargo +"$RUST_MSRV" test --locked --workspace
 
   coverage:
     # Reports line coverage for both language boundaries. This runs beside the
@@ -191,8 +191,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            engine/target
-          key: cargo-v1-linux-x64-coverage-${{ hashFiles('engine/Cargo.lock') }}
+            target
+          key: cargo-v1-linux-x64-coverage-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             cargo-v1-linux-x64-coverage-
 
@@ -209,15 +209,12 @@ jobs:
       - name: Install frozen Bun dependencies
         run: bun install --frozen-lockfile
 
-      # --remap-path-prefix rewrites absolute source paths to the workspace
-      # root (engine/), leaving them as crates/... . The sed step then prepends
-      # engine/ so every SF: path is repository-relative; Codecov silently
-      # discards a report whose paths do not resolve against the repo tree.
+      # --remap-path-prefix rewrites absolute source paths to the repository
+      # root, leaving every LCOV source path directly repository-relative.
       - name: Collect Rust coverage
         run: |
-          cargo llvm-cov --locked --manifest-path engine/Cargo.toml --workspace \
+          cargo llvm-cov --locked --workspace \
             --remap-path-prefix --lcov --output-path engine-lcov.info
-          sed -i -E 's|^SF:crates/|SF:engine/crates/|' engine-lcov.info
 
       # The integration suite runs the real staged binary, so stage it before
       # collecting TypeScript coverage. Without this the native tests skip and

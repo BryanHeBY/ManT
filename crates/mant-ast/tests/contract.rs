@@ -6,7 +6,7 @@ use mant_ast::{
 };
 use serde_json::Value;
 
-const MINIMAL_QUERY: &str = include_str!("../../../../tests/contracts/minimal-query-v3.json");
+const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query-v3.json");
 
 #[test]
 fn shared_query_fixture_round_trips_without_shape_changes() {

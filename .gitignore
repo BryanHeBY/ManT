@@ -32,8 +32,9 @@ yarn-error.log*
 tmp-*
 *.tmp
 
-# Platform-specific artifact built from the pinned mandoc source.
-engine/bin/
+# Locally staged executable.
+bin/
 
 # Cargo workspace output. Cargo.lock remains tracked for reproducible builds.
-engine/target/
+target/
+fuzz/target/

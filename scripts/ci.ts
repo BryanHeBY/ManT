@@ -15,7 +15,7 @@ import { assertSupportedBuildPlatform } from "./c-compiler";
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const mantName = "mant";
-const mantSource = join(root, "engine", "bin", mantName);
+const mantSource = join(root, "bin", mantName);
 const mantPath = join(distDirectory, mantName);
 
 async function isExecutable(path: string): Promise<boolean> {
@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     "cargo",
     "fmt",
     "--manifest-path",
-    join(root, "engine", "Cargo.toml"),
+    join(root, "Cargo.toml"),
     "--all",
     "--check",
   ]);
@@ -113,14 +113,14 @@ async function main(): Promise<void> {
     "cargo",
     "test",
     "--manifest-path",
-    join(root, "engine", "Cargo.toml"),
+    join(root, "Cargo.toml"),
     "--workspace",
   ]);
   await run("lint Rust workspace", [
     "cargo",
     "clippy",
     "--manifest-path",
-    join(root, "engine", "Cargo.toml"),
+    join(root, "Cargo.toml"),
     "--workspace",
     "--all-targets",
     "--",
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   ]);
   await run("build native mant", [process.execPath, "run", "build:mant"]);
   if (!(await isExecutable(mantSource))) {
-    throw new Error("build:mant did not stage an executable engine/bin/mant");
+    throw new Error("build:mant did not stage an executable bin/mant");
   }
 
   await run("test", [process.execPath, "test"]);

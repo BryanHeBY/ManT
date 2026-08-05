@@ -40,7 +40,7 @@ fn fixture(relative: &str) -> PathBuf {
 
 fn project_file(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
+        .join("../..")
         .join(relative)
 }
 

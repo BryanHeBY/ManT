@@ -3,7 +3,7 @@
  *
  * Cargo owns compilation and dependency tracking. This wrapper applies ManT's
  * Linux/macOS C-compiler policy and atomically stages the unified release
- * artifact under engine/bin for local development.
+ * artifact under bin/ for local development.
  */
 
 import { chmod, copyFile, mkdir, rename, rm } from "node:fs/promises";
@@ -11,9 +11,9 @@ import { basename, dirname, join } from "node:path";
 import { assertSupportedBuildPlatform, resolveCCompiler } from "./c-compiler";
 
 const root = new URL("..", import.meta.url).pathname;
-const manifest = join(root, "engine", "Cargo.toml");
-const cargoArtifact = join(root, "engine", "target", "release", "mant");
-const stagedArtifact = join(root, "engine", "bin", "mant");
+const manifest = join(root, "Cargo.toml");
+const cargoArtifact = join(root, "target", "release", "mant");
+const stagedArtifact = join(root, "bin", "mant");
 
 /** Build the unified command and return its staged executable path. */
 export async function buildMant(): Promise<string> {

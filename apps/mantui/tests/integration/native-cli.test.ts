@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createMantClient } from "../../src/native/client";
 import { buildPageSearchIndex, queryPageSearchIndex } from "../../src/ui/search";
 
-const mantPath = new URL("../../../../engine/bin/mant", import.meta.url).pathname;
+const mantPath = new URL("../../../../bin/mant", import.meta.url).pathname;
 
 // A missing executable makes spawnSync throw ENOENT rather than return a
 // non-zero code, so a bare probe would crash module load before describe.skip

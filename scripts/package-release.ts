@@ -22,7 +22,7 @@ import { resolveReleasePlatform } from "./release-platform";
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const packageManifest = join(root, "package.json");
-const cargoManifest = join(root, "engine", "Cargo.toml");
+const cargoManifest = join(root, "Cargo.toml");
 
 const RELEASE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
 
@@ -46,7 +46,7 @@ export function workspaceVersion(manifest: string): string {
     /\[workspace\.package\]([\s\S]*?)(?=\n\[|$)/,
   )?.[1];
   const version = workspacePackage?.match(/^version\s*=\s*"([^"]+)"\s*$/m)?.[1];
-  if (!version) throw new Error("engine/Cargo.toml has no workspace package version");
+  if (!version) throw new Error("Cargo.toml has no workspace package version");
   return version;
 }
 
@@ -68,7 +68,7 @@ export function releaseVersionFromManifests(
     throw new Error(
       "version mismatch: "
       + `package.json=${rootVersion}, `
-      + `engine/Cargo.toml=${nativeVersion}`,
+      + `Cargo.toml=${nativeVersion}`,
     );
   }
   return rootVersion;
@@ -211,7 +211,7 @@ export async function packageRelease(
     await copyFile(join(root, "README.md"), join(packageDirectory, "README.md"));
     await copyFile(join(root, "LICENSE"), join(packageDirectory, "LICENSE"));
     await copyFile(
-      join(root, "engine", "crates", "libmandoc-rs", "vendor", "mandoc-1.14.6", "LICENSE"),
+      join(root, "crates", "libmandoc-rs", "vendor", "mandoc-1.14.6", "LICENSE"),
       join(licenseDirectory, "mandoc.txt"),
     );
     await runTar(stagingDirectory, archiveRoot, archive);
