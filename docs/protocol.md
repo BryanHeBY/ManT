@@ -729,7 +729,7 @@ With the current runtime, a client requesting `2025-11-25` receives:
     "name": "mant",
     "version": "0.4.0"
   },
-  "instructions": "Query local manual pages or Markdown files. Start with mant_document_outline, then use IDs, paths, or aliases with mant_document_get or mant_document_explain."
+  "instructions": "Query registered Markdown topics and local manual pages by topic. Use mant_topics_list to discover registered Markdown, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain."
 }
 ```
 
@@ -739,32 +739,33 @@ server version as a permanent ManT constant.
 
 ### Tools
 
-`tools/list` returns generated input and output schemas for exactly four
+`tools/list` returns generated input and output schemas for exactly five
 read-only tools:
 
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
-| `mant_document_outline` | `target` | `detail`, default `options` | `mant.outline/v3` |
-| `mant_document_get` | `target`, non-empty `nodes` | None | `mant.excerpt/v3` |
-| `mant_document_explain` | `target`, `entry` | None | `mant.excerpt/v3` |
-| `mant_document_search` | `target`, `pattern` | Search settings | `mant.search/v2` |
+| `mant_topics_list` | None | None | Registered topic catalog |
+| `mant_document_outline` | `topic` | `section`; `detail`, default `options` | `mant.outline/v3` |
+| `mant_document_get` | `topic`, non-empty `nodes` | `section` | `mant.excerpt/v3` |
+| `mant_document_explain` | `topic`, `entry` | `section` | `mant.excerpt/v3` |
+| `mant_document_search` | `topic`, `pattern` | `section` and search settings | `mant.search/v2` |
 
 Every tool is annotated read-only, non-destructive, idempotent, and
-closed-world. `target` reuses the public input union:
+closed-world. Document tools resolve one topic through registered Markdown and
+then the local man database. They intentionally do not accept arbitrary file
+paths. Supplying `section` bypasses registered Markdown and selects a manual.
+
+Discover registered Markdown with:
 
 ```json
 {
-  "kind": "manual",
-  "topic": "tar"
-}
-```
-
-or:
-
-```json
-{
-  "kind": "markdown-file",
-  "path": "README.md"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "mant_topics_list",
+    "arguments": {}
+  }
 }
 ```
 
@@ -778,10 +779,7 @@ An outline tool call is:
   "params": {
     "name": "mant_document_outline",
     "arguments": {
-      "target": {
-        "kind": "manual",
-        "topic": "tar"
-      },
+      "topic": "tar",
       "detail": "options"
     }
   }
@@ -798,10 +796,7 @@ A structure-aware search tool call is:
   "params": {
     "name": "mant_document_search",
     "arguments": {
-      "target": {
-        "kind": "manual",
-        "topic": "tar"
-      },
+      "topic": "tar",
       "pattern": "--acls",
       "syntax": "literal",
       "case": "insensitive",

@@ -23,7 +23,7 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncRead, ReadBuf},
     sync::Semaphore,
@@ -121,57 +121,22 @@ impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
 
 // ── MCP parameter contracts ──────────────────────────────────────────────
 
-/// The query-input `target` argument with tolerance for stringified JSON.
-///
-/// Some function-calling models serialize the nested `target` object as one
-/// JSON string. The public `--request-json` contract stays strict; only this
-/// MCP boundary re-parses such strings before normal validation, and failures
-/// answer with a correct example so the model can retry.
-#[derive(Debug)]
-struct Target(QueryInput);
-
-const TARGET_HINT: &str = r#"target must be an object such as {"kind":"manual","topic":"ls"} or {"kind":"markdown-file","path":"README.md"}"#;
-
-impl<'de> Deserialize<'de> for Target {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        use serde::de::Error as _;
-
-        let value = serde_json::Value::deserialize(deserializer)?;
-        let value = match value {
-            serde_json::Value::String(text) => serde_json::from_str(&text)
-                .map_err(|error| D::Error::custom(format!("{error}; {TARGET_HINT}")))?,
-            other => other,
-        };
-        serde_json::from_value(value)
-            .map(Self)
-            .map_err(|error| D::Error::custom(format!("{error}; {TARGET_HINT}")))
-    }
-}
-
-impl JsonSchema for Target {
-    fn schema_name() -> std::borrow::Cow<'static, str> {
-        QueryInput::schema_name()
-    }
-
-    fn schema_id() -> std::borrow::Cow<'static, str> {
-        QueryInput::schema_id()
-    }
-
-    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-        QueryInput::json_schema(generator)
-    }
-
-    fn inline_schema() -> bool {
-        QueryInput::inline_schema()
-    }
+/// A document name resolved through registered Markdown and the man database.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TopicSelector {
+    /// Registered Markdown or manual topic name, for example `git` or `mant`.
+    topic: String,
+    /// Optional man section. Supplying it bypasses registered Markdown.
+    section: Option<String>,
 }
 
 /// Parameters for the hierarchy-discovery tool.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OutlineParams {
-    /// A local manual topic or Markdown file using the public query-input schema.
-    target: Target,
+    #[serde(flatten)]
+    selector: TopicSelector,
     /// Include only sections, or include addressable option and command entries.
     detail: Option<OutlineDetail>,
 }
@@ -180,8 +145,8 @@ struct OutlineParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GetParams {
-    /// A local manual topic or Markdown file using the public query-input schema.
-    target: Target,
+    #[serde(flatten)]
+    selector: TopicSelector,
     /// Outline paths, stable IDs, or entry aliases returned by `mant_document_outline`.
     #[schemars(length(min = 1))]
     #[serde(deserialize_with = "lenient_nodes")]
@@ -192,8 +157,8 @@ struct GetParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ExplainParams {
-    /// A local manual topic or Markdown file using the public query-input schema.
-    target: Target,
+    #[serde(flatten)]
+    selector: TopicSelector,
     /// Option spelling, command name, environment variable, outline path, or stable ID.
     entry: String,
 }
@@ -202,8 +167,8 @@ struct ExplainParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SearchParams {
-    /// A local manual topic or Markdown file using the public query-input schema.
-    target: Target,
+    #[serde(flatten)]
+    selector: TopicSelector,
     /// Literal text or a regular expression, depending on `syntax`.
     #[schemars(length(min = 1, max = 4096))]
     pattern: String,
@@ -227,6 +192,22 @@ struct SearchParams {
     /// Number of matches to skip for deterministic pagination.
     #[serde(default, deserialize_with = "lenient_scalar")]
     offset: Option<u32>,
+}
+
+/// Discoverable registered-Markdown catalog returned to MCP clients.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct TopicCatalog {
+    topics: Vec<TopicSummary>,
+}
+
+/// One effective topic after user and system directory precedence is applied.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct TopicSummary {
+    name: String,
+    path: String,
+    origin: String,
 }
 
 /// Accepts a native scalar or its stringified spelling such as `"10"` or `"True"`.
@@ -311,6 +292,35 @@ impl MantMcpServer {
 
 #[tool_router(router = tool_router)]
 impl MantMcpServer {
+    /// List Markdown documents explicitly registered in the topic namespace.
+    #[tool(
+        name = "mant_topics_list",
+        annotations(
+            title = "ManT registered topics",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn topics_list(&self) -> Result<Json<TopicCatalog>, String> {
+        let topics = task::spawn_blocking(mant_core::list_registered_topics)
+            .await
+            .map_err(|error| format!("MCP topic discovery worker failed: {error}"))?
+            .into_iter()
+            .map(|topic| TopicSummary {
+                name: topic.name,
+                path: topic.path.to_string_lossy().into_owned(),
+                origin: match topic.origin {
+                    mant_core::RegisteredTopicOrigin::User => "user",
+                    mant_core::RegisteredTopicOrigin::System => "system",
+                }
+                .to_owned(),
+            })
+            .collect();
+        Ok(Json(TopicCatalog { topics }))
+    }
+
     /// Return a hierarchical tree of sections and optional addressable entries.
     #[tool(
         name = "mant_document_outline",
@@ -328,7 +338,7 @@ impl MantMcpServer {
     ) -> Result<Json<QueryOutline>, String> {
         let parameters = parameters.0;
         let detail = parameters.detail.unwrap_or(OutlineDetail::Options);
-        let request = request_for(parameters.target.0, QueryView::Outline { detail })?;
+        let request = request_for(parameters.selector, QueryView::Outline { detail })?;
         let query = self.query(request).await?;
         let outline = mant_core::build_outline_with_detail(&query, detail)
             .map_err(|error| error.to_string())?;
@@ -353,7 +363,7 @@ impl MantMcpServer {
         let parameters = parameters.0;
         validate_nodes(&parameters.nodes)?;
         let request = request_for(
-            parameters.target.0,
+            parameters.selector,
             QueryView::Excerpt {
                 nodes: parameters.nodes.clone(),
             },
@@ -383,7 +393,7 @@ impl MantMcpServer {
         let parameters = parameters.0;
         let entry = non_empty(&parameters.entry, "entry")?;
         let request = request_for(
-            parameters.target.0,
+            parameters.selector,
             QueryView::Excerpt {
                 nodes: vec![entry.clone()],
             },
@@ -430,7 +440,7 @@ impl MantMcpServer {
         };
         mant_core::validate_search_query(&search).map_err(|error| error.to_string())?;
         let request = request_for(
-            parameters.target.0,
+            parameters.selector,
             QueryView::Search {
                 pattern: search.pattern.clone(),
                 syntax: search.syntax,
@@ -454,7 +464,7 @@ impl ServerHandler for MantMcpServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("mant", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Query local manual pages or Markdown files. Start with mant_document_outline, then use IDs, paths, or aliases with mant_document_get or mant_document_explain.",
+                "Query registered Markdown topics and local manual pages by topic. Use mant_topics_list to discover registered Markdown, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain.",
             )
     }
 }
@@ -471,17 +481,13 @@ fn drop_author_style_diagnostics(excerpt: &mut QueryExcerpt) {
         .retain(|diagnostic| diagnostic.level != DiagnosticLevel::Style);
 }
 
-fn request_for(target: QueryInput, view: QueryView) -> Result<QueryRequest, String> {
-    let input = match target {
-        QueryInput::Manual { topic, section } => QueryInput::Manual {
-            topic: non_empty(&topic, "topic")?,
-            section: section
-                .map(|section| non_empty(&section, "section"))
-                .transpose()?,
-        },
-        QueryInput::MarkdownFile { path } => QueryInput::MarkdownFile {
-            path: non_empty(&path, "path")?,
-        },
+fn request_for(selector: TopicSelector, view: QueryView) -> Result<QueryRequest, String> {
+    let input = QueryInput::Manual {
+        topic: non_empty(&selector.topic, "topic")?,
+        section: selector
+            .section
+            .map(|section| non_empty(&section, "section"))
+            .transpose()?,
     };
     Ok(QueryRequest {
         schema: mant_ast::RequestSchema::V3,
@@ -513,7 +519,6 @@ fn non_empty(value: &str, field: &str) -> Result<String, String> {
 mod tests {
     use std::io;
 
-    use mant_ast::QueryInput;
     use serde_json::json;
 
     use super::{GetParams, MantMcpServer, OutlineParams, SearchParams};
@@ -535,6 +540,7 @@ mod tests {
                 "mant_document_get",
                 "mant_document_outline",
                 "mant_document_search",
+                "mant_topics_list",
             ]
         );
         for tool in tools {
@@ -548,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    fn the_target_wrapper_publishes_the_public_query_input_schema() {
+    fn document_tools_publish_a_topic_without_an_arbitrary_path_target() {
         let server = MantMcpServer::new();
         let tools = server.tool_router.list_all();
         let outline = tools
@@ -556,59 +562,36 @@ mod tests {
             .find(|tool| tool.name == "mant_document_outline")
             .expect("outline tool");
         let schema = serde_json::to_value(&outline.input_schema).expect("schema JSON");
-        assert_eq!(
-            schema["properties"]["target"]["$ref"],
-            json!("#/$defs/QueryInput")
-        );
-        assert!(schema["$defs"]["QueryInput"]["oneOf"].is_array());
+        assert_eq!(schema["properties"]["topic"]["type"], "string");
+        assert!(schema["properties"]["section"].is_object());
+        assert!(schema["properties"].get("target").is_none());
+        assert!(!schema.to_string().contains("markdown-file"));
     }
 
     #[test]
-    fn a_target_object_deserializes_directly() {
-        let parameters: OutlineParams =
-            serde_json::from_value(json!({"target": {"kind": "manual", "topic": "ls"}}))
-                .expect("object target");
-        assert_eq!(
-            parameters.target.0,
-            QueryInput::Manual {
-                topic: "ls".to_owned(),
-                section: None,
-            }
-        );
+    fn a_topic_and_optional_manual_section_deserialize_directly() {
+        let parameters: OutlineParams = serde_json::from_value(json!({
+            "topic": "printf",
+            "section": "3"
+        }))
+        .expect("topic selector");
+        assert_eq!(parameters.selector.topic, "printf");
+        assert_eq!(parameters.selector.section.as_deref(), Some("3"));
     }
 
     #[test]
-    fn a_stringified_target_object_still_deserializes() {
-        let parameters: OutlineParams = serde_json::from_value(
-            json!({"target": "{\"kind\": \"markdown-file\", \"path\": \"README.md\"}"}),
-        )
-        .expect("stringified target");
-        assert_eq!(
-            parameters.target.0,
-            QueryInput::MarkdownFile {
-                path: "README.md".to_owned(),
-            }
-        );
-    }
-
-    #[test]
-    fn an_invalid_target_reports_a_correct_example() {
-        for target in [json!("ls"), json!(42), json!({"kind": "unknown"})] {
-            let error = serde_json::from_value::<OutlineParams>(json!({"target": target}))
-                .expect_err("invalid target");
-            assert!(
-                error
-                    .to_string()
-                    .contains(r#"{"kind":"manual","topic":"ls"}"#),
-                "missing example in: {error}"
-            );
-        }
+    fn arbitrary_markdown_paths_are_not_mcp_inputs() {
+        let error = serde_json::from_value::<OutlineParams>(json!({
+            "target": {"kind": "markdown-file", "path": "README.md"}
+        }))
+        .expect_err("path target must be rejected");
+        assert!(error.to_string().contains("topic"));
     }
 
     #[test]
     fn stringified_search_scalars_and_snake_case_context_still_deserialize() {
         let parameters: SearchParams = serde_json::from_value(json!({
-            "target": {"kind": "manual", "topic": "ls"},
+            "topic": "ls",
             "pattern": "sort",
             "word": "True",
             "context_lines": "2",
@@ -625,7 +608,7 @@ mod tests {
     #[test]
     fn unparsable_search_scalars_still_fail() {
         let error = serde_json::from_value::<SearchParams>(json!({
-            "target": {"kind": "manual", "topic": "ls"},
+            "topic": "ls",
             "pattern": "sort",
             "limit": "ten",
         }))
@@ -641,7 +624,7 @@ mod tests {
             (json!("[\"2\", \"1/o1\"]"), vec!["2", "1/o1"]),
         ] {
             let parameters: GetParams = serde_json::from_value(json!({
-                "target": {"kind": "manual", "topic": "ls"},
+                "topic": "ls",
                 "nodes": nodes,
             }))
             .expect("lenient nodes");
@@ -652,7 +635,7 @@ mod tests {
     #[test]
     fn malformed_node_selectors_report_a_correct_example() {
         let error = serde_json::from_value::<GetParams>(json!({
-            "target": {"kind": "manual", "topic": "ls"},
+            "topic": "ls",
             "nodes": "[1, 2]",
         }))
         .expect_err("non-string selectors");

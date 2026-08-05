@@ -319,9 +319,11 @@ examples, compatibility policy, coordinate rules, and MCP tool contracts.
 
 Standard output is reserved for the requested result. Concise diagnostics use
 standard error. `--request-json` accepts the same input and projection model
-used by external process integrations. MCP exposes `mant_document_outline`, `mant_document_get`,
-`mant_document_explain`, and `mant_document_search`; their generated `target`
-union accepts either a manual topic or a local Markdown path.
+used by external process integrations. MCP exposes `mant_topics_list`,
+`mant_document_outline`, `mant_document_get`, `mant_document_explain`, and
+`mant_document_search`. Document tools accept a topic and optional manual
+section, not an arbitrary local path; register Markdown before exposing it to
+an agent.
 
 ## Data
 

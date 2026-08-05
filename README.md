@@ -235,9 +235,11 @@ mant --mcp
 ```
 
 Configure the client command as `mant` with arguments `["--mcp"]`. The server
-exposes outline, content, semantic explanation, and search tools over stdio.
-It has no network transport or mutation tools; stdout remains reserved for
-MCP JSON-RPC and diagnostics use stderr.
+exposes registered-topic discovery, outline, content, semantic explanation,
+and search tools over stdio. Document tools accept topic names rather than
+arbitrary filesystem paths; place agent-readable Markdown in the registered
+topic directories above. It has no network transport or mutation tools;
+stdout remains reserved for MCP JSON-RPC and diagnostics use stderr.
 
 ## Architecture
 

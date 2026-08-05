@@ -1,4 +1,4 @@
-//! Verifies the public `mant --mcp` stdio handshake without a local man page.
+//! Verifies topic-only MCP queries without depending on a local man page.
 
 use std::{
     fs,
@@ -11,10 +11,13 @@ use serde_json::{Value, json};
 
 /// Start the real binary, negotiate MCP, and inspect its discoverable tools.
 #[test]
-fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
+fn stdio_mode_lists_and_queries_registered_markdown_topics() {
     let executable = env!("CARGO_BIN_EXE_mant");
+    let data_home = registered_topic_fixture();
     let mut child = Command::new(executable)
         .arg("--mcp")
+        .env("XDG_DATA_HOME", &data_home)
+        .env("XDG_DATA_DIRS", data_home.join("empty-system-data"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -47,26 +50,19 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
             "mant_document_get",
             "mant_document_outline",
             "mant_document_search",
+            "mant_topics_list",
         ]
     );
     for tool in tools {
         assert!(tool["inputSchema"]["properties"].is_object());
-        assert!(tool["inputSchema"]["properties"]["target"].is_object());
         assert!(tool["outputSchema"].is_object());
         assert_eq!(tool["annotations"]["readOnlyHint"], true);
         assert_eq!(tool["annotations"]["openWorldHint"], false);
     }
 
-    // Exercise the new source branch without depending on whichever manuals
-    // the host provides.
-    let markdown_path = markdown_fixture_path();
-    fs::write(
-        &markdown_path,
-        "Read the MCP needle.\n\n# Guide\n\nDocument body.\n",
-    )
-    .expect("write Markdown fixture");
-    request_markdown_search(&mut input, &markdown_path);
-    request_markdown_get(&mut input, &markdown_path);
+    request_topic_list(&mut input);
+    request_topic_search(&mut input);
+    request_topic_get(&mut input);
     input.flush().expect("flush tool call");
 
     // JSON-RPC permits concurrent requests to complete out of order. Select
@@ -74,12 +70,25 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
     let replies = [
         parse_reply(lines.next().expect("first tool reply")),
         parse_reply(lines.next().expect("second tool reply")),
+        parse_reply(lines.next().expect("third tool reply")),
     ];
-    let search = replies
+    let catalog = replies
         .iter()
         .find(|reply| reply["id"] == 3)
+        .expect("topic list reply");
+    assert_eq!(
+        catalog["result"]["structuredContent"]["topics"][0]["name"],
+        "mcp-registered"
+    );
+    assert_eq!(
+        catalog["result"]["structuredContent"]["topics"][0]["origin"],
+        "user"
+    );
+    let search = replies
+        .iter()
+        .find(|reply| reply["id"] == 4)
         .expect("tool search reply");
-    assert_eq!(search["id"], 3);
+    assert_eq!(search["id"], 4);
     assert_ne!(search["result"]["isError"], true);
     assert_eq!(search["result"]["structuredContent"]["total"], 1);
     assert_eq!(
@@ -89,9 +98,9 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
 
     let excerpt = replies
         .iter()
-        .find(|reply| reply["id"] == 4)
+        .find(|reply| reply["id"] == 5)
         .expect("tool get reply");
-    assert_eq!(excerpt["id"], 4);
+    assert_eq!(excerpt["id"], 5);
     assert_ne!(excerpt["result"]["isError"], true);
     assert_eq!(
         excerpt["result"]["structuredContent"]["selections"][0]["kind"],
@@ -104,7 +113,7 @@ fn stdio_mode_exposes_read_only_document_tools_and_queries_markdown() {
 
     drop(input);
     let status = child.wait().expect("MCP server exit");
-    fs::remove_file(markdown_path).expect("remove Markdown fixture");
+    fs::remove_dir_all(data_home).expect("remove registered topic fixture");
     assert!(status.success(), "MCP server should stop cleanly: {status}");
 }
 
@@ -144,7 +153,7 @@ fn request_tool_list(input: &mut impl Write) {
     );
 }
 
-fn request_markdown_search(input: &mut impl Write, path: &PathBuf) {
+fn request_topic_list(input: &mut impl Write) {
     write_message(
         input,
         &json!({
@@ -152,9 +161,24 @@ fn request_markdown_search(input: &mut impl Write, path: &PathBuf) {
             "id": 3,
             "method": "tools/call",
             "params": {
+                "name": "mant_topics_list",
+                "arguments": {}
+            }
+        }),
+    );
+}
+
+fn request_topic_search(input: &mut impl Write) {
+    write_message(
+        input,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
                 "name": "mant_document_search",
                 "arguments": {
-                    "target": stringified_markdown_target(path),
+                    "topic": "mcp-registered",
                     "pattern": "needle",
                     "word": "True",
                     "context_lines": "1",
@@ -166,17 +190,17 @@ fn request_markdown_search(input: &mut impl Write, path: &PathBuf) {
     );
 }
 
-fn request_markdown_get(input: &mut impl Write, path: &PathBuf) {
+fn request_topic_get(input: &mut impl Write) {
     write_message(
         input,
         &json!({
             "jsonrpc": "2.0",
-            "id": 4,
+            "id": 5,
             "method": "tools/call",
             "params": {
                 "name": "mant_document_get",
                 "arguments": {
-                    "target": stringified_markdown_target(path),
+                    "topic": "mcp-registered",
                     "nodes": "[\"root\"]"
                 }
             }
@@ -184,20 +208,21 @@ fn request_markdown_get(input: &mut impl Write, path: &PathBuf) {
     );
 }
 
-fn stringified_markdown_target(path: &PathBuf) -> String {
-    json!({
-        "kind": "markdown-file",
-        "path": path,
-    })
-    .to_string()
-}
-
 fn write_message(input: &mut impl Write, message: &Value) {
     writeln!(input, "{message}").expect("write MCP request");
 }
 
-fn markdown_fixture_path() -> PathBuf {
-    std::env::temp_dir().join(format!("mant-mcp-markdown-{}.md", std::process::id()))
+fn registered_topic_fixture() -> PathBuf {
+    let data_home =
+        std::env::temp_dir().join(format!("mant-mcp-registered-topic-{}", std::process::id()));
+    let topics = data_home.join("mant/topics");
+    fs::create_dir_all(&topics).expect("create topic directory");
+    fs::write(
+        topics.join("mcp-registered.md"),
+        "Read the MCP needle.\n\n# Guide\n\nDocument body.\n",
+    )
+    .expect("write registered topic");
+    data_home
 }
 
 fn parse_reply(line: Result<String, std::io::Error>) -> Value {
