@@ -28,6 +28,12 @@ use crate::{
 };
 
 const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
+/// Defers expensive width-dependent document reflow until the splitter settles.
+///
+/// Pointer events can arrive substantially faster than a large manual can be
+/// lowered into visual rows. Keeping only the newest coordinate and restarting
+/// this short idle window avoids replaying every intermediate width.
+const SIDEBAR_RESIZE_IDLE: Duration = Duration::from_millis(60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SearchMode {
@@ -87,6 +93,12 @@ enum PointerDrag {
     Sidebar,
     NavigationScrollbar(ScrollbarDrag),
     ContentScrollbar(ScrollbarDrag),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PendingSidebarResize {
+    column: u16,
+    deadline: Instant,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -154,6 +166,7 @@ pub struct App {
     last_status_area: Rect,
     last_navigation_rows: Vec<usize>,
     navigation_sync_deadline: Option<Instant>,
+    pending_sidebar_resize: Option<PendingSidebarResize>,
     content_render_width: u16,
     rendered_cache: HashMap<u16, RenderedDocument>,
 }
@@ -196,6 +209,7 @@ impl App {
             last_status_area: Rect::default(),
             last_navigation_rows: Vec::new(),
             navigation_sync_deadline: None,
+            pending_sidebar_resize: None,
             content_render_width: 0,
             rendered_cache: HashMap::new(),
         }
@@ -207,6 +221,13 @@ impl App {
     }
 
     pub(crate) fn tick(&mut self, now: Instant) {
+        if let Some(pending) = self
+            .pending_sidebar_resize
+            .filter(|pending| pending.deadline <= now)
+        {
+            self.pending_sidebar_resize = None;
+            self.commit_sidebar_at(pending.column);
+        }
         if self
             .navigation_sync_deadline
             .is_some_and(|deadline| deadline <= now)
@@ -217,8 +238,14 @@ impl App {
     }
 
     pub(crate) fn next_wakeup(&self, now: Instant) -> Option<Duration> {
-        self.navigation_sync_deadline
-            .map(|deadline| deadline.saturating_duration_since(now))
+        [
+            self.navigation_sync_deadline,
+            self.pending_sidebar_resize.map(|pending| pending.deadline),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|deadline| deadline.saturating_duration_since(now))
+        .min()
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
@@ -340,6 +367,10 @@ impl App {
     }
 
     fn handle_pointer_control(&mut self, mouse: MouseEvent) -> bool {
+        self.handle_pointer_control_at(mouse, Instant::now())
+    }
+
+    fn handle_pointer_control_at(&mut self, mouse: MouseEvent, now: Instant) -> bool {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
                 if self
@@ -355,6 +386,7 @@ impl App {
                 if self.is_sidebar_boundary(mouse.column, mouse.row) =>
             {
                 self.pointer_drag = PointerDrag::Sidebar;
+                self.pending_sidebar_resize = None;
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
@@ -368,7 +400,7 @@ impl App {
                 self.pointer_drag = PointerDrag::ContentScrollbar(drag);
             }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
-                PointerDrag::Sidebar => self.commit_sidebar_at(mouse.column),
+                PointerDrag::Sidebar => self.request_sidebar_resize(mouse.column, now),
                 PointerDrag::NavigationScrollbar(drag) => {
                     self.scroll_navigation_to_pointer(mouse.row, drag);
                 }
@@ -379,7 +411,7 @@ impl App {
             },
             MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
                 match self.pointer_drag {
-                    PointerDrag::Sidebar => self.commit_sidebar_at(mouse.column),
+                    PointerDrag::Sidebar => self.finish_sidebar_resize(mouse.column),
                     PointerDrag::NavigationScrollbar(drag) => {
                         self.scroll_navigation_to_pointer(mouse.row, drag);
                     }
@@ -429,6 +461,7 @@ impl App {
                 self.pointer_drag,
                 PointerDrag::Sidebar | PointerDrag::NavigationScrollbar(_)
             ) {
+                self.pending_sidebar_resize = None;
                 self.pointer_drag = PointerDrag::None;
             }
             self.draw_content(frame, body_area);
@@ -1312,6 +1345,20 @@ impl App {
         self.sidebar_width = self.sidebar_width_at(column);
     }
 
+    fn request_sidebar_resize(&mut self, column: u16, now: Instant) {
+        // This is a trailing-edge debounce: every new coordinate replaces the
+        // previous one and postpones reflow until pointer input becomes idle.
+        self.pending_sidebar_resize = Some(PendingSidebarResize {
+            column,
+            deadline: now + SIDEBAR_RESIZE_IDLE,
+        });
+    }
+
+    fn finish_sidebar_resize(&mut self, column: u16) {
+        self.commit_sidebar_at(column);
+        self.pending_sidebar_resize = None;
+    }
+
     fn visible_navigation_indices(&self) -> Vec<usize> {
         let mut visible_ids = HashSet::new();
         let mut indices = Vec::new();
@@ -2054,7 +2101,7 @@ mod tests {
     }
 
     #[test]
-    fn dragging_the_sidebar_boundary_changes_its_width() {
+    fn dragging_the_sidebar_boundary_debounces_width_updates() {
         let backend = TestBackend::new(100, 18);
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
@@ -2066,37 +2113,59 @@ mod tests {
         assert!(!app.is_sidebar_boundary(boundary.saturating_sub(1), splitter_row));
         assert!(app.is_sidebar_boundary(boundary, splitter_row));
         assert!(!app.is_sidebar_boundary(boundary, 0));
+        let started = Instant::now();
 
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: boundary,
-            row: 8,
-            modifiers: KeyModifiers::NONE,
-        });
+        app.handle_pointer_control_at(
+            MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: boundary,
+                row: 8,
+                modifiers: KeyModifiers::NONE,
+            },
+            started,
+        );
         assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Drag(MouseButton::Left),
-            column: 40,
-            row: 8,
-            modifiers: KeyModifiers::NONE,
-        });
+        app.handle_pointer_control_at(
+            MouseEvent {
+                kind: MouseEventKind::Drag(MouseButton::Left),
+                column: 40,
+                row: 8,
+                modifiers: KeyModifiers::NONE,
+            },
+            started,
+        );
         terminal
             .draw(|frame| app.draw(frame))
-            .expect("draw intermediate width");
-        assert_eq!(app.sidebar_width, 40);
+            .expect("draw while resize is pending");
+        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+        assert_eq!(
+            app.pending_sidebar_resize.map(|pending| pending.column),
+            Some(40)
+        );
         assert_eq!(app.pointer_drag, PointerDrag::Sidebar);
-        assert_ne!(app.last_content_area.width, initial_render_width);
+        assert_eq!(app.last_content_area.width, initial_render_width);
         assert_eq!(
             app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
             HashSet::from([app.last_content_area.width])
         );
 
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Drag(MouseButton::Left),
-            column: 44,
-            row: 8,
-            modifiers: KeyModifiers::NONE,
-        });
+        app.handle_pointer_control_at(
+            MouseEvent {
+                kind: MouseEventKind::Drag(MouseButton::Left),
+                column: 44,
+                row: 8,
+                modifiers: KeyModifiers::NONE,
+            },
+            started + Duration::from_millis(1),
+        );
+        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+        assert_eq!(
+            app.pending_sidebar_resize.map(|pending| pending.column),
+            Some(44)
+        );
+        app.tick(started + SIDEBAR_RESIZE_IDLE);
+        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+        app.tick(started + SIDEBAR_RESIZE_IDLE + Duration::from_millis(1));
         terminal
             .draw(|frame| app.draw(frame))
             .expect("draw final live width");
@@ -2107,19 +2176,23 @@ mod tests {
             HashSet::from([app.last_content_area.width])
         );
 
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Up(MouseButton::Left),
-            column: 44,
-            row: 8,
-            modifiers: KeyModifiers::NONE,
-        });
+        app.handle_pointer_control_at(
+            MouseEvent {
+                kind: MouseEventKind::Up(MouseButton::Left),
+                column: 46,
+                row: 8,
+                modifiers: KeyModifiers::NONE,
+            },
+            started + SIDEBAR_RESIZE_IDLE + Duration::from_millis(2),
+        );
 
-        assert_eq!(app.sidebar_width, 44);
+        assert_eq!(app.sidebar_width, 46);
         assert_eq!(app.pointer_drag, PointerDrag::None);
+        assert!(app.pending_sidebar_resize.is_none());
     }
 
     #[test]
-    fn live_sidebar_resize_keeps_the_visible_code_logically_anchored() {
+    fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
         let mut bundle = navigation_bundle();
         bundle.document.as_mut().expect("document").sections[0].blocks = vec![
             AstBlock::Paragraph {
@@ -2166,6 +2239,11 @@ mod tests {
             row: 6,
             modifiers: KeyModifiers::NONE,
         });
+        let deadline = app
+            .pending_sidebar_resize
+            .expect("pending sidebar resize")
+            .deadline;
+        app.tick(deadline);
         terminal
             .draw(|frame| app.draw(frame))
             .expect("resized draw");
