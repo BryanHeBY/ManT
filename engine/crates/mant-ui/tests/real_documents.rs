@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mant_ast::{QueryBundle, QuerySchema};
+use mant_ast::{Block, Inline, MantDocument, QueryBundle, QuerySchema, Section};
 use mant_ui::DocumentView;
 
 fn fixture(relative: &str) -> PathBuf {
@@ -23,6 +23,13 @@ fn view(relative: &str) -> DocumentView {
         document: Some(document),
         tldr: None,
     })
+}
+
+fn visible_characters(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_whitespace() && !character.is_control())
+        .collect()
 }
 
 #[test]
@@ -105,6 +112,113 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
             !rendered.search("--acls").is_empty(),
             "tar --acls is visible but not searchable at width {width}"
         );
+    }
+}
+
+#[test]
+fn real_manual_lowering_preserves_every_substantial_text_fragment() {
+    for relative in [
+        "archlinux/gawk.1.zst",
+        "debian/sh.1.gz",
+        "fedora44/gcc.1.zst",
+        "fedora44/tar.1.zst",
+    ] {
+        let document =
+            mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
+        let mut fragments = Vec::new();
+        collect_document_fragments(&document, &mut fragments);
+        let view = DocumentView::new(&QueryBundle {
+            schema: QuerySchema::V3,
+            label: relative.to_owned(),
+            document: Some(document),
+            tldr: None,
+        });
+
+        for width in [32, 80, 132] {
+            let rendered = view.render(width);
+            let output = visible_characters(
+                &rendered
+                    .text
+                    .lines
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+            let mut cursor = 0;
+            for fragment in &fragments {
+                let expected = visible_characters(fragment);
+                if expected.chars().count() < 4 {
+                    continue;
+                }
+                let Some(relative_position) = output[cursor..].find(&expected) else {
+                    panic!("{relative} lost or reordered fragment {fragment:?} at width {width}");
+                };
+                cursor += relative_position + expected.len();
+            }
+        }
+    }
+}
+
+fn collect_document_fragments(document: &MantDocument, output: &mut Vec<String>) {
+    collect_blocks(&document.blocks, output);
+    for section in &document.sections {
+        collect_section_fragments(section, output);
+    }
+}
+
+fn collect_section_fragments(section: &Section, output: &mut Vec<String>) {
+    output.push(section.title.clone());
+    collect_blocks(&section.blocks, output);
+    for child in &section.children {
+        collect_section_fragments(child, output);
+    }
+}
+
+fn collect_blocks(blocks: &[Block], output: &mut Vec<String>) {
+    for block in blocks {
+        match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                collect_inlines(children, output);
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    collect_blocks(&item.blocks, output);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    for term in &item.terms {
+                        collect_inlines(term, output);
+                    }
+                    collect_blocks(&item.description, output);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter().flat_map(|row| &row.cells) {
+                    collect_blocks(&cell.blocks, output);
+                }
+            }
+            Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
+                output.push(value.clone());
+            }
+            Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => {}
+        }
+    }
+}
+
+fn collect_inlines(inlines: &[Inline], output: &mut Vec<String>) {
+    for inline in inlines {
+        match inline {
+            Inline::Text { value } | Inline::Code { value } => output.push(value.clone()),
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => collect_inlines(children, output),
+            Inline::Anchor { .. } | Inline::LineBreak => {}
+        }
     }
 }
 
