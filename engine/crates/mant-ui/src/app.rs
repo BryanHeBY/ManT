@@ -117,11 +117,13 @@ pub struct App {
     expanded: HashSet<String>,
     content_scroll: usize,
     navigation_scroll: usize,
+    navigation_visibility_target: Option<usize>,
     sidebar_width: u16,
     show_sidebar: bool,
     quit: bool,
     search_mode: SearchMode,
     search_draft: String,
+    search_cursor: usize,
     search_query: String,
     search_matches: Vec<RenderedSearchMatch>,
     active_search_match: usize,
@@ -152,11 +154,13 @@ impl App {
             expanded,
             content_scroll: 0,
             navigation_scroll: 0,
+            navigation_visibility_target: Some(0),
             sidebar_width: 36,
             show_sidebar: true,
             quit: false,
             search_mode: SearchMode::Closed,
             search_draft: String::new(),
+            search_cursor: 0,
             search_query: String::new(),
             search_matches: Vec::new(),
             active_search_match: 0,
@@ -264,6 +268,20 @@ impl App {
                 self.resize_sidebar_to(mouse.column);
                 self.resizing_sidebar = false;
             }
+            MouseEventKind::ScrollDown
+                if self
+                    .last_navigation_area
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.navigation_scroll = self.navigation_scroll.saturating_add(3);
+            }
+            MouseEventKind::ScrollUp
+                if self
+                    .last_navigation_area
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.navigation_scroll = self.navigation_scroll.saturating_sub(3);
+            }
             MouseEventKind::ScrollDown => self.scroll_content(3),
             MouseEventKind::ScrollUp => self.scroll_content(-3),
             MouseEventKind::Down(MouseButton::Left)
@@ -276,7 +294,7 @@ impl App {
                     if self.selected == index && self.document.navigation()[index].has_children {
                         self.toggle_selected();
                     } else {
-                        self.selected = index;
+                        self.set_selected_index(index);
                         if self.document.navigation()[index].has_children {
                             self.expanded
                                 .insert(self.document.navigation()[index].id.clone());
@@ -451,7 +469,7 @@ impl App {
             visible.first()
         };
         if let Some(index) = selected.copied() {
-            self.selected = index;
+            self.set_selected_index(index);
             self.scroll_to_selected();
         }
     }
@@ -662,15 +680,21 @@ impl App {
             &self.expanded,
             line_width,
         );
-        let selected_row = rows
-            .iter()
-            .position(|row| row.item_index == self.selected)
-            .unwrap_or_default();
-        self.keep_selected_navigation_visible(selected_row, usize::from(navigation_area.height));
+        let height = usize::from(navigation_area.height);
+        self.navigation_scroll = self
+            .navigation_scroll
+            .min(rows.len().saturating_sub(height));
+        if self.navigation_visibility_target.take() == Some(self.selected) {
+            let selected_row = rows
+                .iter()
+                .position(|row| row.item_index == self.selected)
+                .unwrap_or_default();
+            self.keep_selected_navigation_visible(selected_row, height);
+        }
         let visible_rows = rows
             .into_iter()
             .skip(self.navigation_scroll)
-            .take(usize::from(navigation_area.height))
+            .take(height)
             .collect::<Vec<_>>();
         self.last_navigation_rows = visible_rows.iter().map(|row| row.item_index).collect();
         let lines = visible_rows
@@ -778,15 +802,26 @@ impl App {
     fn draw_search(&self, frame: &mut Frame<'_>, area: Rect) {
         let style = Style::default().bg(theme::MENU);
         frame.render_widget(Block::default().style(style), area);
+        let (before_cursor, after_cursor) = self.search_draft.split_at(self.search_cursor);
+        let cursor_character = after_cursor.chars().next();
+        let cursor_bytes = cursor_character.map_or(0, char::len_utf8);
+        let after_cursor = &after_cursor[cursor_bytes..];
         let prompt = format!(" Find: {}", self.search_draft);
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(" Find: ", style.fg(theme::YELLOW)),
                 Span::styled(
-                    self.search_draft.clone(),
+                    before_cursor.to_owned(),
                     style.fg(theme::TEXT).bg(theme::SURFACE),
                 ),
-                Span::styled(" ", style.bg(theme::TEXT)),
+                Span::styled(
+                    cursor_character.map_or_else(|| " ".to_owned(), |value| value.to_string()),
+                    style.fg(theme::BASE).bg(theme::TEXT),
+                ),
+                Span::styled(
+                    after_cursor.to_owned(),
+                    style.fg(theme::TEXT).bg(theme::SURFACE),
+                ),
             ])),
             area,
         );
@@ -833,18 +868,25 @@ impl App {
             .position(|index| *index == self.selected)
             .unwrap_or_default();
         let next = current.saturating_add_signed(delta).min(visible.len() - 1);
-        self.selected = visible[next];
+        self.set_selected_index(visible[next]);
         self.scroll_to_selected();
+    }
+
+    fn set_selected_index(&mut self, index: usize) {
+        self.selected = index;
+        self.navigation_visibility_target = Some(index);
     }
 
     fn open_search(&mut self) {
         self.search_mode = SearchMode::Open { editing: false };
         self.search_draft.clone_from(&self.search_query);
+        self.search_cursor = self.search_draft.len();
     }
 
     fn close_search(&mut self) {
         self.search_mode = SearchMode::Closed;
         self.search_draft.clear();
+        self.search_cursor = 0;
         self.search_query.clear();
         self.search_matches.clear();
         self.active_search_match = 0;
@@ -865,19 +907,50 @@ impl App {
                 }
             }
             KeyCode::Backspace => {
-                self.search_draft.pop();
-                self.search_mode = SearchMode::Open { editing: true };
+                if let Some(previous) =
+                    previous_char_boundary(&self.search_draft, self.search_cursor)
+                {
+                    self.search_draft.drain(previous..self.search_cursor);
+                    self.search_cursor = previous;
+                    self.search_mode = SearchMode::Open { editing: true };
+                }
             }
             KeyCode::Delete => {
+                if let Some(next) = next_char_boundary(&self.search_draft, self.search_cursor) {
+                    self.search_draft.drain(self.search_cursor..next);
+                    self.search_mode = SearchMode::Open { editing: true };
+                }
+            }
+            KeyCode::Left => {
+                self.search_cursor = previous_char_boundary(&self.search_draft, self.search_cursor)
+                    .unwrap_or_default();
+            }
+            KeyCode::Right => {
+                self.search_cursor = next_char_boundary(&self.search_draft, self.search_cursor)
+                    .unwrap_or(self.search_draft.len());
+            }
+            KeyCode::Home => self.search_cursor = 0,
+            KeyCode::End => self.search_cursor = self.search_draft.len(),
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.search_cursor = 0;
+            }
+            KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.search_cursor = self.search_draft.len();
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.search_draft.clear();
+                self.search_cursor = 0;
                 self.search_mode = SearchMode::Open { editing: true };
             }
+            KeyCode::Down if !self.search_mode.is_editing() => self.select_search_relative(1),
+            KeyCode::Up if !self.search_mode.is_editing() => self.select_search_relative(-1),
             KeyCode::Char(character)
                 if !key
                     .modifiers
                     .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
-                self.search_draft.push(character);
+                self.search_draft.insert(self.search_cursor, character);
+                self.search_cursor += character.len_utf8();
                 self.search_mode = SearchMode::Open { editing: true };
             }
             _ => {}
@@ -908,7 +981,7 @@ impl App {
     }
 
     fn select_active_search_match(&mut self) {
-        let Some(search_match) = self.search_matches.get(self.active_search_match).copied() else {
+        let Some(search_match) = self.search_matches.get(self.active_search_match).cloned() else {
             return;
         };
         self.content_scroll = search_match.row;
@@ -922,6 +995,7 @@ impl App {
             .rendered_cache
             .entry(width)
             .or_insert_with(|| self.document.render(width));
+        let mut selected = None;
         for index in visible {
             let item = &self.document.navigation()[index];
             if !matches!(item.kind, NavKind::Tldr | NavKind::Root | NavKind::Section) {
@@ -933,7 +1007,10 @@ impl App {
             if anchor_row > row {
                 break;
             }
-            self.selected = index;
+            selected = Some(index);
+        }
+        if let Some(index) = selected {
+            self.set_selected_index(index);
         }
     }
 
@@ -977,7 +1054,7 @@ impl App {
             .position(|item| item.id == target)
         {
             self.expand_navigation_ancestors(index);
-            self.selected = index;
+            self.set_selected_index(index);
         } else {
             self.select_section_at_row(target_row);
         }
@@ -1071,7 +1148,7 @@ impl App {
             .iter()
             .position(|candidate| candidate.id == parent_id)
         {
-            self.selected = index;
+            self.set_selected_index(index);
             self.scroll_to_selected();
         }
     }
@@ -1093,7 +1170,7 @@ impl App {
             .iter()
             .position(|candidate| candidate.parent_id.as_deref() == Some(parent_id.as_str()))
         {
-            self.selected = index;
+            self.set_selected_index(index);
             self.scroll_to_selected();
         }
     }
@@ -1195,6 +1272,20 @@ const fn menu_entries(id: MenuId) -> &'static [MenuEntry] {
     }
 }
 
+fn previous_char_boundary(value: &str, cursor: usize) -> Option<usize> {
+    value[..cursor]
+        .char_indices()
+        .next_back()
+        .map(|(index, _)| index)
+}
+
+fn next_char_boundary(value: &str, cursor: usize) -> Option<usize> {
+    value[cursor..]
+        .chars()
+        .next()
+        .map(|character| cursor + character.len_utf8())
+}
+
 struct NavigationRow {
     item_index: usize,
     line: Line<'static>,
@@ -1230,31 +1321,8 @@ fn navigation_lines(
     width: usize,
 ) -> Vec<NavigationRow> {
     let selection = if selected { "› " } else { "  " };
-    let tree = if item.kind == NavKind::Tldr {
-        "◆ ".to_owned()
-    } else if item.depth == 0 {
-        if item.has_children {
-            if expanded { "▾ " } else { "▸ " }.to_owned()
-        } else {
-            "· ".to_owned()
-        }
-    } else {
-        let mut prefix = "│  ".repeat(item.depth.saturating_sub(1));
-        prefix.push_str(if item.is_last && !expanded {
-            "╰─"
-        } else {
-            "├─"
-        });
-        prefix.push_str(if item.has_children {
-            if expanded { "▾ " } else { "▸ " }
-        } else if item.kind == NavKind::Option {
-            "◇ "
-        } else {
-            "· "
-        });
-        prefix
-    };
-    let prefix = format!("{selection}{tree}");
+    let prefix = format!("{selection}{}", navigation_tree_prefix(item, expanded));
+    let continuation_prefix = format!("  {}", navigation_continuation_prefix(item, expanded));
     let foreground = if selected {
         if item.kind == NavKind::Tldr {
             theme::MAUVE
@@ -1285,8 +1353,9 @@ fn navigation_lines(
     if selected {
         style = style.add_modifier(Modifier::BOLD);
     }
-    let prefix_width = prefix.width();
-    let title_width = width.saturating_sub(prefix_width).max(1);
+    let title_width = width
+        .saturating_sub(prefix.width().max(continuation_prefix.width()))
+        .max(1);
     let titles = if selected {
         wrap_to_width(&item.title, title_width)
     } else {
@@ -1299,15 +1368,75 @@ fn navigation_lines(
             let line_prefix = if line_index == 0 {
                 prefix.clone()
             } else {
-                " ".repeat(prefix_width)
+                continuation_prefix.clone()
             };
-            let value = fit_to_width(&format!("{line_prefix}{title}"), width);
+            let used = line_prefix.width() + title.width();
+            let prefix_color = if selected {
+                if line_index == 0 {
+                    theme::PEACH
+                } else {
+                    theme::PINK
+                }
+            } else {
+                theme::OVERLAY
+            };
             NavigationRow {
                 item_index,
-                line: Line::from(Span::styled(value, style)),
+                line: Line::from(vec![
+                    Span::styled(
+                        line_prefix,
+                        Style::default().fg(prefix_color).bg(background),
+                    ),
+                    Span::styled(title, style),
+                    Span::styled(
+                        " ".repeat(width.saturating_sub(used)),
+                        Style::default().bg(background),
+                    ),
+                ]),
             }
         })
         .collect()
+}
+
+fn navigation_tree_prefix(item: &crate::NavItem, expanded: bool) -> String {
+    if item.kind == NavKind::Tldr {
+        return "◆ ".to_owned();
+    }
+    let mut prefix = "│ ".repeat(item.depth);
+    if item.depth == 0 {
+        if item.has_children {
+            prefix.push_str("│ ");
+        }
+    } else {
+        prefix.push_str(if item.is_last && !expanded {
+            "╰─"
+        } else {
+            "├─"
+        });
+    }
+    prefix.push_str(if item.has_children {
+        if expanded { "▾ " } else { "▸ " }
+    } else if item.kind == NavKind::Option {
+        "◇ "
+    } else {
+        "· "
+    });
+    prefix
+}
+
+fn navigation_continuation_prefix(item: &crate::NavItem, expanded: bool) -> String {
+    if item.kind == NavKind::Tldr {
+        return "  ".to_owned();
+    }
+    let mut prefix = "│ ".repeat(item.depth);
+    if item.depth > 0 || item.has_children {
+        prefix.push_str("│ ");
+    }
+    if item.has_children && expanded {
+        prefix.push_str("│ ");
+    }
+    prefix.push_str("  ");
+    prefix
 }
 
 fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
@@ -1783,5 +1912,111 @@ mod tests {
                 .anchor_row("details")
                 .expect("details anchor")
         );
+    }
+
+    #[test]
+    fn mouse_wheel_over_sidebar_does_not_scroll_the_document() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let content_scroll = app.content_scroll;
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 5,
+            row: 7,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.navigation_scroll, 3);
+        assert_eq!(app.content_scroll, content_scroll);
+        assert!(app.navigation_sync_deadline.is_none());
+    }
+
+    #[test]
+    fn search_input_edits_at_unicode_character_boundaries() {
+        let mut app = App::new(&navigation_bundle());
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "ab界".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+
+        assert_eq!(app.search_draft, "ac界");
+        assert_eq!(app.search_cursor, 2);
+    }
+
+    #[test]
+    fn arrows_cycle_confirmed_search_results_without_requerying() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "help".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(app.search_matches.len() >= 2);
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.active_search_match, 1);
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.active_search_match, 0);
+    }
+
+    #[test]
+    fn wrapped_expanded_navigation_titles_keep_their_subtree_guides() {
+        let item = crate::NavItem {
+            id: "parent".to_owned(),
+            target_id: "parent".to_owned(),
+            title: "A deliberately long expanded parent title".to_owned(),
+            depth: 0,
+            kind: NavKind::Section,
+            has_children: true,
+            is_last: true,
+            parent_id: None,
+        };
+
+        let rows = navigation_lines(&item, 0, true, true, 22);
+        let text = rows
+            .iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>();
+
+        assert!(text.len() > 1);
+        assert!(text[0].starts_with("› │ ▾ "));
+        assert!(text[1].starts_with("  │ │   "));
+        assert!(
+            rows[1]
+                .line
+                .spans
+                .iter()
+                .all(|span| span.style.bg == Some(theme::SELECTED))
+        );
+    }
+
+    #[test]
+    fn nested_navigation_rows_use_two_column_tree_guides() {
+        let item = crate::NavItem {
+            id: "leaf".to_owned(),
+            target_id: "leaf".to_owned(),
+            title: "Leaf".to_owned(),
+            depth: 1,
+            kind: NavKind::Section,
+            has_children: false,
+            is_last: false,
+            parent_id: Some("parent".to_owned()),
+        };
+
+        let row = navigation_lines(&item, 0, false, false, 24)
+            .remove(0)
+            .line
+            .to_string();
+
+        assert!(row.starts_with("  │ ├─· Leaf"));
     }
 }

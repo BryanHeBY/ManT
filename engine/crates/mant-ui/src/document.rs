@@ -64,6 +64,7 @@ pub struct RenderedDocument {
     pub row_count: usize,
     anchor_rows: HashMap<String, usize>,
     links: Vec<RenderedLinkRegion>,
+    search_records: Vec<RenderedSearchRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,11 +76,32 @@ struct RenderedLinkRegion {
 }
 
 /// One exact visual-row range found in a width-dependent document rendering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedSearchMatch {
     pub row: usize,
     pub start_column: usize,
     pub end_column: usize,
+    additional_fragments: Vec<RenderedSearchFragment>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RenderedSearchFragment {
+    row: usize,
+    start_column: usize,
+    end_column: usize,
+}
+
+#[derive(Debug, Clone)]
+struct RenderedSearchRecord {
+    text: String,
+    cells: Vec<RenderedSearchSourceCell>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RenderedSearchSourceCell {
+    source_start: usize,
+    source_end: usize,
+    fragment: RenderedSearchFragment,
 }
 
 #[derive(Debug, Clone)]
@@ -287,11 +309,16 @@ impl DocumentView {
         let width = usize::from(width.max(1));
         let mut rows = Vec::new();
         let mut links = Vec::new();
+        let mut search_records = Vec::new();
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
 
         for line in &self.lines {
             logical_rows.push(rows.len());
-            for wrapped in wrap_line_with_links(line, width) {
+            let wrapped_lines = wrap_line_with_links(line, width);
+            if let Some(record) = search_record(&wrapped_lines, rows.len()) {
+                search_records.push(record);
+            }
+            for wrapped in wrapped_lines {
                 let row = rows.len();
                 links.extend(wrapped.links.into_iter().map(|link| RenderedLinkRegion {
                     target: link.target,
@@ -320,6 +347,7 @@ impl DocumentView {
             text: Text::from(rows),
             anchor_rows,
             links,
+            search_records,
         }
     }
 }
@@ -345,28 +373,17 @@ impl RenderedDocument {
         if needle.is_empty() {
             return Vec::new();
         }
-        self.text
-            .lines
+        self.search_records
             .iter()
-            .enumerate()
-            .flat_map(|(row, line)| {
-                let plain = line
-                    .spans
-                    .iter()
-                    .map(|span| span.content.as_ref())
-                    .collect::<String>();
-                let folded = fold_for_search(&plain);
+            .flat_map(|record| {
+                let folded = fold_for_search(&record.text);
                 folded
                     .value
                     .match_indices(&needle)
-                    .map(|(start, value)| {
+                    .filter_map(|(start, value)| {
                         let source_start = folded.starts[start];
                         let source_end = folded.ends[start + value.len() - 1];
-                        RenderedSearchMatch {
-                            row,
-                            start_column: plain[..source_start].width(),
-                            end_column: plain[..source_end].width(),
-                        }
+                        search_match_for_range(record, source_start, source_end)
                     })
                     .collect::<Vec<_>>()
             })
@@ -381,12 +398,21 @@ impl RenderedDocument {
         active: Option<usize>,
     ) -> Text<'static> {
         let mut text = self.text.clone();
-        let mut by_row: HashMap<usize, Vec<(usize, RenderedSearchMatch)>> = HashMap::new();
-        for (index, search_match) in matches.iter().copied().enumerate() {
-            by_row
-                .entry(search_match.row)
-                .or_default()
-                .push((index, search_match));
+        let mut by_row: HashMap<usize, Vec<(usize, RenderedSearchFragment)>> = HashMap::new();
+        for (index, search_match) in matches.iter().enumerate() {
+            let first = RenderedSearchFragment {
+                row: search_match.row,
+                start_column: search_match.start_column,
+                end_column: search_match.end_column,
+            };
+            for fragment in
+                std::iter::once(first).chain(search_match.additional_fragments.iter().copied())
+            {
+                by_row
+                    .entry(fragment.row)
+                    .or_default()
+                    .push((index, fragment));
+            }
         }
         for (row, ranges) in by_row {
             let Some(line) = text.lines.get_mut(row) else {
@@ -396,6 +422,59 @@ impl RenderedDocument {
         }
         text
     }
+}
+
+fn search_record(lines: &[WrappedLine], first_row: usize) -> Option<RenderedSearchRecord> {
+    let mut text = String::new();
+    let mut cells = Vec::new();
+    for (line_index, line) in lines.iter().enumerate() {
+        if line_index > 0 && line.join_with_space {
+            text.push(' ');
+        }
+        for cell in &line.search_cells {
+            let source_start = text.len();
+            text.push(cell.character);
+            cells.push(RenderedSearchSourceCell {
+                source_start,
+                source_end: text.len(),
+                fragment: RenderedSearchFragment {
+                    row: first_row + line_index,
+                    start_column: cell.start_column,
+                    end_column: cell.end_column,
+                },
+            });
+        }
+    }
+    (!text.is_empty()).then_some(RenderedSearchRecord { text, cells })
+}
+
+fn search_match_for_range(
+    record: &RenderedSearchRecord,
+    source_start: usize,
+    source_end: usize,
+) -> Option<RenderedSearchMatch> {
+    let mut fragments: Vec<RenderedSearchFragment> = Vec::new();
+    for cell in record
+        .cells
+        .iter()
+        .filter(|cell| cell.source_start < source_end && cell.source_end > source_start)
+    {
+        if let Some(last) = fragments.last_mut()
+            && last.row == cell.fragment.row
+            && last.end_column == cell.fragment.start_column
+        {
+            last.end_column = cell.fragment.end_column;
+        } else {
+            fragments.push(cell.fragment);
+        }
+    }
+    let first = fragments.first().copied()?;
+    Some(RenderedSearchMatch {
+        row: first.row,
+        start_column: first.start_column,
+        end_column: first.end_column,
+        additional_fragments: fragments.into_iter().skip(1).collect(),
+    })
 }
 
 struct FoldedText {
@@ -424,7 +503,7 @@ fn fold_for_search(value: &str) -> FoldedText {
 
 fn highlight_line(
     line: &Line<'static>,
-    ranges: &[(usize, RenderedSearchMatch)],
+    ranges: &[(usize, RenderedSearchFragment)],
     active: Option<usize>,
 ) -> Line<'static> {
     let mut spans = Vec::new();
@@ -1134,6 +1213,15 @@ struct StyledCell {
 struct WrappedLine {
     line: Line<'static>,
     links: Vec<WrappedLink>,
+    search_cells: Vec<WrappedSearchCell>,
+    join_with_space: bool,
+}
+
+#[derive(Clone, Copy)]
+struct WrappedSearchCell {
+    character: char,
+    start_column: usize,
+    end_column: usize,
 }
 
 struct WrappedLink {
@@ -1160,12 +1248,16 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             return vec![WrappedLine {
                 line: panel_border(width, '┌', '┐'),
                 links: Vec::new(),
+                search_cells: Vec::new(),
+                join_with_space: false,
             }];
         }
         LineSurface::TldrBottom => {
             return vec![WrappedLine {
                 line: panel_border(width, '└', '┘'),
                 links: Vec::new(),
+                search_cells: Vec::new(),
+                join_with_space: false,
             }];
         }
         LineSurface::Divider => {
@@ -1175,6 +1267,8 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                     Style::default().fg(theme::OVERLAY),
                 )),
                 links: Vec::new(),
+                search_cells: Vec::new(),
+                join_with_space: false,
             }];
         }
         LineSurface::Rule => {
@@ -1188,6 +1282,8 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                     ),
                 ]),
                 links: Vec::new(),
+                search_cells: Vec::new(),
+                join_with_space: false,
             }];
         }
         LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
@@ -1202,11 +1298,13 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             width,
             line.indent.min(width.saturating_sub(1)),
             &[],
+            false,
         )];
     }
 
     let mut result = Vec::new();
     let mut first_row = true;
+    let mut join_with_space = false;
     while !cells.is_empty() {
         let indent = if first_row {
             line.indent
@@ -1220,13 +1318,26 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
             .max(1);
         let fit = fitting_prefix(&cells, available);
         if fit == cells.len() {
-            result.push(wrapped_cells_to_line(line, width, indent, &cells));
+            result.push(wrapped_cells_to_line(
+                line,
+                width,
+                indent,
+                &cells,
+                join_with_space,
+            ));
             break;
         }
 
         if line.wrap_mode == WrapMode::Character {
-            result.push(wrapped_cells_to_line(line, width, indent, &cells[..fit]));
+            result.push(wrapped_cells_to_line(
+                line,
+                width,
+                indent,
+                &cells[..fit],
+                join_with_space,
+            ));
             cells.drain(..fit);
+            join_with_space = false;
         } else {
             let split = cells[..fit]
                 .iter()
@@ -1242,9 +1353,11 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                     width,
                     indent,
                     &cells[..row_end],
+                    join_with_space,
                 ));
                 let consumed = if split < fit { split + 1 } else { split };
                 cells.drain(..consumed.max(1));
+                join_with_space = split < fit;
             }
             while cells
                 .first()
@@ -1310,6 +1423,8 @@ fn render_table_row_with_links(
         return vec![WrappedLine {
             line: Line::default(),
             links: Vec::new(),
+            search_cells: Vec::new(),
+            join_with_space: false,
         }];
     }
     let indent = indent.min(width.saturating_sub(1));
@@ -1338,6 +1453,7 @@ fn render_table_row_with_links(
         .map(|row_index| {
             let mut spans = Vec::new();
             let mut links = Vec::new();
+            let mut search_cells = Vec::new();
             let mut column_offset = indent;
             if indent > 0 {
                 spans.push(Span::raw(" ".repeat(indent)));
@@ -1352,6 +1468,11 @@ fn render_table_row_with_links(
                         start_column: column_offset + link.start_column,
                         end_column: column_offset + link.end_column,
                     }));
+                    search_cells.extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
+                        character: cell.character,
+                        start_column: column_offset + cell.start_column,
+                        end_column: column_offset + cell.end_column,
+                    }));
                 }
                 spans.push(Span::raw(" ".repeat(column_width.saturating_sub(used))));
                 column_offset += column_width;
@@ -1359,6 +1480,8 @@ fn render_table_row_with_links(
             WrappedLine {
                 line: Line::from(spans),
                 links,
+                search_cells,
+                join_with_space: row_index > 0,
             }
         })
         .collect()
@@ -1449,12 +1572,19 @@ fn wrapped_cells_to_line(
     width: usize,
     indent: usize,
     cells: &[StyledCell],
+    join_with_space: bool,
 ) -> WrappedLine {
     let mut links = Vec::new();
+    let mut search_cells = Vec::with_capacity(cells.len());
     let mut column = indent + usize::from(line.surface == LineSurface::Tldr) * 2;
     let mut active: Option<(usize, usize, usize)> = None;
     for cell in cells {
         let next_column = column + cell.width;
+        search_cells.push(WrappedSearchCell {
+            character: cell.character,
+            start_column: column,
+            end_column: next_column,
+        });
         match (active, cell.link_index) {
             (Some((index, start, _)), Some(next)) if index == next => {
                 active = Some((index, start, next_column));
@@ -1482,6 +1612,8 @@ fn wrapped_cells_to_line(
     WrappedLine {
         line: cells_to_line(line, width, indent, cells),
         links,
+        search_cells,
+        join_with_space,
     }
 }
 
@@ -1812,6 +1944,25 @@ mod tests {
             row_count: 1,
             anchor_rows: HashMap::new(),
             links: Vec::new(),
+            search_records: vec![RenderedSearchRecord {
+                text: "İstanbul".to_owned(),
+                cells: "İstanbul"
+                    .char_indices()
+                    .scan(0, |column, (source_start, character)| {
+                        let start_column = *column;
+                        *column += character.width().unwrap_or(0);
+                        Some(RenderedSearchSourceCell {
+                            source_start,
+                            source_end: source_start + character.len_utf8(),
+                            fragment: RenderedSearchFragment {
+                                row: 0,
+                                start_column,
+                                end_column: *column,
+                            },
+                        })
+                    })
+                    .collect(),
+            }],
         };
 
         assert_eq!(
@@ -1820,6 +1971,7 @@ mod tests {
                 row: 0,
                 start_column: 0,
                 end_column: 1,
+                additional_fragments: Vec::new(),
             }]
         );
     }
@@ -1866,5 +2018,70 @@ mod tests {
                 Some("details")
             );
         }
+    }
+
+    #[test]
+    fn search_matches_one_logical_phrase_across_soft_wrapping() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "alpha searchable phrase omega".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let rendered = DocumentView::new(&bundle).render(15);
+
+        let matches = rendered.search("searchable phrase");
+        let highlighted = rendered.highlighted_text(&matches, Some(0));
+
+        assert_eq!(matches.len(), 1);
+        assert!(!matches[0].additional_fragments.is_empty());
+        let highlighted_rows = highlighted
+            .lines
+            .iter()
+            .filter(|line| {
+                line.spans
+                    .iter()
+                    .any(|span| span.style.bg == Some(theme::SEARCH_ACTIVE))
+            })
+            .count();
+        assert_eq!(highlighted_rows, 2);
+    }
+
+    #[test]
+    fn character_wrapped_code_remains_contiguous_for_search() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks =
+            vec![Block::Preformatted {
+                children: vec![Inline::Text {
+                    value: "abcdefghijklmnop".to_owned(),
+                }],
+                language: None,
+                layout: LayoutHint::default(),
+                source: None,
+            }];
+        let rendered = DocumentView::new(&bundle).render(10);
+
+        let matches = rendered.search("ghijkl");
+
+        assert_eq!(matches.len(), 1);
+        assert!(!matches[0].additional_fragments.is_empty());
+    }
+
+    #[test]
+    fn forced_word_splitting_does_not_insert_a_search_space() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks =
+            vec![Block::Paragraph {
+                children: vec![Inline::Text {
+                    value: "supercalifragilistic".to_owned(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }];
+        let rendered = DocumentView::new(&bundle).render(10);
+
+        assert_eq!(rendered.search("fragilistic").len(), 1);
     }
 }

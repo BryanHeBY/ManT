@@ -25,6 +25,7 @@ pub const GREEN: Color = Color::Rgb(166, 227, 161);
 pub const YELLOW: Color = Color::Rgb(249, 226, 175);
 pub const PEACH: Color = Color::Rgb(250, 179, 135);
 pub const MAUVE: Color = Color::Rgb(203, 166, 247);
+pub const PINK: Color = Color::Rgb(245, 194, 231);
 pub const SELECTED: Color = BORDER;
 pub const TLDR_SELECTED: Color = Color::Rgb(73, 64, 95);
 pub const SEARCH_MATCH: Color = Color::Rgb(69, 71, 90);
