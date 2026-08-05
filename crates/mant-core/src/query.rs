@@ -750,7 +750,7 @@ mod tests {
     #[test]
     fn leading_tldr_directives_are_independent_from_the_markdown_document() {
         let source = "\
-:::tldr
+<!-- mant:tldr:start -->
 # demo
 
 > Concise embedded help.
@@ -758,7 +758,7 @@ mod tests {
 - Run the demo:
 
 `demo {{path}}`
-:::
+<!-- mant:tldr:end -->
 
 # Demo
 
@@ -790,21 +790,21 @@ Document overview.
             document
                 .diagnostics
                 .iter()
-                .all(|diagnostic| !diagnostic.message.contains(":::tldr"))
+                .all(|diagnostic| !diagnostic.message.contains("mant:tldr"))
         );
     }
 
     #[test]
     fn malformed_leading_tldr_directives_report_the_source_path() {
         let error = query_markdown_text(
-            ":::tldr\n# demo\n\n- Run:\n\n`demo`\n",
+            "<!-- mant:tldr:start -->\n# demo\n\n- Run:\n\n`demo`\n",
             Some("docs/broken.md".to_owned()),
         )
         .expect_err("unterminated directive");
 
         assert_eq!(
             error.to_string(),
-            "could not load Markdown document 'docs/broken.md': top-level :::tldr directive is missing its closing ::: marker"
+            "could not load Markdown document 'docs/broken.md': top-level <!-- mant:tldr:start --> marker is missing its <!-- mant:tldr:end --> marker"
         );
     }
 

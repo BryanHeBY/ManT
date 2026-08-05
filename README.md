@@ -218,11 +218,12 @@ GFM tables, hard breaks, and thematic breaks. A complete list such as
 manual page. Unsupported syntax remains visible with a diagnostic instead of
 being silently discarded.
 
-An optional `:::tldr` container at the physical start of a Markdown file uses
-the tldr-pages dialect and becomes reserved path `0`:
+An optional tldr preface at the physical start of a Markdown file uses the
+tldr-pages dialect and becomes reserved path `0`. Invisible CommonMark HTML
+comments keep the extension markers out of GitHub's rendered page:
 
 ```markdown
-:::tldr
+<!-- mant:tldr:start -->
 # tool
 
 > One-line quick reference.
@@ -230,7 +231,7 @@ the tldr-pages dialect and becomes reserved path `0`:
 - Run the tool:
 
 `tool {{path/to/input}}`
-:::
+<!-- mant:tldr:end -->
 
 # Tool
 ```

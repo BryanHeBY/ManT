@@ -63,15 +63,17 @@ impl fmt::Display for MarkdownParseError {
 
 impl Error for MarkdownParseError {}
 
-/// Split `ManT`'s optional leading tldr directive from the Markdown document.
+/// Split `ManT`'s optional leading tldr preface from the Markdown document.
 ///
-/// The directive must be the first non-empty construct and uses the existing
-/// tldr-pages Markdown dialect. The remaining source is parsed independently,
-/// so its first H1 remains document metadata rather than part of the preface.
+/// Invisible HTML comments delimit the preface so `CommonMark` renderers can
+/// present the enclosed tldr-pages Markdown without leaking extension syntax.
+/// It must be the first non-empty construct. The remaining source is parsed
+/// independently, so its first H1 remains document metadata rather than part
+/// of the preface.
 ///
 /// # Errors
 ///
-/// Returns [`MarkdownParseError`] for an unterminated directive or malformed
+/// Returns [`MarkdownParseError`] for an unterminated preface or malformed
 /// embedded tldr page.
 pub fn parse_markdown(
     source_text: &str,
@@ -109,7 +111,7 @@ pub fn parse_markdown(
 
 /// Mask a leading BOM and terminal-unsafe control characters with spaces.
 ///
-/// A BOM would hide the tldr directive and demote the first heading, while
+/// A BOM would hide the tldr opening marker and demote the first heading, while
 /// raw control characters would pass escape sequences through to terminals.
 /// Replacements keep every byte offset valid for source coordinates.
 fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<String> {

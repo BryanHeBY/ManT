@@ -1,4 +1,4 @@
-:::tldr
+<!-- mant:tldr:start -->
 # tool
 
 > Markers and escapes inside the container.
@@ -10,9 +10,9 @@
 - Unbalanced placeholder braces:
 
 `tool {{unclosed`
-:::
+<!-- mant:tldr:end -->
 
-:::tldr
+<!-- mant:tldr:start -->
 
 # A second container is ordinary document content
 

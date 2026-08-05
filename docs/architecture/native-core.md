@@ -201,9 +201,12 @@ same outline, explain, search, and TUI navigation code works for manuals and
 project documentation.
 
 ManT's Markdown extension is structurally separate from ordinary headings. An
-optional `:::tldr` container must be the first non-empty construct and is
-parsed with the existing tldr-pages parser into `QueryBundle.tldr`. The
-remaining Markdown is independently lowered into `QueryBundle.document`.
+optional tldr preface begins with `<!-- mant:tldr:start -->`, ends with
+`<!-- mant:tldr:end -->`, and must be the first non-empty construct. CommonMark
+renderers hide these comment markers while rendering the enclosed tldr-pages
+Markdown normally. ManT masks the complete preface without changing byte or
+line coordinates, parses it into `QueryBundle.tldr`, and independently lowers
+the remaining Markdown into `QueryBundle.document`.
 Consequently outline path `0`, selector `tldr`, search, textual projections,
 and the highlighted TUI panel use exactly the same implementation for cached
 and document-owned quick references. An origin marker suppresses the

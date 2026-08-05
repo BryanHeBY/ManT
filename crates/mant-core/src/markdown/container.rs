@@ -1,14 +1,15 @@
 //! Extracts `ManT`'s optional document-owned tldr preface.
 //!
-//! The directive is deliberately structural rather than ordinary Markdown:
-//! it must be the first non-empty construct, and its contents use the
-//! tldr-pages dialect. The returned document text masks the complete directive
+//! Invisible HTML comments delimit the structural extension so GitHub and
+//! other `CommonMark` renderers show only valid Markdown content. The opening
+//! marker must be the first non-empty construct, and its contents use the
+//! tldr-pages dialect. The returned document text masks the complete preface
 //! while preserving byte offsets and line numbers for source diagnostics.
 
 use std::{borrow::Cow, error::Error, fmt, ops::Range};
 
-const OPENING_MARKER: &str = ":::tldr";
-const CLOSING_MARKER: &str = ":::";
+const OPENING_MARKER: &str = "<!-- mant:tldr:start -->";
+const CLOSING_MARKER: &str = "<!-- mant:tldr:end -->";
 
 #[derive(Debug)]
 pub(super) struct MarkdownParts<'a> {
@@ -25,7 +26,9 @@ impl fmt::Display for TldrDirectiveError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unterminated => {
-                formatter.write_str("top-level :::tldr directive is missing its closing ::: marker")
+                formatter.write_str(
+                    "top-level <!-- mant:tldr:start --> marker is missing its <!-- mant:tldr:end --> marker",
+                )
             }
         }
     }
@@ -123,11 +126,13 @@ fn mask_range(source: &str, range: Range<usize>) -> String {
 mod tests {
     use std::borrow::Cow;
 
+    use pulldown_cmark::{Event, Parser};
+
     use super::{TldrDirectiveError, split_markdown};
 
     #[test]
     fn extracts_only_a_leading_directive_and_preserves_source_coordinates() {
-        let source = "\n:::tldr\n# demo\n\n- Run:\n\n`demo`\n:::\n\n# Demo\n\nBody.\n";
+        let source = "\n<!-- mant:tldr:start -->\n# demo\n\n- Run:\n\n`demo`\n<!-- mant:tldr:end -->\n\n# Demo\n\nBody.\n";
         let parts = split_markdown(source).expect("directive");
 
         assert_eq!(parts.tldr, Some("# demo\n\n- Run:\n\n`demo`\n"));
@@ -141,7 +146,7 @@ mod tests {
 
     #[test]
     fn leaves_later_directives_as_ordinary_markdown() {
-        let source = "# Demo\n\n:::tldr\n# late\n:::\n";
+        let source = "# Demo\n\n<!-- mant:tldr:start -->\n# late\n<!-- mant:tldr:end -->\n";
         let parts = split_markdown(source).expect("ordinary Markdown");
 
         assert!(parts.tldr.is_none());
@@ -150,7 +155,31 @@ mod tests {
 
     #[test]
     fn reports_an_unterminated_leading_directive() {
-        let error = split_markdown(":::tldr\n# demo\n").expect_err("unterminated");
+        let error = split_markdown("<!-- mant:tldr:start -->\n# demo\n").expect_err("unterminated");
         assert_eq!(error, TldrDirectiveError::Unterminated);
+    }
+
+    #[test]
+    fn does_not_accept_the_obsolete_fenced_container() {
+        let source = ":::tldr\n# demo\n:::\n\n# Demo\n";
+        let parts = split_markdown(source).expect("ordinary Markdown");
+
+        assert!(parts.tldr.is_none());
+        assert!(matches!(parts.document, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn boundary_comments_are_not_visible_commonmark_text() {
+        let source = "<!-- mant:tldr:start -->\n# demo\n\n> Quick reference.\n<!-- mant:tldr:end -->\n\n# Demo\n";
+        let visible = Parser::new(source)
+            .filter_map(|event| match event {
+                Event::Text(text) => Some(text.into_string()),
+                _ => None,
+            })
+            .collect::<String>();
+
+        assert!(!visible.contains("mant:tldr"));
+        assert!(visible.contains("Quick reference."));
+        assert!(visible.contains("Demo"));
     }
 }

@@ -331,6 +331,12 @@ A tldr-only result is possible when a cached quick reference exists but the
 manual is unavailable. A Markdown file can provide an embedded quick
 reference and a document in the same bundle.
 
+The embedded form is an input-layer extension, not an additional wire shape.
+At the physical start of a Markdown source, invisible
+`<!-- mant:tldr:start -->` and `<!-- mant:tldr:end -->` comment lines delimit a
+tldr-pages-format preface. ManT emits it as the same `TldrDocument` used for
+cached pages, so this syntax does not change any `v4` schema.
+
 An abbreviated but structurally valid Markdown result is:
 
 ```json

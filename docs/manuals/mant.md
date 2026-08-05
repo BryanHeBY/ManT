@@ -1,4 +1,4 @@
-:::tldr
+<!-- mant:tldr:start -->
 # mant
 
 > Turn local Unix manual pages and Markdown into structured documents.
@@ -26,7 +26,7 @@
 - Read Markdown from standard input:
 
 `cat {{path/to/document.md}} | mant -`
-:::
+<!-- mant:tldr:end -->
 
 # mant
 
@@ -162,11 +162,12 @@ entries receive stable IDs and aliases, appear beneath their owning section
 in `--outline`, and are selectable through `--node` and `--explain`. A mixed
 ordinary/option list remains an ordinary list rather than being guessed.
 
-An optional leading `:::tldr` container is parsed independently with the
-tldr-pages dialect:
+An optional leading tldr preface is parsed independently with the tldr-pages
+dialect. Invisible CommonMark HTML comments delimit it, so GitHub renders the
+contents normally without exposing extension syntax:
 
 ```markdown
-:::tldr
+<!-- mant:tldr:start -->
 # tool
 
 > One-line command description.
@@ -175,13 +176,14 @@ tldr-pages dialect:
 - Run the command for a file:
 
 `tool {{path/to/file}}`
-:::
+<!-- mant:tldr:end -->
 
 # Tool
 ```
 
-The opening marker must be the first non-empty construct and the closing line
-must contain only `:::`. The embedded page uses a command H1, quoted
+The opening line must contain only `<!-- mant:tldr:start -->` and be the first
+non-empty construct. The closing line must contain only
+`<!-- mant:tldr:end -->`. The embedded page uses a command H1, quoted
 description lines, optional `More information:`, example descriptions, code
 commands, and standard `{{placeholder}}` or `{{[-s|--long]}}` placeholders.
 It receives path `0` and alias `tldr`, uses the same renderer and search model
@@ -193,9 +195,11 @@ no special meaning.
 
 Block quotes, task lists, images, raw HTML, strikethrough, footnotes, native
 Markdown definition lists, metadata blocks, math, superscript, subscript, and
-wiki links are outside the semantic subset. Their source remains visible as
-an unsupported node or inline fragment, and JSON results include a source
-diagnostic. ManT does not silently discard them or pretend to render browser
+wiki links are outside the semantic subset. The two exact leading tldr
+boundary comments are consumed before ordinary Markdown lowering; all other
+raw HTML follows the unsupported-syntax rule. Its source remains visible as an
+unsupported node or inline fragment, and JSON results include a source
+diagnostic. ManT does not silently discard it or pretend to render browser
 features it does not implement.
 
 Source spans keep original Markdown line and column positions. Extracting an
@@ -251,7 +255,7 @@ errors, and Rust panics.
 - `--explain ENTRY`: Return exactly one semantic option, command, or environment entry.
 
 Path `0` and ID alias `tldr` are reserved for either an external tldr page or a
-Markdown document's explicit `:::tldr` preface. Remaining headings use
+Markdown document's explicitly marked tldr preface. Remaining headings use
 one-based paths such as `2.3`, and semantic entries use paths such as `2.3/o4`.
 
 ## Search

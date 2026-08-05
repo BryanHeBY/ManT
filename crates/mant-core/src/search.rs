@@ -647,7 +647,7 @@ mod tests {
     fn embedded_tldr_and_markdown_body_keep_distinct_search_owners() {
         let query = crate::query_markdown_text(
             "\
-:::tldr
+<!-- mant:tldr:start -->
 # demo
 
 > Quick needle.
@@ -655,7 +655,7 @@ mod tests {
 - Run:
 
 `demo quick-command`
-:::
+<!-- mant:tldr:end -->
 
 # Demo
 

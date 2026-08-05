@@ -1,4 +1,4 @@
-:::tldr
+<!-- mant:tldr:start -->
 # tool
 
 > Quick reference that never closes.

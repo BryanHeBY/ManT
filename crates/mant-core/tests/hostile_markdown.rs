@@ -218,7 +218,7 @@ fn hostile_fixtures_never_panic_across_the_pipeline() {
 
 #[test]
 fn line_ending_and_control_byte_variants_never_panic() {
-    let crlf = ":::tldr\r\n# tool\r\n\r\n> CRLF quick reference.\r\n\r\n- Run:\r\n\r\n`tool {{x}}`\r\n:::\r\n\r\n# CRLF Document\r\n\r\nLine one\r\nLine with a lone \r carriage return inside\r\n\r\n- `-a`: option with CRLF ending\r\n";
+    let crlf = "<!-- mant:tldr:start -->\r\n# tool\r\n\r\n> CRLF quick reference.\r\n\r\n- Run:\r\n\r\n`tool {{x}}`\r\n<!-- mant:tldr:end -->\r\n\r\n# CRLF Document\r\n\r\nLine one\r\nLine with a lone \r carriage return inside\r\n\r\n- `-a`: option with CRLF ending\r\n";
     exercise("crlf-mixed", crlf);
 
     let controls = "# BOM and controls\n\n\u{feff}Text after a BOM mid-document.\n\nControls: \u{1} \u{2} \u{7} \u{1b}[31mANSI\u{1b}[0m \u{7f} end.\n\nNul\u{0}byte, vertical\u{b}tab, and form\u{c}feed.\n";
@@ -271,7 +271,7 @@ fn pathological_structures_never_panic() {
     let unclosed_inline = format!("# Unclosed\n\n{}\n", "`*_[".repeat(10_000));
     exercise("unclosed-inline-runs", &unclosed_inline);
 
-    let marker_flood = ":::tldr\n".repeat(2_000);
+    let marker_flood = "<!-- mant:tldr:start -->\n".repeat(2_000);
     exercise("tldr-marker-flood", &marker_flood);
 
     let fence_flood = format!("# Fences\n\n{}", "```\n".repeat(2_000));

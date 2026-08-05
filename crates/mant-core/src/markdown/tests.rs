@@ -176,7 +176,7 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
 fn separates_a_leading_tldr_directive_from_the_document_ast() {
     let parsed = parse_markdown(
         "\
-:::tldr
+<!-- mant:tldr:start -->
 # demo
 
 > A demonstration command.
@@ -184,7 +184,7 @@ fn separates_a_leading_tldr_directive_from_the_document_ast() {
 - Show command help:
 
 `demo --help`
-:::
+<!-- mant:tldr:end -->
 
 # Demo
 
@@ -251,7 +251,7 @@ Duplicate heading.
 #[test]
 fn a_leading_byte_order_mark_hides_neither_the_directive_nor_the_title() {
     let parsed = parse_markdown(
-        "\u{feff}:::tldr\n# demo\n\n> Saved by a Windows editor.\n\n- Run:\n\n`demo`\n:::\n\n# Demo\n\nBody.\n",
+        "\u{feff}<!-- mant:tldr:start -->\n# demo\n\n> Saved by a Windows editor.\n\n- Run:\n\n`demo`\n<!-- mant:tldr:end -->\n\n# Demo\n\nBody.\n",
         None,
     )
     .expect("embedded tldr behind a BOM");
