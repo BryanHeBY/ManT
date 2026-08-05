@@ -63,6 +63,15 @@ pub struct RenderedDocument {
     pub text: Text<'static>,
     pub row_count: usize,
     anchor_rows: HashMap<String, usize>,
+    links: Vec<RenderedLinkRegion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RenderedLinkRegion {
+    target: String,
+    row: usize,
+    start_column: usize,
+    end_column: usize,
 }
 
 /// One exact visual-row range found in a width-dependent document rendering.
@@ -81,6 +90,20 @@ struct LogicalLine {
     surface: LineSurface,
     wrap_mode: WrapMode,
     table_cells: Option<Vec<Vec<LogicalLine>>>,
+    links: Vec<LogicalLinkRange>,
+}
+
+#[derive(Debug, Clone)]
+struct LogicalLinkRange {
+    target: String,
+    start_column: usize,
+    end_column: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct StyledInlineLine {
+    spans: Vec<Span<'static>>,
+    links: Vec<LogicalLinkRange>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,6 +132,7 @@ impl LogicalLine {
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_cells: None,
+            links: Vec::new(),
         }
     }
 
@@ -120,6 +144,7 @@ impl LogicalLine {
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_cells: None,
+            links: Vec::new(),
         }
     }
 
@@ -133,6 +158,11 @@ impl LogicalLine {
         self
     }
 
+    fn with_links(mut self, links: Vec<LogicalLinkRange>) -> Self {
+        self.links = links;
+        self
+    }
+
     fn hanging(indent: usize, continuation_indent: usize, spans: Vec<Span<'static>>) -> Self {
         Self {
             indent,
@@ -141,6 +171,7 @@ impl LogicalLine {
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_cells: None,
+            links: Vec::new(),
         }
     }
 
@@ -152,6 +183,7 @@ impl LogicalLine {
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
             table_cells: Some(cells),
+            links: Vec::new(),
         }
     }
 
@@ -254,11 +286,21 @@ impl DocumentView {
     pub fn render(&self, width: u16) -> RenderedDocument {
         let width = usize::from(width.max(1));
         let mut rows = Vec::new();
+        let mut links = Vec::new();
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
 
         for line in &self.lines {
             logical_rows.push(rows.len());
-            rows.extend(wrap_line(line, width));
+            for wrapped in wrap_line_with_links(line, width) {
+                let row = rows.len();
+                links.extend(wrapped.links.into_iter().map(|link| RenderedLinkRegion {
+                    target: link.target,
+                    row,
+                    start_column: link.start_column,
+                    end_column: link.end_column,
+                }));
+                rows.push(wrapped.line);
+            }
         }
         logical_rows.push(rows.len());
 
@@ -277,6 +319,7 @@ impl DocumentView {
             row_count: rows.len(),
             text: Text::from(rows),
             anchor_rows,
+            links,
         }
     }
 }
@@ -285,6 +328,14 @@ impl RenderedDocument {
     #[must_use]
     pub fn anchor_row(&self, id: &str) -> Option<usize> {
         self.anchor_rows.get(id).copied()
+    }
+
+    #[must_use]
+    pub fn link_target_at(&self, row: usize, column: usize) -> Option<&str> {
+        self.links
+            .iter()
+            .find(|link| link.row == row && link.start_column <= column && column < link.end_column)
+            .map(|link| link.target.as_str())
     }
 
     /// Search visible terminal rows without rebuilding or traversing the AST.
@@ -530,6 +581,7 @@ impl DocumentBuilder {
             surface: LineSurface::Tldr,
             wrap_mode: WrapMode::Word,
             table_cells: None,
+            links: Vec::new(),
         });
     }
 
@@ -707,14 +759,21 @@ impl DocumentBuilder {
                             styled_inline_lines(children, Style::default().fg(theme::TEXT));
                         let first = inline_lines
                             .first_mut()
-                            .map_or_else(Vec::new, std::mem::take);
+                            .map_or_else(StyledInlineLine::default, std::mem::take);
                         let mut spans =
                             vec![Span::styled(marker, Style::default().fg(theme::HEADING))];
                         spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
-                        spans.extend(first);
-                        self.push(LogicalLine::hanging(indent, content_indent, spans));
-                        for spans in inline_lines.into_iter().skip(1) {
-                            self.push(LogicalLine::hanging(content_indent, content_indent, spans));
+                        spans.extend(first.spans);
+                        self.push(
+                            LogicalLine::hanging(indent, content_indent, spans).with_links(
+                                shifted_links(first.links, content_indent.saturating_sub(indent)),
+                            ),
+                        );
+                        for line in inline_lines.into_iter().skip(1) {
+                            self.push(
+                                LogicalLine::hanging(content_indent, content_indent, line.spans)
+                                    .with_links(line.links),
+                            );
                         }
                         self.blocks(&item.blocks[1..], indent + marker_width);
                     } else {
@@ -807,12 +866,13 @@ impl DocumentBuilder {
 
     fn inline_definition(&mut self, item: &mant_ast::DefinitionItem, indent: usize) {
         let mut term_spans = Vec::new();
+        let mut term_links = Vec::new();
         for (index, term) in item.terms.iter().enumerate() {
-            term_spans.extend(
-                styled_inline_lines(term, Style::default().fg(theme::SUBTEXT_BRIGHT))
-                    .into_iter()
-                    .flatten(),
-            );
+            for line in styled_inline_lines(term, Style::default().fg(theme::SUBTEXT_BRIGHT)) {
+                let offset = spans_width(&term_spans);
+                term_links.extend(shifted_links(line.links, offset));
+                term_spans.extend(line.spans);
+            }
             term_spans.push(Span::styled(
                 if index + 1 < item.terms.len() {
                     ", "
@@ -833,22 +893,24 @@ impl DocumentBuilder {
             term_spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
             let mut description_lines =
                 styled_inline_lines(children, Style::default().fg(theme::TEXT));
-            term_spans.extend(
-                description_lines
-                    .first_mut()
-                    .map_or_else(Vec::new, std::mem::take),
+            let first = description_lines
+                .first_mut()
+                .map_or_else(StyledInlineLine::default, std::mem::take);
+            let description_offset = spans_width(&term_spans);
+            term_links.extend(shifted_links(first.links, description_offset));
+            term_spans.extend(first.spans);
+            self.push(
+                LogicalLine::hanging(indent, description_indent, term_spans).with_links(term_links),
             );
-            self.push(LogicalLine::hanging(indent, description_indent, term_spans));
-            for spans in description_lines.into_iter().skip(1) {
-                self.push(LogicalLine::hanging(
-                    description_indent,
-                    description_indent,
-                    spans,
-                ));
+            for line in description_lines.into_iter().skip(1) {
+                self.push(
+                    LogicalLine::hanging(description_indent, description_indent, line.spans)
+                        .with_links(line.links),
+                );
             }
             self.blocks(&item.description[1..], description_indent);
         } else {
-            self.push(LogicalLine::hanging(indent, indent, term_spans));
+            self.push(LogicalLine::hanging(indent, indent, term_spans).with_links(term_links));
             self.blocks(&item.description, indent + term_width);
         }
     }
@@ -867,15 +929,16 @@ impl DocumentBuilder {
         for id in inline_anchor_ids(nodes) {
             self.anchors.entry(id).or_insert(self.lines.len());
         }
-        for spans in styled_inline_lines(nodes, base_style) {
+        for line in styled_inline_lines(nodes, base_style) {
+            let spans = if surface == LineSurface::Code {
+                crate::code::highlight(line.spans)
+            } else {
+                line.spans
+            };
             self.push(LogicalLine {
                 indent,
                 continuation_indent: indent,
-                spans: if surface == LineSurface::Code {
-                    crate::code::highlight(spans)
-                } else {
-                    spans
-                },
+                spans,
                 surface,
                 wrap_mode: if surface == LineSurface::Code {
                     WrapMode::Character
@@ -883,6 +946,7 @@ impl DocumentBuilder {
                     WrapMode::Word
                 },
                 table_cells: None,
+                links: line.links,
             });
         }
     }
@@ -905,8 +969,8 @@ fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
     ids
 }
 
-fn styled_inline_lines(nodes: &[Inline], style: Style) -> Vec<Vec<Span<'static>>> {
-    let mut lines = vec![Vec::new()];
+fn styled_inline_lines(nodes: &[Inline], style: Style) -> Vec<StyledInlineLine> {
+    let mut lines = vec![StyledInlineLine::default()];
     append_inline(nodes, style, &mut lines);
     lines
 }
@@ -916,6 +980,17 @@ fn spans_width(spans: &[Span<'_>]) -> usize {
         .iter()
         .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
         .sum()
+}
+
+fn shifted_links(links: Vec<LogicalLinkRange>, columns: usize) -> Vec<LogicalLinkRange> {
+    links
+        .into_iter()
+        .map(|mut link| {
+            link.start_column += columns;
+            link.end_column += columns;
+            link
+        })
+        .collect()
 }
 
 fn count_sections(sections: &[Section]) -> usize {
@@ -964,7 +1039,7 @@ fn collect_option_entries<'a>(blocks: &'a [Block], entries: &mut Vec<&'a Definit
     }
 }
 
-fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<Vec<Span<'static>>>) {
+fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLine>) {
     for node in nodes {
         match node {
             Inline::Text { value } => append_text(value, style, lines),
@@ -986,8 +1061,7 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<Vec<Span<'stati
                     lines,
                 );
             }
-            Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => {
+            Inline::ManualReference { children, .. } => {
                 append_inline(
                     children,
                     Style::default()
@@ -996,21 +1070,54 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<Vec<Span<'stati
                     lines,
                 );
             }
+            Inline::SectionReference { target, children } => {
+                let first_line = lines.len() - 1;
+                let first_column = spans_width(&lines[first_line].spans);
+                append_inline(
+                    children,
+                    Style::default()
+                        .fg(theme::LINK)
+                        .add_modifier(Modifier::UNDERLINED),
+                    lines,
+                );
+                let last_line = lines.len() - 1;
+                for (line_index, line) in lines
+                    .iter_mut()
+                    .enumerate()
+                    .take(last_line + 1)
+                    .skip(first_line)
+                {
+                    let start_column = if line_index == first_line {
+                        first_column
+                    } else {
+                        0
+                    };
+                    let end_column = spans_width(&line.spans);
+                    if end_column > start_column {
+                        line.links.push(LogicalLinkRange {
+                            target: target.clone(),
+                            start_column,
+                            end_column,
+                        });
+                    }
+                }
+            }
             Inline::Anchor { .. } => {}
-            Inline::LineBreak => lines.push(Vec::new()),
+            Inline::LineBreak => lines.push(StyledInlineLine::default()),
         }
     }
 }
 
-fn append_text(value: &str, style: Style, lines: &mut Vec<Vec<Span<'static>>>) {
+fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {
     for (index, part) in value.split('\n').enumerate() {
         if index > 0 {
-            lines.push(Vec::new());
+            lines.push(StyledInlineLine::default());
         }
         if !part.is_empty() {
             lines
                 .last_mut()
                 .expect("inline builder always owns one line")
+                .spans
                 .push(Span::styled(part.to_owned(), style));
         }
     }
@@ -1021,30 +1128,67 @@ struct StyledCell {
     character: char,
     width: usize,
     style: Style,
+    link_index: Option<usize>,
 }
 
+struct WrappedLine {
+    line: Line<'static>,
+    links: Vec<WrappedLink>,
+}
+
+struct WrappedLink {
+    target: String,
+    start_column: usize,
+    end_column: usize,
+}
+
+#[cfg(test)]
 fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
+    wrap_line_with_links(line, width)
+        .into_iter()
+        .map(|wrapped| wrapped.line)
+        .collect()
+}
+
+#[allow(clippy::too_many_lines)]
+fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
     if let Some(cells) = &line.table_cells {
-        return render_table_row(line.indent, cells, width);
+        return render_table_row_with_links(line.indent, cells, width);
     }
     match line.surface {
-        LineSurface::TldrTop => return vec![panel_border(width, '┌', '┐')],
-        LineSurface::TldrBottom => return vec![panel_border(width, '└', '┘')],
+        LineSurface::TldrTop => {
+            return vec![WrappedLine {
+                line: panel_border(width, '┌', '┐'),
+                links: Vec::new(),
+            }];
+        }
+        LineSurface::TldrBottom => {
+            return vec![WrappedLine {
+                line: panel_border(width, '└', '┘'),
+                links: Vec::new(),
+            }];
+        }
         LineSurface::Divider => {
-            return vec![Line::from(Span::styled(
-                "─".repeat(width),
-                Style::default().fg(theme::OVERLAY),
-            ))];
+            return vec![WrappedLine {
+                line: Line::from(Span::styled(
+                    "─".repeat(width),
+                    Style::default().fg(theme::OVERLAY),
+                )),
+                links: Vec::new(),
+            }];
         }
         LineSurface::Rule => {
             let indent = line.indent.min(width.saturating_sub(1));
-            return vec![Line::from(vec![
-                Span::raw(" ".repeat(indent)),
-                Span::styled(
-                    "─".repeat(width.saturating_sub(indent)),
-                    Style::default().fg(theme::OVERLAY),
-                ),
-            ])];
+            return vec![WrappedLine {
+                line: Line::from(vec![
+                    Span::raw(" ".repeat(indent)),
+                    Span::styled(
+                        "─".repeat(width.saturating_sub(indent)),
+                        Style::default().fg(theme::OVERLAY),
+                    ),
+                ]),
+                links: Vec::new(),
+            }];
         }
         LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
     }
@@ -1053,7 +1197,7 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
     let mut cells = styled_cells(line);
 
     if cells.is_empty() {
-        return vec![cells_to_line(
+        return vec![wrapped_cells_to_line(
             line,
             width,
             line.indent.min(width.saturating_sub(1)),
@@ -1076,12 +1220,12 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
             .max(1);
         let fit = fitting_prefix(&cells, available);
         if fit == cells.len() {
-            result.push(cells_to_line(line, width, indent, &cells));
+            result.push(wrapped_cells_to_line(line, width, indent, &cells));
             break;
         }
 
         if line.wrap_mode == WrapMode::Character {
-            result.push(cells_to_line(line, width, indent, &cells[..fit]));
+            result.push(wrapped_cells_to_line(line, width, indent, &cells[..fit]));
             cells.drain(..fit);
         } else {
             let split = cells[..fit]
@@ -1093,7 +1237,12 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
             if row_end == 0 {
                 cells.drain(..fit.max(1));
             } else {
-                result.push(cells_to_line(line, width, indent, &cells[..row_end]));
+                result.push(wrapped_cells_to_line(
+                    line,
+                    width,
+                    indent,
+                    &cells[..row_end],
+                ));
                 let consumed = if split < fit { split + 1 } else { split };
                 cells.drain(..consumed.max(1));
             }
@@ -1114,16 +1263,23 @@ fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
 
     let mut cells = Vec::new();
     let mut column = line.indent;
+    let mut source_column = 0;
     for span in &line.spans {
         for character in span.content.chars() {
+            let source_width = character.width().unwrap_or(0);
+            let link_index = line.links.iter().position(|link| {
+                link.start_column < source_column + source_width && link.end_column > source_column
+            });
             if character == '\t' {
                 let spaces = TAB_STOP - column % TAB_STOP;
                 cells.extend((0..spaces).map(|_| StyledCell {
                     character: ' ',
                     width: 1,
                     style: span.style,
+                    link_index,
                 }));
                 column += spaces;
+                source_column += spaces;
                 continue;
             }
             let character = if character.is_control() {
@@ -1136,16 +1292,25 @@ fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
                 character,
                 width: cell_width,
                 style: span.style,
+                link_index,
             });
             column += cell_width;
+            source_column += source_width;
         }
     }
     cells
 }
 
-fn render_table_row(indent: usize, cells: &[Vec<LogicalLine>], width: usize) -> Vec<Line<'static>> {
+fn render_table_row_with_links(
+    indent: usize,
+    cells: &[Vec<LogicalLine>],
+    width: usize,
+) -> Vec<WrappedLine> {
     if cells.is_empty() {
-        return vec![Line::default()];
+        return vec![WrappedLine {
+            line: Line::default(),
+            links: Vec::new(),
+        }];
     }
     let indent = indent.min(width.saturating_sub(1));
     let available = width.saturating_sub(indent).max(1);
@@ -1163,7 +1328,7 @@ fn render_table_row(indent: usize, cells: &[Vec<LogicalLine>], width: usize) -> 
             }
             lines
                 .iter()
-                .flat_map(|line| wrap_line(line, *column_width))
+                .flat_map(|line| wrap_line_with_links(line, *column_width))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
@@ -1172,18 +1337,29 @@ fn render_table_row(indent: usize, cells: &[Vec<LogicalLine>], width: usize) -> 
     (0..row_count)
         .map(|row_index| {
             let mut spans = Vec::new();
+            let mut links = Vec::new();
+            let mut column_offset = indent;
             if indent > 0 {
                 spans.push(Span::raw(" ".repeat(indent)));
             }
             for (cell_rows, column_width) in rendered_cells.iter().zip(&column_widths) {
                 let mut used = 0;
                 if let Some(row) = cell_rows.get(row_index) {
-                    used = UnicodeWidthStr::width(row.to_string().as_str());
-                    spans.extend(row.spans.clone());
+                    used = UnicodeWidthStr::width(row.line.to_string().as_str());
+                    spans.extend(row.line.spans.clone());
+                    links.extend(row.links.iter().map(|link| WrappedLink {
+                        target: link.target.clone(),
+                        start_column: column_offset + link.start_column,
+                        end_column: column_offset + link.end_column,
+                    }));
                 }
                 spans.push(Span::raw(" ".repeat(column_width.saturating_sub(used))));
+                column_offset += column_width;
             }
-            Line::from(spans)
+            WrappedLine {
+                line: Line::from(spans),
+                links,
+            }
         })
         .collect()
 }
@@ -1266,6 +1442,47 @@ fn cells_to_line(
         ));
     }
     Line::from(spans)
+}
+
+fn wrapped_cells_to_line(
+    line: &LogicalLine,
+    width: usize,
+    indent: usize,
+    cells: &[StyledCell],
+) -> WrappedLine {
+    let mut links = Vec::new();
+    let mut column = indent + usize::from(line.surface == LineSurface::Tldr) * 2;
+    let mut active: Option<(usize, usize, usize)> = None;
+    for cell in cells {
+        let next_column = column + cell.width;
+        match (active, cell.link_index) {
+            (Some((index, start, _)), Some(next)) if index == next => {
+                active = Some((index, start, next_column));
+            }
+            (Some((index, start, end)), next) => {
+                links.push(WrappedLink {
+                    target: line.links[index].target.clone(),
+                    start_column: start,
+                    end_column: end,
+                });
+                active = next.map(|index| (index, column, next_column));
+            }
+            (None, Some(index)) => active = Some((index, column, next_column)),
+            (None, None) => {}
+        }
+        column = next_column;
+    }
+    if let Some((index, start, end)) = active {
+        links.push(WrappedLink {
+            target: line.links[index].target.clone(),
+            start_column: start,
+            end_column: end,
+        });
+    }
+    WrappedLine {
+        line: cells_to_line(line, width, indent, cells),
+        links,
+    }
 }
 
 fn with_background(style: Style, background: Option<ratatui::style::Color>) -> Style {
@@ -1594,6 +1811,7 @@ mod tests {
             text: Text::from(Line::from("İstanbul")),
             row_count: 1,
             anchor_rows: HashMap::new(),
+            links: Vec::new(),
         };
 
         assert_eq!(
@@ -1604,5 +1822,49 @@ mod tests {
                 end_column: 1,
             }]
         );
+    }
+
+    #[test]
+    fn section_reference_hit_regions_follow_wrapped_link_text() {
+        let mut bundle = bundle();
+        let document = bundle.document.as_mut().expect("document");
+        document.sections[0].blocks = vec![Block::Paragraph {
+            children: vec![
+                Inline::Text {
+                    value: "Read ".to_owned(),
+                },
+                Inline::SectionReference {
+                    target: "details".to_owned(),
+                    children: vec![Inline::Text {
+                        value: "the detailed section".to_owned(),
+                    }],
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        document.sections[0].children.push(Section {
+            id: "details".to_owned(),
+            title: "Details".to_owned(),
+            spacing_before_lines: 0,
+            blocks: Vec::new(),
+            children: Vec::new(),
+            source: None,
+        });
+
+        let rendered = DocumentView::new(&bundle).render(12);
+        let regions = rendered
+            .links
+            .iter()
+            .filter(|link| link.target == "details")
+            .collect::<Vec<_>>();
+
+        assert!(regions.len() >= 2, "reference should wrap across rows");
+        for region in regions {
+            assert_eq!(
+                rendered.link_target_at(region.row, region.start_column),
+                Some("details")
+            );
+        }
     }
 }

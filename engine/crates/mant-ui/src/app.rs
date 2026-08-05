@@ -285,6 +285,13 @@ impl App {
                     }
                 }
             }
+            MouseEventKind::Down(MouseButton::Left)
+                if self
+                    .last_content_area
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.activate_content_link(mouse.column, mouse.row);
+            }
             _ => {}
         }
     }
@@ -942,6 +949,50 @@ impl App {
             .or_insert_with(|| self.document.render(width));
         if let Some(row) = rendered.anchor_row(&item.target_id) {
             self.content_scroll = row;
+        }
+    }
+
+    fn activate_content_link(&mut self, column: u16, row: u16) {
+        let width = self.last_content_area.width.max(1);
+        let rendered = self
+            .rendered_cache
+            .entry(width)
+            .or_insert_with(|| self.document.render(width));
+        let document_row = self.content_scroll + usize::from(row - self.last_content_area.y);
+        let document_column = usize::from(column - self.last_content_area.x);
+        let Some(target) = rendered
+            .link_target_at(document_row, document_column)
+            .map(str::to_owned)
+        else {
+            return;
+        };
+        let Some(target_row) = rendered.anchor_row(&target) else {
+            return;
+        };
+        self.content_scroll = target_row;
+        if let Some(index) = self
+            .document
+            .navigation()
+            .iter()
+            .position(|item| item.id == target)
+        {
+            self.expand_navigation_ancestors(index);
+            self.selected = index;
+        } else {
+            self.select_section_at_row(target_row);
+        }
+    }
+
+    fn expand_navigation_ancestors(&mut self, index: usize) {
+        let mut parent = self.document.navigation()[index].parent_id.as_deref();
+        while let Some(parent_id) = parent {
+            self.expanded.insert(parent_id.to_owned());
+            parent = self
+                .document
+                .navigation()
+                .iter()
+                .find(|item| item.id == parent_id)
+                .and_then(|item| item.parent_id.as_deref());
         }
     }
 
@@ -1681,5 +1732,56 @@ mod tests {
         app.tick(deadline);
         assert_eq!(app.document.navigation()[app.selected].id, "details");
         assert!(app.navigation_sync_deadline.is_none());
+    }
+
+    #[test]
+    fn clicking_a_wrapped_section_reference_opens_its_target() {
+        let mut bundle = navigation_bundle();
+        bundle.document.as_mut().expect("manual").sections[0]
+            .blocks
+            .insert(
+                0,
+                AstBlock::Paragraph {
+                    children: vec![
+                        Inline::Text {
+                            value: "Continue with ".to_owned(),
+                        },
+                        Inline::SectionReference {
+                            target: "details".to_owned(),
+                            children: vec![Inline::Text {
+                                value: "the nested details section".to_owned(),
+                            }],
+                        },
+                    ],
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+            );
+        let backend = TestBackend::new(72, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&bundle);
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let width = app.last_content_area.width;
+        let region = app.rendered_cache[&width]
+            .search("nested")
+            .into_iter()
+            .next()
+            .expect("visible reference text");
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: app.last_content_area.x
+                + u16::try_from(region.start_column).expect("link column"),
+            row: app.last_content_area.y + u16::try_from(region.row).expect("link row"),
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.document.navigation()[app.selected].id, "details");
+        assert_eq!(
+            app.content_scroll,
+            app.rendered_cache[&width]
+                .anchor_row("details")
+                .expect("details anchor")
+        );
     }
 }
