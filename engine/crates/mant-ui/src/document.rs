@@ -7,14 +7,14 @@
 use std::collections::HashMap;
 
 use mant_ast::{
-    Block, Inline, ListKind, QueryBundle, Section, SourceFormat, TableCell, TldrCommandPart,
-    TldrDocument, TldrOrigin,
+    Block, Inline, ListKind, QueryBundle, Section, SourceFormat, TldrCommandPart, TldrDocument,
+    TldrOrigin,
 };
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span, Text},
 };
-use unicode_width::UnicodeWidthChar;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::theme;
 
@@ -64,8 +64,17 @@ pub struct RenderedDocument {
 #[derive(Debug, Clone)]
 struct LogicalLine {
     indent: usize,
+    continuation_indent: usize,
     spans: Vec<Span<'static>>,
     surface: LineSurface,
+    wrap_mode: WrapMode,
+    table_cells: Option<Vec<Vec<LogicalLine>>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WrapMode {
+    Word,
+    Character,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,28 +85,70 @@ enum LineSurface {
     TldrTop,
     TldrBottom,
     Divider,
+    Rule,
 }
 
 impl LogicalLine {
     fn empty() -> Self {
         Self {
             indent: 0,
+            continuation_indent: 0,
             spans: Vec::new(),
             surface: LineSurface::Normal,
+            wrap_mode: WrapMode::Word,
+            table_cells: None,
         }
     }
 
     fn plain(indent: usize, value: impl Into<String>, style: Style) -> Self {
         Self {
             indent,
+            continuation_indent: indent,
             spans: vec![Span::styled(value.into(), style)],
             surface: LineSurface::Normal,
+            wrap_mode: WrapMode::Word,
+            table_cells: None,
         }
     }
 
     fn surface(mut self, surface: LineSurface) -> Self {
         self.surface = surface;
         self
+    }
+
+    fn wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
+        self.wrap_mode = wrap_mode;
+        self
+    }
+
+    fn hanging(indent: usize, continuation_indent: usize, spans: Vec<Span<'static>>) -> Self {
+        Self {
+            indent,
+            continuation_indent,
+            spans,
+            surface: LineSurface::Normal,
+            wrap_mode: WrapMode::Word,
+            table_cells: None,
+        }
+    }
+
+    fn table(indent: usize, cells: Vec<Vec<Self>>) -> Self {
+        Self {
+            indent,
+            continuation_indent: indent,
+            spans: Vec::new(),
+            surface: LineSurface::Normal,
+            wrap_mode: WrapMode::Word,
+            table_cells: Some(cells),
+        }
+    }
+
+    fn rule(indent: usize) -> Self {
+        let mut line = Self::empty();
+        line.indent = indent;
+        line.continuation_indent = indent;
+        line.surface = LineSurface::Rule;
+        line
     }
 }
 
@@ -335,8 +386,11 @@ impl DocumentBuilder {
             .collect();
         self.push(LogicalLine {
             indent: 2,
+            continuation_indent: 2,
             spans,
             surface: LineSurface::Tldr,
+            wrap_mode: WrapMode::Word,
+            table_cells: None,
         });
     }
 
@@ -442,14 +496,39 @@ impl DocumentBuilder {
                         ListKind::Plain => String::new(),
                     };
                     let has_marker = !marker.is_empty();
-                    if has_marker {
-                        self.push(LogicalLine::plain(
-                            indent,
-                            marker,
-                            Style::default().fg(theme::HEADING),
-                        ));
+                    if has_marker
+                        && let Some(Block::Paragraph {
+                            children, layout, ..
+                        }) = item.blocks.first()
+                    {
+                        self.spacing(layout.spacing_before_lines);
+                        let marker_width = UnicodeWidthStr::width(marker.as_str());
+                        let content_indent =
+                            indent + marker_width + usize::from(layout.indent_columns);
+                        let mut inline_lines =
+                            styled_inline_lines(children, Style::default().fg(theme::TEXT));
+                        let first = inline_lines
+                            .first_mut()
+                            .map_or_else(Vec::new, std::mem::take);
+                        let mut spans =
+                            vec![Span::styled(marker, Style::default().fg(theme::HEADING))];
+                        spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
+                        spans.extend(first);
+                        self.push(LogicalLine::hanging(indent, content_indent, spans));
+                        for spans in inline_lines.into_iter().skip(1) {
+                            self.push(LogicalLine::hanging(content_indent, content_indent, spans));
+                        }
+                        self.blocks(&item.blocks[1..], indent + marker_width);
+                    } else {
+                        if has_marker {
+                            self.push(LogicalLine::plain(
+                                indent,
+                                marker,
+                                Style::default().fg(theme::HEADING),
+                            ));
+                        }
+                        self.blocks(&item.blocks, indent + usize::from(has_marker) * 2);
                     }
-                    self.blocks(&item.blocks, indent + usize::from(has_marker) * 2);
                 }
             }
             Block::DefinitionList {
@@ -465,46 +544,52 @@ impl DocumentBuilder {
                         .spacing_before_lines
                         .unwrap_or(u16::from(index > 0 && !compact));
                     self.spacing(spacing);
-                    for term in &item.terms {
-                        self.inline_lines(term, indent, Style::default().fg(theme::TEXT));
+                    if let Some(identity) = &item.identity {
+                        self.anchors.insert(identity.id.clone(), self.lines.len());
                     }
-                    self.blocks(
-                        &item.description,
-                        indent + usize::from(!item.inline_term) * 4,
-                    );
+                    if item.inline_term {
+                        self.inline_definition(item, indent);
+                    } else {
+                        for term in &item.terms {
+                            self.inline_lines(
+                                term,
+                                indent,
+                                Style::default().fg(theme::SUBTEXT_BRIGHT),
+                            );
+                        }
+                        self.blocks(&item.description, indent + 4);
+                    }
                 }
             }
             Block::Table { rows, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
                 let indent = base_indent + usize::from(layout.indent_columns);
                 for row in rows {
-                    let value = row
+                    let cells = row
                         .cells
                         .iter()
-                        .map(cell_text)
-                        .collect::<Vec<_>>()
-                        .join("  ");
-                    self.push(LogicalLine::plain(
-                        indent,
-                        value,
-                        Style::default().fg(theme::TEXT),
-                    ));
+                        .map(|cell| {
+                            let mut builder = Self::new(String::new());
+                            builder.blocks(&cell.blocks, 0);
+                            builder.lines
+                        })
+                        .collect();
+                    self.push(LogicalLine::table(indent, cells));
                 }
             }
             Block::Equation { value, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
-                self.push(LogicalLine::plain(
-                    base_indent + usize::from(layout.indent_columns),
-                    value.clone(),
-                    Style::default().fg(theme::YELLOW),
-                ));
+                self.push(
+                    LogicalLine::plain(
+                        base_indent + usize::from(layout.indent_columns),
+                        value.clone(),
+                        Style::default().fg(theme::YELLOW),
+                    )
+                    .wrap_mode(WrapMode::Character),
+                );
             }
             Block::VerticalSpace { lines, .. } => self.spacing(*lines),
-            Block::ThematicBreak { .. } => self.push(LogicalLine::plain(
-                base_indent,
-                "─".repeat(12),
-                Style::default().fg(theme::OVERLAY),
-            )),
+            Block::ThematicBreak { .. } => self.push(LogicalLine::rule(base_indent)),
             Block::Unsupported { text, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
                 self.push(LogicalLine::plain(
@@ -522,6 +607,54 @@ impl DocumentBuilder {
         }
     }
 
+    fn inline_definition(&mut self, item: &mant_ast::DefinitionItem, indent: usize) {
+        let mut term_spans = Vec::new();
+        for (index, term) in item.terms.iter().enumerate() {
+            term_spans.extend(
+                styled_inline_lines(term, Style::default().fg(theme::SUBTEXT_BRIGHT))
+                    .into_iter()
+                    .flatten(),
+            );
+            term_spans.push(Span::styled(
+                if index + 1 < item.terms.len() {
+                    ", "
+                } else {
+                    " "
+                },
+                Style::default().fg(theme::SUBTEXT_BRIGHT),
+            ));
+        }
+        let term_width = spans_width(&term_spans);
+
+        if let Some(Block::Paragraph {
+            children, layout, ..
+        }) = item.description.first()
+            && layout.spacing_before_lines == 0
+        {
+            let description_indent = indent + term_width + usize::from(layout.indent_columns);
+            term_spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
+            let mut description_lines =
+                styled_inline_lines(children, Style::default().fg(theme::TEXT));
+            term_spans.extend(
+                description_lines
+                    .first_mut()
+                    .map_or_else(Vec::new, std::mem::take),
+            );
+            self.push(LogicalLine::hanging(indent, description_indent, term_spans));
+            for spans in description_lines.into_iter().skip(1) {
+                self.push(LogicalLine::hanging(
+                    description_indent,
+                    description_indent,
+                    spans,
+                ));
+            }
+            self.blocks(&item.description[1..], description_indent);
+        } else {
+            self.push(LogicalLine::hanging(indent, indent, term_spans));
+            self.blocks(&item.description, indent + term_width);
+        }
+    }
+
     fn inline_lines(&mut self, nodes: &[Inline], indent: usize, base_style: Style) {
         self.inline_lines_with_surface(nodes, indent, base_style, LineSurface::Normal);
     }
@@ -533,20 +666,58 @@ impl DocumentBuilder {
         base_style: Style,
         surface: LineSurface,
     ) {
-        let mut lines = vec![Vec::new()];
-        append_inline(nodes, base_style, &mut lines);
-        for spans in lines {
+        for id in inline_anchor_ids(nodes) {
+            self.anchors.entry(id).or_insert(self.lines.len());
+        }
+        for spans in styled_inline_lines(nodes, base_style) {
             self.push(LogicalLine {
                 indent,
+                continuation_indent: indent,
                 spans: if surface == LineSurface::Code {
                     crate::code::highlight(spans)
                 } else {
                     spans
                 },
                 surface,
+                wrap_mode: if surface == LineSurface::Code {
+                    WrapMode::Character
+                } else {
+                    WrapMode::Word
+                },
+                table_cells: None,
             });
         }
     }
+}
+
+fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
+    let mut ids = Vec::new();
+    for node in nodes {
+        match node {
+            Inline::Anchor { id } => ids.push(id.clone()),
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::ExternalLink { children, .. }
+            | Inline::EmailLink { children, .. }
+            | Inline::ManualReference { children, .. }
+            | Inline::SectionReference { children, .. } => ids.extend(inline_anchor_ids(children)),
+            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+        }
+    }
+    ids
+}
+
+fn styled_inline_lines(nodes: &[Inline], style: Style) -> Vec<Vec<Span<'static>>> {
+    let mut lines = vec![Vec::new()];
+    append_inline(nodes, style, &mut lines);
+    lines
+}
+
+fn spans_width(spans: &[Span<'_>]) -> usize {
+    spans
+        .iter()
+        .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+        .sum()
 }
 
 fn count_sections(sections: &[Section]) -> usize {
@@ -608,43 +779,6 @@ fn append_text(value: &str, style: Style, lines: &mut Vec<Vec<Span<'static>>>) {
     }
 }
 
-fn cell_text(cell: &TableCell) -> String {
-    cell.blocks
-        .iter()
-        .map(block_text)
-        .filter(|value| !value.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn block_text(block: &Block) -> String {
-    match block {
-        Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-            inline_text(children)
-        }
-        Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => value.clone(),
-        _ => String::new(),
-    }
-}
-
-fn inline_text(nodes: &[Inline]) -> String {
-    let mut value = String::new();
-    for node in nodes {
-        match node {
-            Inline::Text { value: text } | Inline::Code { value: text } => value.push_str(text),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => value.push_str(&inline_text(children)),
-            Inline::LineBreak => value.push(' '),
-            Inline::Anchor { .. } => {}
-        }
-    }
-    value
-}
-
 #[derive(Clone, Copy)]
 struct StyledCell {
     character: char,
@@ -653,6 +787,9 @@ struct StyledCell {
 }
 
 fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
+    if let Some(cells) = &line.table_cells {
+        return render_table_row(line.indent, cells, width);
+    }
     match line.surface {
         LineSurface::TldrTop => return vec![panel_border(width, '┌', '┐')],
         LineSurface::TldrBottom => return vec![panel_border(width, '└', '┘')],
@@ -662,69 +799,173 @@ fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> {
                 Style::default().fg(theme::OVERLAY),
             ))];
         }
+        LineSurface::Rule => {
+            let indent = line.indent.min(width.saturating_sub(1));
+            return vec![Line::from(vec![
+                Span::raw(" ".repeat(indent)),
+                Span::styled(
+                    "─".repeat(width.saturating_sub(indent)),
+                    Style::default().fg(theme::OVERLAY),
+                ),
+            ])];
+        }
         LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
     }
 
-    let indent = line.indent.min(width.saturating_sub(1));
     let decoration_width = usize::from(line.surface == LineSurface::Tldr) * 4;
-    let available = width
-        .saturating_sub(indent)
-        .saturating_sub(decoration_width)
-        .max(1);
-    let cells = line
-        .spans
-        .iter()
-        .flat_map(|span| {
-            let style = span.style;
-            span.content.chars().map(move |character| StyledCell {
-                character,
-                width: character.width().unwrap_or(0),
-                style,
-            })
-        })
-        .collect::<Vec<_>>();
+    let mut cells = styled_cells(line);
 
     if cells.is_empty() {
-        return vec![cells_to_line(line, width, indent, &[])];
+        return vec![cells_to_line(
+            line,
+            width,
+            line.indent.min(width.saturating_sub(1)),
+            &[],
+        )];
     }
 
     let mut result = Vec::new();
-    let mut row = Vec::new();
-    let mut row_width = 0;
-    for cell in cells {
-        while row_width + cell.width > available && !row.is_empty() {
-            if let Some(space) = row
+    let mut first_row = true;
+    while !cells.is_empty() {
+        let indent = if first_row {
+            line.indent
+        } else {
+            line.continuation_indent
+        }
+        .min(width.saturating_sub(1));
+        let available = width
+            .saturating_sub(indent)
+            .saturating_sub(decoration_width)
+            .max(1);
+        let fit = fitting_prefix(&cells, available);
+        if fit == cells.len() {
+            result.push(cells_to_line(line, width, indent, &cells));
+            break;
+        }
+
+        if line.wrap_mode == WrapMode::Character {
+            result.push(cells_to_line(line, width, indent, &cells[..fit]));
+            cells.drain(..fit);
+        } else {
+            let split = cells[..fit]
                 .iter()
-                .rposition(|item: &StyledCell| item.character.is_whitespace())
-            {
-                let mut continuation = row.split_off(space + 1);
-                row.pop();
-                while row
-                    .last()
-                    .is_some_and(|item| item.character.is_whitespace())
-                {
-                    row.pop();
-                }
-                result.push(cells_to_line(line, width, indent, &row));
-                while continuation
-                    .first()
-                    .is_some_and(|item| item.character.is_whitespace())
-                {
-                    continuation.remove(0);
-                }
-                row = continuation;
-                row_width = row.iter().map(|item| item.width).sum();
+                .rposition(|cell| cell.character.is_whitespace())
+                .filter(|position| *position > 0)
+                .unwrap_or(fit);
+            let row_end = trim_trailing_whitespace(&cells, split);
+            if row_end == 0 {
+                cells.drain(..fit.max(1));
             } else {
-                result.push(cells_to_line(line, width, indent, &row));
-                row.clear();
-                row_width = 0;
+                result.push(cells_to_line(line, width, indent, &cells[..row_end]));
+                let consumed = if split < fit { split + 1 } else { split };
+                cells.drain(..consumed.max(1));
+            }
+            while cells
+                .first()
+                .is_some_and(|cell| cell.character.is_whitespace())
+            {
+                cells.remove(0);
             }
         }
-        row_width += cell.width;
-        row.push(cell);
+        first_row = false;
     }
-    if !row.is_empty() {
-        result.push(cells_to_line(line, width, indent, &row));
+    result
+}
+
+fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
+    const TAB_STOP: usize = 8;
+
+    let mut cells = Vec::new();
+    let mut column = line.indent;
+    for span in &line.spans {
+        for character in span.content.chars() {
+            if character == '\t' {
+                let spaces = TAB_STOP - column % TAB_STOP;
+                cells.extend((0..spaces).map(|_| StyledCell {
+                    character: ' ',
+                    width: 1,
+                    style: span.style,
+                }));
+                column += spaces;
+                continue;
+            }
+            let character = if character.is_control() {
+                '\u{fffd}'
+            } else {
+                character
+            };
+            let cell_width = character.width().unwrap_or(0);
+            cells.push(StyledCell {
+                character,
+                width: cell_width,
+                style: span.style,
+            });
+            column += cell_width;
+        }
+    }
+    cells
+}
+
+fn render_table_row(indent: usize, cells: &[Vec<LogicalLine>], width: usize) -> Vec<Line<'static>> {
+    if cells.is_empty() {
+        return vec![Line::default()];
+    }
+    let indent = indent.min(width.saturating_sub(1));
+    let available = width.saturating_sub(indent).max(1);
+    let base_width = available / cells.len();
+    let remainder = available % cells.len();
+    let column_widths = (0..cells.len())
+        .map(|index| base_width + usize::from(index < remainder))
+        .collect::<Vec<_>>();
+    let rendered_cells = cells
+        .iter()
+        .zip(&column_widths)
+        .map(|(lines, column_width)| {
+            if *column_width == 0 {
+                return Vec::new();
+            }
+            lines
+                .iter()
+                .flat_map(|line| wrap_line(line, *column_width))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let row_count = rendered_cells.iter().map(Vec::len).max().unwrap_or(1);
+
+    (0..row_count)
+        .map(|row_index| {
+            let mut spans = Vec::new();
+            if indent > 0 {
+                spans.push(Span::raw(" ".repeat(indent)));
+            }
+            for (cell_rows, column_width) in rendered_cells.iter().zip(&column_widths) {
+                let mut used = 0;
+                if let Some(row) = cell_rows.get(row_index) {
+                    used = UnicodeWidthStr::width(row.to_string().as_str());
+                    spans.extend(row.spans.clone());
+                }
+                spans.push(Span::raw(" ".repeat(column_width.saturating_sub(used))));
+            }
+            Line::from(spans)
+        })
+        .collect()
+}
+
+fn fitting_prefix(cells: &[StyledCell], available: usize) -> usize {
+    let mut width = 0;
+    for (index, cell) in cells.iter().enumerate() {
+        if width + cell.width > available {
+            return index.max(1);
+        }
+        width += cell.width;
+    }
+    cells.len()
+}
+
+fn trim_trailing_whitespace(cells: &[StyledCell], end: usize) -> usize {
+    let mut result = end;
+    while result > 0 && cells[result - 1].character.is_whitespace() {
+        result -= 1;
     }
     result
 }
@@ -742,7 +983,8 @@ fn cells_to_line(
         LineSurface::Normal
         | LineSurface::TldrTop
         | LineSurface::TldrBottom
-        | LineSurface::Divider => None,
+        | LineSurface::Divider
+        | LineSurface::Rule => None,
     };
 
     if line.surface == LineSurface::Tldr {
@@ -807,8 +1049,9 @@ fn panel_border(width: usize, left: char, right: char) -> Line<'static> {
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        DocumentMeta, DocumentSchema, DocumentSource, LayoutHint, MantDocument, Producer,
-        QuerySchema, SourceFormat, TldrDocument, TldrExample,
+        DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSchema,
+        DocumentSource, LayoutHint, ListItem, MantDocument, Producer, QuerySchema, SourceFormat,
+        TableCell, TableRow, TldrDocument, TldrExample,
     };
     use unicode_width::UnicodeWidthStr;
 
@@ -896,6 +1139,17 @@ mod tests {
     }
 
     #[test]
+    fn preformatted_character_wrapping_preserves_significant_spaces() {
+        let line = LogicalLine::plain(2, "ab  cd", Style::default())
+            .surface(LineSurface::Code)
+            .wrap_mode(WrapMode::Character);
+        let rows = wrap_line(&line, 7);
+
+        assert_eq!(&rows[0].to_string()[..7], "  ab  c");
+        assert!(rows[1].to_string().starts_with("  d"));
+    }
+
+    #[test]
     fn tldr_is_rendered_as_a_bordered_full_width_panel() {
         let mut bundle = bundle();
         bundle.tldr = Some(TldrDocument {
@@ -936,5 +1190,133 @@ mod tests {
                 .iter()
                 .any(|line| line.to_string() == "─".repeat(32))
         );
+    }
+
+    #[test]
+    fn bullet_lists_share_the_first_row_and_use_a_hanging_indent() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::List {
+            kind: ListKind::Bullet,
+            start: None,
+            compact: true,
+            items: vec![ListItem {
+                blocks: vec![Block::Paragraph {
+                    children: vec![Inline::Text {
+                        value: "alpha beta gamma".to_owned(),
+                    }],
+                    layout: LayoutHint::default(),
+                    source: None,
+                }],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let rendered = DocumentView::new(&bundle).render(16);
+        let rows = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert_eq!(rows[1], "   • alpha beta");
+        assert_eq!(rows[2], "     gamma");
+    }
+
+    #[test]
+    fn inline_definitions_hang_the_description_and_expose_their_anchor() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks =
+            vec![Block::DefinitionList {
+                items: vec![DefinitionItem {
+                    identity: Some(DefinitionIdentity {
+                        id: "help-option".to_owned(),
+                        role: DefinitionRole::Option,
+                        names: vec!["-h".to_owned()],
+                    }),
+                    terms: vec![vec![Inline::Strong {
+                        children: vec![Inline::Text {
+                            value: "-h".to_owned(),
+                        }],
+                    }]],
+                    description: vec![Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "Show detailed command help".to_owned(),
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    inline_term: true,
+                    spacing_before_lines: None,
+                }],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }];
+
+        let rendered = DocumentView::new(&bundle).render(18);
+        let rows = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered.anchor_row("help-option"), Some(1));
+        assert_eq!(rows[1], "   -h Show");
+        assert!(rows[2].starts_with("      detailed"));
+    }
+
+    #[test]
+    fn table_cells_keep_equal_columns_and_independent_wrapping() {
+        let mut bundle = bundle();
+        let paragraph = |value: &str| Block::Paragraph {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+            rows: vec![TableRow {
+                cells: vec![
+                    TableCell {
+                        blocks: vec![paragraph("alpha beta gamma")],
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    },
+                    TableCell {
+                        blocks: vec![paragraph("right hand")],
+                        column_span: 1,
+                        row_span: 1,
+                        alignment: None,
+                    },
+                ],
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let rendered = DocumentView::new(&bundle).render(24);
+        let rows = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert!(rows[1].starts_with("   alpha beta "));
+        assert!(rows[1].contains("right hand"));
+        assert!(rows[2].starts_with("   gamma"));
+        assert_eq!(UnicodeWidthStr::width(rows[1].as_str()), 24);
+    }
+
+    #[test]
+    fn thematic_breaks_fill_the_remaining_content_width() {
+        let rows = wrap_line(&LogicalLine::rule(3), 12);
+
+        assert_eq!(rows[0].to_string(), "   ─────────");
     }
 }
