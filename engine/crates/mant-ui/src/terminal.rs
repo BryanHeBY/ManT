@@ -1,6 +1,6 @@
 //! Crossterm lifecycle boundary that always restores the host terminal.
 
-use std::{io, panic};
+use std::{io, panic, time::Instant};
 
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
@@ -28,16 +28,17 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
 
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<()> {
         while !app.should_quit() {
+            let now = Instant::now();
+            app.tick(now);
             terminal.draw(|frame| app.draw(frame))?;
-            match event::read()? {
-                Event::Key(key) if key.is_press() => app.handle_key(key),
-                Event::Mouse(mouse) => app.handle_mouse(mouse),
-                Event::Resize(_, _)
-                | Event::FocusGained
-                | Event::FocusLost
-                | Event::Paste(_)
-                | Event::Key(_) => {}
+            let Some(timeout) = app.next_wakeup(now) else {
+                route_event(&mut app, &event::read()?);
+                continue;
+            };
+            if !event::poll(timeout)? {
+                continue;
             }
+            route_event(&mut app, &event::read()?);
         }
         Ok(())
     }));
@@ -49,6 +50,18 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
             let _ = restore_result;
             panic::resume_unwind(payload);
         }
+    }
+}
+
+fn route_event(app: &mut App, event: &Event) {
+    match event {
+        Event::Key(key) if key.is_press() => app.handle_key(*key),
+        Event::Mouse(mouse) => app.handle_mouse(*mouse),
+        Event::Resize(_, _)
+        | Event::FocusGained
+        | Event::FocusLost
+        | Event::Paste(_)
+        | Event::Key(_) => {}
     }
 }
 

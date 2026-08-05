@@ -1,6 +1,9 @@
 //! Interactive state machine and Ratatui widget composition.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::{Duration, Instant},
+};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ast::QueryBundle;
@@ -17,6 +20,7 @@ use crate::{DocumentView, NavKind, RenderedDocument, RenderedSearchMatch, theme}
 
 const MIN_SIDEBAR_WIDTH: u16 = 20;
 const MAX_SIDEBAR_WIDTH: u16 = 60;
+const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SearchMode {
@@ -128,6 +132,7 @@ pub struct App {
     last_content_area: Rect,
     last_navigation_area: Rect,
     last_navigation_rows: Vec<usize>,
+    navigation_sync_deadline: Option<Instant>,
     rendered_cache: HashMap<u16, RenderedDocument>,
 }
 
@@ -162,6 +167,7 @@ impl App {
             last_content_area: Rect::default(),
             last_navigation_area: Rect::default(),
             last_navigation_rows: Vec::new(),
+            navigation_sync_deadline: None,
             rendered_cache: HashMap::new(),
         }
     }
@@ -169,6 +175,21 @@ impl App {
     #[must_use]
     pub const fn should_quit(&self) -> bool {
         self.quit
+    }
+
+    pub(crate) fn tick(&mut self, now: Instant) {
+        if self
+            .navigation_sync_deadline
+            .is_some_and(|deadline| deadline <= now)
+        {
+            self.navigation_sync_deadline = None;
+            self.sync_selection_to_scroll();
+        }
+    }
+
+    pub(crate) fn next_wakeup(&self, now: Instant) -> Option<Duration> {
+        self.navigation_sync_deadline
+            .map(|deadline| deadline.saturating_duration_since(now))
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
@@ -910,6 +931,7 @@ impl App {
     }
 
     fn scroll_to_selected(&mut self) {
+        self.navigation_sync_deadline = None;
         let Some(item) = self.document.navigation().get(self.selected) else {
             return;
         };
@@ -925,7 +947,7 @@ impl App {
 
     fn scroll_content(&mut self, delta: isize) {
         self.content_scroll = self.content_scroll.saturating_add_signed(delta);
-        self.sync_selection_to_scroll();
+        self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
     }
 
     fn sync_selection_to_scroll(&mut self) {
@@ -1639,5 +1661,25 @@ mod tests {
 
         app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
         assert_eq!(app.overlay, Overlay::None);
+    }
+
+    #[test]
+    fn content_scrolling_updates_navigation_only_after_the_idle_deadline() {
+        let mut app = App::new(&navigation_bundle());
+        app.last_content_area = Rect::new(0, 0, 80, 10);
+        app.content_scroll = 100;
+        let deadline = Instant::now() + NAVIGATION_SYNC_IDLE;
+        app.navigation_sync_deadline = Some(deadline);
+
+        app.tick(
+            deadline
+                .checked_sub(Duration::from_millis(1))
+                .expect("deadline is in the future"),
+        );
+        assert_eq!(app.selected, 0);
+
+        app.tick(deadline);
+        assert_eq!(app.document.navigation()[app.selected].id, "details");
+        assert!(app.navigation_sync_deadline.is_none());
     }
 }
