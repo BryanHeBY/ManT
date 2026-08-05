@@ -7,6 +7,8 @@
 mod app;
 mod code;
 mod document;
+mod layout;
+mod scrollbar;
 mod terminal;
 mod theme;
 

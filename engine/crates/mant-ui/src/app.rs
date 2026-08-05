@@ -12,14 +12,20 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Borders, Clear, Paragraph},
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::{DocumentView, NavKind, RenderedDocument, RenderedSearchMatch, theme};
+use crate::{
+    DocumentView, NavKind, RenderedDocument, RenderedSearchMatch,
+    layout::{
+        CONTENT_MARGIN, DEFAULT_SIDEBAR_WIDTH, MIN_CONTENT_WIDTH, MIN_SIDEBAR_WIDTH,
+        maximum_sidebar_width,
+    },
+    scrollbar::{ScrollbarDrag, VerticalScrollbar},
+    theme,
+};
 
-const MIN_SIDEBAR_WIDTH: u16 = 20;
-const MAX_SIDEBAR_WIDTH: u16 = 60;
 const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,8 +84,8 @@ enum Overlay {
 enum PointerDrag {
     None,
     Sidebar,
-    NavigationScrollbar,
-    ContentScrollbar,
+    NavigationScrollbar(ScrollbarDrag),
+    ContentScrollbar(ScrollbarDrag),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -140,11 +146,9 @@ pub struct App {
     pointer_drag: PointerDrag,
     last_body_area: Rect,
     last_content_area: Rect,
-    last_content_scrollbar_area: Rect,
-    last_content_max_scroll: usize,
+    last_content_scrollbar: Option<VerticalScrollbar>,
     last_navigation_area: Rect,
-    last_navigation_scrollbar_area: Rect,
-    last_navigation_max_scroll: usize,
+    last_navigation_scrollbar: Option<VerticalScrollbar>,
     last_status_area: Rect,
     last_navigation_rows: Vec<usize>,
     navigation_sync_deadline: Option<Instant>,
@@ -168,7 +172,7 @@ impl App {
             content_scroll: 0,
             navigation_scroll: 0,
             navigation_visibility_target: Some(0),
-            sidebar_width: 36,
+            sidebar_width: DEFAULT_SIDEBAR_WIDTH,
             show_sidebar: true,
             quit: false,
             search_mode: SearchMode::Closed,
@@ -182,11 +186,9 @@ impl App {
             pointer_drag: PointerDrag::None,
             last_body_area: Rect::default(),
             last_content_area: Rect::default(),
-            last_content_scrollbar_area: Rect::default(),
-            last_content_max_scroll: 0,
+            last_content_scrollbar: None,
             last_navigation_area: Rect::default(),
-            last_navigation_scrollbar_area: Rect::default(),
-            last_navigation_max_scroll: 0,
+            last_navigation_scrollbar: None,
             last_status_area: Rect::default(),
             last_navigation_rows: Vec::new(),
             navigation_sync_deadline: None,
@@ -261,7 +263,10 @@ impl App {
                 self.sidebar_width = self.sidebar_width.saturating_sub(2).max(MIN_SIDEBAR_WIDTH);
             }
             KeyCode::Char('>') => {
-                self.sidebar_width = self.sidebar_width.saturating_add(2).min(MAX_SIDEBAR_WIDTH);
+                self.sidebar_width = self
+                    .sidebar_width
+                    .saturating_add(2)
+                    .min(maximum_sidebar_width(self.last_body_area.width));
             }
             _ => {}
         }
@@ -333,38 +338,47 @@ impl App {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
                 if self
-                    .last_navigation_scrollbar_area
-                    .contains((mouse.column, mouse.row).into()) =>
+                    .last_navigation_scrollbar
+                    .is_some_and(|scrollbar| scrollbar.contains(mouse.column, mouse.row)) =>
             {
-                self.pointer_drag = PointerDrag::NavigationScrollbar;
-                self.scroll_navigation_to_pointer(mouse.row);
+                let scrollbar = self.last_navigation_scrollbar.expect("guarded scrollbar");
+                let (drag, position) = scrollbar.begin_drag(mouse.row);
+                self.navigation_scroll = position;
+                self.pointer_drag = PointerDrag::NavigationScrollbar(drag);
             }
             MouseEventKind::Down(MouseButton::Left) if self.is_sidebar_boundary(mouse.column) => {
                 self.pointer_drag = PointerDrag::Sidebar;
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
-                    .last_content_scrollbar_area
-                    .contains((mouse.column, mouse.row).into()) =>
+                    .last_content_scrollbar
+                    .is_some_and(|scrollbar| scrollbar.contains(mouse.column, mouse.row)) =>
             {
-                self.pointer_drag = PointerDrag::ContentScrollbar;
-                self.scroll_content_to_pointer(mouse.row);
+                let scrollbar = self.last_content_scrollbar.expect("guarded scrollbar");
+                let (drag, position) = scrollbar.begin_drag(mouse.row);
+                self.content_scroll = position;
+                self.schedule_navigation_sync();
+                self.pointer_drag = PointerDrag::ContentScrollbar(drag);
             }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
                 PointerDrag::Sidebar => self.resize_sidebar_to(mouse.column),
-                PointerDrag::NavigationScrollbar => {
-                    self.scroll_navigation_to_pointer(mouse.row);
+                PointerDrag::NavigationScrollbar(drag) => {
+                    self.scroll_navigation_to_pointer(mouse.row, drag);
                 }
-                PointerDrag::ContentScrollbar => self.scroll_content_to_pointer(mouse.row),
+                PointerDrag::ContentScrollbar(drag) => {
+                    self.scroll_content_to_pointer(mouse.row, drag);
+                }
                 PointerDrag::None => return false,
             },
             MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
                 match self.pointer_drag {
                     PointerDrag::Sidebar => self.resize_sidebar_to(mouse.column),
-                    PointerDrag::NavigationScrollbar => {
-                        self.scroll_navigation_to_pointer(mouse.row);
+                    PointerDrag::NavigationScrollbar(drag) => {
+                        self.scroll_navigation_to_pointer(mouse.row, drag);
                     }
-                    PointerDrag::ContentScrollbar => self.scroll_content_to_pointer(mouse.row),
+                    PointerDrag::ContentScrollbar(drag) => {
+                        self.scroll_content_to_pointer(mouse.row, drag);
+                    }
                     PointerDrag::None => {}
                 }
                 self.pointer_drag = PointerDrag::None;
@@ -384,22 +398,22 @@ impl App {
 
         self.draw_menu(frame, menu_area);
         self.last_body_area = body_area;
-        if self.show_sidebar && body_area.width > MIN_SIDEBAR_WIDTH + 20 {
-            let [navigation_area, content_area] = Layout::horizontal([
-                Constraint::Length(self.sidebar_width.min(body_area.width / 2)),
-                Constraint::Min(1),
-            ])
-            .areas(body_area);
+        if self.show_sidebar && body_area.width > MIN_SIDEBAR_WIDTH + MIN_CONTENT_WIDTH {
+            self.sidebar_width = self
+                .sidebar_width
+                .clamp(MIN_SIDEBAR_WIDTH, maximum_sidebar_width(body_area.width));
+            let [navigation_area, content_area] =
+                Layout::horizontal([Constraint::Length(self.sidebar_width), Constraint::Min(1)])
+                    .areas(body_area);
             self.draw_navigation(frame, navigation_area);
             self.draw_content(frame, content_area);
         } else {
             self.last_navigation_area = Rect::default();
-            self.last_navigation_scrollbar_area = Rect::default();
-            self.last_navigation_max_scroll = 0;
+            self.last_navigation_scrollbar = None;
             self.last_navigation_rows.clear();
             if matches!(
                 self.pointer_drag,
-                PointerDrag::Sidebar | PointerDrag::NavigationScrollbar
+                PointerDrag::Sidebar | PointerDrag::NavigationScrollbar(_)
             ) {
                 self.pointer_drag = PointerDrag::None;
             }
@@ -503,7 +517,7 @@ impl App {
         match action {
             MenuAction::Quit => self.quit = true,
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
-            MenuAction::ResetSidebar => self.sidebar_width = 36,
+            MenuAction::ResetSidebar => self.sidebar_width = DEFAULT_SIDEBAR_WIDTH,
             MenuAction::ExpandAll => {
                 self.expanded = self
                     .document
@@ -757,8 +771,8 @@ impl App {
         );
         let row_count = rows.len();
         let height = usize::from(navigation_area.height);
-        self.last_navigation_max_scroll = row_count.saturating_sub(height);
-        self.navigation_scroll = self.navigation_scroll.min(self.last_navigation_max_scroll);
+        let maximum = row_count.saturating_sub(height);
+        self.navigation_scroll = self.navigation_scroll.min(maximum);
         if self.navigation_visibility_target.take() == Some(self.selected) {
             let selected_row = rows
                 .iter()
@@ -791,32 +805,13 @@ impl App {
         row_count: usize,
         viewport_height: usize,
     ) {
-        if row_count <= viewport_height {
-            self.last_navigation_scrollbar_area = Rect::default();
-            if self.pointer_drag == PointerDrag::NavigationScrollbar {
-                self.pointer_drag = PointerDrag::None;
-            }
-            return;
+        self.last_navigation_scrollbar =
+            VerticalScrollbar::new(area, row_count, viewport_height, self.navigation_scroll);
+        if let Some(scrollbar) = self.last_navigation_scrollbar {
+            scrollbar.render(frame);
+        } else if matches!(self.pointer_drag, PointerDrag::NavigationScrollbar(_)) {
+            self.pointer_drag = PointerDrag::None;
         }
-        let mut state = ScrollbarState::new(row_count)
-            .position(self.navigation_scroll)
-            .viewport_content_length(viewport_height);
-        frame.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .thumb_symbol("█")
-                .track_symbol(None)
-                .begin_symbol(None)
-                .end_symbol(None)
-                .style(Style::default().fg(theme::OVERLAY)),
-            area,
-            &mut state,
-        );
-        self.last_navigation_scrollbar_area = Rect::new(
-            area.right().saturating_sub(1),
-            area.y,
-            u16::from(area.width > 0),
-            area.height,
-        );
     }
 
     fn draw_content(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -824,10 +819,7 @@ impl App {
             Block::default().style(Style::default().bg(theme::CONTENT)),
             area,
         );
-        let inner = area.inner(Margin {
-            horizontal: 1,
-            vertical: 1,
-        });
+        let inner = area.inner(CONTENT_MARGIN);
         self.last_content_area = inner;
         self.rendered_cache
             .entry(inner.width)
@@ -841,8 +833,10 @@ impl App {
         // including the final section heading, to become the viewport's first
         // line. The previous OpenTUI frontend achieved this with a terminal-
         // height spacer after the document.
-        let maximum = rendered.row_count.saturating_sub(1);
-        self.last_content_max_scroll = maximum;
+        let virtual_rows = rendered
+            .row_count
+            .saturating_add(viewport_height.saturating_sub(1));
+        let maximum = virtual_rows.saturating_sub(viewport_height);
         self.content_scroll = self.content_scroll.min(maximum);
         let scroll = u16::try_from(self.content_scroll).unwrap_or(u16::MAX);
         let text = if self.search_query.is_empty() {
@@ -859,34 +853,12 @@ impl App {
                 .style(Style::default().bg(theme::CONTENT)),
             inner,
         );
-        if maximum > 0 {
-            let virtual_rows = rendered
-                .row_count
-                .saturating_add(viewport_height.saturating_sub(1));
-            let mut state = ScrollbarState::new(virtual_rows)
-                .position(self.content_scroll)
-                .viewport_content_length(viewport_height);
-            frame.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("█")
-                    .track_symbol(None)
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(theme::OVERLAY)),
-                area,
-                &mut state,
-            );
-            self.last_content_scrollbar_area = Rect::new(
-                area.right().saturating_sub(1),
-                area.y,
-                u16::from(area.width > 0),
-                area.height,
-            );
-        } else {
-            self.last_content_scrollbar_area = Rect::default();
-            if self.pointer_drag == PointerDrag::ContentScrollbar {
-                self.pointer_drag = PointerDrag::None;
-            }
+        self.last_content_scrollbar =
+            VerticalScrollbar::new(inner, virtual_rows, viewport_height, self.content_scroll);
+        if let Some(scrollbar) = self.last_content_scrollbar {
+            scrollbar.render(frame);
+        } else if matches!(self.pointer_drag, PointerDrag::ContentScrollbar(_)) {
+            self.pointer_drag = PointerDrag::None;
         }
     }
 
@@ -1221,38 +1193,24 @@ impl App {
 
     fn scroll_content(&mut self, delta: isize) {
         self.content_scroll = self.content_scroll.saturating_add_signed(delta);
+        self.schedule_navigation_sync();
+    }
+
+    fn schedule_navigation_sync(&mut self) {
         self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
     }
 
-    fn scroll_content_to_pointer(&mut self, row: u16) {
-        let area = self.last_content_scrollbar_area;
-        if area.height <= 1 {
-            self.content_scroll = 0;
-            return;
+    fn scroll_content_to_pointer(&mut self, row: u16, drag: ScrollbarDrag) {
+        if let Some(scrollbar) = self.last_content_scrollbar {
+            self.content_scroll = scrollbar.position_for_pointer(row, drag);
+            self.schedule_navigation_sync();
         }
-        let offset = usize::from(row.saturating_sub(area.y).min(area.height - 1));
-        let track = usize::from(area.height - 1);
-        self.content_scroll = self
-            .last_content_max_scroll
-            .saturating_mul(offset)
-            .checked_div(track)
-            .unwrap_or_default();
-        self.navigation_sync_deadline = Some(Instant::now() + NAVIGATION_SYNC_IDLE);
     }
 
-    fn scroll_navigation_to_pointer(&mut self, row: u16) {
-        let area = self.last_navigation_scrollbar_area;
-        if area.height <= 1 {
-            self.navigation_scroll = 0;
-            return;
+    fn scroll_navigation_to_pointer(&mut self, row: u16, drag: ScrollbarDrag) {
+        if let Some(scrollbar) = self.last_navigation_scrollbar {
+            self.navigation_scroll = scrollbar.position_for_pointer(row, drag);
         }
-        let offset = usize::from(row.saturating_sub(area.y).min(area.height - 1));
-        let track = usize::from(area.height - 1);
-        self.navigation_scroll = self
-            .last_navigation_max_scroll
-            .saturating_mul(offset)
-            .checked_div(track)
-            .unwrap_or_default();
     }
 
     fn move_search_cursor_to(&mut self, column: u16) {
@@ -1287,7 +1245,7 @@ impl App {
     }
 
     fn resize_sidebar_to(&mut self, column: u16) {
-        let maximum = MAX_SIDEBAR_WIDTH.min(self.last_body_area.width.saturating_sub(20));
+        let maximum = maximum_sidebar_width(self.last_body_area.width);
         let width = column
             .saturating_sub(self.last_body_area.x)
             .saturating_add(1)
@@ -1957,10 +1915,12 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
-        let area = app.last_navigation_scrollbar_area;
+        let scrollbar = app.last_navigation_scrollbar.expect("navigation scrollbar");
+        let area = scrollbar.area();
+        let maximum = scrollbar.maximum();
         let sidebar_width = app.sidebar_width;
         assert!(area.height > 1);
-        assert!(app.last_navigation_max_scroll > 0);
+        assert!(maximum > 0);
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -1968,8 +1928,11 @@ mod tests {
             row: area.bottom() - 1,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(app.navigation_scroll, app.last_navigation_max_scroll);
-        assert_eq!(app.pointer_drag, PointerDrag::NavigationScrollbar);
+        assert_eq!(app.navigation_scroll, maximum);
+        assert!(matches!(
+            app.pointer_drag,
+            PointerDrag::NavigationScrollbar(_)
+        ));
         assert_eq!(app.sidebar_width, sidebar_width);
 
         app.handle_mouse(MouseEvent {
@@ -2026,9 +1989,28 @@ mod tests {
             theme::TLDR_SELECTED
         );
         assert_eq!(
-            buffer.cell((37, 2)).expect("tldr panel border").bg,
+            buffer
+                .cell((DEFAULT_SIDEBAR_WIDTH + 1, 2))
+                .expect("tldr panel border")
+                .bg,
             theme::TLDR_SURFACE
         );
+    }
+
+    #[test]
+    fn default_geometry_keeps_the_established_sidebar_and_content_padding() {
+        let backend = TestBackend::new(100, 14);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&tldr_bundle());
+
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
+        assert_eq!(app.last_content_area.x, DEFAULT_SIDEBAR_WIDTH + 1);
+        assert_eq!(app.last_content_area.y, 2);
+        let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
+        assert_eq!(scrollbar.area().x, app.last_content_area.right() - 1);
+        assert_eq!(scrollbar.area().y, app.last_content_area.y);
     }
 
     #[test]
@@ -2116,7 +2098,7 @@ mod tests {
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: 36,
+            column: DEFAULT_SIDEBAR_WIDTH,
             row: 8,
             modifiers: KeyModifiers::NONE,
         });
@@ -2143,7 +2125,9 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
-        let area = app.last_content_scrollbar_area;
+        let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
+        let area = scrollbar.area();
+        let maximum = scrollbar.maximum();
         assert!(area.height > 1);
 
         app.handle_mouse(MouseEvent {
@@ -2152,8 +2136,8 @@ mod tests {
             row: area.bottom() - 1,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(app.content_scroll, app.last_content_max_scroll);
-        assert_eq!(app.pointer_drag, PointerDrag::ContentScrollbar);
+        assert_eq!(app.content_scroll, maximum);
+        assert!(matches!(app.pointer_drag, PointerDrag::ContentScrollbar(_)));
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),

@@ -20,6 +20,7 @@ use crate::theme;
 
 const TLDR_ID: &str = "tldr";
 const ROOT_ID: &str = "document-root";
+const TLDR_VERTICAL_PADDING_ROWS: u16 = 1;
 
 /// One addressable entry displayed in the navigation sidebar.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -250,7 +251,13 @@ impl DocumentView {
             .map_or(0, |document| count_sections(&document.sections));
 
         if let Some(tldr) = &bundle.tldr {
-            builder.tldr(tldr, bundle.document.is_some(), source_label);
+            let document_gap = u16::from(
+                bundle
+                    .document
+                    .as_ref()
+                    .is_none_or(|document| document.source.format != SourceFormat::Markdown),
+            );
+            builder.tldr(tldr, bundle.document.is_some(), source_label, document_gap);
         }
 
         if let Some(document) = &bundle.document {
@@ -598,7 +605,13 @@ impl DocumentBuilder {
         self.lines.push(line);
     }
 
-    fn tldr(&mut self, tldr: &TldrDocument, has_document: bool, source_label: &'static str) {
+    fn tldr(
+        &mut self,
+        tldr: &TldrDocument,
+        has_document: bool,
+        source_label: &'static str,
+        document_gap: u16,
+    ) {
         self.anchor(
             TLDR_ID,
             "TLDR QUICK REFERENCE",
@@ -609,6 +622,9 @@ impl DocumentBuilder {
             None,
         );
         self.push(LogicalLine::empty().surface(LineSurface::TldrTop));
+        for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
+            self.push(LogicalLine::empty().surface(LineSurface::Tldr));
+        }
         self.push(
             LogicalLine::plain(
                 0,
@@ -654,7 +670,11 @@ impl DocumentBuilder {
                 .surface(LineSurface::Tldr),
             );
         }
+        for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
+            self.push(LogicalLine::empty().surface(LineSurface::Tldr));
+        }
         self.push(LogicalLine::empty().surface(LineSurface::TldrBottom));
+        self.spacing(document_gap);
         if has_document {
             self.push(LogicalLine::empty().surface(LineSurface::Divider));
             self.push(LogicalLine::plain(
@@ -662,6 +682,7 @@ impl DocumentBuilder {
                 source_label,
                 Style::default().fg(theme::SUBTEXT),
             ));
+            self.spacing(document_gap);
         } else {
             self.push(LogicalLine::empty().surface(LineSurface::Divider));
             self.push(LogicalLine::plain(
@@ -1959,6 +1980,49 @@ mod tests {
                 .iter()
                 .any(|line| line.to_string() == "─".repeat(32))
         );
+        assert_eq!(
+            rendered.text.lines[1].to_string(),
+            format!("│{}│", " ".repeat(30))
+        );
+        let bottom = rendered
+            .text
+            .lines
+            .iter()
+            .position(|line| line.to_string().starts_with('└'))
+            .expect("bottom border");
+        assert_eq!(
+            rendered.text.lines[bottom - 1].to_string(),
+            format!("│{}│", " ".repeat(30))
+        );
+    }
+
+    #[test]
+    fn manual_children_keep_the_same_gaps_as_the_established_layout() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").source.format = SourceFormat::Man;
+        bundle.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["Quick reference".to_owned()],
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
+        });
+
+        let rendered = DocumentView::new(&bundle).render(32);
+        let bottom = rendered
+            .text
+            .lines
+            .iter()
+            .position(|line| line.to_string().starts_with('└'))
+            .expect("bottom border");
+
+        assert!(rendered.text.lines[bottom + 1].to_string().is_empty());
+        assert_eq!(rendered.text.lines[bottom + 2].to_string(), "─".repeat(32));
+        assert_eq!(rendered.text.lines[bottom + 3].to_string(), "MANUAL");
+        assert!(rendered.text.lines[bottom + 4].to_string().is_empty());
     }
 
     #[test]
