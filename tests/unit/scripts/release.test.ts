@@ -3,7 +3,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -28,22 +28,18 @@ async function hasGnuTar(): Promise<boolean> {
 }
 
 describe("release platform selection", () => {
-  test("maps every supported native runner to matching archive and Bun targets", () => {
+  test("maps every supported native runner to its archive target", () => {
     expect(resolveReleasePlatform("linux", "x64")).toEqual({
       archiveTarget: "linux-x64",
-      bunCompileTarget: "bun-linux-x64-baseline",
     });
     expect(resolveReleasePlatform("linux", "arm64")).toEqual({
       archiveTarget: "linux-arm64",
-      bunCompileTarget: "bun-linux-arm64",
     });
     expect(resolveReleasePlatform("darwin", "x64")).toEqual({
       archiveTarget: "macos-x64",
-      bunCompileTarget: "bun-darwin-x64",
     });
     expect(resolveReleasePlatform("darwin", "arm64")).toEqual({
       archiveTarget: "macos-arm64",
-      bunCompileTarget: "bun-darwin-arm64",
     });
   });
 
@@ -80,31 +76,21 @@ example = "9"
 `)).toBe("0.4.2");
   });
 
-  test("requires the distribution, TUI, and Rust workspace versions to agree", () => {
+  test("requires the distribution and Rust workspace versions to agree", () => {
     const root = JSON.stringify({ version: "0.4.2" });
-    const tui = JSON.stringify({ version: "0.4.2" });
     const cargo = `[workspace.package]\nversion = "0.4.2"\n`;
 
-    expect(releaseVersionFromManifests(root, tui, cargo)).toBe("0.4.2");
+    expect(releaseVersionFromManifests(root, cargo)).toBe("0.4.2");
     expect(() => releaseVersionFromManifests(
       root,
-      JSON.stringify({ version: "0.4.1" }),
-      cargo,
-    )).toThrow("apps/mantui/package.json=0.4.1");
-    expect(() => releaseVersionFromManifests(
-      root,
-      tui,
       `[workspace.package]\nversion = "0.4.0"\n`,
     )).toThrow("engine/Cargo.toml=0.4.0");
   });
 });
 
 describe("release documentation", () => {
-  test("ships both self-hosted Markdown manuals at the archive root", async () => {
-    expect(RELEASE_MANUALS.map(({ destination }) => destination)).toEqual([
-      "mant.md",
-      "mantui.md",
-    ]);
+  test("ships the unified self-hosted Markdown manual at the archive root", async () => {
+    expect(RELEASE_MANUALS.map(({ destination }) => destination)).toEqual(["mant.md"]);
     for (const manual of RELEASE_MANUALS) {
       expect(
         await Bun.file(join(import.meta.dir, "../../..", manual.source)).exists(),
@@ -112,25 +98,6 @@ describe("release documentation", () => {
     }
   });
 
-  test("publishes a minimal Bun-only mantui package with an executable shim", async () => {
-    const root = join(import.meta.dir, "../../..");
-    const manifest = JSON.parse(
-      await Bun.file(join(root, "apps/mantui/package.json")).text(),
-    ) as {
-      private: boolean;
-      bin: Record<string, string>;
-      files: string[];
-      engines: Record<string, string>;
-    };
-    const launcher = join(root, "apps/mantui/bin/mantui");
-
-    expect(manifest.private).toBe(false);
-    expect(manifest.bin).toEqual({ mantui: "bin/mantui" });
-    expect(manifest.files).toEqual(["bin", "src", "README.md", "LICENSE"]);
-    expect(manifest.engines.bun).toBe(">=1.3.14");
-    expect(await Bun.file(launcher).text()).toStartWith("#!/usr/bin/env bun\n");
-    expect((await stat(launcher)).mode & 0o111).not.toBe(0);
-  });
 });
 
 describe("release archive reproducibility", () => {

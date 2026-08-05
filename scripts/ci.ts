@@ -11,16 +11,12 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { assertSupportedBuildPlatform } from "./c-compiler";
-import { resolveReleasePlatform } from "./release-platform";
 
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const mantName = "mant";
 const mantSource = join(root, "engine", "bin", mantName);
 const mantPath = join(distDirectory, mantName);
-const executableName = "mantui";
-const executablePath = join(distDirectory, executableName);
-const executableEntrypoint = join(root, "apps", "mantui", "src", "mantui.ts");
 
 async function isExecutable(path: string): Promise<boolean> {
   try {
@@ -52,7 +48,7 @@ async function run(
 
 async function verifyPackagedExecutable(): Promise<void> {
   console.log("\n==> packaged executable smoke tests");
-  const helpProcess = Bun.spawn([executablePath, "--help"], {
+  const helpProcess = Bun.spawn([mantPath, "--help"], {
     cwd: distDirectory,
     stdout: "pipe",
     stderr: "pipe",
@@ -64,10 +60,11 @@ async function verifyPackagedExecutable(): Promise<void> {
   ]);
   if (
     helpExitCode !== 0
-    || !helpOutput.includes("Usage:\n  mantui <topic|markdown>")
-    || !helpOutput.includes("mantui README.md")
+    || !helpOutput.includes("mant <TOPIC|MARKDOWN|-> [OPTIONS]")
+    || !helpOutput.includes("mant README.md")
+    || !helpOutput.includes("--ui")
   ) {
-    throw new Error(`packaged TUI help smoke test failed: ${helpStderr.trim()}`);
+    throw new Error(`packaged mant help smoke test failed: ${helpStderr.trim()}`);
   }
 
   const queryProcess = Bun.spawn(
@@ -101,7 +98,6 @@ async function verifyPackagedExecutable(): Promise<void> {
 
 async function main(): Promise<void> {
   assertSupportedBuildPlatform();
-  const releasePlatform = resolveReleasePlatform();
 
   await run("install locked dependencies", [process.execPath, "install", "--frozen-lockfile"]);
   await run("type check", [process.execPath, "run", "lint"]);
@@ -140,23 +136,10 @@ async function main(): Promise<void> {
   await mkdir(distDirectory, { recursive: true });
   await copyFile(mantSource, mantPath);
   await chmod(mantPath, 0o755);
-  await run("compile current-platform executable", [
-    process.execPath,
-    "build",
-    "--compile",
-    "--target",
-    releasePlatform.bunCompileTarget,
-    "--define",
-    "MANT_COMPILED=true",
-    "--outfile",
-    executablePath,
-    executableEntrypoint,
-  ]);
   await verifyPackagedExecutable();
 
-  console.log(`\nlocal CI succeeded: ${dirname(executablePath)}`);
-  console.log(`  TUI:        ${executablePath}`);
-  console.log(`  agent CLI:  ${mantPath}`);
+  console.log(`\nlocal CI succeeded: ${dirname(mantPath)}`);
+  console.log(`  executable: ${mantPath}`);
 }
 
 await main();

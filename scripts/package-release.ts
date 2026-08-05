@@ -22,7 +22,6 @@ import { resolveReleasePlatform } from "./release-platform";
 const root = new URL("..", import.meta.url).pathname;
 const distDirectory = join(root, "dist");
 const packageManifest = join(root, "package.json");
-const mantuiManifest = join(root, "apps", "mantui", "package.json");
 const cargoManifest = join(root, "engine", "Cargo.toml");
 
 const RELEASE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
@@ -30,7 +29,6 @@ const RELEASE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A
 /** Markdown manuals shipped beside the executables for immediate self-hosting. */
 export const RELEASE_MANUALS = [
   { source: "docs/manuals/mant.md", destination: "mant.md" },
-  { source: "docs/manuals/mantui.md", destination: "mantui.md" },
 ] as const;
 
 /** Validate a release tag and return its package version. */
@@ -55,27 +53,21 @@ export function workspaceVersion(manifest: string): string {
 /**
  * Validate every independently versioned workspace boundary.
  *
- * The root manifest names the distribution, the mantui manifest names the Bun
- * workspace, and Cargo supplies the version inherited by native crates. A
- * release is coherent only when all three advance together.
+ * The root manifest names the distribution and Cargo supplies the version
+ * inherited by native crates. A release is coherent only when both advance
+ * together.
  */
 export function releaseVersionFromManifests(
   rootManifest: string,
-  tuiManifest: string,
   nativeManifest: string,
 ): string {
   const rootVersion = packageVersion(rootManifest, "package.json");
-  const tuiVersion = packageVersion(
-    tuiManifest,
-    "apps/mantui/package.json",
-  );
   const nativeVersion = workspaceVersion(nativeManifest);
 
-  if (rootVersion !== tuiVersion || rootVersion !== nativeVersion) {
+  if (rootVersion !== nativeVersion) {
     throw new Error(
       "version mismatch: "
       + `package.json=${rootVersion}, `
-      + `apps/mantui/package.json=${tuiVersion}, `
       + `engine/Cargo.toml=${nativeVersion}`,
     );
   }
@@ -183,14 +175,12 @@ export async function packageRelease(
   releaseTag: string | undefined = process.env.MANT_RELEASE_TAG,
   expectedTarget: string | undefined = process.env.MANT_RELEASE_TARGET,
 ): Promise<string> {
-  const [rootPackage, tuiPackage, cargoWorkspace] = await Promise.all([
+  const [rootPackage, cargoWorkspace] = await Promise.all([
     readFile(packageManifest, "utf8"),
-    readFile(mantuiManifest, "utf8"),
     readFile(cargoManifest, "utf8"),
   ]);
   const releaseVersion = releaseVersionFromManifests(
     rootPackage,
-    tuiPackage,
     cargoWorkspace,
   );
   if (releaseTag && versionFromReleaseTag(releaseTag) !== releaseVersion) {
@@ -214,7 +204,6 @@ export async function packageRelease(
   await rm(stagingDirectory, { recursive: true, force: true });
   await mkdir(licenseDirectory, { recursive: true });
   try {
-    await copyExecutable(join(distDirectory, "mantui"), join(packageDirectory, "mantui"));
     await copyExecutable(join(distDirectory, "mant"), join(packageDirectory, "mant"));
     for (const manual of RELEASE_MANUALS) {
       await copyFile(join(root, manual.source), join(packageDirectory, manual.destination));
