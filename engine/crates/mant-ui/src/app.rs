@@ -20,7 +20,7 @@ use crate::{
     DocumentView, NavKind, RenderedDocument, RenderedSearchMatch,
     layout::{
         CONTENT_MARGIN, CONTENT_SCROLLBAR_GAP, DEFAULT_SIDEBAR_WIDTH, MIN_CONTENT_WIDTH,
-        MIN_SIDEBAR_WIDTH, maximum_sidebar_width,
+        MIN_SIDEBAR_WIDTH, SIDEBAR_SPLITTER_WIDTH, maximum_sidebar_width,
     },
     navigation,
     scrollbar::{ScrollbarDrag, VerticalScrollbar},
@@ -150,6 +150,7 @@ pub struct App {
     last_content_scrollbar: Option<VerticalScrollbar>,
     last_navigation_area: Rect,
     last_navigation_scrollbar: Option<VerticalScrollbar>,
+    last_sidebar_splitter: Rect,
     last_status_area: Rect,
     last_navigation_rows: Vec<usize>,
     navigation_sync_deadline: Option<Instant>,
@@ -190,6 +191,7 @@ impl App {
             last_content_scrollbar: None,
             last_navigation_area: Rect::default(),
             last_navigation_scrollbar: None,
+            last_sidebar_splitter: Rect::default(),
             last_status_area: Rect::default(),
             last_navigation_rows: Vec::new(),
             navigation_sync_deadline: None,
@@ -347,7 +349,9 @@ impl App {
                 self.navigation_scroll = position;
                 self.pointer_drag = PointerDrag::NavigationScrollbar(drag);
             }
-            MouseEventKind::Down(MouseButton::Left) if self.is_sidebar_boundary(mouse.column) => {
+            MouseEventKind::Down(MouseButton::Left)
+                if self.is_sidebar_boundary(mouse.column, mouse.row) =>
+            {
                 self.pointer_drag = PointerDrag::Sidebar;
             }
             MouseEventKind::Down(MouseButton::Left)
@@ -399,18 +403,25 @@ impl App {
 
         self.draw_menu(frame, menu_area);
         self.last_body_area = body_area;
-        if self.show_sidebar && body_area.width > MIN_SIDEBAR_WIDTH + MIN_CONTENT_WIDTH {
+        if self.show_sidebar
+            && body_area.width > MIN_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + MIN_CONTENT_WIDTH
+        {
             self.sidebar_width = self
                 .sidebar_width
                 .clamp(MIN_SIDEBAR_WIDTH, maximum_sidebar_width(body_area.width));
-            let [navigation_area, content_area] =
-                Layout::horizontal([Constraint::Length(self.sidebar_width), Constraint::Min(1)])
-                    .areas(body_area);
+            let [navigation_area, splitter_area, content_area] = Layout::horizontal([
+                Constraint::Length(self.sidebar_width),
+                Constraint::Length(SIDEBAR_SPLITTER_WIDTH),
+                Constraint::Min(1),
+            ])
+            .areas(body_area);
             self.draw_navigation(frame, navigation_area);
+            self.draw_sidebar_splitter(frame, splitter_area);
             self.draw_content(frame, content_area);
         } else {
             self.last_navigation_area = Rect::default();
             self.last_navigation_scrollbar = None;
+            self.last_sidebar_splitter = Rect::default();
             self.last_navigation_rows.clear();
             if matches!(
                 self.pointer_drag,
@@ -704,6 +715,17 @@ impl App {
         );
     }
 
+    fn draw_sidebar_splitter(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        self.last_sidebar_splitter = area;
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::LEFT)
+                .border_style(Style::default().fg(theme::BORDER))
+                .style(Style::default().bg(theme::CONTENT)),
+            area,
+        );
+    }
+
     fn draw_navigation(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(
             Block::default().style(Style::default().bg(theme::SIDEBAR)),
@@ -716,14 +738,12 @@ impl App {
         ])
         .areas(area);
 
-        let mut metadata = format!(
-            "{} top-level · {} sections",
+        let metadata = sidebar_metadata(
             self.document.top_level_count(),
-            self.document.section_count()
+            self.document.section_count(),
+            self.document.has_tldr(),
+            navigation_area.width,
         );
-        if self.document.has_tldr() {
-            metadata.push_str(" · TLDR");
-        }
         frame.render_widget(
             Paragraph::new(vec![
                 Line::from(Span::styled(
@@ -734,10 +754,7 @@ impl App {
                     ),
                     Style::default().fg(theme::SUBTEXT_BRIGHT),
                 )),
-                Line::from(Span::styled(
-                    format!(" {metadata}"),
-                    Style::default().fg(theme::SUBTEXT),
-                )),
+                Line::from(Span::styled(metadata, Style::default().fg(theme::SUBTEXT))),
             ])
             .block(
                 Block::default()
@@ -1257,13 +1274,8 @@ impl App {
         }
     }
 
-    fn is_sidebar_boundary(&self, column: u16) -> bool {
-        // `Rect::right()` is the half-open edge immediately after the sidebar,
-        // so it is draggable without consuming the sidebar's final text or
-        // scrollbar column.
-        self.show_sidebar
-            && self.last_navigation_area.width > 0
-            && column == self.last_navigation_area.right()
+    fn is_sidebar_boundary(&self, column: u16, row: u16) -> bool {
+        self.show_sidebar && self.last_sidebar_splitter.contains((column, row).into())
     }
 
     fn resize_sidebar_to(&mut self, column: u16) {
@@ -1520,6 +1532,32 @@ fn fit_to_width(value: &str, width: usize) -> String {
     }
     result.push_str(&" ".repeat(width.saturating_sub(used)));
     result
+}
+
+fn sidebar_metadata(
+    top_level_count: usize,
+    section_count: usize,
+    has_tldr: bool,
+    width: u16,
+) -> String {
+    let suffix = if has_tldr { " · TLDR" } else { "" };
+    let candidates = [
+        format!(" {top_level_count} top-level · {section_count} sections{suffix}"),
+        format!(" {top_level_count} top · {section_count} sections{suffix}"),
+        format!(" {top_level_count} · {section_count} sections{suffix}"),
+        format!(" {top_level_count} · {section_count}{suffix}"),
+    ];
+    let available = usize::from(width);
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.width() <= available)
+        .unwrap_or_else(|| {
+            if has_tldr && available >= " TLDR".width() {
+                " TLDR".to_owned()
+            } else {
+                fit_to_width(&format!(" {top_level_count} · {section_count}"), available)
+            }
+        })
 }
 
 const fn virtual_content_rows(row_count: usize, viewport_height: usize) -> usize {
@@ -1823,12 +1861,19 @@ mod tests {
             theme::SIDEBAR
         );
         assert_eq!(
+            buffer
+                .cell((DEFAULT_SIDEBAR_WIDTH, 1))
+                .expect("sidebar splitter")
+                .symbol(),
+            "│"
+        );
+        assert_eq!(
             buffer.cell((0, 5)).expect("selected tldr navigation").bg,
             theme::TLDR_SELECTED
         );
         assert_eq!(
             buffer
-                .cell((DEFAULT_SIDEBAR_WIDTH + 1, 2))
+                .cell((DEFAULT_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + 1, 2,))
                 .expect("tldr panel border")
                 .bg,
             theme::TLDR_SURFACE
@@ -1867,7 +1912,14 @@ mod tests {
 
         assert_eq!(app.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
         assert_eq!(app.last_navigation_area.right(), DEFAULT_SIDEBAR_WIDTH);
-        assert_eq!(app.last_content_area.x, DEFAULT_SIDEBAR_WIDTH + 1);
+        assert_eq!(
+            app.last_sidebar_splitter,
+            Rect::new(DEFAULT_SIDEBAR_WIDTH, 1, SIDEBAR_SPLITTER_WIDTH, 12)
+        );
+        assert_eq!(
+            app.last_content_area.x,
+            DEFAULT_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + 1
+        );
         assert_eq!(app.last_content_area.y, 2);
         let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
         assert_eq!(
@@ -1974,10 +2026,12 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
-        let boundary = app.last_navigation_area.right();
+        let boundary = app.last_sidebar_splitter.x;
+        let splitter_row = app.last_sidebar_splitter.y;
         assert_eq!(boundary, DEFAULT_SIDEBAR_WIDTH);
-        assert!(!app.is_sidebar_boundary(boundary.saturating_sub(1)));
-        assert!(app.is_sidebar_boundary(boundary));
+        assert!(!app.is_sidebar_boundary(boundary.saturating_sub(1), splitter_row));
+        assert!(app.is_sidebar_boundary(boundary, splitter_row));
+        assert!(!app.is_sidebar_boundary(boundary, 0));
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -2000,6 +2054,15 @@ mod tests {
 
         assert_eq!(app.sidebar_width, 44);
         assert_eq!(app.pointer_drag, PointerDrag::None);
+    }
+
+    #[test]
+    fn sidebar_metadata_never_clips_the_tldr_label_mid_word() {
+        assert_eq!(
+            sidebar_metadata(10, 93, true, DEFAULT_SIDEBAR_WIDTH),
+            " 10 top · 93 sections · TLDR"
+        );
+        assert_eq!(sidebar_metadata(10, 93, true, 8), " TLDR");
     }
 
     #[test]
