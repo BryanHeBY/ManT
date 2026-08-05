@@ -503,7 +503,7 @@ impl App {
         spans.push(Span::styled(rule, style.fg(theme::BORDER)));
         frame.render_widget(Paragraph::new(Line::from(spans)).style(style), area);
         frame.render_widget(
-            Paragraph::new(format!("{} ", self.document.label()))
+            Paragraph::new(format!("{} ", self.document.terminal_label()))
                 .alignment(Alignment::Right)
                 .style(style.fg(theme::SUBTEXT)),
             area,
@@ -686,6 +686,7 @@ impl App {
             &self.expanded,
             line_width,
         );
+        let row_count = rows.len();
         let height = usize::from(navigation_area.height);
         self.navigation_scroll = self
             .navigation_scroll
@@ -712,6 +713,21 @@ impl App {
             Paragraph::new(Text::from(lines)).style(Style::default().bg(theme::SIDEBAR)),
             navigation_area,
         );
+        if row_count > height {
+            let mut state = ScrollbarState::new(row_count)
+                .position(self.navigation_scroll)
+                .viewport_content_length(height);
+            frame.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("█")
+                    .track_symbol(None)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(theme::OVERLAY)),
+                navigation_area,
+                &mut state,
+            );
+        }
     }
 
     fn draw_content(&mut self, frame: &mut Frame<'_>, area: Rect) {
@@ -732,7 +748,11 @@ impl App {
         }
         let rendered = &self.rendered_cache[&inner.width];
         let viewport_height = usize::from(inner.height);
-        let maximum = rendered.row_count.saturating_sub(viewport_height);
+        // Keep enough virtual trailing space for every addressable row,
+        // including the final section heading, to become the viewport's first
+        // line. The previous OpenTUI frontend achieved this with a terminal-
+        // height spacer after the document.
+        let maximum = rendered.row_count.saturating_sub(1);
         self.content_scroll = self.content_scroll.min(maximum);
         let scroll = u16::try_from(self.content_scroll).unwrap_or(u16::MAX);
         let text = if self.search_query.is_empty() {
@@ -749,8 +769,13 @@ impl App {
                 .style(Style::default().bg(theme::CONTENT)),
             inner,
         );
-        if rendered.row_count > viewport_height {
-            let mut state = ScrollbarState::new(rendered.row_count).position(self.content_scroll);
+        if maximum > 0 {
+            let virtual_rows = rendered
+                .row_count
+                .saturating_add(viewport_height.saturating_sub(1));
+            let mut state = ScrollbarState::new(virtual_rows)
+                .position(self.content_scroll)
+                .viewport_content_length(viewport_height);
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .thumb_symbol("█")
@@ -1691,6 +1716,70 @@ mod tests {
         let screen = terminal.backend().to_string();
         assert!(screen.contains("1 visible sections"));
         assert_eq!(app.selected, 0, "hidden child selects its visible parent");
+    }
+
+    #[test]
+    fn terminal_title_includes_the_manual_section_but_the_sidebar_does_not() {
+        let mut bundle = navigation_bundle();
+        bundle.document.as_mut().expect("document").meta.section = Some("1".to_owned());
+        let backend = TestBackend::new(80, 14);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&bundle);
+
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let screen = terminal.backend().to_string();
+
+        assert!(screen.lines().next().expect("menu row").contains("demo(1)"));
+        assert!(screen.contains("MANUAL · demo"));
+        assert!(!screen.contains("MANUAL · demo(1)"));
+    }
+
+    #[test]
+    fn the_final_section_heading_can_become_the_first_content_row() {
+        let backend = TestBackend::new(80, 12);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("initial draw");
+        app.set_selected_index(3);
+        app.scroll_to_selected();
+        let width = app.last_content_area.width;
+        let expected = app.rendered_cache[&width]
+            .anchor_row("details")
+            .expect("details anchor");
+
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("scrolled draw");
+
+        assert_eq!(app.content_scroll, expected);
+        let row = app.last_content_area.y;
+        let content = (app.last_content_area.x..app.last_content_area.right())
+            .filter_map(|column| terminal.backend().buffer().cell((column, row)))
+            .map(ratatui::buffer::Cell::symbol)
+            .collect::<String>();
+        assert!(content.trim_start().starts_with("Details"));
+    }
+
+    #[test]
+    fn overflowing_navigation_exposes_a_scrollbar() {
+        let backend = TestBackend::new(80, 7);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        let scrollbar_column = app.last_navigation_area.right().saturating_sub(1);
+        assert!(
+            (app.last_navigation_area.y..app.last_navigation_area.bottom()).any(|row| {
+                terminal
+                    .backend()
+                    .buffer()
+                    .cell((scrollbar_column, row))
+                    .is_some_and(|cell| cell.symbol() == "█")
+            })
+        );
     }
 
     #[test]

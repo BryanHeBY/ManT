@@ -48,6 +48,7 @@ pub enum NavKind {
 #[derive(Debug, Clone)]
 pub struct DocumentView {
     label: String,
+    terminal_label: String,
     source_label: &'static str,
     top_level_count: usize,
     section_count: usize,
@@ -230,9 +231,19 @@ impl DocumentView {
                 "MANUAL"
             }
         });
-        let top_level_count = bundle.document.as_ref().map_or(0, |document| {
-            document.sections.len() + usize::from(!document.blocks.is_empty())
-        });
+        let top_level_count = bundle
+            .document
+            .as_ref()
+            .map_or(0, |document| document.sections.len());
+        let terminal_label = bundle.document.as_ref().map_or_else(
+            || bundle.label.clone(),
+            |document| {
+                document.meta.section.as_ref().map_or_else(
+                    || bundle.label.clone(),
+                    |section| format!("{}({section})", bundle.label),
+                )
+            },
+        );
         let section_count = bundle
             .document
             .as_ref()
@@ -263,6 +274,7 @@ impl DocumentView {
 
         Self {
             label: builder.label,
+            terminal_label,
             source_label,
             top_level_count,
             section_count,
@@ -276,6 +288,12 @@ impl DocumentView {
     #[must_use]
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    /// Label used in terminal chrome, including the resolved manual section.
+    #[must_use]
+    pub fn terminal_label(&self) -> &str {
+        &self.terminal_label
     }
 
     #[must_use]
@@ -628,6 +646,13 @@ impl DocumentBuilder {
                 source_label,
                 Style::default().fg(theme::SUBTEXT),
             ));
+        } else {
+            self.push(LogicalLine::empty().surface(LineSurface::Divider));
+            self.push(LogicalLine::plain(
+                0,
+                "No local man page was found; showing the cached tldr quick reference.",
+                Style::default().fg(theme::YELLOW),
+            ));
         }
     }
 
@@ -662,12 +687,6 @@ impl DocumentBuilder {
             table_cells: None,
             links: Vec::new(),
         });
-    }
-
-    fn blank(&mut self) {
-        if self.lines.last().is_none_or(|line| !line.spans.is_empty()) {
-            self.lines.push(LogicalLine::empty());
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -716,9 +735,7 @@ impl DocumentBuilder {
         is_last: bool,
         parent_id: Option<&str>,
     ) {
-        for _ in 0..section.spacing_before_lines {
-            self.blank();
-        }
+        self.spacing(section.spacing_before_lines);
         let options = section_option_entries(&section.blocks);
         let has_children = !options.is_empty() || !section.children.is_empty();
         self.anchor(
@@ -817,7 +834,7 @@ impl DocumentBuilder {
                 let indent = base_indent + usize::from(layout.indent_columns);
                 for (index, item) in items.iter().enumerate() {
                     if index > 0 && !compact {
-                        self.blank();
+                        self.spacing(1);
                     }
                     let marker = match kind {
                         ListKind::Bullet => "• ".to_owned(),
@@ -1141,13 +1158,7 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLin
                 );
             }
             Inline::ManualReference { children, .. } => {
-                append_inline(
-                    children,
-                    Style::default()
-                        .fg(theme::LINK)
-                        .add_modifier(Modifier::UNDERLINED),
-                    lines,
-                );
+                append_inline(children, Style::default().fg(theme::LINK), lines);
             }
             Inline::SectionReference { target, children } => {
                 let first_line = lines.len() - 1;
@@ -1689,6 +1700,90 @@ mod tests {
         assert_eq!(rendered.anchor_row("description"), Some(0));
         assert!(rendered.row_count >= 4);
         assert_eq!(view.navigation()[0].title, "Description");
+    }
+
+    #[test]
+    fn terminal_chrome_keeps_the_manual_section_out_of_the_sidebar_label() {
+        let mut bundle = bundle();
+        let document = bundle.document.as_mut().expect("document");
+        document.meta.section = Some("1".to_owned());
+        document.blocks.push(Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "overview".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        });
+
+        let view = DocumentView::new(&bundle);
+
+        assert_eq!(view.label(), "demo");
+        assert_eq!(view.terminal_label(), "demo(1)");
+        assert_eq!(view.top_level_count(), 1);
+    }
+
+    #[test]
+    fn section_spacing_is_not_coalesced_with_existing_blank_rows() {
+        let mut bundle = bundle();
+        let document = bundle.document.as_mut().expect("document");
+        document.blocks = vec![Block::VerticalSpace {
+            lines: 1,
+            source: None,
+        }];
+        document.sections[0].spacing_before_lines = 2;
+
+        let rendered = DocumentView::new(&bundle).render(80);
+
+        assert_eq!(rendered.anchor_row("description"), Some(3));
+    }
+
+    #[test]
+    fn a_tldr_only_result_explains_why_no_manual_body_follows() {
+        let mut bundle = bundle();
+        bundle.document = None;
+        bundle.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["Quick reference".to_owned()],
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
+        });
+
+        let rendered = DocumentView::new(&bundle).render(80);
+        let output = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(output.contains("No local man page was found"));
+    }
+
+    #[test]
+    fn manual_references_are_distinct_without_implying_page_local_clickability() {
+        let lines = styled_inline_lines(
+            &[Inline::ManualReference {
+                name: "printf".to_owned(),
+                section: Some("3".to_owned()),
+                children: vec![Inline::Text {
+                    value: "printf(3)".to_owned(),
+                }],
+            }],
+            Style::default(),
+        );
+
+        assert_eq!(lines[0].spans[0].style.fg, Some(theme::LINK));
+        assert!(
+            !lines[0].spans[0]
+                .style
+                .add_modifier
+                .contains(Modifier::UNDERLINED)
+        );
     }
 
     #[test]
