@@ -172,9 +172,11 @@ Every request has three required fields:
 ### Input Variants
 
 An unqualified name first checks registered Markdown below
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents` and each
-`$XDG_DATA_DIRS/mant/documents` directory, then falls back to ManT's native
-manual index:
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant` and each `$XDG_DATA_DIRS/mant`
+directory, then falls back to ManT's native manual index. Registration roots
+are recursive and follow file or directory symbolic links without revisiting
+the same canonical directory. A nested file keeps its filename stem as its
+public name; directory components are not part of the request:
 
 ```json
 {

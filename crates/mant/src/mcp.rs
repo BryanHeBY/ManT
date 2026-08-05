@@ -714,7 +714,7 @@ mod tests {
                     name: "printf".to_owned(),
                     kind: AvailableDocumentKind::Markdown,
                     section: None,
-                    path: PathBuf::from("/data/mant/documents/printf.md"),
+                    path: PathBuf::from("/data/mant/printf.md"),
                     origin: AvailableDocumentOrigin::User,
                 },
                 AvailableDocument {

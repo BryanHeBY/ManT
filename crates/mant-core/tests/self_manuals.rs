@@ -110,6 +110,21 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
 }
 
 #[test]
+fn shipped_manual_explains_recursive_registered_documents() {
+    for required in [
+        "$HOME/.local/share/mant",
+        "team/handbook.md",
+        "Directories organize documents but do not form",
+        "symbolic-link cycles",
+    ] {
+        assert!(
+            MANT_MANUAL.contains(required),
+            "mant.md should document registered Markdown with {required:?}"
+        );
+    }
+}
+
+#[test]
 fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
     let query = query_markdown_text(PROTOCOL_REFERENCE, Some("docs/protocol.md".to_owned()))
         .expect("protocol reference query");

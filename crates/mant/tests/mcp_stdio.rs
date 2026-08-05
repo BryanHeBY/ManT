@@ -259,7 +259,7 @@ fn registered_document_fixture() -> PathBuf {
         "mant-mcp-registered-document-{}",
         std::process::id()
     ));
-    let documents = data_home.join("mant/documents");
+    let documents = data_home.join("mant");
     fs::create_dir_all(&documents).expect("create document directory");
     fs::write(
         documents.join("mcp-registered.md"),

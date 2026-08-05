@@ -61,15 +61,22 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 ## Input
 
 Input is resolved before parsing. An ordinary value first selects a registered
-Markdown document from `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`, then
-from each `$XDG_DATA_DIRS/mant/documents` directory, and finally from the native
+Markdown document from `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, then
+from each `$XDG_DATA_DIRS/mant` directory, and finally from the native
 manual index. Values ending in `.md` or `.markdown`, other path-like values, and
 the exact value `-` select Markdown directly instead.
 
 The filename supplies a registered document name: `mant.md` is queried as
-`mant mant`. User data precedes system data, and the first matching filename
-wins. An explicit `--section`, `--force-libmandoc`, or `--force-groff` request
-bypasses registered Markdown and selects a manual page.
+`mant mant`. Registration roots are scanned recursively, including file and
+directory symbolic links. Directories organize documents but do not form
+namespaces: `team/handbook.md` is still queried as `mant handbook`.
+
+For duplicate names, user data precedes system data, shallower paths precede
+deeper paths, relative path order breaks remaining ties, and `.md` precedes
+`.markdown` in the same directory. Broken links and unreadable paths are
+ignored; canonical directory identities prevent symbolic-link cycles. An
+explicit `--section`, `--force-libmandoc`, or `--force-groff` request bypasses
+registered Markdown and selects a manual page.
 
 ### Manual Pages
 
@@ -346,14 +353,14 @@ tldr page is available.
 - `MANT_TLDR_DIR`: Use one explicit tldr checkout for reads and updates.
 - `XDG_CACHE_HOME`: Relocate cache discovery and ManT's Linux fallback cache.
 - `XDG_DATA_HOME`: Relocate the user document directory from the default
-  `$HOME/.local/share/mant/documents`.
-- `XDG_DATA_DIRS`: Add system data roots considered during registered-document and
-  tldr discovery. Registered Markdown is read from each `mant/documents`
-  subdirectory.
+  `$HOME/.local/share/mant`.
+- `XDG_DATA_DIRS`: Add system data roots considered during
+  registered-document and tldr discovery. Registered Markdown is read
+  recursively from each `mant` subdirectory.
 - `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manual sources
   and translated tldr pages before English fallback.
-- `HOME`: Supply conventional document, manual, and cache locations when their XDG
-  overrides are absent.
+- `HOME`: Supply conventional document, manual, and cache locations when their
+  XDG overrides are absent.
 
 ## General
 

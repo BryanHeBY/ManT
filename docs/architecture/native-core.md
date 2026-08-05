@@ -116,10 +116,13 @@ read-only tools: local-document discovery, outline, selected content,
 semantic explanation, and search. Document tools accept a name plus an
 optional manual section. That narrower boundary prevents agents from opening
 arbitrary host paths: Markdown must first be registered in an XDG document
-directory, while ordinary names continue to fall back to the native manual
-index. Input and output schemas derive directly from Rust types. MCP drops
-lowering diagnostics and keeps standard error silent; the ordinary CLI JSON
-surface remains the diagnostic inspection path. MCP is an alternate process
+root. Registration recursively follows file and directory symlinks, but
+canonical-directory deduplication and explicit traversal bounds prevent loops
+or unbounded trees. Nested directories are organizational: the filename stem
+remains the flat public name. Ordinary names continue to fall back to the
+native manual index. Input and output schemas derive directly from Rust types.
+MCP drops lowering diagnostics and keeps standard error silent; the ordinary
+CLI JSON surface remains the diagnostic inspection path. MCP is an alternate process
 protocol; it does not add another executable or a second document
 interpretation path.
 

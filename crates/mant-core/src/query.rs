@@ -809,7 +809,7 @@ mod tests {
     #[test]
     fn registered_markdown_shadows_an_unqualified_manual_name() {
         let mut host = host(Err("manual parser must not run".to_owned()));
-        host.registered_document = Some(PathBuf::from("/data/mant/documents/tool.md"));
+        host.registered_document = Some(PathBuf::from("/data/mant/tool.md"));
         host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
 
         let result = query_with(&request(), QueryPolicy::default(), &host)
@@ -819,10 +819,7 @@ mod tests {
         assert!(result.tldr.is_none());
         let document = result.document.expect("registered document");
         assert_eq!(document.source.format, SourceFormat::Markdown);
-        assert_eq!(
-            document.source.path.as_deref(),
-            Some("/data/mant/documents/tool.md")
-        );
+        assert_eq!(document.source.path.as_deref(), Some("/data/mant/tool.md"));
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
             ["name", "markdown"],

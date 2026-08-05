@@ -313,7 +313,7 @@ fn unqualified_names_prefer_registered_xdg_markdown() {
         "mant-registered-document-process-{}",
         std::process::id()
     ));
-    let documents = data_home.join("mant/documents");
+    let documents = data_home.join("mant");
     fs::create_dir_all(&documents).expect("create registered document directory");
     let path = documents.join("process-registered.md");
     fs::write(&path, "# Registered\n\nBody from the XDG document.\n")
@@ -338,6 +338,48 @@ fn unqualified_names_prefer_registered_xdg_markdown() {
     );
 
     fs::remove_dir_all(data_home).expect("remove registered document fixture");
+}
+
+#[cfg(unix)]
+#[test]
+fn registered_names_resolve_through_nested_directory_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let root = std::env::temp_dir().join(format!(
+        "mant-linked-document-process-{}",
+        std::process::id()
+    ));
+    let data_home = root.join("user-data");
+    let provider = root.join("provider-docs");
+    fs::create_dir_all(data_home.join("mant")).expect("create registration root");
+    fs::create_dir_all(&provider).expect("create provider directory");
+    fs::write(
+        provider.join("process-linked.md"),
+        "# Linked\n\nBody from another tool.\n",
+    )
+    .expect("write provider document");
+    symlink(&provider, data_home.join("mant/provider")).expect("link provider directory");
+
+    let output = Command::new(executable())
+        .args(["process-linked", "--format", "json", "--compact"])
+        .env("XDG_DATA_HOME", &data_home)
+        .env("XDG_DATA_DIRS", root.join("empty-system-data"))
+        .output()
+        .expect("query linked registered document");
+
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
+    assert_eq!(value["label"], "process-linked");
+    assert_eq!(value["document"]["meta"]["title"], "Linked");
+    assert_eq!(
+        value["document"]["source"]["path"],
+        data_home
+            .join("mant/provider/process-linked.md")
+            .to_str()
+            .expect("UTF-8 path")
+    );
+
+    fs::remove_dir_all(root).expect("remove linked document fixture");
 }
 
 #[test]
