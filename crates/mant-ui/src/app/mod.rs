@@ -247,12 +247,8 @@ impl App {
     }
 
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> UpdateOutcome {
-        if self.handle_overlay_mouse(mouse) {
-            return if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
-                UpdateOutcome::Redraw
-            } else {
-                UpdateOutcome::Unchanged
-            };
+        if let Some(outcome) = self.handle_overlay_mouse(mouse) {
+            return outcome;
         }
         if let Some(outcome) = self.handle_pointer_control(mouse) {
             return outcome;
@@ -1964,6 +1960,72 @@ mod tests {
         });
         assert!(!app.show_sidebar);
         assert_eq!(app.overlay, Overlay::None);
+    }
+
+    #[test]
+    fn open_menus_follow_pointer_hover_across_entries_and_menu_buttons() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        app.open_menu(MenuId::View);
+        assert_eq!(
+            app.handle_mouse(MouseEvent {
+                kind: MouseEventKind::Moved,
+                column: MenuId::View.left() + 2,
+                row: 2,
+                modifiers: KeyModifiers::NONE,
+            }),
+            UpdateOutcome::Redraw
+        );
+        assert_eq!(
+            app.overlay,
+            Overlay::Menu {
+                id: MenuId::View,
+                cursor: 1,
+            }
+        );
+
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("draw hovered entry");
+        let buffer = terminal.backend().buffer();
+        assert_eq!(
+            buffer
+                .cell((MenuId::View.left(), 1))
+                .expect("unhovered first entry")
+                .bg,
+            theme::BASE
+        );
+        assert_eq!(
+            buffer
+                .cell((MenuId::View.left(), 2))
+                .expect("hovered second entry")
+                .bg,
+            theme::SELECTED
+        );
+
+        assert_eq!(
+            app.handle_mouse(MouseEvent {
+                kind: MouseEventKind::Moved,
+                column: MenuId::Navigate.left() + 2,
+                row: 0,
+                modifiers: KeyModifiers::NONE,
+            }),
+            UpdateOutcome::Redraw
+        );
+        assert_eq!(
+            app.overlay,
+            Overlay::Menu {
+                id: MenuId::Navigate,
+                cursor: 0,
+            }
+        );
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("draw hovered menu button");
+        assert!(terminal.backend().to_string().contains("Previous Section"));
     }
 
     #[test]

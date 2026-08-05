@@ -10,7 +10,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::{App, Overlay, fit_to_width};
+use super::{App, Overlay, UpdateOutcome, fit_to_width};
 use crate::{layout::DEFAULT_SIDEBAR_WIDTH, theme};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -224,39 +224,83 @@ impl App {
         }
     }
 
-    pub(super) fn handle_overlay_mouse(&mut self, mouse: MouseEvent) -> bool {
-        if mouse.kind != MouseEventKind::Down(MouseButton::Left) {
-            return self.overlay != Overlay::None;
-        }
-        if mouse.row == 0
-            && let Some(id) = MenuId::ALL.into_iter().find(|id| {
-                let start = id.left();
-                let end = start + u16::try_from(id.label().len() + 2).unwrap_or_default();
-                mouse.column >= start && mouse.column < end
+    pub(super) fn handle_overlay_mouse(&mut self, mouse: MouseEvent) -> Option<UpdateOutcome> {
+        let menu_bar_target = (mouse.row == 0)
+            .then(|| {
+                MenuId::ALL.into_iter().find(|id| {
+                    let start = id.left();
+                    let end = start + u16::try_from(id.label().len() + 2).unwrap_or_default();
+                    mouse.column >= start && mouse.column < end
+                })
             })
-        {
-            self.overlay = if matches!(self.overlay, Overlay::Menu { id: open, .. } if open == id) {
-                Overlay::None
-            } else {
-                Overlay::Menu { id, cursor: 0 }
+            .flatten();
+
+        if let Some(id) = menu_bar_target {
+            return match mouse.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    self.overlay = if matches!(self.overlay, Overlay::Menu { id: open, .. } if open == id)
+                    {
+                        Overlay::None
+                    } else {
+                        Overlay::Menu { id, cursor: 0 }
+                    };
+                    Some(UpdateOutcome::Redraw)
+                }
+                MouseEventKind::Moved if matches!(self.overlay, Overlay::Menu { .. }) => {
+                    let changed =
+                        !matches!(self.overlay, Overlay::Menu { id: open, .. } if open == id);
+                    if changed {
+                        self.overlay = Overlay::Menu { id, cursor: 0 };
+                    }
+                    Some(if changed {
+                        UpdateOutcome::Redraw
+                    } else {
+                        UpdateOutcome::Unchanged
+                    })
+                }
+                _ if self.overlay != Overlay::None => Some(UpdateOutcome::Unchanged),
+                _ => None,
             };
-            return true;
         }
-        if let Overlay::Menu { id, .. } = self.overlay {
+
+        if let Overlay::Menu { id, cursor } = self.overlay {
             let entries = menu_entries(id);
             let row = usize::from(mouse.row.saturating_sub(1));
-            if mouse.row >= 1
+            let entry = (mouse.row >= 1
                 && row < entries.len()
                 && mouse.column >= id.left()
-                && mouse.column < id.left().saturating_add(30)
-            {
-                self.activate_menu_action(entries[row].action);
-            } else {
-                self.overlay = Overlay::None;
-            }
-            return true;
+                && mouse.column < id.left().saturating_add(30))
+            .then_some(row);
+
+            return match mouse.kind {
+                MouseEventKind::Moved => {
+                    let changed = entry.is_some_and(|index| index != cursor);
+                    if let Some(index) = entry {
+                        self.overlay = Overlay::Menu { id, cursor: index };
+                    }
+                    Some(if changed {
+                        UpdateOutcome::Redraw
+                    } else {
+                        UpdateOutcome::Unchanged
+                    })
+                }
+                MouseEventKind::Down(MouseButton::Left) => {
+                    if let Some(index) = entry {
+                        self.activate_menu_action(entries[index].action);
+                    } else {
+                        self.overlay = Overlay::None;
+                    }
+                    Some(UpdateOutcome::Redraw)
+                }
+                _ => Some(UpdateOutcome::Unchanged),
+            };
         }
-        self.overlay == Overlay::Help
+
+        if self.overlay == Overlay::Help {
+            return Some(UpdateOutcome::Unchanged);
+        }
+
+        None
     }
 
     pub(super) fn activate_menu_action(&mut self, action: MenuAction) {
