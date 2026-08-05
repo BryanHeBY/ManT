@@ -141,11 +141,11 @@ pub(crate) enum Command {
 #[allow(clippy::struct_excessive_bools)]
 #[command(
     name = "mant",
-    about = "Query structured local manuals and Markdown for agents and scripts",
+    about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
     disable_version_flag = true,
     override_usage = "mant <TOPIC|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant README.md\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant README.md\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("source")
         .args(["topic", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)

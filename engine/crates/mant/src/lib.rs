@@ -50,6 +50,16 @@ struct QueryExecution {
     preserve_anchors: bool,
 }
 
+/// Terminal capabilities consulted only by the OS process entry point.
+///
+/// The injectable [`run`] boundary intentionally remains deterministic and
+/// treats `Auto` as conventional Markdown output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TerminalCapabilities {
+    input: bool,
+    output: bool,
+}
+
 // ── Host boundary ─────────────────────────────────────────────────────────
 
 trait CliHost {
@@ -100,13 +110,23 @@ pub fn run(
 /// owns operating-system stdio because the protocol reserves it exclusively
 /// for newline-delimited JSON-RPC messages.
 pub async fn run_process(arguments: &[String]) -> u8 {
-    let command = match arguments::parse(arguments) {
+    let mut command = match arguments::parse(arguments) {
         Ok(command) => command,
         Err(error) => return report_argument_error(&error, &mut io::stderr().lock()),
     };
 
     if matches!(command, Command::Mcp) {
         return mcp::run_stdio().await;
+    }
+
+    if let Err(error) = resolve_process_presentation(
+        &mut command,
+        TerminalCapabilities {
+            input: io::stdin().is_terminal(),
+            output: io::stdout().is_terminal(),
+        },
+    ) {
+        return report_failure(&error, &mut io::stderr().lock());
     }
 
     if matches!(
@@ -116,14 +136,6 @@ pub async fn run_process(arguments: &[String]) -> u8 {
             ..
         }
     ) {
-        if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
-            return report_failure(
-                &Failure::usage(
-                    "interactive view requires an input and output terminal; omit --ui or select --format",
-                ),
-                &mut io::stderr().lock(),
-            );
-        }
         return run_interactive(command, &mut io::stderr().lock(), &SystemHost);
     }
 
@@ -134,6 +146,32 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         &mut io::stderr().lock(),
         &SystemHost,
     )
+}
+
+/// Resolve terminal-sensitive defaults without coupling argument parsing to
+/// operating-system streams.
+fn resolve_process_presentation(
+    command: &mut Command,
+    terminal: TerminalCapabilities,
+) -> Result<(), Failure> {
+    let Command::Query { presentation, .. } = command else {
+        return Ok(());
+    };
+    match *presentation {
+        QueryPresentation::Auto if terminal.input && terminal.output => {
+            *presentation = QueryPresentation::Interactive;
+        }
+        QueryPresentation::Auto => {
+            *presentation = QueryPresentation::Output(QueryFormat::Markdown);
+        }
+        QueryPresentation::Interactive if !terminal.input || !terminal.output => {
+            return Err(Failure::usage(
+                "interactive view requires an input and output terminal; omit --ui or select --format",
+            ));
+        }
+        QueryPresentation::Interactive | QueryPresentation::Output(_) => {}
+    }
+    Ok(())
 }
 
 fn run_with_host(
@@ -673,13 +711,92 @@ mod tests {
         TldrCacheAction, TldrCacheUpdate, TldrDocument, TldrOrigin,
     };
 
-    use super::{CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, run_with_host};
+    use super::{
+        CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, TerminalCapabilities,
+        arguments::{self, Command, QueryFormat, QueryPresentation},
+        resolve_process_presentation, run_with_host,
+    };
 
     struct FakeHost {
         query_calls: Cell<usize>,
         update_calls: Cell<usize>,
         document: Option<MantDocument>,
         tldr: Option<TldrDocument>,
+    }
+
+    #[test]
+    fn terminal_capabilities_resolve_only_automatic_full_queries() {
+        let mut terminal_query = arguments::parse(&["git".to_owned()]).expect("automatic query");
+        resolve_process_presentation(
+            &mut terminal_query,
+            TerminalCapabilities {
+                input: true,
+                output: true,
+            },
+        )
+        .expect("terminal query");
+        assert!(matches!(
+            terminal_query,
+            Command::Query {
+                presentation: QueryPresentation::Interactive,
+                ..
+            }
+        ));
+
+        let mut redirected_query = arguments::parse(&["git".to_owned()]).expect("automatic query");
+        resolve_process_presentation(
+            &mut redirected_query,
+            TerminalCapabilities {
+                input: true,
+                output: false,
+            },
+        )
+        .expect("redirected query");
+        assert!(matches!(
+            redirected_query,
+            Command::Query {
+                presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                ..
+            }
+        ));
+
+        let mut outline =
+            arguments::parse(&["git".to_owned(), "--outline".to_owned()]).expect("outline query");
+        resolve_process_presentation(
+            &mut outline,
+            TerminalCapabilities {
+                input: true,
+                output: true,
+            },
+        )
+        .expect("outline remains non-interactive");
+        assert!(matches!(
+            outline,
+            Command::Query {
+                presentation: QueryPresentation::Output(QueryFormat::Text),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn explicit_interactive_queries_require_both_terminal_streams() {
+        for terminal in [
+            TerminalCapabilities {
+                input: false,
+                output: true,
+            },
+            TerminalCapabilities {
+                input: true,
+                output: false,
+            },
+        ] {
+            let mut command =
+                arguments::parse(&["git".to_owned(), "--ui".to_owned()]).expect("UI query");
+            let error = resolve_process_presentation(&mut command, terminal)
+                .expect_err("incomplete terminal must fail");
+            assert!(error.message.contains("interactive view requires"));
+        }
     }
 
     impl FakeHost {
