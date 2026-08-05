@@ -58,7 +58,16 @@ independent of terminal detection.
 
 ## Install
 
-Install the complete native command from crates.io:
+Install a supported prebuilt release with `cargo-binstall`:
+
+```sh
+cargo binstall mant
+mant git
+```
+
+Linux glibc x64/arm64 and Windows MSVC x64 use native release archives. Other
+targets fall back to a Cargo source build. To compile explicitly from
+crates.io:
 
 ```sh
 cargo install mant --locked

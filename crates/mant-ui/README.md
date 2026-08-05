@@ -1,13 +1,53 @@
 # mant-ui
 
-`mant-ui` is the Ratatui frontend component used by the `mant` executable.
-It renders ManT's normalized document model and owns interactive navigation,
-search, scrolling, links, and terminal presentation.
+`mant-ui` is the Ratatui frontend component used by the `mant` executable. It
+renders ManT's normalized `mant-ast::QueryBundle` and owns interactive
+navigation, search, scrolling, links, menus, mouse input, and terminal
+presentation.
 
-The component is portable across Linux, macOS, and Windows. It is independent
-of the document source: Unix callers can supply normalized man, mdoc, or
-Markdown documents, while Windows callers use the same interface and complete
-TUI feature set with Markdown documents without compiling libmandoc.
+## What this crate provides
 
-Install [`mant`](https://crates.io/crates/mant) for the complete command. This
-component crate does not install a separate executable.
+- A hierarchy-aware, collapsible sidebar for sections and semantic options.
+- Settled-scroll navigation following and selectable page-local references.
+- Confirmed full-document search with active and inactive match highlighting.
+- tldr quick-reference and source-document rendering through one layout model.
+- Keyboard, mouse, scrollbar, and resizable-pane interaction.
+- A Crossterm lifecycle boundary that restores raw mode and the alternate
+  screen after normal exit, setup failure, or panic.
+- Public `App` and `DocumentView` layers for callers embedding the frontend in
+  an existing Ratatui host.
+
+Command-line parsing and document loading deliberately remain outside this
+crate.
+
+## Basic use
+
+The convenience boundary owns the terminal event loop:
+
+```rust,no_run
+let query = mant_core::query_markdown_text(
+    "# Demo\n\n## Overview\n\nHello from ManT.\n",
+    Some("demo.md".to_owned()),
+)?;
+
+mant_ui::run(&query)?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+`run` requires an interactive terminal. Callers that already own a Ratatui
+event loop can construct `mant_ui::App`, route input through its handlers, and
+invoke `App::draw` from their frame callback instead.
+
+## Platform behavior
+
+The frontend is portable across Linux, macOS, and Windows and does not inspect
+the original document source. Unix callers can provide normalized man, mdoc,
+or Markdown queries. Windows callers use the same complete TUI feature set
+with Markdown queries without compiling libmandoc.
+
+Install [`mant`](https://crates.io/crates/mant) for the complete executable.
+This component crate is a library and does not install a second command.
+
+## License
+
+Apache-2.0.

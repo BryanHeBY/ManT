@@ -85,6 +85,14 @@ be installed at `%APPDATA%\ManT\documents\mant.md`.
 macOS supports Cargo installation and local source builds, but public macOS
 archives remain disabled until they can be Developer ID-signed and notarized.
 
+The `mant` crate's cargo-binstall metadata maps the three public Rust targets
+to these human-readable archive names and their nested executable paths.
+`crates/mant/tests/release_metadata.rs` keeps that mapping synchronized with
+both packaging scripts. If an archive name or root changes, update the crate
+metadata and regression test in the same commit. cargo-binstall can download
+an archive only after the draft GitHub Release becomes public; before that it
+may fall back to a source build.
+
 ## Inspect an archive locally
 
 Packaging never builds or tests. It validates the Cargo version, optional tag,
