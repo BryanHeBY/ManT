@@ -65,6 +65,14 @@ pub struct RenderedDocument {
     anchor_rows: HashMap<String, usize>,
 }
 
+/// One exact visual-row range found in a width-dependent document rendering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderedSearchMatch {
+    pub row: usize,
+    pub start_column: usize,
+    pub end_column: usize,
+}
+
 #[derive(Debug, Clone)]
 struct LogicalLine {
     indent: usize,
@@ -278,6 +286,131 @@ impl RenderedDocument {
     pub fn anchor_row(&self, id: &str) -> Option<usize> {
         self.anchor_rows.get(id).copied()
     }
+
+    /// Search visible terminal rows without rebuilding or traversing the AST.
+    #[must_use]
+    pub fn search(&self, query: &str) -> Vec<RenderedSearchMatch> {
+        let needle = query.to_lowercase();
+        if needle.is_empty() {
+            return Vec::new();
+        }
+        self.text
+            .lines
+            .iter()
+            .enumerate()
+            .flat_map(|(row, line)| {
+                let plain = line
+                    .spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>();
+                let folded = fold_for_search(&plain);
+                folded
+                    .value
+                    .match_indices(&needle)
+                    .map(|(start, value)| {
+                        let source_start = folded.starts[start];
+                        let source_end = folded.ends[start + value.len() - 1];
+                        RenderedSearchMatch {
+                            row,
+                            start_column: plain[..source_start].width(),
+                            end_column: plain[..source_end].width(),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Clone the rendered rows and decorate ordinary and active search hits.
+    #[must_use]
+    pub fn highlighted_text(
+        &self,
+        matches: &[RenderedSearchMatch],
+        active: Option<usize>,
+    ) -> Text<'static> {
+        let mut text = self.text.clone();
+        let mut by_row: HashMap<usize, Vec<(usize, RenderedSearchMatch)>> = HashMap::new();
+        for (index, search_match) in matches.iter().copied().enumerate() {
+            by_row
+                .entry(search_match.row)
+                .or_default()
+                .push((index, search_match));
+        }
+        for (row, ranges) in by_row {
+            let Some(line) = text.lines.get_mut(row) else {
+                continue;
+            };
+            *line = highlight_line(line, &ranges, active);
+        }
+        text
+    }
+}
+
+struct FoldedText {
+    value: String,
+    starts: Vec<usize>,
+    ends: Vec<usize>,
+}
+
+fn fold_for_search(value: &str) -> FoldedText {
+    let mut folded = String::new();
+    let mut starts = Vec::new();
+    let mut ends = Vec::new();
+    for (source_start, character) in value.char_indices() {
+        let source_end = source_start + character.len_utf8();
+        let lowered = character.to_lowercase().to_string();
+        folded.push_str(&lowered);
+        starts.resize(folded.len(), source_start);
+        ends.resize(folded.len(), source_end);
+    }
+    FoldedText {
+        value: folded,
+        starts,
+        ends,
+    }
+}
+
+fn highlight_line(
+    line: &Line<'static>,
+    ranges: &[(usize, RenderedSearchMatch)],
+    active: Option<usize>,
+) -> Line<'static> {
+    let mut spans = Vec::new();
+    let mut column = 0;
+    for span in &line.spans {
+        let mut segment = String::new();
+        let mut segment_style = None;
+        for character in span.content.chars() {
+            let width = character.width().unwrap_or(0);
+            let next_column = column + width;
+            let matched = ranges
+                .iter()
+                .find(|(_, range)| range.start_column < next_column && range.end_column > column);
+            let style = match matched {
+                Some((index, _)) if Some(*index) == active => span
+                    .style
+                    .fg(theme::BASE)
+                    .bg(theme::SEARCH_ACTIVE)
+                    .add_modifier(Modifier::BOLD),
+                Some(_) => span.style.bg(theme::SEARCH_MATCH),
+                None => span.style,
+            };
+            if segment_style.is_some_and(|current| current != style) {
+                spans.push(Span::styled(
+                    std::mem::take(&mut segment),
+                    segment_style.unwrap(),
+                ));
+            }
+            segment_style = Some(style);
+            segment.push(character);
+            column = next_column;
+        }
+        if !segment.is_empty() {
+            spans.push(Span::styled(segment, segment_style.unwrap_or(span.style)));
+        }
+    }
+    Line::from(spans)
 }
 
 struct DocumentBuilder {
@@ -1422,5 +1555,54 @@ mod tests {
         let rows = wrap_line(&LogicalLine::rule(3), 12);
 
         assert_eq!(rows[0].to_string(), "   ─────────");
+    }
+
+    #[test]
+    fn rendered_search_finds_literal_options_and_decorates_every_match() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "Use --acls, then repeat --acls.".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let rendered = DocumentView::new(&bundle).render(42);
+
+        let matches = rendered.search("--ACLS");
+        let highlighted = rendered.highlighted_text(&matches, Some(1));
+
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].row, 1);
+        assert!(
+            highlighted.lines[1]
+                .spans
+                .iter()
+                .any(|span| span.style.bg == Some(theme::SEARCH_MATCH))
+        );
+        assert!(
+            highlighted.lines[1]
+                .spans
+                .iter()
+                .any(|span| span.style.bg == Some(theme::SEARCH_ACTIVE))
+        );
+    }
+
+    #[test]
+    fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
+        let rendered = RenderedDocument {
+            text: Text::from(Line::from("İstanbul")),
+            row_count: 1,
+            anchor_rows: HashMap::new(),
+        };
+
+        assert_eq!(
+            rendered.search("i"),
+            vec![RenderedSearchMatch {
+                row: 0,
+                start_column: 0,
+                end_column: 1,
+            }]
+        );
     }
 }

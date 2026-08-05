@@ -11,5 +11,5 @@ mod terminal;
 mod theme;
 
 pub use app::App;
-pub use document::{DocumentView, NavItem, NavKind, RenderedDocument};
+pub use document::{DocumentView, NavItem, NavKind, RenderedDocument, RenderedSearchMatch};
 pub use terminal::run;

@@ -13,10 +13,26 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::{DocumentView, NavKind, RenderedDocument, theme};
+use crate::{DocumentView, NavKind, RenderedDocument, RenderedSearchMatch, theme};
 
 const MIN_SIDEBAR_WIDTH: u16 = 20;
 const MAX_SIDEBAR_WIDTH: u16 = 60;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchMode {
+    Closed,
+    Open { editing: bool },
+}
+
+impl SearchMode {
+    const fn is_open(self) -> bool {
+        matches!(self, Self::Open { .. })
+    }
+
+    const fn is_editing(self) -> bool {
+        matches!(self, Self::Open { editing: true })
+    }
+}
 
 /// All mutable interaction state for one `ManT` document.
 pub struct App {
@@ -28,6 +44,12 @@ pub struct App {
     sidebar_width: u16,
     show_sidebar: bool,
     quit: bool,
+    search_mode: SearchMode,
+    search_draft: String,
+    search_query: String,
+    search_matches: Vec<RenderedSearchMatch>,
+    active_search_match: usize,
+    search_width: u16,
     resizing_sidebar: bool,
     last_body_area: Rect,
     last_content_area: Rect,
@@ -55,6 +77,12 @@ impl App {
             sidebar_width: 36,
             show_sidebar: true,
             quit: false,
+            search_mode: SearchMode::Closed,
+            search_draft: String::new(),
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            active_search_match: 0,
+            search_width: 0,
             resizing_sidebar: false,
             last_body_area: Rect::default(),
             last_content_area: Rect::default(),
@@ -72,6 +100,16 @@ impl App {
     pub fn handle_key(&mut self, key: KeyEvent) {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.quit = true;
+            return;
+        }
+        if self.search_mode.is_open() {
+            self.handle_search_key(key);
+            return;
+        }
+        if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('f'))
+            || key.code == KeyCode::Char('/')
+        {
+            self.open_search();
             return;
         }
         match key.code {
@@ -157,7 +195,11 @@ impl App {
             self.resizing_sidebar = false;
             self.draw_content(frame, body_area);
         }
-        self.draw_status(frame, status_area);
+        if self.search_mode.is_open() {
+            self.draw_search(frame, status_area);
+        } else {
+            self.draw_status(frame, status_area);
+        }
     }
 
     fn draw_menu(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -281,16 +323,27 @@ impl App {
             vertical: 1,
         });
         self.last_content_area = inner;
-        let rendered = self
-            .rendered_cache
+        self.rendered_cache
             .entry(inner.width)
             .or_insert_with(|| self.document.render(inner.width));
+        if !self.search_query.is_empty() && self.search_width != inner.width {
+            self.refresh_search(inner.width);
+        }
+        let rendered = &self.rendered_cache[&inner.width];
         let viewport_height = usize::from(inner.height);
         let maximum = rendered.row_count.saturating_sub(viewport_height);
         self.content_scroll = self.content_scroll.min(maximum);
         let scroll = u16::try_from(self.content_scroll).unwrap_or(u16::MAX);
+        let text = if self.search_query.is_empty() {
+            rendered.text.clone()
+        } else {
+            rendered.highlighted_text(
+                &self.search_matches,
+                (!self.search_matches.is_empty()).then_some(self.active_search_match),
+            )
+        };
         frame.render_widget(
-            Paragraph::new(rendered.text.clone())
+            Paragraph::new(text)
                 .scroll((scroll, 0))
                 .style(Style::default().bg(theme::CONTENT)),
             inner,
@@ -332,7 +385,13 @@ impl App {
             .style(style.fg(theme::TEXT)),
             area,
         );
-        let suffix = if self.document.has_tldr() {
+        let suffix = if !self.search_query.is_empty() && !self.search_matches.is_empty() {
+            format!(
+                "Find “{}” · {} matches ",
+                self.search_query,
+                self.search_matches.len()
+            )
+        } else if self.document.has_tldr() {
             format!("{} visible sections · TLDR ", self.document.section_count())
         } else {
             format!("{} visible sections ", self.document.section_count())
@@ -343,6 +402,54 @@ impl App {
                 .style(style.fg(theme::SUBTEXT)),
             area,
         );
+    }
+
+    fn draw_search(&self, frame: &mut Frame<'_>, area: Rect) {
+        let style = Style::default().bg(theme::MENU);
+        frame.render_widget(Block::default().style(style), area);
+        let prompt = format!(" Find: {}", self.search_draft);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(" Find: ", style.fg(theme::YELLOW)),
+                Span::styled(
+                    self.search_draft.clone(),
+                    style.fg(theme::TEXT).bg(theme::SURFACE),
+                ),
+                Span::styled(" ", style.bg(theme::TEXT)),
+            ])),
+            area,
+        );
+        let suffix = if !self.search_mode.is_editing() && !self.search_query.is_empty() {
+            if self.search_matches.is_empty() {
+                " No matches · Edit query · Esc close ".to_owned()
+            } else {
+                format!(
+                    " {}/{} · Enter next · Esc close ",
+                    self.active_search_match + 1,
+                    self.search_matches.len()
+                )
+            }
+        } else {
+            " Enter search · Esc cancel ".to_owned()
+        };
+        let suffix_style = if self.search_matches.is_empty()
+            && !self.search_mode.is_editing()
+            && !self.search_query.is_empty()
+        {
+            style
+                .fg(theme::BASE)
+                .bg(theme::PEACH)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            style.fg(theme::SUBTEXT)
+        };
+        let prompt_width = prompt.width();
+        if prompt_width + suffix.width() < usize::from(area.width) {
+            frame.render_widget(
+                Paragraph::new(Span::styled(suffix, suffix_style)).alignment(Alignment::Right),
+                area,
+            );
+        }
     }
 
     fn select_relative(&mut self, delta: isize) {
@@ -357,6 +464,106 @@ impl App {
         let next = current.saturating_add_signed(delta).min(visible.len() - 1);
         self.selected = visible[next];
         self.scroll_to_selected();
+    }
+
+    fn open_search(&mut self) {
+        self.search_mode = SearchMode::Open { editing: false };
+        self.search_draft.clone_from(&self.search_query);
+    }
+
+    fn close_search(&mut self) {
+        self.search_mode = SearchMode::Closed;
+        self.search_draft.clear();
+        self.search_query.clear();
+        self.search_matches.clear();
+        self.active_search_match = 0;
+        self.search_width = 0;
+    }
+
+    fn handle_search_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => self.close_search(),
+            KeyCode::Enter => {
+                if !self.search_mode.is_editing() && self.search_draft == self.search_query {
+                    self.select_search_relative(1);
+                } else {
+                    self.search_query.clone_from(&self.search_draft);
+                    self.search_mode = SearchMode::Open { editing: false };
+                    self.refresh_search(self.last_content_area.width.max(1));
+                    self.select_active_search_match();
+                }
+            }
+            KeyCode::Backspace => {
+                self.search_draft.pop();
+                self.search_mode = SearchMode::Open { editing: true };
+            }
+            KeyCode::Delete => {
+                self.search_draft.clear();
+                self.search_mode = SearchMode::Open { editing: true };
+            }
+            KeyCode::Char(character)
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                self.search_draft.push(character);
+                self.search_mode = SearchMode::Open { editing: true };
+            }
+            _ => {}
+        }
+    }
+
+    fn refresh_search(&mut self, width: u16) {
+        let rendered = self
+            .rendered_cache
+            .entry(width)
+            .or_insert_with(|| self.document.render(width));
+        self.search_matches = rendered.search(&self.search_query);
+        self.active_search_match = self
+            .active_search_match
+            .min(self.search_matches.len().saturating_sub(1));
+        self.search_width = width;
+    }
+
+    fn select_search_relative(&mut self, delta: isize) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        let length = isize::try_from(self.search_matches.len()).unwrap_or(isize::MAX);
+        let current = isize::try_from(self.active_search_match).unwrap_or_default();
+        self.active_search_match =
+            usize::try_from((current + delta).rem_euclid(length)).unwrap_or_default();
+        self.select_active_search_match();
+    }
+
+    fn select_active_search_match(&mut self) {
+        let Some(search_match) = self.search_matches.get(self.active_search_match).copied() else {
+            return;
+        };
+        self.content_scroll = search_match.row;
+        self.select_section_at_row(search_match.row);
+    }
+
+    fn select_section_at_row(&mut self, row: usize) {
+        let width = self.last_content_area.width.max(1);
+        let visible = self.visible_navigation_indices();
+        let rendered = self
+            .rendered_cache
+            .entry(width)
+            .or_insert_with(|| self.document.render(width));
+        for index in visible {
+            let item = &self.document.navigation()[index];
+            if !matches!(item.kind, NavKind::Tldr | NavKind::Root | NavKind::Section) {
+                continue;
+            }
+            let Some(anchor_row) = rendered.anchor_row(&item.target_id) else {
+                continue;
+            };
+            if anchor_row > row {
+                break;
+            }
+            self.selected = index;
+        }
     }
 
     fn scroll_to_selected(&mut self) {
@@ -379,25 +586,7 @@ impl App {
     }
 
     fn sync_selection_to_scroll(&mut self) {
-        let width = self.last_content_area.width.max(1);
-        let visible = self.visible_navigation_indices();
-        let rendered = self
-            .rendered_cache
-            .entry(width)
-            .or_insert_with(|| self.document.render(width));
-        for index in visible {
-            let item = &self.document.navigation()[index];
-            if !matches!(item.kind, NavKind::Tldr | NavKind::Root | NavKind::Section) {
-                continue;
-            }
-            let Some(row) = rendered.anchor_row(&item.target_id) else {
-                continue;
-            };
-            if row > self.content_scroll {
-                break;
-            }
-            self.selected = index;
-        }
+        self.select_section_at_row(self.content_scroll);
     }
 
     fn keep_selected_navigation_visible(&mut self, selected: usize, height: usize) {
@@ -919,5 +1108,47 @@ mod tests {
 
         assert_eq!(app.sidebar_width, 45);
         assert!(!app.resizing_sidebar);
+    }
+
+    #[test]
+    fn search_runs_only_on_confirmation_and_escape_removes_highlights() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL));
+        for character in "show".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        assert!(app.search_matches.is_empty());
+        assert!(app.search_mode.is_editing());
+
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.search_query, "show");
+        assert_eq!(app.search_matches.len(), 1);
+        assert!(!app.search_mode.is_editing());
+
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.search_mode, SearchMode::Closed);
+        assert!(app.search_query.is_empty());
+        assert!(app.search_matches.is_empty());
+    }
+
+    #[test]
+    fn confirmed_search_reports_no_matches_in_the_bottom_bar() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        for character in "missing".chars() {
+            app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+        }
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        assert!(terminal.backend().to_string().contains("No matches"));
     }
 }

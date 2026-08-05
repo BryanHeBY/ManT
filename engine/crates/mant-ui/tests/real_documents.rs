@@ -98,7 +98,14 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
         tldr: None,
     });
 
-    assert!(view.render(80).anchor_row(&acls_id).is_some());
+    for width in [32, 80, 132] {
+        let rendered = view.render(width);
+        assert!(rendered.anchor_row(&acls_id).is_some());
+        assert!(
+            !rendered.search("--acls").is_empty(),
+            "tar --acls is visible but not searchable at width {width}"
+        );
+    }
 }
 
 fn section_definitions(section: &mant_ast::Section) -> Vec<&mant_ast::DefinitionIdentity> {
