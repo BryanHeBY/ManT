@@ -1,7 +1,10 @@
 [package]
 name = "mant-ui"
 autobins = false
-version.workspace = true
+# mant-ui entered crates.io after the other 0.4.0 workspace crates. Publish
+# this bootstrap release against their existing contracts; the next workspace
+# release returns every crate to one lockstep version.
+version = "0.4.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

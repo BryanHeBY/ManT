@@ -19,7 +19,9 @@ releases; publishing remains a deliberate human action.
 ## Publish the Rust crates
 
 The crates.io packages form one dependency graph and must be published from
-the leaves toward the unified command:
+the leaves toward the unified command. `mant-ui` first entered crates.io as
+the `0.4.1` bootstrap release against the existing `0.4.0` contracts; later
+workspace releases keep all five packages on one version:
 
 ```text
 libmandoc-rs ─┐
