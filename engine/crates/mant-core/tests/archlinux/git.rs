@@ -122,5 +122,7 @@ fn supports_outline_discovery_and_targeted_excerpts() {
 /// No roff escapes or control characters leak into text values.
 #[test]
 fn does_not_leak_roff_markup() {
-    common::assert_document_has_no_source_markup("archlinux/git", archlinux_manual("git"));
+    let document = archlinux_manual("git");
+    common::assert_document_has_no_source_markup("archlinux/git", document);
+    common::assert_git_generated_highlight_is_lowered("archlinux/git", document);
 }

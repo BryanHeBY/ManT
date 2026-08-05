@@ -435,6 +435,15 @@ fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 font = parse_font(&characters, &mut index);
             }
+            // GNU roff foreground/background colour requests are presentation
+            // state, not visible text. libmandoc deliberately keeps unknown
+            // groff extensions in text nodes, so consume their opaque operand
+            // here instead of leaking `m[blue]` into every AST consumer.
+            'm' | 'M' => consume_opaque_escape_argument(&characters, &mut index),
+            // Point-size changes likewise have no renderer-neutral textual
+            // value. The following `\u`/`\d` escapes still leave their actual
+            // footnote text visible, for example `[1]` in generated Git pages.
+            's' => consume_size_escape_argument(&characters, &mut index),
             'X' if characters.get(index) == Some(&'\'') => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 index += 1;
@@ -476,6 +485,46 @@ fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
     output
+}
+
+/// Consume the argument syntax shared by opaque GNU roff requests such as
+/// `\m[blue]`, `\M(XX`, and their one-character forms.
+fn consume_opaque_escape_argument(characters: &[char], index: &mut usize) {
+    match characters.get(*index) {
+        Some('[') => {
+            *index += 1;
+            while *index < characters.len() && characters[*index] != ']' {
+                *index += 1;
+            }
+            *index += usize::from(*index < characters.len());
+        }
+        Some('(') => {
+            *index += 1;
+            *index = (*index + 2).min(characters.len());
+        }
+        Some(_) => *index += 1,
+        None => {}
+    }
+}
+
+/// Consume all portable point-size spellings without confusing the operand
+/// with document text: `\s2`, `\s-2`, `\s(12`, and `\s[+12]`.
+fn consume_size_escape_argument(characters: &[char], index: &mut usize) {
+    if matches!(characters.get(*index), Some('[' | '(')) {
+        consume_opaque_escape_argument(characters, index);
+        return;
+    }
+
+    if matches!(characters.get(*index), Some('+' | '-')) {
+        *index += 1;
+    }
+    if matches!(characters.get(*index), Some('[' | '(')) {
+        consume_opaque_escape_argument(characters, index);
+        return;
+    }
+    if *index < characters.len() {
+        *index += 1;
+    }
 }
 
 /// Lower a text node after honoring a macro-provided default font. Nodes marked
@@ -612,5 +661,21 @@ mod tests {
         let source = r"[\|optional\|]\&.\|.\|. \||\|";
 
         assert_eq!(plain_text(&parse_roff_text(source)), "[optional]... |");
+    }
+
+    #[test]
+    fn consumes_groff_colour_and_size_state_around_visible_text() {
+        let source = r"The \m[blue]\fBGit User\(cqs Manual\fR\m[]\&\s-2\u[1]\d\s+2 has more detail";
+        let nodes = parse_roff_text(source);
+
+        assert_eq!(
+            plain_text(&nodes),
+            "The Git User's Manual[1] has more detail"
+        );
+        assert!(
+            nodes
+                .iter()
+                .any(|node| matches!(node, Inline::Strong { .. }))
+        );
     }
 }

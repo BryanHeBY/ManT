@@ -26,5 +26,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
 /// No roff escapes leak into text.
 #[test]
 fn does_not_leak_roff_markup() {
-    common::assert_document_has_no_source_markup("fedora44/git", fedora44_manual("git"));
+    let document = fedora44_manual("git");
+    common::assert_document_has_no_source_markup("fedora44/git", document);
+    common::assert_git_generated_highlight_is_lowered("fedora44/git", document);
 }

@@ -381,6 +381,8 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &MantDocument)
                 !value.contains("\\f")
                     && !value.contains("\\(")
                     && !value.contains("\\*")
+                    && !value.contains("m[blue]")
+                    && !value.contains("m[]")
                     && !value.contains("<br")
                     && !value.contains("<b>")
                     && !value.contains("<i>")
@@ -389,6 +391,38 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &MantDocument)
             );
         });
     }
+}
+
+/// Generated Git manuals use GNU roff colour and point-size escapes around a
+/// highlighted title and its footnote. Both the Arch and Fedora packages carry
+/// this construct, making it a useful full-pipeline guard against presentation
+/// requests leaking into renderer-neutral text.
+pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &MantDocument) {
+    let description = section(document, "DESCRIPTION");
+    let text = block_slice_text(&description.blocks);
+    assert!(
+        text.contains("The Git User's Manual[1] has a more in-depth introduction"),
+        "fixture {name} lost generated Git title or footnote: {text:?}",
+    );
+    assert!(
+        !text.contains("m[blue]") && !text.contains("m[]") && !text.contains("s-2[1]s+2"),
+        "fixture {name} leaked GNU roff presentation state: {text:?}",
+    );
+
+    let mut title_is_strong = false;
+    for block in &description.blocks {
+        visit_block_inlines(block, &mut |inline| {
+            if let Inline::Strong { children } = inline
+                && inline_text(children).contains("Git User's Manual")
+            {
+                title_is_strong = true;
+            }
+        });
+    }
+    assert!(
+        title_is_strong,
+        "fixture {name} lost the strong style around the generated Git title",
+    );
 }
 
 pub fn assert_anchor_ids_are_clean(name: &str, document: &MantDocument) {

@@ -146,6 +146,24 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
 }
 
 #[test]
+fn generated_git_presentation_requests_never_reach_terminal_text() {
+    for relative in ["archlinux/git.1.gz", "fedora44/git.1.zst"] {
+        let rendered = view(relative).render(132);
+        let output = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(output.contains("The Git User's Manual[1]"), "{relative}");
+        assert!(!output.contains("m[blue]"), "{relative}: {output}");
+        assert!(!output.contains("s-2[1]s+2"), "{relative}: {output}");
+    }
+}
+
+#[test]
 fn real_manual_lowering_preserves_every_substantial_text_fragment() {
     for &relative in REAL_MANUALS {
         let document =
