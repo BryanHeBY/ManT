@@ -47,8 +47,9 @@ fn real_manuals_render_at_narrow_and_wide_terminal_widths() {
             );
             for item in view.navigation() {
                 assert!(
-                    rendered.anchor_row(&item.id).is_some(),
-                    "{relative} lost anchor {} at width {width}",
+                    rendered.anchor_row(&item.target_id).is_some(),
+                    "{relative} lost anchor {} for navigation {} at width {width}",
+                    item.target_id,
                     item.id
                 );
             }

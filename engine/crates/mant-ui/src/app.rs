@@ -1,6 +1,6 @@
 //! Interactive state machine and Ratatui widget composition.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ast::QueryBundle;
@@ -11,7 +11,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
-use unicode_width::UnicodeWidthChar;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::{DocumentView, NavKind, RenderedDocument, theme};
 
@@ -22,29 +22,44 @@ const MAX_SIDEBAR_WIDTH: u16 = 60;
 pub struct App {
     document: DocumentView,
     selected: usize,
+    expanded: HashSet<String>,
     content_scroll: usize,
     navigation_scroll: usize,
     sidebar_width: u16,
     show_sidebar: bool,
     quit: bool,
+    resizing_sidebar: bool,
+    last_body_area: Rect,
     last_content_area: Rect,
     last_navigation_area: Rect,
+    last_navigation_rows: Vec<usize>,
     rendered_cache: HashMap<u16, RenderedDocument>,
 }
 
 impl App {
     #[must_use]
     pub fn new(bundle: &QueryBundle) -> Self {
+        let document = DocumentView::new(bundle);
+        let expanded = document
+            .navigation()
+            .iter()
+            .filter(|item| item.kind == NavKind::Section && item.depth == 0)
+            .map(|item| item.id.clone())
+            .collect();
         Self {
-            document: DocumentView::new(bundle),
+            document,
             selected: 0,
+            expanded,
             content_scroll: 0,
             navigation_scroll: 0,
             sidebar_width: 36,
             show_sidebar: true,
             quit: false,
+            resizing_sidebar: false,
+            last_body_area: Rect::default(),
             last_content_area: Rect::default(),
             last_navigation_area: Rect::default(),
+            last_navigation_rows: Vec::new(),
             rendered_cache: HashMap::new(),
         }
     }
@@ -63,8 +78,11 @@ impl App {
             KeyCode::Char('q') => self.quit = true,
             KeyCode::Char('j') | KeyCode::Down => self.select_relative(1),
             KeyCode::Char('k') | KeyCode::Up => self.select_relative(-1),
-            KeyCode::PageDown | KeyCode::Char(' ') => self.scroll_content(10),
-            KeyCode::PageUp => self.scroll_content(-10),
+            KeyCode::Char('h') | KeyCode::Left => self.collapse_or_select_parent(),
+            KeyCode::Char('l') | KeyCode::Right => self.expand_or_select_child(),
+            KeyCode::Enter | KeyCode::Char(' ') => self.toggle_selected(),
+            KeyCode::PageDown | KeyCode::Char('d') => self.scroll_content(10),
+            KeyCode::PageUp | KeyCode::Char('u') => self.scroll_content(-10),
             KeyCode::Home => self.content_scroll = 0,
             KeyCode::End => self.content_scroll = usize::MAX,
             KeyCode::Char('b') => self.show_sidebar = !self.show_sidebar,
@@ -80,6 +98,16 @@ impl App {
 
     pub fn handle_mouse(&mut self, mouse: MouseEvent) {
         match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) if self.is_sidebar_boundary(mouse.column) => {
+                self.resizing_sidebar = true;
+            }
+            MouseEventKind::Drag(MouseButton::Left) if self.resizing_sidebar => {
+                self.resize_sidebar_to(mouse.column);
+            }
+            MouseEventKind::Up(MouseButton::Left) if self.resizing_sidebar => {
+                self.resize_sidebar_to(mouse.column);
+                self.resizing_sidebar = false;
+            }
             MouseEventKind::ScrollDown => self.scroll_content(3),
             MouseEventKind::ScrollUp => self.scroll_content(-3),
             MouseEventKind::Down(MouseButton::Left)
@@ -88,10 +116,17 @@ impl App {
                     .contains((mouse.column, mouse.row).into()) =>
             {
                 let local_row = usize::from(mouse.row - self.last_navigation_area.y);
-                let index = self.navigation_scroll + local_row;
-                if index < self.document.navigation().len() {
-                    self.selected = index;
-                    self.scroll_to_selected();
+                if let Some(index) = self.last_navigation_rows.get(local_row).copied() {
+                    if self.selected == index && self.document.navigation()[index].has_children {
+                        self.toggle_selected();
+                    } else {
+                        self.selected = index;
+                        if self.document.navigation()[index].has_children {
+                            self.expanded
+                                .insert(self.document.navigation()[index].id.clone());
+                        }
+                        self.scroll_to_selected();
+                    }
                 }
             }
             _ => {}
@@ -107,6 +142,7 @@ impl App {
         .areas(frame.area());
 
         self.draw_menu(frame, menu_area);
+        self.last_body_area = body_area;
         if self.show_sidebar && body_area.width > MIN_SIDEBAR_WIDTH + 20 {
             let [navigation_area, content_area] = Layout::horizontal([
                 Constraint::Length(self.sidebar_width.min(body_area.width / 2)),
@@ -117,6 +153,8 @@ impl App {
             self.draw_content(frame, content_area);
         } else {
             self.last_navigation_area = Rect::default();
+            self.last_navigation_rows.clear();
+            self.resizing_sidebar = false;
             self.draw_content(frame, body_area);
         }
         self.draw_status(frame, status_area);
@@ -202,16 +240,29 @@ impl App {
         );
 
         self.last_navigation_area = navigation_area;
-        self.keep_selected_navigation_visible(usize::from(navigation_area.height));
+        let visible = self.visible_navigation_indices();
         let line_width = usize::from(navigation_area.width);
-        let lines = self
-            .document
-            .navigation()
+        let rows = navigation_rows(
+            self.document.navigation(),
+            &visible,
+            self.selected,
+            &self.expanded,
+            line_width,
+        );
+        let selected_row = rows
             .iter()
-            .enumerate()
+            .position(|row| row.item_index == self.selected)
+            .unwrap_or_default();
+        self.keep_selected_navigation_visible(selected_row, usize::from(navigation_area.height));
+        let visible_rows = rows
+            .into_iter()
             .skip(self.navigation_scroll)
             .take(usize::from(navigation_area.height))
-            .map(|(index, item)| navigation_line(item, index == self.selected, line_width))
+            .collect::<Vec<_>>();
+        self.last_navigation_rows = visible_rows.iter().map(|row| row.item_index).collect();
+        let lines = visible_rows
+            .into_iter()
+            .map(|row| row.line)
             .collect::<Vec<_>>();
 
         frame.render_widget(
@@ -265,15 +316,18 @@ impl App {
             .navigation()
             .get(self.selected)
             .map_or("document", |item| item.title.as_str());
+        let visible = self.visible_navigation_indices();
+        let selected_position = visible
+            .iter()
+            .position(|index| *index == self.selected)
+            .map_or(0, |index| index + 1);
         let style = Style::default().bg(theme::BASE);
-        let selected_position =
-            usize::from(!self.document.navigation().is_empty()) * (self.selected + 1);
         frame.render_widget(Block::default().style(style), area);
         frame.render_widget(
             Paragraph::new(format!(
                 " {}/{} · {current}",
                 selected_position,
-                self.document.navigation().len()
+                visible.len()
             ))
             .style(style.fg(theme::TEXT)),
             area,
@@ -292,11 +346,16 @@ impl App {
     }
 
     fn select_relative(&mut self, delta: isize) {
-        let len = self.document.navigation().len();
-        if len == 0 {
+        let visible = self.visible_navigation_indices();
+        if visible.is_empty() {
             return;
         }
-        self.selected = self.selected.saturating_add_signed(delta).min(len - 1);
+        let current = visible
+            .iter()
+            .position(|index| *index == self.selected)
+            .unwrap_or_default();
+        let next = current.saturating_add_signed(delta).min(visible.len() - 1);
+        self.selected = visible[next];
         self.scroll_to_selected();
     }
 
@@ -309,7 +368,7 @@ impl App {
             .rendered_cache
             .entry(width)
             .or_insert_with(|| self.document.render(width));
-        if let Some(row) = rendered.anchor_row(&item.id) {
+        if let Some(row) = rendered.anchor_row(&item.target_id) {
             self.content_scroll = row;
         }
     }
@@ -321,12 +380,17 @@ impl App {
 
     fn sync_selection_to_scroll(&mut self) {
         let width = self.last_content_area.width.max(1);
+        let visible = self.visible_navigation_indices();
         let rendered = self
             .rendered_cache
             .entry(width)
             .or_insert_with(|| self.document.render(width));
-        for (index, item) in self.document.navigation().iter().enumerate() {
-            let Some(row) = rendered.anchor_row(&item.id) else {
+        for index in visible {
+            let item = &self.document.navigation()[index];
+            if !matches!(item.kind, NavKind::Tldr | NavKind::Root | NavKind::Section) {
+                continue;
+            }
+            let Some(row) = rendered.anchor_row(&item.target_id) else {
                 continue;
             };
             if row > self.content_scroll {
@@ -336,32 +400,160 @@ impl App {
         }
     }
 
-    fn keep_selected_navigation_visible(&mut self, height: usize) {
-        if self.selected < self.navigation_scroll {
-            self.navigation_scroll = self.selected;
-        } else if self.selected >= self.navigation_scroll.saturating_add(height) {
-            self.navigation_scroll = self.selected.saturating_add(1).saturating_sub(height);
+    fn keep_selected_navigation_visible(&mut self, selected: usize, height: usize) {
+        if selected < self.navigation_scroll {
+            self.navigation_scroll = selected;
+        } else if selected >= self.navigation_scroll.saturating_add(height) {
+            self.navigation_scroll = selected.saturating_add(1).saturating_sub(height);
+        }
+    }
+
+    fn is_sidebar_boundary(&self, column: u16) -> bool {
+        self.show_sidebar
+            && self.last_navigation_area.width > 0
+            && column.abs_diff(self.last_navigation_area.right()) <= 1
+    }
+
+    fn resize_sidebar_to(&mut self, column: u16) {
+        let maximum = MAX_SIDEBAR_WIDTH.min(self.last_body_area.width.saturating_sub(20));
+        let width = column
+            .saturating_sub(self.last_body_area.x)
+            .saturating_add(1)
+            .clamp(MIN_SIDEBAR_WIDTH, maximum.max(MIN_SIDEBAR_WIDTH));
+        self.sidebar_width = width;
+    }
+
+    fn visible_navigation_indices(&self) -> Vec<usize> {
+        let mut visible_ids = HashSet::new();
+        let mut indices = Vec::new();
+        for (index, item) in self.document.navigation().iter().enumerate() {
+            let visible = item.parent_id.as_ref().is_none_or(|parent| {
+                visible_ids.contains(parent) && self.expanded.contains(parent)
+            });
+            if visible {
+                visible_ids.insert(item.id.clone());
+                indices.push(index);
+            }
+        }
+        indices
+    }
+
+    fn toggle_selected(&mut self) {
+        let Some(item) = self.document.navigation().get(self.selected) else {
+            return;
+        };
+        if !item.has_children {
+            return;
+        }
+        if !self.expanded.remove(&item.id) {
+            self.expanded.insert(item.id.clone());
+        }
+    }
+
+    fn collapse_or_select_parent(&mut self) {
+        let Some(item) = self.document.navigation().get(self.selected) else {
+            return;
+        };
+        if item.has_children && self.expanded.remove(&item.id) {
+            return;
+        }
+        let Some(parent_id) = item.parent_id.as_deref() else {
+            return;
+        };
+        if let Some(index) = self
+            .document
+            .navigation()
+            .iter()
+            .position(|candidate| candidate.id == parent_id)
+        {
+            self.selected = index;
+            self.scroll_to_selected();
+        }
+    }
+
+    fn expand_or_select_child(&mut self) {
+        let Some(item) = self.document.navigation().get(self.selected) else {
+            return;
+        };
+        if !item.has_children {
+            return;
+        }
+        if self.expanded.insert(item.id.clone()) {
+            return;
+        }
+        let parent_id = item.id.clone();
+        if let Some(index) = self
+            .document
+            .navigation()
+            .iter()
+            .position(|candidate| candidate.parent_id.as_deref() == Some(parent_id.as_str()))
+        {
+            self.selected = index;
+            self.scroll_to_selected();
         }
     }
 }
 
-fn navigation_line(item: &crate::NavItem, selected: bool, width: usize) -> Line<'static> {
+struct NavigationRow {
+    item_index: usize,
+    line: Line<'static>,
+}
+
+fn navigation_rows(
+    items: &[crate::NavItem],
+    visible: &[usize],
+    selected: usize,
+    expanded: &HashSet<String>,
+    width: usize,
+) -> Vec<NavigationRow> {
+    visible
+        .iter()
+        .flat_map(|index| {
+            let item = &items[*index];
+            navigation_lines(
+                item,
+                *index,
+                *index == selected,
+                expanded.contains(&item.id),
+                width,
+            )
+        })
+        .collect()
+}
+
+fn navigation_lines(
+    item: &crate::NavItem,
+    item_index: usize,
+    selected: bool,
+    expanded: bool,
+    width: usize,
+) -> Vec<NavigationRow> {
     let selection = if selected { "› " } else { "  " };
     let tree = if item.kind == NavKind::Tldr {
         "◆ ".to_owned()
     } else if item.depth == 0 {
         if item.has_children {
-            "▾ ".to_owned()
+            if expanded { "▾ " } else { "▸ " }.to_owned()
         } else {
             "· ".to_owned()
         }
     } else {
         let mut prefix = "│  ".repeat(item.depth.saturating_sub(1));
-        prefix.push_str(if item.is_last { "╰─" } else { "├─" });
-        prefix.push_str(if item.has_children { "▾ " } else { "· " });
+        prefix.push_str(if item.is_last && !expanded {
+            "╰─"
+        } else {
+            "├─"
+        });
+        prefix.push_str(if item.has_children {
+            if expanded { "▾ " } else { "▸ " }
+        } else if item.kind == NavKind::Option {
+            "◇ "
+        } else {
+            "· "
+        });
         prefix
     };
-    let value = fit_to_width(&format!("{selection}{tree}{}", item.title), width);
+    let prefix = format!("{selection}{tree}");
     let foreground = if selected {
         if item.kind == NavKind::Tldr {
             theme::MAUVE
@@ -373,6 +565,8 @@ fn navigation_line(item: &crate::NavItem, selected: bool, width: usize) -> Line<
             NavKind::Tldr => theme::MAUVE,
             NavKind::Root | NavKind::Section if item.depth == 0 => theme::SUBTEXT_BRIGHT,
             NavKind::Root | NavKind::Section => theme::BLUE,
+            NavKind::EntryGroup => theme::YELLOW,
+            NavKind::Option => theme::GREEN,
         }
     };
     let background = if selected {
@@ -390,7 +584,80 @@ fn navigation_line(item: &crate::NavItem, selected: bool, width: usize) -> Line<
     if selected {
         style = style.add_modifier(Modifier::BOLD);
     }
-    Line::from(Span::styled(value, style))
+    let prefix_width = prefix.width();
+    let title_width = width.saturating_sub(prefix_width).max(1);
+    let titles = if selected {
+        wrap_to_width(&item.title, title_width)
+    } else {
+        vec![item.title.clone()]
+    };
+    titles
+        .into_iter()
+        .enumerate()
+        .map(|(line_index, title)| {
+            let line_prefix = if line_index == 0 {
+                prefix.clone()
+            } else {
+                " ".repeat(prefix_width)
+            };
+            let value = fit_to_width(&format!("{line_prefix}{title}"), width);
+            NavigationRow {
+                item_index,
+                line: Line::from(Span::styled(value, style)),
+            }
+        })
+        .collect()
+}
+
+fn wrap_to_width(value: &str, width: usize) -> Vec<String> {
+    if value.width() <= width {
+        return vec![value.to_owned()];
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in value.split_whitespace() {
+        let separator = usize::from(!current.is_empty());
+        if current.width() + separator + word.width() <= width {
+            if separator == 1 {
+                current.push(' ');
+            }
+            current.push_str(word);
+            continue;
+        }
+        if !current.is_empty() {
+            lines.push(std::mem::take(&mut current));
+        }
+        let mut remaining = word;
+        while remaining.width() > width {
+            let split = byte_index_at_width(remaining, width);
+            lines.push(remaining[..split].to_owned());
+            remaining = &remaining[split..];
+        }
+        current.push_str(remaining);
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+fn byte_index_at_width(value: &str, width: usize) -> usize {
+    let mut used = 0;
+    for (index, character) in value.char_indices() {
+        let character_width = character.width().unwrap_or(0);
+        if used + character_width > width {
+            return if index == 0 {
+                character.len_utf8()
+            } else {
+                index
+            };
+        }
+        used += character_width;
+    }
+    value.len()
 }
 
 fn fit_to_width(value: &str, width: usize) -> String {
@@ -410,7 +677,11 @@ fn fit_to_width(value: &str, width: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{QueryBundle, QuerySchema, TldrDocument, TldrOrigin};
+    use mant_ast::{
+        Block as AstBlock, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
+        DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle,
+        QuerySchema, Section, SourceFormat, TldrDocument, TldrOrigin,
+    };
     use ratatui::{Terminal, backend::TestBackend};
 
     use super::*;
@@ -439,6 +710,69 @@ mod tests {
                 source_path: "demo.md".to_owned(),
                 origin: TldrOrigin::TldrPages,
             }),
+        }
+    }
+
+    fn navigation_bundle() -> QueryBundle {
+        let paragraph = |value: &str| AstBlock::Paragraph {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        QueryBundle {
+            schema: QuerySchema::V3,
+            label: "demo".to_owned(),
+            document: Some(MantDocument {
+                schema: DocumentSchema::V3,
+                producer: Producer {
+                    name: "mant".to_owned(),
+                    version: "test".to_owned(),
+                    engine: None,
+                },
+                source: DocumentSource {
+                    format: SourceFormat::Man,
+                    path: None,
+                    renderer: None,
+                },
+                meta: DocumentMeta::default(),
+                diagnostics: Vec::new(),
+                blocks: Vec::new(),
+                sections: vec![Section {
+                    id: "options".to_owned(),
+                    title: "OPTIONS".to_owned(),
+                    spacing_before_lines: 0,
+                    blocks: vec![AstBlock::DefinitionList {
+                        items: vec![DefinitionItem {
+                            identity: Some(DefinitionIdentity {
+                                id: "help-option".to_owned(),
+                                role: DefinitionRole::Option,
+                                names: vec!["-h".to_owned(), "--help".to_owned()],
+                            }),
+                            terms: vec![vec![Inline::Text {
+                                value: "-h, --help".to_owned(),
+                            }]],
+                            description: vec![paragraph("Show help")],
+                            inline_term: false,
+                            spacing_before_lines: None,
+                        }],
+                        compact: true,
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                    children: vec![Section {
+                        id: "details".to_owned(),
+                        title: "Details".to_owned(),
+                        spacing_before_lines: 0,
+                        blocks: vec![paragraph("Nested details")],
+                        children: Vec::new(),
+                        source: None,
+                    }],
+                    source: None,
+                }],
+            }),
+            tldr: None,
         }
     }
 
@@ -486,5 +820,104 @@ mod tests {
             buffer.cell((37, 2)).expect("tldr panel border").bg,
             theme::TLDR_SURFACE
         );
+    }
+
+    #[test]
+    fn semantic_options_are_revealed_only_after_their_group_expands() {
+        let mut app = App::new(&navigation_bundle());
+
+        assert_eq!(app.visible_navigation_indices(), vec![0, 1, 3]);
+        app.selected = 1;
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        assert_eq!(app.visible_navigation_indices(), vec![0, 1, 2, 3]);
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+        assert_eq!(app.selected, 2);
+        assert_eq!(app.document.navigation()[2].target_id, "help-option");
+    }
+
+    #[test]
+    fn clicking_the_sidebar_selects_and_reclicking_a_branch_collapses_it() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 5,
+            row: 7,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(app.document.navigation()[app.selected].id, "details");
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 5,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(app.document.navigation()[app.selected].id, "options");
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 5,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(app.visible_navigation_indices(), vec![0]);
+    }
+
+    #[test]
+    fn selected_navigation_titles_wrap_with_a_continuous_background() {
+        let mut bundle = navigation_bundle();
+        bundle.document.as_mut().expect("manual").sections[0].children[0].title =
+            "A deliberately long nested section title".to_owned();
+        let backend = TestBackend::new(64, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&bundle);
+        app.selected = 3;
+
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let buffer = terminal.backend().buffer();
+
+        assert_eq!(app.last_navigation_rows[2], 3);
+        assert_eq!(app.last_navigation_rows[3], 3);
+        assert_eq!(
+            buffer.cell((5, 7)).expect("first selected row").bg,
+            theme::SELECTED
+        );
+        assert_eq!(
+            buffer.cell((5, 8)).expect("wrapped selected row").bg,
+            theme::SELECTED
+        );
+    }
+
+    #[test]
+    fn dragging_the_sidebar_boundary_changes_its_width() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 36,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        });
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 44,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        });
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 44,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.sidebar_width, 45);
+        assert!(!app.resizing_sidebar);
     }
 }

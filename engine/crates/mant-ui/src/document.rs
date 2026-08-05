@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use mant_ast::{
-    Block, Inline, ListKind, QueryBundle, Section, SourceFormat, TldrCommandPart, TldrDocument,
-    TldrOrigin,
+    Block, DefinitionIdentity, DefinitionRole, Inline, ListKind, QueryBundle, Section,
+    SourceFormat, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 use ratatui::{
     style::{Modifier, Style},
@@ -25,11 +25,13 @@ const ROOT_ID: &str = "document-root";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavItem {
     pub id: String,
+    pub target_id: String,
     pub title: String,
     pub depth: usize,
     pub kind: NavKind,
     pub has_children: bool,
     pub is_last: bool,
+    pub parent_id: Option<String>,
 }
 
 /// Semantic presentation class for a navigation entry.
@@ -38,6 +40,8 @@ pub enum NavKind {
     Tldr,
     Root,
     Section,
+    EntryGroup,
+    Option,
 }
 
 /// Renderer-independent terminal view before width-dependent wrapping.
@@ -185,12 +189,13 @@ impl DocumentView {
                     NavKind::Root,
                     false,
                     document.sections.is_empty(),
+                    None,
                 );
                 builder.blocks(&document.blocks, 0);
             }
             let section_count = document.sections.len();
             for (index, section) in document.sections.iter().enumerate() {
-                builder.section_with_position(section, 0, index + 1 == section_count);
+                builder.section_with_position(section, 0, index + 1 == section_count, None);
             }
         }
 
@@ -304,6 +309,7 @@ impl DocumentBuilder {
             NavKind::Tldr,
             false,
             false,
+            None,
         );
         self.push(LogicalLine::empty().surface(LineSurface::TldrTop));
         self.push(
@@ -400,6 +406,7 @@ impl DocumentBuilder {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn anchor(
         &mut self,
         id: &str,
@@ -408,30 +415,83 @@ impl DocumentBuilder {
         kind: NavKind,
         has_children: bool,
         is_last: bool,
+        parent_id: Option<&str>,
     ) {
         self.anchors.insert(id.to_owned(), self.lines.len());
+        self.navigation(id, id, title, depth, kind, has_children, is_last, parent_id);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn navigation(
+        &mut self,
+        id: &str,
+        target_id: &str,
+        title: &str,
+        depth: usize,
+        kind: NavKind,
+        has_children: bool,
+        is_last: bool,
+        parent_id: Option<&str>,
+    ) {
         self.navigation.push(NavItem {
             id: id.to_owned(),
+            target_id: target_id.to_owned(),
             title: title.to_owned(),
             depth,
             kind,
             has_children,
             is_last,
+            parent_id: parent_id.map(str::to_owned),
         });
     }
 
-    fn section_with_position(&mut self, section: &Section, depth: usize, is_last: bool) {
+    fn section_with_position(
+        &mut self,
+        section: &Section,
+        depth: usize,
+        is_last: bool,
+        parent_id: Option<&str>,
+    ) {
         for _ in 0..section.spacing_before_lines {
             self.blank();
         }
+        let options = section_option_entries(&section.blocks);
+        let has_children = !options.is_empty() || !section.children.is_empty();
         self.anchor(
             &section.id,
             &section.title,
             depth,
             NavKind::Section,
-            !section.children.is_empty(),
+            has_children,
             is_last,
+            parent_id,
         );
+        if !options.is_empty() {
+            let group_id = format!("__mant-options__{}", section.id);
+            self.navigation(
+                &group_id,
+                &section.id,
+                &format!("OPTIONS ({})", options.len()),
+                depth + 1,
+                NavKind::EntryGroup,
+                true,
+                section.children.is_empty(),
+                Some(&section.id),
+            );
+            let option_count = options.len();
+            for (index, identity) in options.into_iter().enumerate() {
+                self.navigation(
+                    &identity.id,
+                    &identity.id,
+                    &identity.names.join(", "),
+                    depth + 2,
+                    NavKind::Option,
+                    false,
+                    index + 1 == option_count,
+                    Some(&group_id),
+                );
+            }
+        }
         self.push(LogicalLine::plain(
             depth * 4,
             section.title.clone(),
@@ -442,7 +502,12 @@ impl DocumentBuilder {
         self.blocks(&section.blocks, depth * 4 + 3);
         let child_count = section.children.len();
         for (index, child) in section.children.iter().enumerate() {
-            self.section_with_position(child, depth + 1, index + 1 == child_count);
+            self.section_with_position(
+                child,
+                depth + 1,
+                index + 1 == child_count,
+                Some(&section.id),
+            );
         }
     }
 
@@ -725,6 +790,45 @@ fn count_sections(sections: &[Section]) -> usize {
         .iter()
         .map(|section| 1 + count_sections(&section.children))
         .sum()
+}
+
+fn section_option_entries(blocks: &[Block]) -> Vec<&DefinitionIdentity> {
+    let mut entries = Vec::new();
+    collect_option_entries(blocks, &mut entries);
+    entries
+}
+
+fn collect_option_entries<'a>(blocks: &'a [Block], entries: &mut Vec<&'a DefinitionIdentity>) {
+    for block in blocks {
+        match block {
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    if let Some(identity) = &item.identity
+                        && identity.role == DefinitionRole::Option
+                    {
+                        entries.push(identity);
+                    }
+                    collect_option_entries(&item.description, entries);
+                }
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    collect_option_entries(&item.blocks, entries);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter().flat_map(|row| &row.cells) {
+                    collect_option_entries(&cell.blocks, entries);
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
 }
 
 fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<Vec<Span<'static>>>) {
