@@ -4,7 +4,7 @@
 //! section navigation, scroll synchronization, links, and future search ranges
 //! can all address the exact rows that Ratatui renders.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use mant_ast::{
     Block, DefinitionIdentity, DefinitionRole, Inline, ListKind, QueryBundle, Section,
@@ -333,9 +333,7 @@ impl DocumentView {
         for line in &self.lines {
             logical_rows.push(rows.len());
             let wrapped_lines = wrap_line_with_links(line, width);
-            if let Some(record) = search_record(&wrapped_lines, rows.len()) {
-                search_records.push(record);
-            }
+            search_records.extend(search_records_for_lines(&wrapped_lines, rows.len()));
             for wrapped in wrapped_lines {
                 let row = rows.len();
                 links.extend(wrapped.links.into_iter().map(|link| RenderedLinkRegion {
@@ -442,19 +440,29 @@ impl RenderedDocument {
     }
 }
 
-fn search_record(lines: &[WrappedLine], first_row: usize) -> Option<RenderedSearchRecord> {
-    let mut text = String::new();
-    let mut cells = Vec::new();
+fn search_records_for_lines(lines: &[WrappedLine], first_row: usize) -> Vec<RenderedSearchRecord> {
+    #[derive(Default)]
+    struct RecordBuilder {
+        text: String,
+        cells: Vec<RenderedSearchSourceCell>,
+        last_line: Option<usize>,
+    }
+
+    let mut records: BTreeMap<usize, RecordBuilder> = BTreeMap::new();
     for (line_index, line) in lines.iter().enumerate() {
-        if line_index > 0 && line.join_with_space {
-            text.push(' ');
-        }
         for cell in &line.search_cells {
-            let source_start = text.len();
-            text.push(cell.character);
-            cells.push(RenderedSearchSourceCell {
+            let record = records.entry(cell.group).or_default();
+            if record.last_line != Some(line_index) {
+                if record.last_line.is_some() && cell.join_before {
+                    record.text.push(' ');
+                }
+                record.last_line = Some(line_index);
+            }
+            let source_start = record.text.len();
+            record.text.push(cell.character);
+            record.cells.push(RenderedSearchSourceCell {
                 source_start,
-                source_end: text.len(),
+                source_end: record.text.len(),
                 fragment: RenderedSearchFragment {
                     row: first_row + line_index,
                     start_column: cell.start_column,
@@ -463,7 +471,15 @@ fn search_record(lines: &[WrappedLine], first_row: usize) -> Option<RenderedSear
             });
         }
     }
-    (!text.is_empty()).then_some(RenderedSearchRecord { text, cells })
+    records
+        .into_values()
+        .filter_map(|record| {
+            (!record.text.is_empty()).then_some(RenderedSearchRecord {
+                text: record.text,
+                cells: record.cells,
+            })
+        })
+        .collect()
 }
 
 fn search_match_for_range(
@@ -1225,11 +1241,12 @@ struct WrappedLine {
     line: Line<'static>,
     links: Vec<WrappedLink>,
     search_cells: Vec<WrappedSearchCell>,
-    join_with_space: bool,
 }
 
 #[derive(Clone, Copy)]
 struct WrappedSearchCell {
+    group: usize,
+    join_before: bool,
     character: char,
     start_column: usize,
     end_column: usize,
@@ -1260,7 +1277,6 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 line: panel_border(width, '┌', '┐'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
-                join_with_space: false,
             }];
         }
         LineSurface::TldrBottom => {
@@ -1268,7 +1284,6 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 line: panel_border(width, '└', '┘'),
                 links: Vec::new(),
                 search_cells: Vec::new(),
-                join_with_space: false,
             }];
         }
         LineSurface::Divider => {
@@ -1279,7 +1294,6 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 )),
                 links: Vec::new(),
                 search_cells: Vec::new(),
-                join_with_space: false,
             }];
         }
         LineSurface::Rule => {
@@ -1294,7 +1308,6 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 ]),
                 links: Vec::new(),
                 search_cells: Vec::new(),
-                join_with_space: false,
             }];
         }
         LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
@@ -1356,8 +1369,10 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                 .filter(|position| *position > 0)
                 .unwrap_or(fit);
             let row_end = trim_trailing_whitespace(&cells, split);
-            if row_end == 0 {
+            let emitted_row = row_end != 0;
+            let mut removed_separator = if row_end == 0 {
                 cells.drain(..fit.max(1));
+                true
             } else {
                 result.push(wrapped_cells_to_line(
                     line,
@@ -1366,16 +1381,23 @@ fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
                     &cells[..row_end],
                     join_with_space,
                 ));
-                let consumed = if split < fit { split + 1 } else { split };
+                let removed_separator = split < fit;
+                let consumed = if removed_separator { split + 1 } else { split };
                 cells.drain(..consumed.max(1));
-                join_with_space = split < fit;
-            }
+                removed_separator
+            };
             while cells
                 .first()
                 .is_some_and(|cell| cell.character.is_whitespace())
             {
                 cells.remove(0);
+                removed_separator = true;
             }
+            join_with_space = if emitted_row {
+                removed_separator
+            } else {
+                join_with_space || removed_separator
+            };
         }
         first_row = false;
     }
@@ -1435,7 +1457,6 @@ fn render_table_row_with_links(
             line: Line::default(),
             links: Vec::new(),
             search_cells: Vec::new(),
-            join_with_space: false,
         }];
     }
     let indent = indent.min(width.saturating_sub(1));
@@ -1445,6 +1466,7 @@ fn render_table_row_with_links(
     let column_widths = (0..cells.len())
         .map(|index| base_width + usize::from(index < remainder))
         .collect::<Vec<_>>();
+    let mut next_search_group = 0;
     let rendered_cells = cells
         .iter()
         .zip(&column_widths)
@@ -1452,10 +1474,19 @@ fn render_table_row_with_links(
             if *column_width == 0 {
                 return Vec::new();
             }
-            lines
-                .iter()
-                .flat_map(|line| wrap_line_with_links(line, *column_width))
-                .collect::<Vec<_>>()
+            let mut rendered = Vec::new();
+            for line in lines {
+                let group = next_search_group;
+                next_search_group += 1;
+                let mut wrapped = wrap_line_with_links(line, *column_width);
+                for row in &mut wrapped {
+                    for cell in &mut row.search_cells {
+                        cell.group = group;
+                    }
+                }
+                rendered.extend(wrapped);
+            }
+            rendered
         })
         .collect::<Vec<_>>();
     let row_count = rendered_cells.iter().map(Vec::len).max().unwrap_or(1);
@@ -1480,6 +1511,8 @@ fn render_table_row_with_links(
                         end_column: column_offset + link.end_column,
                     }));
                     search_cells.extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
+                        group: cell.group,
+                        join_before: cell.join_before,
                         character: cell.character,
                         start_column: column_offset + cell.start_column,
                         end_column: column_offset + cell.end_column,
@@ -1492,7 +1525,6 @@ fn render_table_row_with_links(
                 line: Line::from(spans),
                 links,
                 search_cells,
-                join_with_space: row_index > 0,
             }
         })
         .collect()
@@ -1589,9 +1621,11 @@ fn wrapped_cells_to_line(
     let mut search_cells = Vec::with_capacity(cells.len());
     let mut column = indent + usize::from(line.surface == LineSurface::Tldr) * 2;
     let mut active: Option<(usize, usize, usize)> = None;
-    for cell in cells {
+    for (index, cell) in cells.iter().enumerate() {
         let next_column = column + cell.width;
         search_cells.push(WrappedSearchCell {
+            group: 0,
+            join_before: index == 0 && join_with_space,
             character: cell.character,
             start_column: column,
             end_column: next_column,
@@ -1624,7 +1658,6 @@ fn wrapped_cells_to_line(
         line: cells_to_line(line, width, indent, cells),
         links,
         search_cells,
-        join_with_space,
     }
 }
 
@@ -1992,6 +2025,11 @@ mod tests {
         assert!(rows[1].contains("right hand"));
         assert!(rows[2].starts_with("   gamma"));
         assert_eq!(UnicodeWidthStr::width(rows[1].as_str()), 24);
+        let left_match = rendered.search("alpha beta gamma");
+        assert_eq!(left_match.len(), 1);
+        assert_eq!(left_match[0].row, 1);
+        assert_eq!(left_match[0].additional_fragments[0].row, 2);
+        assert_eq!(rendered.search("right hand").len(), 1);
     }
 
     #[test]
@@ -2142,6 +2180,24 @@ mod tests {
             })
             .count();
         assert_eq!(highlighted_rows, 2);
+    }
+
+    #[test]
+    fn search_preserves_a_space_wrapped_exactly_after_the_row_boundary() {
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "Relative inset end".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let rendered = DocumentView::new(&bundle).render(11);
+
+        let matches = rendered.search("Relative inset end");
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].additional_fragments.len(), 2);
     }
 
     #[test]

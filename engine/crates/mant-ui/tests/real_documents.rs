@@ -12,6 +12,26 @@ use mant_ast::{
 };
 use mant_ui::DocumentView;
 
+const REAL_MANUALS: &[&str] = &[
+    "archlinux/clang.1.gz",
+    "archlinux/gawk.1.zst",
+    "archlinux/gcc.1.gz",
+    "archlinux/git.1.gz",
+    "archlinux/ls.1.gz",
+    "archlinux/rsync.1.zst",
+    "archlinux/sh.1p.gz",
+    "archlinux/tar.1.gz",
+    "debian/groff_man_style.7.gz",
+    "debian/groff_me.7.gz",
+    "debian/mt-gnu.1.gz",
+    "debian/sh.1.gz",
+    "fedora44/clang.1.zst",
+    "fedora44/gcc.1.zst",
+    "fedora44/git.1.zst",
+    "fedora44/sh.1.zst",
+    "fedora44/tar.1.zst",
+];
+
 fn fixture(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real")
@@ -41,14 +61,15 @@ fn visible_characters(value: &str) -> String {
         .collect()
 }
 
+#[derive(Debug)]
+struct ExpectedFragment {
+    value: String,
+    independent: bool,
+}
+
 #[test]
 fn real_manuals_render_at_narrow_and_wide_terminal_widths() {
-    for relative in [
-        "archlinux/gawk.1.zst",
-        "debian/sh.1.gz",
-        "fedora44/gcc.1.zst",
-        "fedora44/tar.1.zst",
-    ] {
+    for &relative in REAL_MANUALS {
         let view = view(relative);
         assert!(
             !view.navigation().is_empty(),
@@ -126,12 +147,7 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
 
 #[test]
 fn real_manual_lowering_preserves_every_substantial_text_fragment() {
-    for relative in [
-        "archlinux/gawk.1.zst",
-        "debian/sh.1.gz",
-        "fedora44/gcc.1.zst",
-        "fedora44/tar.1.zst",
-    ] {
+    for &relative in REAL_MANUALS {
         let document =
             mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
         let mut fragments = Vec::new();
@@ -156,12 +172,32 @@ fn real_manual_lowering_preserves_every_substantial_text_fragment() {
             );
             let mut cursor = 0;
             for fragment in &fragments {
-                let expected = visible_characters(fragment);
+                let expected = visible_characters(&fragment.value);
                 if expected.chars().count() < 4 {
                     continue;
                 }
+                if fragment.independent {
+                    let query = fragment
+                        .value
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    assert!(
+                        !rendered.search(&query).is_empty(),
+                        "{relative} lost independently wrapped table fragment {:?} at width {width}; word hits: {:?}",
+                        fragment.value,
+                        query
+                            .split_whitespace()
+                            .map(|word| (word, rendered.search(word).len()))
+                            .collect::<Vec<_>>()
+                    );
+                    continue;
+                }
                 let Some(relative_position) = output[cursor..].find(&expected) else {
-                    panic!("{relative} lost or reordered fragment {fragment:?} at width {width}");
+                    panic!(
+                        "{relative} lost or reordered fragment {:?} at width {width}",
+                        fragment.value
+                    );
                 };
                 cursor += relative_position + expected.len();
             }
@@ -202,63 +238,74 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
     }
 }
 
-fn collect_document_fragments(document: &MantDocument, output: &mut Vec<String>) {
-    collect_blocks(&document.blocks, output);
+fn collect_document_fragments(document: &MantDocument, output: &mut Vec<ExpectedFragment>) {
+    collect_blocks(&document.blocks, output, false);
     for section in &document.sections {
         collect_section_fragments(section, output);
     }
 }
 
-fn collect_section_fragments(section: &Section, output: &mut Vec<String>) {
-    output.push(section.title.clone());
-    collect_blocks(&section.blocks, output);
+fn collect_section_fragments(section: &Section, output: &mut Vec<ExpectedFragment>) {
+    output.push(ExpectedFragment {
+        value: section.title.clone(),
+        independent: false,
+    });
+    collect_blocks(&section.blocks, output, false);
     for child in &section.children {
         collect_section_fragments(child, output);
     }
 }
 
-fn collect_blocks(blocks: &[Block], output: &mut Vec<String>) {
+fn collect_blocks(blocks: &[Block], output: &mut Vec<ExpectedFragment>, independent: bool) {
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                collect_inlines(children, output);
+                collect_inlines(children, output, independent);
             }
             Block::List { items, .. } => {
                 for item in items {
-                    collect_blocks(&item.blocks, output);
+                    collect_blocks(&item.blocks, output, independent);
                 }
             }
             Block::DefinitionList { items, .. } => {
                 for item in items {
                     for term in &item.terms {
-                        collect_inlines(term, output);
+                        collect_inlines(term, output, independent);
                     }
-                    collect_blocks(&item.description, output);
+                    collect_blocks(&item.description, output, independent);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_blocks(&cell.blocks, output);
+                    collect_blocks(&cell.blocks, output, true);
                 }
             }
             Block::Equation { value, .. } | Block::Unsupported { text: value, .. } => {
-                output.push(value.clone());
+                output.push(ExpectedFragment {
+                    value: value.clone(),
+                    independent,
+                });
             }
             Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => {}
         }
     }
 }
 
-fn collect_inlines(inlines: &[Inline], output: &mut Vec<String>) {
+fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, independent: bool) {
     for inline in inlines {
         match inline {
-            Inline::Text { value } | Inline::Code { value } => output.push(value.clone()),
+            Inline::Text { value } | Inline::Code { value } => output.push(ExpectedFragment {
+                value: value.clone(),
+                independent,
+            }),
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
             | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => collect_inlines(children, output),
+            | Inline::SectionReference { children, .. } => {
+                collect_inlines(children, output, independent);
+            }
             Inline::Anchor { .. } | Inline::LineBreak => {}
         }
     }
