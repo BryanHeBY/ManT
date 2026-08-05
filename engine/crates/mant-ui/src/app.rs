@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -22,6 +22,78 @@ const MAX_SIDEBAR_WIDTH: u16 = 60;
 enum SearchMode {
     Closed,
     Open { editing: bool },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MenuId {
+    File,
+    View,
+    Navigate,
+    Search,
+    Help,
+}
+
+impl MenuId {
+    const ALL: [Self; 5] = [
+        Self::File,
+        Self::View,
+        Self::Navigate,
+        Self::Search,
+        Self::Help,
+    ];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::File => "File",
+            Self::View => "View",
+            Self::Navigate => "Navigate",
+            Self::Search => "Search",
+            Self::Help => "Help",
+        }
+    }
+
+    const fn left(self) -> u16 {
+        match self {
+            Self::File => 0,
+            Self::View => 6,
+            Self::Navigate => 12,
+            Self::Search => 22,
+            Self::Help => 30,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Overlay {
+    None,
+    Menu { id: MenuId, cursor: usize },
+    Help,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MenuEntry {
+    label: &'static str,
+    shortcut: &'static str,
+    action: MenuAction,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MenuAction {
+    Quit,
+    ToggleSidebar,
+    ResetSidebar,
+    ExpandAll,
+    CollapseAll,
+    Previous,
+    Next,
+    Parent,
+    FirstChild,
+    First,
+    Last,
+    Find,
+    FindNext,
+    FindPrevious,
+    Help,
 }
 
 impl SearchMode {
@@ -50,6 +122,7 @@ pub struct App {
     search_matches: Vec<RenderedSearchMatch>,
     active_search_match: usize,
     search_width: u16,
+    overlay: Overlay,
     resizing_sidebar: bool,
     last_body_area: Rect,
     last_content_area: Rect,
@@ -83,6 +156,7 @@ impl App {
             search_matches: Vec::new(),
             active_search_match: 0,
             search_width: 0,
+            overlay: Overlay::None,
             resizing_sidebar: false,
             last_body_area: Rect::default(),
             last_content_area: Rect::default(),
@@ -102,8 +176,16 @@ impl App {
             self.quit = true;
             return;
         }
+        if self.overlay != Overlay::None {
+            self.handle_overlay_key(key);
+            return;
+        }
         if self.search_mode.is_open() {
             self.handle_search_key(key);
+            return;
+        }
+        if key.code == KeyCode::F(10) {
+            self.open_menu(MenuId::File);
             return;
         }
         if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('f'))
@@ -112,8 +194,20 @@ impl App {
             self.open_search();
             return;
         }
+        if key.code == KeyCode::Char('?') {
+            self.overlay = Overlay::Help;
+            return;
+        }
+        if key.code == KeyCode::Char('n') && !self.search_matches.is_empty() {
+            self.select_search_relative(if key.modifiers.contains(KeyModifiers::SHIFT) {
+                -1
+            } else {
+                1
+            });
+            return;
+        }
         match key.code {
-            KeyCode::Char('q') => self.quit = true,
+            KeyCode::Char('q' | 'Q') => self.quit = true,
             KeyCode::Char('j') | KeyCode::Down => self.select_relative(1),
             KeyCode::Char('k') | KeyCode::Up => self.select_relative(-1),
             KeyCode::Char('h') | KeyCode::Left => self.collapse_or_select_parent(),
@@ -135,6 +229,9 @@ impl App {
     }
 
     pub fn handle_mouse(&mut self, mouse: MouseEvent) {
+        if self.handle_overlay_mouse(mouse) {
+            return;
+        }
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) if self.is_sidebar_boundary(mouse.column) => {
                 self.resizing_sidebar = true;
@@ -200,33 +297,279 @@ impl App {
         } else {
             self.draw_status(frame, status_area);
         }
+        self.draw_overlay(frame);
+    }
+
+    fn open_menu(&mut self, id: MenuId) {
+        self.close_search();
+        self.overlay = Overlay::Menu { id, cursor: 0 };
+    }
+
+    fn handle_overlay_key(&mut self, key: KeyEvent) {
+        match self.overlay {
+            Overlay::None => {}
+            Overlay::Help => {
+                if matches!(key.code, KeyCode::Esc | KeyCode::Char('?')) {
+                    self.overlay = Overlay::None;
+                }
+            }
+            Overlay::Menu { id, cursor } => match key.code {
+                KeyCode::Esc | KeyCode::F(10) => self.overlay = Overlay::None,
+                KeyCode::Left | KeyCode::Right => {
+                    let current = MenuId::ALL
+                        .iter()
+                        .position(|candidate| *candidate == id)
+                        .unwrap_or_default();
+                    let delta = if key.code == KeyCode::Left { -1 } else { 1 };
+                    let length = isize::try_from(MenuId::ALL.len()).unwrap_or_default();
+                    let next = usize::try_from(
+                        (isize::try_from(current).unwrap_or_default() + delta).rem_euclid(length),
+                    )
+                    .unwrap_or_default();
+                    self.overlay = Overlay::Menu {
+                        id: MenuId::ALL[next],
+                        cursor: 0,
+                    };
+                }
+                KeyCode::Down | KeyCode::Up => {
+                    let length = isize::try_from(menu_entries(id).len()).unwrap_or_default();
+                    let delta = if key.code == KeyCode::Up { -1 } else { 1 };
+                    let next = usize::try_from(
+                        (isize::try_from(cursor).unwrap_or_default() + delta).rem_euclid(length),
+                    )
+                    .unwrap_or_default();
+                    self.overlay = Overlay::Menu { id, cursor: next };
+                }
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    if let Some(entry) = menu_entries(id).get(cursor) {
+                        self.activate_menu_action(entry.action);
+                    }
+                }
+                _ => {}
+            },
+        }
+    }
+
+    fn handle_overlay_mouse(&mut self, mouse: MouseEvent) -> bool {
+        if mouse.kind != MouseEventKind::Down(MouseButton::Left) {
+            return self.overlay != Overlay::None;
+        }
+        if mouse.row == 0
+            && let Some(id) = MenuId::ALL.into_iter().find(|id| {
+                let start = id.left();
+                let end = start + u16::try_from(id.label().len() + 2).unwrap_or_default();
+                mouse.column >= start && mouse.column < end
+            })
+        {
+            self.close_search();
+            self.overlay = if matches!(self.overlay, Overlay::Menu { id: open, .. } if open == id) {
+                Overlay::None
+            } else {
+                Overlay::Menu { id, cursor: 0 }
+            };
+            return true;
+        }
+        if let Overlay::Menu { id, .. } = self.overlay {
+            let entries = menu_entries(id);
+            let row = usize::from(mouse.row.saturating_sub(1));
+            if mouse.row >= 1
+                && row < entries.len()
+                && mouse.column >= id.left()
+                && mouse.column < id.left().saturating_add(30)
+            {
+                self.activate_menu_action(entries[row].action);
+            } else {
+                self.overlay = Overlay::None;
+            }
+            return true;
+        }
+        self.overlay == Overlay::Help
+    }
+
+    fn activate_menu_action(&mut self, action: MenuAction) {
+        self.overlay = Overlay::None;
+        match action {
+            MenuAction::Quit => self.quit = true,
+            MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
+            MenuAction::ResetSidebar => self.sidebar_width = 36,
+            MenuAction::ExpandAll => {
+                self.expanded = self
+                    .document
+                    .navigation()
+                    .iter()
+                    .filter(|item| item.has_children)
+                    .map(|item| item.id.clone())
+                    .collect();
+            }
+            MenuAction::CollapseAll => self.expanded.clear(),
+            MenuAction::Previous => self.select_relative(-1),
+            MenuAction::Next => self.select_relative(1),
+            MenuAction::Parent => self.collapse_or_select_parent(),
+            MenuAction::FirstChild => self.expand_or_select_child(),
+            MenuAction::First => self.select_edge(false),
+            MenuAction::Last => self.select_edge(true),
+            MenuAction::Find => self.open_search(),
+            MenuAction::FindNext => self.select_search_relative(1),
+            MenuAction::FindPrevious => self.select_search_relative(-1),
+            MenuAction::Help => self.overlay = Overlay::Help,
+        }
+    }
+
+    fn select_edge(&mut self, last: bool) {
+        let visible = self.visible_navigation_indices();
+        let selected = if last {
+            visible.last()
+        } else {
+            visible.first()
+        };
+        if let Some(index) = selected.copied() {
+            self.selected = index;
+            self.scroll_to_selected();
+        }
     }
 
     fn draw_menu(&self, frame: &mut Frame<'_>, area: Rect) {
         let style = Style::default().bg(theme::MENU);
-        let menu_width = " File View Navigate Search Help "
-            .chars()
-            .map(|character| character.width().unwrap_or(0))
-            .sum::<usize>();
+        let menu_width = 36;
         let rule = "─".repeat(usize::from(area.width).saturating_sub(menu_width));
         frame.render_widget(Block::default().style(style), area);
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(" File ", style.fg(theme::SUBTEXT_BRIGHT)),
-                Span::styled("View ", style.fg(theme::SUBTEXT_BRIGHT)),
-                Span::styled("Navigate ", style.fg(theme::SUBTEXT_BRIGHT)),
-                Span::styled("Search ", style.fg(theme::SUBTEXT_BRIGHT)),
-                Span::styled("Help ", style.fg(theme::SUBTEXT_BRIGHT)),
-                Span::styled(rule, style.fg(theme::BORDER)),
-            ]))
-            .style(style),
-            area,
-        );
+        let open_menu = match self.overlay {
+            Overlay::Menu { id, .. } => Some(id),
+            Overlay::None | Overlay::Help => None,
+        };
+        let mut spans = MenuId::ALL
+            .into_iter()
+            .map(|id| {
+                let active = open_menu == Some(id);
+                Span::styled(
+                    format!(" {} ", id.label()),
+                    if active {
+                        style.fg(theme::SELECTED_TEXT).bg(theme::SELECTED)
+                    } else {
+                        style.fg(theme::SUBTEXT_BRIGHT)
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        spans.push(Span::styled(rule, style.fg(theme::BORDER)));
+        frame.render_widget(Paragraph::new(Line::from(spans)).style(style), area);
         frame.render_widget(
             Paragraph::new(format!("{} ", self.document.label()))
                 .alignment(Alignment::Right)
                 .style(style.fg(theme::SUBTEXT)),
             area,
+        );
+    }
+
+    fn draw_overlay(&self, frame: &mut Frame<'_>) {
+        match self.overlay {
+            Overlay::None => {}
+            Overlay::Menu { id, cursor } => {
+                let entries = menu_entries(id);
+                let height = u16::try_from(entries.len())
+                    .unwrap_or_default()
+                    .saturating_add(1);
+                let area = Rect::new(
+                    id.left().min(frame.area().width.saturating_sub(1)),
+                    1,
+                    30.min(frame.area().width.saturating_sub(id.left())),
+                    height.min(frame.area().height.saturating_sub(1)),
+                );
+                frame.render_widget(Clear, area);
+                frame.render_widget(
+                    Block::default()
+                        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                        .border_style(Style::default().fg(theme::OVERLAY))
+                        .style(Style::default().bg(theme::BASE)),
+                    area,
+                );
+                let inner = Rect::new(
+                    area.x.saturating_add(1),
+                    area.y,
+                    area.width.saturating_sub(2),
+                    area.height.saturating_sub(1),
+                );
+                for (index, entry) in entries.iter().enumerate().take(usize::from(inner.height)) {
+                    let row = Rect::new(
+                        inner.x,
+                        inner.y + u16::try_from(index).unwrap_or_default(),
+                        inner.width,
+                        1,
+                    );
+                    let active = index == cursor;
+                    let checked =
+                        matches!(entry.action, MenuAction::ToggleSidebar) && self.show_sidebar;
+                    let prefix = if checked { "✓ " } else { "  " };
+                    let label = format!("{prefix}{}", entry.label);
+                    let gap = usize::from(row.width)
+                        .saturating_sub(label.width())
+                        .saturating_sub(entry.shortcut.width());
+                    let value = fit_to_width(
+                        &format!(
+                            "{label}{}{shortcut}",
+                            " ".repeat(gap),
+                            shortcut = entry.shortcut
+                        ),
+                        usize::from(row.width),
+                    );
+                    let style = if active {
+                        Style::default()
+                            .fg(theme::SELECTED_TEXT)
+                            .bg(theme::SELECTED)
+                    } else {
+                        Style::default().fg(theme::TEXT).bg(theme::BASE)
+                    };
+                    frame.render_widget(Paragraph::new(Span::styled(value, style)), row);
+                }
+            }
+            Overlay::Help => Self::draw_help(frame),
+        }
+    }
+
+    fn draw_help(frame: &mut Frame<'_>) {
+        let width = 58.min(frame.area().width.saturating_sub(4)).max(20);
+        let height = 13.min(frame.area().height.saturating_sub(2)).max(5);
+        let area = Rect::new(
+            frame.area().x + frame.area().width.saturating_sub(width) / 2,
+            frame.area().y + frame.area().height.saturating_sub(height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::BLUE))
+            .style(Style::default().bg(theme::BASE));
+        let inner = block.inner(area).inner(Margin {
+            horizontal: 1,
+            vertical: 1,
+        });
+        frame.render_widget(block, area);
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::styled(
+                    "Keyboard Shortcuts",
+                    Style::default()
+                        .fg(theme::BLUE)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Line::raw("↑/↓ or j/k  select section"),
+                Line::raw("←/→ or h/l  move through the section tree"),
+                Line::raw("Enter        fold or unfold selected section"),
+                Line::raw("Ctrl+F or /  find in current page"),
+                Line::raw("n / N        next / previous search match"),
+                Line::raw("d/u          scroll content by ten rows"),
+                Line::raw("b            toggle sidebar"),
+                Line::raw("F10          open menu bar"),
+                Line::raw("q            quit"),
+                Line::raw(""),
+                Line::styled(
+                    "Esc or ? closes this window",
+                    Style::default().fg(theme::SUBTEXT),
+                ),
+            ])
+            .style(Style::default().fg(theme::TEXT).bg(theme::BASE)),
+            inner,
         );
     }
 
@@ -680,6 +1023,102 @@ impl App {
             self.selected = index;
             self.scroll_to_selected();
         }
+    }
+}
+
+const FILE_MENU: &[MenuEntry] = &[MenuEntry {
+    label: "Quit",
+    shortcut: "q",
+    action: MenuAction::Quit,
+}];
+
+const VIEW_MENU: &[MenuEntry] = &[
+    MenuEntry {
+        label: "Sidebar",
+        shortcut: "",
+        action: MenuAction::ToggleSidebar,
+    },
+    MenuEntry {
+        label: "Reset Sidebar Width",
+        shortcut: "",
+        action: MenuAction::ResetSidebar,
+    },
+    MenuEntry {
+        label: "Expand All",
+        shortcut: "",
+        action: MenuAction::ExpandAll,
+    },
+    MenuEntry {
+        label: "Collapse All",
+        shortcut: "",
+        action: MenuAction::CollapseAll,
+    },
+];
+
+const NAVIGATE_MENU: &[MenuEntry] = &[
+    MenuEntry {
+        label: "Previous Section",
+        shortcut: "↑ / k",
+        action: MenuAction::Previous,
+    },
+    MenuEntry {
+        label: "Next Section",
+        shortcut: "↓ / j",
+        action: MenuAction::Next,
+    },
+    MenuEntry {
+        label: "Parent Section",
+        shortcut: "← / h",
+        action: MenuAction::Parent,
+    },
+    MenuEntry {
+        label: "First Child",
+        shortcut: "→ / l",
+        action: MenuAction::FirstChild,
+    },
+    MenuEntry {
+        label: "First Section",
+        shortcut: "",
+        action: MenuAction::First,
+    },
+    MenuEntry {
+        label: "Last Section",
+        shortcut: "",
+        action: MenuAction::Last,
+    },
+];
+
+const SEARCH_MENU: &[MenuEntry] = &[
+    MenuEntry {
+        label: "Find in Page…",
+        shortcut: "Ctrl+F / /",
+        action: MenuAction::Find,
+    },
+    MenuEntry {
+        label: "Find Next",
+        shortcut: "n",
+        action: MenuAction::FindNext,
+    },
+    MenuEntry {
+        label: "Find Previous",
+        shortcut: "N",
+        action: MenuAction::FindPrevious,
+    },
+];
+
+const HELP_MENU: &[MenuEntry] = &[MenuEntry {
+    label: "Keyboard Shortcuts",
+    shortcut: "?",
+    action: MenuAction::Help,
+}];
+
+const fn menu_entries(id: MenuId) -> &'static [MenuEntry] {
+    match id {
+        MenuId::File => FILE_MENU,
+        MenuId::View => VIEW_MENU,
+        MenuId::Navigate => NAVIGATE_MENU,
+        MenuId::Search => SEARCH_MENU,
+        MenuId::Help => HELP_MENU,
     }
 }
 
@@ -1150,5 +1589,55 @@ mod tests {
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
 
         assert!(terminal.backend().to_string().contains("No matches"));
+    }
+
+    #[test]
+    fn view_menu_is_clickable_and_toggles_the_sidebar() {
+        let backend = TestBackend::new(100, 18);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+        terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 7,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        });
+        terminal.draw(|frame| app.draw(frame)).expect("draw menu");
+        assert!(
+            terminal
+                .backend()
+                .to_string()
+                .contains("Reset Sidebar Width")
+        );
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 8,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert!(!app.show_sidebar);
+        assert_eq!(app.overlay, Overlay::None);
+    }
+
+    #[test]
+    fn question_mark_opens_and_closes_keyboard_help() {
+        let backend = TestBackend::new(100, 22);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        let mut app = App::new(&navigation_bundle());
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+        terminal.draw(|frame| app.draw(frame)).expect("draw help");
+        assert!(
+            terminal
+                .backend()
+                .to_string()
+                .contains("Keyboard Shortcuts")
+        );
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+        assert_eq!(app.overlay, Overlay::None);
     }
 }
