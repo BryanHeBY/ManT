@@ -19,8 +19,8 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use crate::{
     DocumentView, NavKind, RenderedDocument, RenderedSearchMatch,
     layout::{
-        CONTENT_MARGIN, DEFAULT_SIDEBAR_WIDTH, MIN_CONTENT_WIDTH, MIN_SIDEBAR_WIDTH,
-        maximum_sidebar_width,
+        CONTENT_MARGIN, CONTENT_SCROLLBAR_GAP, DEFAULT_SIDEBAR_WIDTH, MIN_CONTENT_WIDTH,
+        MIN_SIDEBAR_WIDTH, maximum_sidebar_width,
     },
     navigation,
     scrollbar::{ScrollbarDrag, VerticalScrollbar},
@@ -619,12 +619,16 @@ impl App {
                         inner.width,
                         1,
                     );
+                    let content = row.inner(Margin {
+                        horizontal: 1,
+                        vertical: 0,
+                    });
                     let active = index == cursor;
                     let checked =
                         matches!(entry.action, MenuAction::ToggleSidebar) && self.show_sidebar;
                     let prefix = if checked { "✓ " } else { "  " };
                     let label = format!("{prefix}{}", entry.label);
-                    let gap = usize::from(row.width)
+                    let gap = usize::from(content.width)
                         .saturating_sub(label.width())
                         .saturating_sub(entry.shortcut.width());
                     let value = fit_to_width(
@@ -633,7 +637,7 @@ impl App {
                             " ".repeat(gap),
                             shortcut = entry.shortcut
                         ),
-                        usize::from(row.width),
+                        usize::from(content.width),
                     );
                     let style = if active {
                         Style::default()
@@ -642,7 +646,8 @@ impl App {
                     } else {
                         Style::default().fg(theme::TEXT).bg(theme::BASE)
                     };
-                    frame.render_widget(Paragraph::new(Span::styled(value, style)), row);
+                    frame.render_widget(Block::default().style(style), row);
+                    frame.render_widget(Paragraph::new(Span::styled(value, style)), content);
                 }
             }
             Overlay::Help => Self::draw_help(frame),
@@ -820,11 +825,12 @@ impl App {
         // The scrollbar owns a gutter beside the document instead of
         // overwriting its final column. This is especially visible on the
         // right border of full-width TLDR panels.
-        let document_area = if needs_scrollbar && inner.width > 1 {
+        let scrollbar_gutter = CONTENT_SCROLLBAR_GAP.saturating_add(1);
+        let document_area = if needs_scrollbar && inner.width > scrollbar_gutter {
             Rect::new(
                 inner.x,
                 inner.y,
-                inner.width.saturating_sub(1),
+                inner.width.saturating_sub(scrollbar_gutter),
                 inner.height,
             )
         } else {
@@ -1840,7 +1846,14 @@ mod tests {
                 .expect("content scrollbar")
                 .area()
                 .x,
-            app.last_content_area.right()
+            app.last_content_area.right() + CONTENT_SCROLLBAR_GAP
+        );
+        assert_eq!(
+            buffer
+                .cell((app.last_content_area.right(), 2))
+                .expect("content-scrollbar gap")
+                .bg,
+            theme::CONTENT
         );
     }
 
@@ -1857,7 +1870,10 @@ mod tests {
         assert_eq!(app.last_content_area.x, DEFAULT_SIDEBAR_WIDTH + 1);
         assert_eq!(app.last_content_area.y, 2);
         let scrollbar = app.last_content_scrollbar.expect("content scrollbar");
-        assert_eq!(scrollbar.area().x, app.last_content_area.right());
+        assert_eq!(
+            scrollbar.area().x,
+            app.last_content_area.right() + CONTENT_SCROLLBAR_GAP
+        );
         assert_eq!(scrollbar.area().y, app.last_content_area.y);
     }
 
@@ -2092,8 +2108,22 @@ mod tests {
             theme::SELECTED
         );
         assert_eq!(
+            buffer
+                .cell((menu_left, 1))
+                .expect("menu left padding")
+                .symbol(),
+            " "
+        );
+        assert_eq!(
             buffer.cell((menu_right, 1)).expect("menu right edge").bg,
             theme::SELECTED
+        );
+        assert_eq!(
+            buffer
+                .cell((menu_right, 1))
+                .expect("menu right padding")
+                .symbol(),
+            " "
         );
 
         app.handle_mouse(MouseEvent {

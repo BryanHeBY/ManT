@@ -13,6 +13,8 @@ pub(crate) const CONTENT_MARGIN: Margin = Margin {
     horizontal: 1,
     vertical: 1,
 };
+/// Blank column separating a full-width document surface from its scrollbar.
+pub(crate) const CONTENT_SCROLLBAR_GAP: u16 = 1;
 
 pub(crate) const fn maximum_sidebar_width(body_width: u16) -> u16 {
     let available = body_width.saturating_sub(MIN_CONTENT_WIDTH);
