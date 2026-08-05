@@ -1763,6 +1763,13 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(app.document.navigation()[app.selected].id, "details");
+        let width = app.last_content_area.width;
+        assert_eq!(
+            app.content_scroll,
+            app.rendered_cache[&width]
+                .anchor_row("details")
+                .expect("details anchor")
+        );
 
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -1974,6 +1981,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&bundle);
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        app.expanded.clear();
         let width = app.last_content_area.width;
         let region = app.rendered_cache[&width]
             .search("nested")
@@ -1990,12 +1998,36 @@ mod tests {
         });
 
         assert_eq!(app.document.navigation()[app.selected].id, "details");
+        assert!(app.expanded.contains("options"));
         assert_eq!(
             app.content_scroll,
             app.rendered_cache[&width]
                 .anchor_row("details")
                 .expect("details anchor")
         );
+    }
+
+    #[test]
+    fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections() {
+        let mut with_tldr = navigation_bundle();
+        with_tldr.tldr = tldr_bundle().tldr;
+        let mut app = App::new(&with_tldr);
+        assert_eq!(app.document.navigation()[app.selected].kind, NavKind::Tldr);
+        app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.document.navigation()[app.selected].id, "options");
+
+        let mut with_overview = navigation_bundle();
+        with_overview.document.as_mut().expect("document").blocks = vec![AstBlock::Paragraph {
+            children: vec![Inline::Text {
+                value: "Document overview".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let mut app = App::new(&with_overview);
+        assert_eq!(app.document.navigation()[app.selected].kind, NavKind::Root);
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.document.navigation()[app.selected].id, "options");
     }
 
     #[test]
