@@ -16,12 +16,11 @@ releases; publishing remains a deliberate human action.
 
 3. Commit the version change and ensure the main branch CI is green.
 
-## Publish the Rust crates
+## Configure crates.io publication
 
-The crates.io packages form one dependency graph and must be published from
-the leaves toward the unified command. `mant-ui` first entered crates.io as
-the `0.4.1` bootstrap release against the existing `0.4.0` contracts; later
-workspace releases keep all five packages on one version:
+The crates.io packages form one dependency graph. `mant-ui` first entered
+crates.io as the `0.4.1` bootstrap release against the existing `0.4.0`
+contracts; later workspace releases keep all five packages on one version:
 
 ```text
 libmandoc-rs ─┐
@@ -29,24 +28,30 @@ libmandoc-rs ─┐
 mant-ast ─────┘               └────────────> mant
 ```
 
-Authenticate with `cargo login`, review each package, and publish it before
-moving to a dependent package:
+Each package must configure the same crates.io Trusted Publisher:
 
-```sh
-for package in libmandoc-rs mant-ast mant-core mant-ui mant; do
-  cargo publish --dry-run --locked -p "$package"
-  cargo publish --locked -p "$package"
-done
+```text
+repository owner: BryanHeBY
+repository:       ManT
+workflow:         release.yml
+environment:      crates-io
 ```
 
-Wait for each package to appear in the crates.io index before publishing its
-dependent package. Installing `mant` installs the reader, structured CLI, and
-MCP server as one executable. `mant-ui` is a reusable library crate and does
-not install a second command.
+The GitHub repository has a matching `crates-io` Environment. It should require
+a maintainer review, permit self-review for this personal repository, reject
+non-release refs, and contain no long-lived Cargo token. The release job has
+only `contents: read` and `id-token: write`; the official crates.io action
+exchanges that identity for a short-lived credential.
 
-Configure crates.io Trusted Publishing for later releases so GitHub Actions
-can exchange its OIDC identity for short-lived credentials. Do not store a
-long-lived Cargo token in the repository.
+On a tag push, `scripts/publish-crates.sh` validates all package archives and
+publishes `mant-ast`, `libmandoc-rs`, `mant-core`, `mant-ui`, and `mant` in
+dependency order. It waits for each exact version to reach the registry before
+continuing and skips versions already present, so a partially completed job is
+safe to rerun. Installing `mant` installs the reader, structured CLI, and MCP
+server as one executable. `mant-ui` is a reusable library crate and does not
+install a second command.
+
+Never move a tag after crates.io publication. Registry versions are immutable.
 
 ## Tag and draft release
 
@@ -58,10 +63,12 @@ git push origin vMAJOR.MINOR.PATCH
 ```
 
 The release workflow rebuilds and tests each supported Linux and Windows target
-on its native GitHub runner. It packages one `mant` executable, includes the
-self-hosted `mant.md` manual, assembles `SHA256SUMS`, and creates a **draft**
-GitHub Release with generated notes. Review the notes, archive names,
-checksums, manual, and licenses before publishing the draft.
+on its native GitHub runner. After all targets pass, it creates a **draft**
+GitHub Release and independently pauses at the protected `crates-io`
+Environment before publishing crates. Review the tag and draft artifacts, then
+approve that deployment. A manually dispatched release rebuilds a named tag
+and draft but deliberately does not publish crates; rerun the original tag
+workflow if crates.io publication needs retrying.
 
 The archive keeps `mant.md` beside the executable so installation remains
 transparent. User-facing release notes should recommend copying it to
