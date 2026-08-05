@@ -10,6 +10,7 @@ use std::{
 
 const LINUX_APPLICATION_DIR: &str = "mant";
 const MACOS_APPLICATION_DIR: &str = "ManT";
+const WINDOWS_APPLICATION_DIR: &str = "ManT";
 const DOCUMENTS_DIR: &str = "documents";
 const DEFAULT_SYSTEM_DATA_DIRS: [&str; 2] = ["/usr/local/share", "/usr/share"];
 const MACOS_SYSTEM_DATA_DIR: &str = "/Library/Application Support";
@@ -103,10 +104,39 @@ fn list_registered_documents_in(
 fn registration_roots(
     environment: &HashMap<OsString, OsString>,
 ) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
+    if cfg!(windows) {
+        return windows_registration_roots(environment);
+    }
     if cfg!(target_os = "macos") {
         return macos_registration_roots(environment);
     }
     linux_registration_roots(environment)
+}
+
+fn windows_registration_roots(
+    environment: &HashMap<OsString, OsString>,
+) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
+    let mut roots = Vec::new();
+    let mut seen = HashSet::new();
+    if let Some(app_data) = absolute_environment_path(environment, "APPDATA") {
+        push_registration_root(
+            &mut roots,
+            &mut seen,
+            &app_data,
+            WINDOWS_APPLICATION_DIR,
+            RegisteredDocumentOrigin::User,
+        );
+    }
+    if let Some(program_data) = absolute_environment_path(environment, "PROGRAMDATA") {
+        push_registration_root(
+            &mut roots,
+            &mut seen,
+            &program_data,
+            WINDOWS_APPLICATION_DIR,
+            RegisteredDocumentOrigin::System,
+        );
+    }
+    roots
 }
 
 fn linux_registration_roots(
@@ -274,10 +304,15 @@ fn absolute_environment_path(
     environment: &HashMap<OsString, OsString>,
     name: &str,
 ) -> Option<PathBuf> {
-    environment
-        .get(OsStr::new(name))
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
+    let value = environment.get(OsStr::new(name));
+    #[cfg(windows)]
+    let value = value.or_else(|| {
+        environment
+            .iter()
+            .find(|(candidate, _)| candidate.to_string_lossy().eq_ignore_ascii_case(name))
+            .map(|(_, value)| value)
+    });
+    value.map(PathBuf::from).filter(|path| path.is_absolute())
 }
 
 fn is_safe_document_name(document: &str) -> bool {
@@ -312,9 +347,14 @@ mod tests {
     };
 
     use super::{
-        RegisteredDocumentOrigin, find_registered_document_in, linux_registration_roots,
-        list_registered_documents_in, macos_registration_roots,
+        RegisteredDocumentOrigin, find_registered_document_in, list_registered_documents_in,
     };
+
+    #[cfg(unix)]
+    use super::{linux_registration_roots, macos_registration_roots};
+
+    #[cfg(windows)]
+    use super::windows_registration_roots;
 
     fn environment(values: &[(&str, &Path)]) -> HashMap<OsString, OsString> {
         values
@@ -342,6 +382,7 @@ mod tests {
         roots
     }
 
+    #[cfg(unix)]
     #[test]
     fn xdg_user_and_system_directories_follow_documented_precedence() {
         let home = Path::new("/home/demo");
@@ -365,6 +406,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn macos_uses_application_support_document_roots() {
         let home = Path::new("/Users/demo");
@@ -379,6 +421,28 @@ mod tests {
                 ),
                 (
                     PathBuf::from("/Library/Application Support/ManT/documents"),
+                    RegisteredDocumentOrigin::System,
+                ),
+            ]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_uses_roaming_and_machine_document_roots() {
+        let app_data = Path::new(r"C:\Users\demo\AppData\Roaming");
+        let program_data = Path::new(r"C:\ProgramData");
+        let environment = environment(&[("AppData", app_data), ("ProgramData", program_data)]);
+
+        assert_eq!(
+            windows_registration_roots(&environment),
+            vec![
+                (
+                    app_data.join("ManT/documents"),
+                    RegisteredDocumentOrigin::User,
+                ),
+                (
+                    program_data.join("ManT/documents"),
                     RegisteredDocumentOrigin::System,
                 ),
             ]

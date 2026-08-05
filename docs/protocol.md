@@ -147,7 +147,8 @@ findings belong to `document.diagnostics` or `excerpt.diagnostics`.
 
 Manual pages have one parser path: the located roff source is lowered directly
 through `libmandoc-rs`. Renderer selection is deliberately absent from
-`mant.request/v4`.
+`mant.request/v4`. This native-manual source family is available on Unix;
+Windows implements the same protocol over registered and explicit Markdown.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires readable native manual content. A request JSON
@@ -172,7 +173,8 @@ An unqualified name first checks registered Markdown below
 `$XDG_DATA_DIRS/mant/documents` directory on Linux. macOS uses
 `~/Library/Application Support/ManT/documents` and
 `/Library/Application Support/ManT/documents`. ManT then falls back to its
-native manual index. Registration roots are recursive and follow file or
+native manual index. Windows uses `%APPDATA%\ManT\documents` and
+`%PROGRAMDATA%\ManT\documents` and has no native manual fallback. Registration roots are recursive and follow file or
 directory symbolic links without revisiting the same canonical directory. A
 nested file keeps its filename stem as its public name; directory components
 are not part of the request:
@@ -185,8 +187,8 @@ are not part of the request:
 }
 ```
 
-`section` is optional and bypasses registered Markdown. Renderer-forcing flags
-also select a manual directly. The native index reads `MANT_MANPATH` as a
+`section` is optional and bypasses registered Markdown. On Windows it produces
+an explicit unsupported-source diagnostic. On Unix, the native index reads `MANT_MANPATH` as a
 complete root override, otherwise honors `MANPATH`, then checks user/XDG,
 PATH-derived, and conventional system manual roots. To query a project-local
 roff source, place it below a hierarchy such as `project-man/man1/tool.1`, set

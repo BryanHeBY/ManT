@@ -176,6 +176,9 @@ pub fn locate_manual_source_in(
 }
 
 fn discover_manual_roots_with(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
+    if cfg!(not(unix)) {
+        return Vec::new();
+    }
     if let Some(explicit) = environment.get(OsStr::new("MANT_MANPATH")) {
         return deduplicate_paths(
             env::split_paths(explicit).filter(|path| !path.as_os_str().is_empty()),
@@ -361,12 +364,18 @@ fn locale_priority(root: &Path, path: &Path, locale: Option<&str>) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, ffi::OsString, fs, path::PathBuf};
+    use std::{fs, path::PathBuf};
+
+    #[cfg(unix)]
+    use std::{collections::HashMap, ffi::OsString};
 
     use super::{
-        LocateError, ManualIndex, ManualRequest, deduplicate_paths, discover_manual_roots_with,
-        locate_manual_source_in, normalize_locale,
+        LocateError, ManualIndex, ManualRequest, deduplicate_paths, locate_manual_source_in,
+        normalize_locale,
     };
+
+    #[cfg(unix)]
+    use super::discover_manual_roots_with;
 
     fn temporary_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -436,6 +445,7 @@ mod tests {
         assert_eq!(normalize_locale("C"), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn explicit_manpath_overrides_conventions_and_empty_components_restore_them() {
         let explicit = PathBuf::from("/opt/manuals");

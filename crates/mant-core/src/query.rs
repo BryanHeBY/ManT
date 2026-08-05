@@ -10,10 +10,10 @@ use std::{
 
 use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
-use crate::{
-    ManualRequest, find_registered_document, locate_manual_source, parse_manual_source,
-    parse_markdown, read_cached_tldr_page,
-};
+use crate::{ManualRequest, find_registered_document, parse_markdown, read_cached_tldr_page};
+
+#[cfg(unix)]
+use crate::{locate_manual_source, parse_manual_source};
 
 /// Upper bound on a single Markdown source, shared by every input path.
 ///
@@ -64,7 +64,7 @@ impl fmt::Display for QueryError {
             Self::NoReadableContent { name } => {
                 write!(
                     formatter,
-                    "no readable manual content was found for '{name}'"
+                    "no readable document content was found for '{name}'"
                 )
             }
         }
@@ -111,11 +111,31 @@ impl QueryHost for SystemQueryHost {
     }
 
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String> {
-        locate_manual_source(request).map_err(|error| error.to_string())
+        #[cfg(unix)]
+        {
+            locate_manual_source(request).map_err(|error| error.to_string())
+        }
+        #[cfg(not(unix))]
+        {
+            Err(format!(
+                "native manual pages are unavailable on this platform; register a Markdown document named '{}'",
+                request.name
+            ))
+        }
     }
 
     fn parse_manual(&self, path: &Path) -> Result<MantDocument, String> {
-        parse_manual_source(path).map_err(|error| error.to_string())
+        #[cfg(unix)]
+        {
+            parse_manual_source(path).map_err(|error| error.to_string())
+        }
+        #[cfg(not(unix))]
+        {
+            Err(format!(
+                "native manual parsing is unavailable on this platform: {}",
+                path.display()
+            ))
+        }
     }
 
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String> {
@@ -242,7 +262,7 @@ fn query_manual(
     let section = section.map(ToOwned::to_owned);
     let require_manual = policy.manual_only || section.is_some();
 
-    // An unqualified name first consults the explicit XDG registration
+    // An unqualified name first consults the platform-native registration
     // namespace. Section selectors and the explicit manual-only policy bypass
     // Markdown name discovery.
     if section.is_none()

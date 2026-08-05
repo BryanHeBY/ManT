@@ -5,11 +5,10 @@ live in the [project README](../README.md).
 
 ## Prerequisites
 
-- Linux or macOS
+- Linux, macOS, or Windows
 - Rust 1.88 or newer with `cargo`, `clippy`, and `rustfmt`
-- GCC on Linux or Clang on macOS; set `CC` when a non-default compiler is needed
-- zlib development headers
-- local manual source trees for exercising native page discovery
+- For Unix native-manual work: GCC on Linux or Clang on macOS, zlib
+  development headers, and local manual source trees
 
 The workspace vendors libmandoc and maintains its own manual index, so system
 `man` and `mandoc` executables are not prerequisites. Markdown parsing and the
@@ -29,6 +28,15 @@ Run the complete local verification boundary before handing off a change:
 ```sh
 bash scripts/check.sh
 ```
+
+On Windows, run the portable product boundary from PowerShell:
+
+```powershell
+.\scripts\check-windows.ps1
+```
+
+It tests `mant-ast`, `mant-core`, `mant-ui`, and `mant` without building the
+Unix-only `libmandoc-rs` workspace member or roff fixture suites.
 
 The script checks formatting, runs every workspace test, runs clippy with all
 targets and features, builds the optimized executable, and smoke-tests its
@@ -58,6 +66,7 @@ tests/contracts/             Stable JSON contract fixtures consumed by Rust test
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
 scripts/package-release.sh   Reproducible Linux release archive assembly
+scripts/package-release.ps1 Windows x64 ZIP assembly
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/manuals/                Self-hosted Markdown manual shipped in releases
 docs/assets/                 README screenshots and documentation assets

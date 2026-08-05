@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! Exercises terminal lowering against the same real roff corpus as mant-core.
 //!
 //! These tests intentionally avoid distribution-specific pixel snapshots.

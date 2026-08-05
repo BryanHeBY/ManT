@@ -466,6 +466,7 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
     assert!(!excerpt_markdown.contains("parent details"));
 }
 
+#[cfg(unix)]
 #[test]
 fn serializes_a_large_source_lowered_document() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

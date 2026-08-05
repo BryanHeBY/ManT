@@ -26,12 +26,13 @@ arguments. A complete query on terminal stdin and stdout is handed directly to
 `mant-ui`; projections, explicit formats, redirection, request JSON, and MCP
 remain deterministic non-interactive surfaces.
 
-`libmandoc-rs` is the boundary around the bundled C parser. Its deliberately
+On Unix, `libmandoc-rs` is the boundary around the bundled C parser. Its deliberately
 small private C shim hides libmandoc structure layouts and parser handles; the
 crate copies each completed parse into an owned, renderer-neutral tree with
 structured diagnostics. The crate exposes no ManT-specific types and never
 formats JSON. `mant-core` alone lowers that parse tree into ManT's public
-document contract.
+document contract. Windows omits this target-specific dependency and retains
+the Markdown, projection, tldr, and source-neutral query layers.
 
 ## Stable and unstable models
 
@@ -115,8 +116,9 @@ read-only tools: local-document discovery, outline, selected content,
 semantic explanation, and search. Document tools accept a name plus an
 optional manual section. That narrower boundary prevents agents from opening
 arbitrary host paths: Markdown must first be registered in the platform
-document root, below `mant/documents` on Linux or Application Support on
-macOS. Registration recursively follows file and directory symlinks, but
+document root, below `mant/documents` on Linux, Application Support on macOS,
+or `%APPDATA%\ManT\documents` on Windows. Registration recursively follows file
+and directory links, but
 canonical-directory deduplication and explicit traversal bounds prevent loops
 or unbounded trees. Nested directories are organizational: the filename stem
 remains the flat public name. Ordinary names continue to fall back to the
@@ -248,9 +250,10 @@ being silently replaced by another renderer.
 Registered documents and caches have distinct lifecycles. Linux discovers
 documents below each XDG data root's `mant/documents` directory and keeps the
 private tldr checkout below the XDG cache root. macOS uses Application Support
-for documents and Library Caches for tldr. Installed-client tldr roots precede
-the private checkout, which remains the final read fallback even when a client
-executable is present.
+for documents and Library Caches for tldr. Windows uses Roaming AppData for
+documents and Local AppData for its private tldr checkout. Installed-client
+tldr roots precede the private checkout, which remains the final read fallback
+even when a client executable is present.
 
 Vertical layout is part of this normalization boundary rather than a TUI
 heuristic. Sections retain the distance requested before `SH`, `SS`, `Sh`, and

@@ -55,8 +55,8 @@ git tag vMAJOR.MINOR.PATCH
 git push origin vMAJOR.MINOR.PATCH
 ```
 
-The release workflow rebuilds and tests each supported Linux target on its
-native GitHub runner. It packages one `mant` executable, includes the
+The release workflow rebuilds and tests each supported Linux and Windows target
+on its native GitHub runner. It packages one `mant` executable, includes the
 self-hosted `mant.md` manual, assembles `SHA256SUMS`, and creates a **draft**
 GitHub Release with generated notes. Review the notes, archive names,
 checksums, manual, and licenses before publishing the draft.
@@ -70,14 +70,16 @@ runtime, but installing it makes `mant mant` and MCP document discovery work
 without a repository checkout.
 
 Linux x64 uses the baseline target so the executable does not require AVX2.
+Windows x64 is distributed as a ZIP and contains the Markdown-native product;
+it does not include libmandoc or Unix manual support. The bundled `mant.md` can
+be installed at `%APPDATA%\ManT\documents\mant.md`.
 macOS supports Cargo installation and local source builds, but public macOS
 archives remain disabled until they can be Developer ID-signed and notarized.
 
 ## Inspect an archive locally
 
 Packaging never builds or tests. It validates the Cargo version, optional tag,
-and native Linux architecture, then reproducibly archives the already-built
-executable:
+and native platform identity, then archives the already-built executable:
 
 ```sh
 bash scripts/check.sh
@@ -87,6 +89,14 @@ MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/package-release.sh
 Set `MANT_RELEASE_TARGET=linux-x64` or `linux-arm64` to assert the expected
 runner identity. `MANT_BINARY` may point at another already-built executable.
 Archives and individual SHA-256 files are written under `dist/`.
+
+The equivalent Windows commands are:
+
+```powershell
+.\scripts\check-windows.ps1
+$env:MANT_RELEASE_TAG = "vMAJOR.MINOR.PATCH"
+.\scripts\package-release.ps1
+```
 
 Before publishing, inspect that both the executable and self-hosted document are
 present:

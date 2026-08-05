@@ -111,6 +111,41 @@ jobs:
       - name: Lint Rust workspace on macOS
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
+  windows-native:
+    # Windows intentionally builds the Markdown/TUI/CLI/MCP product without
+    # the Unix-only libmandoc crate or native manual-page fixtures.
+    name: Native (Windows x64)
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install stable Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+
+      - name: Cache Cargo dependencies and build output
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~\.cargo\registry\index
+            ~\.cargo\registry\cache
+            ~\.cargo\git\db
+            target
+          key: cargo-v1-windows-x64-stable-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-v1-windows-x64-stable-
+
+      - name: Build and test portable Windows product
+        shell: pwsh
+        run: ./scripts/check-windows.ps1
+
   rust-msrv:
     name: Rust MSRV (1.88.0)
     runs-on: ubuntu-24.04

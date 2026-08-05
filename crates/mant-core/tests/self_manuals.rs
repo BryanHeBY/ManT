@@ -104,7 +104,7 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
         );
     }
     assert!(
-        PROTOCOL_REFERENCE.contains("The native index reads `MANT_MANPATH`"),
+        PROTOCOL_REFERENCE.contains("the native index reads `MANT_MANPATH`"),
         "the request reference should define the manual lookup environment"
     );
 }

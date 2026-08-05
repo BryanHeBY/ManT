@@ -6,7 +6,6 @@ use std::{
     error::Error,
     ffi::{OsStr, OsString},
     fmt, fs, io,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{self, Command},
     sync::atomic::{AtomicU64, Ordering},
@@ -14,7 +13,10 @@ use std::{
 
 use mant_ast::{TldrCacheAction, TldrCacheUpdate};
 
-use crate::source::CommandOutput;
+use crate::{
+    executable::{environment_value, find_executable},
+    source::CommandOutput,
+};
 
 use super::cache::{HostPlatform, TldrCacheError, get_tldr_cache_dir};
 
@@ -134,14 +136,7 @@ impl TldrUpdateHost for SystemUpdateHost {
         name: &str,
         environment: &BTreeMap<String, String>,
     ) -> Option<PathBuf> {
-        let path = environment.get("PATH")?;
-        env::split_paths(OsStr::new(path))
-            .map(|directory| directory.join(name))
-            .find(|candidate| {
-                candidate.metadata().is_ok_and(|metadata| {
-                    metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-                })
-            })
+        find_executable(name, environment)
     }
 
     fn exists(&self, path: &Path) -> bool {
@@ -182,7 +177,7 @@ impl TldrUpdateHost for SystemUpdateHost {
     }
 
     fn run(&self, program: &OsStr, arguments: &[OsString]) -> io::Result<CommandOutput> {
-        let output = Command::new(program).args(arguments).output()?;
+        let output = platform_command(program, arguments).output()?;
         Ok(CommandOutput {
             stdout: output.stdout,
             stderr: output.stderr,
@@ -191,13 +186,32 @@ impl TldrUpdateHost for SystemUpdateHost {
     }
 }
 
+fn platform_command(program: &OsStr, arguments: &[OsString]) -> Command {
+    #[cfg(windows)]
+    {
+        let extension = Path::new(program)
+            .extension()
+            .and_then(OsStr::to_str)
+            .unwrap_or_default();
+        if extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat") {
+            let mut command =
+                Command::new(env::var_os("COMSPEC").unwrap_or_else(|| "cmd.exe".into()));
+            command.arg("/D").arg("/C").arg(program).args(arguments);
+            return command;
+        }
+    }
+    let mut command = Command::new(program);
+    command.args(arguments);
+    command
+}
+
 fn update_tldr_cache_with(
     environment: &BTreeMap<String, String>,
     platform: HostPlatform,
     repository: &str,
     host: &dyn TldrUpdateHost,
 ) -> Result<TldrCacheUpdate, TldrUpdateError> {
-    if !environment.contains_key("MANT_TLDR_DIR")
+    if environment_value(environment, "MANT_TLDR_DIR").is_none()
         && let Some(client) = host.find_executable("tldr", environment)
     {
         let output = run_checked(host, &client, &[OsString::from("--update")])?;

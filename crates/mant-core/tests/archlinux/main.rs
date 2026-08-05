@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! Integration tests for the Arch Linux fixture corpus.
 //!
 //! Each page module covers roff bytes extracted from an immutable Arch Linux

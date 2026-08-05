@@ -7,6 +7,8 @@
 
 ManT turns dense local Unix manuals and structurally compatible Markdown into
 navigable documents for people and precise, reusable knowledge for agents.
+On Windows, the same reader and machine interfaces operate on Markdown
+documents while Unix manual parsing remains an explicit Unix capability.
 One native `mant` executable provides the full-screen reader, deterministic
 Markdown/text/JSON output, generated schemas, and a read-only MCP server.
 
@@ -48,8 +50,9 @@ independent of terminal detection.
   searching an entire page.
 - **Search results are reusable.** Matches include stable outline nodes and
   generated-Markdown line and column coordinates.
-- **Local-first and reproducible.** The primary libmandoc parser is bundled;
-  ordinary use needs no network service or system `man`/`mandoc` executable.
+- **Local-first and reproducible.** Unix builds bundle their primary libmandoc
+  parser; ordinary use needs no network service or system `man`/`mandoc`
+  executable. Windows keeps the same property for Markdown documents.
 - **Markdown uses the same model.** Project documentation gains the same
   outline, excerpt, search, TUI, JSON, and MCP capabilities.
 
@@ -62,9 +65,11 @@ cargo install mant --locked
 mant git
 ```
 
-Building from crates.io requires Rust 1.88+, a C compiler, and the zlib
-development library on Linux or macOS. ManT discovers local manual source trees
-itself; neither a `man` nor a `mandoc` executable is required at runtime.
+Building from crates.io requires Rust 1.88+. Unix manual support additionally
+requires a C compiler and zlib development headers on Linux or macOS. Windows
+builds are pure Rust and provide Markdown, TUI, CLI, tldr, and MCP capabilities
+without compiling libmandoc. On Unix, neither a `man` nor a `mandoc` executable
+is required at runtime.
 
 ### Linux release archive
 
@@ -89,6 +94,25 @@ User documents take precedence over system documents.
 
 The archive also includes the project README, the Apache-2.0 license, the
 bundled mandoc license, and a published SHA-256 checksum.
+
+### Windows release archive
+
+Download `mant-<version>-windows-x64.zip` from the
+[latest release](https://github.com/BryanHeBY/ManT/releases/latest), extract
+`mant.exe` into a directory on `PATH`, and optionally register the bundled
+manual from PowerShell:
+
+```powershell
+$documents = Join-Path $env:APPDATA "ManT\documents"
+New-Item $documents -ItemType Directory -Force | Out-Null
+Copy-Item .\mant.md (Join-Path $documents "mant.md")
+mant mant
+```
+
+The Windows build reads registered or explicit Markdown, starts the same
+interactive reader, and exposes the same output and MCP contracts. It does not
+parse Unix man/roff sources; `--manual` and `--section` therefore report that
+native manuals are unavailable.
 
 ### Build from source
 
@@ -169,10 +193,10 @@ The [JSON protocol and Schema reference](docs/protocol.md) documents every
 versioned request and response projection, normalized AST node, coordinate
 rule, and MCP tool.
 
-## Manual sources and tldr
+## Unix manual sources and tldr
 
-ManT indexes raw, gzip, and zstd manual sources directly and parses their roff
-through bundled libmandoc. Project-local pages can be exposed through
+On Linux and macOS, ManT indexes raw, gzip, and zstd manual sources directly
+and parses their roff through bundled libmandoc. Project-local pages can be exposed through
 `MANT_MANPATH` (a complete override) or `MANPATH`:
 
 ```sh
@@ -189,7 +213,7 @@ checkout.
 
 ## Markdown through the same model
 
-Register reusable Markdown under the XDG data hierarchy:
+Register reusable Markdown under the platform data hierarchy:
 
 ```sh
 mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents"
@@ -201,11 +225,14 @@ An unqualified name checks the user directory first, then
 each `$XDG_DATA_DIRS/mant/documents` root, and finally the native manual index.
 On macOS the corresponding roots are
 `~/Library/Application Support/ManT/documents` and
-`/Library/Application Support/ManT/documents`. Nested directories and file or
-directory symlinks are discovered recursively. The filename stem remains the
-lookup name, so `team/handbook.md` is opened as `mant handbook`; directories
-are organizational rather than namespaces. An explicit `--manual` or
-`--section` request bypasses registered Markdown and selects a native manual.
+`/Library/Application Support/ManT/documents`. Windows uses
+`%APPDATA%\ManT\documents` for user documents and
+`%PROGRAMDATA%\ManT\documents` for system documents. Nested directories and
+file or directory links are discovered recursively. The filename stem remains
+the lookup name, so `team/handbook.md` is opened as `mant handbook`;
+directories are organizational rather than namespaces. On Unix, an explicit
+`--manual` or `--section` request bypasses registered Markdown and selects a
+native manual.
 
 Use a path for one-off local files or `-` for non-interactive standard input:
 
@@ -268,7 +295,7 @@ mant
 ├─ integration ────→ schemas / request JSON / MCP stdio
 └─ mant-core
    ├─ mant-ast
-   └─ libmandoc-rs
+   └─ libmandoc-rs (Unix)
       └─ vendored libmandoc + private C shim
 ```
 

@@ -3,6 +3,8 @@
 use libmandoc_rs::{Node, NodeKind};
 use mant_ast::Inline;
 
+pub(crate) use crate::inline::{plain_text, terms_fit_inline};
+
 use super::{
     part_children,
     roff_escape::{RoffFont as Font, RoffInlineEvent, decode, visible_text},
@@ -142,40 +144,6 @@ pub(super) fn append_inline_node(
     if node.flags.delimiter_open {
         builder.suppress_next_space();
     }
-}
-
-pub(crate) fn plain_text(nodes: &[Inline]) -> String {
-    let mut output = String::new();
-    for node in nodes {
-        match node {
-            Inline::Text { value } | Inline::Code { value } => output.push_str(value),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => output.push_str(&plain_text(children)),
-            Inline::Anchor { .. } => {}
-            Inline::LineBreak => output.push('\n'),
-        }
-    }
-    output
-}
-
-/// Decide whether a definition item's term(s) hang inline with the first line
-/// of the description, mirroring how renderers join multiple terms with `", "`.
-pub(crate) const DEFAULT_INLINE_TERM_MAX_WIDTH: usize = 6;
-
-pub(crate) fn terms_fit_inline(terms: &[Vec<Inline>], max_width: usize) -> bool {
-    let width = terms
-        .iter()
-        .map(|term| plain_text(term))
-        .collect::<Vec<_>>()
-        .join(", ")
-        .trim()
-        .chars()
-        .count();
-    (1..=max_width).contains(&width)
 }
 
 fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {

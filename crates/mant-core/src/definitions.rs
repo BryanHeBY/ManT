@@ -13,7 +13,7 @@ use mant_ast::{
     Block, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline, LayoutHint, Section,
 };
 
-use crate::mandoc::inline::plain_text;
+use crate::inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline};
 
 /// Annotate reliably recognizable command-line options and return every
 /// inline anchor that the navigation resolver must retain.
@@ -153,10 +153,7 @@ fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
         normalized.push(Block::DefinitionList {
             items: vec![DefinitionItem {
                 identity: None,
-                inline_term: crate::mandoc::inline::terms_fit_inline(
-                    &terms,
-                    crate::mandoc::inline::DEFAULT_INLINE_TERM_MAX_WIDTH,
-                ),
+                inline_term: terms_fit_inline(&terms, DEFAULT_INLINE_TERM_MAX_WIDTH),
                 terms,
                 description,
                 spacing_before_lines: Some(layout.spacing_before_lines),

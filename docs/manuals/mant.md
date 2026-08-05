@@ -1,7 +1,7 @@
 <!-- mant:tldr:start -->
 # mant
 
-> Turn local Unix manual pages and Markdown into structured documents.
+> Turn local Unix manual pages and cross-platform Markdown into structured documents.
 
 - Read a complete manual interactively:
 
@@ -32,7 +32,7 @@
 
 ## Name
 
-`mant` — read and query structured local Unix manual pages and Markdown.
+`mant` — read and query structured Unix manual pages and cross-platform Markdown.
 
 ## Synopsis
 
@@ -48,9 +48,10 @@ mant --mcp
 ## Description
 
 `mant` is ManT's native interactive reader, structured command-line interface,
-and MCP server. It parses local man and mdoc sources through bundled libmandoc,
-then exposes their hierarchy, semantic options, references, and visible text
-through one normalized document model.
+and MCP server. On Unix it parses local man and mdoc sources through bundled
+libmandoc. On Windows it operates as a Markdown-native document reader. Both
+paths expose hierarchy, semantic options, references, and visible text through
+one normalized document model.
 
 Local Markdown enters the same model, so terminal navigation, outlines,
 excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
@@ -66,9 +67,10 @@ Markdown document from
 `$XDG_DATA_DIRS/mant/documents` directory, and finally from the native manual
 index. On macOS the user and system roots are
 `~/Library/Application Support/ManT/documents` and
-`/Library/Application Support/ManT/documents`. Values ending in `.md` or
-`.markdown`, other path-like values, and the exact value `-` select Markdown
-directly instead.
+`/Library/Application Support/ManT/documents`. Windows uses
+`%APPDATA%\ManT\documents` and `%PROGRAMDATA%\ManT\documents`; it has no native
+manual fallback. Values ending in `.md` or `.markdown`, other path-like values,
+and the exact value `-` select Markdown directly instead.
 
 The filename supplies a registered document name: `mant.md` is queried as
 `mant mant`. Registration roots are scanned recursively, including file and
@@ -80,14 +82,20 @@ deeper paths, relative path order breaks remaining ties, and `.md` precedes
 `.markdown` in the same directory. Broken links and unreadable paths are
 ignored; canonical directory identities prevent symbolic-link cycles. An
 explicit `--manual` or `--section` request bypasses registered Markdown and
-selects a native manual page.
+selects a native manual page on Unix. Windows reports that this source family
+is unavailable instead of silently treating it as Markdown.
 
 ### Manual Pages
 
-Manual page names are located through ManT's native manual index. ManT reads
+On Linux and macOS, manual page names are located through ManT's native manual
+index. ManT reads
 raw, gzip, and zstd roff sources and lowers man or mdoc semantics through its
 bundled libmandoc parser. Neither a system `man` nor a system `mandoc`
 executable is required for ordinary use.
+
+Windows intentionally omits libmandoc and native man/roff lookup. Register a
+Markdown document with the desired name, pass an explicit Markdown path, or
+pipe Markdown through standard input instead.
 
 - `--section SECTION`: Select a manual section such as `1` or `3p`.
 - `--manual`: Require a native manual instead of registered Markdown with the
@@ -363,13 +371,19 @@ On macOS, registered Markdown lives below
 `/Library/Application Support/ManT/documents`, and the private tldr checkout
 lives below `~/Library/Caches/ManT/tldr-pages`.
 
+On Windows, user and system Markdown live below
+`%APPDATA%\ManT\documents` and `%PROGRAMDATA%\ManT\documents`. ManT's private
+tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. A Windows
+installation provides Markdown, TUI, structured output, tldr, and MCP support;
+native Unix manual parsing is not part of that build.
+
 Configuration and state, when introduced, use the same platform conventions
 without sharing the document scanner or cache lifecycle.
 
 ## Environment
 
 - `MANT_MANPATH`: Completely replace ManT's manual roots with a colon-separated
-  list. Each root contains section directories such as `man1/`, not an
+  list on Unix. Each root contains section directories such as `man1/`, not an
   individual roff file.
 - `MANPATH`: Override the derived manual roots. Empty components insert the
   user/XDG, PATH-derived, and conventional system roots.
@@ -384,6 +398,11 @@ without sharing the document scanner or cache lifecycle.
   and translated tldr pages before English fallback.
 - `HOME`: Supply conventional document, manual, and cache locations when their
   XDG overrides are absent.
+- `APPDATA`: Select the per-user registered Markdown root on Windows.
+- `PROGRAMDATA`: Select the system-wide registered Markdown root on Windows.
+- `LOCALAPPDATA`: Select ManT and installed-client cache roots on Windows.
+- `USERPROFILE`: Supply compatible installed-client tldr cache locations on
+  Windows when available.
 
 ## General
 

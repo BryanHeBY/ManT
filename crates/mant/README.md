@@ -21,6 +21,11 @@ directories and symlinks are discovered recursively without changing the
 filename-based public name. Explicit Markdown paths and standard input remain
 available for one-off documents.
 
+On Windows, registered documents live below
+`%APPDATA%\ManT\documents` (or `%PROGRAMDATA%\ManT\documents` system-wide).
+The Windows build provides the same Markdown reader, projections, tldr, and MCP
+interfaces, but intentionally omits Unix man/roff parsing.
+
 Install the native CLI with:
 
 ```sh

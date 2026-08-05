@@ -3,6 +3,9 @@
 mod catalog;
 mod definitions;
 mod documents;
+mod executable;
+mod inline;
+#[cfg(unix)]
 mod mandoc;
 mod markdown;
 mod output;
@@ -19,6 +22,7 @@ pub use documents::{
     RegisteredDocument, RegisteredDocumentOrigin, find_registered_document,
     list_registered_documents,
 };
+#[cfg(unix)]
 pub use mandoc::{lower_mandoc_document, parse_manual_source};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{

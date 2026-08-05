@@ -17,10 +17,12 @@ include = ["/Cargo.toml", "/README.md", "/src/**"]
 grep-matcher.workspace = true
 grep-regex.workspace = true
 mant-ast = { path = "../mant-ast", version = "=0.4.0" }
-libmandoc-rs = { path = "../libmandoc-rs", version = "=0.4.0" }
 pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libmandoc-rs = { path = "../libmandoc-rs", version = "=0.4.0" }
 
 [lints]
 workspace = true

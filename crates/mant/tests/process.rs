@@ -350,6 +350,7 @@ fn unqualified_names_prefer_registered_markdown() {
     fs::remove_dir_all(fixture_root).expect("remove registered document fixture");
 }
 
+#[cfg(unix)]
 #[test]
 fn manual_option_bypasses_registered_markdown_with_the_same_name() {
     let root = std::env::temp_dir().join(format!(
@@ -398,6 +399,27 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
     fs::remove_dir_all(root).expect("remove source-policy fixture");
 }
 
+#[cfg(windows)]
+#[test]
+fn manual_option_explains_the_windows_capability_boundary() {
+    let output = Command::new(executable())
+        .args(["process-native-manual", "--manual"])
+        .output()
+        .expect("query an unavailable native manual");
+
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+    assert!(
+        stderr.contains("native manual pages are unavailable on this platform"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("register a Markdown document named 'process-native-manual'"),
+        "{stderr}"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn registered_names_resolve_through_nested_directory_symlinks() {
@@ -440,6 +462,7 @@ fn registered_names_resolve_through_nested_directory_symlinks() {
     fs::remove_dir_all(root).expect("remove linked document fixture");
 }
 
+#[cfg(unix)]
 #[test]
 fn manual_queries_use_native_paths_without_a_man_executable() {
     let root =

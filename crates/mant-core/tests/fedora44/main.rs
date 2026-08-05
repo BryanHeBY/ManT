@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! Integration tests for the Fedora Linux 44 zstd fixture corpus.
 //!
 //! These tests exercise `ManT`'s in-process zstd decoder and verify

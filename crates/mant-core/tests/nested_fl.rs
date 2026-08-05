@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! Regression test for nested `Fl` lowering.
 //!
 //! mdoc spells `--long` options as `.Fl Fl long`: each `Fl` contributes one

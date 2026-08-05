@@ -6,11 +6,12 @@ use std::{
     error::Error,
     ffi::OsStr,
     fmt, fs, io,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
 use mant_ast::TldrDocument;
+
+use crate::executable::{environment_value, find_executable};
 
 use super::parser::{TldrPageLocation, TldrParseError, parse_tldr_page};
 
@@ -34,6 +35,7 @@ const ALL_PLATFORMS: &[&str] = &[
 pub enum HostPlatform {
     Linux,
     Macos,
+    Windows,
 }
 
 impl HostPlatform {
@@ -41,12 +43,14 @@ impl HostPlatform {
     ///
     /// # Errors
     ///
-    /// Returns [`TldrCacheError::UnsupportedPlatform`] outside Linux and macOS.
+    /// Returns [`TldrCacheError::UnsupportedPlatform`] outside supported hosts.
     pub fn current() -> Result<Self, TldrCacheError> {
         if cfg!(target_os = "linux") {
             Ok(Self::Linux)
         } else if cfg!(target_os = "macos") {
             Ok(Self::Macos)
+        } else if cfg!(windows) {
+            Ok(Self::Windows)
         } else {
             Err(TldrCacheError::UnsupportedPlatform)
         }
@@ -58,6 +62,7 @@ impl HostPlatform {
 pub enum TldrCacheError {
     UnsupportedPlatform,
     MissingHomeDirectory,
+    MissingLocalAppData,
     Read {
         path: PathBuf,
         source: io::Error,
@@ -72,10 +77,13 @@ impl fmt::Display for TldrCacheError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnsupportedPlatform => {
-                formatter.write_str("tldr cache lookup is supported only on Linux and macOS")
+                formatter.write_str("tldr cache lookup is unsupported on this platform")
             }
             Self::MissingHomeDirectory => {
                 formatter.write_str("cannot locate a tldr cache without HOME")
+            }
+            Self::MissingLocalAppData => {
+                formatter.write_str("cannot locate a tldr cache without LOCALAPPDATA")
             }
             Self::Read { path, source } => {
                 write!(
@@ -100,7 +108,9 @@ impl Error for TldrCacheError {
         match self {
             Self::Read { source, .. } => Some(source),
             Self::Parse { source, .. } => Some(source),
-            Self::UnsupportedPlatform | Self::MissingHomeDirectory => None,
+            Self::UnsupportedPlatform | Self::MissingHomeDirectory | Self::MissingLocalAppData => {
+                None
+            }
         }
     }
 }
@@ -109,27 +119,35 @@ impl Error for TldrCacheError {
 ///
 /// # Errors
 ///
-/// Returns [`TldrCacheError::MissingHomeDirectory`] when neither an explicit
-/// override nor `HOME` is available.
+/// Returns a platform-specific location error when neither an explicit
+/// override nor the native cache base (`HOME` or `LOCALAPPDATA`) is available.
 pub fn get_tldr_cache_dir(
     environment: &BTreeMap<String, String>,
     platform: HostPlatform,
 ) -> Result<PathBuf, TldrCacheError> {
-    if let Some(path) = environment.get("MANT_TLDR_DIR") {
+    if let Some(path) = environment_value(environment, "MANT_TLDR_DIR") {
         return Ok(PathBuf::from(path));
     }
-    let home = home_dir(environment)?;
-    Ok(match platform {
-        HostPlatform::Linux => environment.get("XDG_CACHE_HOME").map_or_else(
-            || home.join(".cache").join("mant").join("tldr-pages"),
-            |cache| PathBuf::from(cache).join("mant").join("tldr-pages"),
-        ),
-        HostPlatform::Macos => home
+    match platform {
+        HostPlatform::Linux => {
+            let home = home_dir(environment)?;
+            Ok(
+                environment_value(environment, "XDG_CACHE_HOME").map_or_else(
+                    || home.join(".cache").join("mant").join("tldr-pages"),
+                    |cache| PathBuf::from(cache).join("mant").join("tldr-pages"),
+                ),
+            )
+        }
+        HostPlatform::Macos => Ok(home_dir(environment)?
             .join("Library")
             .join("Caches")
             .join("ManT")
-            .join("tldr-pages"),
-    })
+            .join("tldr-pages")),
+        HostPlatform::Windows => Ok(local_app_data(environment)?
+            .join("ManT")
+            .join("cache")
+            .join("tldr-pages")),
+    }
 }
 
 /// Return known installed-client cache roots in priority order.
@@ -141,13 +159,33 @@ pub fn get_system_tldr_cache_dirs(
     environment: &BTreeMap<String, String>,
     platform: HostPlatform,
 ) -> Result<Vec<PathBuf>, TldrCacheError> {
+    if platform == HostPlatform::Windows {
+        let local = local_app_data(environment)?;
+        let roaming = environment_value(environment, "APPDATA").map(PathBuf::from);
+        let mut candidates = vec![
+            local.join("tldr"),
+            local.join("tlrc"),
+            local.join("tealdeer").join("tldr-pages"),
+        ];
+        if let Some(roaming) = roaming {
+            candidates.push(roaming.join("tldr"));
+            candidates.push(roaming.join("tlrc"));
+        }
+        if let Some(home) = optional_home_dir(environment) {
+            candidates.push(home.join(".tldrc").join("tldr"));
+            candidates.push(home.join(".tldr").join("cache"));
+            candidates.push(home.join(".tldr"));
+        }
+        return Ok(deduplicate_paths(candidates));
+    }
+
     let home = home_dir(environment)?;
-    let portable_cache = environment
-        .get("XDG_CACHE_HOME")
+    let portable_cache = environment_value(environment, "XDG_CACHE_HOME")
         .map_or_else(|| home.join(".cache"), PathBuf::from);
     let native_cache = match platform {
         HostPlatform::Linux => portable_cache.clone(),
         HostPlatform::Macos => home.join("Library").join("Caches"),
+        HostPlatform::Windows => unreachable!("Windows returned above"),
     };
     let mut candidates = vec![
         portable_cache.join("tldr"),
@@ -164,7 +202,7 @@ pub fn get_system_tldr_cache_dirs(
         home.join(".tldr"),
     ];
 
-    if let Some(value) = environment.get("XDG_DATA_DIRS") {
+    if let Some(value) = environment_value(environment, "XDG_DATA_DIRS") {
         candidates.extend(
             env::split_paths(OsStr::new(value))
                 .filter(|path| !path.as_os_str().is_empty())
@@ -190,7 +228,7 @@ pub fn get_tldr_read_cache_dirs(
     platform: HostPlatform,
     tldr_installed: bool,
 ) -> Result<Vec<PathBuf>, TldrCacheError> {
-    if environment.contains_key("MANT_TLDR_DIR") {
+    if environment_value(environment, "MANT_TLDR_DIR").is_some() {
         return get_tldr_cache_dir(environment, platform).map(|path| vec![path]);
     }
     let private_cache = get_tldr_cache_dir(environment, platform)?;
@@ -229,6 +267,7 @@ pub fn get_tldr_platforms(platform: HostPlatform) -> Vec<String> {
     let mut platforms = match platform {
         HostPlatform::Linux => vec!["linux".to_owned()],
         HostPlatform::Macos => vec!["osx".to_owned(), "macos".to_owned()],
+        HostPlatform::Windows => vec!["windows".to_owned()],
     };
     platforms.extend(ALL_PLATFORMS.iter().map(ToString::to_string));
     deduplicate_strings(platforms)
@@ -355,11 +394,21 @@ fn read_cached_tldr_page_with(
 }
 
 fn home_dir(environment: &BTreeMap<String, String>) -> Result<PathBuf, TldrCacheError> {
-    environment
-        .get("HOME")
+    optional_home_dir(environment).ok_or(TldrCacheError::MissingHomeDirectory)
+}
+
+fn optional_home_dir(environment: &BTreeMap<String, String>) -> Option<PathBuf> {
+    environment_value(environment, "HOME")
+        .or_else(|| environment_value(environment, "USERPROFILE"))
         .filter(|home| !home.is_empty())
         .map(PathBuf::from)
-        .ok_or(TldrCacheError::MissingHomeDirectory)
+}
+
+fn local_app_data(environment: &BTreeMap<String, String>) -> Result<PathBuf, TldrCacheError> {
+    environment_value(environment, "LOCALAPPDATA")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .ok_or(TldrCacheError::MissingLocalAppData)
 }
 
 fn normalize_locale(locale: &str) -> Vec<String> {
@@ -377,17 +426,6 @@ fn normalize_locale(locale: &str) -> Vec<String> {
     } else {
         vec![normalized, language]
     }
-}
-
-fn find_executable(name: &str, environment: &BTreeMap<String, String>) -> Option<PathBuf> {
-    let path = environment.get("PATH")?;
-    env::split_paths(OsStr::new(path))
-        .map(|directory| directory.join(name))
-        .find(|candidate| {
-            candidate.metadata().is_ok_and(|metadata| {
-                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-            })
-        })
 }
 
 fn deduplicate_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
@@ -492,6 +530,36 @@ mod tests {
                 "/cache/mant/tldr-pages",
             ]
             .map(PathBuf::from)
+        );
+    }
+
+    #[test]
+    fn windows_uses_local_application_data_for_private_and_client_caches() {
+        let environment = env(&[
+            ("LOCALAPPDATA", r"C:\Users\test\AppData\Local"),
+            ("APPDATA", r"C:\Users\test\AppData\Roaming"),
+            ("USERPROFILE", r"C:\Users\test"),
+        ]);
+        assert_eq!(
+            get_tldr_cache_dir(&environment, HostPlatform::Windows).expect("private cache"),
+            PathBuf::from(r"C:\Users\test\AppData\Local").join("ManT/cache/tldr-pages")
+        );
+        assert_eq!(
+            get_system_tldr_cache_dirs(&environment, HostPlatform::Windows).expect("client caches"),
+            [
+                PathBuf::from(r"C:\Users\test\AppData\Local").join("tldr"),
+                PathBuf::from(r"C:\Users\test\AppData\Local").join("tlrc"),
+                PathBuf::from(r"C:\Users\test\AppData\Local").join("tealdeer/tldr-pages"),
+                PathBuf::from(r"C:\Users\test\AppData\Roaming").join("tldr"),
+                PathBuf::from(r"C:\Users\test\AppData\Roaming").join("tlrc"),
+                PathBuf::from(r"C:\Users\test").join(".tldrc/tldr"),
+                PathBuf::from(r"C:\Users\test").join(".tldr/cache"),
+                PathBuf::from(r"C:\Users\test").join(".tldr"),
+            ]
+        );
+        assert_eq!(
+            &get_tldr_platforms(HostPlatform::Windows)[..2],
+            ["windows", "common"]
         );
     }
 
