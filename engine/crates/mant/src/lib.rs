@@ -7,7 +7,7 @@
 mod arguments;
 mod mcp;
 
-use std::io::{self, Read, Write};
+use std::io::{self, IsTerminal, Read, Write};
 
 use mant_ast::{
     Diagnostic, ExcerptSelection, QueryBundle, QueryInput, QueryRequest, QueryView, SearchQuery,
@@ -16,7 +16,7 @@ use mant_ast::{
 use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
 use serde::Serialize;
 
-use arguments::{Command, QueryFormat, QuerySource, SchemaContract};
+use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ struct ProtocolDescription<'a> {
 #[allow(clippy::struct_excessive_bools)]
 struct QueryExecution {
     source: QuerySource,
-    format: QueryFormat,
+    presentation: QueryPresentation,
     pretty: bool,
     force_libmandoc: bool,
     force_groff: bool,
@@ -109,6 +109,24 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         return mcp::run_stdio().await;
     }
 
+    if matches!(
+        command,
+        Command::Query {
+            presentation: QueryPresentation::Interactive,
+            ..
+        }
+    ) {
+        if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+            return report_failure(
+                &Failure::usage(
+                    "interactive view requires an input and output terminal; omit --ui or select --format",
+                ),
+                &mut io::stderr().lock(),
+            );
+        }
+        return run_interactive(command, &mut io::stderr().lock(), &SystemHost);
+    }
+
     run_command(
         command,
         &mut io::stdin().lock(),
@@ -143,6 +161,18 @@ fn run_command(
     if matches!(command, Command::Mcp) {
         return report_failure(
             &Failure::usage("MCP mode must be launched through the native process entry point"),
+            diagnostics,
+        );
+    }
+    if matches!(
+        command,
+        Command::Query {
+            presentation: QueryPresentation::Interactive,
+            ..
+        }
+    ) {
+        return report_failure(
+            &Failure::usage("interactive mode requires the native terminal process boundary"),
             diagnostics,
         );
     }
@@ -195,7 +225,7 @@ fn execute(
         }
         Command::Query {
             source,
-            format,
+            presentation,
             pretty,
             force_libmandoc,
             force_groff,
@@ -204,7 +234,7 @@ fn execute(
         } => execute_query(
             QueryExecution {
                 source,
-                format,
+                presentation,
                 pretty,
                 force_libmandoc,
                 force_groff,
@@ -248,14 +278,74 @@ fn execute_query(
     if command.force_libmandoc || command.force_groff {
         report_manual_diagnostics(&query, diagnostics)?;
     }
+    let format = match command.presentation {
+        QueryPresentation::Auto => QueryFormat::Markdown,
+        QueryPresentation::Output(format) => format,
+        QueryPresentation::Interactive => {
+            return Err(Failure::usage(
+                "interactive mode requires the native terminal process boundary",
+            ));
+        }
+    };
     render_query_view(
         &query,
         view,
-        command.format,
+        format,
         command.pretty,
         command.explain,
         command.preserve_anchors,
     )
+}
+
+/// Load one full query and hand the normalized document directly to Ratatui.
+fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn CliHost) -> u8 {
+    let Command::Query {
+        source,
+        presentation: QueryPresentation::Interactive,
+        force_libmandoc,
+        force_groff,
+        ..
+    } = command
+    else {
+        return report_failure(
+            &Failure::usage("interactive mode requires a document query"),
+            diagnostics,
+        );
+    };
+    let QuerySource::Arguments(request) = source else {
+        return report_failure(
+            &Failure::usage("interactive mode requires a topic or Markdown path"),
+            diagnostics,
+        );
+    };
+    if !matches!(request.view, QueryView::Full {}) {
+        return report_failure(
+            &Failure::usage("interactive mode requires the complete document view"),
+            diagnostics,
+        );
+    }
+    let policy = QueryPolicy {
+        force_libmandoc,
+        force_groff,
+    };
+    if matches!(request.input, QueryInput::MarkdownFile { .. })
+        && let Err(error) = validate_markdown_policy(policy)
+    {
+        return report_failure(&error, diagnostics);
+    }
+    let query = match host.query(&request, policy) {
+        Ok(query) => query,
+        Err(error) => return report_failure(&error, diagnostics),
+    };
+    if (force_libmandoc || force_groff)
+        && let Err(error) = report_manual_diagnostics(&query, diagnostics)
+    {
+        return report_failure(&error, diagnostics);
+    }
+    match mant_ui::run(&query) {
+        Ok(()) => 0,
+        Err(error) => report_failure(&Failure::operational(error), diagnostics),
+    }
 }
 
 /// Render one already-loaded projection without re-reading local source data.

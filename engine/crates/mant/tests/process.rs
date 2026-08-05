@@ -61,6 +61,20 @@ fn short_help_alias_matches_long_help() {
 }
 
 #[test]
+fn explicit_ui_requires_a_real_terminal_before_loading_a_document() {
+    let output = Command::new(executable())
+        .args(["definitely-not-a-real-manual", "--ui"])
+        .output()
+        .expect("run redirected mant UI");
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+    assert!(diagnostic.contains("interactive view requires"));
+    assert!(!diagnostic.contains("No manual entry"));
+}
+
+#[test]
 fn request_schema_is_discoverable_without_host_state() {
     let output = Command::new(executable())
         .args(["--schema", "request", "--compact"])

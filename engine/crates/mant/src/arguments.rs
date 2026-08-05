@@ -24,6 +24,18 @@ pub(crate) enum QueryFormat {
     Json,
 }
 
+/// How a complete native query is presented to its caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum QueryPresentation {
+    /// Use the interactive reader when the process owns a terminal, otherwise
+    /// retain the conventional Markdown output.
+    Auto,
+    /// Require the Ratatui reader and a usable terminal.
+    Interactive,
+    /// Render a deterministic representation to standard output.
+    Output(QueryFormat),
+}
+
 /// A discoverable JSON Schema exposed by the native process boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum SchemaContract {
@@ -99,7 +111,7 @@ pub(crate) enum Command {
     Help(String),
     Query {
         source: QuerySource,
-        format: QueryFormat,
+        presentation: QueryPresentation,
         pretty: bool,
         force_libmandoc: bool,
         /// Use the groff HTML compatibility renderer instead of libmandoc.
@@ -294,6 +306,28 @@ struct Cli {
     )]
     force_groff: bool,
 
+    /// Open the interactive terminal reader explicitly.
+    #[arg(
+        long,
+        requires = "topic",
+        conflicts_with_all = [
+            "outline",
+            "node",
+            "explain",
+            "search",
+            "request_json",
+            "update_tldr",
+            "protocol_version",
+            "schema",
+            "mcp",
+            "format",
+            "compact",
+            "preserve_anchors"
+        ],
+        help_heading = "Reading"
+    )]
+    ui: bool,
+
     /// Update tldr data through the installed client or `ManT` cache.
     #[arg(
         long,
@@ -439,17 +473,21 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
     } else {
         QueryView::Excerpt { nodes: parsed.node }
     };
-    let format = parsed.format.unwrap_or(match &view {
+    let default_format = match &view {
         QueryView::Outline { .. } | QueryView::Search { .. } => QueryFormat::Text,
         QueryView::Full { .. } | QueryView::Excerpt { .. } => QueryFormat::Markdown,
-    });
-    if parsed.compact && format != QueryFormat::Json {
+    };
+    if parsed.compact && parsed.format != Some(QueryFormat::Json) {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--compact requires --format json for manual queries",
         ));
     }
-    if parsed.preserve_anchors && format != QueryFormat::Markdown {
+    if parsed.preserve_anchors
+        && parsed
+            .format
+            .is_some_and(|format| format != QueryFormat::Markdown)
+    {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--preserve-anchors requires Markdown output",
@@ -457,10 +495,27 @@ fn normalize(parsed: Cli) -> Result<Command, clap::Error> {
     }
 
     let source = normalize_query_source(parsed.request_json, parsed.topic, parsed.section, view)?;
+    let presentation = if parsed.ui {
+        QueryPresentation::Interactive
+    } else if let Some(format) = parsed.format {
+        QueryPresentation::Output(format)
+    } else if parsed.preserve_anchors {
+        QueryPresentation::Output(QueryFormat::Markdown)
+    } else if matches!(
+        source,
+        QuerySource::Arguments(QueryRequest {
+            view: QueryView::Full {},
+            ..
+        })
+    ) {
+        QueryPresentation::Auto
+    } else {
+        QueryPresentation::Output(default_format)
+    };
 
     Ok(Command::Query {
         source,
-        format,
+        presentation,
         pretty: !parsed.compact,
         force_libmandoc: parsed.force_libmandoc,
         force_groff: parsed.force_groff,
@@ -546,7 +601,7 @@ mod tests {
         SearchSyntax,
     };
 
-    use super::{Command, QueryFormat, QuerySource, SchemaContract, parse};
+    use super::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract, parse};
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -565,7 +620,7 @@ mod tests {
                     },
                     view: QueryView::Full {},
                 }),
-                format: QueryFormat::Markdown,
+                presentation: QueryPresentation::Auto,
                 pretty: true,
                 force_libmandoc: false,
                 force_groff: false,
@@ -573,6 +628,29 @@ mod tests {
                 preserve_anchors: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_an_explicit_interactive_query_without_an_output_projection() {
+        assert!(matches!(
+            parse(&args(&["git", "--ui"])).expect("interactive query"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    input: QueryInput::Manual { ref topic, .. },
+                    view: QueryView::Full {},
+                    ..
+                }),
+                presentation: QueryPresentation::Interactive,
+                ..
+            } if topic == "git"
+        ));
+
+        for conflicting in ["--outline", "--search=git", "--format=json"] {
+            assert!(
+                parse(&args(&["git", "--ui", conflicting])).is_err(),
+                "accepted {conflicting}"
+            );
+        }
     }
 
     #[test]
@@ -598,7 +676,7 @@ mod tests {
                         detail: OutlineDetail::Options
                     }
                 },
-                format: QueryFormat::Text,
+                presentation: QueryPresentation::Output(QueryFormat::Text),
                 ..
             }
         ));
@@ -615,7 +693,7 @@ mod tests {
         assert!(matches!(
             parse(&args(&["git", "--preserve-anchors"])).expect("addressable Markdown"),
             Command::Query {
-                format: QueryFormat::Markdown,
+                presentation: QueryPresentation::Output(QueryFormat::Markdown),
                 preserve_anchors: true,
                 ..
             }
@@ -643,7 +721,7 @@ mod tests {
                     },
                     view: QueryView::Full {},
                 }),
-                format: QueryFormat::Json,
+                presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
                 force_libmandoc: false,
                 force_groff: false,
@@ -660,7 +738,7 @@ mod tests {
                 .expect("stdin query"),
             Command::Query {
                 source: QuerySource::StdinJson,
-                format: QueryFormat::Json,
+                presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
                 force_libmandoc: false,
                 force_groff: false,
@@ -716,7 +794,7 @@ mod tests {
                         detail: OutlineDetail::Options,
                     },
                 }),
-                format: QueryFormat::Text,
+                presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
                 force_libmandoc: false,
                 force_groff: false,
@@ -738,7 +816,7 @@ mod tests {
                         detail: OutlineDetail::Options,
                     },
                 }),
-                format: QueryFormat::Json,
+                presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
                 force_libmandoc: false,
                 force_groff: false,
@@ -762,7 +840,7 @@ mod tests {
                         nodes: vec!["4.2".to_owned(), "files-8".to_owned()],
                     },
                 }),
-                format: QueryFormat::Text,
+                presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
                 force_libmandoc: false,
                 force_groff: false,
@@ -792,7 +870,7 @@ mod tests {
                             nodes: vec![selector.to_owned()],
                         },
                     }),
-                    format: QueryFormat::Markdown,
+                    presentation: QueryPresentation::Output(QueryFormat::Markdown),
                     pretty: true,
                     force_libmandoc: false,
                     force_groff: false,
@@ -825,7 +903,7 @@ mod tests {
                         offset: 0,
                     },
                 }),
-                format: QueryFormat::Text,
+                presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
                 force_libmandoc: false,
                 force_groff: false,
@@ -872,7 +950,7 @@ mod tests {
                         offset: 5,
                     },
                 }),
-                format: QueryFormat::Json,
+                presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
                 force_libmandoc: false,
                 force_groff: false,
@@ -961,7 +1039,7 @@ mod tests {
                     },
                     view: QueryView::Full {},
                 }),
-                format: QueryFormat::Markdown,
+                presentation: QueryPresentation::Auto,
                 pretty: true,
                 force_libmandoc: false,
                 force_groff: false,
