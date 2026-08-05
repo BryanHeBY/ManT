@@ -1,11 +1,15 @@
 //! Black-box checks for the executable's stdout, stderr, and exit-code contract.
 
+mod support;
+
 use std::{
     fs,
     io::Write,
     path::PathBuf,
     process::{Command, Stdio},
 };
+
+use support::{configure_registered_documents, registered_documents_dir};
 
 fn executable() -> &'static str {
     env!("CARGO_BIN_EXE_mant")
@@ -311,21 +315,24 @@ fn cli_json_remains_the_lowering_diagnostic_surface() {
 }
 
 #[test]
-fn unqualified_names_prefer_registered_xdg_markdown() {
-    let data_home = std::env::temp_dir().join(format!(
+fn unqualified_names_prefer_registered_markdown() {
+    let fixture_root = std::env::temp_dir().join(format!(
         "mant-registered-document-process-{}",
         std::process::id()
     ));
-    let documents = data_home.join("mant/documents");
+    let documents = registered_documents_dir(&fixture_root);
     fs::create_dir_all(&documents).expect("create registered document directory");
     let path = documents.join("process-registered.md");
-    fs::write(&path, "# Registered\n\nBody from the XDG document.\n")
-        .expect("write registered document");
+    fs::write(
+        &path,
+        "# Registered\n\nBody from the registered document.\n",
+    )
+    .expect("write registered document");
 
-    let output = Command::new(executable())
+    let mut command = Command::new(executable());
+    configure_registered_documents(&mut command, &fixture_root);
+    let output = command
         .args(["process-registered", "--format", "json", "--compact"])
-        .env("XDG_DATA_HOME", &data_home)
-        .env("XDG_DATA_DIRS", data_home.join("empty-system-data"))
         .output()
         .expect("query registered document");
 
@@ -340,7 +347,7 @@ fn unqualified_names_prefer_registered_xdg_markdown() {
         path.to_str().expect("UTF-8 path")
     );
 
-    fs::remove_dir_all(data_home).expect("remove registered document fixture");
+    fs::remove_dir_all(fixture_root).expect("remove registered document fixture");
 }
 
 #[test]
@@ -349,12 +356,12 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
         "mant-manual-source-policy-process-{}",
         std::process::id()
     ));
-    let data_home = root.join("data");
     let manual_root = root.join("manuals");
-    fs::create_dir_all(data_home.join("mant/documents")).expect("create registration root");
+    let documents = registered_documents_dir(&root);
+    fs::create_dir_all(&documents).expect("create registration root");
     fs::create_dir_all(manual_root.join("man1")).expect("create manual root");
     fs::write(
-        data_home.join("mant/documents/source-policy.md"),
+        documents.join("source-policy.md"),
         "# Registered document\n\nRegistered body.\n",
     )
     .expect("write registered document");
@@ -366,12 +373,11 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
 
     let run = |manual: bool| {
         let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
         command
             .arg("source-policy")
             .args(manual.then_some("--manual"))
             .args(["--format", "json", "--compact"])
-            .env("XDG_DATA_HOME", &data_home)
-            .env("XDG_DATA_DIRS", root.join("empty-system-data"))
             .env("MANT_MANPATH", &manual_root);
         command.output().expect("query source policy")
     };
@@ -401,21 +407,21 @@ fn registered_names_resolve_through_nested_directory_symlinks() {
         "mant-linked-document-process-{}",
         std::process::id()
     ));
-    let data_home = root.join("user-data");
     let provider = root.join("provider-docs");
-    fs::create_dir_all(data_home.join("mant/documents")).expect("create registration root");
+    let documents = registered_documents_dir(&root);
+    fs::create_dir_all(&documents).expect("create registration root");
     fs::create_dir_all(&provider).expect("create provider directory");
     fs::write(
         provider.join("process-linked.md"),
         "# Linked\n\nBody from another tool.\n",
     )
     .expect("write provider document");
-    symlink(&provider, data_home.join("mant/documents/provider")).expect("link provider directory");
+    symlink(&provider, documents.join("provider")).expect("link provider directory");
 
-    let output = Command::new(executable())
+    let mut command = Command::new(executable());
+    configure_registered_documents(&mut command, &root);
+    let output = command
         .args(["process-linked", "--format", "json", "--compact"])
-        .env("XDG_DATA_HOME", &data_home)
-        .env("XDG_DATA_DIRS", root.join("empty-system-data"))
         .output()
         .expect("query linked registered document");
 
@@ -425,8 +431,8 @@ fn registered_names_resolve_through_nested_directory_symlinks() {
     assert_eq!(value["document"]["meta"]["title"], "Linked");
     assert_eq!(
         value["document"]["source"]["path"],
-        data_home
-            .join("mant/documents/provider/process-linked.md")
+        documents
+            .join("provider/process-linked.md")
             .to_str()
             .expect("UTF-8 path")
     );

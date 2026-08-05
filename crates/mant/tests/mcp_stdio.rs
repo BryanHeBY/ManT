@@ -1,5 +1,7 @@
 //! Verifies MCP discovery and registered-document queries over real stdio.
 
+mod support;
+
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
@@ -9,16 +11,18 @@ use std::{
 
 use serde_json::{Value, json};
 
+use support::{configure_registered_documents, registered_documents_dir};
+
 /// Start the real binary, negotiate MCP, and inspect its discoverable tools.
 #[test]
 fn stdio_mode_lists_and_queries_registered_markdown_documents() {
     let executable = env!("CARGO_BIN_EXE_mant");
-    let data_home = registered_document_fixture();
-    let mut child = Command::new(executable)
+    let fixture_root = registered_document_fixture();
+    let mut command = Command::new(executable);
+    configure_registered_documents(&mut command, &fixture_root);
+    let mut child = command
         .arg("--mcp")
-        .env("XDG_DATA_HOME", &data_home)
-        .env("XDG_DATA_DIRS", data_home.join("empty-system-data"))
-        .env("MANT_MANPATH", data_home.join("manuals"))
+        .env("MANT_MANPATH", fixture_root.join("manuals"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -56,7 +60,7 @@ fn stdio_mode_lists_and_queries_registered_markdown_documents() {
     ];
     assert_tool_replies(&replies);
 
-    assert_silent_shutdown(child, input, diagnostics, data_home);
+    assert_silent_shutdown(child, input, diagnostics, fixture_root);
 }
 
 fn assert_tool_catalog(tools: &[Value]) {
@@ -255,25 +259,25 @@ fn write_message(input: &mut impl Write, message: &Value) {
 }
 
 fn registered_document_fixture() -> PathBuf {
-    let data_home = std::env::temp_dir().join(format!(
+    let fixture_root = std::env::temp_dir().join(format!(
         "mant-mcp-registered-document-{}",
         std::process::id()
     ));
-    let documents = data_home.join("mant/documents");
+    let documents = registered_documents_dir(&fixture_root);
     fs::create_dir_all(&documents).expect("create document directory");
     fs::write(
         documents.join("mcp-registered.md"),
         "Read the MCP needle.\n\n> preserved unsupported quote\n\n# Guide\n\nDocument body.\n",
     )
     .expect("write registered document");
-    let manual_section = data_home.join("manuals/man1");
+    let manual_section = fixture_root.join("manuals/man1");
     fs::create_dir_all(&manual_section).expect("create manual section");
     fs::write(
         manual_section.join("mcp-manual.1"),
         ".TH MCP-MANUAL 1\n.SH NAME\nmcp-manual \\- native MCP discovery\n",
     )
     .expect("write manual document");
-    data_home
+    fixture_root
 }
 
 fn parse_reply(line: Result<String, std::io::Error>) -> Value {
