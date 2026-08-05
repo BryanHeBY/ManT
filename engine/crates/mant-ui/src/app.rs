@@ -84,7 +84,12 @@ enum Overlay {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PointerDrag {
     None,
-    Sidebar,
+    /// Keep using the last committed document width while the divider moves.
+    /// Reflowing a large manual for every intermediate mouse column makes the
+    /// pointer lag behind; the final width is committed on button release.
+    Sidebar {
+        render_width: u16,
+    },
     NavigationScrollbar(ScrollbarDrag),
     ContentScrollbar(ScrollbarDrag),
 }
@@ -352,7 +357,9 @@ impl App {
             MouseEventKind::Down(MouseButton::Left)
                 if self.is_sidebar_boundary(mouse.column, mouse.row) =>
             {
-                self.pointer_drag = PointerDrag::Sidebar;
+                self.pointer_drag = PointerDrag::Sidebar {
+                    render_width: self.last_content_area.width.max(1),
+                };
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self
@@ -366,7 +373,7 @@ impl App {
                 self.pointer_drag = PointerDrag::ContentScrollbar(drag);
             }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
-                PointerDrag::Sidebar => self.resize_sidebar_to(mouse.column),
+                PointerDrag::Sidebar { .. } => self.resize_sidebar_to(mouse.column),
                 PointerDrag::NavigationScrollbar(drag) => {
                     self.scroll_navigation_to_pointer(mouse.row, drag);
                 }
@@ -377,7 +384,7 @@ impl App {
             },
             MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
                 match self.pointer_drag {
-                    PointerDrag::Sidebar => self.resize_sidebar_to(mouse.column),
+                    PointerDrag::Sidebar { .. } => self.resize_sidebar_to(mouse.column),
                     PointerDrag::NavigationScrollbar(drag) => {
                         self.scroll_navigation_to_pointer(mouse.row, drag);
                     }
@@ -425,7 +432,7 @@ impl App {
             self.last_navigation_rows.clear();
             if matches!(
                 self.pointer_drag,
-                PointerDrag::Sidebar | PointerDrag::NavigationScrollbar(_)
+                PointerDrag::Sidebar { .. } | PointerDrag::NavigationScrollbar(_)
             ) {
                 self.pointer_drag = PointerDrag::None;
             }
@@ -831,18 +838,25 @@ impl App {
         );
         let inner = area.inner(CONTENT_MARGIN);
         let viewport_height = usize::from(inner.height);
-        let full_width = inner.width.max(1);
-        let full_width_rows = self
-            .rendered_cache
-            .entry(full_width)
-            .or_insert_with(|| self.document.render(full_width))
-            .row_count;
-        let needs_scrollbar =
-            virtual_content_rows(full_width_rows, viewport_height) > viewport_height;
         // The scrollbar owns a gutter beside the document instead of
         // overwriting its final column. This is especially visible on the
         // right border of full-width TLDR panels.
         let scrollbar_gutter = CONTENT_SCROLLBAR_GAP.saturating_add(1);
+        let drag_render_width = match self.pointer_drag {
+            PointerDrag::Sidebar { render_width } => Some(render_width),
+            _ => None,
+        };
+        // Test the narrower, scrollbar-bearing layout first. Almost every
+        // manual needs its virtual trailing rows, so this avoids rendering a
+        // second full-width document merely to discover that fact.
+        let sizing_width = drag_render_width
+            .unwrap_or_else(|| inner.width.saturating_sub(scrollbar_gutter).max(1));
+        let sizing_rows = self
+            .rendered_cache
+            .entry(sizing_width)
+            .or_insert_with(|| self.document.render(sizing_width))
+            .row_count;
+        let needs_scrollbar = virtual_content_rows(sizing_rows, viewport_height) > viewport_height;
         let document_area = if needs_scrollbar && inner.width > scrollbar_gutter {
             Rect::new(
                 inner.x,
@@ -854,7 +868,11 @@ impl App {
             inner
         };
         self.last_content_area = document_area;
-        let render_width = document_area.width.max(1);
+        // During a sidebar drag the viewport follows the pointer immediately,
+        // but its text is clipped from the last committed rendering. Mouse-up
+        // clears the drag state and performs one exact reflow at the final
+        // width on the next frame.
+        let render_width = drag_render_width.unwrap_or_else(|| document_area.width.max(1));
         self.rendered_cache
             .entry(render_width)
             .or_insert_with(|| self.document.render(render_width));
@@ -869,19 +887,19 @@ impl App {
         let virtual_rows = virtual_content_rows(rendered.row_count, viewport_height);
         let maximum = virtual_rows.saturating_sub(viewport_height);
         self.content_scroll = self.content_scroll.min(maximum);
-        let scroll = u16::try_from(self.content_scroll).unwrap_or(u16::MAX);
-        let text = if self.search_query.is_empty() {
-            rendered.text.clone()
+        let matches = if self.search_query.is_empty() {
+            &[]
         } else {
-            rendered.highlighted_text(
-                &self.search_matches,
-                (!self.search_matches.is_empty()).then_some(self.active_search_match),
-            )
+            self.search_matches.as_slice()
         };
+        let text = rendered.viewport_text(
+            self.content_scroll,
+            viewport_height,
+            matches,
+            (!matches.is_empty()).then_some(self.active_search_match),
+        );
         frame.render_widget(
-            Paragraph::new(text)
-                .scroll((scroll, 0))
-                .style(Style::default().bg(theme::CONTENT)),
+            Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),
             document_area,
         );
         self.last_content_scrollbar =
@@ -890,6 +908,13 @@ impl App {
             scrollbar.render(frame);
         } else if matches!(self.pointer_drag, PointerDrag::ContentScrollbar(_)) {
             self.pointer_drag = PointerDrag::None;
+        }
+        if drag_render_width.is_none() {
+            // A width-dependent rendering can be large (notably for GCC).
+            // Keeping the current width hot is useful; retaining every prior
+            // terminal width turns repeated resizing into unbounded growth.
+            self.rendered_cache
+                .retain(|width, _| *width == render_width);
         }
     }
 
@@ -2026,6 +2051,8 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test terminal");
         let mut app = App::new(&navigation_bundle());
         terminal.draw(|frame| app.draw(frame)).expect("draw app");
+        let initial_render_width = app.last_content_area.width;
+        let initial_cached_widths = app.rendered_cache.keys().copied().collect::<HashSet<_>>();
         let boundary = app.last_sidebar_splitter.x;
         let splitter_row = app.last_sidebar_splitter.y;
         assert_eq!(boundary, DEFAULT_SIDEBAR_WIDTH);
@@ -2039,12 +2066,42 @@ mod tests {
             row: 8,
             modifiers: KeyModifiers::NONE,
         });
+        assert_eq!(
+            app.pointer_drag,
+            PointerDrag::Sidebar {
+                render_width: initial_render_width
+            }
+        );
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 40,
+            row: 8,
+            modifiers: KeyModifiers::NONE,
+        });
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("draw intermediate width");
+        assert_eq!(app.sidebar_width, 40);
+        assert_eq!(
+            app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
+            initial_cached_widths
+        );
+
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Drag(MouseButton::Left),
             column: 44,
             row: 8,
             modifiers: KeyModifiers::NONE,
         });
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("draw final preview width");
+        assert_eq!(app.sidebar_width, 44);
+        assert_eq!(
+            app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
+            initial_cached_widths
+        );
+
         app.handle_mouse(MouseEvent {
             kind: MouseEventKind::Up(MouseButton::Left),
             column: 44,
@@ -2054,6 +2111,14 @@ mod tests {
 
         assert_eq!(app.sidebar_width, 44);
         assert_eq!(app.pointer_drag, PointerDrag::None);
+        terminal
+            .draw(|frame| app.draw(frame))
+            .expect("draw committed width");
+        assert_ne!(app.last_content_area.width, initial_render_width);
+        assert_eq!(
+            app.rendered_cache.keys().copied().collect::<HashSet<_>>(),
+            HashSet::from([app.last_content_area.width])
+        );
     }
 
     #[test]

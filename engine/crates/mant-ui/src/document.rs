@@ -427,7 +427,40 @@ impl RenderedDocument {
         matches: &[RenderedSearchMatch],
         active: Option<usize>,
     ) -> Text<'static> {
-        let mut text = self.text.clone();
+        self.text_range(0, self.text.lines.len(), matches, active)
+    }
+
+    /// Clone and decorate only the rows visible in one terminal viewport.
+    ///
+    /// A rendered GCC manual can contain tens of thousands of rows. Cloning
+    /// all of them for every mouse event defeats the width cache even when no
+    /// reflow occurs, so the UI asks for this bounded projection instead.
+    pub(crate) fn viewport_text(
+        &self,
+        start: usize,
+        height: usize,
+        matches: &[RenderedSearchMatch],
+        active: Option<usize>,
+    ) -> Text<'static> {
+        let end = start.saturating_add(height).min(self.text.lines.len());
+        self.text_range(start, end, matches, active)
+    }
+
+    fn text_range(
+        &self,
+        start: usize,
+        end: usize,
+        matches: &[RenderedSearchMatch],
+        active: Option<usize>,
+    ) -> Text<'static> {
+        let Some(lines) = self.text.lines.get(start..end) else {
+            return Text::default();
+        };
+        let mut text = Text::from(lines.to_vec());
+        if matches.is_empty() {
+            return text;
+        }
+
         let mut by_row: HashMap<usize, Vec<(usize, RenderedSearchFragment)>> = HashMap::new();
         for (index, search_match) in matches.iter().enumerate() {
             let first = RenderedSearchFragment {
@@ -438,10 +471,12 @@ impl RenderedDocument {
             for fragment in
                 std::iter::once(first).chain(search_match.additional_fragments.iter().copied())
             {
-                by_row
-                    .entry(fragment.row)
-                    .or_default()
-                    .push((index, fragment));
+                if (start..end).contains(&fragment.row) {
+                    by_row
+                        .entry(fragment.row - start)
+                        .or_default()
+                        .push((index, fragment));
+                }
             }
         }
         for (row, ranges) in by_row {
@@ -2381,6 +2416,21 @@ mod tests {
         );
         assert!(
             highlighted.lines[1]
+                .spans
+                .iter()
+                .any(|span| span.style.bg == Some(theme::SEARCH_ACTIVE))
+        );
+
+        let viewport = rendered.viewport_text(1, 1, &matches, Some(1));
+        assert_eq!(viewport.lines.len(), 1);
+        assert!(
+            viewport.lines[0]
+                .spans
+                .iter()
+                .any(|span| span.style.bg == Some(theme::SEARCH_MATCH))
+        );
+        assert!(
+            viewport.lines[0]
                 .spans
                 .iter()
                 .any(|span| span.style.bg == Some(theme::SEARCH_ACTIVE))
