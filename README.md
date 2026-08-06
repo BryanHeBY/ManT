@@ -58,80 +58,25 @@ independent of terminal detection.
 
 ## Install
 
-Install a supported prebuilt release with `cargo-binstall`:
+Install the latest release and its bundled ManT manual with one command.
+
+### Unix (Linux or macOS)
 
 ```sh
-cargo binstall mant
-mant git
+curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh
 ```
 
-Linux glibc x64/arm64 and Windows MSVC x64 use native release archives. Other
-targets fall back to a Cargo source build. To compile explicitly from
-crates.io:
-
-```sh
-cargo install mant --locked
-mant git
-```
-
-Building from crates.io requires Rust 1.88+. Unix manual support additionally
-requires a C compiler and zlib development headers on Linux or macOS. Windows
-builds are pure Rust and provide Markdown, TUI, CLI, tldr, and MCP capabilities
-without compiling libmandoc. On Unix, neither a `man` nor a `mandoc` executable
-is required at runtime.
-
-### Linux release archive
-
-Download the archive for your architecture from the
-[latest release](https://github.com/BryanHeBY/ManT/releases/latest), then
-install the executable and its bundled `mant` documentation:
-
-```sh
-tar -xzf mant-<version>-linux-<arch>.tar.gz
-cd mant-<version>-linux-<arch>
-install -Dm755 mant ~/.local/bin/mant
-data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-install -Dm644 mant.md "$data_home/mant/documents/mant.md"
-mant mant
-```
-
-Installing `mant.md` is recommended but optional: it makes the complete ManT
-manual available as the registered document `mant`, including in the reader,
-structured CLI, and MCP document catalog. For a system-wide installation, use
-`/usr/local/bin/mant` and `/usr/local/share/mant/documents/mant.md` instead.
-User documents take precedence over system documents.
-
-The archive also includes the project README, the Apache-2.0 license, the
-bundled mandoc license, and a published SHA-256 checksum.
-
-### Windows release archive
-
-Download `mant-<version>-windows-x64.zip` from the
-[latest release](https://github.com/BryanHeBY/ManT/releases/latest), extract
-`mant.exe` into a directory on `PATH`, and optionally register the bundled
-manual from PowerShell:
+### Windows (PowerShell)
 
 ```powershell
-$documents = Join-Path $env:APPDATA "ManT\documents"
-New-Item $documents -ItemType Directory -Force | Out-Null
-Copy-Item .\mant.md (Join-Path $documents "mant.md")
-mant mant
+irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1 | iex
 ```
 
-The Windows build reads registered or explicit Markdown, starts the same
-interactive reader, and exposes the same output and MCP contracts. It does not
-parse Unix man/roff sources; `--manual` and `--section` therefore report that
-native manuals are unavailable.
-
-### Build from source
-
-```sh
-cargo build --release --locked -p mant
-./target/release/mant git
-```
-
-See the [development guide](docs/development.md) for full repository checks
-and fixture requirements.
+The installers select the latest GitHub release, verify prebuilt archives
+against the published SHA-256 manifest, install or update `mant`, and register
+the bundled manual so `mant mant` works immediately. See the complete
+[installation guide](docs/installation.md) for custom locations,
+uninstallation, `cargo-binstall`, release archives, and source builds.
 
 ## Interactive reader
 
@@ -316,6 +261,7 @@ versioned JSON and MCP boundaries.
 ## Documentation
 
 - [mant self manual](docs/manuals/mant.md)
+- [Installation methods and platform requirements](docs/installation.md)
 - [JSON protocol and Schema reference](docs/protocol.md)
 - [Native architecture](docs/architecture/native-core.md)
 - [Development guide and repository map](docs/development.md)

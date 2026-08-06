@@ -2,6 +2,9 @@
 
 use std::{path::PathBuf, process::Command};
 
+#[cfg(target_os = "linux")]
+use std::{fs, process, time::SystemTime};
+
 use serde_json::Value;
 
 #[test]
@@ -71,6 +74,99 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
     let windows = include_str!("../../../scripts/package-release.ps1");
     assert!(windows.contains(r#"$ArchiveRoot = "mant-$Version-$Target""#));
     assert!(windows.contains(r#"Copy-Item $Binary (Join-Path $Package "mant.exe")"#));
+}
+
+#[test]
+fn one_line_installers_follow_the_published_release_contract() {
+    let readme = include_str!("../../../README.md");
+    let unix = include_str!("../../../scripts/install.sh");
+    let windows = include_str!("../../../scripts/install.ps1");
+
+    assert!(
+        readme.contains(
+            "https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh"
+        )
+    );
+    assert!(readme.contains(
+        "https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1 | iex"
+    ));
+
+    assert!(unix.contains("$GITHUB_URL/releases/latest"));
+    assert!(unix.contains(r#"archive="mant-$version-$target.tar.gz""#));
+    assert!(unix.contains(r#"download "$release_url/SHA256SUMS""#));
+    assert!(unix.contains(r#"install -m 0644 "$manual" "$manual_path""#));
+    assert!(unix.contains("RECEIPT_SCHEMA=mant.install/v1"));
+    assert!(unix.contains(r#"[ "$uninstall" = true ]"#));
+    assert!(unix.contains("ManT %s is already up to date."));
+
+    assert!(windows.contains("/releases/latest"));
+    assert!(windows.contains(r#"$Archive = "mant-$Version-$Target.zip""#));
+    assert!(
+        windows.contains(r#"Invoke-WebRequest -UseBasicParsing -Uri "$ReleaseUrl/SHA256SUMS""#)
+    );
+    assert!(windows.contains(r"Copy-Item $Manual $ManualPath -Force"));
+    assert!(windows.contains(r#"$ReceiptSchema = "mant.install/v1""#));
+    assert!(windows.contains("if ($Uninstall)"));
+    assert!(windows.contains("ManT $Version is already up to date."));
+
+    assert!(readme.contains("docs/installation.md"));
+    let installation = include_str!("../../../docs/installation.md");
+    assert!(installation.contains("sh -s -- --uninstall"));
+    assert!(installation.contains("-Uninstall"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn unix_installer_uninstalls_only_files_owned_by_its_receipt() {
+    let nonce = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("system time after epoch")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("mant-installer-{}-{nonce}", process::id()));
+    let state = root.join("state/mant");
+    let bin = root.join("bin");
+    let documents = root.join("documents");
+    fs::create_dir_all(&state).expect("installer state directory");
+    fs::create_dir_all(&bin).expect("installer binary directory");
+    fs::create_dir_all(&documents).expect("installer document directory");
+
+    let binary = bin.join("mant");
+    let manual = documents.join("mant.md");
+    let user_document = documents.join("user.md");
+    fs::write(&binary, "installed binary").expect("installed binary fixture");
+    fs::write(&manual, "installed manual").expect("installed manual fixture");
+    fs::write(&user_document, "user document").expect("user document fixture");
+    fs::write(
+        state.join("install-receipt"),
+        format!(
+            "schema\tmant.install/v1\nversion\t0.5.0\ninstall_dir\t{}\ndata_dir\t{}\nbinary\t{}\nmanual\t{}\n",
+            bin.display(),
+            documents.display(),
+            binary.display(),
+            manual.display()
+        ),
+    )
+    .expect("installer receipt fixture");
+
+    let installer = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts/install.sh");
+    let output = Command::new("sh")
+        .arg(installer)
+        .arg("--uninstall")
+        .env("XDG_STATE_HOME", root.join("state"))
+        .output()
+        .expect("run Unix uninstaller");
+    assert!(
+        output.status.success(),
+        "Unix uninstaller failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!binary.exists());
+    assert!(!manual.exists());
+    assert!(!state.join("install-receipt").exists());
+    assert!(user_document.exists());
+    assert!(documents.exists());
+
+    fs::remove_dir_all(root).expect("remove installer fixture");
 }
 
 #[test]

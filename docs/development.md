@@ -43,9 +43,10 @@ Those four portable crates are also the workspace `default-members`, so a bare
 deliberately passes `--workspace` to include the standalone `libmandoc-rs`
 package and its native parser tests.
 
-The script checks formatting, runs every workspace test, runs clippy with all
-targets and features, builds the optimized executable, and smoke-tests its
-human and JSON surfaces. The result is `target/release/mant`.
+The script checks formatting and installer syntax, runs every workspace test,
+runs clippy with all targets and features, builds the optimized executable,
+and smoke-tests its human and JSON surfaces. The result is
+`target/release/mant`.
 
 Focused commands are useful while iterating:
 
@@ -70,9 +71,12 @@ fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
+scripts/install.sh           Latest-release installer for Linux and macOS
+scripts/install.ps1          Latest-release installer for Windows x64
 scripts/package-release.sh   Reproducible Linux release archive assembly
 scripts/package-release.ps1 Windows x64 ZIP assembly
 docs/architecture/           Design decisions and stable-boundary documentation
+docs/installation.md         User installation methods and platform requirements
 docs/manuals/                Self-hosted Markdown manual shipped in releases
 docs/assets/                 README screenshots and documentation assets
 ```

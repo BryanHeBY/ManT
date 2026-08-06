@@ -90,10 +90,15 @@ archives remain disabled until they can be Developer ID-signed and notarized.
 The `mant` crate's cargo-binstall metadata maps the three public Rust targets
 to these human-readable archive names and their nested executable paths.
 `crates/mant/tests/release_metadata.rs` keeps that mapping synchronized with
-both packaging scripts. If an archive name or root changes, update the crate
-metadata and regression test in the same commit. cargo-binstall can download
-an archive only after the draft GitHub Release becomes public; before that it
-may fall back to a source build.
+the packaging and one-line installer scripts. The installers resolve GitHub's
+latest public release, download `SHA256SUMS`, install the platform archive and
+register its bundled manual. They keep a versioned receipt so later runs can
+update the same destinations or safely uninstall only installer-owned files.
+If an archive name, root, checksum publication, or receipt schema changes,
+update the crate metadata, installers, installation guide, and regression test
+in the same commit. cargo-binstall and the one-line installers can download an
+archive only after the draft GitHub Release becomes public; before that,
+cargo-binstall may fall back to a source build.
 
 ## Inspect an archive locally
 
