@@ -12,12 +12,32 @@ documents while Unix manual parsing remains an explicit Unix capability.
 One native `mant` executable provides the full-screen reader, deterministic
 Markdown/text/JSON output, generated schemas, and a read-only MCP server.
 
+## Install
+
+Install or update the latest release.
+
+**Unix (Linux or macOS)**
+
 ```sh
-mant git                              # interactive reader in a terminal
-mant gcc --outline                    # structured outline for a script or agent
-mant tar --explain=--exclude          # one semantic option
-mant git --format markdown            # deterministic standard output
-mant --mcp                            # read-only MCP over stdio
+curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1 | iex
+```
+
+All options, uninstallation, and alternative methods are in the
+[installation guide](docs/installation.md).
+
+**Agent prompt**
+
+```text
+Read https://raw.githubusercontent.com/BryanHeBY/ManT/main/docs/installation.md
+and install or update the latest ManT release for this system. Use its
+recommended user-scoped method, verify the installation, and report any PATH
+change still needed.
 ```
 
 ![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mant-reader.png)
@@ -55,28 +75,6 @@ independent of terminal detection.
   executable. Windows keeps the same property for Markdown documents.
 - **Markdown uses the same model.** Project documentation gains the same
   outline, excerpt, search, TUI, JSON, and MCP capabilities.
-
-## Install
-
-Install the latest release and its bundled ManT manual with one command.
-
-### Unix (Linux or macOS)
-
-```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh
-```
-
-### Windows (PowerShell)
-
-```powershell
-irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1 | iex
-```
-
-The installers select the latest GitHub release, verify prebuilt archives
-against the published SHA-256 manifest, install or update `mant`, and register
-the bundled manual so `mant mant` works immediately. See the complete
-[installation guide](docs/installation.md) for custom locations,
-uninstallation, `cargo-binstall`, release archives, and source builds.
 
 ## Interactive reader
 
