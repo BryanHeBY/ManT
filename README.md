@@ -12,6 +12,8 @@ documents while Unix manual parsing remains an explicit Unix capability.
 One native `mant` executable provides the full-screen reader, deterministic
 Markdown/text/JSON output, generated schemas, and a read-only MCP server.
 
+![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mant-reader.png)
+
 ## Install
 
 Install or update the latest release.
@@ -39,8 +41,6 @@ and install or update the latest ManT release for this system. Use its
 recommended user-scoped method, verify the installation, and report any PATH
 change still needed.
 ```
-
-![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mant-reader.png)
 
 ## One command, two workflows
 
