@@ -53,8 +53,10 @@ for tool in cargo fc-cache fc-match import magick xdotool xterm; do
 done
 
 font_dir="$ROOT/docs/assets/fonts"
+font_pattern='JetBrains Mono'
 for file in \
   JetBrainsMono-Regular.ttf \
+  JetBrainsMono-Medium.ttf \
   JetBrainsMono-Bold.ttf \
   JetBrainsMono-Italic.ttf \
   JetBrainsMono-BoldItalic.ttf \
@@ -110,18 +112,22 @@ runtime_environment=(
 # follows NO_COLOR for its own terminal session.
 unset NO_COLOR
 
-printf '==> prepare pinned JetBrains Mono font\n'
+printf '==> prepare pinned JetBrains Mono Medium font\n'
 env "${runtime_environment[@]}" fc-cache -f "$font_dir" >/dev/null
-matched_font=$(env "${runtime_environment[@]}" fc-match -f '%{family}\n' 'JetBrains Mono')
-[[ $matched_font == *'JetBrains Mono'* ]] \
-  || fail "Fontconfig did not select the pinned JetBrains Mono font"
+matched_normal_font=$(env "${runtime_environment[@]}" fc-match -f '%{file}\n' "$font_pattern")
+[[ $matched_normal_font == "$font_dir/JetBrainsMono-Medium.ttf" ]] \
+  || fail "Fontconfig did not select the pinned JetBrains Mono Medium font"
+matched_bold_font=$(env "${runtime_environment[@]}" fc-match -f '%{file}\n' \
+  'JetBrains Mono:style=Bold')
+[[ $matched_bold_font == "$font_dir/JetBrainsMono-Bold.ttf" ]] \
+  || fail "Fontconfig did not select the pinned JetBrains Mono Bold font"
 
 printf '==> start isolated ManT reader\n'
 env "${runtime_environment[@]}" xterm \
   -name mant-screenshot \
   -title mant-screenshot \
   -geometry 135x41 \
-  -fa 'JetBrains Mono' \
+  -fa "$font_pattern" \
   -fs 14 \
   -bg '#11111b' \
   -fg '#cdd6f4' \
