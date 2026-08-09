@@ -18,6 +18,7 @@ run() {
 
 run "check Rust formatting" cargo fmt --all --check
 run "check Unix installer syntax" sh -n scripts/install.sh
+run "check screenshot script syntax" bash -n scripts/update-reader-screenshot.sh
 run "test Rust workspace" cargo test --locked --workspace
 run "lint Rust workspace" \
   cargo clippy --locked --workspace --all-targets --all-features -- -D warnings

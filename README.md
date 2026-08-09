@@ -80,7 +80,6 @@ independent of terminal detection.
 
 ```sh
 mant git
-mant printf --section 3
 mant README.md
 mant tar --ui
 ```
@@ -105,15 +104,13 @@ Start with an outline and retrieve only the section or option that matters:
 
 ```sh
 mant gcc --outline
-mant gcc --outline sections
 mant gcc --node 4.2 --format markdown
 mant tar --node acls --format json
 mant tar --explain=--exclude
 ```
 
 Heading paths are one-based. Path `0` and selector `tldr` are reserved for an
-available quick reference. The default outline includes semantic options;
-`--outline sections` returns only section topology.
+available quick reference.
 
 Search returns the nearest reusable outline node and exact generated-Markdown
 coordinates:
@@ -127,7 +124,7 @@ Full output supports Markdown, text, man-style plain text, and JSON:
 
 ```sh
 mant git --format markdown
-mant printf --section 3 --format text
+mant README.md --format text
 mant git --format json --compact
 ```
 
@@ -154,7 +151,7 @@ and parses their roff through bundled libmandoc. Project-local pages can be expo
 ```sh
 mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
-MANT_MANPATH="$PWD/project-man" mant widget --section 1
+MANT_MANPATH="$PWD/project-man" mant widget --manual
 ```
 
 When compatible local tldr data exists, the reader places it before the full
@@ -183,8 +180,7 @@ On macOS the corresponding roots are
 file or directory links are discovered recursively. The filename stem remains
 the lookup name, so `team/handbook.md` is opened as `mant handbook`;
 directories are organizational rather than namespaces. On Unix, an explicit
-`--manual` or `--section` request bypasses registered Markdown and selects a
-native manual.
+`--manual` request bypasses registered Markdown and selects a native manual.
 
 Use a path for one-off local files or `-` for non-interactive standard input:
 

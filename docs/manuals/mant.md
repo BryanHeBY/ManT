@@ -9,7 +9,7 @@
 
 - Inspect a manual outline:
 
-`mant {{name}} --outline`
+`mant {{name}} --outline {{sections}}`
 
 - Retrieve one section from that outline:
 
@@ -262,7 +262,7 @@ errors, and Rust panics.
 
 ## Document Selection
 
-- `--outline[=DETAIL]`: Print the addressable tree; `options` is the default and `sections` is the compact form.
+- `--outline [DETAIL]`: Print the addressable tree; `options` is the default and `sections` is the compact form.
 - `--node NODE`: Return a node by path or ID; repeat the option to select several nodes.
 - `--explain ENTRY`: Return exactly one semantic option, command, or environment entry.
 

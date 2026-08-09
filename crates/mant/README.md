@@ -50,7 +50,6 @@ terminals. Use `--ui` to require it explicitly:
 
 ```sh
 mant git
-mant printf --section 3
 mant README.md --ui
 ```
 
@@ -66,7 +65,6 @@ Discover the document before selecting only the content that matters:
 
 ```sh
 mant gcc --outline
-mant gcc --outline sections
 mant gcc --node 4.2 --format markdown
 mant tar --explain=--exclude
 mant tar --search=--acls --context 1

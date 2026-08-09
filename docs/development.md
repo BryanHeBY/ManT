@@ -73,6 +73,7 @@ tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
 scripts/install.sh           Latest-release installer for Linux and macOS
 scripts/install.ps1          Latest-release installer for Windows x64
+scripts/update-reader-screenshot.sh  Reproducible Linux README screenshot
 scripts/package-release.sh   Reproducible Linux release archive assembly
 scripts/package-release.ps1 Windows x64 ZIP assembly
 docs/architecture/           Design decisions and stable-boundary documentation
@@ -97,6 +98,18 @@ directory.
 The file `docs/manuals/mant.md` is executable documentation. Tests parse it
 through the supported Markdown subset, require its embedded quick reference
 and semantic options, and reject lossy fallback diagnostics.
+
+On Linux, regenerate the README reader image with:
+
+```sh
+scripts/update-reader-screenshot.sh
+```
+
+The script builds the release executable, registers the repository's ManT
+manual in an isolated XDG hierarchy, opens it in a fixed Xvfb/xterm surface,
+activates View → Expand All, and captures the result. It requires Xvfb, xterm,
+xdotool, Fontconfig, and ImageMagick; the pinned JetBrains Mono files and their
+OFL-1.1 license live under `docs/assets/fonts/`.
 
 `libmandoc-rs` also has a self-contained package boundary: its parser,
 compression, include-policy, diagnostics, and optional `serde` tests must pass

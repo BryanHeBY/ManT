@@ -50,6 +50,13 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         }),
         "{name} uses the standard tldr placeholder syntax that drives command highlighting"
     );
+    assert!(
+        tldr.examples.iter().any(|example| {
+            example.description == "Inspect a manual outline"
+                && example.command == "mant {{name}} --outline {{sections}}"
+        }),
+        "{name} quick reference exposes the section-only outline"
+    );
 
     let outline =
         build_outline_with_detail(&query, OutlineDetail::Sections).expect("self manual outline");
