@@ -16,8 +16,8 @@ include = ["/Cargo.toml", "/README.md", "/src/**"]
 
 [dependencies]
 crossterm.workspace = true
-mant-ast = { path = "../mant-ast", version = "=0.5.0" }
-mant-core = { path = "../mant-core", version = "=0.5.0" }
+mant-ast = { path = "../mant-ast", version = "=0.6.0" }
+mant-core = { path = "../mant-core", version = "=0.6.0" }
 ratatui.workspace = true
 unicode-width.workspace = true
 
