@@ -420,6 +420,41 @@ mod tests {
         );
     }
 
+    #[test]
+    fn deeply_nested_equation_is_bounded_instead_of_overflowing_the_stack() {
+        // Braces nest eqn boxes, a recursive walk the node-copy cap never
+        // enters: copy_equation descends box->first without limit, so a
+        // pathologically nested equation overflows the stack while flattening
+        // it. Each `sqrt` level emits text, so an unbounded render would grow
+        // the string with the input depth; a bounded one plateaus at the cap.
+        let depth = 5_000;
+        let mut equation = String::new();
+        for _ in 0..depth {
+            equation.push_str("sqrt { ");
+        }
+        equation.push('x');
+        for _ in 0..depth {
+            equation.push_str(" }");
+        }
+        let source = format!(".TH DEEP 1\n.SH BODY\n.EQ\n{equation}\n.EN\n");
+
+        let document = Parser::default()
+            .parse_bytes("deep-eqn.1", source.as_bytes())
+            .expect("deeply nested equation parses")
+            .document;
+
+        let node = find_kind(&document.root, NodeKind::Equation).expect("equation node");
+        let rendered = node.equation.as_deref().expect("equation text");
+        // The render stopped at the cap: the flattened text is far shorter than
+        // the ~30k chars all 5000 `sqrt` levels would emit, proving it did not
+        // recurse through every box (and so could not overflow the stack).
+        assert!(
+            rendered.len() < 2_000,
+            "equation text must be bounded by the copy cap, got {} bytes",
+            rendered.len()
+        );
+    }
+
     #[cfg(feature = "serde")]
     #[test]
     fn serde_feature_round_trips_the_public_parse_report() {

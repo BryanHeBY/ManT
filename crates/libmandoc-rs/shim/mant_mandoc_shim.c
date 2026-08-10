@@ -522,7 +522,7 @@ struct text_buffer {
 };
 
 static int append_text(struct text_buffer *, const char *);
-static int append_equation(struct text_buffer *, const struct eqn_box *);
+static int append_equation(struct text_buffer *, const struct eqn_box *, int);
 
 static char *
 copy_equation(const struct eqn_box *box)
@@ -530,7 +530,7 @@ copy_equation(const struct eqn_box *box)
 	struct text_buffer	buffer;
 
 	memset(&buffer, 0, sizeof(buffer));
-	if (!append_equation(&buffer, box)) {
+	if (!append_equation(&buffer, box, 0)) {
 		free(buffer.data);
 		return NULL;
 	}
@@ -538,12 +538,21 @@ copy_equation(const struct eqn_box *box)
 }
 
 static int
-append_equation(struct text_buffer *buffer, const struct eqn_box *box)
+append_equation(struct text_buffer *buffer, const struct eqn_box *box, int depth)
 {
 	const struct eqn_box	*child;
 
 	if (box == NULL)
 		return append_text(buffer, "");
+	/*
+	 * The eqn box tree is a recursive walk the node-copy cap never reaches:
+	 * copy_equation enters it once, then braces nest boxes without bound, so
+	 * `{{{...}}}` overflows the stack here. Stop rendering past the same cap
+	 * and keep the text gathered so far; deeper eqn content is dropped, not
+	 * a whole-page failure. Real equations nest only a handful of levels.
+	 */
+	if (depth >= MANT_MANDOC_MAX_COPY_DEPTH)
+		return 1;
 	if (box->pos == EQNPOS_SQRT && !append_text(buffer, "sqrt("))
 		return 0;
 	if (!append_text(buffer, box->left) || !append_text(buffer, box->text))
@@ -551,7 +560,7 @@ append_equation(struct text_buffer *buffer, const struct eqn_box *box)
 	for (child = box->first; child != NULL; child = child->next) {
 		if (child != box->first && !append_text(buffer, " "))
 			return 0;
-		if (!append_equation(buffer, child))
+		if (!append_equation(buffer, child, depth + 1))
 			return 0;
 	}
 	if (!append_text(buffer, box->right))
