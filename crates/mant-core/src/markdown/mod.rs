@@ -15,7 +15,12 @@ mod tests;
 
 pub use container::TldrDirectiveError;
 
-use std::{collections::HashMap, error::Error, fmt, ops::Range};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt,
+    ops::Range,
+};
 
 use mant_ast::{
     Block, Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, Engine,
@@ -409,6 +414,7 @@ fn attach_completed(stack: &mut Vec<FlatSection>, roots: &mut Vec<Section>) {
 #[derive(Default)]
 struct SectionIds {
     counts: HashMap<String, usize>,
+    assigned: HashSet<String>,
     targets: HashMap<String, String>,
 }
 
@@ -428,12 +434,21 @@ impl SectionIds {
         } else {
             base
         };
+        // Disambiguate on the final id, not the per-base count: `# Foo 2`
+        // slugs to base `foo-2`, which collides with the `foo-2` a second
+        // `# Foo` produces. Counting per base alone would hand both the same
+        // id, silently misattributing search ownership between them.
         let count = self.counts.entry(base.clone()).or_default();
-        *count += 1;
-        let id = if *count == 1 {
-            base.clone()
-        } else {
-            format!("{base}-{}", *count)
+        let id = loop {
+            *count += 1;
+            let candidate = if *count == 1 {
+                base.clone()
+            } else {
+                format!("{base}-{}", *count)
+            };
+            if self.assigned.insert(candidate.clone()) {
+                break candidate;
+            }
         };
         // Ambiguous human-facing keys resolve to the first section that
         // claimed them, matching the bare slug this heading renders as its

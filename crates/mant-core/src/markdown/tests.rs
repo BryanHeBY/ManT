@@ -249,6 +249,38 @@ Duplicate heading.
 }
 
 #[test]
+fn a_heading_slug_colliding_with_a_disambiguated_duplicate_stays_unique() {
+    // `# Foo 2` slugs to `foo-2`, the same id a second `# Foo` produces by
+    // disambiguation. Every section must still own a distinct id, or search
+    // ownership silently misattributes between the collision pair.
+    let markdown = "\
+# Foo
+
+Alpha.
+
+# Foo
+
+Beta.
+
+# Foo 2
+
+Gamma.
+";
+    let document = parse_document(markdown, None);
+
+    let ids: Vec<&str> = document
+        .sections
+        .iter()
+        .map(|section| section.id.as_str())
+        .collect();
+    assert_eq!(
+        ids.len(),
+        ids.iter().collect::<std::collections::HashSet<_>>().len(),
+        "duplicate heading ids collided: {ids:?}"
+    );
+}
+
+#[test]
 fn a_leading_byte_order_mark_hides_neither_the_directive_nor_the_title() {
     let parsed = parse_markdown(
         "\u{feff}<!-- mant:tldr:start -->\n# demo\n\n> Saved by a Windows editor.\n\n- Run:\n\n`demo`\n<!-- mant:tldr:end -->\n\n# Demo\n\nBody.\n",
