@@ -2,6 +2,7 @@
 name = "mant-fuzz"
 version = "0.0.0"
 edition = "2024"
+rust-version = "1.88"
 license = "Apache-2.0"
 publish = false
 
@@ -9,7 +10,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
+libfuzzer-sys = "0.4.13"
 mant-ast = { path = "../crates/mant-ast" }
 mant-core = { path = "../crates/mant-core" }
 
