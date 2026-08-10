@@ -104,6 +104,12 @@ Nested directories and symlinks are discovered recursively. An unqualified
 name. Explicit Markdown paths and `mant -` standard input remain available for
 one-off documents; `--manual` bypasses registered Markdown on Unix.
 
+A registration directory is a trust boundary you own. Discovery follows
+symlinks even when their target lies outside the directory, so any file that is
+readable through a registered path — including one reached by a symlink placed
+there — can be returned, over the read-only MCP server as well. Register only
+directories whose contents and links you control.
+
 When compatible local tldr data exists, ManT prepends it as reserved outline
 node `0`. Reads prefer installed-client caches and then ManT's private cache;
 `mant --update-tldr` updates through an installed client or the private
