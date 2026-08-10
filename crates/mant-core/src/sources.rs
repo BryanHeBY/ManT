@@ -773,12 +773,18 @@ impl Drop for UpdateLock {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, ffi::OsString, fs, path::Path};
+    use std::fs;
+
+    #[cfg(target_os = "linux")]
+    use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
     use super::{
-        RepositorySource, document_paths_with, install_selected_documents, load_source_config_from,
-        recover_directory, source_fingerprint,
+        RepositorySource, install_selected_documents, load_source_config_from, recover_directory,
+        source_fingerprint,
     };
+
+    #[cfg(target_os = "linux")]
+    use super::document_paths_with;
 
     fn temp(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-sources-{label}-{}", std::process::id()))

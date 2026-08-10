@@ -22,6 +22,8 @@ run "check screenshot script syntax" bash -n scripts/update-reader-screenshot.sh
 run "test Rust workspace" cargo test --locked --workspace
 run "lint Rust workspace" \
   cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+run "compile fuzz targets" \
+  cargo check --locked --manifest-path fuzz/Cargo.toml --bins
 run "build release executable" cargo build --locked --release --package mant
 
 MANT="$ROOT/target/release/mant"
