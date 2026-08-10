@@ -182,6 +182,11 @@ the lookup name, so `team/handbook.md` is opened as `mant handbook`;
 directories are organizational rather than namespaces. On Unix, an explicit
 `--manual` request bypasses registered Markdown and selects a native manual.
 
+A registration directory is a trust boundary: discovery follows links even
+when they resolve outside that directory, and readable Markdown reached this
+way is also available through the read-only MCP server. Register only
+directories whose contents and links you control.
+
 Use a path for one-off local files or `-` for non-interactive standard input:
 
 ```sh

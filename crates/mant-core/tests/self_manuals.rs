@@ -124,6 +124,8 @@ fn shipped_manual_explains_recursive_registered_documents() {
         "team/handbook.md",
         "Directories organize documents but do not form",
         "symbolic-link cycles",
+        "registration directory is a trust boundary",
+        "read-only MCP server",
     ] {
         assert!(
             MANT_MANUAL.contains(required),

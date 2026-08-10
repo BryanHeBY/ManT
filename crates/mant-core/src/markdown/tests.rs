@@ -2,10 +2,11 @@
 
 use mant_ast::{
     Block, ExcerptSelection, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle,
-    QuerySchema, SourceFormat, TableAlignment, TldrOrigin,
+    QuerySchema, SearchCase, SearchNode, SearchQuery, SearchScope, SearchSyntax, SourceFormat,
+    TableAlignment, TldrOrigin,
 };
 
-use crate::{build_outline_with_detail, select_excerpt};
+use crate::{build_outline_with_detail, search_query, select_excerpt};
 
 use super::{parse_document, parse_markdown};
 
@@ -273,11 +274,34 @@ Gamma.
         .iter()
         .map(|section| section.id.as_str())
         .collect();
-    assert_eq!(
-        ids.len(),
-        ids.iter().collect::<std::collections::HashSet<_>>().len(),
-        "duplicate heading ids collided: {ids:?}"
-    );
+    assert_eq!(ids, ["foo-2", "foo-2-2"]);
+
+    let query = QueryBundle {
+        schema: QuerySchema::V4,
+        label: "collision".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let result = search_query(
+        &query,
+        &SearchQuery {
+            pattern: "Gamma".to_owned(),
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Sensitive,
+            scope: SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 10,
+            offset: 0,
+        },
+    )
+    .expect("search colliding section");
+    assert_eq!(result.total, 1);
+    assert!(matches!(
+        &result.matches[0].node,
+        SearchNode::DocumentSection { path, id, .. }
+            if path == "2" && id == "foo-2-2"
+    ));
 }
 
 #[test]

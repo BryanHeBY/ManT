@@ -77,6 +77,11 @@ The filename supplies a registered document name: `mant.md` is queried as
 directory symbolic links. Directories organize documents but do not form
 namespaces: `team/handbook.md` is still queried as `mant handbook`.
 
+A registration directory is a trust boundary: discovery follows links even
+when they resolve outside that directory, and readable Markdown reached this
+way is also available through the read-only MCP server. Register only
+directories whose contents and links you control.
+
 For duplicate names, user data precedes system data, shallower paths precede
 deeper paths, relative path order breaks remaining ties, and `.md` precedes
 `.markdown` in the same directory. Broken links and unreadable paths are

@@ -4,7 +4,7 @@ use std::{
     error::Error,
     ffi::OsStr,
     fmt, fs,
-    io::Read,
+    io::{self, Read},
     path::{Path, PathBuf},
 };
 
@@ -153,16 +153,26 @@ impl QueryHost for SystemQueryHost {
 /// The reader is bounded directly instead of trusting a reported length: a pipe
 /// or character device such as `/dev/zero` reports no size yet streams without
 /// end, so only capping the byte count keeps the read finite.
-pub(crate) fn read_capped_utf8(reader: impl Read, limit: u64) -> Result<String, String> {
+fn read_capped_utf8(reader: impl Read, limit: u64) -> Result<String, String> {
+    read_capped_utf8_io(reader, limit).map_err(|error| error.to_string())
+}
+
+/// Read bounded UTF-8 while preserving failures from the underlying reader.
+pub(crate) fn read_capped_utf8_io(reader: impl Read, limit: u64) -> io::Result<String> {
     let mut bytes = Vec::new();
-    reader
-        .take(limit + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|error| error.to_string())?;
+    reader.take(limit + 1).read_to_end(&mut bytes)?;
     if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
-        return Err(format!("Markdown document exceeds the {limit}-byte limit"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Markdown document exceeds the {limit}-byte limit"),
+        ));
     }
-    String::from_utf8(bytes).map_err(|_| "Markdown document must be UTF-8".to_owned())
+    String::from_utf8(bytes).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Markdown document must be UTF-8",
+        )
+    })
 }
 
 fn query_with(
@@ -413,7 +423,7 @@ mod tests {
 
     use super::{
         MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, query_markdown_text, query_with,
-        read_capped_utf8,
+        read_capped_utf8, read_capped_utf8_io,
     };
 
     #[derive(Clone)]
@@ -850,5 +860,24 @@ Document overview.
         let error =
             read_capped_utf8(&[0xff, 0xfe][..], MAX_MARKDOWN_BYTES).expect_err("invalid UTF-8");
         assert!(error.contains("must be UTF-8"), "{error}");
+    }
+
+    #[test]
+    fn capped_io_read_preserves_the_underlying_error_kind() {
+        struct PermissionDeniedReader;
+
+        impl io::Read for PermissionDeniedReader {
+            fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "reader denied access",
+                ))
+            }
+        }
+
+        let error = read_capped_utf8_io(PermissionDeniedReader, MAX_MARKDOWN_BYTES)
+            .expect_err("reader failure is preserved");
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(error.to_string(), "reader denied access");
     }
 }
