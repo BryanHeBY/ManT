@@ -182,9 +182,10 @@ impl App {
             return;
         }
 
-        let mut parent = self.document.navigation()[self.selected]
-            .parent_id
-            .as_deref();
+        let Some(selected) = self.document.navigation().get(self.selected) else {
+            return;
+        };
+        let mut parent = selected.parent_id.as_deref();
         while let Some(parent_id) = parent {
             if let Some(index) = self
                 .document

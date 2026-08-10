@@ -154,6 +154,17 @@ fn status_counts_only_sections_visible_in_the_folded_tree() {
 }
 
 #[test]
+fn collapse_all_over_an_empty_navigation_does_not_panic() {
+    // An empty document yields no navigation entries. Collapse All then walks
+    // the (absent) selected ancestor; indexing it directly would panic, so the
+    // path must tolerate a selection with nothing to resolve.
+    let mut app = App::new(&empty_bundle());
+    app.set_selected_index(3);
+    app.activate_menu_action(MenuAction::CollapseAll);
+    assert!(app.document.navigation().is_empty());
+}
+
+#[test]
 fn terminal_title_includes_the_manual_section_but_the_sidebar_does_not() {
     let mut bundle = navigation_bundle();
     bundle.document.as_mut().expect("document").meta.section = Some("1".to_owned());
