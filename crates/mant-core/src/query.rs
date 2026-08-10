@@ -153,7 +153,7 @@ impl QueryHost for SystemQueryHost {
 /// The reader is bounded directly instead of trusting a reported length: a pipe
 /// or character device such as `/dev/zero` reports no size yet streams without
 /// end, so only capping the byte count keeps the read finite.
-fn read_capped_utf8(reader: impl Read, limit: u64) -> Result<String, String> {
+pub(crate) fn read_capped_utf8(reader: impl Read, limit: u64) -> Result<String, String> {
     let mut bytes = Vec::new();
     reader
         .take(limit + 1)

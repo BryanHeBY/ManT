@@ -334,7 +334,12 @@ impl TldrFileReader for SystemFileReader {
     }
 
     fn read_to_string(&self, path: &Path) -> io::Result<String> {
-        fs::read_to_string(path)
+        // A tldr page is markdown, so hold it to the same byte ceiling as any
+        // other markdown source. Reading unbounded here lets a corrupt cache
+        // entry or a device file streamed in its place exhaust memory.
+        let file = fs::File::open(path)?;
+        crate::query::read_capped_utf8(file, crate::query::MAX_MARKDOWN_BYTES)
+            .map_err(|message| io::Error::new(io::ErrorKind::InvalidData, message))
     }
 }
 
@@ -448,15 +453,16 @@ fn deduplicate_strings(values: Vec<String>) -> Vec<String> {
 mod tests {
     use std::{
         collections::{BTreeMap, HashMap},
-        io,
+        fs, io,
         path::{Path, PathBuf},
     };
 
     use super::{
-        HostPlatform, TldrFileReader, get_system_tldr_cache_dirs, get_tldr_cache_dir,
-        get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs, normalize_tldr_topic,
-        read_cached_tldr_page_with,
+        HostPlatform, SystemFileReader, TldrFileReader, get_system_tldr_cache_dirs,
+        get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs,
+        normalize_tldr_topic, read_cached_tldr_page_with,
     };
+    use crate::query::MAX_MARKDOWN_BYTES;
 
     const PAGE: &str = "# tar\n\n> Archiving utility.\n\n- List: `tar --list`\n";
 
@@ -718,5 +724,38 @@ mod tests {
         assert!(!super::is_safe_page_name("/etc/passwd"));
         assert!(!super::is_safe_page_name(".."));
         assert!(!super::is_safe_page_name("a/b"));
+    }
+
+    fn temporary_page(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "mant-tldr-cap-{label}-{}-{:?}.md",
+            std::process::id(),
+            std::thread::current().id()
+        ))
+    }
+
+    #[test]
+    fn system_reader_reads_ordinary_pages_and_rejects_oversized_ones() {
+        // The disk-backed reader must enforce the same byte ceiling as every
+        // other markdown source; a small page reads through, one past the limit
+        // is refused as invalid data rather than buffered whole.
+        let ordinary = temporary_page("ordinary");
+        fs::write(&ordinary, PAGE).expect("write ordinary page");
+        assert_eq!(
+            SystemFileReader
+                .read_to_string(&ordinary)
+                .expect("ordinary page reads"),
+            PAGE
+        );
+        fs::remove_file(&ordinary).expect("remove ordinary fixture");
+
+        let oversized = temporary_page("oversized");
+        let bytes = usize::try_from(MAX_MARKDOWN_BYTES).expect("limit fits usize") + 1;
+        fs::write(&oversized, vec![b'a'; bytes]).expect("write oversized page");
+        let error = SystemFileReader
+            .read_to_string(&oversized)
+            .expect_err("oversized page is refused");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        fs::remove_file(&oversized).expect("remove oversized fixture");
     }
 }
