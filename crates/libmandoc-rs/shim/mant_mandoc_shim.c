@@ -82,14 +82,24 @@ static int source_root_strict;
 static char *source_dir;
 
 /*
- * Maximum node nesting copied out of libmandoc's tree.
+ * Maximum recursion depth for any tree copied or flattened out of libmandoc.
  *
  * libmandoc bounds .so include depth but not block/inline nesting, so a
  * pathological or hostile page (thousands of nested .RS or .Bl) yields a tree
  * deep enough to overflow the stack when it is copied, freed, lowered, or
- * dropped. Capping depth once at the copy boundary keeps the owned tree finite,
- * which transitively bounds every later recursive walk on both sides of the
- * FFI. Real manuals nest only a handful of levels, far below this limit.
+ * dropped. Capping copy_node keeps the *owned node tree* finite, which
+ * transitively bounds every later recursive walk over that tree -- free_node
+ * here and the lowering pass across the FFI.
+ *
+ * It does not, however, bound sub-structures that hang off a node and are
+ * walked from their own source tree: the eqn box tree is copied by descending
+ * eqn_box->first independently of node depth, so copy_equation applies this
+ * same cap itself. Any future payload with its own nested source structure
+ * must do likewise -- one cap at copy_node is not automatically enough.
+ *
+ * libmandoc's own parser is iterative and does not overflow on deep input, so
+ * no pre-parse depth check is needed; the caps on our recursive walks suffice.
+ * Real manuals nest only a handful of levels, far below this limit.
  */
 #define MANT_MANDOC_MAX_COPY_DEPTH 256
 
