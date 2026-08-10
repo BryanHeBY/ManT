@@ -2,7 +2,9 @@
 
 use std::path::PathBuf;
 
-use crate::{RegisteredDocumentOrigin, list_registered_documents, system_manual_index};
+use crate::{
+    RegisteredDocumentOrigin, SourceConfigError, list_registered_documents, system_manual_index,
+};
 
 /// Source family used to resolve one available document.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -12,10 +14,10 @@ pub enum AvailableDocumentKind {
 }
 
 /// Precedence class and storage family for one available document.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AvailableDocumentOrigin {
-    User,
-    System,
+    Documents,
+    Source(String),
     ManualPath,
 }
 
@@ -29,10 +31,17 @@ pub struct AvailableDocument {
     pub origin: AvailableDocumentOrigin,
 }
 
-/// List every effective registered document and locally indexed manual page.
-#[must_use]
-pub fn list_available_documents() -> Vec<AvailableDocument> {
-    list_available_documents_from(list_registered_documents(), system_manual_index().pages())
+/// List every registered document candidate and locally indexed manual page.
+///
+/// # Errors
+///
+/// Returns an error when the platform data root or source configuration cannot
+/// be read or validated.
+pub fn list_available_documents() -> Result<Vec<AvailableDocument>, SourceConfigError> {
+    Ok(list_available_documents_from(
+        list_registered_documents()?,
+        system_manual_index().pages(),
+    ))
 }
 
 fn list_available_documents_from(
@@ -47,8 +56,8 @@ fn list_available_documents_from(
             section: None,
             path: document.path,
             origin: match document.origin {
-                RegisteredDocumentOrigin::User => AvailableDocumentOrigin::User,
-                RegisteredDocumentOrigin::System => AvailableDocumentOrigin::System,
+                RegisteredDocumentOrigin::Documents => AvailableDocumentOrigin::Documents,
+                RegisteredDocumentOrigin::Source(source) => AvailableDocumentOrigin::Source(source),
             },
         })
         .chain(manuals.iter().map(|page| AvailableDocument {
@@ -59,7 +68,7 @@ fn list_available_documents_from(
             origin: AvailableDocumentOrigin::ManualPath,
         }))
         .collect::<Vec<_>>();
-    documents.sort_unstable_by(|left, right| {
+    documents.sort_by(|left, right| {
         (&left.name, left.kind, &left.section).cmp(&(&right.name, right.kind, &right.section))
     });
     documents
@@ -79,7 +88,7 @@ mod tests {
             vec![RegisteredDocument {
                 name: "printf".to_owned(),
                 path: PathBuf::from("/home/demo/.local/share/mant/documents/printf.md"),
-                origin: RegisteredDocumentOrigin::User,
+                origin: RegisteredDocumentOrigin::Documents,
             }],
             &[
                 ManualPage {
@@ -97,8 +106,33 @@ mod tests {
 
         assert_eq!(documents.len(), 3);
         assert_eq!(documents[0].kind, AvailableDocumentKind::Markdown);
-        assert_eq!(documents[0].origin, AvailableDocumentOrigin::User);
+        assert_eq!(documents[0].origin, AvailableDocumentOrigin::Documents);
         assert_eq!(documents[1].section.as_deref(), Some("1"));
         assert_eq!(documents[2].section.as_deref(), Some("3"));
+    }
+
+    #[test]
+    fn keeps_shadowed_markdown_candidates_in_fallback_order() {
+        let documents = list_available_documents_from(
+            vec![
+                RegisteredDocument {
+                    name: "tool".to_owned(),
+                    path: PathBuf::from("/data/mant/documents/tool.md"),
+                    origin: RegisteredDocumentOrigin::Documents,
+                },
+                RegisteredDocument {
+                    name: "tool".to_owned(),
+                    path: PathBuf::from("/data/mant/sources/alpha/tool.md"),
+                    origin: RegisteredDocumentOrigin::Source("alpha".to_owned()),
+                },
+            ],
+            &[],
+        );
+        assert_eq!(documents.len(), 2);
+        assert_eq!(documents[0].origin, AvailableDocumentOrigin::Documents);
+        assert_eq!(
+            documents[1].origin,
+            AvailableDocumentOrigin::Source("alpha".to_owned())
+        );
     }
 }

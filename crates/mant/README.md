@@ -96,19 +96,13 @@ Reusable Markdown documents can be registered by filename below:
 
 - Linux: `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`
 - macOS: `~/Library/Application Support/ManT/documents`
-- Windows user: `%APPDATA%\ManT\documents`
-- Windows system: `%PROGRAMDATA%\ManT\documents`
+- Windows: `%APPDATA%\ManT\documents`
 
-Nested directories and symlinks are discovered recursively. An unqualified
-`mant NAME` resolves registered Markdown before a native manual with the same
-name. Explicit Markdown paths and `mant -` standard input remain available for
-one-off documents; `--manual` bypasses registered Markdown on Unix.
-
-A registration directory is a trust boundary you own. Discovery follows
-symlinks even when their target lies outside the directory, so any file that is
-readable through a registered path — including one reached by a symlink placed
-there — can be returned, over the read-only MCP server as well. Register only
-directories whose contents and links you control.
+Only immediate regular Markdown files are discovered; nested directories and
+symlinks are ignored. Repositories configured in sibling `sources.toml` can be
+installed with `mant --update-docs` and selected with `--source`. An
+unqualified name resolves root documents, sources by priority/name, then a
+native manual. See the repository-level `docs/sources.md` reference.
 
 When compatible local tldr data exists, ManT prepends it as reserved outline
 node `0`. Reads prefer installed-client caches and then ManT's private cache;

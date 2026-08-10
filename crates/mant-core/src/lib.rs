@@ -13,6 +13,7 @@ mod projection;
 mod query;
 mod search;
 mod source;
+mod sources;
 mod tldr;
 
 pub use catalog::{
@@ -41,6 +42,11 @@ pub use source::{
     CommandOutput, LocateError, ManualIndex, ManualPage, ManualRequest, discover_manual_roots,
     locate_manual_source, locate_manual_source_in, system_manual_index,
 };
+pub use sources::{
+    DocumentPaths, DocumentSourcesUpdate, DocumentSourcesUpdateSchema, RepositorySource,
+    SourceConfig, SourceConfigError, SourceUpdateAction, SourceUpdateResult, document_paths,
+    load_source_config, update_document_sources,
+};
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, TldrUpdateError,
     get_system_tldr_cache_dirs, get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms,
@@ -60,6 +66,6 @@ mod tests {
 
     #[test]
     fn exposes_the_ast_contract_version() {
-        assert_eq!(native_api_version(), "4");
+        assert_eq!(native_api_version(), "5");
     }
 }

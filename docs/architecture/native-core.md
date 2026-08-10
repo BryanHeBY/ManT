@@ -96,6 +96,8 @@ mant <name> --node <path-or-id>   -> selected section subtrees
 mant <name> --explain <alias-or-id> -> one option, command, or environment entry
 mant <name> --search <pattern>    -> matches with node and Markdown locations
 mant <name> --manual              -> bypass registered Markdown by the same name
+mant <name> --source <source>     -> select one configured Markdown source
+mant --update-docs                -> repository update report JSON
 mant --update-tldr                 -> update result JSON
 mant --protocol-version            -> protocol description JSON
 mant --schema <contract>           -> generated JSON Schema
@@ -114,22 +116,18 @@ For agent clients that speak the Model Context Protocol, `mant --mcp`
 keeps standard output exclusively for JSON-RPC and exposes five generated,
 read-only tools: local-document discovery, outline, selected content,
 semantic explanation, and search. Document tools accept a name plus an
-optional manual section. That narrower boundary prevents agents from opening
-arbitrary host paths: Markdown must first be registered in the platform
-document root, below `mant/documents` on Linux, Application Support on macOS,
-or `%APPDATA%\ManT\documents` on Windows. Registration recursively follows file
-and directory links, but
-canonical-directory deduplication and explicit traversal bounds prevent loops
-or unbounded trees. Nested directories are organizational: the filename stem
-remains the flat public name. Ordinary names continue to fall back to the
+optional configured source or manual section. That narrower boundary prevents
+agents from opening arbitrary host paths: Markdown must first be placed in the
+flat root directory or installed by the native CLI. MCP only reads current
+local state and never invokes Git. Ordinary names continue to fall back to the
 native manual index. Input and output schemas derive directly from Rust types.
 MCP drops lowering diagnostics and keeps standard error silent; the ordinary
 CLI JSON surface remains the diagnostic inspection path. MCP is an alternate process
 protocol; it does not add another executable or a second document
 interpretation path.
 
-`mant.request/v4` requires a `schema` marker, one closed `input`, and one
-closed `view`. The input is either a document name with an optional manual section or a
+`mant.request/v5` requires a `schema` marker, one closed `input`, and one
+closed `view`. The input is either a document name with an optional source or manual section or a
 local Markdown path; raw document content is deliberately not part of the
 process contract. Direct `mant -` reads bounded UTF-8 input before constructing
 an in-memory query and does not add a third public input variant. Unknown
@@ -237,7 +235,7 @@ an otherwise complete document, and recoverable findings remain structured in
 the document contract. ManT never invokes a host renderer or chooses between
 renderer outputs.
 
-`--manual` is an input-resolution policy outside `mant.request/v4`. It bypasses
+`--manual` is an input-resolution policy outside `mant.request/v5`. It bypasses
 registered Markdown with the same filename stem and requires a readable native
 manual instead of accepting a tldr-only result. An explicit `--section` also
 bypasses registered Markdown because sections belong only to native manuals.
@@ -247,11 +245,11 @@ distributions, including large git, gcc, clang, tar, and shell pages.
 Best-effort native output is retained together with its diagnostics rather than
 being silently replaced by another renderer.
 
-Registered documents and caches have distinct lifecycles. Linux discovers
-documents below each XDG data root's `mant/documents` directory and keeps the
-private tldr checkout below the XDG cache root. macOS uses Application Support
-for documents and Library Caches for tldr. Windows uses Roaming AppData for
-documents and Local AppData for its private tldr checkout. Installed-client
+Registered documents and caches have distinct lifecycles. Each platform has
+one user data root containing `sources.toml`, flat root documents, installed
+source directories, and per-source revision metadata. The native CLI alone
+updates repositories with a shallow clone and directory replacement. The
+private tldr checkout remains below the platform cache root. Installed-client
 tldr roots precede the private checkout, which remains the final read fallback
 even when a client executable is present.
 

@@ -118,14 +118,13 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
 }
 
 #[test]
-fn shipped_manual_explains_recursive_registered_documents() {
+fn shipped_manual_explains_flat_registered_documents_and_sources() {
     for required in [
         "$HOME/.local/share/mant/documents",
-        "team/handbook.md",
-        "Directories organize documents but do not form",
-        "symbolic-link cycles",
-        "registration directory is a trust boundary",
-        "read-only MCP server",
+        "Nested directories and symbolic links are",
+        "--source NAME",
+        "--update-docs",
+        "no cross-call snapshot guarantee",
     ] {
         assert!(
             MANT_MANUAL.contains(required),

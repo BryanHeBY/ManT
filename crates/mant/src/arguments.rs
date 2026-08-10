@@ -120,6 +120,9 @@ pub(crate) enum Command {
     UpdateTldr {
         pretty: bool,
     },
+    UpdateDocs {
+        pretty: bool,
+    },
     ProtocolVersion {
         pretty: bool,
     },
@@ -142,10 +145,10 @@ pub(crate) enum Command {
     about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
     version,
-    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant README.md\n  mant printf --manual\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-tldr\n  mant --mcp",
-    group = ArgGroup::new("source")
-        .args(["name", "request_json", "update_tldr", "protocol_version", "schema", "mcp"])
+    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant README.md\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --update-tldr\n  mant --mcp",
+    group = ArgGroup::new("action")
+        .args(["name", "request_json", "update_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
@@ -163,6 +166,17 @@ struct Cli {
         help_heading = "Document selection"
     )]
     section: Option<String>,
+
+    /// Select exactly one configured Markdown source.
+    #[arg(
+        long,
+        value_name = "SOURCE",
+        value_parser = non_empty,
+        requires = "name",
+        conflicts_with_all = ["section", "manual"],
+        help_heading = "Document selection"
+    )]
+    source: Option<String>,
 
     /// Bypass registered Markdown and require a native manual page.
     #[arg(long, requires = "name", help_heading = "Document selection")]
@@ -322,6 +336,14 @@ struct Cli {
     )]
     update_tldr: bool,
 
+    /// Update configured Markdown repositories from sources.toml.
+    #[arg(
+        long,
+        conflicts_with_all = ["section", "source", "outline", "node", "search", "format"],
+        help_heading = "Data"
+    )]
+    update_docs: bool,
+
     /// Print the native protocol description as JSON.
     #[arg(
         long,
@@ -346,6 +368,7 @@ struct Cli {
         conflicts_with_all = [
             "name",
             "section",
+            "source",
             "outline",
             "node",
             "explain",
@@ -360,6 +383,7 @@ struct Cli {
             "request_json",
             "manual",
             "update_tldr",
+            "update_docs",
             "protocol_version",
             "schema",
             "format",
@@ -381,7 +405,7 @@ struct Cli {
     /// Preserve raw HTML anchors and document-local links in Markdown output.
     #[arg(
         long,
-        conflicts_with_all = ["update_tldr", "protocol_version", "schema", "mcp"],
+        conflicts_with_all = ["update_docs", "update_tldr", "protocol_version", "schema", "mcp"],
         help_heading = "Output"
     )]
     preserve_anchors: bool,
@@ -415,6 +439,11 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
     if parsed.mcp {
         return Ok(Command::Mcp);
     }
+    if parsed.update_docs {
+        return Ok(Command::UpdateDocs {
+            pretty: !parsed.compact,
+        });
+    }
     if parsed.update_tldr {
         return Ok(Command::UpdateTldr {
             pretty: !parsed.compact,
@@ -434,7 +463,13 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
 
     let (view, explain) = normalize_query_view(&mut parsed);
     validate_output_options(parsed.compact, parsed.format, parsed.preserve_anchors)?;
-    let source = normalize_query_source(parsed.request_json, parsed.name, parsed.section, view)?;
+    let source = normalize_query_source(
+        parsed.request_json,
+        parsed.name,
+        parsed.source,
+        parsed.section,
+        view,
+    )?;
     validate_manual_source(parsed.manual, &source)?;
     let presentation =
         normalize_presentation(parsed.ui, parsed.format, parsed.preserve_anchors, &source);
@@ -568,6 +603,7 @@ fn normalize_presentation(
 fn normalize_query_source(
     request_json: bool,
     name: Option<String>,
+    configured_source: Option<String>,
     section: Option<String>,
     view: QueryView,
 ) -> Result<QuerySource, clap::Error> {
@@ -582,6 +618,12 @@ fn normalize_query_source(
                     "--section applies only to document names",
                 ));
             }
+            if configured_source.is_some() {
+                return Err(command_error(
+                    ErrorKind::ArgumentConflict,
+                    "--source applies only to document names",
+                ));
+            }
             QuerySource::MarkdownStdin { view }
         } else {
             let input = if is_markdown_path(&value) {
@@ -591,15 +633,22 @@ fn normalize_query_source(
                         "--section applies only to document names",
                     ));
                 }
+                if configured_source.is_some() {
+                    return Err(command_error(
+                        ErrorKind::ArgumentConflict,
+                        "--source applies only to document names",
+                    ));
+                }
                 QueryInput::MarkdownFile { path: value }
             } else {
                 QueryInput::Document {
                     name: value,
+                    source: configured_source,
                     section,
                 }
             };
             QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V4,
+                schema: RequestSchema::V5,
                 input,
                 view,
             })
@@ -654,9 +703,10 @@ mod tests {
             parse(&args(&["git"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "git".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Full {},
@@ -754,9 +804,10 @@ mod tests {
             .expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "printf".to_owned(),
+                        source: None,
                         section: Some("3".to_owned()),
                     },
                     view: QueryView::Full {},
@@ -768,6 +819,20 @@ mod tests {
                 preserve_anchors: false,
             }
         );
+        assert!(matches!(
+            parse(&args(&["printf", "--source", "team"])).expect("source query"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    input: QueryInput::Document {
+                        ref source,
+                        section: None,
+                        ..
+                    },
+                    ..
+                }),
+                ..
+            } if source.as_deref() == Some("team")
+        ));
     }
 
     #[test]
@@ -803,9 +868,10 @@ mod tests {
             parse(&args(&["gcc", "--outline"])).expect("outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "gcc".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Outline {
@@ -824,9 +890,10 @@ mod tests {
                 .expect("option outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "tar".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Outline {
@@ -847,9 +914,10 @@ mod tests {
             .expect("excerpt"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "gcc".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Excerpt {
@@ -876,9 +944,10 @@ mod tests {
                 parse(&args(&values)).expect("explain query"),
                 Command::Query {
                     source: QuerySource::Arguments(QueryRequest {
-                        schema: RequestSchema::V4,
+                        schema: RequestSchema::V5,
                         input: QueryInput::Document {
                             name: "tar".to_owned(),
+                            source: None,
                             section: None,
                         },
                         view: QueryView::Excerpt {
@@ -901,9 +970,10 @@ mod tests {
             parse(&args(&["tar", "--search=--acls"])).expect("literal search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "tar".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Search {
@@ -947,9 +1017,10 @@ mod tests {
             .expect("regex search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "git".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Search {
@@ -974,6 +1045,10 @@ mod tests {
 
     #[test]
     fn parses_long_option_actions_without_ad_hoc_subcommands() {
+        assert_eq!(
+            parse(&args(&["--update-docs", "--compact"])).expect("document update"),
+            Command::UpdateDocs { pretty: false }
+        );
         assert_eq!(
             parse(&args(&["--update-tldr"])).expect("update"),
             Command::UpdateTldr { pretty: true }
@@ -1012,6 +1087,10 @@ mod tests {
             vec!["git", "--node"],
             vec!["--section", "1"],
             vec!["--update-tldr", "--format", "json"],
+            vec!["--update-docs", "--format", "json"],
+            vec!["git", "--source", "team", "--section", "1"],
+            vec!["git", "--source", "team", "--manual"],
+            vec!["README.md", "--source", "team"],
             vec!["--schema", "request", "--format", "json"],
             vec!["--mcp", "git"],
             vec!["--mcp", "--format", "json"],
@@ -1046,9 +1125,10 @@ mod tests {
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: "--help".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Full {},

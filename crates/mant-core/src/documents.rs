@@ -1,41 +1,26 @@
-//! Discovers registered Markdown below platform-native application data roots.
+//! Discovers flat local Markdown documents from the user data directory.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    env,
-    ffi::{OsStr, OsString},
+    collections::BTreeMap,
+    ffi::OsStr,
     fs,
     path::{Component, Path, PathBuf},
 };
 
-const LINUX_APPLICATION_DIR: &str = "mant";
-const MACOS_APPLICATION_DIR: &str = "ManT";
-const WINDOWS_APPLICATION_DIR: &str = "ManT";
-const DOCUMENTS_DIR: &str = "documents";
-const DEFAULT_SYSTEM_DATA_DIRS: [&str; 2] = ["/usr/local/share", "/usr/share"];
-const MACOS_SYSTEM_DATA_DIR: &str = "/Library/Application Support";
+use crate::sources::{SOURCE_METADATA_FILE, SourceConfigError, is_source_name, load_source_config};
+
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
-const MAX_DIRECTORY_DEPTH: usize = 32;
-const MAX_VISITED_DIRECTORIES: usize = 4096;
-const MAX_DISCOVERED_DOCUMENTS: usize = 10_000;
 
-#[derive(Debug)]
-struct DocumentCandidate {
-    name: String,
-    depth: usize,
-    parent: PathBuf,
-    extension_priority: u8,
-    path: PathBuf,
-}
-
-/// Precedence class for one registered Markdown document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Storage class for one registered Markdown document.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegisteredDocumentOrigin {
-    User,
-    System,
+    /// A file directly inside the singular user `documents` directory.
+    Documents,
+    /// A file installed from one configured repository.
+    Source(String),
 }
 
-/// One Markdown document explicitly registered in `ManT`'s document namespace.
+/// One Markdown document registered in `ManT`'s document namespace.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegisteredDocument {
     pub name: String,
@@ -43,276 +28,135 @@ pub struct RegisteredDocument {
     pub origin: RegisteredDocumentOrigin,
 }
 
-/// Find the highest-precedence registered Markdown document for `document`.
-#[must_use]
-pub fn find_registered_document(document: &str) -> Option<RegisteredDocument> {
-    let environment = env::vars_os().collect::<HashMap<_, _>>();
-    find_registered_document_with(document, &environment)
-}
-
-/// List effective registered documents after applying directory precedence.
-#[must_use]
-pub fn list_registered_documents() -> Vec<RegisteredDocument> {
-    let environment = env::vars_os().collect::<HashMap<_, _>>();
-    list_registered_documents_with(&environment)
-}
-
-fn find_registered_document_with(
+/// Find a registered document using root-first or explicit-source resolution.
+///
+/// # Errors
+///
+/// Returns an error when the platform data root or `sources.toml` is invalid.
+pub fn find_registered_document(
     document: &str,
-    environment: &HashMap<OsString, OsString>,
-) -> Option<RegisteredDocument> {
-    find_registered_document_in(document, registration_roots(environment))
-}
-
-fn find_registered_document_in(
-    document: &str,
-    roots: impl IntoIterator<Item = (PathBuf, RegisteredDocumentOrigin)>,
-) -> Option<RegisteredDocument> {
+    source: Option<&str>,
+) -> Result<Option<RegisteredDocument>, SourceConfigError> {
     let document = document.trim();
     if !is_safe_document_name(document) {
-        return None;
+        return Ok(None);
     }
-    list_registered_documents_in(roots)
-        .into_iter()
-        .find(|candidate| candidate.name == document)
-}
+    let (paths, config) = load_source_config()?;
+    if let Some(source) = source {
+        if !is_source_name(source) || config.get(source).is_none() {
+            return Err(SourceConfigError::new(format!(
+                "document source '{source}' is not configured"
+            )));
+        }
+        let directory = paths.sources.join(source);
+        if !source_directory_ready(&directory) {
+            return Ok(None);
+        }
+        return Ok(
+            find_in_directory(&directory, document).map(|path| RegisteredDocument {
+                name: document.to_owned(),
+                path,
+                origin: RegisteredDocumentOrigin::Source(source.to_owned()),
+            }),
+        );
+    }
 
-fn list_registered_documents_with(
-    environment: &HashMap<OsString, OsString>,
-) -> Vec<RegisteredDocument> {
-    list_registered_documents_in(registration_roots(environment))
-}
-
-fn list_registered_documents_in(
-    roots: impl IntoIterator<Item = (PathBuf, RegisteredDocumentOrigin)>,
-) -> Vec<RegisteredDocument> {
-    let mut documents = BTreeMap::<String, RegisteredDocument>::new();
-    for (root, origin) in roots {
-        for candidate in scan_registration_root(&root) {
-            documents
-                .entry(candidate.name.clone())
-                .or_insert(RegisteredDocument {
-                    name: candidate.name,
-                    path: candidate.path,
-                    origin,
-                });
+    if let Some(path) = find_in_directory(&paths.documents, document) {
+        return Ok(Some(RegisteredDocument {
+            name: document.to_owned(),
+            path,
+            origin: RegisteredDocumentOrigin::Documents,
+        }));
+    }
+    for source in config.precedence() {
+        let directory = paths.sources.join(source);
+        if source_directory_ready(&directory)
+            && let Some(path) = find_in_directory(&directory, document)
+        {
+            return Ok(Some(RegisteredDocument {
+                name: document.to_owned(),
+                path,
+                origin: RegisteredDocumentOrigin::Source(source.to_owned()),
+            }));
         }
     }
-    documents.into_values().collect()
+    Ok(None)
 }
 
-fn registration_roots(
-    environment: &HashMap<OsString, OsString>,
-) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
-    if cfg!(windows) {
-        return windows_registration_roots(environment);
+/// List every root and configured-source candidate in fallback order.
+///
+/// Documents with the same public name remain visible so callers can select a
+/// source explicitly instead of losing shadowed candidates.
+///
+/// # Errors
+///
+/// Returns an error when the platform data root or `sources.toml` is invalid.
+pub fn list_registered_documents() -> Result<Vec<RegisteredDocument>, SourceConfigError> {
+    let (paths, config) = load_source_config()?;
+    let mut documents = scan_directory(&paths.documents)
+        .into_iter()
+        .map(|(name, path)| RegisteredDocument {
+            name,
+            path,
+            origin: RegisteredDocumentOrigin::Documents,
+        })
+        .collect::<Vec<_>>();
+    for source in config.precedence() {
+        let directory = paths.sources.join(source);
+        if !source_directory_ready(&directory) {
+            continue;
+        }
+        documents.extend(scan_directory(&directory).into_iter().map(|(name, path)| {
+            RegisteredDocument {
+                name,
+                path,
+                origin: RegisteredDocumentOrigin::Source(source.to_owned()),
+            }
+        }));
     }
-    if cfg!(target_os = "macos") {
-        return macos_registration_roots(environment);
-    }
-    linux_registration_roots(environment)
+    Ok(documents)
 }
 
-fn windows_registration_roots(
-    environment: &HashMap<OsString, OsString>,
-) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
-    let mut roots = Vec::new();
-    let mut seen = HashSet::new();
-    if let Some(app_data) = absolute_environment_path(environment, "APPDATA") {
-        push_registration_root(
-            &mut roots,
-            &mut seen,
-            &app_data,
-            WINDOWS_APPLICATION_DIR,
-            RegisteredDocumentOrigin::User,
-        );
-    }
-    if let Some(program_data) = absolute_environment_path(environment, "PROGRAMDATA") {
-        push_registration_root(
-            &mut roots,
-            &mut seen,
-            &program_data,
-            WINDOWS_APPLICATION_DIR,
-            RegisteredDocumentOrigin::System,
-        );
-    }
-    roots
+fn source_directory_ready(directory: &Path) -> bool {
+    fs::symlink_metadata(directory.join(SOURCE_METADATA_FILE))
+        .is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
-fn linux_registration_roots(
-    environment: &HashMap<OsString, OsString>,
-) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
-    let mut roots = Vec::new();
-    let mut seen = HashSet::new();
-
-    let user_data = absolute_environment_path(environment, "XDG_DATA_HOME").or_else(|| {
-        environment
-            .get(OsStr::new("HOME"))
-            .map(PathBuf::from)
-            .filter(|path| path.is_absolute())
-            .map(|home| home.join(".local/share"))
-    });
-    if let Some(root) = user_data {
-        push_registration_root(
-            &mut roots,
-            &mut seen,
-            &root,
-            LINUX_APPLICATION_DIR,
-            RegisteredDocumentOrigin::User,
-        );
-    }
-
-    let system_roots = environment.get(OsStr::new("XDG_DATA_DIRS")).map_or_else(
-        || {
-            DEFAULT_SYSTEM_DATA_DIRS
-                .into_iter()
-                .map(PathBuf::from)
-                .collect::<Vec<_>>()
-        },
-        |value| {
-            env::split_paths(value)
-                .filter(|path| path.is_absolute())
-                .collect()
-        },
-    );
-    for root in system_roots {
-        push_registration_root(
-            &mut roots,
-            &mut seen,
-            &root,
-            LINUX_APPLICATION_DIR,
-            RegisteredDocumentOrigin::System,
-        );
-    }
-    roots
+fn find_in_directory(directory: &Path, document: &str) -> Option<PathBuf> {
+    scan_directory(directory)
+        .into_iter()
+        .find_map(|(name, path)| (name == document).then_some(path))
 }
 
-fn macos_registration_roots(
-    environment: &HashMap<OsString, OsString>,
-) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
-    let mut roots = Vec::new();
-    let mut seen = HashSet::new();
-    if let Some(home) = absolute_environment_path(environment, "HOME") {
-        push_registration_root(
-            &mut roots,
-            &mut seen,
-            &home.join("Library/Application Support"),
-            MACOS_APPLICATION_DIR,
-            RegisteredDocumentOrigin::User,
-        );
-    }
-    push_registration_root(
-        &mut roots,
-        &mut seen,
-        Path::new(MACOS_SYSTEM_DATA_DIR),
-        MACOS_APPLICATION_DIR,
-        RegisteredDocumentOrigin::System,
-    );
-    roots
-}
-
-fn push_registration_root(
-    roots: &mut Vec<(PathBuf, RegisteredDocumentOrigin)>,
-    seen: &mut HashSet<PathBuf>,
-    root: &Path,
-    application_dir: &str,
-    origin: RegisteredDocumentOrigin,
-) {
-    let root = root.join(application_dir).join(DOCUMENTS_DIR);
-    if seen.insert(root.clone()) {
-        roots.push((root, origin));
-    }
-}
-
-fn scan_registration_root(root: &Path) -> Vec<DocumentCandidate> {
-    let mut visited = HashSet::new();
-    let mut candidates = Vec::new();
-    scan_registration_directory(root, root, 0, &mut visited, &mut candidates);
-    candidates.sort_unstable_by(|left, right| {
-        (
-            &left.name,
-            left.depth,
-            &left.parent,
-            left.extension_priority,
-            &left.path,
-        )
-            .cmp(&(
-                &right.name,
-                right.depth,
-                &right.parent,
-                right.extension_priority,
-                &right.path,
-            ))
-    });
-    candidates
-}
-
-fn scan_registration_directory(
-    root: &Path,
-    directory: &Path,
-    depth: usize,
-    visited: &mut HashSet<PathBuf>,
-    candidates: &mut Vec<DocumentCandidate>,
-) {
-    if depth > MAX_DIRECTORY_DEPTH
-        || visited.len() >= MAX_VISITED_DIRECTORIES
-        || candidates.len() >= MAX_DISCOVERED_DOCUMENTS
-    {
-        return;
-    }
-    let Ok(identity) = fs::canonicalize(directory) else {
-        return;
-    };
-    if !visited.insert(identity) {
-        return;
-    }
+/// Scan exactly one directory. Directories and symbolic links are ignored.
+fn scan_directory(directory: &Path) -> Vec<(String, PathBuf)> {
     let Ok(entries) = fs::read_dir(directory) else {
-        return;
+        return Vec::new();
     };
+    let mut candidates = BTreeMap::<String, (u8, PathBuf)>::new();
     let mut entries = entries.flatten().collect::<Vec<_>>();
     entries.sort_unstable_by_key(fs::DirEntry::file_name);
     for entry in entries {
-        if candidates.len() >= MAX_DISCOVERED_DOCUMENTS {
-            break;
-        }
-        let path = entry.path();
-        let Ok(metadata) = fs::metadata(&path) else {
+        let Ok(file_type) = entry.file_type() else {
             continue;
         };
-        if metadata.is_dir() {
-            scan_registration_directory(root, &path, depth + 1, visited, candidates);
-        } else if metadata.is_file()
-            && let Some(name) = markdown_document_name(&path)
-            && let Some(extension_priority) = markdown_extension_priority(&path)
-        {
-            let relative = path.strip_prefix(root).unwrap_or(&path);
-            candidates.push(DocumentCandidate {
-                name,
-                depth,
-                parent: relative
-                    .parent()
-                    .unwrap_or_else(|| Path::new(""))
-                    .to_owned(),
-                extension_priority,
-                path,
-            });
+        if !file_type.is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let Some(name) = markdown_document_name(&path) else {
+            continue;
+        };
+        let priority = markdown_extension_priority(&path).expect("name checks extension");
+        let candidate = candidates.entry(name).or_insert((priority, path.clone()));
+        if priority < candidate.0 {
+            *candidate = (priority, path);
         }
     }
-}
-
-fn absolute_environment_path(
-    environment: &HashMap<OsString, OsString>,
-    name: &str,
-) -> Option<PathBuf> {
-    let value = environment.get(OsStr::new(name));
-    #[cfg(windows)]
-    let value = value.or_else(|| {
-        environment
-            .iter()
-            .find(|(candidate, _)| candidate.to_string_lossy().eq_ignore_ascii_case(name))
-            .map(|(_, value)| value)
-    });
-    value.map(PathBuf::from).filter(|path| path.is_absolute())
+    candidates
+        .into_iter()
+        .map(|(name, (_, path))| (name, path))
+        .collect()
 }
 
 fn is_safe_document_name(document: &str) -> bool {
@@ -339,29 +183,10 @@ fn markdown_extension_priority(path: &Path) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashMap,
-        ffi::OsString,
-        fs,
-        path::{Path, PathBuf},
-    };
+    use std::{collections::BTreeMap, fs, path::PathBuf};
 
-    use super::{
-        RegisteredDocumentOrigin, find_registered_document_in, list_registered_documents_in,
-    };
-
-    #[cfg(unix)]
-    use super::{linux_registration_roots, macos_registration_roots};
-
-    #[cfg(windows)]
-    use super::windows_registration_roots;
-
-    fn environment(values: &[(&str, &Path)]) -> HashMap<OsString, OsString> {
-        values
-            .iter()
-            .map(|(name, value)| (OsString::from(name), value.as_os_str().to_owned()))
-            .collect()
-    }
+    use super::{RegisteredDocumentOrigin, scan_directory};
+    use crate::sources::{RepositorySource, SourceConfig};
 
     fn temporary_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -371,190 +196,61 @@ mod tests {
         ))
     }
 
-    fn registration_roots(
-        user: &Path,
-        system: Option<&Path>,
-    ) -> Vec<(PathBuf, RegisteredDocumentOrigin)> {
-        let mut roots = vec![(user.to_owned(), RegisteredDocumentOrigin::User)];
-        if let Some(system) = system {
-            roots.push((system.to_owned(), RegisteredDocumentOrigin::System));
-        }
-        roots
-    }
-
-    #[cfg(unix)]
     #[test]
-    fn xdg_user_and_system_directories_follow_documented_precedence() {
-        let home = Path::new("/home/demo");
-        let user = Path::new("/data/user");
-        let system = Path::new("/data/system");
-        let environment = environment(&[
-            ("HOME", home),
-            ("XDG_DATA_HOME", user),
-            ("XDG_DATA_DIRS", system),
-        ]);
+    fn discovery_is_flat_and_markdown_only() {
+        let root = temporary_root("flat");
+        fs::create_dir_all(root.join("nested")).expect("create directories");
+        fs::write(root.join("alpha.md"), "# alpha").expect("write alpha");
+        fs::write(root.join("beta.markdown"), "# beta").expect("write beta");
+        fs::write(root.join("ignored.txt"), "ignored").expect("write text");
+        fs::write(root.join("nested/hidden.md"), "# hidden").expect("write nested");
 
-        assert_eq!(
-            linux_registration_roots(&environment),
-            vec![
-                (user.join("mant/documents"), RegisteredDocumentOrigin::User),
-                (
-                    system.join("mant/documents"),
-                    RegisteredDocumentOrigin::System
-                ),
-            ]
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn macos_uses_application_support_document_roots() {
-        let home = Path::new("/Users/demo");
-        let environment = environment(&[("HOME", home)]);
-
-        assert_eq!(
-            macos_registration_roots(&environment),
-            vec![
-                (
-                    home.join("Library/Application Support/ManT/documents"),
-                    RegisteredDocumentOrigin::User,
-                ),
-                (
-                    PathBuf::from("/Library/Application Support/ManT/documents"),
-                    RegisteredDocumentOrigin::System,
-                ),
-            ]
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn windows_uses_roaming_and_machine_document_roots() {
-        let app_data = Path::new(r"C:\Users\demo\AppData\Roaming");
-        let program_data = Path::new(r"C:\ProgramData");
-        let environment = environment(&[("AppData", app_data), ("ProgramData", program_data)]);
-
-        assert_eq!(
-            windows_registration_roots(&environment),
-            vec![
-                (
-                    app_data.join("ManT/documents"),
-                    RegisteredDocumentOrigin::User,
-                ),
-                (
-                    program_data.join("ManT/documents"),
-                    RegisteredDocumentOrigin::System,
-                ),
-            ]
-        );
-    }
-
-    #[test]
-    fn lookup_rejects_paths_and_prefers_user_markdown() {
-        let root = temporary_root("lookup");
-        let user = root.join("user-documents");
-        let system = root.join("system-documents");
-        fs::create_dir_all(&user).expect("user documents");
-        fs::create_dir_all(&system).expect("system documents");
-        fs::write(user.join("tool.md"), "# User").expect("user document");
-        fs::write(system.join("tool.md"), "# System").expect("system document");
-        let roots = registration_roots(&user, Some(&system));
-
-        let document =
-            find_registered_document_in("tool", roots.clone()).expect("registered document");
-        assert_eq!(document.path, user.join("tool.md"));
-        assert_eq!(document.origin, RegisteredDocumentOrigin::User);
-        assert!(find_registered_document_in("../tool", roots).is_none());
-
-        fs::remove_dir_all(root).expect("remove fixture");
-    }
-
-    #[test]
-    fn listing_is_sorted_deduplicated_and_accepts_both_markdown_extensions() {
-        let root = temporary_root("list");
-        let user = root.join("user-documents");
-        let system = root.join("system-documents");
-        fs::create_dir_all(&user).expect("user documents");
-        fs::create_dir_all(&system).expect("system documents");
-        fs::write(user.join("zeta.markdown"), "# Zeta").expect("user document");
-        fs::write(user.join("alpha.md"), "# Alpha").expect("user document");
-        fs::write(user.join("alpha.markdown"), "# Lower priority")
-            .expect("alternate user document");
-        fs::write(system.join("alpha.md"), "# Shadowed").expect("system document");
-        fs::write(system.join("not-markdown.txt"), "ignored").expect("other file");
-
-        let documents = list_registered_documents_in(registration_roots(&user, Some(&system)));
+        let documents = scan_directory(&root);
         assert_eq!(
             documents
                 .iter()
-                .map(|document| document.name.as_str())
+                .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>(),
-            ["alpha", "zeta"]
+            vec!["alpha", "beta"]
         );
-        assert_eq!(documents[0].path, user.join("alpha.md"));
-
         fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
-    fn document_discovery_is_confined_to_the_documents_layer() {
-        let root = temporary_root("documents-layer");
-        let application = root.join("mant");
-        let documents = application.join("documents");
-        fs::create_dir_all(&documents).expect("document directory");
-        fs::write(application.join("current.md"), "# Outside scanner")
-            .expect("non-document application data");
-        fs::write(documents.join("current.md"), "# Current").expect("registered document");
-
-        let discovered = list_registered_documents_in(registration_roots(&documents, None));
-        assert_eq!(discovered.len(), 1);
-        assert_eq!(discovered[0].path, documents.join("current.md"));
-
+    fn md_wins_over_markdown_for_the_same_public_name() {
+        let root = temporary_root("extension");
+        fs::create_dir_all(&root).expect("create directory");
+        fs::write(root.join("tool.markdown"), "long").expect("write markdown");
+        fs::write(root.join("tool.md"), "short").expect("write md");
+        let documents = scan_directory(&root);
+        assert_eq!(documents.len(), 1);
+        assert_eq!(documents[0].1, root.join("tool.md"));
         fs::remove_dir_all(root).expect("remove fixture");
     }
 
-    #[cfg(unix)]
     #[test]
-    fn nested_directories_and_symlinks_are_discovered_without_cycles() {
-        use std::os::unix::fs::symlink;
+    fn source_origin_carries_the_selector_name() {
+        let origin = RegisteredDocumentOrigin::Source("rust".to_owned());
+        assert_eq!(origin, RegisteredDocumentOrigin::Source("rust".to_owned()));
+    }
 
-        let root = temporary_root("nested-links");
-        let registration = root.join("documents");
-        let external = root.join("external");
-        fs::create_dir_all(registration.join("team")).expect("nested registration");
-        fs::create_dir_all(&external).expect("external documents");
-        fs::write(registration.join("guide.markdown"), "# Shallow").expect("shallow document");
-        fs::write(registration.join("team/guide.md"), "# Nested").expect("nested duplicate");
-        fs::write(external.join("linked.md"), "# Linked").expect("linked document");
-        symlink(&external, registration.join("imported")).expect("linked directory");
-        symlink(&registration, external.join("cycle")).expect("directory cycle");
-        symlink(external.join("linked.md"), registration.join("alias.md")).expect("linked file");
-
-        let documents = list_registered_documents_in(registration_roots(&registration, None));
-        assert_eq!(
-            documents
-                .iter()
-                .map(|document| document.name.as_str())
-                .collect::<Vec<_>>(),
-            ["alias", "guide", "linked"]
+    // Keep the imported schema types exercised here so changes to their shape
+    // remain deliberate alongside discovery precedence tests.
+    #[test]
+    fn source_priority_is_signed() {
+        let mut values = BTreeMap::new();
+        values.insert(
+            "docs".to_owned(),
+            RepositorySource {
+                repo: "repo".to_owned(),
+                branch: "main".to_owned(),
+                path: ".".to_owned(),
+                include: Vec::new(),
+                exclude: Vec::new(),
+                priority: -1,
+            },
         );
-        assert_eq!(
-            documents
-                .iter()
-                .find(|document| document.name == "guide")
-                .expect("guide")
-                .path,
-            registration.join("guide.markdown")
-        );
-        assert_eq!(
-            documents
-                .iter()
-                .find(|document| document.name == "linked")
-                .expect("linked")
-                .path,
-            registration.join("imported/linked.md")
-        );
-
-        fs::remove_dir_all(root).expect("remove fixture");
+        let _ = std::mem::size_of::<SourceConfig>();
+        assert_eq!(values["docs"].priority, -1);
     }
 }

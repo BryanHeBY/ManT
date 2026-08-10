@@ -75,10 +75,10 @@ workflow if crates.io publication needs retrying.
 The archive keeps `mant.md` beside the executable so installation remains
 transparent. User-facing release notes should recommend copying it to
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md`; a system package
-should install it as `/usr/local/share/mant/documents/mant.md` (or the matching
-prefix-relative `share/mant/documents/mant.md`). The document is optional at
-runtime, but installing it makes `mant mant` and MCP document discovery work
-without a repository checkout.
+may ship it as ordinary package documentation and tell users how to copy it
+into their ManT data directory. The document is optional at runtime, but a
+user-scoped copy makes `mant mant` and MCP document discovery work without a
+repository checkout.
 
 Linux x64 uses the baseline target so the executable does not require AVX2.
 Windows x64 is distributed as a ZIP and contains the Markdown-native product;

@@ -162,7 +162,7 @@ checkout.
 
 ## Markdown through the same model
 
-Register reusable Markdown under the platform data hierarchy:
+Place personal documents directly in ManT's user data directory:
 
 ```sh
 mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents"
@@ -171,21 +171,28 @@ mant mant
 ```
 
 An unqualified name checks the user directory first, then
-each `$XDG_DATA_DIRS/mant/documents` root, and finally the native manual index.
-On macOS the corresponding roots are
-`~/Library/Application Support/ManT/documents` and
-`/Library/Application Support/ManT/documents`. Windows uses
-`%APPDATA%\ManT\documents` for user documents and
-`%PROGRAMDATA%\ManT\documents` for system documents. Nested directories and
-file or directory links are discovered recursively. The filename stem remains
-the lookup name, so `team/handbook.md` is opened as `mant handbook`;
-directories are organizational rather than namespaces. On Unix, an explicit
-`--manual` request bypasses registered Markdown and selects a native manual.
+configured repository sources, and finally the native manual index. Only
+`.md` and `.markdown` files directly inside each installed directory are
+discoverable; nested directories and symbolic links are ignored. On Unix,
+`--manual` bypasses Markdown and selects a native manual.
 
-A registration directory is a trust boundary: discovery follows links even
-when they resolve outside that directory, and readable Markdown reached this
-way is also available through the read-only MCP server. Register only
-directories whose contents and links you control.
+Repository sources are top-level tables in `sources.toml` beside `documents/`:
+
+```toml
+[team]
+repo = "https://github.com/example/cli-docs.git"
+branch = "main"
+path = "manuals"
+include = ["public"]
+exclude = ["public/drafts"]
+priority = 10
+```
+
+Run `mant --update-docs` to install selected Markdown from one shallow Git
+revision. Root documents always win; repositories then fall back by higher
+priority and source name. Use `mant tool --source team` to select one source
+explicitly. See [document sources](docs/sources.md) for paths, exact selector
+rules, metadata, update safety, and complete examples.
 
 Use a path for one-off local files or `-` for non-interactive standard input:
 
@@ -232,12 +239,11 @@ mant --mcp
 ```
 
 Configure the client command as `mant` with arguments `["--mcp"]`. The server
-exposes registered-document discovery, outline, content, semantic explanation,
-and search tools over stdio. Document tools accept document names rather than
-arbitrary filesystem paths; place agent-readable Markdown in the registered
-document directories above. It has no network transport or mutation tools;
-stdout remains reserved for MCP JSON-RPC and stderr stays silent. Lowering
-diagnostics remain available through ordinary CLI JSON queries.
+exposes local discovery, outline, content, semantic explanation, and search
+tools over stdio. Each call reads the files currently visible in `documents/`,
+configured installed sources, and native manual paths. MCP has no update,
+network, or mutation tool and does not promise a session snapshot across
+calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
@@ -261,6 +267,7 @@ versioned JSON and MCP boundaries.
 
 - [mant self manual](docs/manuals/mant.md)
 - [Installation methods and platform requirements](docs/installation.md)
+- [Document source configuration and updates](docs/sources.md)
 - [JSON protocol and Schema reference](docs/protocol.md)
 - [Native architecture](docs/architecture/native-core.md)
 - [Development guide and repository map](docs/development.md)

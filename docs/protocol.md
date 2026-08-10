@@ -20,9 +20,9 @@ The current descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v4",
-  "nativeApiVersion": "4",
-  "requestSchema": "mant.request/v4",
+  "protocol": "mant.cli/v5",
+  "nativeApiVersion": "5",
+  "requestSchema": "mant.request/v5",
   "querySchema": "mant.query/v4",
   "documentSchema": "mant.document/v4",
   "outlineSchema": "mant.outline/v4",
@@ -38,9 +38,9 @@ query the manual database, read tldr data, or start the TUI.
 
 | Identifier | Scope | Where it appears |
 | --- | --- | --- |
-| `mant.cli/v4` | One-shot process invocation and stream behavior | `--protocol-version` |
-| `4` | Native API generation negotiated by process clients | `nativeApiVersion` |
-| `mant.request/v4` | Closed request accepted by `--request-json` | Request `schema` |
+| `mant.cli/v5` | One-shot process invocation and stream behavior | `--protocol-version` |
+| `5` | Native API generation negotiated by process clients | `nativeApiVersion` |
+| `mant.request/v5` | Closed request accepted by `--request-json` | Request `schema` |
 | `mant.query/v4` | Complete document plus optional quick reference | Full response `schema` |
 | `mant.document/v4` | Source-neutral document AST | `QueryBundle.document.schema` |
 | `mant.outline/v4` | Block-free addressable tree | Outline response `schema` |
@@ -48,9 +48,10 @@ query the manual database, read tldr data, or start the TUI.
 | `mant.search/v4` | Search results and pagination | Search response `schema` |
 | `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
 
-The suffixes are contract versions, not the ManT release number. The v4 suite
-is aligned for its first publication, but clients must still compare every
-complete identifier rather than infer one contract from another.
+The suffixes are contract versions, not the ManT release number. Request and
+CLI framing are v5 while unchanged response projections remain v4; clients
+must compare every complete identifier rather than infer one contract from
+another.
 
 ### Compatibility Rules
 
@@ -91,7 +92,7 @@ commands.
 
 | Catalog key | Root title | Root `$id` |
 | --- | --- | --- |
-| `request` | `QueryRequest` | `urn:mant:request:v4` |
+| `request` | `QueryRequest` | `urn:mant:request:v5` |
 | `query` | `QueryBundle` | `urn:mant:query:v4` |
 | `outline` | `QueryOutline` | `urn:mant:outline:v4` |
 | `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v4` |
@@ -147,7 +148,7 @@ findings belong to `document.diagnostics` or `excerpt.diagnostics`.
 
 Manual pages have one parser path: the located roff source is lowered directly
 through `libmandoc-rs`. Renderer selection is deliberately absent from
-`mant.request/v4`. This native-manual source family is available on Unix;
+`mant.request/v5`. This native-manual source family is available on Unix;
 Windows implements the same protocol over registered and explicit Markdown.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
@@ -162,22 +163,20 @@ Every request has three required fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema` | Exact string | Must be `mant.request/v4` |
+| `schema` | Exact string | Must be `mant.request/v5` |
 | `input` | `QueryInput` union | Resolvable document name or local Markdown path |
 | `view` | `QueryView` union | Full, outline, excerpt, or search projection |
 
 ### Input Variants
 
-An unqualified name first checks registered Markdown below
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents` and each
-`$XDG_DATA_DIRS/mant/documents` directory on Linux. macOS uses
-`~/Library/Application Support/ManT/documents` and
-`/Library/Application Support/ManT/documents`. ManT then falls back to its
-native manual index. Windows uses `%APPDATA%\ManT\documents` and
-`%PROGRAMDATA%\ManT\documents` and has no native manual fallback. Registration roots are recursive and follow file or
-directory symbolic links without revisiting the same canonical directory. A
-nested file keeps its filename stem as its public name; directory components
-are not part of the request:
+An unqualified name first checks the singular per-user `documents` directory,
+then installed repositories configured by `sources.toml` in descending
+`priority` and source-name order, then the native manual index. Linux uses
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
+`~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as the
+data root. Only regular `.md` and `.markdown` files immediately inside each
+document directory are registered; nested directories and symbolic links are
+ignored:
 
 ```json
 {
@@ -186,6 +185,20 @@ are not part of the request:
   "section": "3"
 }
 ```
+
+The document input also accepts an optional `source` string. It selects exactly
+one configured repository and bypasses root Markdown and manuals:
+
+```json
+{
+  "kind": "document",
+  "name": "printf",
+  "source": "team"
+}
+```
+
+`source` and `section` are mutually exclusive. A missing document in an
+explicit source is an error rather than a fallback.
 
 `section` is optional and bypasses registered Markdown. On Windows it produces
 an explicit unsupported-source diagnostic. On Unix, the native index reads `MANT_MANPATH` as a
@@ -242,7 +255,7 @@ Request a full manual:
 
 ```json
 {
-  "schema": "mant.request/v4",
+  "schema": "mant.request/v5",
   "input": {
     "kind": "document",
     "name": "printf",
@@ -258,7 +271,7 @@ Discover all sections and semantic entries:
 
 ```json
 {
-  "schema": "mant.request/v4",
+  "schema": "mant.request/v5",
   "input": {
     "kind": "document",
     "name": "tar"
@@ -274,7 +287,7 @@ Retrieve a section and one option by selectors returned from an outline:
 
 ```json
 {
-  "schema": "mant.request/v4",
+  "schema": "mant.request/v5",
   "input": {
     "kind": "document",
     "name": "tar"
@@ -293,7 +306,7 @@ Search a Markdown document:
 
 ```json
 {
-  "schema": "mant.request/v4",
+  "schema": "mant.request/v5",
   "input": {
     "kind": "markdown-file",
     "path": "README.md"
@@ -316,7 +329,7 @@ A shell client can send a request without a temporary file:
 
 ```sh
 printf '%s\n' \
-  '{"schema":"mant.request/v4","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}' \
+  '{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}' \
   | mant --request-json --format json --compact
 ```
 
@@ -718,7 +731,7 @@ A complete no-match response is:
 
 `mant --mcp` is a long-running Model Context Protocol server over standard
 input and output. It is an alternate transport over the same `mant-core`
-queries, not `mant.cli/v4` framing and not a separate document model.
+queries, not `mant.cli/v5` framing and not a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
 line is limited to 8 MiB. Standard output is exclusively MCP traffic;
@@ -726,7 +739,9 @@ standard error is deliberately silent. Lowering diagnostics are omitted from
 MCP excerpts, while tool failures use structured MCP error results and fatal
 transport failures use a non-zero process status. Diagnose source lowering
 through ordinary CLI JSON output, whose document contains structured parser
-findings. There is no HTTP listener and there are no mutation tools.
+findings. There is no HTTP listener and there are no mutation tools. Each call
+reads the local files visible at that time; MCP does not invoke Git, update
+repositories, or promise one fixed snapshot across calls.
 
 MCP protocol versions are negotiated by the standard `initialize` exchange.
 With the current runtime, a client requesting `2025-11-25` receives:
@@ -741,7 +756,7 @@ With the current runtime, a client requesting `2025-11-25` receives:
     "name": "mant",
     "version": "0.5.0"
   },
-  "instructions": "Query registered Markdown documents and local manual pages by name. Use mant_documents_list for paginated discovery, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain."
+  "instructions": "Read locally installed Markdown documents and manual pages by name. Use mant_documents_list for discovery, optionally select a configured source, then call mant_document_outline before retrieving IDs, paths, or aliases. Files may change between calls; this server does not update sources."
 }
 ```
 
@@ -756,16 +771,17 @@ read-only tools:
 
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
-| `mant_documents_list` | None | `query`, `kind`, `section`, `limit`, `offset` | Paginated document catalog |
-| `mant_document_outline` | `name` | `section`; `detail`, default `options` | `mant.outline/v4` |
-| `mant_document_get` | `name`, non-empty `nodes` | `section` | `mant.excerpt/v4` |
-| `mant_document_explain` | `name`, `entry` | `section` | `mant.excerpt/v4` |
-| `mant_document_search` | `name`, `pattern` | `section` and search settings | `mant.search/v4` |
+| `mant_documents_list` | None | `query`, `kind`, `source`, `section`, `limit`, `offset` | Paginated document catalog |
+| `mant_document_outline` | `name` | `source` or `section`; `detail`, default `options` | `mant.outline/v4` |
+| `mant_document_get` | `name`, non-empty `nodes` | `source` or `section` | `mant.excerpt/v4` |
+| `mant_document_explain` | `name`, `entry` | `source` or `section` | `mant.excerpt/v4` |
+| `mant_document_search` | `name`, `pattern` | `source` or `section`, plus search settings | `mant.search/v4` |
 
-Every tool is annotated read-only, non-destructive, idempotent, and
-closed-world. Document tools resolve one name through registered Markdown and
-then the native manual index. They intentionally do not accept arbitrary file
-paths. Supplying `section` bypasses registered Markdown and selects a manual.
+Every tool is annotated read-only, non-destructive, and
+closed-world. Document tools resolve one name through root Markdown,
+configured installed sources, and then the native manual index. They do not
+accept arbitrary file paths. `source` selects one repository; `section`
+selects a manual; the two selectors cannot be combined.
 
 Discover both registered Markdown and section-qualified manual pages with:
 
@@ -788,9 +804,12 @@ Discover both registered Markdown and section-qualified manual pages with:
 
 The catalog response reports `total`, `returned`, `offset`, `truncated`, an
 optional `nextOffset`, and `documents`. Each document has `name`, `kind`,
-optional `section`, `path`, and `origin`. `kind` accepts `markdown` or `manual`;
-`section` excludes Markdown entries. `query` is a case-insensitive name
-substring. `limit` defaults to 100 and is capped at 1,000.
+optional `source`, optional `section`, `path`, and `origin`. `kind` accepts
+`markdown` or `manual`; `section` excludes Markdown entries. `query` is a
+case-insensitive name substring. `origin` is `documents`, `source`, or
+`manual-path`; source-backed entries also carry their source name. Shadowed
+Markdown candidates remain in the catalog. `limit` defaults to 100 and is
+capped at 1,000.
 
 An outline tool call is:
 
@@ -842,7 +861,7 @@ than inventing a ManT error schema.
 2. Run `mant --protocol-version --compact` and require compatible identifiers.
 3. Obtain `mant --schema request` and the expected response schema, or use a
    schema catalog pinned with the executable.
-4. Construct a closed `mant.request/v4` object.
+4. Construct a closed `mant.request/v5` object.
 5. Spawn `mant --request-json --format json --compact`.
 6. Write one UTF-8 request and close stdin.
 7. Drain stdout and stderr concurrently and apply a timeout.

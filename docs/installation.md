@@ -150,10 +150,10 @@ install -Dm644 mant.md "$data_home/mant/documents/mant.md"
 mant mant
 ```
 
-For a system-wide installation, use `/usr/local/bin/mant` and
-`/usr/local/share/mant/documents/mant.md` instead. User documents take
-precedence over system documents. The archive also contains the project
-README, the Apache-2.0 license, and the bundled mandoc license.
+For a system-wide executable installation, use `/usr/local/bin/mant`; reusable
+Markdown still belongs in each user's data directory. The archive also
+contains the project README, the Apache-2.0 license, and the bundled mandoc
+license.
 
 ### Windows
 

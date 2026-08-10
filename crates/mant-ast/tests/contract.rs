@@ -1,4 +1,4 @@
-//! Cross-language golden tests for the coherent v4 protocol suite.
+//! Cross-language golden tests for the versioned query protocol suite.
 
 use mant_ast::{
     Block, Inline, OutlineDetail, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView,
@@ -57,21 +57,22 @@ fn unknown_query_schema_is_rejected() {
 #[test]
 fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     let request: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"printf","section":"3"},"view":{"kind":"full"}}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"printf","section":"3"},"view":{"kind":"full"}}"#,
     )
     .expect("valid full query request");
-    assert_eq!(request.schema, RequestSchema::V4);
+    assert_eq!(request.schema, RequestSchema::V5);
     assert_eq!(
         request.input,
         QueryInput::Document {
             name: "printf".to_owned(),
+            source: None,
             section: Some("3".to_owned()),
         }
     );
     assert_eq!(request.view, QueryView::Full {});
 
     let outline: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
     )
     .expect("valid outline request");
     assert_eq!(
@@ -82,7 +83,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let excerpt: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"tar"},"view":{"kind":"excerpt","nodes":["acls"]}}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"excerpt","nodes":["acls"]}}"#,
     )
     .expect("valid excerpt request");
     assert_eq!(
@@ -93,7 +94,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let search: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
     )
     .expect("valid search request");
     assert_eq!(
@@ -111,7 +112,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let search_defaults: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"tar"},"view":{"kind":"search","pattern":"acls"}}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"search","pattern":"acls"}}"#,
     )
     .expect("search defaults");
     assert_eq!(
@@ -129,7 +130,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"ls"},"view":{"kind":"full"},"mode":"html"}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"ls"},"view":{"kind":"full"},"mode":"html"}"#,
     )
     .expect_err("unknown request field");
     assert!(error.to_string().contains("unknown field"));
@@ -147,8 +148,30 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     assert!(error.to_string().contains("unknown variant"));
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"ls"},"view":{"kind":"full","future":true}}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"ls"},"view":{"kind":"full","future":true}}"#,
     )
     .expect_err("unknown view field");
     assert!(error.to_string().contains("unknown field"));
+}
+
+#[test]
+fn request_v5_selects_one_configured_source_without_accepting_v4() {
+    let selected: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"printf","source":"team"},"view":{"kind":"full"}}"#,
+    )
+    .expect("valid explicit source request");
+    assert!(matches!(
+        selected.input,
+        QueryInput::Document {
+            source: Some(ref source),
+            section: None,
+            ..
+        } if source == "team"
+    ));
+
+    let error = serde_json::from_str::<QueryRequest>(
+        r#"{"schema":"mant.request/v4","input":{"kind":"document","name":"ls"},"view":{"kind":"full"}}"#,
+    )
+    .expect_err("old request schema is intentionally unsupported");
+    assert!(error.to_string().contains("unknown variant"));
 }

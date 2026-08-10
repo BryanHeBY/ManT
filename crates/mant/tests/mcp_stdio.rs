@@ -100,7 +100,7 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(documents.iter().any(|document| {
         document["name"] == "mcp-registered"
             && document["kind"] == "markdown"
-            && document["origin"] == "user"
+            && document["origin"] == "documents"
     }));
     if cfg!(unix) {
         assert!(documents.iter().any(|document| {

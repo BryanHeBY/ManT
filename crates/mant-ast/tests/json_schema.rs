@@ -29,14 +29,15 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
         "https://json-schema.org/draft/2020-12/schema"
     );
     assert_eq!(schema["title"], "QueryRequest");
-    assert_eq!(schema["$id"], "urn:mant:request:v4");
+    assert_eq!(schema["$id"], "urn:mant:request:v5");
     assert_eq!(schema["additionalProperties"], false);
     assert!(required(&schema).contains(&"schema"));
     assert!(required(&schema).contains(&"input"));
     assert!(required(&schema).contains(&"view"));
-    assert!(encoded.contains("mant.request/v4"));
+    assert!(encoded.contains("mant.request/v5"));
     assert!(encoded.contains("\"document\""));
     assert!(encoded.contains("\"name\""));
+    assert!(encoded.contains("\"source\""));
     assert!(!encoded.contains("\"topic\""));
     assert!(encoded.contains("markdown-file"));
     assert!(encoded.contains("outline"));

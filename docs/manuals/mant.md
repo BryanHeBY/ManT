@@ -26,6 +26,10 @@
 - Read Markdown from standard input:
 
 `cat {{path/to/document.md}} | mant -`
+
+- Update configured document sources:
+
+`mant --update-docs`
 <!-- mant:tldr:end -->
 
 # mant
@@ -40,6 +44,7 @@
 mant <NAME|MARKDOWN|-> [OPTIONS]
 mant --request-json [--format FORMAT] [--compact]
 mant --schema CONTRACT [--compact]
+mant --update-docs [--compact]
 mant --update-tldr [--compact]
 mant --protocol-version [--compact]
 mant --mcp
@@ -61,34 +66,21 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 
 ## Input
 
-Input is resolved before parsing. An ordinary value first selects a registered
-Markdown document from
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`, then from each
-`$XDG_DATA_DIRS/mant/documents` directory, and finally from the native manual
-index. On macOS the user and system roots are
-`~/Library/Application Support/ManT/documents` and
-`/Library/Application Support/ManT/documents`. Windows uses
-`%APPDATA%\ManT\documents` and `%PROGRAMDATA%\ManT\documents`; it has no native
-manual fallback. Values ending in `.md` or `.markdown`, other path-like values,
-and the exact value `-` select Markdown directly instead.
+Input is resolved before parsing. An ordinary value first checks the user's
+flat `documents` directory, then configured installed sources by descending
+priority and source name, and finally the native manual index. Linux uses
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
+`~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as its
+data root. Values ending in `.md` or `.markdown`, other path-like values, and
+the exact value `-` select Markdown directly instead.
 
 The filename supplies a registered document name: `mant.md` is queried as
-`mant mant`. Registration roots are scanned recursively, including file and
-directory symbolic links. Directories organize documents but do not form
-namespaces: `team/handbook.md` is still queried as `mant handbook`.
-
-A registration directory is a trust boundary: discovery follows links even
-when they resolve outside that directory, and readable Markdown reached this
-way is also available through the read-only MCP server. Register only
-directories whose contents and links you control.
-
-For duplicate names, user data precedes system data, shallower paths precede
-deeper paths, relative path order breaks remaining ties, and `.md` precedes
-`.markdown` in the same directory. Broken links and unreadable paths are
-ignored; canonical directory identities prevent symbolic-link cycles. An
-explicit `--manual` or `--section` request bypasses registered Markdown and
-selects a native manual page on Unix. Windows reports that this source family
-is unavailable instead of silently treating it as Markdown.
+`mant mant`. Only regular `.md` and `.markdown` files immediately inside a
+registered directory are visible. Nested directories and symbolic links are
+ignored. Root documents always win; source priority and name resolve remaining
+duplicates; `.md` wins over `.markdown` within one directory. `--source NAME`
+selects exactly one configured repository. `--manual` or `--section` selects a
+native manual on Unix and cannot be combined with `--source`.
 
 ### Manual Pages
 
@@ -105,6 +97,7 @@ pipe Markdown through standard input instead.
 - `--section SECTION`: Select a manual section such as `1` or `3p`.
 - `--manual`: Require a native manual instead of registered Markdown with the
   same name.
+- `--source SOURCE`: Require one configured installed Markdown source.
 
 Recoverable parser findings remain structured in JSON output. ManT does not
 invoke a host renderer or maintain an alternate HTML parsing path.
@@ -314,7 +307,7 @@ valid only with JSON query output.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v4` object from standard input.
+- `--request-json`: Read one closed `mant.request/v5` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
@@ -326,9 +319,9 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v4",
-  "nativeApiVersion": "4",
-  "requestSchema": "mant.request/v4",
+  "protocol": "mant.cli/v5",
+  "nativeApiVersion": "5",
+  "requestSchema": "mant.request/v5",
   "querySchema": "mant.query/v4",
   "documentSchema": "mant.document/v4",
   "outlineSchema": "mant.outline/v4",
@@ -337,11 +330,12 @@ The current protocol descriptor is:
 }
 ```
 
-These contracts use one coherent unpublished `v4` suite for the first public
-protocol release. Future revisions may advance individual contracts only when
-their wire shapes change, so consumers must still compare every exact schema
-identifier. Generated schemas use JSON Schema Draft 2020-12 and remain the
-authoritative field-level definition.
+The request and CLI framing advanced to v5 when explicit source selection was
+added; response document and projection schemas remain v4. Future revisions
+may advance individual contracts only when their wire shapes change, so
+consumers must still compare every exact schema identifier. Generated schemas
+use JSON Schema Draft 2020-12 and remain the authoritative field-level
+definition.
 The repository's `docs/protocol.md` supplies the complete field reference,
 examples, compatibility policy, coordinate rules, and MCP tool contracts.
 
@@ -349,14 +343,15 @@ Standard output is reserved for the requested result. Concise diagnostics use
 standard error. `--request-json` accepts the same input and projection model
 used by external process integrations. MCP exposes `mant_documents_list`,
 `mant_document_outline`, `mant_document_get`, `mant_document_explain`, and
-`mant_document_search`. Document tools accept a name and optional manual
-section, not an arbitrary local path; register Markdown before exposing it to
-an agent. `mant_documents_list` merges registered Markdown with the native
-manual index and supports a case-insensitive `query`, `markdown` or `manual`
-`kind`, exact `section`, and bounded `limit`/`offset` pagination.
+`mant_document_search`. Document tools accept a name and optional source or
+manual section, not an arbitrary local path. `mant_documents_list` merges
+local Markdown candidates with the native manual index and supports `query`,
+`kind`, exact `source` or `section`, and bounded pagination. MCP reads current
+local files only; it has no update tool and no cross-call snapshot guarantee.
 
 ## Data
 
+- `--update-docs`: Update repositories declared in `sources.toml` and print a complete JSON report.
 - `--update-tldr`: Update through an installed tldr client when available, otherwise through ManT's private cache.
 
 Normal queries prefer compatible installed-client data and always retain
@@ -365,25 +360,21 @@ no tldr page is available.
 
 ## Storage
 
-ManT keeps durable registered documents separate from disposable caches. On
-Linux, registered Markdown lives below
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`; system roots are each
-`mant/documents` directory below `XDG_DATA_DIRS`. ManT's private tldr checkout
-lives below `${XDG_CACHE_HOME:-$HOME/.cache}/mant/tldr-pages`.
+ManT keeps durable documents and repository metadata separate from disposable
+caches. On Linux they live below
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant`; the private tldr checkout lives
+below `${XDG_CACHE_HOME:-$HOME/.cache}/mant/tldr-pages`.
 
-On macOS, registered Markdown lives below
-`~/Library/Application Support/ManT/documents`, system documents live below
-`/Library/Application Support/ManT/documents`, and the private tldr checkout
-lives below `~/Library/Caches/ManT/tldr-pages`.
+On macOS, documents live below `~/Library/Application Support/ManT` and the
+private tldr checkout lives below `~/Library/Caches/ManT/tldr-pages`.
 
-On Windows, user and system Markdown live below
-`%APPDATA%\ManT\documents` and `%PROGRAMDATA%\ManT\documents`. ManT's private
+On Windows, documents live below `%APPDATA%\ManT`. ManT's private
 tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. A Windows
 installation provides Markdown, TUI, structured output, tldr, and MCP support;
 native Unix manual parsing is not part of that build.
 
-Configuration and state, when introduced, use the same platform conventions
-without sharing the document scanner or cache lifecycle.
+`sources.toml`, `documents/`, and `sources/` share the data root. See
+`docs/sources.md` for the source schema and update lifecycle.
 
 ## Environment
 
@@ -396,15 +387,13 @@ without sharing the document scanner or cache lifecycle.
 - `XDG_CACHE_HOME`: Relocate cache discovery and ManT's Linux fallback cache.
 - `XDG_DATA_HOME`: Relocate the user document directory from the default
   `$HOME/.local/share/mant/documents` on Linux.
-- `XDG_DATA_DIRS`: Add system data roots considered during
-  registered-document and tldr discovery. Registered Markdown is read
-  recursively from each `mant/documents` subdirectory on Linux.
+- `XDG_DATA_DIRS`: Add installed-client tldr discovery roots; it does not add
+  ManT document roots.
 - `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manual sources
   and translated tldr pages before English fallback.
 - `HOME`: Supply conventional document, manual, and cache locations when their
   XDG overrides are absent.
 - `APPDATA`: Select the per-user registered Markdown root on Windows.
-- `PROGRAMDATA`: Select the system-wide registered Markdown root on Windows.
 - `LOCALAPPDATA`: Select ManT and installed-client cache roots on Windows.
 - `USERPROFILE`: Supply compatible installed-client tldr cache locations on
   Windows when available.

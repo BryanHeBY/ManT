@@ -124,6 +124,8 @@ impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
 struct DocumentSelector {
     /// Registered Markdown or manual page name, for example `git` or `mant`.
     name: String,
+    /// Optional configured Markdown source. It bypasses root documents and manuals.
+    source: Option<String>,
     /// Optional man section. Supplying it bypasses registered Markdown.
     section: Option<String>,
 }
@@ -201,6 +203,8 @@ struct DocumentListParams {
     kind: Option<DocumentKindFilter>,
     /// Restrict manual pages to one exact section; excludes Markdown entries.
     section: Option<String>,
+    /// Restrict Markdown discovery to one configured source.
+    source: Option<String>,
     /// Maximum entries returned from 1 through 1,000. The default is 100.
     #[schemars(range(min = 1, max = 1000))]
     #[serde(default, deserialize_with = "lenient_scalar")]
@@ -241,6 +245,8 @@ struct DocumentSummary {
     section: Option<String>,
     path: String,
     origin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
 }
 
 /// Accepts a native scalar or its stringified spelling such as `"10"` or `"True"`.
@@ -332,7 +338,6 @@ impl MantMcpServer {
             title = "ManT local documents",
             read_only_hint = true,
             destructive_hint = false,
-            idempotent_hint = true,
             open_world_hint = false
         )
     )]
@@ -343,7 +348,8 @@ impl MantMcpServer {
         let parameters = validate_document_list(parameters.0)?;
         let documents = task::spawn_blocking(mant_core::list_available_documents)
             .await
-            .map_err(|error| format!("MCP document discovery worker failed: {error}"))?;
+            .map_err(|error| format!("MCP document discovery worker failed: {error}"))?
+            .map_err(|error| error.to_string())?;
         Ok(Json(build_document_catalog(documents, &parameters)))
     }
 
@@ -354,7 +360,6 @@ impl MantMcpServer {
             title = "ManT document outline",
             read_only_hint = true,
             destructive_hint = false,
-            idempotent_hint = true,
             open_world_hint = false
         )
     )]
@@ -378,7 +383,6 @@ impl MantMcpServer {
             title = "ManT selected document content",
             read_only_hint = true,
             destructive_hint = false,
-            idempotent_hint = true,
             open_world_hint = false
         )
     )]
@@ -408,7 +412,6 @@ impl MantMcpServer {
             title = "ManT option explanation",
             read_only_hint = true,
             destructive_hint = false,
-            idempotent_hint = true,
             open_world_hint = false
         )
     )]
@@ -445,7 +448,6 @@ impl MantMcpServer {
             title = "ManT document search",
             read_only_hint = true,
             destructive_hint = false,
-            idempotent_hint = true,
             open_world_hint = false
         )
     )]
@@ -490,7 +492,7 @@ impl ServerHandler for MantMcpServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("mant", env!("CARGO_PKG_VERSION")))
             .with_instructions(
-                "Query registered Markdown documents and local manual pages by name. Use mant_documents_list for paginated discovery, then mant_document_outline before selecting IDs, paths, or aliases with mant_document_get or mant_document_explain.",
+                "Read locally installed Markdown documents and manual pages by name. Use mant_documents_list for discovery, optionally select a configured source, then call mant_document_outline before retrieving IDs, paths, or aliases. Files may change between calls; this server does not update sources.",
             )
     }
 }
@@ -508,6 +510,13 @@ fn validate_document_list(
         .section
         .map(|section| non_empty(&section, "section"))
         .transpose()?;
+    parameters.source = parameters
+        .source
+        .map(|source| non_empty(&source, "source"))
+        .transpose()?;
+    if parameters.source.is_some() && parameters.section.is_some() {
+        return Err("source and section cannot be combined".to_owned());
+    }
     let limit = parameters.limit.unwrap_or(100);
     if !(1..=1000).contains(&limit) {
         return Err("limit must be between 1 and 1000".to_owned());
@@ -542,6 +551,13 @@ fn build_document_catalog(
                         .as_ref()
                         .is_some_and(|value| value == section)
                 })
+                && parameters.source.as_ref().is_none_or(|source| {
+                    matches!(
+                        &document.origin,
+                        mant_core::AvailableDocumentOrigin::Source(candidate)
+                            if candidate == source
+                    )
+                })
         })
         .collect::<Vec<_>>();
     let total = filtered.len();
@@ -560,12 +576,17 @@ fn build_document_catalog(
             .to_owned(),
             section: document.section.clone(),
             path: document.path.to_string_lossy().into_owned(),
-            origin: match document.origin {
-                mant_core::AvailableDocumentOrigin::User => "user",
-                mant_core::AvailableDocumentOrigin::System => "system",
+            origin: match &document.origin {
+                mant_core::AvailableDocumentOrigin::Documents => "documents",
+                mant_core::AvailableDocumentOrigin::Source(_) => "source",
                 mant_core::AvailableDocumentOrigin::ManualPath => "manual-path",
             }
             .to_owned(),
+            source: match &document.origin {
+                mant_core::AvailableDocumentOrigin::Source(source) => Some(source.clone()),
+                mant_core::AvailableDocumentOrigin::Documents
+                | mant_core::AvailableDocumentOrigin::ManualPath => None,
+            },
         })
         .collect::<Vec<_>>();
     DocumentCatalog {
@@ -588,15 +609,24 @@ fn discard_lowering_diagnostics(excerpt: &mut QueryExcerpt) {
 }
 
 fn request_for(selector: DocumentSelector, view: QueryView) -> Result<QueryRequest, String> {
+    let source = selector
+        .source
+        .map(|source| non_empty(&source, "source"))
+        .transpose()?;
+    let section = selector
+        .section
+        .map(|section| non_empty(&section, "section"))
+        .transpose()?;
+    if source.is_some() && section.is_some() {
+        return Err("source and section cannot be combined".to_owned());
+    }
     let input = QueryInput::Document {
         name: non_empty(&selector.name, "name")?,
-        section: selector
-            .section
-            .map(|section| non_empty(&section, "section"))
-            .transpose()?,
+        source,
+        section,
     };
     Ok(QueryRequest {
-        schema: mant_ast::RequestSchema::V4,
+        schema: mant_ast::RequestSchema::V5,
         input,
         view,
     })
@@ -673,6 +703,7 @@ mod tests {
             .expect("outline tool");
         let schema = serde_json::to_value(&outline.input_schema).expect("schema JSON");
         assert_eq!(schema["properties"]["name"]["type"], "string");
+        assert!(schema["properties"]["source"].is_object());
         assert!(schema["properties"]["section"].is_object());
         assert!(schema["properties"].get("target").is_none());
         assert!(!schema.to_string().contains("markdown-file"));
@@ -690,6 +721,29 @@ mod tests {
     }
 
     #[test]
+    fn a_configured_source_is_available_but_cannot_combine_with_a_section() {
+        let parameters: OutlineParams = serde_json::from_value(json!({
+            "name": "tool",
+            "source": "team"
+        }))
+        .expect("source selector");
+        assert_eq!(parameters.selector.source.as_deref(), Some("team"));
+        assert!(super::request_for(parameters.selector, mant_ast::QueryView::Full {}).is_ok());
+
+        let parameters: OutlineParams = serde_json::from_value(json!({
+            "name": "tool",
+            "source": "team",
+            "section": "1"
+        }))
+        .expect("deserialize combined selector before semantic validation");
+        assert!(
+            super::request_for(parameters.selector, mant_ast::QueryView::Full {})
+                .expect_err("reject combined source and section")
+                .contains("cannot be combined")
+        );
+    }
+
+    #[test]
     fn arbitrary_markdown_paths_are_not_mcp_inputs() {
         let error = serde_json::from_value::<OutlineParams>(json!({
             "target": {"kind": "markdown-file", "path": "README.md"}
@@ -704,6 +758,7 @@ mod tests {
             query: Some("PRINT".to_owned()),
             kind: Some(DocumentKindFilter::Manual),
             section: None,
+            source: None,
             limit: Some(1),
             offset: Some(1),
         })
@@ -715,7 +770,7 @@ mod tests {
                     kind: AvailableDocumentKind::Markdown,
                     section: None,
                     path: PathBuf::from("/data/mant/printf.md"),
-                    origin: AvailableDocumentOrigin::User,
+                    origin: AvailableDocumentOrigin::Documents,
                 },
                 AvailableDocument {
                     name: "printf".to_owned(),

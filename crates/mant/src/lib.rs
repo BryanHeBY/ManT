@@ -13,7 +13,7 @@ use mant_ast::{
     ExcerptSelection, QueryBundle, QueryInput, QueryRequest, QueryView, SearchQuery, SourceFormat,
     TldrCacheUpdate,
 };
-use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
+use mant_core::{DocumentSourcesUpdate, ProjectionError, QueryError, QueryPolicy, SearchError};
 use serde::Serialize;
 
 use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
@@ -21,7 +21,7 @@ use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaCont
 // ── Stable process protocol ────────────────────────────────────────────────
 
 /// Exact stdio protocol exposed to external process clients.
-pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v4";
+pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v5";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 
@@ -65,6 +65,7 @@ trait CliHost {
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure>;
     fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure>;
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
+    fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure>;
 }
 
 struct SystemHost;
@@ -72,9 +73,11 @@ struct SystemHost;
 impl CliHost for SystemHost {
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
         mant_core::query_with_policy(request, policy).map_err(|error| match error {
-            QueryError::EmptyName | QueryError::InvalidSection | QueryError::EmptyMarkdownPath => {
-                Failure::usage(error)
-            }
+            QueryError::EmptyName
+            | QueryError::InvalidSection
+            | QueryError::InvalidSource
+            | QueryError::ConflictingSourceSelectors
+            | QueryError::EmptyMarkdownPath => Failure::usage(error),
             _ => Failure::operational(error),
         })
     }
@@ -85,6 +88,10 @@ impl CliHost for SystemHost {
 
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {
         mant_core::update_tldr_cache().map_err(Failure::operational)
+    }
+
+    fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {
+        mant_core::update_document_sources().map_err(Failure::operational)
     }
 }
 
@@ -214,14 +221,28 @@ fn run_command(
         );
     }
 
-    let rendered = match execute(command, input, host) {
-        Ok(rendered) => rendered,
-        Err(error) => return report_failure(&error, diagnostics),
+    let (rendered, success_status) = match command {
+        Command::UpdateDocs { pretty } => {
+            let update = match host.update_docs() {
+                Ok(update) => update,
+                Err(error) => return report_failure(&error, diagnostics),
+            };
+            let status = u8::from(update.has_failures());
+            let rendered = match render_json(&update, pretty) {
+                Ok(rendered) => rendered,
+                Err(error) => return report_failure(&error, diagnostics),
+            };
+            (rendered, status)
+        }
+        command => match execute(command, input, host) {
+            Ok(rendered) => (rendered, 0),
+            Err(error) => return report_failure(&error, diagnostics),
+        },
     };
 
     match write_output(output, &rendered) {
-        Ok(()) => 0,
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => 0,
+        Ok(()) => success_status,
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => success_status,
         Err(error) => report_failure(&Failure::operational(error), diagnostics),
     }
 }
@@ -233,7 +254,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_core::native_api_version(),
-                request_schema: "mant.request/v4",
+                request_schema: "mant.request/v5",
                 query_schema: "mant.query/v4",
                 document_schema: "mant.document/v4",
                 outline_schema: "mant.outline/v4",
@@ -251,6 +272,9 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             SchemaContract::All => render_json(&mant_ast::query_json_schema_catalog(), pretty),
         },
         Command::Mcp => unreachable!("MCP mode is dispatched before normal CLI execution"),
+        Command::UpdateDocs { .. } => {
+            unreachable!("document updates are dispatched before normal execution")
+        }
         Command::UpdateTldr { pretty } => {
             let update = host.update_tldr()?;
             mant_core::render_update_json(&update, pretty).map_err(Failure::operational)
@@ -537,9 +561,24 @@ fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
 
 fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
     match &request.input {
-        QueryInput::Document { name, section } => {
+        QueryInput::Document {
+            name,
+            source,
+            section,
+        } => {
             if name.trim().is_empty() {
                 return Err(Failure::usage("document name must not be empty"));
+            }
+            if source
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(Failure::usage("document source must not be empty"));
+            }
+            if source.is_some() && section.is_some() {
+                return Err(Failure::usage(
+                    "document source and manual section cannot be combined",
+                ));
             }
             if section
                 .as_deref()
@@ -657,6 +696,8 @@ fn report_argument_error(error: &clap::Error, diagnostics: &mut dyn Write) -> u8
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
+
+    use mant_core::{DocumentSourcesUpdate, DocumentSourcesUpdateSchema};
 
     use mant_ast::{
         Block, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSchema,
@@ -835,6 +876,14 @@ mod tests {
                 revision: Some("abc123".to_owned()),
             })
         }
+
+        fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {
+            Ok(DocumentSourcesUpdate {
+                schema: DocumentSourcesUpdateSchema::V1,
+                config: "/data/mant/sources.toml".to_owned(),
+                sources: Vec::new(),
+            })
+        }
     }
 
     fn invoke(arguments: &[&str], input: &[u8], host: &FakeHost) -> (u8, String, String) {
@@ -957,7 +1006,7 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git","section":"1"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git","section":"1"},"view":{"kind":"full"}}"#,
             &host,
         );
 
@@ -971,13 +1020,13 @@ mod tests {
     fn malformed_or_extended_requests_fail_before_querying_the_host() {
         for input in [
             br"not-json".as_slice(),
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"   "},"view":{"kind":"full"}}"#.as_slice(),
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"   "},"view":{"kind":"full"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -997,7 +1046,7 @@ mod tests {
         let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1008,7 +1057,7 @@ mod tests {
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1167,7 +1216,7 @@ mod tests {
         let host = FakeHost::with_manual();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
             &host,
         );
 
@@ -1213,8 +1262,8 @@ mod tests {
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
-        assert_eq!(value["nativeApiVersion"], "4");
-        assert_eq!(value["requestSchema"], "mant.request/v4");
+        assert_eq!(value["nativeApiVersion"], "5");
+        assert_eq!(value["requestSchema"], "mant.request/v5");
         assert_eq!(value["outlineSchema"], "mant.outline/v4");
         assert_eq!(value["excerptSchema"], "mant.excerpt/v4");
         assert_eq!(value["searchSchema"], "mant.search/v4");
@@ -1247,7 +1296,7 @@ mod tests {
             "https://json-schema.org/draft/2020-12/schema"
         );
         assert_eq!(value["additionalProperties"], false);
-        assert!(output.contains("mant.request/v4"));
+        assert!(output.contains("mant.request/v5"));
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);

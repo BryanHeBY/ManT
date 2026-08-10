@@ -28,9 +28,12 @@ pub const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 pub enum QueryError {
     EmptyName,
     InvalidSection,
+    InvalidSource,
+    ConflictingSourceSelectors,
     EmptyMarkdownPath,
     Markdown { path: String, detail: String },
     EmptyMarkdown { label: String },
+    Registry { detail: String },
     Manual { name: String, detail: String },
     NoReadableContent { name: String },
 }
@@ -47,6 +50,10 @@ impl fmt::Display for QueryError {
         match self {
             Self::EmptyName => formatter.write_str("name must not be empty"),
             Self::InvalidSection => formatter.write_str("manual section must not be empty"),
+            Self::InvalidSource => formatter.write_str("document source must not be empty"),
+            Self::ConflictingSourceSelectors => formatter.write_str(
+                "document source cannot be combined with a manual section or manual-only policy",
+            ),
             Self::EmptyMarkdownPath => formatter.write_str("Markdown path must not be empty"),
             Self::Markdown { path, detail } => {
                 write!(
@@ -60,7 +67,7 @@ impl fmt::Display for QueryError {
                     "Markdown document '{label}' has no readable content"
                 )
             }
-            Self::Manual { detail, .. } => formatter.write_str(detail),
+            Self::Registry { detail } | Self::Manual { detail, .. } => formatter.write_str(detail),
             Self::NoReadableContent { name } => {
                 write!(
                     formatter,
@@ -96,7 +103,11 @@ pub fn query_with_policy(
 }
 
 trait QueryHost {
-    fn locate_registered_document(&self, name: &str) -> Option<PathBuf>;
+    fn locate_registered_document(
+        &self,
+        name: &str,
+        source: Option<&str>,
+    ) -> Result<Option<PathBuf>, String>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String>;
     fn parse_manual(&self, path: &Path) -> Result<MantDocument, String>;
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
@@ -106,8 +117,14 @@ trait QueryHost {
 struct SystemQueryHost;
 
 impl QueryHost for SystemQueryHost {
-    fn locate_registered_document(&self, name: &str) -> Option<PathBuf> {
-        find_registered_document(name).map(|registered| registered.path)
+    fn locate_registered_document(
+        &self,
+        name: &str,
+        source: Option<&str>,
+    ) -> Result<Option<PathBuf>, String> {
+        find_registered_document(name, source)
+            .map(|registered| registered.map(|registered| registered.path))
+            .map_err(|error| error.to_string())
     }
 
     fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String> {
@@ -181,9 +198,11 @@ fn query_with(
     host: &dyn QueryHost,
 ) -> Result<QueryBundle, QueryError> {
     match &request.input {
-        QueryInput::Document { name, section } => {
-            query_manual(name, section.as_deref(), policy, host)
-        }
+        QueryInput::Document {
+            name,
+            source,
+            section,
+        } => query_manual(name, source.as_deref(), section.as_deref(), policy, host),
         QueryInput::MarkdownFile { path } => query_markdown_file(path, policy, host),
     }
 }
@@ -257,6 +276,7 @@ pub fn query_markdown_text(
 
 fn query_manual(
     name: &str,
+    requested_source: Option<&str>,
     requested_section: Option<&str>,
     policy: QueryPolicy,
     host: &dyn QueryHost,
@@ -270,16 +290,30 @@ fn query_manual(
         return Err(QueryError::InvalidSection);
     }
     let section = section.map(ToOwned::to_owned);
+    let source = requested_source.map(str::trim);
+    if source.is_some_and(str::is_empty) {
+        return Err(QueryError::InvalidSource);
+    }
+    if source.is_some() && (section.is_some() || policy.manual_only) {
+        return Err(QueryError::ConflictingSourceSelectors);
+    }
     let require_manual = policy.manual_only || section.is_some();
 
     // An unqualified name first consults the platform-native registration
     // namespace. Section selectors and the explicit manual-only policy bypass
     // Markdown name discovery.
-    if section.is_none()
-        && !policy.manual_only
-        && let Some(path) = host.locate_registered_document(name)
-    {
-        return query_registered_document(name, &path, host);
+    if section.is_none() && !policy.manual_only {
+        let registered = host
+            .locate_registered_document(name, source)
+            .map_err(|detail| QueryError::Registry { detail })?;
+        if let Some(path) = registered {
+            return query_registered_document(name, &path, host);
+        }
+        if source.is_some() {
+            return Err(QueryError::NoReadableContent {
+                name: name.to_owned(),
+            });
+        }
     }
 
     let manual_request = ManualRequest::new(name, section.clone());
@@ -437,9 +471,16 @@ mod tests {
     }
 
     impl QueryHost for StubHost {
-        fn locate_registered_document(&self, _name: &str) -> Option<PathBuf> {
-            self.calls.lock().expect("calls lock").push("name");
-            self.registered_document.clone()
+        fn locate_registered_document(
+            &self,
+            _name: &str,
+            source: Option<&str>,
+        ) -> Result<Option<PathBuf>, String> {
+            self.calls
+                .lock()
+                .expect("calls lock")
+                .push(if source.is_some() { "source" } else { "name" });
+            Ok(self.registered_document.clone())
         }
 
         fn locate_manual(&self, _request: &ManualRequest) -> Result<PathBuf, String> {
@@ -523,9 +564,10 @@ mod tests {
 
     fn request() -> QueryRequest {
         QueryRequest {
-            schema: RequestSchema::V4,
+            schema: RequestSchema::V5,
             input: QueryInput::Document {
                 name: " tool ".to_owned(),
+                source: None,
                 section: None,
             },
             view: QueryView::Full {},
@@ -552,9 +594,10 @@ mod tests {
     fn requested_section_backfills_metadata_the_parser_left_empty() {
         let host = host(Ok(document(SourceFormat::Man, false, true)));
         let request = QueryRequest {
-            schema: RequestSchema::V4,
+            schema: RequestSchema::V5,
             input: QueryInput::Document {
                 name: "tool".to_owned(),
+                source: None,
                 section: Some("3".to_owned()),
             },
             view: QueryView::Full {},
@@ -570,6 +613,31 @@ mod tests {
             *host.calls.lock().expect("calls lock"),
             ["tldr", "locate", "parse"],
             "an explicit manual section bypasses registered Markdown"
+        );
+    }
+
+    #[test]
+    fn explicit_source_reads_only_registered_markdown() {
+        let mut host = host(Err("manual must not be read".to_owned()));
+        host.registered_document = Some(PathBuf::from("/documents/tool.md"));
+        host.markdown = Ok("# Tool\n\nSource body.\n".to_owned());
+        let request = QueryRequest {
+            schema: RequestSchema::V5,
+            input: QueryInput::Document {
+                name: "tool".to_owned(),
+                source: Some("team".to_owned()),
+                section: None,
+            },
+            view: QueryView::Full {},
+        };
+        let result = query_with(&request, QueryPolicy::default(), &host).expect("source query");
+        assert_eq!(
+            result.document.expect("Markdown").meta.title.as_deref(),
+            Some("Tool")
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["source", "markdown"]
         );
     }
 
@@ -632,9 +700,10 @@ mod tests {
         host.locate = Err("section not found".to_owned());
         host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
-            schema: RequestSchema::V4,
+            schema: RequestSchema::V5,
             input: QueryInput::Document {
                 name: "tool".to_owned(),
+                source: None,
                 section: Some("7".to_owned()),
             },
             view: QueryView::Full {},
@@ -701,9 +770,10 @@ mod tests {
         assert_eq!(
             query_with(
                 &QueryRequest {
-                    schema: RequestSchema::V4,
+                    schema: RequestSchema::V5,
                     input: QueryInput::Document {
                         name: " ".to_owned(),
+                        source: None,
                         section: None,
                     },
                     view: QueryView::Full {},
@@ -743,7 +813,7 @@ mod tests {
         host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
         let result = query_with(
             &QueryRequest {
-                schema: RequestSchema::V4,
+                schema: RequestSchema::V5,
                 input: QueryInput::MarkdownFile {
                     path: "docs/tool.md".to_owned(),
                 },

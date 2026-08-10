@@ -15,6 +15,29 @@ fn executable() -> &'static str {
     env!("CARGO_BIN_EXE_mant")
 }
 
+fn run_git(directory: &std::path::Path, arguments: &[&str]) {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(directory)
+        .args(arguments)
+        .output()
+        .expect("run git fixture command");
+    assert!(
+        output.status.success(),
+        "git fixture command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn run_with_registered_documents(
+    home: &std::path::Path,
+    arguments: &[&str],
+) -> std::process::Output {
+    let mut command = Command::new(executable());
+    configure_registered_documents(&mut command, home);
+    command.args(arguments).output().expect("run isolated mant")
+}
+
 const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/protocol.md");
 
 #[test]
@@ -40,6 +63,8 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("--format <FORMAT>"));
     assert!(help.contains("--preserve-anchors"));
     assert!(help.contains("--update-tldr"));
+    assert!(help.contains("--update-docs"));
+    assert!(help.contains("--source <SOURCE>"));
     assert!(help.contains("--protocol-version"));
     assert!(help.contains("--schema <CONTRACT>"));
     assert!(help.contains("--mcp"));
@@ -117,7 +142,7 @@ fn request_schema_is_discoverable_without_host_state() {
     assert!(
         String::from_utf8(output.stdout)
             .expect("UTF-8 schema")
-            .contains("mant.request/v4")
+            .contains("mant.request/v5")
     );
 }
 
@@ -131,8 +156,8 @@ fn protocol_version_is_a_clean_json_document() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
-    assert_eq!(value["protocol"], "mant.cli/v4");
-    assert_eq!(value["requestSchema"], "mant.request/v4");
+    assert_eq!(value["protocol"], "mant.cli/v5");
+    assert_eq!(value["requestSchema"], "mant.request/v5");
     assert_eq!(value["querySchema"], "mant.query/v4");
     assert_eq!(value["outlineSchema"], "mant.outline/v4");
     assert_eq!(value["excerptSchema"], "mant.excerpt/v4");
@@ -176,7 +201,7 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v4","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"futureField":true}"#,
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"futureField":true}"#,
         )
         .expect("write request");
     let output = child.wait_with_output().expect("wait for mant");
@@ -220,6 +245,153 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
 }
 
 #[test]
+fn document_sources_update_on_demand_and_support_explicit_selection() {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "mant-document-source-process-{}",
+        std::process::id()
+    ));
+    let repository = fixture_root.join("repository");
+    let data_root = registered_documents_dir(&fixture_root)
+        .parent()
+        .expect("application data root")
+        .to_owned();
+    fs::create_dir_all(repository.join("docs/reference")).expect("create repository fixture");
+    fs::write(
+        repository.join("docs/reference/source-tool.md"),
+        "# Source tool\n\nFirst revision.\n",
+    )
+    .expect("write selected Markdown");
+    fs::write(repository.join("README.md"), "# Outside configured path\n")
+        .expect("write outer readme");
+    run_git(&repository, &["init", "--initial-branch=main"]);
+    run_git(&repository, &["config", "user.name", "ManT Test"]);
+    run_git(
+        &repository,
+        &["config", "user.email", "mant-test@example.invalid"],
+    );
+    run_git(&repository, &["add", "."]);
+    run_git(&repository, &["commit", "-m", "initial"]);
+
+    fs::create_dir_all(&data_root).expect("create application data root");
+    let repository_url = repository.to_string_lossy();
+    fs::write(
+        data_root.join("sources.toml"),
+        format!(
+            "[team]\nrepo = {repository_url:?}\nbranch = \"main\"\npath = \"docs\"\ninclude = [\"reference\"]\npriority = 10\n"
+        ),
+    )
+    .expect("write source config");
+
+    let mut update = Command::new(executable());
+    configure_registered_documents(&mut update, &fixture_root);
+    let first = update
+        .args(["--update-docs", "--compact"])
+        .output()
+        .expect("update document source");
+    assert!(first.status.success(), "{first:?}");
+    assert!(first.stderr.is_empty());
+    let result: serde_json::Value = serde_json::from_slice(&first.stdout).expect("update JSON");
+    assert_eq!(result["schema"], "mant.sources-update/v1");
+    assert_eq!(result["sources"][0]["source"], "team");
+    assert_eq!(result["sources"][0]["action"], "updated");
+    assert_eq!(result["sources"][0]["documents"], 1);
+    assert!(data_root.join("sources/team/source-tool.md").is_file());
+    assert!(data_root.join("sources/team/.mant-source.toml").is_file());
+    assert!(!data_root.join("sources/team/README.md").exists());
+
+    let mut unchanged = Command::new(executable());
+    configure_registered_documents(&mut unchanged, &fixture_root);
+    let unchanged = unchanged
+        .args(["--update-docs", "--compact"])
+        .output()
+        .expect("check unchanged source");
+    assert!(unchanged.status.success(), "{unchanged:?}");
+    let result: serde_json::Value =
+        serde_json::from_slice(&unchanged.stdout).expect("unchanged JSON");
+    assert_eq!(result["sources"][0]["action"], "unchanged");
+
+    let mut query = Command::new(executable());
+    configure_registered_documents(&mut query, &fixture_root);
+    let query = query
+        .args([
+            "source-tool",
+            "--source",
+            "team",
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .output()
+        .expect("query installed source");
+    assert!(query.status.success(), "{query:?}");
+    let result: serde_json::Value = serde_json::from_slice(&query.stdout).expect("query JSON");
+    assert_eq!(result["document"]["meta"]["title"], "Source tool");
+
+    let documents = registered_documents_dir(&fixture_root);
+    fs::create_dir_all(&documents).expect("create root documents");
+    fs::write(
+        documents.join("source-tool.md"),
+        "# Root tool\n\nRoot document wins.\n",
+    )
+    .expect("write root document");
+    let mut fallback = Command::new(executable());
+    configure_registered_documents(&mut fallback, &fixture_root);
+    let fallback = fallback
+        .args(["source-tool", "--format", "json", "--compact"])
+        .output()
+        .expect("query fallback chain");
+    assert!(fallback.status.success(), "{fallback:?}");
+    let result: serde_json::Value =
+        serde_json::from_slice(&fallback.stdout).expect("fallback JSON");
+    assert_eq!(result["document"]["meta"]["title"], "Root tool");
+
+    let unknown =
+        run_with_registered_documents(&fixture_root, &["source-tool", "--source", "missing"]);
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("is not configured"));
+
+    fs::remove_dir_all(fixture_root).expect("remove document source fixture");
+}
+
+#[test]
+fn document_source_failures_keep_a_complete_json_report() {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "mant-document-source-failure-process-{}",
+        std::process::id()
+    ));
+    let data_root = registered_documents_dir(&fixture_root)
+        .parent()
+        .expect("application data root")
+        .to_owned();
+    fs::create_dir_all(&data_root).expect("create application data root");
+    fs::write(
+        data_root.join("sources.toml"),
+        format!(
+            "[broken]\nrepo = {:?}\nbranch = \"main\"\n",
+            fixture_root.join("missing.git").to_string_lossy()
+        ),
+    )
+    .expect("write failing source config");
+
+    let mut update = Command::new(executable());
+    configure_registered_documents(&mut update, &fixture_root);
+    let output = update
+        .args(["--update-docs", "--compact"])
+        .output()
+        .expect("run failing document update");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("failure report JSON");
+    assert_eq!(report["sources"][0]["source"], "broken");
+    assert_eq!(report["sources"][0]["action"], "failed");
+    assert!(report["sources"][0]["error"].as_str().is_some());
+    assert!(!data_root.join("sources/broken").exists());
+
+    fs::remove_dir_all(fixture_root).expect("remove failure fixture");
+}
+
+#[test]
 fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     let path = markdown_fixture_path();
     fs::write(&path, "# Local\n\nBody.\n").expect("write Markdown fixture");
@@ -251,7 +423,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
         .spawn()
         .expect("start protocol query");
     let request = serde_json::json!({
-        "schema": "mant.request/v4",
+        "schema": "mant.request/v5",
         "input": {
             "kind": "markdown-file",
             "path": path.to_str().expect("UTF-8 path"),
@@ -425,7 +597,7 @@ fn manual_option_explains_the_windows_capability_boundary() {
 
 #[cfg(unix)]
 #[test]
-fn registered_names_resolve_through_nested_directory_symlinks() {
+fn registered_names_ignore_nested_directories_and_symlinks() {
     use std::os::unix::fs::symlink;
 
     let root = std::env::temp_dir().join(format!(
@@ -448,19 +620,11 @@ fn registered_names_resolve_through_nested_directory_symlinks() {
     let output = command
         .args(["process-linked", "--format", "json", "--compact"])
         .output()
-        .expect("query linked registered document");
+        .expect("query ignored linked document");
 
-    assert!(output.status.success(), "{output:?}");
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
-    assert_eq!(value["label"], "process-linked");
-    assert_eq!(value["document"]["meta"]["title"], "Linked");
-    assert_eq!(
-        value["document"]["source"]["path"],
-        documents
-            .join("provider/process-linked.md")
-            .to_str()
-            .expect("UTF-8 path")
-    );
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(output.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("# Linked"));
 
     fs::remove_dir_all(root).expect("remove linked document fixture");
 }
