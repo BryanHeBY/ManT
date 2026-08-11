@@ -43,6 +43,9 @@ mod tests {
         NormalizedListKind, ParseError, ParseOptions, Parser, TableAlignment,
     };
 
+    #[cfg(windows)]
+    use super::DiagnosticLevel;
+
     fn source_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-{label}-{}.1", process::id()))
     }
@@ -158,11 +161,11 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_parser_accepts_the_date_formats_used_by_libmandoc() {
-        for (date, normalized) in [
-            ("2026-07-20", "2026-07-20"),
-            ("Jul 20, 2026", "July 20, 2026"),
-            ("July 20, 2026", "July 20, 2026"),
-            ("$Mdocdate: Jul 20 2026 $", "July 20, 2026"),
+        for (date, normalized, normalized_with_style) in [
+            ("2026-07-20", "2026-07-20", false),
+            ("Jul 20, 2026", "July 20, 2026", true),
+            ("July 20, 2026", "July 20, 2026", false),
+            ("$Mdocdate: Jul 20 2026 $", "July 20, 2026", false),
         ] {
             let source =
                 format!(".TH WINDOWS-DATE 1 \"{date}\"\n.SH NAME\nwindows-date \\- portable\n");
@@ -170,11 +173,20 @@ mod tests {
                 .parse_bytes("windows-date.1", source.as_bytes())
                 .expect("parse a supported manual date");
 
-            assert!(
-                report.diagnostics.is_empty(),
-                "unexpected diagnostics for {date}: {:?}",
-                report.diagnostics
-            );
+            if normalized_with_style {
+                assert_eq!(report.diagnostics.len(), 1);
+                assert_eq!(report.diagnostics[0].level, DiagnosticLevel::Style);
+                assert_eq!(
+                    report.diagnostics[0].message,
+                    "normalizing date format to: TH July 20, 2026"
+                );
+            } else {
+                assert!(
+                    report.diagnostics.is_empty(),
+                    "unexpected diagnostics for {date}: {:?}",
+                    report.diagnostics
+                );
+            }
             assert_eq!(report.document.metadata.date.as_deref(), Some(normalized));
         }
     }
