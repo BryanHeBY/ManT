@@ -1,5 +1,7 @@
 //! Lowers typed roff events and semantic mdoc macros into inline AST nodes.
 
+use std::borrow::Cow;
+
 use libmandoc_rs::{Node, NodeKind};
 use mant_ast::Inline;
 
@@ -372,7 +374,9 @@ fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
 
     for event in decode(source) {
         match event {
-            RoffInlineEvent::Text(value) => buffer.push_str(&value),
+            RoffInlineEvent::Text(value) => {
+                buffer.push_str(&normalize_redundant_escaped_font(&value, font));
+            }
             RoffInlineEvent::Font(next_font) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 font = next_font;
@@ -392,6 +396,25 @@ fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
     }
     flush_segment(&mut output, &mut buffer, font, link.as_deref());
     output
+}
+
+/// Some generated manuals wrap a link label in a font and then escape another
+/// copy of that same font request as visible text. libmandoc correctly reports
+/// the enclosing font, so remove only the redundant escaped request. Keeping
+/// this conditional on the enclosing font preserves literal `\\f` examples in
+/// formatter manuals and ordinary prose.
+fn normalize_redundant_escaped_font(source: &str, font: Font) -> Cow<'_, str> {
+    let opening = match font {
+        Font::Strong => r"\fB",
+        Font::Emphasis => r"\fI",
+        Font::Code => r"\fC",
+        Font::Regular => return Cow::Borrowed(source),
+    };
+    if !source.contains(opening) {
+        return Cow::Borrowed(source);
+    }
+
+    Cow::Owned(source.replace(opening, "").replace(r"\fR", ""))
 }
 
 /// Lower a text node after honoring a macro-provided default font. Nodes marked
@@ -489,5 +512,23 @@ mod tests {
                 .iter()
                 .any(|node| matches!(node, Inline::Strong { .. }))
         );
+    }
+
+    #[test]
+    fn removes_redundant_escaped_font_requests_only_inside_the_same_font() {
+        let generated = parse_roff_text(r"\fB\\fBpackage.json\\fR config\fR");
+        assert_eq!(plain_text(&generated), "package.json config");
+        assert!(matches!(generated.as_slice(), [Inline::Strong { .. }]));
+
+        let emphasis = parse_roff_text(r"\fI\\fIvalue\\fR\fR");
+        assert_eq!(plain_text(&emphasis), "value");
+        assert!(matches!(emphasis.as_slice(), [Inline::Emphasis { .. }]));
+
+        let code = parse_roff_text(r"\fC\\fCvalue\\fR\fR");
+        assert_eq!(plain_text(&code), "value");
+        assert!(matches!(code.as_slice(), [Inline::Code { .. }]));
+
+        let literal = parse_roff_text(r"show \\fBbold\\fR markup");
+        assert_eq!(plain_text(&literal), r"show \fBbold\fR markup");
     }
 }
