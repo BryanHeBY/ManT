@@ -225,6 +225,12 @@ A root may contain `tool.1` directly or a hierarchy such as
 raw, gzip, and zstd sources are indexed because those are the formats ManT's
 bounded input layer decodes before parsing.
 
+The native index accepts a leaf page symlink when its target is a regular file,
+including a target outside the indexed root. It does not traverse directory
+symlinks or register broken links. Redirect-only `.so` targets are resolved
+from the leaf's logical indexed location and must remain inside the canonical
+manual root throughout the redirect chain.
+
 A local Markdown file is selected by path:
 
 ```json

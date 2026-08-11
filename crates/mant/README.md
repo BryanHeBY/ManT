@@ -89,9 +89,11 @@ protocol messages only; use CLI JSON output to inspect lowering diagnostics.
 
 ## Document sources
 
-On Linux, macOS, and Windows, ManT indexes raw, gzip, and zstd manual sources and parses
-their roff through bundled libmandoc. It does not require a system `man` or
-`mandoc` executable at runtime. Windows defaults to
+On Linux, macOS, and Windows, ManT indexes raw, gzip, and zstd manual sources
+and parses their roff through bundled libmandoc. It does not require a system
+`man` or `mandoc` executable at runtime. A leaf manual-page symlink may point
+outside its indexed root, but directory symlinks are not traversed and every
+`.so` target must remain inside that root. Windows defaults to
 `%USERPROFILE%\.local\share\man` and also honors configured manual paths.
 
 Reusable Markdown documents can be registered by filename below:

@@ -8,6 +8,8 @@ releases; publishing remains a deliberate human action.
 1. Choose a semantic version and update `[workspace.package].version` in
    `Cargo.toml`. The six Rust crates use one lockstep version, so
    update every exact internal dependency in their manifests at the same time.
+   Refresh both `Cargo.lock` and the standalone `fuzz/Cargo.lock` before running
+   locked checks.
 2. Regenerate and visually inspect the README screenshot:
 
    ```sh
@@ -76,6 +78,9 @@ Never move a tag after crates.io publication. Registry versions are immutable.
 crates.io cannot configure a Trusted Publisher until a crate has an initial
 release. `mant-sources` therefore needs one manual publication before the
 `v0.6.0` tag workflow can own future releases.
+
+This bootstrap is complete. Do not repeat it for `0.6.1` or later releases;
+their tags use the normal trusted-publisher workflow below.
 
 Do this only after the release commit is frozen on `main`, its CI is green,
 and the worktree is clean:
