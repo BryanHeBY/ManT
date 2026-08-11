@@ -699,8 +699,8 @@ fn malformed_declared_entry_lists_remain_visible_and_report_the_list_location() 
         Block::List { .. }
     ));
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
-            && diagnostic.source.is_some_and(|source| source.line == 6)
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.missing-leading-code")
+            && diagnostic.source.is_some_and(|source| source.line == 7)
     }));
 }
 
@@ -736,6 +736,102 @@ fn declared_entry_grammar_accepts_blank_lines_delimiters_and_colon_conventions()
 }
 
 #[test]
+fn declared_option_entries_cover_windows_native_token_families() {
+    fn collect_names(nodes: &[OutlineNode], output: &mut Vec<String>) {
+        for node in nodes {
+            match node {
+                OutlineNode::DocumentEntry {
+                    names: entry_names, ..
+                } => output.extend(entry_names.iter().cloned()),
+                OutlineNode::DocumentSection { children, .. } => collect_names(children, output),
+                OutlineNode::Tldr { .. } | OutlineNode::DocumentRoot { .. } => {}
+            }
+        }
+    }
+
+    let parsed = parse_markdown(
+        "# Native options\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `type= TYPE`: Select a type.\n- `start= MODE`: Select a start mode.\n- `board=N`: Select a board.\n- `PORTX=PORTY`: Map ports.\n- `//B`: Select batch mode.\n- `//E:ENGINE`: Select an engine.\n- `//?`: Display host help.\n- `+r`: Set an attribute.\n- `+shared`: Share a printer.\n- `+N`: Select a line.\n- `/+N`: Select an offset.\n- `/driver.exclude`: Exclude drivers.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `start`: Start processing.\n",
+        Some("native.md".to_owned()),
+    )
+    .expect("Windows-native semantic entries");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let query = QueryBundle {
+        schema: QuerySchema::V5,
+        label: "native.md".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
+        .expect("Windows-native entry outline");
+    let mut names = Vec::new();
+    collect_names(&outline.nodes, &mut names);
+    assert_eq!(
+        names,
+        [
+            "type=",
+            "start=",
+            "board=",
+            "PORTX=",
+            "//B",
+            "//E",
+            "//?",
+            "+r",
+            "+shared",
+            "+N",
+            "/+N",
+            "/driver.exclude",
+            "start",
+        ]
+    );
+
+    for selector in ["START=", "//b", "//e", "/DRIVER.EXCLUDE", "+R", "/+n"] {
+        select_explanation(&query, selector).expect("case-insensitive Windows entry selector");
+    }
+    let option = select_explanation(&query, "start=").expect("equals-bearing option selector");
+    let command = select_explanation(&query, "start").expect("command selector");
+    assert!(matches!(
+        option.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| {
+                identity.id == "option-start" && identity.role == DefinitionRole::Option
+            })
+    ));
+    assert!(matches!(
+        command.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| {
+                identity.id == "command-start" && identity.role == DefinitionRole::Command
+            })
+    ));
+}
+
+#[test]
+fn rejected_declared_entries_report_each_term_reason_and_item_location() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `--good`: Valid.\n- `/driver..exclude`: Empty dotted segment.\n- `type= lowercase`: Lowercase placeholder.\n",
+        None,
+    )
+    .expect("rejected declaration diagnostics");
+
+    assert!(matches!(
+        parsed.document.sections[0].blocks[0],
+        Block::List { .. }
+    ));
+    assert_eq!(parsed.document.diagnostics.len(), 2);
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.invalid-option-name")
+            && diagnostic.message.contains("/driver..exclude")
+            && diagnostic.source.is_some_and(|source| source.line == 7)
+    }));
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.invalid-placeholder")
+            && diagnostic.message.contains("type= lowercase")
+            && diagnostic.source.is_some_and(|source| source.line == 8)
+    }));
+}
+
+#[test]
 fn declared_entry_directive_does_not_skip_an_intervening_construct() {
     let parsed = parse_markdown(
         "# Tool\n\n<!-- mant:entries role=option case=insensitive -->\n## Options\n\n- `/query`: Query data.\n",
@@ -761,7 +857,7 @@ fn declared_entry_description_requires_a_leading_paragraph_delimiter() {
     .expect("invalid declared entry remains recoverable");
     assert!(matches!(parsed.document.blocks[0], Block::List { .. }));
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
-            && diagnostic.message.contains("invalid item")
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.missing-description")
+            && diagnostic.message.contains("query")
     }));
 }

@@ -254,15 +254,15 @@ pub(super) fn normalize_entry_lists(
         let signatures = items
             .iter()
             .map(|item| entry_signature(item, role, declaration.is_some()))
-            .collect::<Option<Vec<_>>>();
-        let Some(signatures) = signatures else {
+            .collect::<Result<Vec<_>, _>>();
+        let Ok(signatures) = signatures else {
             if let Some(declaration) = declaration {
-                semantic_diagnostic(
-                    diagnostics,
-                    source.unwrap_or(declaration.source),
-                    "declared semantic-entry list contains an invalid item; the list was left unchanged"
-                        .to_owned(),
-                );
+                for rejection in items
+                    .iter()
+                    .filter_map(|item| entry_signature(item, role, true).err())
+                {
+                    rejection.emit(diagnostics, source.unwrap_or(declaration.source));
+                }
             } else if resembles_rejected_option_list(items) {
                 semantic_diagnostic(
                     diagnostics,
@@ -330,43 +330,167 @@ struct EntrySignature {
     names: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum EntryRejectionReason {
+    MissingLeadingParagraph,
+    MissingLeadingCode,
+    UnsupportedOptionPrefix,
+    InvalidOptionName,
+    InvalidEntryName,
+    InvalidPlaceholder,
+    InvalidAliasSeparator,
+    MissingDescription,
+    UnsupportedInline,
+}
+
+impl EntryRejectionReason {
+    const fn code(self) -> &'static str {
+        match self {
+            Self::MissingLeadingParagraph => "markdown.semantic-entry.missing-leading-paragraph",
+            Self::MissingLeadingCode => "markdown.semantic-entry.missing-leading-code",
+            Self::UnsupportedOptionPrefix => "markdown.semantic-entry.unsupported-option-prefix",
+            Self::InvalidOptionName => "markdown.semantic-entry.invalid-option-name",
+            Self::InvalidEntryName => "markdown.semantic-entry.invalid-entry-name",
+            Self::InvalidPlaceholder => "markdown.semantic-entry.invalid-placeholder",
+            Self::InvalidAliasSeparator => "markdown.semantic-entry.invalid-alias-separator",
+            Self::MissingDescription => "markdown.semantic-entry.missing-description",
+            Self::UnsupportedInline => "markdown.semantic-entry.unsupported-inline",
+        }
+    }
+
+    const fn message(self) -> &'static str {
+        match self {
+            Self::MissingLeadingParagraph => "item must start with a paragraph",
+            Self::MissingLeadingCode => "item must start with a code term",
+            Self::UnsupportedOptionPrefix => "option term uses an unsupported prefix",
+            Self::InvalidOptionName => "option term has an invalid name",
+            Self::InvalidEntryName => "entry term has an invalid name",
+            Self::InvalidPlaceholder => "option term has an invalid placeholder",
+            Self::InvalidAliasSeparator => {
+                "entry aliases must be separated by whitespace, ',', '/', or '|'"
+            }
+            Self::MissingDescription => {
+                "entry term must be followed by a ':' or dash description delimiter"
+            }
+            Self::UnsupportedInline => "entry term contains an unsupported inline construct",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct EntryRejection {
+    reason: EntryRejectionReason,
+    term: Option<String>,
+    source: Option<SourceSpan>,
+}
+
+impl EntryRejection {
+    fn new(reason: EntryRejectionReason, term: Option<&str>, source: Option<SourceSpan>) -> Self {
+        Self {
+            reason,
+            term: term.map(ToOwned::to_owned),
+            source,
+        }
+    }
+
+    fn emit(self, diagnostics: &mut Vec<Diagnostic>, fallback: SourceSpan) {
+        let subject = self.term.as_deref().map_or_else(
+            || "semantic-entry item".to_owned(),
+            |term| format!("semantic-entry term '{term}'"),
+        );
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some(self.reason.code().to_owned()),
+            message: format!(
+                "{subject} is invalid: {}; the declared list was left unchanged",
+                self.reason.message()
+            ),
+            source: Some(self.source.unwrap_or(fallback)),
+        });
+    }
+}
+
 /// Validate one leading paragraph and record how to split it after ownership
 /// moves out of the source list.
 fn entry_signature(
     item: &ListItem,
     role: DefinitionRole,
     explicitly_declared: bool,
-) -> Option<EntrySignature> {
+) -> Result<EntrySignature, EntryRejection> {
+    let source = item.blocks.first().and_then(block_source);
     let Some(Block::Paragraph { children, .. }) = item.blocks.first() else {
-        return None;
+        return Err(EntryRejection::new(
+            EntryRejectionReason::MissingLeadingParagraph,
+            None,
+            source,
+        ));
     };
     let mut names = Vec::new();
+    let mut leading_term = None;
     for (delimiter_inline, inline) in children.iter().enumerate() {
         match inline {
             Inline::Code { value } => {
-                let parsed = entry_names(value, role, explicitly_declared)?;
+                leading_term.get_or_insert(value.as_str());
+                let parsed = entry_names(value, role, explicitly_declared)
+                    .map_err(|reason| EntryRejection::new(reason, Some(value), source))?;
                 extend_unique(&mut names, parsed);
             }
             Inline::Text { value } => {
                 if let Some((delimiter_byte, delimiter_width)) = delimiter_location(value) {
-                    if names.is_empty() || !is_alias_separator(&value[..delimiter_byte]) {
-                        return None;
+                    if names.is_empty() {
+                        return Err(EntryRejection::new(
+                            EntryRejectionReason::MissingLeadingCode,
+                            leading_term,
+                            source,
+                        ));
                     }
-                    return Some(EntrySignature {
+                    if !is_alias_separator(&value[..delimiter_byte]) {
+                        return Err(EntryRejection::new(
+                            EntryRejectionReason::InvalidAliasSeparator,
+                            leading_term,
+                            source,
+                        ));
+                    }
+                    return Ok(EntrySignature {
                         inline_index: delimiter_inline,
                         byte_index: delimiter_byte,
                         width: delimiter_width,
                         names,
                     });
                 }
-                if names.is_empty() || !is_alias_separator(value) {
-                    return None;
+                if names.is_empty() {
+                    return Err(EntryRejection::new(
+                        EntryRejectionReason::MissingLeadingCode,
+                        leading_term,
+                        source,
+                    ));
+                }
+                if !is_alias_separator(value) {
+                    return Err(EntryRejection::new(
+                        EntryRejectionReason::InvalidAliasSeparator,
+                        leading_term,
+                        source,
+                    ));
                 }
             }
-            _ => return None,
+            _ => {
+                return Err(EntryRejection::new(
+                    EntryRejectionReason::UnsupportedInline,
+                    leading_term,
+                    source,
+                ));
+            }
         }
     }
-    None
+    Err(EntryRejection::new(
+        if names.is_empty() {
+            EntryRejectionReason::MissingLeadingCode
+        } else {
+            EntryRejectionReason::MissingDescription
+        },
+        leading_term,
+        source,
+    ))
 }
 
 /// Move one previously validated item into its semantic definition.
@@ -456,7 +580,7 @@ fn entry_names(
     value: &str,
     role: DefinitionRole,
     explicitly_declared: bool,
-) -> Option<Vec<String>> {
+) -> Result<Vec<String>, EntryRejectionReason> {
     match role {
         DefinitionRole::Option if explicitly_declared => option_entry_names(value),
         DefinitionRole::Option => value
@@ -468,9 +592,13 @@ fn entry_names(
                 }]];
                 option_names_from_terms(&terms)
             })
-            .filter(|names| !names.is_empty()),
-        DefinitionRole::Command => plain_entry_names(value, is_command_name),
-        DefinitionRole::EnvironmentVariable => plain_entry_names(value, is_environment_name),
+            .filter(|names| !names.is_empty())
+            .ok_or(EntryRejectionReason::InvalidOptionName),
+        DefinitionRole::Command => {
+            plain_entry_names(value, is_command_name).ok_or(EntryRejectionReason::InvalidEntryName)
+        }
+        DefinitionRole::EnvironmentVariable => plain_entry_names(value, is_environment_name)
+            .ok_or(EntryRejectionReason::InvalidEntryName),
     }
 }
 
@@ -504,53 +632,142 @@ fn is_environment_name(value: &str) -> bool {
             .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
 }
 
-fn option_entry_names(value: &str) -> Option<Vec<String>> {
+fn option_entry_names(value: &str) -> Result<Vec<String>, EntryRejectionReason> {
     let mut names = Vec::new();
     for alias in value.split([',', '|']).map(str::trim) {
         if alias.starts_with('-') && alias.contains('/') {
             let parts = alias.split('/').collect::<Vec<_>>();
             if parts.iter().all(|part| part.starts_with('-')) {
                 for part in parts {
-                    names.push(dash_option_name(part)?.to_owned());
+                    names.push(
+                        dash_option_name(part)
+                            .ok_or(EntryRejectionReason::InvalidOptionName)?
+                            .to_owned(),
+                    );
                 }
                 continue;
             }
         }
         names.push(option_entry_name(alias)?);
     }
-    (!names.is_empty()).then_some(names)
+    (!names.is_empty())
+        .then_some(names)
+        .ok_or(EntryRejectionReason::InvalidOptionName)
 }
 
-fn option_entry_name(value: &str) -> Option<String> {
+fn option_entry_name(value: &str) -> Result<String, EntryRejectionReason> {
     let value = value.trim();
     if value.starts_with('-') {
-        return dash_option_name(value).map(ToOwned::to_owned);
+        return dash_option_name(value)
+            .map(ToOwned::to_owned)
+            .ok_or(EntryRejectionReason::InvalidOptionName);
     }
-    if !value.starts_with('/') || value == "/" {
-        return None;
+    if value.starts_with('+') {
+        return fixed_prefixed_name(value, "+");
     }
-    let token = value.split_whitespace().next()?;
-    if token == "/?" {
-        return Some(token.to_owned());
+    if !value.starts_with('/') {
+        return equals_option_name(value);
     }
-    let (head, suffix) = token.split_once(':').unwrap_or((token, ""));
-    if head.len() < 2
-        || !head[1..]
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    if value.starts_with("/+") {
+        return fixed_prefixed_name(value, "/+");
+    }
+    slash_option_name(value)
+}
+
+fn equals_option_name(value: &str) -> Result<String, EntryRejectionReason> {
+    let Some((name, visible_value)) = value.split_once('=') else {
+        return Err(EntryRejectionReason::UnsupportedOptionPrefix);
+    };
+    if !is_ascii_identifier(name) {
+        return Err(EntryRejectionReason::InvalidOptionName);
+    }
+    let placeholder = visible_value.trim();
+    if !placeholder.is_empty() && !is_placeholder(placeholder) {
+        return Err(EntryRejectionReason::InvalidPlaceholder);
+    }
+    Ok(format!("{name}="))
+}
+
+fn fixed_prefixed_name(value: &str, prefix: &str) -> Result<String, EntryRejectionReason> {
+    let Some(body) = value.strip_prefix(prefix) else {
+        return Err(EntryRejectionReason::UnsupportedOptionPrefix);
+    };
+    if body.is_empty() || body.contains(char::is_whitespace) || !is_safe_segment(body) {
+        return Err(EntryRejectionReason::InvalidOptionName);
+    }
+    Ok(value.to_owned())
+}
+
+fn slash_option_name(value: &str) -> Result<String, EntryRejectionReason> {
+    let mut parts = value.split_whitespace();
+    let token = parts
+        .next()
+        .ok_or(EntryRejectionReason::InvalidOptionName)?;
+    if let Some(placeholder) = parts.next()
+        && (parts.next().is_some() || !is_placeholder(placeholder))
     {
-        return None;
+        return Err(EntryRejectionReason::InvalidPlaceholder);
+    }
+    if matches!(token, "/?" | "//?") {
+        return Ok(token.to_owned());
+    }
+    let prefix_width = if token.starts_with("//") { 2 } else { 1 };
+    let (head, suffix) = token.split_once(':').unwrap_or((token, ""));
+    if head.len() <= prefix_width || !is_safe_dotted_name(&head[prefix_width..]) {
+        return Err(EntryRejectionReason::InvalidOptionName);
     }
     if suffix.is_empty() {
-        return Some(head.to_owned());
+        return Ok(head.to_owned());
     }
-    let placeholder = suffix
-        .chars()
-        .any(|character| character.is_ascii_alphabetic())
-        && suffix.chars().all(|character| {
-            character.is_ascii_uppercase() || matches!(character, '_' | '-' | '<' | '>')
-        });
-    Some(if placeholder { head } else { token }.to_owned())
+    Ok(if is_placeholder(suffix) { head } else { token }.to_owned())
+}
+
+fn is_ascii_identifier(value: &str) -> bool {
+    value
+        .bytes()
+        .next()
+        .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+}
+
+fn is_safe_segment(value: &str) -> bool {
+    value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+fn is_safe_dotted_name(value: &str) -> bool {
+    value
+        .split('.')
+        .all(|segment| !segment.is_empty() && is_safe_segment(segment))
+}
+
+fn is_placeholder(value: &str) -> bool {
+    let value = value
+        .strip_prefix('<')
+        .and_then(|value| value.strip_suffix('>'))
+        .unwrap_or(value);
+    !value.is_empty()
+        && value.bytes().any(|byte| byte.is_ascii_alphabetic())
+        && value.bytes().all(|byte| {
+            byte.is_ascii_uppercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+        })
+}
+
+fn block_source(block: &Block) -> Option<SourceSpan> {
+    match block {
+        Block::Paragraph { source, .. }
+        | Block::Preformatted { source, .. }
+        | Block::List { source, .. }
+        | Block::DefinitionList { source, .. }
+        | Block::Table { source, .. }
+        | Block::Equation { source, .. }
+        | Block::VerticalSpace { source, .. }
+        | Block::ThematicBreak { source }
+        | Block::Unsupported { source, .. } => *source,
+    }
 }
 
 fn dash_option_name(value: &str) -> Option<&str> {
