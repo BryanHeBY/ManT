@@ -15,8 +15,8 @@ pub use config::{
     document_paths, load_source_config,
 };
 pub use registry::{
-    RegisteredDocument, RegisteredDocumentOrigin, find_registered_document,
-    list_registered_documents,
+    RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentOrigin,
+    find_registered_document_candidates, list_registered_documents,
 };
 #[cfg(feature = "update")]
 pub use update::{

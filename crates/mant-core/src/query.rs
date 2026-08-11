@@ -6,13 +6,20 @@ use std::{
     fmt, fs,
     io::{self, Read},
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 
-use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
+use mant_ast::{
+    MantDocument, QueryBundle, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySchema,
+    QuerySearch, QueryView, SearchQuery, TldrDocument,
+};
+use mant_sources::{RegisteredDocumentIndex, SourceConfigError};
 
 use crate::{
-    ManualPage, ManualRequest, executable::query_name_candidates, find_registered_document,
-    locate_manual_source, parse_manual_page, parse_markdown, read_cached_tldr_page,
+    ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError,
+    build_outline_with_detail, discover_manual_roots, executable::query_name_candidates,
+    locate_manual_source_in, parse_manual_page, parse_markdown, read_cached_tldr_page,
+    search_query, select_excerpt, select_explanation, validate_search_query,
 };
 
 /// Upper bound on a single Markdown source, shared by every input path.
@@ -31,11 +38,50 @@ pub enum QueryError {
     InvalidSource,
     ConflictingSourceSelectors,
     EmptyMarkdownPath,
+    EmptySelection,
+    EmptySelector,
+    EmptyEntry,
+    InvalidSearch(SearchError),
     Markdown { path: String, detail: String },
     EmptyMarkdown { label: String },
     Registry { detail: String },
-    Manual { name: String, detail: String },
+    Manual(ManualLoadError),
     NoReadableContent { name: String },
+}
+
+/// Native-manual resolution or lowering failed after candidate selection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ManualLoadError {
+    NotFound {
+        name: String,
+        detail: String,
+    },
+    Parse {
+        name: String,
+        detail: String,
+    },
+    Empty {
+        name: String,
+        path: PathBuf,
+        diagnostics: Vec<String>,
+    },
+}
+
+/// Materialized result of the view carried by a [`QueryRequest`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueryViewResult {
+    Full(QueryBundle),
+    Outline(QueryOutline),
+    Excerpt(QueryExcerpt),
+    Search(QuerySearch),
+}
+
+/// A valid request could not be loaded or projected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueryExecutionError {
+    Query(QueryError),
+    Projection(ProjectionError),
+    Search(SearchError),
 }
 
 /// Input-resolution policy kept outside the serialized request contract.
@@ -55,6 +101,10 @@ impl fmt::Display for QueryError {
                 "document source cannot be combined with a manual section or manual-only policy",
             ),
             Self::EmptyMarkdownPath => formatter.write_str("Markdown path must not be empty"),
+            Self::EmptySelection => formatter.write_str("at least one outline node is required"),
+            Self::EmptySelector => formatter.write_str("outline node must not be empty"),
+            Self::EmptyEntry => formatter.write_str("semantic entry must not be empty"),
+            Self::InvalidSearch(error) => error.fmt(formatter),
             Self::Markdown { path, detail } => {
                 write!(
                     formatter,
@@ -67,7 +117,8 @@ impl fmt::Display for QueryError {
                     "Markdown document '{label}' has no readable content"
                 )
             }
-            Self::Registry { detail } | Self::Manual { detail, .. } => formatter.write_str(detail),
+            Self::Registry { detail } => formatter.write_str(detail),
+            Self::Manual(error) => error.fmt(formatter),
             Self::NoReadableContent { name } => {
                 write!(
                     formatter,
@@ -80,33 +131,226 @@ impl fmt::Display for QueryError {
 
 impl Error for QueryError {}
 
+impl fmt::Display for ManualLoadError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotFound { name, detail } => {
+                write!(
+                    formatter,
+                    "could not load manual '{name}': manual source: {detail}"
+                )
+            }
+            Self::Parse { name, detail } => {
+                write!(
+                    formatter,
+                    "could not load manual '{name}': manual source: {detail}"
+                )
+            }
+            Self::Empty {
+                name,
+                path,
+                diagnostics,
+            } => {
+                write!(
+                    formatter,
+                    "could not load manual '{name}': libmandoc parsed {} but produced no readable sections",
+                    path.display()
+                )?;
+                if !diagnostics.is_empty() {
+                    write!(formatter, "; diagnostics: {}", diagnostics.join("; "))?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Error for ManualLoadError {}
+
+impl fmt::Display for QueryExecutionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Query(error) => error.fmt(formatter),
+            Self::Projection(error) => error.fmt(formatter),
+            Self::Search(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl Error for QueryExecutionError {}
+
 /// Query the local man database and optional offline tldr caches.
 ///
 /// # Errors
 ///
 /// Returns [`QueryError`] for invalid input or when neither source can produce
 /// readable content.
-pub fn query(request: &QueryRequest) -> Result<QueryBundle, QueryError> {
-    query_with(request, QueryPolicy::default(), &SystemQueryHost)
+pub fn resolve_query(request: &QueryRequest) -> Result<QueryBundle, QueryError> {
+    resolve_query_with_policy(request, QueryPolicy::default())
 }
 
 /// Query with an explicit input-resolution policy.
 ///
 /// # Errors
 ///
-/// Returns [`QueryError`] under the same conditions as [`query`].
-pub fn query_with_policy(
+/// Returns [`QueryError`] under the same conditions as [`resolve_query`].
+pub fn resolve_query_with_policy(
     request: &QueryRequest,
     policy: QueryPolicy,
 ) -> Result<QueryBundle, QueryError> {
-    query_with(request, policy, &SystemQueryHost)
+    validate_query_request(request, policy)?;
+    let resolver = DocumentResolver::from_system();
+    query_with(request, policy, &resolver)
+}
+
+/// Load and materialize the view encoded in one native request.
+///
+/// # Errors
+///
+/// Returns a typed loading, projection, or search failure.
+pub fn execute_query(
+    request: &QueryRequest,
+    policy: QueryPolicy,
+) -> Result<QueryViewResult, QueryExecutionError> {
+    let query = resolve_query_with_policy(request, policy).map_err(QueryExecutionError::Query)?;
+    project_query_view(query, &request.view)
+}
+
+/// Materialize one view from an already loaded query.
+///
+/// # Errors
+///
+/// Returns a typed projection or search failure.
+pub fn project_query_view(
+    query: QueryBundle,
+    view: &QueryView,
+) -> Result<QueryViewResult, QueryExecutionError> {
+    match view {
+        QueryView::Full {} => Ok(QueryViewResult::Full(query)),
+        QueryView::Outline { detail } => build_outline_with_detail(&query, *detail)
+            .map(QueryViewResult::Outline)
+            .map_err(QueryExecutionError::Projection),
+        QueryView::Excerpt { nodes } => select_excerpt(&query, nodes)
+            .map(QueryViewResult::Excerpt)
+            .map_err(QueryExecutionError::Projection),
+        QueryView::Explain { entry } => select_explanation(&query, entry)
+            .map(QueryViewResult::Excerpt)
+            .map_err(QueryExecutionError::Projection),
+        QueryView::Search {
+            pattern,
+            syntax,
+            case,
+            scope,
+            word,
+            context_lines,
+            limit,
+            offset,
+        } => search_query(
+            &query,
+            &SearchQuery {
+                pattern: pattern.clone(),
+                syntax: *syntax,
+                case: *case,
+                scope: *scope,
+                word: *word,
+                context_lines: *context_lines,
+                limit: *limit,
+                offset: *offset,
+            },
+        )
+        .map(QueryViewResult::Search)
+        .map_err(QueryExecutionError::Search),
+    }
+}
+
+/// Validate all request and policy invariants before local I/O.
+///
+/// # Errors
+///
+/// Returns the exact invalid input constraint.
+pub fn validate_query_request(
+    request: &QueryRequest,
+    policy: QueryPolicy,
+) -> Result<(), QueryError> {
+    match &request.input {
+        QueryInput::Document {
+            name,
+            source,
+            section,
+        } => {
+            if name.trim().is_empty() {
+                return Err(QueryError::EmptyName);
+            }
+            if source
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(QueryError::InvalidSource);
+            }
+            if section
+                .as_deref()
+                .is_some_and(|value| value.trim().is_empty())
+            {
+                return Err(QueryError::InvalidSection);
+            }
+            if source.is_some() && (section.is_some() || policy.manual_only) {
+                return Err(QueryError::ConflictingSourceSelectors);
+            }
+        }
+        QueryInput::MarkdownFile { path } => {
+            if path.trim().is_empty() {
+                return Err(QueryError::EmptyMarkdownPath);
+            }
+            if policy.manual_only {
+                return Err(QueryError::Markdown {
+                    path: path.trim().to_owned(),
+                    detail: "the manual-only policy does not apply to Markdown input".to_owned(),
+                });
+            }
+        }
+    }
+    match &request.view {
+        QueryView::Excerpt { nodes } => {
+            if nodes.is_empty() {
+                return Err(QueryError::EmptySelection);
+            }
+            if nodes.iter().any(|node| node.trim().is_empty()) {
+                return Err(QueryError::EmptySelector);
+            }
+        }
+        QueryView::Explain { entry } if entry.trim().is_empty() => {
+            return Err(QueryError::EmptyEntry);
+        }
+        QueryView::Search {
+            pattern,
+            syntax,
+            case,
+            scope,
+            word,
+            context_lines,
+            limit,
+            offset,
+        } => validate_search_query(&SearchQuery {
+            pattern: pattern.clone(),
+            syntax: *syntax,
+            case: *case,
+            scope: *scope,
+            word: *word,
+            context_lines: *context_lines,
+            limit: *limit,
+            offset: *offset,
+        })
+        .map_err(QueryError::InvalidSearch)?,
+        QueryView::Full {} | QueryView::Outline { .. } | QueryView::Explain { .. } => {}
+    }
+    Ok(())
 }
 
 trait QueryHost {
     fn name_candidates(&self, name: &str) -> Vec<String>;
     fn locate_registered_document(
         &self,
-        name: &str,
+        candidates: &[String],
         source: Option<&str>,
     ) -> Result<Option<PathBuf>, String>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String>;
@@ -115,25 +359,46 @@ trait QueryHost {
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }
 
-struct SystemQueryHost;
+/// One explicit local document-environment snapshot.
+pub struct DocumentResolver {
+    registered: OnceLock<Result<RegisteredDocumentIndex, SourceConfigError>>,
+    manuals: ManualIndex,
+}
 
-impl QueryHost for SystemQueryHost {
+impl DocumentResolver {
+    /// Capture the native manual index and lazily snapshot Markdown registration.
+    #[must_use]
+    pub fn from_system() -> Self {
+        Self {
+            registered: OnceLock::new(),
+            manuals: ManualIndex::from_roots(discover_manual_roots()),
+        }
+    }
+}
+
+impl QueryHost for DocumentResolver {
     fn name_candidates(&self, name: &str) -> Vec<String> {
         query_name_candidates(name)
     }
 
     fn locate_registered_document(
         &self,
-        name: &str,
+        candidates: &[String],
         source: Option<&str>,
     ) -> Result<Option<PathBuf>, String> {
-        find_registered_document(name, source)
-            .map(|registered| registered.map(|registered| registered.path))
+        let index = self
+            .registered
+            .get_or_init(RegisteredDocumentIndex::load)
+            .as_ref()
+            .map_err(ToString::to_string)?;
+        index
+            .find(candidates, source)
+            .map(|registered| registered.map(|registered| registered.path.clone()))
             .map_err(|error| error.to_string())
     }
 
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String> {
-        locate_manual_source(request).map_err(|error| error.to_string())
+        locate_manual_source_in(request, &self.manuals).map_err(|error| error.to_string())
     }
 
     fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String> {
@@ -272,17 +537,15 @@ fn query_named_document(
     let require_manual = policy.manual_only || section.is_some();
     let candidates = host.name_candidates(name);
 
-    // An unqualified name first consults the platform-native registration
-    // namespace. Section selectors and the explicit manual-only policy bypass
-    // Markdown name discovery.
+    // An unqualified name first consults one snapshot of the platform-native
+    // registration namespace. Section selectors and the explicit manual-only
+    // policy bypass Markdown name discovery.
     if section.is_none() && !policy.manual_only {
-        for candidate in &candidates {
-            let registered = host
-                .locate_registered_document(candidate, source)
-                .map_err(|detail| QueryError::Registry { detail })?;
-            if let Some(path) = registered {
-                return query_registered_document(name, &path, host);
-            }
+        let registered = host
+            .locate_registered_document(&candidates, source)
+            .map_err(|detail| QueryError::Registry { detail })?;
+        if let Some(path) = registered {
+            return query_registered_document(name, &path, host);
         }
         if source.is_some() {
             return Err(QueryError::NoReadableContent {
@@ -298,7 +561,7 @@ fn query_named_document(
 
     // A malformed page may omit its own section metadata. Preserve the
     // requested section so labels stay `name(N)`.
-    if let (Ok(Some(document)), Some(section)) = (&mut manual, section.as_deref())
+    if let (Ok(document), Some(section)) = (&mut manual, section.as_deref())
         && document.meta.section.is_none()
     {
         document.meta.section = Some(section.to_owned());
@@ -308,42 +571,30 @@ fn query_named_document(
     // but must not degrade into an apparently successful tldr-only response.
     if require_manual {
         return match manual {
-            Ok(Some(manual)) => Ok(QueryBundle {
+            Ok(manual) => Ok(QueryBundle {
                 schema: QuerySchema::V5,
                 label: name.to_owned(),
                 document: Some(manual),
                 tldr,
             }),
-            Ok(None) => Err(QueryError::NoReadableContent {
-                name: name.to_owned(),
-            }),
-            Err(detail) => Err(QueryError::Manual {
-                name: name.to_owned(),
-                detail,
-            }),
+            Err(error) => Err(QueryError::Manual(error)),
         };
     }
 
     match manual {
-        Ok(Some(manual)) => Ok(QueryBundle {
+        Ok(manual) => Ok(QueryBundle {
             schema: QuerySchema::V5,
             label: name.to_owned(),
             document: Some(manual),
             tldr,
         }),
-        Ok(None) | Err(_) if tldr.is_some() => Ok(QueryBundle {
+        Err(_) if tldr.is_some() => Ok(QueryBundle {
             schema: QuerySchema::V5,
             label: name.to_owned(),
             document: None,
             tldr,
         }),
-        Ok(None) => Err(QueryError::NoReadableContent {
-            name: name.to_owned(),
-        }),
-        Err(detail) => Err(QueryError::Manual {
-            name: name.to_owned(),
-            detail,
-        }),
+        Err(error) => Err(QueryError::Manual(error)),
     }
 }
 
@@ -369,7 +620,7 @@ fn load_manual(
     candidates: &[String],
     section: Option<&str>,
     host: &dyn QueryHost,
-) -> Result<Option<MantDocument>, String> {
+) -> Result<MantDocument, ManualLoadError> {
     let mut first_locate_error = None;
     let mut located = None;
     for candidate in candidates {
@@ -387,17 +638,20 @@ fn load_manual(
     let Some(page) = located else {
         let error =
             first_locate_error.unwrap_or_else(|| "no name candidates were available".to_owned());
-        return Err(format!(
-            "could not load manual '{requested_name}': manual source: {error}"
-        ));
+        return Err(ManualLoadError::NotFound {
+            name: requested_name.to_owned(),
+            detail: error,
+        });
     };
 
     let source_path = page.path.clone();
-    let document = host.parse_manual(&page).map_err(|error| {
-        format!("could not load manual '{requested_name}': manual source: {error}")
-    })?;
+    let document = host
+        .parse_manual(&page)
+        .map_err(|detail| ManualLoadError::Parse {
+            name: requested_name.to_owned(),
+            detail,
+        })?;
     if document.sections.is_empty() {
-        let path = source_path.display();
         let diagnostics = document
             .diagnostics
             .iter()
@@ -407,18 +661,14 @@ fn load_manual(
                 });
                 format!("{:?}{location}: {}", diagnostic.level, diagnostic.message)
             })
-            .collect::<Vec<_>>()
-            .join("; ");
-        let detail = if diagnostics.is_empty() {
-            String::new()
-        } else {
-            format!("; diagnostics: {diagnostics}")
-        };
-        return Err(format!(
-            "could not load manual '{requested_name}': libmandoc parsed {path} but produced no readable sections{detail}",
-        ));
+            .collect::<Vec<_>>();
+        return Err(ManualLoadError::Empty {
+            name: requested_name.to_owned(),
+            path: source_path,
+            diagnostics,
+        });
     }
-    Ok(Some(document))
+    Ok(document)
 }
 
 #[cfg(test)]
@@ -464,7 +714,7 @@ mod tests {
 
         fn locate_registered_document(
             &self,
-            name: &str,
+            candidates: &[String],
             source: Option<&str>,
         ) -> Result<Option<PathBuf>, String> {
             self.calls
@@ -474,7 +724,11 @@ mod tests {
             if self
                 .registered_name
                 .as_deref()
-                .is_some_and(|registered_name| registered_name != name)
+                .is_some_and(|registered_name| {
+                    !candidates
+                        .iter()
+                        .any(|candidate| candidate == registered_name)
+                })
             {
                 return Ok(None);
             }
@@ -696,11 +950,15 @@ mod tests {
         let error = query_with(&request(), QueryPolicy { manual_only: true }, &host)
             .expect_err("an optional tldr page must not hide native parser failure");
 
-        let QueryError::Manual { detail, .. } = error else {
+        let QueryError::Manual(detail) = error else {
             panic!("expected the native parser diagnostic");
         };
-        assert!(detail.contains("/man/tool.1"));
-        assert!(detail.contains("Unsupported: unsupported request"));
+        assert!(detail.to_string().contains("/man/tool.1"));
+        assert!(
+            detail
+                .to_string()
+                .contains("Unsupported: unsupported request")
+        );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
             ["tldr", "locate", "parse"]
@@ -725,7 +983,7 @@ mod tests {
         let error = query_with(&request, QueryPolicy::default(), &host)
             .expect_err("an explicit section must require a native manual");
 
-        assert!(matches!(&error, QueryError::Manual { .. }));
+        assert!(matches!(&error, QueryError::Manual(_)));
         assert!(error.to_string().contains("section not found"));
         assert_eq!(*host.calls.lock().expect("calls lock"), ["tldr", "locate"]);
     }
@@ -734,13 +992,12 @@ mod tests {
     fn truncated_unsupported_document_is_an_error_by_default() {
         let host = host(Ok(document(SourceFormat::Man, true, false)));
 
-        let QueryError::Manual { detail, .. } =
-            query_with(&request(), QueryPolicy::default(), &host)
-                .expect_err("empty-section document must error by default")
+        let QueryError::Manual(detail) = query_with(&request(), QueryPolicy::default(), &host)
+            .expect_err("empty-section document must error by default")
         else {
             panic!("expected Manual error");
         };
-        assert!(detail.contains("produced no readable sections"));
+        assert!(detail.to_string().contains("produced no readable sections"));
     }
 
     #[test]
@@ -838,7 +1095,7 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["name", "name", "markdown"]
+            ["name", "markdown"]
         );
     }
 
@@ -864,7 +1121,7 @@ mod tests {
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["name", "name", "tldr", "locate", "locate", "parse"]
+            ["name", "tldr", "locate", "locate", "parse"]
         );
     }
 

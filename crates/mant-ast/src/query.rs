@@ -91,7 +91,7 @@ pub enum QueryView {
     },
 }
 
-/// Validated use-case input accepted by the native query boundary.
+/// Native use-case input. The engine validates semantic constraints before I/O.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:request:v5"))]

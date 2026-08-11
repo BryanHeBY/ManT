@@ -7,7 +7,9 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use super::{SOURCE_METADATA_FILE, SourceConfigError, is_source_name, load_source_config};
+use super::{
+    SOURCE_METADATA_FILE, SourceConfig, SourceConfigError, is_source_name, load_source_config,
+};
 
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 
@@ -28,59 +30,101 @@ pub struct RegisteredDocument {
     pub origin: RegisteredDocumentOrigin,
 }
 
+/// Immutable snapshot of the configured Markdown document namespace.
+///
+/// Loading the snapshot reads `sources.toml` and scans each eligible flat
+/// directory exactly once. Candidate fallback therefore changes only lookup
+/// order; it never repeats filesystem discovery.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RegisteredDocumentIndex {
+    config: SourceConfig,
+    documents: Vec<RegisteredDocument>,
+}
+
+impl RegisteredDocumentIndex {
+    /// Load the current user's registered Markdown namespace.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the platform data root or `sources.toml` is invalid.
+    pub fn load() -> Result<Self, SourceConfigError> {
+        let (paths, config) = load_source_config()?;
+        let mut documents = scan_directory(&paths.documents)
+            .into_iter()
+            .map(|(name, path)| RegisteredDocument {
+                name,
+                path,
+                origin: RegisteredDocumentOrigin::Documents,
+            })
+            .collect::<Vec<_>>();
+        for source in config.precedence() {
+            let directory = paths.sources.join(source);
+            if !source_directory_ready(&directory) {
+                continue;
+            }
+            documents.extend(scan_directory(&directory).into_iter().map(|(name, path)| {
+                RegisteredDocument {
+                    name,
+                    path,
+                    origin: RegisteredDocumentOrigin::Source(source.to_owned()),
+                }
+            }));
+        }
+        Ok(Self { config, documents })
+    }
+
+    /// Resolve ordered public-name candidates using root and source precedence.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an explicit source is not configured.
+    pub fn find(
+        &self,
+        candidates: &[String],
+        source: Option<&str>,
+    ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
+        if let Some(source) = source
+            && (!is_source_name(source) || self.config.get(source).is_none())
+        {
+            return Err(SourceConfigError::new(format!(
+                "document source '{source}' is not configured"
+            )));
+        }
+        Ok(candidates
+            .iter()
+            .map(|candidate| candidate.trim())
+            .filter(|candidate| is_safe_document_name(candidate))
+            .find_map(|candidate| {
+                self.documents.iter().find(|document| {
+                    document_names_equal(&document.name, candidate)
+                        && source.is_none_or(|source| {
+                            matches!(
+                                &document.origin,
+                                RegisteredDocumentOrigin::Source(candidate) if candidate == source
+                            )
+                        })
+                })
+            }))
+    }
+
+    /// Documents in root-first and configured-source precedence order.
+    #[must_use]
+    pub fn documents(&self) -> &[RegisteredDocument] {
+        &self.documents
+    }
+}
+
 /// Find a registered document using root-first or explicit-source resolution.
 ///
 /// # Errors
 ///
 /// Returns an error when the platform data root or `sources.toml` is invalid.
-pub fn find_registered_document(
-    document: &str,
+pub fn find_registered_document_candidates(
+    candidates: &[String],
     source: Option<&str>,
 ) -> Result<Option<RegisteredDocument>, SourceConfigError> {
-    let document = document.trim();
-    if !is_safe_document_name(document) {
-        return Ok(None);
-    }
-    let (paths, config) = load_source_config()?;
-    if let Some(source) = source {
-        if !is_source_name(source) || config.get(source).is_none() {
-            return Err(SourceConfigError::new(format!(
-                "document source '{source}' is not configured"
-            )));
-        }
-        let directory = paths.sources.join(source);
-        if !source_directory_ready(&directory) {
-            return Ok(None);
-        }
-        return Ok(
-            find_in_directory(&directory, document).map(|path| RegisteredDocument {
-                name: document.to_owned(),
-                path,
-                origin: RegisteredDocumentOrigin::Source(source.to_owned()),
-            }),
-        );
-    }
-
-    if let Some(path) = find_in_directory(&paths.documents, document) {
-        return Ok(Some(RegisteredDocument {
-            name: document.to_owned(),
-            path,
-            origin: RegisteredDocumentOrigin::Documents,
-        }));
-    }
-    for source in config.precedence() {
-        let directory = paths.sources.join(source);
-        if source_directory_ready(&directory)
-            && let Some(path) = find_in_directory(&directory, document)
-        {
-            return Ok(Some(RegisteredDocument {
-                name: document.to_owned(),
-                path,
-                origin: RegisteredDocumentOrigin::Source(source.to_owned()),
-            }));
-        }
-    }
-    Ok(None)
+    let index = RegisteredDocumentIndex::load()?;
+    Ok(index.find(candidates, source)?.cloned())
 }
 
 /// List every root and configured-source candidate in fallback order.
@@ -92,40 +136,12 @@ pub fn find_registered_document(
 ///
 /// Returns an error when the platform data root or `sources.toml` is invalid.
 pub fn list_registered_documents() -> Result<Vec<RegisteredDocument>, SourceConfigError> {
-    let (paths, config) = load_source_config()?;
-    let mut documents = scan_directory(&paths.documents)
-        .into_iter()
-        .map(|(name, path)| RegisteredDocument {
-            name,
-            path,
-            origin: RegisteredDocumentOrigin::Documents,
-        })
-        .collect::<Vec<_>>();
-    for source in config.precedence() {
-        let directory = paths.sources.join(source);
-        if !source_directory_ready(&directory) {
-            continue;
-        }
-        documents.extend(scan_directory(&directory).into_iter().map(|(name, path)| {
-            RegisteredDocument {
-                name,
-                path,
-                origin: RegisteredDocumentOrigin::Source(source.to_owned()),
-            }
-        }));
-    }
-    Ok(documents)
+    Ok(RegisteredDocumentIndex::load()?.documents)
 }
 
 fn source_directory_ready(directory: &Path) -> bool {
     fs::symlink_metadata(directory.join(SOURCE_METADATA_FILE))
         .is_ok_and(|metadata| metadata.file_type().is_file())
-}
-
-fn find_in_directory(directory: &Path, document: &str) -> Option<PathBuf> {
-    scan_directory(directory)
-        .into_iter()
-        .find_map(|(name, path)| document_names_equal(&name, document).then_some(path))
 }
 
 fn document_names_equal(left: &str, right: &str) -> bool {

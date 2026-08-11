@@ -22,7 +22,7 @@ pub use mandoc::{
     parse_manual_source,
 };
 pub use mant_sources::{
-    RegisteredDocument, RegisteredDocumentOrigin, SourceConfigError, find_registered_document,
+    RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError,
     list_registered_documents,
 };
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
@@ -38,12 +38,14 @@ pub use projection::{
     select_explanation,
 };
 pub use query::{
-    MAX_MARKDOWN_BYTES, QueryError, QueryPolicy, query, query_markdown_text, query_with_policy,
+    DocumentResolver, MAX_MARKDOWN_BYTES, ManualLoadError, QueryError, QueryExecutionError,
+    QueryPolicy, QueryViewResult, execute_query, project_query_view, query_markdown_text,
+    resolve_query, resolve_query_with_policy, validate_query_request,
 };
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
-    CommandOutput, LocateError, ManualIndex, ManualPage, ManualRequest, discover_manual_roots,
-    locate_manual_source, locate_manual_source_in, system_manual_index,
+    LocateError, ManualIndex, ManualPage, ManualRequest, discover_manual_roots,
+    locate_manual_source_in,
 };
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, TldrUpdateError,

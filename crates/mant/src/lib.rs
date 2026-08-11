@@ -9,10 +9,10 @@ mod mcp;
 
 use std::io::{self, IsTerminal, Read, Write};
 
-use mant_ast::{
-    QueryBundle, QueryInput, QueryRequest, QueryView, SearchQuery, SourceFormat, TldrCacheUpdate,
+use mant_ast::{QueryBundle, QueryRequest, QueryView, SourceFormat, TldrCacheUpdate};
+use mant_core::{
+    ProjectionError, QueryError, QueryExecutionError, QueryPolicy, QueryViewResult, SearchError,
 };
-use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
 use mant_sources::DocumentSourcesUpdate;
 use serde::Serialize;
 
@@ -71,14 +71,7 @@ struct SystemHost;
 
 impl CliHost for SystemHost {
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
-        mant_core::query_with_policy(request, policy).map_err(|error| match error {
-            QueryError::EmptyName
-            | QueryError::InvalidSection
-            | QueryError::InvalidSource
-            | QueryError::ConflictingSourceSelectors
-            | QueryError::EmptyMarkdownPath => Failure::usage(error),
-            _ => Failure::operational(error),
-        })
+        mant_core::resolve_query_with_policy(request, policy).map_err(query_failure)
     }
 
     fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure> {
@@ -307,20 +300,18 @@ fn execute_query(
     let policy = QueryPolicy {
         manual_only: command.manual_only,
     };
-    let (query, view) = match command.source {
+    let result = match command.source {
         QuerySource::MarkdownStdin { view } => {
             validate_markdown_policy(policy)?;
             let source = read_utf8_input(input, mant_core::MAX_MARKDOWN_BYTES, "Markdown input")?;
-            (host.query_markdown(&source)?, view)
+            mant_core::project_query_view(host.query_markdown(&source)?, &view)
+                .map_err(query_execution_failure)?
         }
         source => {
             let request = read_query_request(source, input)?;
-            validate_query_request(&request)?;
-            if matches!(request.input, QueryInput::MarkdownFile { .. }) {
-                validate_markdown_policy(policy)?;
-            }
-            let view = request.view.clone();
-            (host.query(&request, policy)?, view)
+            mant_core::validate_query_request(&request, policy).map_err(query_failure)?;
+            let query = host.query(&request, policy)?;
+            mant_core::project_query_view(query, &request.view).map_err(query_execution_failure)?
         }
     };
     let format = match command.presentation {
@@ -332,13 +323,7 @@ fn execute_query(
             ));
         }
     };
-    render_query_view(
-        &query,
-        view,
-        format,
-        command.pretty,
-        command.preserve_anchors,
-    )
+    render_query_result(&result, format, command.pretty, command.preserve_anchors)
 }
 
 /// Load one full query and hand the normalized document directly to Ratatui.
@@ -368,9 +353,7 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
         );
     }
     let policy = QueryPolicy { manual_only };
-    if matches!(request.input, QueryInput::MarkdownFile { .. })
-        && let Err(error) = validate_markdown_policy(policy)
-    {
+    if let Err(error) = mant_core::validate_query_request(&request, policy).map_err(query_failure) {
         return report_failure(&error, diagnostics);
     }
     let query = match host.query(&request, policy) {
@@ -384,69 +367,31 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
 }
 
 /// Render one already-loaded projection without re-reading local source data.
-fn render_query_view(
-    query: &QueryBundle,
-    view: QueryView,
+fn render_query_result(
+    result: &QueryViewResult,
     format: QueryFormat,
     pretty: bool,
     preserve_anchors: bool,
 ) -> Result<String, Failure> {
-    match view {
-        QueryView::Full { .. } => render_full_query(query, format, pretty, preserve_anchors),
-        QueryView::Outline { detail } => {
-            let outline =
-                mant_core::build_outline_with_detail(query, detail).map_err(projection_failure)?;
-            match format {
-                QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
-                QueryFormat::Text | QueryFormat::Man => {
-                    Ok(mant_core::render_outline_text(&outline))
-                }
-                QueryFormat::Json => {
-                    mant_core::render_outline_json(&outline, pretty).map_err(Failure::operational)
-                }
+    match result {
+        QueryViewResult::Full(query) => render_full_query(query, format, pretty, preserve_anchors),
+        QueryViewResult::Outline(outline) => match format {
+            QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
+            QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_outline_text(&outline)),
+            QueryFormat::Json => {
+                mant_core::render_outline_json(&outline, pretty).map_err(Failure::operational)
             }
-        }
-        QueryView::Excerpt { nodes } => {
-            let excerpt = mant_core::select_excerpt(query, &nodes).map_err(projection_failure)?;
+        },
+        QueryViewResult::Excerpt(excerpt) => {
             render_excerpt(&excerpt, format, pretty, preserve_anchors)
         }
-        QueryView::Explain { entry } => {
-            let excerpt =
-                mant_core::select_explanation(query, &entry).map_err(projection_failure)?;
-            render_excerpt(&excerpt, format, pretty, preserve_anchors)
-        }
-        QueryView::Search {
-            pattern,
-            syntax,
-            case,
-            scope,
-            word,
-            context_lines,
-            limit,
-            offset,
-        } => {
-            let search = mant_core::search_query(
-                query,
-                &SearchQuery {
-                    pattern,
-                    syntax,
-                    case,
-                    scope,
-                    word,
-                    context_lines,
-                    limit,
-                    offset,
-                },
-            )
-            .map_err(search_failure)?;
-            match format {
-                QueryFormat::Markdown => Ok(mant_core::render_search_markdown(&search)),
-                QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_search_text(&search)),
-                QueryFormat::Json => {
-                    mant_core::render_search_json(&search, pretty).map_err(Failure::operational)
-                }
+        QueryViewResult::Search(search) => match format {
+            QueryFormat::Markdown => Ok(mant_core::render_search_markdown(&search)),
+            QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_search_text(&search)),
+            QueryFormat::Json => {
+                mant_core::render_search_json(&search, pretty).map_err(Failure::operational)
             }
-        }
+        },
     }
 }
 
@@ -510,6 +455,33 @@ fn projection_failure(error: ProjectionError) -> Failure {
     }
 }
 
+fn query_failure(error: QueryError) -> Failure {
+    match error {
+        QueryError::EmptyName
+        | QueryError::InvalidSection
+        | QueryError::InvalidSource
+        | QueryError::ConflictingSourceSelectors
+        | QueryError::EmptyMarkdownPath
+        | QueryError::EmptySelection
+        | QueryError::EmptySelector
+        | QueryError::EmptyEntry
+        | QueryError::InvalidSearch(_) => Failure::usage(error),
+        QueryError::Markdown { .. }
+        | QueryError::EmptyMarkdown { .. }
+        | QueryError::Registry { .. }
+        | QueryError::Manual(_)
+        | QueryError::NoReadableContent { .. } => Failure::operational(error),
+    }
+}
+
+fn query_execution_failure(error: QueryExecutionError) -> Failure {
+    match error {
+        QueryExecutionError::Query(error) => query_failure(error),
+        QueryExecutionError::Projection(error) => projection_failure(error),
+        QueryExecutionError::Search(error) => search_failure(error),
+    }
+}
+
 fn search_failure(error: SearchError) -> Failure {
     Failure::usage(error)
 }
@@ -547,79 +519,6 @@ fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
         return Err(Failure::usage(
             "the manual-only policy does not apply to Markdown input",
         ));
-    }
-    Ok(())
-}
-
-fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
-    match &request.input {
-        QueryInput::Document {
-            name,
-            source,
-            section,
-        } => {
-            if name.trim().is_empty() {
-                return Err(Failure::usage("document name must not be empty"));
-            }
-            if source
-                .as_deref()
-                .is_some_and(|value| value.trim().is_empty())
-            {
-                return Err(Failure::usage("document source must not be empty"));
-            }
-            if source.is_some() && section.is_some() {
-                return Err(Failure::usage(
-                    "document source and manual section cannot be combined",
-                ));
-            }
-            if section
-                .as_deref()
-                .is_some_and(|value| value.trim().is_empty())
-            {
-                return Err(Failure::usage("manual section must not be empty"));
-            }
-        }
-        QueryInput::MarkdownFile { path } => {
-            if path.trim().is_empty() {
-                return Err(Failure::usage("Markdown path must not be empty"));
-            }
-        }
-    }
-    if let QueryView::Excerpt { nodes } = &request.view {
-        if nodes.is_empty() {
-            return Err(Failure::usage("at least one outline node is required"));
-        }
-        if nodes.iter().any(|node| node.trim().is_empty()) {
-            return Err(Failure::usage("outline node must not be empty"));
-        }
-    }
-    if let QueryView::Explain { entry } = &request.view
-        && entry.trim().is_empty()
-    {
-        return Err(Failure::usage("semantic entry must not be empty"));
-    }
-    if let QueryView::Search {
-        pattern,
-        syntax,
-        case,
-        scope,
-        word,
-        context_lines,
-        limit,
-        offset,
-    } = &request.view
-    {
-        mant_core::validate_search_query(&SearchQuery {
-            pattern: pattern.clone(),
-            syntax: *syntax,
-            case: *case,
-            scope: *scope,
-            word: *word,
-            context_lines: *context_lines,
-            limit: *limit,
-            offset: *offset,
-        })
-        .map_err(search_failure)?;
     }
     Ok(())
 }

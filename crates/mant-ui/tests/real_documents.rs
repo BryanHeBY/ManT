@@ -227,7 +227,7 @@ fn real_manual_lowering_preserves_every_substantial_text_fragment() {
 fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
     for relative in ["docs/manuals/mant.md"] {
         let path = project_file(relative);
-        let bundle = mant_core::query(&QueryRequest {
+        let bundle = mant_core::resolve_query(&QueryRequest {
             schema: RequestSchema::V5,
             input: QueryInput::MarkdownFile {
                 path: path.to_string_lossy().into_owned(),

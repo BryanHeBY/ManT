@@ -12,9 +12,10 @@ use std::{
 };
 
 use mant_ast::{
-    OutlineDetail, QueryBundle, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QueryView,
-    SearchCase, SearchQuery, SearchScope, SearchSyntax, default_search_limit,
+    OutlineDetail, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QueryView, SearchCase,
+    SearchScope, SearchSyntax, default_search_limit,
 };
+use mant_core::{QueryPolicy, QueryViewResult};
 use rmcp::{
     Json, ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -314,14 +315,15 @@ impl MantMcpServer {
         }
     }
 
-    async fn query(&self, request: QueryRequest) -> Result<QueryBundle, String> {
+    async fn query(&self, request: QueryRequest) -> Result<QueryViewResult, String> {
         let permit = Arc::clone(&self.query_gate)
             .acquire_owned()
             .await
             .map_err(|_| "MCP query service is shutting down".to_owned())?;
         task::spawn_blocking(move || {
             let _permit = permit;
-            mant_core::query(&request).map_err(|error| error.to_string())
+            mant_core::execute_query(&request, QueryPolicy::default())
+                .map_err(|error| error.to_string())
         })
         .await
         .map_err(|error| format!("MCP query worker failed: {error}"))?
@@ -368,10 +370,10 @@ impl MantMcpServer {
     ) -> Result<Json<QueryOutline>, String> {
         let parameters = parameters.0;
         let detail = parameters.detail.unwrap_or(OutlineDetail::Entries);
-        let request = request_for(parameters.selector, QueryView::Outline { detail })?;
-        let query = self.query(request).await?;
-        let outline = mant_core::build_outline_with_detail(&query, detail)
-            .map_err(|error| error.to_string())?;
+        let request = request_for(parameters.selector, QueryView::Outline { detail });
+        let QueryViewResult::Outline(outline) = self.query(request).await? else {
+            unreachable!("outline request materializes an outline")
+        };
         Ok(Json(outline))
     }
 
@@ -390,16 +392,15 @@ impl MantMcpServer {
         parameters: Parameters<GetParams>,
     ) -> Result<Json<QueryExcerpt>, String> {
         let parameters = parameters.0;
-        validate_nodes(&parameters.nodes)?;
         let request = request_for(
             parameters.selector,
             QueryView::Excerpt {
                 nodes: parameters.nodes.clone(),
             },
-        )?;
-        let query = self.query(request).await?;
-        let mut excerpt = mant_core::select_excerpt(&query, &parameters.nodes)
-            .map_err(|error| error.to_string())?;
+        );
+        let QueryViewResult::Excerpt(mut excerpt) = self.query(request).await? else {
+            unreachable!("excerpt request materializes an excerpt")
+        };
         discard_lowering_diagnostics(&mut excerpt);
         Ok(Json(excerpt))
     }
@@ -425,10 +426,10 @@ impl MantMcpServer {
             QueryView::Explain {
                 entry: entry.clone(),
             },
-        )?;
-        let query = self.query(request).await?;
-        let mut excerpt =
-            mant_core::select_explanation(&query, &entry).map_err(|error| error.to_string())?;
+        );
+        let QueryViewResult::Excerpt(mut excerpt) = self.query(request).await? else {
+            unreachable!("explain request materializes an excerpt")
+        };
         discard_lowering_diagnostics(&mut excerpt);
         Ok(Json(excerpt))
     }
@@ -448,32 +449,22 @@ impl MantMcpServer {
         parameters: Parameters<SearchParams>,
     ) -> Result<Json<mant_ast::QuerySearch>, String> {
         let parameters = parameters.0;
-        let search = SearchQuery {
-            pattern: non_empty(&parameters.pattern, "pattern")?,
-            syntax: parameters.syntax.unwrap_or_default(),
-            case: parameters.case.unwrap_or_default(),
-            scope: parameters.scope.unwrap_or_default(),
-            word: parameters.word.unwrap_or(false),
-            context_lines: parameters.context_lines.unwrap_or(0),
-            limit: parameters.limit.unwrap_or_else(default_search_limit),
-            offset: parameters.offset.unwrap_or(0),
-        };
-        mant_core::validate_search_query(&search).map_err(|error| error.to_string())?;
         let request = request_for(
             parameters.selector,
             QueryView::Search {
-                pattern: search.pattern.clone(),
-                syntax: search.syntax,
-                case: search.case,
-                scope: search.scope,
-                word: search.word,
-                context_lines: search.context_lines,
-                limit: search.limit,
-                offset: search.offset,
+                pattern: parameters.pattern.trim().to_owned(),
+                syntax: parameters.syntax.unwrap_or_default(),
+                case: parameters.case.unwrap_or_default(),
+                scope: parameters.scope.unwrap_or_default(),
+                word: parameters.word.unwrap_or(false),
+                context_lines: parameters.context_lines.unwrap_or(0),
+                limit: parameters.limit.unwrap_or_else(default_search_limit),
+                offset: parameters.offset.unwrap_or(0),
             },
-        )?;
-        let query = self.query(request).await?;
-        let result = mant_core::search_query(&query, &search).map_err(|error| error.to_string())?;
+        );
+        let QueryViewResult::Search(result) = self.query(request).await? else {
+            unreachable!("search request materializes search results")
+        };
         Ok(Json(result))
     }
 }
@@ -600,38 +591,17 @@ fn discard_lowering_diagnostics(excerpt: &mut QueryExcerpt) {
     excerpt.diagnostics.clear();
 }
 
-fn request_for(selector: DocumentSelector, view: QueryView) -> Result<QueryRequest, String> {
-    let source = selector
-        .source
-        .map(|source| non_empty(&source, "source"))
-        .transpose()?;
-    let section = selector
-        .section
-        .map(|section| non_empty(&section, "section"))
-        .transpose()?;
-    if source.is_some() && section.is_some() {
-        return Err("source and section cannot be combined".to_owned());
-    }
+fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
     let input = QueryInput::Document {
-        name: non_empty(&selector.name, "name")?,
-        source,
-        section,
+        name: selector.name,
+        source: selector.source,
+        section: selector.section,
     };
-    Ok(QueryRequest {
+    QueryRequest {
         schema: mant_ast::RequestSchema::V5,
         input,
         view,
-    })
-}
-
-fn validate_nodes(nodes: &[String]) -> Result<(), String> {
-    if nodes.is_empty() {
-        return Err("at least one outline node is required".to_owned());
     }
-    if nodes.iter().any(|node| node.trim().is_empty()) {
-        return Err("outline node must not be empty".to_owned());
-    }
-    Ok(())
 }
 
 fn non_empty(value: &str, field: &str) -> Result<String, String> {
@@ -720,7 +690,10 @@ mod tests {
         }))
         .expect("source selector");
         assert_eq!(parameters.selector.source.as_deref(), Some("team"));
-        assert!(super::request_for(parameters.selector, mant_ast::QueryView::Full {}).is_ok());
+        let request = super::request_for(parameters.selector, mant_ast::QueryView::Full {});
+        assert!(
+            mant_core::validate_query_request(&request, mant_core::QueryPolicy::default()).is_ok()
+        );
 
         let parameters: OutlineParams = serde_json::from_value(json!({
             "name": "tool",
@@ -728,9 +701,11 @@ mod tests {
             "section": "1"
         }))
         .expect("deserialize combined selector before semantic validation");
+        let request = super::request_for(parameters.selector, mant_ast::QueryView::Full {});
         assert!(
-            super::request_for(parameters.selector, mant_ast::QueryView::Full {})
+            mant_core::validate_query_request(&request, mant_core::QueryPolicy::default())
                 .expect_err("reject combined source and section")
+                .to_string()
                 .contains("cannot be combined")
         );
     }

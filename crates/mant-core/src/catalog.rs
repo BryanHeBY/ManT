@@ -3,7 +3,8 @@
 use std::path::PathBuf;
 
 use crate::{
-    RegisteredDocumentOrigin, SourceConfigError, list_registered_documents, system_manual_index,
+    ManualIndex, RegisteredDocumentOrigin, SourceConfigError, discover_manual_roots,
+    list_registered_documents,
 };
 
 /// Source family used to resolve one available document.
@@ -38,9 +39,10 @@ pub struct AvailableDocument {
 /// Returns an error when the platform data root or source configuration cannot
 /// be read or validated.
 pub fn list_available_documents() -> Result<Vec<AvailableDocument>, SourceConfigError> {
+    let manuals = ManualIndex::from_roots(discover_manual_roots());
     Ok(list_available_documents_from(
         list_registered_documents()?,
-        system_manual_index().pages(),
+        manuals.pages(),
     ))
 }
 

@@ -6,7 +6,6 @@ use std::{
     ffi::{OsStr, OsString},
     fmt, fs,
     path::{Path, PathBuf},
-    sync::OnceLock,
 };
 
 #[cfg(unix)]
@@ -17,8 +16,6 @@ const DEFAULT_MANUAL_ROOTS: [&str; 4] = [
     "/usr/man",
 ];
 const SUPPORTED_COMPRESSION_SUFFIXES: [&str; 2] = [".gz", ".zst"];
-
-static SYSTEM_INDEX: OnceLock<ManualIndex> = OnceLock::new();
 
 /// One validated manual lookup independent from CLI token syntax.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -126,7 +123,7 @@ fn manual_name_key(name: &str) -> String {
 
 /// Minimal subprocess result shared by external data update operations.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct CommandOutput {
+pub(crate) struct CommandOutput {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
     pub exit_code: i32,
@@ -154,26 +151,11 @@ impl fmt::Display for LocateError {
 
 impl std::error::Error for LocateError {}
 
-/// Build or retrieve the process-wide native manual index.
-#[must_use]
-pub fn system_manual_index() -> &'static ManualIndex {
-    SYSTEM_INDEX.get_or_init(|| ManualIndex::from_roots(discover_manual_roots()))
-}
-
 /// Discover manual roots from explicit variables and platform conventions.
 #[must_use]
 pub fn discover_manual_roots() -> Vec<PathBuf> {
     let environment = env::vars_os().collect::<HashMap<_, _>>();
     discover_manual_roots_with(&environment)
-}
-
-/// Locate a manual through the process-wide native index.
-///
-/// # Errors
-///
-/// Returns [`LocateError`] for invalid requests and missing local sources.
-pub fn locate_manual_source(request: &ManualRequest) -> Result<ManualPage, LocateError> {
-    locate_manual_source_in(request, system_manual_index())
 }
 
 /// Locate a manual in an explicit immutable index.
