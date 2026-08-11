@@ -250,6 +250,7 @@ pub(in crate::update) fn activate_source(
     fs::write(&metadata_path, metadata_text)
         .map_err(|error| format!("could not write source metadata: {error}"))?;
     sync_file(&metadata_path, "source metadata")?;
+    #[cfg(unix)]
     sync_directory(staging)?;
     replace_directory(staging, target)
 }
@@ -414,7 +415,15 @@ fn sync_parent_directory(path: &Path) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "source target has no parent directory".to_owned())?;
-    sync_directory(parent)
+    #[cfg(unix)]
+    {
+        sync_directory(parent)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = parent;
+        Ok(())
+    }
 }
 
 #[cfg(unix)]
@@ -422,11 +431,6 @@ fn sync_directory(path: &Path) -> Result<(), String> {
     fs::File::open(path)
         .and_then(|directory| directory.sync_all())
         .map_err(|error| format!("could not sync directory '{}': {error}", path.display()))
-}
-
-#[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<(), String> {
-    Ok(())
 }
 
 fn recover_directory(target: &Path) -> Result<(), String> {
