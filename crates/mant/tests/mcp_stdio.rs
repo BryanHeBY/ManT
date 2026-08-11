@@ -95,20 +95,17 @@ fn assert_tool_replies(replies: &[Value]) {
     let documents = catalog["result"]["structuredContent"]["documents"]
         .as_array()
         .expect("document catalog");
-    let expected_documents = if cfg!(unix) { 2 } else { 1 };
-    assert_eq!(documents.len(), expected_documents);
+    assert_eq!(documents.len(), 2);
     assert!(documents.iter().any(|document| {
         document["name"] == "mcp-registered"
             && document["kind"] == "markdown"
             && document["origin"] == "documents"
     }));
-    if cfg!(unix) {
-        assert!(documents.iter().any(|document| {
-            document["name"] == "mcp-manual"
-                && document["kind"] == "manual"
-                && document["section"] == "1"
-        }));
-    }
+    assert!(documents.iter().any(|document| {
+        document["name"] == "mcp-manual"
+            && document["kind"] == "manual"
+            && document["section"] == "1"
+    }));
     let search = replies
         .iter()
         .find(|reply| reply["id"] == 4)
