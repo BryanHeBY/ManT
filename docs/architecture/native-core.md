@@ -251,12 +251,13 @@ Best-effort native output is retained together with its diagnostics rather than
 being silently replaced by another renderer.
 
 Registered documents and caches have distinct lifecycles. Each platform has
-one user data root containing `sources.toml`, flat root documents, installed
-source directories, and per-source revision metadata. The native CLI alone
-updates repositories with a shallow clone and directory replacement. The
-private tldr checkout remains below the platform cache root. Installed-client
-tldr roots precede the private checkout, which remains the final read fallback
-even when a client executable is present.
+one user data root containing `sources.toml` and a `documents/` tree. Personal
+documents are flat at that tree's root; installed source directories and their
+revision metadata live below `documents/sources/`. The native CLI alone updates
+repositories with a shallow clone and directory replacement. The private tldr
+checkout remains below the platform cache root. Installed-client tldr roots
+precede the private checkout, which remains the final read fallback even when
+a client executable is present.
 
 Vertical layout is part of this normalization boundary rather than a TUI
 heuristic. Sections retain the distance requested before `SH`, `SS`, `Sh`, and

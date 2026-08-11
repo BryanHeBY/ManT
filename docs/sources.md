@@ -20,21 +20,22 @@ The layout is fixed:
 ```text
 mant/
 ├── sources.toml
-├── documents/
-│   └── personal.md
-└── sources/
-    └── team/
-        ├── .mant-source.toml
-        └── tool.md
+└── documents/
+    ├── personal.md
+    └── sources/
+        └── team/
+            ├── .mant-source.toml
+            └── tool.md
 ```
 
-`documents/` is for files managed directly by the user. Each immediate
-directory below `sources/` is managed by `mant --update-docs`; do not edit it
-by hand because a later update replaces the complete directory.
+Files directly inside `documents/` are managed by the user. Each immediate
+directory below `documents/sources/` is managed by `mant --update-docs`; do not
+edit it by hand because a later update replaces the complete directory.
 
-Only `.md` and `.markdown` files directly inside `documents/` or one installed
-source directory are discoverable. Lookup uses the filename stem. Directories,
-other extensions, and symbolic links are ignored.
+Every discoverable Markdown document remains below `documents/`. Only `.md`
+and `.markdown` files directly inside that root or one installed source
+directory are discoverable. Lookup uses the filename stem. Other directories,
+extensions, and symbolic links are ignored.
 
 ## Configuration
 

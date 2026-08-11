@@ -295,9 +295,10 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
     assert_eq!(result["sources"][0]["source"], "team");
     assert_eq!(result["sources"][0]["action"], "updated");
     assert_eq!(result["sources"][0]["documents"], 1);
-    assert!(data_root.join("sources/team/source-tool.md").is_file());
-    assert!(data_root.join("sources/team/.mant-source.toml").is_file());
-    assert!(!data_root.join("sources/team/README.md").exists());
+    let installed = data_root.join("documents/sources/team");
+    assert!(installed.join("source-tool.md").is_file());
+    assert!(installed.join(".mant-source.toml").is_file());
+    assert!(!installed.join("README.md").exists());
 
     let mut unchanged = Command::new(executable());
     configure_registered_documents(&mut unchanged, &fixture_root);
@@ -386,7 +387,7 @@ fn document_source_failures_keep_a_complete_json_report() {
     assert_eq!(report["sources"][0]["source"], "broken");
     assert_eq!(report["sources"][0]["action"], "failed");
     assert!(report["sources"][0]["error"].as_str().is_some());
-    assert!(!data_root.join("sources/broken").exists());
+    assert!(!data_root.join("documents/sources/broken").exists());
 
     fs::remove_dir_all(fixture_root).expect("remove failure fixture");
 }

@@ -374,8 +374,9 @@ tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. A Windows
 installation provides Markdown, TUI, structured output, tldr, and MCP support;
 native Unix manual parsing is not part of that build.
 
-`sources.toml`, `documents/`, and `sources/` share the data root. See
-`docs/sources.md` for the source schema and update lifecycle.
+`sources.toml` lives at the data root. Personal documents and installed source
+directories remain below `documents/`; see `docs/sources.md` for the source
+schema and update lifecycle.
 
 ## Environment
 
