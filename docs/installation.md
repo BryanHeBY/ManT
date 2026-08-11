@@ -52,7 +52,7 @@ On Windows, the PowerShell installer uses the x64 ZIP, installs `mant.exe`
 below `%LOCALAPPDATA%\Programs\ManT\bin`, adds that directory to the user
 `PATH`, and registers the manual below `%APPDATA%\ManT\documents`.
 
-Set `MANT_VERSION` to a release such as `0.5.0` to install that version instead
+Set `MANT_VERSION` to a release such as `0.6.0` to install that version instead
 of the latest. `MANT_INSTALL_DIR` and `MANT_DATA_DIR` override the executable
 and document destinations.
 
@@ -60,13 +60,13 @@ The scripts also accept command-line options. Pass them to the receiving shell
 on Unix:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh -s -- --version 0.5.0
+curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh -s -- --version 0.6.0
 ```
 
 Create and invoke a script block when passing PowerShell parameters:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1))) -Version 0.5.0
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1))) -Version 0.6.0
 ```
 
 Use `--help` or `-Help` to list every option. Notable controls include

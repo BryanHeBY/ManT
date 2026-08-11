@@ -126,7 +126,7 @@ printf '==> start isolated ManT reader\n'
 env "${runtime_environment[@]}" xterm \
   -name mant-screenshot \
   -title mant-screenshot \
-  -geometry 135x41 \
+  -geometry 135x47 \
   -fa "$font_pattern" \
   -fs 14 \
   -bg '#11111b' \

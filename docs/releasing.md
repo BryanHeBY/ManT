@@ -6,15 +6,26 @@ releases; publishing remains a deliberate human action.
 ## Before tagging
 
 1. Choose a semantic version and update `[workspace.package].version` in
-   `Cargo.toml`. The six published Rust crates use one lockstep version, so
+   `Cargo.toml`. The six Rust crates use one lockstep version, so
    update every exact internal dependency in their manifests at the same time.
-2. Run the complete local verification boundary:
+2. Regenerate and visually inspect the README screenshot:
+
+   ```sh
+   scripts/update-reader-screenshot.sh
+   ```
+
+   Commit the resulting `docs/assets/screenshots/mant-reader.png`; do not edit
+   or recapture it outside the pinned script environment.
+3. Run the complete local verification boundary:
 
    ```sh
    bash scripts/check.sh
    ```
 
-3. Commit the version change and ensure the main branch CI is green.
+4. Commit every release change, sync that exact commit to `main`, and ensure
+   the main branch CI is green. The recommended installers and agent prompt
+   read their scripts and documentation from `main`, so do not publish a tag
+   that is ahead of the default branch.
 
 ## Configure crates.io publication
 
@@ -30,7 +41,8 @@ mant-ast ─────┴─────────────┘           
 mant-sources ────────────────────────────────────────────> mant
 ```
 
-Each package must configure the same crates.io Trusted Publisher:
+Each previously published package must configure the same crates.io Trusted
+Publisher:
 
 ```text
 repository owner: BryanHeBY
@@ -47,20 +59,46 @@ exchanges that identity for a short-lived credential.
 
 On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ast`,
 `libmandoc-rs`, `mant-sources`, `mant-core`, `mant-ui`, and `mant` in dependency
-order. Exact
-internal dependencies require each predecessor to become visible in the
-registry before its dependent can be packaged, so the script validates each
-package immediately before uploading it and then waits for the index before
-continuing. It skips versions already present, making a partially completed
-job safe to rerun. Installing `mant` installs the reader, structured CLI, and
-MCP server as one executable. `mant-ui` is a reusable library crate and does
-not install a second command.
+order. Exact internal dependencies require each predecessor to become visible
+in the registry before its dependent can be packaged, so the script validates
+each package immediately before uploading it and then waits for the index
+before continuing. It skips versions already present, making a partially
+completed job safe to rerun. Installing `mant` installs the reader, structured
+CLI, and MCP server as one executable. `mant-ui` is a reusable library crate
+and does not install a second command.
 
 Never move a tag after crates.io publication. Registry versions are immutable.
 
+### One-time `mant-sources` bootstrap for `0.6.0`
+
+crates.io cannot configure a Trusted Publisher until a crate has an initial
+release. `mant-sources` therefore needs one manual publication before the
+`v0.6.0` tag workflow can own future releases.
+
+Do this only after the release commit is frozen on `main`, its CI is green,
+and the worktree is clean:
+
+```sh
+git tag v0.6.0
+cargo login
+cargo publish --locked -p mant-sources
+cargo info mant-sources@0.6.0
+cargo logout
+```
+
+Paste a temporary, narrowly scoped crates.io token only at Cargo's prompt and
+revoke it afterward; do not add it to GitHub. Once `0.6.0` is visible,
+configure the `mant-sources` Trusted Publisher with the same repository,
+workflow, and environment values shown above. Do not change or move the local
+tag after the upload. The release script detects that `mant-sources 0.6.0`
+already exists, skips re-uploading it, and continues with the remaining
+dependency graph when that tag is pushed.
+
 ## Tag and draft release
 
-The tag must exactly match the Cargo workspace version:
+The tag must exactly match the Cargo workspace version. Create it from the
+clean `main` release commit unless it already exists locally from the
+`mant-sources` bootstrap:
 
 ```sh
 git tag vMAJOR.MINOR.PATCH
@@ -70,23 +108,28 @@ git push origin vMAJOR.MINOR.PATCH
 The release workflow rebuilds and tests each supported Linux and Windows target
 on its native GitHub runner. After all targets pass, it creates a **draft**
 GitHub Release and independently pauses at the protected `crates-io`
-Environment before publishing crates. Review the tag and draft artifacts, then
-approve that deployment. A manually dispatched release rebuilds a named tag
-and draft but deliberately does not publish crates; rerun the original tag
+Environment before publishing crates. Review the tag and draft artifacts,
+replace the generated notes with a curated user-facing summary, then approve
+that deployment. Wait for all six crates to become visible before making the
+GitHub Release public; the macOS installer depends on the published `mant`
+crate. A manually dispatched release rebuilds a named tag and draft but
+deliberately does not publish crates and can create the draft only when that
+tag has no existing GitHub Release. Rerun the failed job in the original tag
 workflow if crates.io publication needs retrying.
 
 The archive keeps `mant.md` beside the executable so installation remains
-transparent. User-facing release notes should recommend copying it to
-`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md`; a system package
-may ship it as ordinary package documentation and tell users how to copy it
-into their ManT data directory. The document is optional at runtime, but a
-user-scoped copy makes `mant mant` and MCP document discovery work without a
-repository checkout.
+transparent. User-facing release notes should lead with the one-line
+installers, which register this document automatically. Manual archive users
+can copy it to `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md`;
+a system package may ship it as ordinary package documentation and tell users
+how to copy it into their ManT data directory. The document is optional at
+runtime, but a user-scoped copy makes `mant mant` and MCP document discovery
+work without a repository checkout.
 
 Linux x64 uses the baseline target so the executable does not require AVX2.
 Windows x64 is distributed as a ZIP and contains bundled libmandoc alongside
-Markdown support. The bundled `mant.md` can
-be installed at `%APPDATA%\ManT\documents\mant.md`.
+Markdown support. The bundled `mant.md` can be installed at
+`%APPDATA%\ManT\documents\mant.md`.
 macOS supports Cargo installation and local source builds, but public macOS
 archives remain disabled until they can be Developer ID-signed and notarized.
 
