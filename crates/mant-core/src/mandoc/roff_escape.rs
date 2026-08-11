@@ -350,6 +350,7 @@ fn special_character(name: &str) -> &'static str {
         "bu" => "•",
         "ha" => "^",
         "ti" => "~",
+        "rs" => "\\",
         _ => "",
     }
 }
@@ -410,6 +411,14 @@ mod tests {
         let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next\\&.\\|.\\|.");
 
         assert_eq!(visible_text(&source), "git-config (1)next...");
+    }
+
+    #[test]
+    fn preserves_roff_reverse_solidus_characters_in_windows_paths() {
+        assert_eq!(
+            visible_text(r"C:\[rs]path\[rs]file \[rs]\[rs]server\[rs]share"),
+            r"C:\path\file \\server\share",
+        );
     }
 
     #[test]

@@ -79,6 +79,22 @@ pub(super) fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
     }
 }
 
+/// Let an explicit vertical-space block exclusively own the following gap.
+///
+/// Nested transparent wrappers can lower their first semantic child with a
+/// paragraph distance before the outer scope reveals that a blank text node
+/// already represents the same gap. Normalize that boundary once the complete
+/// block sequence is available.
+pub(super) fn normalize_explicit_vertical_spacing(blocks: &mut [Block]) {
+    let mut follows_explicit_space = false;
+    for block in blocks {
+        if follows_explicit_space && let Some(layout) = block_layout_mut(block) {
+            layout.spacing_before_lines = 0;
+        }
+        follows_explicit_space = matches!(block, Block::VerticalSpace { .. });
+    }
+}
+
 /// Return a block's indentation when it has one.
 pub(super) fn block_indent(block: &Block) -> Option<u16> {
     match block {
@@ -231,9 +247,10 @@ mod tests {
     use libmandoc_rs::{Node, NodeFlags, NodeKind};
 
     use super::{
-        display_indent, horizontal_distance_columns, layout, paragraph_distance_lines,
-        vertical_distance_lines,
+        display_indent, horizontal_distance_columns, layout, layout_with_spacing,
+        normalize_explicit_vertical_spacing, paragraph_distance_lines, vertical_distance_lines,
     };
+    use mant_ast::Block;
 
     fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         Node {
@@ -279,6 +296,29 @@ mod tests {
         assert_eq!(display_indent(&node(NodeKind::Root, None, Some("left"))), 0);
         assert_eq!(display_indent(&node(NodeKind::Root, None, Some("8n"))), 8);
         assert_eq!(layout(3).indent_columns, 3);
+    }
+
+    #[test]
+    fn explicit_vertical_space_owns_the_following_gap() {
+        let mut blocks = [
+            Block::VerticalSpace {
+                lines: 1,
+                source: None,
+            },
+            Block::Paragraph {
+                children: Vec::new(),
+                layout: layout_with_spacing(4, 1),
+                source: None,
+            },
+        ];
+
+        normalize_explicit_vertical_spacing(&mut blocks);
+
+        let Block::Paragraph { layout, .. } = &blocks[1] else {
+            panic!("expected paragraph after explicit vertical space");
+        };
+        assert_eq!(layout.indent_columns, 4);
+        assert_eq!(layout.spacing_before_lines, 0);
     }
 
     #[test]

@@ -16,8 +16,8 @@ use super::{
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
-        layout_with_spacing, section_spacing, set_block_spacing, update_paragraph_distance,
-        vertical_distance_lines,
+        layout_with_spacing, normalize_explicit_vertical_spacing, section_spacing,
+        set_block_spacing, update_paragraph_distance, vertical_distance_lines,
     },
     part_children,
     roff_escape::visible_text,
@@ -460,6 +460,7 @@ impl BlockState {
     fn finish(mut self) -> Vec<Block> {
         self.flush_preformatted();
         self.flush_paragraph();
+        normalize_explicit_vertical_spacing(&mut self.output);
         self.output
     }
 }
