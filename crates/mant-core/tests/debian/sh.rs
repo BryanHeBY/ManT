@@ -2,7 +2,7 @@
 
 use mant_ast::{Block, SourceFormat};
 
-use crate::common::{self, block_slice_text};
+use crate::common::{self, block_slice_text, source_path_ends_with};
 use crate::fixtures::debian_manual;
 
 /// Literal mdoc displays retain parser-classified word and delimiter spacing.
@@ -10,13 +10,7 @@ use crate::fixtures::debian_manual;
 fn preserves_literal_display_spacing_and_closing_delimiters() {
     let document = debian_manual("sh");
     assert_eq!(document.source.format, SourceFormat::Mdoc);
-    assert!(
-        document
-            .source
-            .path
-            .as_deref()
-            .is_some_and(|path| path.ends_with("debian/sh.1.gz")),
-    );
+    assert!(source_path_ends_with(document, "debian/sh.1.gz"));
 
     let functions = block_slice_text(&common::section(document, "Functions").blocks);
     assert!(functions.contains("name () command"));

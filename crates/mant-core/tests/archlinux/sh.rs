@@ -2,7 +2,7 @@
 
 use mant_ast::SourceFormat;
 
-use crate::common::{self, collect_sections};
+use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::archlinux_manual;
 
 #[test]
@@ -10,13 +10,7 @@ fn parses_the_posix_shell_manual_from_its_real_section() {
     let document = archlinux_manual("sh");
     assert_eq!(document.source.format, SourceFormat::Man);
     assert_eq!(document.meta.section.as_deref(), Some("1P"));
-    assert!(
-        document
-            .source
-            .path
-            .as_deref()
-            .is_some_and(|path| path.ends_with("archlinux/sh.1p.gz")),
-    );
+    assert!(source_path_ends_with(document, "archlinux/sh.1p.gz"));
 
     let mut sections = Vec::new();
     collect_sections(&document.sections, &mut sections);

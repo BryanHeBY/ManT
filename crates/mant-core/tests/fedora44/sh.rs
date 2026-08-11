@@ -2,7 +2,7 @@
 
 use mant_ast::SourceFormat;
 
-use crate::common::{self, collect_sections};
+use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::fedora44_manual;
 
 #[test]
@@ -10,13 +10,7 @@ fn parses_the_real_bash_backed_shell_manual() {
     let document = fedora44_manual("sh");
     assert_eq!(document.source.format, SourceFormat::Man);
     assert_eq!(document.meta.section.as_deref(), Some("1"));
-    assert!(
-        document
-            .source
-            .path
-            .as_deref()
-            .is_some_and(|path| path.ends_with("fedora44/sh.1.zst")),
-    );
+    assert!(source_path_ends_with(document, "fedora44/sh.1.zst"));
 
     let mut sections = Vec::new();
     collect_sections(&document.sections, &mut sections);

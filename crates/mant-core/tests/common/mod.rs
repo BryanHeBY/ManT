@@ -747,3 +747,11 @@ pub fn assert_section_topology(name: &str, document: &MantDocument, expected_tit
     let ids: HashSet<&str> = sections.iter().map(|section| section.id.as_str()).collect();
     assert_eq!(ids.len(), sections.len(), "fixture {name} section IDs");
 }
+
+pub fn source_path_ends_with(document: &MantDocument, suffix: &str) -> bool {
+    document
+        .source
+        .path
+        .as_deref()
+        .is_some_and(|path| path.replace('\\', "/").ends_with(suffix))
+}

@@ -1,6 +1,8 @@
 //! Tests for the Fedora Linux 44 `clang(1)` zstd fixture.
 
-use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
+use crate::common::{
+    self, count_outline_entries, find_outline_entry, query_for_document, source_path_ends_with,
+};
 use crate::fixtures::fedora44_manual;
 use mant_ast::{OutlineDetail, SourceFormat};
 use mant_core::build_outline_with_detail;
@@ -14,13 +16,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert_eq!(document.sections.len(), 9);
     assert_eq!(document.meta.section.as_deref(), Some("1"));
     assert_eq!(document.meta.os.as_deref(), Some("22"));
-    assert!(
-        document
-            .source
-            .path
-            .as_deref()
-            .is_some_and(|path| path.ends_with("fedora44/clang.1.zst")),
-    );
+    assert!(source_path_ends_with(document, "fedora44/clang.1.zst"));
 
     let query = query_for_document("clang", document);
     let outline = build_outline_with_detail(&query, OutlineDetail::Options)
