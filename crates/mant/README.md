@@ -71,8 +71,9 @@ mant tar --explain=--exclude
 mant tar --search=--acls --context 1
 ```
 
-Output formats include Markdown, text, man-style plain text, and JSON. Search
-results carry reusable outline selectors and exact generated-Markdown
+Output formats include Markdown, text, and JSON. A complete native roff manual
+also supports `--format man` for manual-only plain text without tldr content.
+Search results carry reusable outline selectors and exact generated-Markdown
 coordinates. Machine consumers can discover the authoritative contracts from
 the installed executable:
 
@@ -102,9 +103,9 @@ Reusable Markdown documents can be registered by filename below:
 Only immediate regular Markdown files are discovered; nested directories and
 symlinks are ignored. Git or direct archive sources configured in sibling
 `sources.toml` can be installed with `mant --update-docs` and selected with
-`--source`. An
-unqualified name resolves root documents, sources by priority/name, then a
-native manual. See the repository-level `docs/sources.md` reference.
+`--source`. An unqualified name resolves root documents, sources by descending
+priority and ascending source name, then a native manual. See the complete
+[document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 
 When compatible local tldr data exists, ManT prepends it as reserved outline
 node `0`. Reads prefer installed-client caches and then ManT's private cache;
@@ -127,5 +128,5 @@ ManT repository.
 
 ## License
 
-Apache-2.0. Unix builds also include the upstream mandoc licenses distributed
-by `libmandoc-rs`.
+Apache-2.0. Native builds also contain the separately attributed upstream
+mandoc sources distributed by `libmandoc-rs`.

@@ -6,7 +6,7 @@ manual available through `mant mant`, structured queries, and MCP discovery.
 
 ## Recommended installers
 
-### Unix (Linux or macOS)
+### Unix (Linux with glibc, or macOS)
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh
@@ -25,7 +25,7 @@ release's `SHA256SUMS` manifest before installation.
 
 ## Choose an installation method
 
-| Method | Linux x64/arm64 | macOS | Windows x64 | Registers `mant.md` |
+| Method | Linux glibc x64/arm64 | macOS | Windows x64 | Registers `mant.md` |
 | --- | --- | --- | --- | --- |
 | One-line installer | Prebuilt archive | Cargo source build | Prebuilt archive | Yes |
 | `cargo-binstall` | Prebuilt archive | Cargo fallback | Prebuilt archive | No |
@@ -33,8 +33,10 @@ release's `SHA256SUMS` manifest before installation.
 | Manual archive | Prebuilt archive | Not published | Prebuilt archive | Optional |
 | Repository checkout | Source build | Source build | Source build | No |
 
-Linux, macOS, and Windows parse Markdown and native man/mdoc documents and
-provide the same TUI, structured output, tldr, and MCP interfaces.
+Linux with glibc, macOS, and Windows parse Markdown and native man/mdoc
+documents and provide the same TUI, structured output, tldr, and MCP
+interfaces. Linux systems using musl, including Alpine Linux, are not currently
+supported; the installer rejects them before downloading an archive.
 
 ## Installer behavior and options
 
@@ -46,7 +48,8 @@ executable to `~/.local/bin`, and installs the manual below
 Public macOS archives remain disabled until they can be Developer ID-signed
 and notarized. The Unix installer therefore builds the selected release from
 crates.io on macOS, installs it to `~/.local/bin`, and registers its manual
-under `~/Library/Application Support/ManT/documents`.
+under `~/Library/Application Support/ManT/documents`. This path requires Rust
+1.88 or newer, Clang, and zlib to be available before running the installer.
 
 On Windows, the PowerShell installer uses the x64 ZIP, installs `mant.exe`
 below `%LOCALAPPDATA%\Programs\ManT\bin`, adds that directory to the user
@@ -54,7 +57,8 @@ below `%LOCALAPPDATA%\Programs\ManT\bin`, adds that directory to the user
 
 Set `MANT_VERSION` to a release such as `0.6.0` to install that version instead
 of the latest. `MANT_INSTALL_DIR` and `MANT_DATA_DIR` override the executable
-and document destinations.
+and document destinations. `MANT_DATA_DIR` is the directory that directly
+receives `mant.md`, not the parent ManT data root.
 
 The scripts also accept command-line options. Pass them to the receiving shell
 on Unix:
@@ -100,9 +104,9 @@ Uninstall on Windows:
 ```
 
 The receipt lives below `${XDG_STATE_HOME:-$HOME/.local/state}/mant` on Linux,
-Application Support on macOS, and `%LOCALAPPDATA%\ManT` on Windows. An older
-one-line installation without a receipt can be adopted by running the current
-installer once before uninstalling it.
+`~/Library/Application Support/ManT` on macOS, and `%LOCALAPPDATA%\ManT` on
+Windows. An older one-line installation without a receipt can be adopted by
+running the current installer once before uninstalling it.
 
 ## cargo-binstall
 
@@ -127,14 +131,14 @@ cargo install mant --locked
 mant git
 ```
 
-This requires Rust 1.88+. Linux additionally requires a C compiler and zlib
+This requires Rust 1.88+. Linux builds require glibc, a C compiler, and zlib
 development headers; macOS requires Clang and zlib. Windows requires the MSVC
 C toolchain but no system zlib. Neither a `man` nor a `mandoc` executable is
 required at runtime.
 
 ## Manual release archives
 
-### Linux
+### Linux with glibc
 
 Download the archive for your architecture from the
 [latest release](https://github.com/BryanHeBY/ManT/releases/latest), then
@@ -167,6 +171,9 @@ New-Item $documents -ItemType Directory -Force | Out-Null
 Copy-Item .\mant.md (Join-Path $documents "mant.md")
 mant mant
 ```
+
+The ZIP also contains the project README, the Apache-2.0 license, and the
+bundled mandoc license under `LICENSES\mandoc.txt`.
 
 ## Build from a repository checkout
 

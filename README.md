@@ -7,8 +7,9 @@
 
 ManT turns dense local manuals and structurally compatible Markdown into
 navigable documents for people and precise, reusable knowledge for agents.
-Linux, macOS, and Windows use the same bundled parser and normalized model;
-Windows can index user-collected roff pages without requiring a Unix runtime.
+Linux with glibc, macOS, and Windows use the same bundled parser and normalized
+model; Windows can index user-collected roff pages without requiring a Unix
+runtime.
 One native `mant` executable provides the full-screen reader, deterministic
 Markdown/text/JSON output, generated schemas, and a read-only MCP server.
 
@@ -18,7 +19,7 @@ Markdown/text/JSON output, generated schemas, and a read-only MCP server.
 
 Install or update the latest release.
 
-**Unix (Linux or macOS)**
+**Unix (Linux with glibc, or macOS)**
 
 ```sh
 curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh
@@ -70,7 +71,7 @@ independent of terminal detection.
   searching an entire page.
 - **Search results are reusable.** Matches include stable outline nodes and
   generated-Markdown line and column coordinates.
-- **Local-first and reproducible.** Builds bundle their primary libmandoc
+- **Local-first and self-contained.** Builds bundle their primary libmandoc
   parser; ordinary use needs no network service or system `man`/`mandoc`
   executable on any supported platform.
 - **Markdown uses the same model.** Project documentation gains the same
@@ -121,7 +122,8 @@ mant tar --search=--acls --context 1
 mant gcc --search 'worktree|branch' --regex --case smart
 ```
 
-Full output supports Markdown, text, man-style plain text, and JSON:
+Full output supports Markdown, text, and JSON. Native roff manuals additionally
+support `--format man`, which emits manual-only plain text without tldr content:
 
 ```sh
 mant git --format markdown
@@ -145,8 +147,8 @@ rule, and MCP tool.
 
 ## Local manual sources and tldr
 
-ManT indexes raw, gzip, and zstd manual sources directly on Linux, macOS, and
-Windows.
+ManT indexes raw, gzip, and zstd manual sources directly on Linux with glibc,
+macOS, and Windows.
 It performs bounded reads and decompression before passing plain roff bytes to
 bundled libmandoc. Rust resolves redirect-only `.so` alias chains against the
 indexed manual root with canonical-path, cycle, depth, and total-byte checks;
@@ -195,8 +197,6 @@ Document sources are top-level tables in `sources.toml` beside `documents/`:
 repo = "https://github.com/example/cli-docs.git"
 branch = "main"
 path = "manuals"
-include = ["public"]
-exclude = ["public/drafts"]
 priority = 10
 
 [release]
@@ -205,8 +205,8 @@ url = "https://example.com/cli-docs/latest/docs.zip"
 
 Run `mant --update-docs` to install selected Markdown from a one-commit Git
 checkout or a direct ZIP/tar archive URL. Root documents always win; sources
-then fall back by higher
-priority and source name. Use `mant tool --source team` to select one source
+then fall back by descending priority and source name in ascending bytewise
+order. Use `mant tool --source team` to select one source
 explicitly. See [document sources](docs/sources.md) for paths, exact selector
 rules, metadata, update safety, and complete examples.
 
@@ -282,8 +282,8 @@ versioned JSON and MCP boundaries.
 
 ## Documentation
 
-- [mant self manual](docs/manuals/mant.md)
 - [Installation methods and platform requirements](docs/installation.md)
+- [mant self manual](docs/manuals/mant.md)
 - [Document source configuration and updates](docs/sources.md)
 - [JSON protocol and Schema reference](docs/protocol.md)
 - [Native architecture](docs/architecture/native-core.md)

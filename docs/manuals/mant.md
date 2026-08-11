@@ -9,7 +9,7 @@
 
 - Inspect a manual outline:
 
-`mant {{name}} --outline {{sections}}`
+`mant {{name}} --outline [=sections]`
 
 - Retrieve one section from that outline:
 
@@ -53,9 +53,10 @@ mant --mcp
 ## Description
 
 `mant` is ManT's native interactive reader, structured command-line interface,
-and MCP server. Linux, macOS, and Windows parse local man and mdoc sources
-through bundled libmandoc. Every platform exposes hierarchy, semantic entries,
-references, and visible text through one normalized document model.
+and MCP server. Linux with glibc, macOS, and Windows parse local man and mdoc
+sources through bundled libmandoc. Every supported platform exposes hierarchy,
+semantic entries, references, and visible text through one normalized document
+model.
 
 Local Markdown enters the same model, so terminal navigation, outlines,
 excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
@@ -67,7 +68,8 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 
 Input is resolved before parsing. An ordinary value first checks the user's
 flat `documents` directory, then configured installed sources by descending
-priority and source name, and finally the native manual index. Linux uses
+priority and source name in ascending bytewise order, and finally the native
+manual index. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as its
 data root. Values ending in `.md` or `.markdown`, other path-like values, and
@@ -77,9 +79,10 @@ The filename supplies a registered document name: `mant.md` is queried as
 `mant mant`. Only regular `.md` and `.markdown` files immediately inside a
 registered directory are visible. Nested directories and symbolic links are
 ignored. Root documents always win; source priority and name resolve remaining
-duplicates; `.md` wins over `.markdown` within one directory. `--source NAME`
-selects exactly one configured Git or archive source. `--manual` or `--section` selects a
-native manual and cannot be combined with `--source`.
+duplicates in the order above; `.md` wins over `.markdown` within one
+directory. `--source NAME` selects exactly one configured Git or archive
+source. `--manual` or `--section` selects a native manual and cannot be combined
+with `--source`.
 
 Windows document packages should retain executable suffixes in canonical
 filenames, such as `cargo.exe.md`. An extensionless query such as `mant cargo`
@@ -92,12 +95,12 @@ Other platforms never elide these suffixes.
 
 ### Manual Pages
 
-On Linux, macOS, and Windows, manual page names are located through ManT's
-native manual index. ManT reads raw, gzip, and zstd roff sources and resolves redirect-only
-`.so` alias chains within the indexed manual root. All file and decompression
-I/O for manual sources remains in ManT; bundled libmandoc receives only the
-final plain roff bytes. Neither a system `man` nor a system `mandoc` executable
-is required for ordinary use.
+On Linux with glibc, macOS, and Windows, manual page names are located through
+ManT's native manual index. ManT reads raw, gzip, and zstd roff sources and
+resolves redirect-only `.so` alias chains within the indexed manual root. All
+file and decompression I/O for manual sources remains in ManT; bundled
+libmandoc receives only the final plain roff bytes. Neither a system `man` nor
+a system `mandoc` executable is required for ordinary use.
 
 Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
 and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
@@ -123,6 +126,15 @@ For example, expose `widget.1` as document name `widget`:
 mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
 MANT_MANPATH="$PWD/project-man" mant widget --section 1
+```
+
+The equivalent PowerShell setup is:
+
+```powershell
+New-Item .\project-man\man1 -ItemType Directory -Force | Out-Null
+Copy-Item .\widget.1 .\project-man\man1\widget.1
+$env:MANT_MANPATH = (Resolve-Path .\project-man).Path
+mant widget --section 1
 ```
 
 `MANT_MANPATH` is a complete ManT-specific override. `MANPATH` also replaces
@@ -360,9 +372,13 @@ errors, and Rust panics.
 
 ## Document Selection
 
-- `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and `sections` is the compact form. The CLI accepts historical `options` as an alias for `entries`.
-- `--node NODE`: Return a node by path or ID; repeat the option to select several nodes.
-- `--explain ENTRY`: Return exactly one semantic option, command, or environment entry.
+- `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and
+  `sections` is the compact form. The CLI accepts historical `options` as an
+  alias for `entries`.
+- `--node NODE`: Return a node by path or ID; repeat the option to select
+  several nodes.
+- `--explain ENTRY`: Return exactly one semantic option, command, or
+  environment entry.
 
 Path `0` and ID alias `tldr` are reserved for either an external tldr page or a
 Markdown document's explicitly marked tldr preface. Remaining headings use
@@ -409,10 +425,12 @@ mant tar --explain=--exclude
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
 
 Clean Markdown output omits internal HTML anchors by default. The `man` format
-is plain manual content without an external tldr preface. Explicit output for
-full documents and excerpts defaults to Markdown; outlines and command-line
-search default to text. JSON must be selected explicitly, and `--compact` is
-valid only with JSON query output.
+applies to a complete native roff manual and emits plain manual content without
+an external tldr preface; it rejects a complete Markdown document. Use `text`
+for plain projections. Explicit output for full documents and excerpts defaults
+to Markdown; outlines and command-line search default to text. JSON must be
+selected explicitly for document queries. `--compact` removes indentation from
+JSON queries, schemas, protocol descriptions, and update reports.
 
 ## Integration
 
@@ -447,8 +465,9 @@ Future revisions may advance individual contracts only when their wire shapes
 change, so consumers must compare every exact schema identifier. Generated
 schemas use JSON Schema Draft 2020-12 and remain the authoritative field-level
 definition.
-The repository's `docs/protocol.md` supplies the complete field reference,
-examples, compatibility policy, coordinate rules, and MCP tool contracts.
+The online [protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/protocol.md)
+supplies the complete field reference, examples, compatibility policy,
+coordinate rules, and MCP tool contracts.
 
 Standard output is reserved for the requested result. Concise diagnostics use
 standard error. `--request-json` accepts the same input and projection model
@@ -464,6 +483,10 @@ local files only; it has no update tool and no cross-call snapshot guarantee.
 
 - `--update-docs`: Update Git or direct archive sources declared in `sources.toml` and print a complete JSON report.
 - `--update-tldr`: Update through an installed tldr client when available, otherwise through ManT's private cache.
+
+Git-backed document sources require a `git` executable on `PATH`; direct
+archives use built-in download and extraction support. The private tldr cache
+fallback also requires Git when no installed client performs the update.
 
 Normal queries prefer compatible installed-client data and always retain
 ManT's private cache as the final fallback. Manual content remains usable when
@@ -484,8 +507,9 @@ tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. The native
 manual fallback root is `%USERPROFILE%\.local\share\man`.
 
 `sources.toml` lives at the data root. Personal documents and installed source
-directories remain below `documents/`; see `docs/sources.md` for the source
-schema and update lifecycle.
+directories remain below `documents/`; see the online
+[document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md)
+for the schema and update lifecycle.
 
 ## Environment
 
@@ -504,9 +528,9 @@ schema and update lifecycle.
   and translated tldr pages before English fallback.
 - `PATHEXT`: On Windows, order executable suffix fallback for extensionless
   registered-document and native-manual queries.
-- `HOME`: Supply conventional document, manual, and cache locations when their
-  XDG overrides are absent.
-- `APPDATA`: Select the per-user registered Markdown root on Windows.
+- `HOME`: On Unix, supply conventional document, manual, and cache locations
+  when their XDG overrides are absent.
+- `APPDATA`: Select the per-user ManT data root on Windows.
 - `LOCALAPPDATA`: Select ManT and installed-client cache roots on Windows.
 - `USERPROFILE`: Supply the default Windows manual root and compatible
   installed-client tldr cache locations.
@@ -524,5 +548,7 @@ an operational failure.
 
 ## See Also
 
-`docs/protocol.md` documents the JSON and MCP contracts used by external
-integrations.
+The online [protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/protocol.md)
+documents the JSON and MCP contracts used by external integrations. The
+[document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md)
+defines `sources.toml` and its update lifecycle.

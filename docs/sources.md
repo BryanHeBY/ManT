@@ -4,6 +4,8 @@ ManT can update small collections of Markdown documentation from an ordinary
 Git repository or a directly downloadable archive. This is deliberately a
 narrow document installer, not a general package manager: a source has either
 one Git branch or one archive URL, and only Markdown files are installed.
+Upstream inputs may use nested directories; every installed source is flattened
+into one private directory for lookup.
 
 ## Layout
 
@@ -94,6 +96,8 @@ extracted archive. Installation is flat. If two selected files
 would have the same public filename stem (compared case-insensitively for
 cross-platform safety), the source update fails and the
 previous installation remains in place.
+Selecting no Markdown files is also an error, which protects an existing source
+from being replaced after a mistyped `path`, `include`, or `exclude` value.
 
 ## Updating
 
@@ -113,14 +117,17 @@ For a Git source, ManT reads the branch head with `git ls-remote`. It skips an
 unchanged source or performs a depth-one, single-branch clone without tags,
 local hardlinks, or submodule initialization. Git transport is restricted to
 HTTPS, SSH, and local paths; remote-helper syntax and other protocols are
-rejected.
+rejected. The `git` executable must be installed and available on `PATH` for
+Git-backed sources.
 
 For an archive source, ManT sends saved `ETag` and `Last-Modified` validators
 when available. A `304 Not Modified` response avoids downloading and
 extracting the artifact. Otherwise ManT streams the response to a bounded
 temporary file and records its SHA-256 digest as the revision; the digest also
 detects unchanged content when a server provides no validators. Redirects stay
-on HTTPS and are limited to five hops.
+on HTTPS and are limited to five hops. Archive downloads and ZIP, tar,
+tar+gzip, and tar+zstd extraction are built in and do not require Git or
+external archive commands.
 
 Both paths then select only regular `.md` and `.markdown` files, flatten them,
 check public-name collisions, and write `.mant-source.toml`. The normalized
