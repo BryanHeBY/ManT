@@ -342,7 +342,10 @@ impl DocumentBuilder {
             )
             .surface(LineSurface::Tldr),
         );
-        for description in &tldr.description {
+        for (index, description) in tldr.description.iter().enumerate() {
+            if index > 0 {
+                self.push(LogicalLine::empty().surface(LineSurface::Tldr));
+            }
             self.push(
                 LogicalLine::plain(0, description.clone(), Style::default().fg(theme::TEXT))
                     .surface(LineSurface::Tldr),
@@ -429,7 +432,7 @@ impl DocumentBuilder {
             continuation_indent: 2,
             spans,
             surface: LineSurface::Tldr,
-            wrap_mode: WrapMode::Word,
+            wrap_mode: WrapMode::Character,
             table_cells: None,
             links: Vec::new(),
         });
@@ -1288,6 +1291,40 @@ mod tests {
                 .iter()
                 .any(|span| span.content == "file" && span.style.fg == Some(theme::YELLOW))
         );
+    }
+
+    #[test]
+    fn tldr_commands_use_terminal_soft_wrapping_instead_of_prose_reflow() {
+        let mut bundle = bundle();
+        bundle.document = None;
+        bundle.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["Quick reference".to_owned()],
+            more_information: None,
+            examples: vec![TldrExample {
+                description: "Run a long command".to_owned(),
+                command: "abc defghij".to_owned(),
+                command_parts: vec![TldrCommandPart::Text {
+                    value: "abc defghij".to_owned(),
+                }],
+            }],
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "demo.md".to_owned(),
+            origin: TldrOrigin::Embedded,
+        });
+
+        let rendered = DocumentView::new(&bundle).render(12);
+        let rows = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert!(rows.iter().any(|row| row.contains("abc de")));
+        assert!(rows.iter().any(|row| row.contains("fghij")));
+        assert_eq!(rendered.search("abc defghij").len(), 1);
     }
 
     #[test]

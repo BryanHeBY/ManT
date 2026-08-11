@@ -85,17 +85,20 @@ pub fn parse_tldr_page(
     let mut description = Vec::new();
     let mut more_information = None;
     let mut examples = Vec::new();
-    let mut pending_description = None;
+    let mut pending_page_description = None;
+    let mut pending_example_description = None;
 
     for line in normalized.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
+            flush_description_paragraph(&mut pending_page_description, &mut description);
             continue;
         }
 
         if title.is_empty()
             && let Some(heading) = trimmed.strip_prefix("# ")
         {
+            flush_description_paragraph(&mut pending_page_description, &mut description);
             title = flatten_markdown(heading);
             continue;
         }
@@ -103,37 +106,50 @@ pub fn parse_tldr_page(
         if let Some(quote) = trimmed.strip_prefix('>') {
             let quote = flatten_markdown(quote);
             if let Some(value) = strip_prefix_ascii_case(&quote, "More information:") {
+                flush_description_paragraph(&mut pending_page_description, &mut description);
                 let value = value.trim();
                 if !value.is_empty() {
                     more_information = Some(value.to_owned());
                 }
-            } else if !quote.is_empty() {
-                description.push(quote);
+            } else if quote.is_empty() {
+                flush_description_paragraph(&mut pending_page_description, &mut description);
+            } else {
+                append_soft_line(&mut pending_page_description, quote);
             }
             continue;
         }
 
+        flush_description_paragraph(&mut pending_page_description, &mut description);
+
         if let Some(item) = trimmed.strip_prefix("- ") {
-            flush_pending(&mut pending_description, &mut examples);
+            flush_pending(&mut pending_example_description, &mut examples);
             if let Some((example_description, command)) = extract_trailing_code(item) {
                 examples.push(make_example(example_description, command));
             } else {
-                let value = flatten_markdown(item.trim_end_matches(':'));
+                let value = flatten_markdown(item);
                 if !value.is_empty() {
-                    pending_description = Some(value);
+                    pending_example_description = Some(value);
                 }
             }
             continue;
         }
 
         if let Some(command) = standalone_code(trimmed)
-            && let Some(example_description) = pending_description.take()
+            && let Some(example_description) = pending_example_description.take()
         {
             examples.push(make_example(example_description, command.to_owned()));
+            continue;
+        }
+
+        if pending_example_description.is_some()
+            && line.chars().next().is_some_and(char::is_whitespace)
+        {
+            append_soft_line(&mut pending_example_description, flatten_markdown(trimmed));
         }
     }
 
-    flush_pending(&mut pending_description, &mut examples);
+    flush_description_paragraph(&mut pending_page_description, &mut description);
+    flush_pending(&mut pending_example_description, &mut examples);
     if title.is_empty() {
         return Err(TldrParseError::MissingCommandHeading);
     }
@@ -182,7 +198,31 @@ fn flush_pending(pending: &mut Option<String>, examples: &mut Vec<TldrExample>) 
     }
 }
 
-fn make_example(description: String, command: String) -> TldrExample {
+fn append_soft_line(paragraph: &mut Option<String>, line: String) {
+    if line.is_empty() {
+        return;
+    }
+    if let Some(paragraph) = paragraph {
+        paragraph.push(' ');
+        paragraph.push_str(&line);
+    } else {
+        *paragraph = Some(line);
+    }
+}
+
+fn flush_description_paragraph(pending: &mut Option<String>, paragraphs: &mut Vec<String>) {
+    if let Some(paragraph) = pending.take() {
+        paragraphs.push(paragraph);
+    }
+}
+
+fn make_example(mut description: String, command: String) -> TldrExample {
+    let description_len = description
+        .trim_end()
+        .trim_end_matches(':')
+        .trim_end()
+        .len();
+    description.truncate(description_len);
     TldrExample {
         description,
         command_parts: parse_tldr_command(&command),
@@ -351,6 +391,32 @@ mod tests {
         assert_eq!(page.description, ["Use demo with docs."]);
         assert_eq!(page.examples[0].description, "Run it");
         assert_eq!(page.examples[0].command, "demo _x_");
+    }
+
+    #[test]
+    fn commonmark_soft_breaks_do_not_become_rendered_line_breaks() {
+        let page = parse_tldr_page(
+            "# demo\n\n> A description wrapped in the source\n> remains one rendered paragraph.\n>\n> A distinct paragraph remains distinct.\n> More information: <https://example.test/demo>.\n\n- Run a command whose explanation is\n  wrapped only for source readability:\n\n  `demo --long-option value`\n",
+            location(),
+        )
+        .expect("valid source-wrapped tldr page");
+
+        assert_eq!(
+            page.description,
+            [
+                "A description wrapped in the source remains one rendered paragraph.",
+                "A distinct paragraph remains distinct.",
+            ]
+        );
+        assert_eq!(
+            page.more_information.as_deref(),
+            Some("https://example.test/demo.")
+        );
+        assert_eq!(
+            page.examples[0].description,
+            "Run a command whose explanation is wrapped only for source readability"
+        );
+        assert_eq!(page.examples[0].command, "demo --long-option value");
     }
 
     #[test]

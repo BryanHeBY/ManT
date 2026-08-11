@@ -278,6 +278,9 @@ non-empty construct. The closing line must contain only
 `<!-- mant:tldr:end -->`. The embedded page uses a command H1, quoted
 description lines, optional `More information:`, example descriptions, code
 commands, and standard `{{placeholder}}` or `{{[-s|--long]}}` placeholders.
+Adjacent source lines in one quoted or example-description paragraph are joined
+according to CommonMark; source formatting therefore does not force terminal
+line breaks.
 It receives path `0` and alias `tldr`, uses the same renderer and search model
 as cached tldr-pages data, and records document-owned provenance without
 claiming tldr-pages licence attribution. Ordinary headings named `TLDR` have

@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct TldrDocument {
     pub title: String,
+    /// `CommonMark` paragraphs from the page's leading block quote.
+    ///
+    /// Source-only soft line breaks are normalized to spaces inside each
+    /// element; distinct paragraphs remain distinct elements.
     pub description: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub more_information: Option<String>,
@@ -43,6 +47,7 @@ impl TldrOrigin {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrExample {
+    /// One normalized prose paragraph describing the command example.
     pub description: String,
     pub command: String,
     pub command_parts: Vec<TldrCommandPart>,
