@@ -74,6 +74,7 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
     let windows = include_str!("../../../scripts/package-release.ps1");
     assert!(windows.contains(r#"$ArchiveRoot = "mant-$Version-$Target""#));
     assert!(windows.contains(r#"Copy-Item $Binary (Join-Path $Package "mant.exe")"#));
+    assert!(windows.contains(r#"(Join-Path $Package "LICENSES/mandoc.txt")"#));
 }
 
 #[test]
@@ -98,6 +99,7 @@ fn one_line_installers_follow_the_published_release_contract() {
     assert!(unix.contains("RECEIPT_SCHEMA=mant.install/v1"));
     assert!(unix.contains(r#"[ "$uninstall" = true ]"#));
     assert!(unix.contains("ManT %s is already up to date."));
+    assert!(unix.contains("public Linux archives require glibc"));
 
     assert!(windows.contains("/releases/latest"));
     assert!(windows.contains(r#"$Archive = "mant-$Version-$Target.zip""#));

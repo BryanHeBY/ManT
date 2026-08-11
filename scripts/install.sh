@@ -16,6 +16,23 @@ require() {
   command -v "$1" >/dev/null 2>&1 || fail "required command '$1' was not found"
 }
 
+require_glibc() {
+  if command -v getconf >/dev/null 2>&1 \
+    && getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+    return
+  fi
+
+  libc_version=
+  if command -v ldd >/dev/null 2>&1; then
+    libc_version=$(ldd --version 2>&1 || :)
+  fi
+  case $libc_version in
+    *GLIBC*|*"GNU libc"*|*"GNU C Library"*) return ;;
+  esac
+
+  fail "public Linux archives require glibc; musl and other libc implementations are not supported"
+}
+
 usage() {
   cat <<'EOF'
 Install, update, or uninstall ManT.
@@ -206,6 +223,8 @@ if [ "$uninstall" = true ]; then
   uninstall_owned_files
   exit 0
 fi
+
+[ "$host" != linux ] || require_glibc
 
 require curl
 require install

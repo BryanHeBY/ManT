@@ -49,10 +49,14 @@ $Archive = Join-Path $Dist "$ArchiveRoot.zip"
 Remove-Item $Staging -Recurse -Force -ErrorAction SilentlyContinue
 New-Item $Dist -ItemType Directory -Force | Out-Null
 New-Item $Package -ItemType Directory -Force | Out-Null
+New-Item (Join-Path $Package "LICENSES") -ItemType Directory -Force | Out-Null
 Copy-Item $Binary (Join-Path $Package "mant.exe")
 Copy-Item (Join-Path $Root "docs/manuals/mant.md") (Join-Path $Package "mant.md")
 Copy-Item (Join-Path $Root "README.md") (Join-Path $Package "README.md")
 Copy-Item (Join-Path $Root "LICENSE") (Join-Path $Package "LICENSE")
+Copy-Item `
+    (Join-Path $Root "crates/libmandoc-rs/vendor/mandoc-1.14.6/LICENSE") `
+    (Join-Path $Package "LICENSES/mandoc.txt")
 
 Remove-Item $Archive -Force -ErrorAction SilentlyContinue
 Compress-Archive -Path $Package -DestinationPath $Archive -CompressionLevel Optimal

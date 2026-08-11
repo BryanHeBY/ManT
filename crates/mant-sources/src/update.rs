@@ -293,6 +293,12 @@ pub(in crate::update) fn install_selected_documents(
                 .any(|selector| selector_matches(relative, selector))
     });
     candidates.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+    if candidates.is_empty() {
+        return Err(format!(
+            "configured path '{}' selected no Markdown documents; adjust path, include, or exclude",
+            source.path
+        ));
+    }
 
     let mut names = BTreeSet::new();
     for (relative, path) in &candidates {
@@ -556,6 +562,22 @@ mod tests {
                 .expect_err("reject duplicate public name")
                 .contains("document name 'tool'")
         );
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn empty_selection_fails_before_replacing_an_installed_source() {
+        let root = temp("empty-selection");
+        let checkout = root.join("checkout");
+        let staging = root.join("staging");
+        fs::create_dir_all(&checkout).expect("create checkout");
+        fs::create_dir_all(&staging).expect("create staging");
+        fs::write(checkout.join("README.txt"), "not Markdown").expect("write ignored file");
+
+        let error = install_selected_documents(&checkout, &staging, &source("."))
+            .expect_err("an empty document package must not activate");
+        assert!(error.contains("selected no Markdown documents"), "{error}");
+        assert!(staging.read_dir().expect("read staging").next().is_none());
         fs::remove_dir_all(root).expect("remove fixture");
     }
 
