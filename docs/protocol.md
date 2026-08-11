@@ -171,7 +171,7 @@ Every request has three required fields:
 ### Input Variants
 
 An unqualified name first checks the singular per-user `documents` directory,
-then installed repositories configured by `sources.toml` in descending
+then installed sources configured by `sources.toml` in descending
 `priority` and source-name order, then the native manual index. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as the
@@ -188,7 +188,7 @@ ignored:
 ```
 
 The document input also accepts an optional `source` string. It selects exactly
-one configured repository and bypasses root Markdown and manuals:
+one configured source and bypasses root Markdown and manuals:
 
 ```json
 {
@@ -741,8 +741,8 @@ MCP excerpts, while tool failures use structured MCP error results and fatal
 transport failures use a non-zero process status. Diagnose source lowering
 through ordinary CLI JSON output, whose document contains structured parser
 findings. There is no HTTP listener and there are no mutation tools. Each call
-reads the local files visible at that time; MCP does not invoke Git, update
-repositories, or promise one fixed snapshot across calls.
+reads the local files visible at that time; MCP does not invoke Git or HTTP,
+update sources, or promise one fixed snapshot across calls.
 
 MCP protocol versions are negotiated by the standard `initialize` exchange.
 With the current runtime, a client requesting `2025-11-25` receives:
@@ -781,7 +781,7 @@ read-only tools:
 Every tool is annotated read-only, non-destructive, and
 closed-world. Document tools resolve one name through root Markdown,
 configured installed sources, and then the native manual index. They do not
-accept arbitrary file paths. `source` selects one repository; `section`
+accept arbitrary file paths. `source` selects one configured source; `section`
 selects a manual; the two selectors cannot be combined.
 
 Discover both registered Markdown and section-qualified manual pages with:

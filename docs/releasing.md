@@ -6,7 +6,7 @@ releases; publishing remains a deliberate human action.
 ## Before tagging
 
 1. Choose a semantic version and update `[workspace.package].version` in
-   `Cargo.toml`. The five published Rust crates use one lockstep version, so
+   `Cargo.toml`. The six published Rust crates use one lockstep version, so
    update every exact internal dependency in their manifests at the same time.
 2. Run the complete local verification boundary:
 
@@ -20,12 +20,14 @@ releases; publishing remains a deliberate human action.
 
 The crates.io packages form one dependency graph. `mant-ui` first entered
 crates.io as the `0.4.1` bootstrap release against the existing `0.4.0`
-contracts. Starting with `0.5.0`, all five packages use one lockstep version:
+contracts. Starting with `0.5.0`, the original five packages use one lockstep
+version; `mant-sources` joins the same graph and version policy:
 
 ```text
-libmandoc-rs ─┐
-              ├─> mant-core ─┬─> mant-ui ─> mant
-mant-ast ─────┘               └────────────> mant
+mant-sources ───────────────┐
+libmandoc-rs ─┐             ├─> mant-core ─┬─> mant-ui ─> mant
+mant-ast ─────┴─────────────┘               └────────────> mant
+mant-sources ────────────────────────────────────────────> mant
 ```
 
 Each package must configure the same crates.io Trusted Publisher:
@@ -44,7 +46,8 @@ only `contents: read` and `id-token: write`; the official crates.io action
 exchanges that identity for a short-lived credential.
 
 On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ast`,
-`libmandoc-rs`, `mant-core`, `mant-ui`, and `mant` in dependency order. Exact
+`libmandoc-rs`, `mant-sources`, `mant-core`, `mant-ui`, and `mant` in dependency
+order. Exact
 internal dependencies require each predecessor to become visible in the
 registry before its dependent can be packaged, so the script validates each
 package immediately before uploading it and then waits for the index before

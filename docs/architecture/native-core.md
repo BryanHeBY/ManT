@@ -11,12 +11,13 @@ renderer-neutral model, and Rust is the sole owner of document interpretation.
 
 ## Decision
 
-ManT uses one Rust implementation with five layers:
+ManT uses one Rust implementation with six layers:
 
 ```text
 mant-ast          versioned document and query contracts
 libmandoc-rs      owned libmandoc parse tree, private C shim, and build logic
-mant-core         source loading, parsing, query, and output renderers
+mant-sources      local Markdown registry; optional Git and archive updates
+mant-core         document loading, parsing, query, and output renderers
 mant-ui           Ratatui presentation over an in-memory query bundle
 mant              mode selection, CLI, MCP, and versioned stdio boundary
 ```
@@ -97,7 +98,7 @@ mant <name> --explain <alias-or-id> -> one option, command, or environment entry
 mant <name> --search <pattern>    -> matches with node and Markdown locations
 mant <name> --manual              -> bypass registered Markdown by the same name
 mant <name> --source <source>     -> select one configured Markdown source
-mant --update-docs                -> repository update report JSON
+mant --update-docs                -> Git/archive source update report JSON
 mant --update-tldr                 -> update result JSON
 mant --protocol-version            -> protocol description JSON
 mant --schema <contract>           -> generated JSON Schema
@@ -119,7 +120,8 @@ semantic explanation, and search. Document tools accept a name plus an
 optional configured source or manual section. That narrower boundary prevents
 agents from opening arbitrary host paths: Markdown must first be placed in the
 flat root directory or installed by the native CLI. MCP only reads current
-local state and never invokes Git. Ordinary names continue to fall back to the
+local state through `mant-sources` without its update feature and never invokes
+Git or HTTP. Ordinary names continue to fall back to the
 native manual index. Input and output schemas derive directly from Rust types.
 MCP drops lowering diagnostics and keeps standard error silent; the ordinary
 CLI JSON surface remains the diagnostic inspection path. MCP is an alternate process
@@ -256,7 +258,8 @@ Registered documents and caches have distinct lifecycles. Each platform has
 one user data root containing `sources.toml` and a `documents/` tree. Personal
 documents are flat at that tree's root; installed source directories and their
 revision metadata live below `documents/sources/`. The native CLI alone updates
-repositories with a shallow clone and directory replacement. The private tldr
+Git repositories or direct archives with transactional directory replacement.
+The private tldr
 checkout remains below the platform cache root. Installed-client tldr roots
 precede the private checkout, which remains the final read fallback even when
 a client executable is present.
@@ -316,7 +319,7 @@ implementation without a duplicate frontend.
 ## Repository boundary
 
 The repository root is the Cargo workspace. Every shipped behavior belongs to
-one of its five crates, while `tests/fixtures/` and `tests/contracts/` provide
+one of its six crates, while `tests/fixtures/` and `tests/contracts/` provide
 the only cross-crate external data. Build, test, coverage, and release
 automation invoke Cargo directly; no second application runtime participates
 in compilation or execution.

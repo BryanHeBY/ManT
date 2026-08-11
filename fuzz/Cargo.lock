@@ -208,10 +208,10 @@ dependencies = [
  "grep-regex",
  "libmandoc-rs",
  "mant-ast",
+ "mant-sources",
  "pulldown-cmark",
  "serde",
  "serde_json",
- "toml",
  "zstd",
 ]
 
@@ -222,6 +222,14 @@ dependencies = [
  "libfuzzer-sys",
  "mant-ast",
  "mant-core",
+]
+
+[[package]]
+name = "mant-sources"
+version = "0.6.0"
+dependencies = [
+ "serde",
+ "toml",
 ]
 
 [[package]]

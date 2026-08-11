@@ -3,6 +3,7 @@ members = [
   "crates/mant-ast",
   "crates/mant",
   "crates/mant-core",
+  "crates/mant-sources",
   "crates/mant-ui",
   "crates/libmandoc-rs",
 ]
@@ -10,6 +11,7 @@ default-members = [
   "crates/mant-ast",
   "crates/mant",
   "crates/mant-core",
+  "crates/mant-sources",
   "crates/mant-ui",
 ]
 resolver = "3"
@@ -44,9 +46,13 @@ rmcp-macros = "=3.1.2"
 schemars = "=1.2.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = { version = "0.11.0", default-features = false }
+tar = { version = "0.4.46", default-features = false }
 toml = "1.1"
 tokio = { version = "1", default-features = false, features = ["io-std", "io-util", "macros", "rt", "sync"] }
 unicode-width = "0.2.2"
+ureq = { version = "3.4.0", default-features = false, features = ["rustls"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2"] }
 zstd = { version = "0.13.3", default-features = false }
 
 [profile.release]

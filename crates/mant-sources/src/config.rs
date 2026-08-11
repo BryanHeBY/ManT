@@ -1,4 +1,4 @@
-//! Loads and validates Git-backed Markdown document source configuration.
+//! Loads and validates Git- and archive-backed document source configuration.
 
 use std::{
     collections::BTreeMap,
@@ -27,36 +27,56 @@ pub struct DocumentPaths {
     pub sources: PathBuf,
 }
 
-/// One repository declared by a top-level table in `sources.toml`.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RepositorySource {
-    pub repo: String,
-    pub branch: String,
-    #[serde(default = "default_source_path")]
+/// How one configured document source obtains its input tree.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SourceLocation {
+    Git { repo: String, branch: String },
+    Archive { url: String },
+}
+
+/// One document source declared by a top-level table in `sources.toml`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfiguredSource {
+    pub location: SourceLocation,
     pub path: String,
-    #[serde(default)]
     pub include: Vec<String>,
-    #[serde(default)]
     pub exclude: Vec<String>,
-    #[serde(default)]
     pub priority: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceDeclaration {
+    #[serde(default)]
+    repo: Option<String>,
+    #[serde(default)]
+    branch: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default = "default_source_path")]
+    path: String,
+    #[serde(default)]
+    include: Vec<String>,
+    #[serde(default)]
+    exclude: Vec<String>,
+    #[serde(default)]
+    priority: i32,
 }
 
 /// Validated local source configuration, keyed by source name.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SourceConfig {
-    sources: BTreeMap<String, RepositorySource>,
+    sources: BTreeMap<String, ConfiguredSource>,
 }
 
 impl SourceConfig {
     #[must_use]
-    pub fn sources(&self) -> &BTreeMap<String, RepositorySource> {
+    pub fn sources(&self) -> &BTreeMap<String, ConfiguredSource> {
         &self.sources
     }
 
     #[must_use]
-    pub fn get(&self, name: &str) -> Option<&RepositorySource> {
+    pub fn get(&self, name: &str) -> Option<&ConfiguredSource> {
         self.sources.get(name)
     }
 
@@ -181,39 +201,67 @@ fn load_source_config_from(path: &Path) -> Result<SourceConfig, SourceConfigErro
             )));
         }
     };
-    let sources = toml::from_str::<BTreeMap<String, RepositorySource>>(&text).map_err(|error| {
-        SourceConfigError::new(format!("invalid '{}': {error}", path.display()))
-    })?;
-    for (name, source) in &sources {
-        validate_source(name, source).map_err(|detail| {
+    let declarations =
+        toml::from_str::<BTreeMap<String, SourceDeclaration>>(&text).map_err(|error| {
+            SourceConfigError::new(format!("invalid '{}': {error}", path.display()))
+        })?;
+    let mut sources = BTreeMap::new();
+    for (name, declaration) in declarations {
+        let source = validate_source(&name, declaration).map_err(|detail| {
             SourceConfigError::new(format!(
                 "invalid source '{name}' in '{}': {detail}",
                 path.display()
             ))
         })?;
+        sources.insert(name, source);
     }
     Ok(SourceConfig { sources })
 }
 
-fn validate_source(name: &str, source: &RepositorySource) -> Result<(), String> {
+fn validate_source(name: &str, source: SourceDeclaration) -> Result<ConfiguredSource, String> {
     if !is_source_name(name) {
         return Err("name must use lowercase ASCII letters, digits, '-' or '_', and start with a letter or digit".to_owned());
     }
-    if source.repo.trim().is_empty()
-        || source.repo.trim() != source.repo
-        || source.repo.starts_with('-')
-    {
-        return Err(
-            "repo must be a trimmed, non-empty Git URL or path and must not start with '-'"
-                .to_owned(),
-        );
-    }
-    if source.branch.trim().is_empty()
-        || source.branch.trim() != source.branch
-        || source.branch.starts_with('-')
-    {
-        return Err("branch must be trimmed, non-empty, and must not start with '-'".to_owned());
-    }
+    let location = match (source.repo, source.branch, source.url) {
+        (Some(repo), Some(branch), None) => {
+            if repo.trim().is_empty() || repo.trim() != repo || repo.starts_with('-') {
+                return Err(
+                    "repo must be a trimmed, non-empty Git URL or path and must not start with '-'"
+                        .to_owned(),
+                );
+            }
+            if branch.trim().is_empty() || branch.trim() != branch || branch.starts_with('-') {
+                return Err(
+                    "branch must be trimmed, non-empty, and must not start with '-'".to_owned(),
+                );
+            }
+            SourceLocation::Git { repo, branch }
+        }
+        (None, None, Some(url)) => {
+            let lower = url.to_ascii_lowercase();
+            if url.trim().is_empty()
+                || url.trim() != url
+                || !(lower.starts_with("https://") || lower.starts_with("http://"))
+                || url.chars().any(char::is_control)
+            {
+                return Err(
+                    "url must be one trimmed HTTP or HTTPS archive URL without control characters"
+                        .to_owned(),
+                );
+            }
+            SourceLocation::Archive { url }
+        }
+        (Some(_), None, None) => {
+            return Err("branch is required when repo is configured".to_owned());
+        }
+        (None, Some(_), None) => {
+            return Err("repo is required when branch is configured".to_owned());
+        }
+        (None, None, None) => {
+            return Err("configure either url or both repo and branch".to_owned());
+        }
+        _ => return Err("url cannot be combined with repo or branch".to_owned()),
+    };
     validate_relative_selector(&source.path, "path", true)?;
     for include in &source.include {
         validate_relative_selector(include, "include", false)?;
@@ -221,7 +269,13 @@ fn validate_source(name: &str, source: &RepositorySource) -> Result<(), String> 
     for exclude in &source.exclude {
         validate_relative_selector(exclude, "exclude", false)?;
     }
-    Ok(())
+    Ok(ConfiguredSource {
+        location,
+        path: source.path,
+        include: source.include,
+        exclude: source.exclude,
+        priority: source.priority,
+    })
 }
 
 pub(crate) fn is_source_name(name: &str) -> bool {
@@ -284,7 +338,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
-    use super::{RepositorySource, load_source_config_from};
+    use super::{ConfiguredSource, SourceLocation, load_source_config_from};
 
     #[cfg(target_os = "linux")]
     use super::document_paths_with;
@@ -314,8 +368,7 @@ include = ["docs", "README.md"]
 exclude = ["docs/drafts"]
 
 [later]
-repo = "https://example.invalid/later.git"
-branch = "main"
+url = "https://example.invalid/releases/latest/download/docs.zip"
 priority = -1
 "#,
         )
@@ -323,6 +376,10 @@ priority = -1
         let loaded = load_source_config_from(&config).expect("load config");
         assert_eq!(loaded.precedence(), vec!["alpha", "zeta", "later"]);
         assert_eq!(loaded.get("alpha").expect("alpha").path, ".");
+        assert!(matches!(
+            loaded.get("later").expect("later").location,
+            SourceLocation::Archive { .. }
+        ));
         fs::remove_dir_all(root).expect("remove fixture");
     }
 
@@ -357,16 +414,32 @@ priority = -1
     }
 
     #[test]
-    fn repository_source_priority_is_signed() {
-        let source = RepositorySource {
-            repo: "repo".to_owned(),
-            branch: "main".to_owned(),
+    fn source_location_is_exclusive_and_priority_is_signed() {
+        let source = ConfiguredSource {
+            location: SourceLocation::Git {
+                repo: "repo".to_owned(),
+                branch: "main".to_owned(),
+            },
             path: ".".to_owned(),
             include: Vec::new(),
             exclude: Vec::new(),
             priority: -1,
         };
         assert_eq!(source.priority, -1);
+
+        let root = temp("exclusive");
+        fs::create_dir_all(&root).expect("create fixture");
+        let config = root.join("sources.toml");
+        for text in [
+            "[bad]\nrepo = 'x'\n",
+            "[bad]\nbranch = 'main'\n",
+            "[bad]\nurl = 'https://example.invalid/docs.zip'\nbranch = 'main'\n",
+            "[bad]\nurl = 'file:///tmp/docs.zip'\n",
+        ] {
+            fs::write(&config, text).expect("write invalid source");
+            assert!(load_source_config_from(&config).is_err(), "accepted {text}");
+        }
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[cfg(target_os = "linux")]

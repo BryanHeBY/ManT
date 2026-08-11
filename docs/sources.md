@@ -1,9 +1,9 @@
 # Document Sources
 
-ManT can update small collections of Markdown documentation from ordinary Git
-repositories. This is deliberately a narrow document installer, not a general
-package manager: it checks one branch, clones one shallow revision, installs
-only Markdown files, and never initializes submodules.
+ManT can update small collections of Markdown documentation from an ordinary
+Git repository or a directly downloadable archive. This is deliberately a
+narrow document installer, not a general package manager: a source has either
+one Git branch or one archive URL, and only Markdown files are installed.
 
 ## Layout
 
@@ -55,18 +55,30 @@ priority = 20
 repo = "https://github.com/example/community-docs.git"
 branch = "release"
 priority = 0
+
+[release]
+url = "https://example.com/cli-docs/latest/docs.zip"
+path = "docs"
+exclude = ["drafts"]
 ```
 
 Fields are:
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `repo` | Yes | Git URL or local repository path; relative paths use the ManT data root |
-| `branch` | Yes | Exact branch checked through `refs/heads/<branch>` |
+| `repo` | For Git | Git URL or local repository path; relative paths use the ManT data root |
+| `branch` | For Git | Exact branch checked through `refs/heads/<branch>` |
+| `url` | For archive | Direct HTTP or HTTPS URL of a ZIP, tar, tar.gz/tgz, or tar.zst/tzst archive |
 | `path` | No | Directory inside the checkout; defaults to `.` |
 | `include` | No | Exact relative files or directory subtrees below `path` |
 | `exclude` | No | Exact relative files or directory subtrees removed after inclusion |
 | `priority` | No | Signed integer used for fallback; defaults to `0` |
+
+Configure either `url`, or both `repo` and `branch`; they cannot be combined.
+The archive URL is the complete artifact identity, so a fixed release belongs
+in the URL itself and there is no separate provider, release, tag, or archive
+format field. Format detection uses the downloaded bytes rather than the URL
+suffix.
 
 Source names use lowercase ASCII letters, digits, `-`, and `_`, beginning with
 a letter or digit. Paths are trimmed, relative, use `/` on every platform,
@@ -76,8 +88,9 @@ matches either one exact path or everything below that
 directory. When `include` is absent or empty, every Markdown file below `path`
 is eligible; `exclude` always wins.
 
-The repository scan is recursive because upstream repositories may organize
-their inputs in subdirectories. Installation is flat. If two selected files
+The source scan is recursive because upstream inputs may organize their files
+in subdirectories. `path = "."` selects the root of either a checkout or an
+extracted archive. Installation is flat. If two selected files
 would have the same public filename stem (compared case-insensitively for
 cross-platform safety), the source update fails and the
 previous installation remains in place.
@@ -96,19 +109,28 @@ The result is stable JSON identified by `mant.sources-update/v1`. Add
 fails, and the process exits with status `1` after printing the complete report
 if any source failed.
 
-For each source ManT:
+For a Git source, ManT reads the branch head with `git ls-remote`. It skips an
+unchanged source or performs a depth-one, single-branch clone without tags,
+local hardlinks, or submodule initialization.
 
-1. Reads the branch head with `git ls-remote`.
-2. Compares the commit and normalized configuration fingerprint with local
-   `.mant-source.toml` metadata. Priority-only changes take effect immediately
-   and do not reinstall identical files.
-3. Skips the clone when both are unchanged.
-4. Otherwise performs a depth-one, single-branch clone without tags or
-   submodule initialization.
-5. Selects only regular `.md` and `.markdown` files, flattens them, checks
-   public-name collisions, and writes new metadata.
-6. Replaces that source directory only after the complete staging result is
-   ready.
+For an archive source, ManT sends saved `ETag` and `Last-Modified` validators
+when available. A `304 Not Modified` response avoids downloading and
+extracting the artifact. Otherwise ManT streams the response to a bounded
+temporary file and records its SHA-256 digest as the revision; the digest also
+detects unchanged content when a server provides no validators.
+
+Both paths then select only regular `.md` and `.markdown` files, flatten them,
+check public-name collisions, and write `.mant-source.toml`. The normalized
+configuration fingerprint excludes `priority`, so a priority-only change
+takes effect immediately without reinstalling identical files. The installed
+directory is replaced only after staging succeeds.
+
+Archive processing is intentionally bounded: downloads are limited to 64 MiB,
+archives to 20,000 entries and 256 MiB of declared expanded regular-file data,
+individual Markdown files to 16 MiB, selected Markdown files to 10,000, and
+paths to 32 components. Absolute, parent-relative, non-UTF-8, duplicate, link,
+and special-file entries are rejected. These checks apply before activation,
+so malformed or hostile input leaves the previous source installed.
 
 An update lock prevents two native CLI updates from writing the source store
 at once. A failed source leaves its prior installed directory untouched. If a
@@ -139,8 +161,7 @@ contract uses the same optional `source` field on a `document` input.
 ## MCP behavior
 
 `mant --mcp` only reads local state visible at the time of each tool call:
-`sources.toml`, installed `.mant-source.toml` metadata, Markdown files, and
-native manual paths. It has no source-update tool, does not invoke Git or use
-the network, and does not promise a fixed snapshot across multiple calls. If a
-native CLI update completes between calls, a later MCP call may see the new
-files.
+`sources.toml`, installed Markdown files, and native manual paths. It has no
+source-update tool, does not invoke Git, download archives, or use the network,
+and does not promise a fixed snapshot across multiple calls. If a native CLI
+update completes between calls, a later MCP call may see the new files.

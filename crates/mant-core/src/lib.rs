@@ -12,7 +12,6 @@ mod projection;
 mod query;
 mod search;
 mod source;
-mod sources;
 mod tldr;
 
 pub use catalog::{
@@ -21,6 +20,10 @@ pub use catalog::{
 pub use mandoc::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_page,
     parse_manual_source,
+};
+pub use mant_sources::{
+    RegisteredDocument, RegisteredDocumentOrigin, SourceConfigError, find_registered_document,
+    list_registered_documents,
 };
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
@@ -38,12 +41,6 @@ pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
     CommandOutput, LocateError, ManualIndex, ManualPage, ManualRequest, discover_manual_roots,
     locate_manual_source, locate_manual_source_in, system_manual_index,
-};
-pub use sources::{
-    DocumentPaths, DocumentSourcesUpdate, DocumentSourcesUpdateSchema, RegisteredDocument,
-    RegisteredDocumentOrigin, RepositorySource, SourceConfig, SourceConfigError,
-    SourceUpdateAction, SourceUpdateResult, document_paths, find_registered_document,
-    list_registered_documents, load_source_config, update_document_sources,
 };
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, TldrUpdateError,

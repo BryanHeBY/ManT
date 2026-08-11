@@ -100,8 +100,9 @@ Reusable Markdown documents can be registered by filename below:
 - Windows: `%APPDATA%\ManT\documents`
 
 Only immediate regular Markdown files are discovered; nested directories and
-symlinks are ignored. Repositories configured in sibling `sources.toml` can be
-installed with `mant --update-docs` and selected with `--source`. An
+symlinks are ignored. Git or direct archive sources configured in sibling
+`sources.toml` can be installed with `mant --update-docs` and selected with
+`--source`. An
 unqualified name resolves root documents, sources by priority/name, then a
 native manual. See the repository-level `docs/sources.md` reference.
 
@@ -114,7 +115,8 @@ checkout.
 
 - `mant-ast` defines the versioned document and query contracts.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
-- `mant-core` performs source lookup, lowering, projections, search, and output.
+- `mant-sources` owns local Markdown discovery and optional source updates.
+- `mant-core` performs document lookup, lowering, projections, search, and output.
 - `mant-ui` provides the source-neutral Ratatui frontend.
 - `mant` owns command-line, terminal-selection, and MCP process boundaries.
 

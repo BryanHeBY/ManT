@@ -78,7 +78,7 @@ The filename supplies a registered document name: `mant.md` is queried as
 registered directory are visible. Nested directories and symbolic links are
 ignored. Root documents always win; source priority and name resolve remaining
 duplicates; `.md` wins over `.markdown` within one directory. `--source NAME`
-selects exactly one configured repository. `--manual` or `--section` selects a
+selects exactly one configured Git or archive source. `--manual` or `--section` selects a
 native manual and cannot be combined with `--source`.
 
 ### Manual Pages
@@ -353,7 +353,7 @@ local files only; it has no update tool and no cross-call snapshot guarantee.
 
 ## Data
 
-- `--update-docs`: Update repositories declared in `sources.toml` and print a complete JSON report.
+- `--update-docs`: Update Git or direct archive sources declared in `sources.toml` and print a complete JSON report.
 - `--update-tldr`: Update through an installed tldr client when available, otherwise through ManT's private cache.
 
 Normal queries prefer compatible installed-client data and always retain
@@ -362,7 +362,7 @@ no tldr page is available.
 
 ## Storage
 
-ManT keeps durable documents and repository metadata separate from disposable
+ManT keeps durable documents and source metadata separate from disposable
 caches. On Linux they live below
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`; the private tldr checkout lives
 below `${XDG_CACHE_HOME:-$HOME/.cache}/mant/tldr-pages`.

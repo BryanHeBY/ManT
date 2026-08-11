@@ -13,7 +13,8 @@ use mant_ast::{
     ExcerptSelection, QueryBundle, QueryInput, QueryRequest, QueryView, SearchQuery, SourceFormat,
     TldrCacheUpdate,
 };
-use mant_core::{DocumentSourcesUpdate, ProjectionError, QueryError, QueryPolicy, SearchError};
+use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
+use mant_sources::DocumentSourcesUpdate;
 use serde::Serialize;
 
 use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
@@ -91,7 +92,7 @@ impl CliHost for SystemHost {
     }
 
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {
-        mant_core::update_document_sources().map_err(Failure::operational)
+        mant_sources::update_document_sources().map_err(Failure::operational)
     }
 }
 
@@ -697,7 +698,7 @@ fn report_argument_error(error: &clap::Error, diagnostics: &mut dyn Write) -> u8
 mod tests {
     use std::cell::Cell;
 
-    use mant_core::{DocumentSourcesUpdate, DocumentSourcesUpdateSchema};
+    use mant_sources::{DocumentSourcesUpdate, DocumentSourcesUpdateSchema};
 
     use mant_ast::{
         Block, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSchema,

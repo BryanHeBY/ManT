@@ -35,7 +35,7 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ast`, `mant-core`, `mant-ui`, and `mant`,
+It tests `libmandoc-rs`, `mant-ast`, `mant-sources`, `mant-core`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
@@ -62,7 +62,8 @@ cargo build --locked --release -p mant
 ```text
 Cargo.toml                    Root Rust workspace and shared dependency policy
 crates/mant-ast/             Versioned document, query, outline, and schema types
-crates/mant-core/            Source loading, libmandoc lowering, projections, output
+crates/mant-sources/         Local Markdown registry and transactional source updates
+crates/mant-core/            Document loading, libmandoc lowering, projections, output
 crates/mant-ui/              Ratatui reader, navigation, search, and terminal styling
 crates/mant/                 Mode selection, CLI, request JSON, and MCP stdio boundary
 crates/libmandoc-rs/         Owned libmandoc parse API, private C shim, vendored source

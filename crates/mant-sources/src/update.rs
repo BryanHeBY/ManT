@@ -1,4 +1,4 @@
-//! Updates configured repositories and atomically installs selected Markdown.
+//! Updates configured sources and atomically installs selected Markdown.
 
 use std::{
     collections::BTreeSet,
@@ -10,11 +10,16 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::config::{
-    DocumentPaths, RepositorySource, SOURCE_METADATA_FILE, SourceConfigError, load_source_config,
+use super::{
+    archive::extract_archive,
+    config::{
+        ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfigError, SourceLocation,
+        load_source_config,
+    },
+    download::{DownloadOutcome, Validators, download_archive},
 };
 
-const METADATA_VERSION: u8 = 1;
+const METADATA_VERSION: u8 = 2;
 const MAX_METADATA_BYTES: u64 = 64 * 1024;
 const MAX_SOURCE_DOCUMENTS: usize = 10_000;
 const MAX_SOURCE_DEPTH: usize = 32;
@@ -72,11 +77,27 @@ impl DocumentSourcesUpdate {
 struct SourceMetadata {
     version: u8,
     source: String,
-    repo: String,
-    branch: String,
+    kind: SourceMetadataKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    repo: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
     revision: String,
     config_fingerprint: String,
     documents: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    etag: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_modified: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum SourceMetadataKind {
+    Git,
+    Archive,
 }
 
 /// Update every configured source without exposing this operation to MCP.
@@ -108,7 +129,7 @@ pub fn update_document_sources() -> Result<DocumentSourcesUpdate, SourceConfigEr
     })
 }
 
-fn source_fingerprint(source: &RepositorySource) -> String {
+fn source_fingerprint(source: &ConfiguredSource) -> String {
     let mut include = source
         .include
         .iter()
@@ -124,11 +145,12 @@ fn source_fingerprint(source: &RepositorySource) -> String {
     include.dedup();
     exclude.dedup();
     let mut state = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in source
-        .repo
+    let location = match &source.location {
+        SourceLocation::Git { repo, branch } => format!("git\0{repo}\0{branch}"),
+        SourceLocation::Archive { url } => format!("archive\0{url}"),
+    };
+    for byte in location
         .bytes()
-        .chain([0])
-        .chain(source.branch.bytes())
         .chain([0])
         .chain(source.path.bytes())
         .chain([0])
@@ -153,7 +175,7 @@ fn source_fingerprint(source: &RepositorySource) -> String {
 fn update_one_source(
     paths: &DocumentPaths,
     name: &str,
-    source: &RepositorySource,
+    source: &ConfiguredSource,
 ) -> SourceUpdateResult {
     match try_update_one_source(paths, name, source) {
         Ok(result) => result,
@@ -170,27 +192,53 @@ fn update_one_source(
 fn try_update_one_source(
     paths: &DocumentPaths,
     name: &str,
-    source: &RepositorySource,
+    source: &ConfiguredSource,
 ) -> Result<SourceUpdateResult, String> {
     let target = paths.sources.join(name);
     recover_directory(&target)?;
-    let revision = remote_revision(&paths.root, source)?;
     let fingerprint = source_fingerprint(source);
-    if let Some(metadata) = read_metadata(&target)
-        && metadata.version == METADATA_VERSION
-        && metadata.source == name
-        && metadata.repo == source.repo
-        && metadata.branch == source.branch
+    let metadata = read_metadata(&target)
+        .filter(|metadata| metadata_matches(metadata, name, source, &fingerprint));
+
+    match &source.location {
+        SourceLocation::Git { repo, branch } => update_git_source(
+            paths,
+            name,
+            source,
+            repo,
+            branch,
+            &target,
+            &fingerprint,
+            metadata.as_ref(),
+        ),
+        SourceLocation::Archive { url } => update_archive_source(
+            paths,
+            name,
+            source,
+            url,
+            &target,
+            &fingerprint,
+            metadata.as_ref(),
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn update_git_source(
+    paths: &DocumentPaths,
+    name: &str,
+    source: &ConfiguredSource,
+    repo: &str,
+    branch: &str,
+    target: &Path,
+    fingerprint: &str,
+    metadata: Option<&SourceMetadata>,
+) -> Result<SourceUpdateResult, String> {
+    let revision = remote_revision(&paths.root, repo, branch)?;
+    if let Some(metadata) = metadata
         && metadata.revision == revision
-        && metadata.config_fingerprint == fingerprint
     {
-        return Ok(SourceUpdateResult {
-            source: name.to_owned(),
-            action: SourceUpdateAction::Unchanged,
-            revision: Some(revision),
-            documents: Some(metadata.documents),
-            error: None,
-        });
+        return Ok(unchanged_result(name, revision, metadata.documents));
     }
 
     let checkout = paths.sources.join(format!(".{name}.checkout"));
@@ -209,9 +257,9 @@ fn try_update_one_source(
                 OsStr::new("--no-local"),
                 OsStr::new("--no-tags"),
                 OsStr::new("--branch"),
-                OsStr::new(&source.branch),
+                OsStr::new(branch),
                 OsStr::new("--"),
-                OsStr::new(&source.repo),
+                OsStr::new(repo),
                 checkout.as_os_str(),
             ],
         )?;
@@ -241,17 +289,17 @@ fn try_update_one_source(
         let metadata = SourceMetadata {
             version: METADATA_VERSION,
             source: name.to_owned(),
-            repo: source.repo.clone(),
-            branch: source.branch.clone(),
+            kind: SourceMetadataKind::Git,
+            repo: Some(repo.to_owned()),
+            branch: Some(branch.to_owned()),
+            url: None,
             revision: revision.clone(),
-            config_fingerprint: fingerprint,
+            config_fingerprint: fingerprint.to_owned(),
             documents: document_count,
+            etag: None,
+            last_modified: None,
         };
-        let metadata_text = toml::to_string_pretty(&metadata)
-            .map_err(|error| format!("could not encode source metadata: {error}"))?;
-        fs::write(staging.join(SOURCE_METADATA_FILE), metadata_text)
-            .map_err(|error| format!("could not write source metadata: {error}"))?;
-        replace_directory(&staging, &target)?;
+        activate_source(&staging, target, &metadata)?;
         Ok(SourceUpdateResult {
             source: name.to_owned(),
             action: SourceUpdateAction::Updated,
@@ -266,8 +314,133 @@ fn try_update_one_source(
     result
 }
 
-fn remote_revision(working_directory: &Path, source: &RepositorySource) -> Result<String, String> {
-    let reference = format!("refs/heads/{}", source.branch);
+#[allow(clippy::too_many_arguments)]
+fn update_archive_source(
+    paths: &DocumentPaths,
+    name: &str,
+    source: &ConfiguredSource,
+    url: &str,
+    target: &Path,
+    fingerprint: &str,
+    metadata: Option<&SourceMetadata>,
+) -> Result<SourceUpdateResult, String> {
+    let download = paths.sources.join(format!(".{name}.download"));
+    let checkout = paths.sources.join(format!(".{name}.checkout"));
+    let staging = paths.sources.join(format!(".{name}.staging"));
+    remove_internal_dir(&download);
+    remove_internal_dir(&checkout);
+    remove_internal_dir(&staging);
+
+    let validators = metadata.and_then(|metadata| {
+        if metadata.etag.is_none() && metadata.last_modified.is_none() {
+            None
+        } else {
+            Some(Validators {
+                etag: metadata.etag.clone(),
+                last_modified: metadata.last_modified.clone(),
+            })
+        }
+    });
+    let result = (|| match download_archive(url, &download, validators.as_ref())? {
+        DownloadOutcome::NotModified => {
+            let metadata = metadata.ok_or_else(|| {
+                "archive server returned not-modified without installed metadata".to_owned()
+            })?;
+            Ok(unchanged_result(
+                name,
+                metadata.revision.clone(),
+                metadata.documents,
+            ))
+        }
+        DownloadOutcome::Downloaded {
+            revision,
+            validators,
+        } => {
+            if let Some(metadata) = metadata
+                && metadata.revision == revision
+            {
+                return Ok(unchanged_result(name, revision, metadata.documents));
+            }
+            extract_archive(&download, &checkout)?;
+            fs::create_dir(&staging)
+                .map_err(|error| format!("could not create staging directory: {error}"))?;
+            let documents = install_selected_documents(&checkout, &staging, source)?;
+            let document_count = u32::try_from(documents).unwrap_or(u32::MAX);
+            let metadata = SourceMetadata {
+                version: METADATA_VERSION,
+                source: name.to_owned(),
+                kind: SourceMetadataKind::Archive,
+                repo: None,
+                branch: None,
+                url: Some(url.to_owned()),
+                revision: revision.clone(),
+                config_fingerprint: fingerprint.to_owned(),
+                documents: document_count,
+                etag: validators.etag,
+                last_modified: validators.last_modified,
+            };
+            activate_source(&staging, target, &metadata)?;
+            Ok(SourceUpdateResult {
+                source: name.to_owned(),
+                action: SourceUpdateAction::Updated,
+                revision: Some(revision),
+                documents: Some(document_count),
+                error: None,
+            })
+        }
+    })();
+
+    remove_internal_dir(&download);
+    remove_internal_dir(&checkout);
+    remove_internal_dir(&staging);
+    result
+}
+
+fn unchanged_result(source: &str, revision: String, documents: u32) -> SourceUpdateResult {
+    SourceUpdateResult {
+        source: source.to_owned(),
+        action: SourceUpdateAction::Unchanged,
+        revision: Some(revision),
+        documents: Some(documents),
+        error: None,
+    }
+}
+
+fn metadata_matches(
+    metadata: &SourceMetadata,
+    name: &str,
+    source: &ConfiguredSource,
+    fingerprint: &str,
+) -> bool {
+    metadata.version == METADATA_VERSION
+        && metadata.source == name
+        && metadata.config_fingerprint == fingerprint
+        && match &source.location {
+            SourceLocation::Git { repo, branch } => {
+                metadata.kind == SourceMetadataKind::Git
+                    && metadata.repo.as_deref() == Some(repo)
+                    && metadata.branch.as_deref() == Some(branch)
+                    && metadata.url.is_none()
+            }
+            SourceLocation::Archive { url } => {
+                metadata.kind == SourceMetadataKind::Archive
+                    && metadata.url.as_deref() == Some(url)
+                    && metadata.repo.is_none()
+                    && metadata.branch.is_none()
+            }
+        }
+}
+
+fn activate_source(staging: &Path, target: &Path, metadata: &SourceMetadata) -> Result<(), String> {
+    let metadata_text = toml::to_string_pretty(metadata)
+        .map_err(|error| format!("could not encode source metadata: {error}"))?;
+    fs::write(staging.join(SOURCE_METADATA_FILE), metadata_text)
+        .map_err(|error| format!("could not write source metadata: {error}"))?;
+    replace_directory(staging, target)
+}
+
+fn remote_revision(working_directory: &Path, repo: &str, branch: &str) -> Result<String, String> {
+    let reference = format!("refs/heads/{branch}");
     let output = run_git(
         working_directory,
         [
@@ -275,16 +448,14 @@ fn remote_revision(working_directory: &Path, source: &RepositorySource) -> Resul
             OsStr::new("--exit-code"),
             OsStr::new("--refs"),
             OsStr::new("--"),
-            OsStr::new(&source.repo),
+            OsStr::new(repo),
             OsStr::new(&reference),
         ],
     )?;
-    let line = output.lines().next().ok_or_else(|| {
-        format!(
-            "branch '{}' was not found in '{}'",
-            source.branch, source.repo
-        )
-    })?;
+    let line = output
+        .lines()
+        .next()
+        .ok_or_else(|| format!("branch '{branch}' was not found in '{repo}'"))?;
     let revision = line.split_whitespace().next().unwrap_or_default();
     if !matches!(revision.len(), 40 | 64) || !revision.bytes().all(|byte| byte.is_ascii_hexdigit())
     {
@@ -330,7 +501,7 @@ fn run_git<'a>(
 fn install_selected_documents(
     checkout: &Path,
     staging: &Path,
-    source: &RepositorySource,
+    source: &ConfiguredSource,
 ) -> Result<usize, String> {
     let requested_root = if source.path == "." {
         checkout.to_owned()
@@ -525,25 +696,54 @@ impl Drop for UpdateLock {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{
+        fs,
+        io::{Cursor, Read as _, Write as _},
+        net::{Shutdown, TcpListener},
+        thread,
+    };
+
+    use zip::{ZipWriter, write::SimpleFileOptions};
 
     use super::{
-        RepositorySource, install_selected_documents, recover_directory, source_fingerprint,
+        ConfiguredSource, DocumentPaths, SourceLocation, SourceUpdateAction,
+        install_selected_documents, recover_directory, source_fingerprint, try_update_one_source,
     };
 
     fn temp(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-sources-{label}-{}", std::process::id()))
     }
 
-    fn source(path: &str) -> RepositorySource {
-        RepositorySource {
-            repo: "repo".to_owned(),
-            branch: "main".to_owned(),
+    fn source(path: &str) -> ConfiguredSource {
+        ConfiguredSource {
+            location: SourceLocation::Git {
+                repo: "repo".to_owned(),
+                branch: "main".to_owned(),
+            },
             path: path.to_owned(),
             include: Vec::new(),
             exclude: Vec::new(),
             priority: 0,
         }
+    }
+
+    fn archive_source(url: String) -> ConfiguredSource {
+        ConfiguredSource {
+            location: SourceLocation::Archive { url },
+            path: ".".to_owned(),
+            include: Vec::new(),
+            exclude: Vec::new(),
+            priority: 0,
+        }
+    }
+
+    fn zip_document() -> Vec<u8> {
+        let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+        writer
+            .start_file("tool.md", SimpleFileOptions::default())
+            .expect("start ZIP file");
+        writer.write_all(b"# tool").expect("write ZIP file");
+        writer.finish().expect("finish ZIP").into_inner()
     }
 
     #[test]
@@ -588,14 +788,14 @@ mod tests {
 
     #[test]
     fn fingerprint_normalizes_selector_order_and_duplicates() {
-        let source = RepositorySource {
+        let source = ConfiguredSource {
             path: "docs".to_owned(),
             include: vec!["b".to_owned(), "a".to_owned(), "a".to_owned()],
             exclude: vec!["z".to_owned(), "y".to_owned()],
             priority: 3,
             ..source(".")
         };
-        let equivalent = RepositorySource {
+        let equivalent = ConfiguredSource {
             include: vec!["a".to_owned(), "b".to_owned()],
             exclude: vec!["y".to_owned(), "z".to_owned()],
             priority: 99,
@@ -616,6 +816,117 @@ mod tests {
         recover_directory(&target).expect("recover backup");
         assert!(target.join("tool.md").is_file());
         assert!(!backup.exists());
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn archive_source_installs_root_and_uses_conditional_updates() {
+        let body = zip_document();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let url = format!(
+            "http://{}/docs.zip",
+            listener.local_addr().expect("server address")
+        );
+        let server = thread::spawn(move || {
+            let mut requests = Vec::new();
+            for index in 0..3 {
+                let (mut stream, _) = listener.accept().expect("accept request");
+                let mut request = Vec::new();
+                let mut buffer = [0_u8; 1024];
+                while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    let count = stream.read(&mut buffer).expect("read request");
+                    if count == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..count]);
+                }
+                if index == 1 {
+                    stream
+                        .write_all(
+                            b"HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        )
+                        .expect("write not-modified response");
+                } else {
+                    write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n{}Connection: close\r\n\r\n",
+                        body.len(),
+                        if index == 0 { "ETag: \"v1\"\r\n" } else { "" },
+                    )
+                    .expect("write response headers");
+                    stream.write_all(&body).expect("write response body");
+                }
+                stream.flush().expect("flush response");
+                stream.shutdown(Shutdown::Write).expect("finish response");
+                requests.push(String::from_utf8(request).expect("UTF-8 request"));
+            }
+            requests
+        });
+
+        let root = temp("archive-update");
+        let paths = DocumentPaths {
+            config: root.join("sources.toml"),
+            documents: root.join("documents"),
+            sources: root.join("documents/sources"),
+            root: root.clone(),
+        };
+        fs::create_dir_all(&paths.sources).expect("create source store");
+        let source = archive_source(url);
+        let first = try_update_one_source(&paths, "release", &source).expect("first update");
+        assert_eq!(first.action, SourceUpdateAction::Updated);
+        assert_eq!(
+            fs::read_to_string(paths.sources.join("release/tool.md")).expect("installed document"),
+            "# tool"
+        );
+        let second = try_update_one_source(&paths, "release", &source).expect("second update");
+        assert_eq!(second.action, SourceUpdateAction::Unchanged);
+        let third = try_update_one_source(&paths, "release", &source).expect("third update");
+        assert_eq!(third.action, SourceUpdateAction::Unchanged);
+        let requests = server.join().expect("join server");
+        assert!(
+            requests[1]
+                .to_ascii_lowercase()
+                .contains("if-none-match: \"v1\"")
+        );
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn invalid_archive_preserves_the_installed_source() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let url = format!(
+            "http://{}/broken.tar",
+            listener.local_addr().expect("server address")
+        );
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let mut request = [0_u8; 2048];
+            let _ = stream.read(&mut request).expect("read request");
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 14\r\nConnection: close\r\n\r\nnot an archive",
+                )
+                .expect("write response");
+            stream.flush().expect("flush response");
+            stream.shutdown(Shutdown::Write).expect("finish response");
+        });
+        let root = temp("archive-failure");
+        let paths = DocumentPaths {
+            config: root.join("sources.toml"),
+            documents: root.join("documents"),
+            sources: root.join("documents/sources"),
+            root: root.clone(),
+        };
+        fs::create_dir_all(paths.sources.join("release")).expect("create installed source");
+        fs::write(paths.sources.join("release/tool.md"), "# old").expect("write old document");
+        let error = try_update_one_source(&paths, "release", &archive_source(url))
+            .expect_err("reject invalid archive");
+        assert!(error.contains("tar entry"), "{error}");
+        assert_eq!(
+            fs::read_to_string(paths.sources.join("release/tool.md")).expect("old document"),
+            "# old"
+        );
+        server.join().expect("join server");
         fs::remove_dir_all(root).expect("remove fixture");
     }
 }

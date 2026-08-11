@@ -16,7 +16,7 @@ const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 pub enum RegisteredDocumentOrigin {
     /// A file directly inside the singular user `documents` directory.
     Documents,
-    /// A file installed from one configured repository.
+    /// A file installed from one configured source.
     Source(String),
 }
 
@@ -185,7 +185,7 @@ fn markdown_extension_priority(path: &Path) -> Option<u8> {
 mod tests {
     use std::{collections::BTreeMap, fs, path::PathBuf};
 
-    use super::super::{RepositorySource, SourceConfig};
+    use super::super::{ConfiguredSource, SourceConfig, SourceLocation};
     use super::{RegisteredDocumentOrigin, scan_directory};
 
     fn temporary_root(label: &str) -> PathBuf {
@@ -241,9 +241,11 @@ mod tests {
         let mut values = BTreeMap::new();
         values.insert(
             "docs".to_owned(),
-            RepositorySource {
-                repo: "repo".to_owned(),
-                branch: "main".to_owned(),
+            ConfiguredSource {
+                location: SourceLocation::Git {
+                    repo: "repo".to_owned(),
+                    branch: "main".to_owned(),
+                },
                 path: ".".to_owned(),
                 include: Vec::new(),
                 exclude: Vec::new(),

@@ -1,13 +1,13 @@
 # mant-core
 
 `mant-core` is ManT's renderer-independent document engine. It resolves local
-sources into the contracts from `mant-ast`, builds semantic projections, and
+documents through `mant-sources` into the contracts from `mant-ast`, builds semantic projections, and
 produces deterministic output without owning a terminal or command-line
 process.
 
 ## What this crate provides
 
-- Registered Markdown discovery under native platform data directories.
+- Registered Markdown lookup through the read-only `mant-sources` boundary.
 - A conservative, source-positioned Markdown parser with explicit loss
   diagnostics and optional embedded tldr content.
 - Bounded native manual loading, constrained `.so` alias resolution, and

@@ -23,6 +23,7 @@ Set-Location $Root
 $Packages = @(
     "--package", "libmandoc-rs",
     "--package", "mant-ast",
+    "--package", "mant-sources",
     "--package", "mant-core",
     "--package", "mant-ui",
     "--package", "mant"

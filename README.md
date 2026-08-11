@@ -178,13 +178,13 @@ cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/man
 mant mant
 ```
 
-An unqualified name checks the user directory first, then
-configured repository sources, and finally the native manual index. Only
+An unqualified name checks the user directory first, then configured document
+sources, and finally the native manual index. Only
 `.md` and `.markdown` files directly inside each installed directory are
 discoverable; nested directories and symbolic links are ignored. `--manual`
 bypasses Markdown and selects a native manual on every supported platform.
 
-Repository sources are top-level tables in `sources.toml` beside `documents/`:
+Document sources are top-level tables in `sources.toml` beside `documents/`:
 
 ```toml
 [team]
@@ -194,10 +194,14 @@ path = "manuals"
 include = ["public"]
 exclude = ["public/drafts"]
 priority = 10
+
+[release]
+url = "https://example.com/cli-docs/latest/docs.zip"
 ```
 
-Run `mant --update-docs` to install selected Markdown from one shallow Git
-revision. Root documents always win; repositories then fall back by higher
+Run `mant --update-docs` to install selected Markdown from a one-commit Git
+checkout or a direct ZIP/tar archive URL. Root documents always win; sources
+then fall back by higher
 priority and source name. Use `mant tool --source team` to select one source
 explicitly. See [document sources](docs/sources.md) for paths, exact selector
 rules, metadata, update safety, and complete examples.
@@ -260,7 +264,8 @@ mant
 ├─ terminal mode ──→ mant-ui (Ratatui)
 ├─ output mode ────→ Markdown / text / JSON
 ├─ integration ────→ schemas / request JSON / MCP stdio
-└─ mant-core
+├─ source updates ─→ mant-sources (Git / HTTP archives)
+└─ mant-core ──────→ mant-sources (local reads)
    ├─ mant-ast
    └─ libmandoc-rs
       └─ vendored libmandoc + private C shim
