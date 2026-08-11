@@ -18,7 +18,15 @@ use crate::definitions::{option_names_from_terms, option_prefix};
 pub(super) struct EntryDeclaration {
     role: DefinitionRole,
     case: DefinitionCase,
+    attached: AttachedValuePolicy,
     pub(super) source: SourceSpan,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+enum AttachedValuePolicy {
+    #[default]
+    Infer,
+    Fixed,
 }
 
 /// Remove invisible semantic-entry directives while retaining source offsets.
@@ -182,6 +190,7 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
     };
     let mut role = None;
     let mut case = None;
+    let mut attached = None;
     for field in fields.split_whitespace() {
         let Some((key, value)) = field.split_once('=') else {
             return Err(format!("invalid semantic-entry field '{field}'"));
@@ -202,15 +211,33 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
                     _ => return Err(format!("unknown semantic-entry case policy '{value}'")),
                 });
             }
-            "role" | "case" => return Err(format!("duplicate semantic-entry field '{key}'")),
+            "attached" if attached.is_none() => {
+                attached = Some(match value {
+                    "infer" => AttachedValuePolicy::Infer,
+                    "fixed" => AttachedValuePolicy::Fixed,
+                    _ => {
+                        return Err(format!(
+                            "unknown semantic-entry attached-value policy '{value}'"
+                        ));
+                    }
+                });
+            }
+            "role" | "case" | "attached" => {
+                return Err(format!("duplicate semantic-entry field '{key}'"));
+            }
             _ => return Err(format!("unknown semantic-entry field '{key}'")),
         }
     }
+    let role = role.ok_or_else(|| "semantic-entry directive requires role=...".to_owned())?;
+    if attached.is_some() && role != DefinitionRole::Option {
+        return Err("semantic-entry field 'attached' applies only to role=option".to_owned());
+    }
     Ok(EntryDeclaration {
-        role: role.ok_or_else(|| "semantic-entry directive requires role=...".to_owned())?,
+        role,
         case: case.ok_or_else(|| {
             "semantic-entry directive requires case=sensitive|insensitive".to_owned()
         })?,
+        attached: attached.unwrap_or_default(),
         source,
     })
 }
@@ -251,15 +278,16 @@ pub(super) fn normalize_entry_lists(
         let declaration = source.and_then(|source| declarations.remove(&source.line));
         let role = declaration.map_or(DefinitionRole::Option, |value| value.role);
         let case = declaration.map_or(DefinitionCase::Sensitive, |value| value.case);
+        let attached = declaration.map_or(AttachedValuePolicy::Infer, |value| value.attached);
         let signatures = items
             .iter()
-            .map(|item| entry_signature(item, role, declaration.is_some()))
+            .map(|item| entry_signature(item, role, declaration.is_some(), attached))
             .collect::<Result<Vec<_>, _>>();
         let Ok(signatures) = signatures else {
             if let Some(declaration) = declaration {
                 for rejection in items
                     .iter()
-                    .filter_map(|item| entry_signature(item, role, true).err())
+                    .filter_map(|item| entry_signature(item, role, true, attached).err())
                 {
                     rejection.emit(diagnostics, source.unwrap_or(declaration.source));
                 }
@@ -416,6 +444,7 @@ fn entry_signature(
     item: &ListItem,
     role: DefinitionRole,
     explicitly_declared: bool,
+    attached: AttachedValuePolicy,
 ) -> Result<EntrySignature, EntryRejection> {
     let source = item.blocks.first().and_then(block_source);
     let Some(Block::Paragraph { children, .. }) = item.blocks.first() else {
@@ -431,7 +460,7 @@ fn entry_signature(
         match inline {
             Inline::Code { value } => {
                 leading_term.get_or_insert(value.as_str());
-                let parsed = entry_names(value, role, explicitly_declared)
+                let parsed = entry_names(value, role, explicitly_declared, attached)
                     .map_err(|reason| EntryRejection::new(reason, Some(value), source))?;
                 extend_unique(&mut names, parsed);
             }
@@ -580,9 +609,10 @@ fn entry_names(
     value: &str,
     role: DefinitionRole,
     explicitly_declared: bool,
+    attached: AttachedValuePolicy,
 ) -> Result<Vec<String>, EntryRejectionReason> {
     match role {
-        DefinitionRole::Option if explicitly_declared => option_entry_names(value),
+        DefinitionRole::Option if explicitly_declared => option_entry_names(value, attached),
         DefinitionRole::Option => value
             .trim_start()
             .starts_with('-')
@@ -632,7 +662,10 @@ fn is_environment_name(value: &str) -> bool {
             .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
 }
 
-fn option_entry_names(value: &str) -> Result<Vec<String>, EntryRejectionReason> {
+fn option_entry_names(
+    value: &str,
+    attached: AttachedValuePolicy,
+) -> Result<Vec<String>, EntryRejectionReason> {
     let mut names = Vec::new();
     for alias in value.split([',', '|']).map(str::trim) {
         if alias.starts_with('-') && alias.contains('/') {
@@ -648,14 +681,17 @@ fn option_entry_names(value: &str) -> Result<Vec<String>, EntryRejectionReason> 
                 continue;
             }
         }
-        names.push(option_entry_name(alias)?);
+        names.push(option_entry_name(alias, attached)?);
     }
     (!names.is_empty())
         .then_some(names)
         .ok_or(EntryRejectionReason::InvalidOptionName)
 }
 
-fn option_entry_name(value: &str) -> Result<String, EntryRejectionReason> {
+fn option_entry_name(
+    value: &str,
+    attached: AttachedValuePolicy,
+) -> Result<String, EntryRejectionReason> {
     let value = value.trim();
     if value.starts_with('-') {
         return dash_option_name(value)
@@ -666,15 +702,18 @@ fn option_entry_name(value: &str) -> Result<String, EntryRejectionReason> {
         return fixed_prefixed_name(value, "+");
     }
     if !value.starts_with('/') {
-        return equals_option_name(value);
+        return equals_option_name(value, attached);
     }
     if value.starts_with("/+") {
         return fixed_prefixed_name(value, "/+");
     }
-    slash_option_name(value)
+    slash_option_name(value, attached)
 }
 
-fn equals_option_name(value: &str) -> Result<String, EntryRejectionReason> {
+fn equals_option_name(
+    value: &str,
+    attached: AttachedValuePolicy,
+) -> Result<String, EntryRejectionReason> {
     let Some((name, visible_value)) = value.split_once('=') else {
         return Err(EntryRejectionReason::UnsupportedOptionPrefix);
     };
@@ -682,6 +721,15 @@ fn equals_option_name(value: &str) -> Result<String, EntryRejectionReason> {
         return Err(EntryRejectionReason::InvalidOptionName);
     }
     let placeholder = visible_value.trim();
+    if matches!(attached, AttachedValuePolicy::Fixed) {
+        if placeholder.is_empty() || is_explicit_placeholder(placeholder) {
+            return Ok(format!("{name}="));
+        }
+        if placeholder != visible_value || !is_safe_segment(placeholder) {
+            return Err(EntryRejectionReason::InvalidOptionName);
+        }
+        return Ok(value.to_owned());
+    }
     if !placeholder.is_empty() && !is_placeholder(placeholder) {
         return Err(EntryRejectionReason::InvalidPlaceholder);
     }
@@ -698,7 +746,10 @@ fn fixed_prefixed_name(value: &str, prefix: &str) -> Result<String, EntryRejecti
     Ok(value.to_owned())
 }
 
-fn slash_option_name(value: &str) -> Result<String, EntryRejectionReason> {
+fn slash_option_name(
+    value: &str,
+    attached: AttachedValuePolicy,
+) -> Result<String, EntryRejectionReason> {
     let mut parts = value.split_whitespace();
     let token = parts
         .next()
@@ -719,7 +770,14 @@ fn slash_option_name(value: &str) -> Result<String, EntryRejectionReason> {
     if suffix.is_empty() {
         return Ok(head.to_owned());
     }
-    Ok(if is_placeholder(suffix) { head } else { token }.to_owned())
+    Ok(if is_explicit_placeholder(suffix)
+        || matches!(attached, AttachedValuePolicy::Infer) && is_placeholder(suffix)
+    {
+        head
+    } else {
+        token
+    }
+    .to_owned())
 }
 
 fn is_ascii_identifier(value: &str) -> bool {
@@ -754,6 +812,13 @@ fn is_placeholder(value: &str) -> bool {
         && value.bytes().all(|byte| {
             byte.is_ascii_uppercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
         })
+}
+
+fn is_explicit_placeholder(value: &str) -> bool {
+    value
+        .strip_prefix('<')
+        .and_then(|value| value.strip_suffix('>'))
+        .is_some_and(is_placeholder)
 }
 
 fn block_source(block: &Block) -> Option<SourceSpan> {

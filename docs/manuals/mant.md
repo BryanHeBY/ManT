@@ -210,6 +210,12 @@ list. Both the role and matching policy are required:
 - `/+N`: Select a character offset.
 - `/driver.exclude`: Select Driver Verifier exclusions.
 
+<!-- mant:entries role=option case=insensitive attached=fixed -->
+- `/F`: Run an extended scan.
+- `/F:Y`: Run an extended scan and clean detected malware.
+- `/server:<NAME>`: Select a server while keeping an explicit placeholder.
+- `perf=default`: Select a fixed named policy.
+
 <!-- mant:entries role=command case=insensitive -->
 - `query`: Read keys and values.
 - `winget install`: Install a package.
@@ -220,10 +226,16 @@ list. Both the role and matching policy are required:
 ```
 
 `role` is `option`, `command`, or `environment-variable`; `case` is
-`sensitive` or `insensitive`. The directive must be the only construct on its
-line and targets a bullet list beginning on the next non-empty line. Blank
-lines are allowed, but a heading, paragraph, or other intervening construct
-invalidates the declaration.
+`sensitive` or `insensitive`. Option declarations may additionally use
+`attached=fixed`. It retains unbracketed values attached with `:` or `=` as
+part of the semantic name, so `/F:Y` and `perf=default` remain distinct from
+`/F` and `perf=`. An angle-bracketed value such as `<NAME>` remains an explicit
+placeholder. Omitting the field preserves the legacy inference in which an
+uppercase attached value is a placeholder. `attached=infer` states that
+default explicitly. The directive must be the only construct on its line and
+targets a bullet list beginning on the next non-empty line. Blank lines are
+allowed, but a heading, paragraph, or other intervening construct invalidates
+the declaration.
 
 Every item in a declared list must begin with one or more inline-code terms,
 optionally separated by commas or `|`, and then contain `:`, `—`, or `–` in the

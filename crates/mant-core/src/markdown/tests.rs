@@ -736,6 +736,48 @@ fn declared_entry_grammar_accepts_blank_lines_delimiters_and_colon_conventions()
 }
 
 #[test]
+fn declared_fixed_attached_values_keep_their_official_identity() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## Options\n\n<!-- mant:entries role=option case=insensitive attached=fixed -->\n- `/F`: Extended scan.\n- `/F:Y`: Extended scan and cleanup.\n- `/server:<NAME>`: Select a server.\n- `perf=default`: Select the default policy.\n",
+        None,
+    )
+    .expect("fixed attached option values");
+    assert!(parsed.document.diagnostics.is_empty());
+    let query = QueryBundle {
+        schema: QuerySchema::V5,
+        label: "tool.md".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
+        .expect("fixed attached value outline");
+    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+        panic!("options section");
+    };
+    assert!(matches!(
+        children.as_slice(),
+        [
+            OutlineNode::DocumentEntry { id: first_id, title: first_title, names: first_names, .. },
+            OutlineNode::DocumentEntry { id: fixed_id, title: fixed_title, names: fixed_names, .. },
+            OutlineNode::DocumentEntry { names: placeholder_names, .. },
+            OutlineNode::DocumentEntry { id: equals_id, title: equals_title, names: equals_names, .. },
+        ] if first_id == "option-f"
+            && first_title == "/F"
+            && first_names == &["/F"]
+            && fixed_id == "option-f-y"
+            && fixed_title == "/F:Y"
+            && fixed_names == &["/F:Y"]
+            && placeholder_names == &["/server"]
+            && equals_id == "option-perf-default"
+            && equals_title == "perf=default"
+            && equals_names == &["perf=default"]
+    ));
+    for selector in ["/F", "/F:Y", "/f:y", "perf=default"] {
+        select_explanation(&query, selector).expect("fixed attached value selector");
+    }
+}
+
+#[test]
 fn declared_option_entries_cover_windows_native_token_families() {
     fn collect_names(nodes: &[OutlineNode], output: &mut Vec<String>) {
         for node in nodes {
