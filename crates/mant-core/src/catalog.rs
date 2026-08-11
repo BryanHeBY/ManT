@@ -2,10 +2,11 @@
 
 use std::path::PathBuf;
 
-use crate::{
-    ManualIndex, RegisteredDocumentOrigin, SourceConfigError, discover_manual_roots,
-    list_registered_documents,
+use mant_sources::{
+    RegisteredDocument, RegisteredDocumentOrigin, SourceConfigError, list_registered_documents,
 };
+
+use crate::{ManualIndex, discover_manual_roots};
 
 /// Source family used to resolve one available document.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -47,7 +48,7 @@ pub fn list_available_documents() -> Result<Vec<AvailableDocument>, SourceConfig
 }
 
 fn list_available_documents_from(
-    registered: Vec<crate::RegisteredDocument>,
+    registered: Vec<RegisteredDocument>,
     manuals: &[crate::ManualPage],
 ) -> Vec<AvailableDocument> {
     let mut documents = registered
@@ -80,7 +81,9 @@ fn list_available_documents_from(
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{ManualPage, RegisteredDocument, RegisteredDocumentOrigin};
+    use mant_sources::{RegisteredDocument, RegisteredDocumentOrigin};
+
+    use crate::ManualPage;
 
     use super::{AvailableDocumentKind, AvailableDocumentOrigin, list_available_documents_from};
 

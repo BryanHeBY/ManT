@@ -129,18 +129,31 @@ impl fmt::Display for QueryError {
     }
 }
 
-impl Error for QueryError {}
+impl Error for QueryError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::InvalidSearch(error) => Some(error),
+            Self::Manual(error) => Some(error),
+            Self::EmptyName
+            | Self::InvalidSection
+            | Self::InvalidSource
+            | Self::ConflictingSourceSelectors
+            | Self::EmptyMarkdownPath
+            | Self::EmptySelection
+            | Self::EmptySelector
+            | Self::EmptyEntry
+            | Self::Markdown { .. }
+            | Self::EmptyMarkdown { .. }
+            | Self::Registry { .. }
+            | Self::NoReadableContent { .. } => None,
+        }
+    }
+}
 
 impl fmt::Display for ManualLoadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotFound { name, detail } => {
-                write!(
-                    formatter,
-                    "could not load manual '{name}': manual source: {detail}"
-                )
-            }
-            Self::Parse { name, detail } => {
+            Self::NotFound { name, detail } | Self::Parse { name, detail } => {
                 write!(
                     formatter,
                     "could not load manual '{name}': manual source: {detail}"
@@ -177,7 +190,15 @@ impl fmt::Display for QueryExecutionError {
     }
 }
 
-impl Error for QueryExecutionError {}
+impl Error for QueryExecutionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Query(error) => Some(error),
+            Self::Projection(error) => Some(error),
+            Self::Search(error) => Some(error),
+        }
+    }
+}
 
 /// Query the local man database and optional offline tldr caches.
 ///
@@ -198,9 +219,8 @@ pub fn resolve_query_with_policy(
     request: &QueryRequest,
     policy: QueryPolicy,
 ) -> Result<QueryBundle, QueryError> {
-    validate_query_request(request, policy)?;
     let resolver = DocumentResolver::from_system();
-    query_with(request, policy, &resolver)
+    resolver.resolve(request, policy)
 }
 
 /// Load and materialize the view encoded in one native request.
@@ -212,8 +232,8 @@ pub fn execute_query(
     request: &QueryRequest,
     policy: QueryPolicy,
 ) -> Result<QueryViewResult, QueryExecutionError> {
-    let query = resolve_query_with_policy(request, policy).map_err(QueryExecutionError::Query)?;
-    project_query_view(query, &request.view)
+    let resolver = DocumentResolver::from_system();
+    resolver.execute(request, policy)
 }
 
 /// Materialize one view from an already loaded query.
@@ -362,7 +382,8 @@ trait QueryHost {
 /// One explicit local document-environment snapshot.
 pub struct DocumentResolver {
     registered: OnceLock<Result<RegisteredDocumentIndex, SourceConfigError>>,
-    manuals: ManualIndex,
+    manual_roots: Vec<PathBuf>,
+    manuals: OnceLock<ManualIndex>,
 }
 
 impl DocumentResolver {
@@ -371,8 +392,43 @@ impl DocumentResolver {
     pub fn from_system() -> Self {
         Self {
             registered: OnceLock::new(),
-            manuals: ManualIndex::from_roots(discover_manual_roots()),
+            manual_roots: discover_manual_roots(),
+            manuals: OnceLock::new(),
         }
+    }
+
+    /// Validate and resolve one request against this environment snapshot.
+    ///
+    /// Reusing a resolver keeps manual and registered-document precedence
+    /// stable across related operations. Construct a new resolver to refresh
+    /// filesystem discovery.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`QueryError`] for invalid input or unreadable local content.
+    pub fn resolve(
+        &self,
+        request: &QueryRequest,
+        policy: QueryPolicy,
+    ) -> Result<QueryBundle, QueryError> {
+        validate_query_request(request, policy)?;
+        query_with(request, policy, self)
+    }
+
+    /// Resolve and materialize the request's encoded view.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed loading, projection, or search failure.
+    pub fn execute(
+        &self,
+        request: &QueryRequest,
+        policy: QueryPolicy,
+    ) -> Result<QueryViewResult, QueryExecutionError> {
+        let query = self
+            .resolve(request, policy)
+            .map_err(QueryExecutionError::Query)?;
+        project_query_view(query, &request.view)
     }
 }
 
@@ -398,7 +454,10 @@ impl QueryHost for DocumentResolver {
     }
 
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String> {
-        locate_manual_source_in(request, &self.manuals).map_err(|error| error.to_string())
+        let manuals = self
+            .manuals
+            .get_or_init(|| ManualIndex::from_roots(self.manual_roots.clone()));
+        locate_manual_source_in(request, manuals).map_err(|error| error.to_string())
     }
 
     fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String> {

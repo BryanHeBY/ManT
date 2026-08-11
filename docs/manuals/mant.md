@@ -54,7 +54,7 @@ mant --mcp
 
 `mant` is ManT's native interactive reader, structured command-line interface,
 and MCP server. Linux, macOS, and Windows parse local man and mdoc sources
-through bundled libmandoc. Every platform exposes hierarchy, semantic options,
+through bundled libmandoc. Every platform exposes hierarchy, semantic entries,
 references, and visible text through one normalized document model.
 
 Local Markdown enters the same model, so terminal navigation, outlines,
@@ -303,7 +303,8 @@ With a complete document name or Markdown path and a terminal on stdin and stdou
 `mant` opens its Ratatui reader. `--ui` requires this mode explicitly. A
 projection option or `--format` selects deterministic output instead.
 
-The resizable sidebar mirrors the section hierarchy and semantic options.
+The resizable sidebar mirrors the section hierarchy and groups every semantic
+entry role: options, commands, and environment variables.
 Selecting an item puts its heading at the top of the content pane. After
 content scrolling settles, the sidebar follows the first visible section.
 Page-local references can be followed directly.

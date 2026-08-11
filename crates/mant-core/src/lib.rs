@@ -21,10 +21,6 @@ pub use mandoc::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_page,
     parse_manual_source,
 };
-pub use mant_sources::{
-    RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError,
-    list_registered_documents,
-};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
     MarkdownOptions, render_excerpt_json, render_excerpt_markdown,

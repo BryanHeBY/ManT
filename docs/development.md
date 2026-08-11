@@ -97,7 +97,7 @@ directory.
 
 The file `docs/manuals/mant.md` is executable documentation. Tests parse it
 through the supported Markdown subset, require its embedded quick reference
-and semantic options, and reject lossy fallback diagnostics.
+and semantic entries, and reject lossy fallback diagnostics.
 
 On Linux, regenerate the README reader image with:
 

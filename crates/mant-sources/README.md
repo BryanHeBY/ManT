@@ -5,4 +5,17 @@ updates. Its default feature set is read-only. The optional `update` feature
 adds shallow Git acquisition and bounded HTTP archive installation for the
 native `mant` CLI; MCP only consumes the local registry.
 
-This crate is an internal component of [ManT](https://github.com/BryanHeBY/ManT).
+The read-only API loads one `RegisteredDocumentIndex` snapshot, scans the root
+document directory and each ready configured source once, then resolves ordered
+name candidates without repeating filesystem discovery. Root documents win;
+configured sources follow explicit priority and source-name order.
+
+With `update` enabled, Git and archive acquisition share the same staging and
+atomic activation transaction. Temporary checkouts, downloads, and staging
+directories are owned by an RAII workspace and cleaned on every exit path.
+Provider metadata is a strict tagged value, so Git-only and archive-only fields
+cannot form invalid combinations.
+
+This crate performs no rendering, native-manual lookup, MCP transport, or
+terminal work. Those responsibilities belong to `mant-core`, `mant`, and
+`mant-ui`.

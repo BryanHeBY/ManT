@@ -11,7 +11,7 @@ process.
 - A conservative, source-positioned Markdown parser with explicit loss
   diagnostics and optional embedded tldr content.
 - Bounded native manual loading, constrained `.so` alias resolution, and
-  `man(7)`/`mdoc(7)` lowering on Unix.
+  `man(7)`/`mdoc(7)` lowering on every supported platform.
 - Semantic outlines containing addressable sections and role-aware entries.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
@@ -42,9 +42,12 @@ println!("{}", render_outline_text(&outline));
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-Use `query` or `query_with_policy` with a `mant_ast::QueryRequest` to resolve a
-registered document or local manual by name. Use `parse_markdown` when the
+Use `resolve_query` or `resolve_query_with_policy` when a caller needs the full
+document bundle. Use `execute_query` to validate, resolve, and materialize the
+request's `view` through one engine boundary. Use `parse_markdown` when the
 caller needs the parsed document and tldr preface without query composition.
+`DocumentResolver` can be reused when several operations must share one lazy
+filesystem snapshot; constructing a new resolver refreshes discovery.
 
 ## Platform behavior
 

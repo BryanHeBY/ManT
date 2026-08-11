@@ -84,9 +84,10 @@ mant README.md
 mant tar --ui
 ```
 
-The sidebar mirrors nested sections and reveals normalized command-line
-options on demand. Selecting an entry places it at the top of the content
-pane; after scrolling settles, the sidebar follows the first visible section.
+The sidebar mirrors nested sections and reveals normalized options, commands,
+and environment variables on demand. Selecting an entry places it at the top
+of the content pane; after scrolling settles, the sidebar follows the first
+visible section.
 
 - `j` / `k` or arrow keys move through visible nodes.
 - `h` / `l` collapse and expand branches.

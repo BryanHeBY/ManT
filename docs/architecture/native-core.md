@@ -306,7 +306,7 @@ Markdown escaping.
 
 The shipped `docs/manuals/mant.md` file is also a fixture: tests require it to
 parse without lossy fallbacks and to expose its embedded quick reference and
-semantic options.
+semantic entries.
 
 Rust additionally owns `mant` argument, stdio protocol, exit-code, interactive
 reader, and agent-facing output tests. Shared contract fixtures are decoded,
