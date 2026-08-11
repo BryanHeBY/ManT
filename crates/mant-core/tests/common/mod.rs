@@ -725,7 +725,7 @@ pub fn assert_section_topology(name: &str, document: &MantDocument, expected_tit
             .source
             .path
             .as_deref()
-            .is_some_and(|path| path.contains(name)),
+            .is_some_and(|path| path.replace('\\', "/").contains(name)),
         "fixture {name} must retain its source location",
     );
 
