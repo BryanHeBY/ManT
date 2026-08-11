@@ -403,7 +403,9 @@ fn replace_directory(staging: &Path, target: &Path) -> Result<(), String> {
 }
 
 fn sync_file(path: &Path, label: &str) -> Result<(), String> {
-    fs::File::open(path)
+    fs::OpenOptions::new()
+        .write(true)
+        .open(path)
         .and_then(|file| file.sync_all())
         .map_err(|error| format!("could not sync {label}: {error}"))
 }
@@ -549,6 +551,19 @@ mod tests {
                 .contains("document name 'tool'")
         );
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn syncing_an_installed_file_uses_a_write_capable_handle() {
+        let root = temp("sync-file");
+        fs::create_dir_all(&root).expect("create sync fixture");
+        let path = root.join("tool.md");
+        fs::write(&path, "# tool").expect("write sync fixture");
+
+        sync_file(&path, "test document").expect("sync file on Windows");
+
+        fs::remove_dir_all(root).expect("remove sync fixture");
     }
 
     #[cfg(unix)]
