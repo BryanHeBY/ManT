@@ -87,6 +87,7 @@ fn item_lines(
             NavKind::Entry(DefinitionRole::Option) => theme::GREEN,
             NavKind::Entry(DefinitionRole::Command) => theme::PEACH,
             NavKind::Entry(DefinitionRole::EnvironmentVariable) => theme::LINK,
+            NavKind::Entry(DefinitionRole::Variable) => theme::PINK,
         }
     };
     let background = if selected {

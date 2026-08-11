@@ -47,7 +47,7 @@ fn project_file(relative: &str) -> PathBuf {
 fn view(relative: &str) -> DocumentView {
     let document = mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
     DocumentView::new(&QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: relative.to_owned(),
         document: Some(document),
         tldr: None,
@@ -129,7 +129,7 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
         })
         .expect("tar --acls identity");
     let view = DocumentView::new(&QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tar".to_owned(),
         document: Some(document),
         tldr: None,
@@ -171,7 +171,7 @@ fn real_manual_lowering_preserves_every_substantial_text_fragment() {
         let mut fragments = Vec::new();
         collect_document_fragments(&document, &mut fragments);
         let view = DocumentView::new(&QueryBundle {
-            schema: QuerySchema::V5,
+            schema: QuerySchema::V6,
             label: relative.to_owned(),
             document: Some(document),
             tldr: None,
@@ -228,7 +228,7 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
     for relative in ["docs/manuals/mant.md"] {
         let path = project_file(relative);
         let bundle = mant_core::resolve_query(&QueryRequest {
-            schema: RequestSchema::V5,
+            schema: RequestSchema::V6,
             input: QueryInput::MarkdownFile {
                 path: path.to_string_lossy().into_owned(),
             },

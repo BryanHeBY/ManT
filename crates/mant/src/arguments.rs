@@ -206,7 +206,7 @@ struct Cli {
     )]
     node: Vec<String>,
 
-    /// Explain one option, command, or environment variable by alias, ID, or outline path.
+    /// Explain one option, command, variable, or environment variable by alias, ID, or outline path.
     #[arg(
         long,
         value_name = "ENTRY",
@@ -655,7 +655,7 @@ fn normalize_query_source(
                 }
             };
             QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V5,
+                schema: RequestSchema::V6,
                 input,
                 view,
             })
@@ -710,7 +710,7 @@ mod tests {
             parse(&args(&["git"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "git".to_owned(),
                         source: None,
@@ -810,7 +810,7 @@ mod tests {
             .expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "printf".to_owned(),
                         source: None,
@@ -872,7 +872,7 @@ mod tests {
             parse(&args(&["gcc", "--outline"])).expect("outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "gcc".to_owned(),
                         source: None,
@@ -893,7 +893,7 @@ mod tests {
                 .expect("option outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "tar".to_owned(),
                         source: None,
@@ -916,7 +916,7 @@ mod tests {
             .expect("excerpt"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "gcc".to_owned(),
                         source: None,
@@ -945,7 +945,7 @@ mod tests {
                 parse(&args(&values)).expect("explain query"),
                 Command::Query {
                     source: QuerySource::Arguments(QueryRequest {
-                        schema: RequestSchema::V5,
+                        schema: RequestSchema::V6,
                         input: QueryInput::Document {
                             name: "tar".to_owned(),
                             source: None,
@@ -970,7 +970,7 @@ mod tests {
             parse(&args(&["tar", "--search=--acls"])).expect("literal search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "tar".to_owned(),
                         source: None,
@@ -1016,7 +1016,7 @@ mod tests {
             .expect("regex search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "git".to_owned(),
                         source: None,
@@ -1125,7 +1125,7 @@ mod tests {
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V5,
+                    schema: RequestSchema::V6,
                     input: QueryInput::Document {
                         name: "--help".to_owned(),
                         source: None,

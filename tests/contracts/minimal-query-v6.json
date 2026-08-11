@@ -1,8 +1,8 @@
 {
-  "schema": "mant.query/v5",
+  "schema": "mant.query/v6",
   "label": "ls",
   "document": {
-    "schema": "mant.document/v5",
+    "schema": "mant.document/v6",
     "producer": {
       "name": "mant-native",
       "version": "0.2.0",

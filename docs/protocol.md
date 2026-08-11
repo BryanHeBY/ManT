@@ -20,14 +20,14 @@ The current descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v5",
-  "nativeApiVersion": "5",
-  "requestSchema": "mant.request/v5",
-  "querySchema": "mant.query/v5",
-  "documentSchema": "mant.document/v5",
-  "outlineSchema": "mant.outline/v5",
-  "excerptSchema": "mant.excerpt/v5",
-  "searchSchema": "mant.search/v5"
+  "protocol": "mant.cli/v6",
+  "nativeApiVersion": "6",
+  "requestSchema": "mant.request/v6",
+  "querySchema": "mant.query/v6",
+  "documentSchema": "mant.document/v6",
+  "outlineSchema": "mant.outline/v6",
+  "excerptSchema": "mant.excerpt/v6",
+  "searchSchema": "mant.search/v6"
 }
 ```
 
@@ -38,23 +38,24 @@ query the manual database, read tldr data, or start the TUI.
 
 | Identifier | Scope | Where it appears |
 | --- | --- | --- |
-| `mant.cli/v5` | One-shot process invocation and stream behavior | `--protocol-version` |
-| `5` | Native API generation negotiated by process clients | `nativeApiVersion` |
-| `mant.request/v5` | Closed request accepted by `--request-json` | Request `schema` |
-| `mant.query/v5` | Complete document plus optional quick reference | Full response `schema` |
-| `mant.document/v5` | Source-neutral document AST | `QueryBundle.document.schema` |
-| `mant.outline/v5` | Block-free addressable tree | Outline response `schema` |
-| `mant.excerpt/v5` | One or more selected nodes | Excerpt response `schema` |
-| `mant.search/v5` | Search results and pagination | Search response `schema` |
+| `mant.cli/v6` | One-shot process invocation and stream behavior | `--protocol-version` |
+| `6` | Native API generation negotiated by process clients | `nativeApiVersion` |
+| `mant.request/v6` | Closed request accepted by `--request-json` | Request `schema` |
+| `mant.query/v6` | Complete document plus optional quick reference | Full response `schema` |
+| `mant.document/v6` | Source-neutral document AST | `QueryBundle.document.schema` |
+| `mant.outline/v6` | Block-free addressable tree | Outline response `schema` |
+| `mant.excerpt/v6` | One or more selected nodes | Excerpt response `schema` |
+| `mant.search/v6` | Search results and pagination | Search response `schema` |
 | `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
 
 The suffixes are contract versions, not the ManT release number. The process
-request and response contracts are v5; the independent Markdown coordinate
+request and response contracts are v6; the independent Markdown coordinate
 contract remains `mant.markdown/v1`. Clients must compare every complete
-identifier rather than infer one contract from another. The v5 semantic-entry
-contracts replace outline detail `options` with `entries` and add an explicit
-`case` policy to entry identities and search nodes; they are not
-wire-compatible with the corresponding v4 responses.
+identifier rather than infer one contract from another. The v6 semantic-entry
+contracts replace outline detail `options` with `entries`, add explicit `case`
+policy to entry identities and search nodes, and distinguish general variables
+from process environment variables. They are not wire-compatible with the
+corresponding v4 responses; no v5 contract was published.
 
 ### Compatibility Rules
 
@@ -95,11 +96,11 @@ commands.
 
 | Catalog key | Root title | Root `$id` |
 | --- | --- | --- |
-| `request` | `QueryRequest` | `urn:mant:request:v5` |
-| `query` | `QueryBundle` | `urn:mant:query:v5` |
-| `outline` | `QueryOutline` | `urn:mant:outline:v5` |
-| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v5` |
-| `search` | `QuerySearch` | `urn:mant:search:v5` |
+| `request` | `QueryRequest` | `urn:mant:request:v6` |
+| `query` | `QueryBundle` | `urn:mant:query:v6` |
+| `outline` | `QueryOutline` | `urn:mant:outline:v6` |
+| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v6` |
+| `search` | `QuerySearch` | `urn:mant:search:v6` |
 
 The request schema is generated for deserialization, while response schemas
 are generated for serialization. This distinction matters because input
@@ -153,7 +154,7 @@ findings belong to `document.diagnostics`, `outline.diagnostics`, or
 Manual pages have one parser path: ManT performs bounded reads, decompression,
 and constrained redirect-only `.so` alias resolution, then gives plain roff
 bytes to `libmandoc-rs` with includes denied. Renderer selection is
-deliberately absent from `mant.request/v5`. This native-manual source family is
+deliberately absent from `mant.request/v6`. This native-manual source family is
 available on Linux, macOS, and Windows through the same owned AST boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
@@ -168,7 +169,7 @@ Every request has three required fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema` | Exact string | Must be `mant.request/v5` |
+| `schema` | Exact string | Must be `mant.request/v6` |
 | `input` | `QueryInput` union | Resolvable document name or local Markdown path |
 | `view` | `QueryView` union | Full, outline, excerpt, explain, or search projection |
 
@@ -241,15 +242,15 @@ mode does not change the versioned request schema.
 
 | `kind` | Additional fields | Defaults and bounds | Response |
 | --- | --- | --- | --- |
-| `full` | None | None | `mant.query/v5` |
-| `outline` | `detail` | Required: `sections` or `entries` | `mant.outline/v5` |
-| `excerpt` | `nodes` | Non-empty string array | `mant.excerpt/v5` |
-| `explain` | `entry` | One non-empty semantic path, ID, or alias | `mant.excerpt/v5` |
-| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v5` |
+| `full` | None | None | `mant.query/v6` |
+| `outline` | `detail` | Required: `sections` or `entries` | `mant.outline/v6` |
+| `excerpt` | `nodes` | Non-empty string array | `mant.excerpt/v6` |
+| `explain` | `entry` | One non-empty semantic path, ID, or alias | `mant.excerpt/v6` |
+| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v6` |
 
-Request JSON uses only the canonical outline detail `"entries"`; v5 rejects
+Request JSON uses only the canonical outline detail `"entries"`; v6 rejects
 `"options"`. The command-line parser alone retains `--outline=options` as a
-human-facing alias for `--outline=entries`. Outline v5 responses always emit
+human-facing alias for `--outline=entries`. Outline v6 responses always emit
 `"detail":"entries"` for the semantic-entry form.
 
 Search view fields are:
@@ -276,7 +277,7 @@ Request a full manual:
 
 ```json
 {
-  "schema": "mant.request/v5",
+  "schema": "mant.request/v6",
   "input": {
     "kind": "document",
     "name": "printf",
@@ -292,7 +293,7 @@ Discover all sections and semantic entries:
 
 ```json
 {
-  "schema": "mant.request/v5",
+  "schema": "mant.request/v6",
   "input": {
     "kind": "document",
     "name": "tar"
@@ -308,7 +309,7 @@ Explain one semantic entry directly (sections with the same name are ignored):
 
 ```json
 {
-  "schema": "mant.request/v5",
+  "schema": "mant.request/v6",
   "input": {
     "kind": "document",
     "name": "tar"
@@ -324,7 +325,7 @@ Retrieve a section and one option by selectors returned from an outline:
 
 ```json
 {
-  "schema": "mant.request/v5",
+  "schema": "mant.request/v6",
   "input": {
     "kind": "document",
     "name": "tar"
@@ -343,7 +344,7 @@ Search a Markdown document:
 
 ```json
 {
-  "schema": "mant.request/v5",
+  "schema": "mant.request/v6",
   "input": {
     "kind": "markdown-file",
     "path": "README.md"
@@ -366,7 +367,7 @@ A shell client can send a request without a temporary file:
 
 ```sh
 printf '%s\n' \
-  '{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"entries"}}' \
+  '{"schema":"mant.request/v6","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"entries"}}' \
   | mant --request-json --format json --compact
 ```
 
@@ -376,9 +377,9 @@ printf '%s\n' \
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `schema` | Yes | `mant.query/v5` |
+| `schema` | Yes | `mant.query/v6` |
 | `label` | Yes | Human-readable source label |
-| `document` | No | Normalized `mant.document/v5` document |
+| `document` | No | Normalized `mant.document/v6` document |
 | `tldr` | No | Normalized external or embedded quick reference |
 
 A successful runtime result contains useful `document`, `tldr`, or both.
@@ -396,10 +397,10 @@ An abbreviated but structurally valid Markdown result is:
 
 ```json
 {
-  "schema": "mant.query/v5",
+  "schema": "mant.query/v6",
   "label": "guide.md",
   "document": {
-    "schema": "mant.document/v5",
+    "schema": "mant.document/v6",
     "producer": {
       "name": "mant",
       "version": "0.6.0",
@@ -433,7 +434,7 @@ components.
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | Exact `mant.document/v5` marker |
+| `schema` | Exact `mant.document/v6` marker |
 | `producer` | ManT version and parser engine |
 | `source` | Original source format and path |
 | `meta` | Normalized title, section, date, volume, OS, architecture, names, and alias target |
@@ -519,7 +520,7 @@ An identity makes one definition addressable:
 }
 ```
 
-Roles are `option`, `command`, and `environment-variable`. `case` is
+Roles are `option`, `command`, `variable`, and `environment-variable`. `case` is
 `sensitive` or `insensitive` and controls alias matching without changing
 canonical spelling. `names` contains
 normalized aliases suitable for `--node`, `--explain`, outline navigation,
@@ -579,7 +580,7 @@ before an agent requests content:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.outline/v5` |
+| `schema` | `mant.outline/v6` |
 | `detail` | Echoed `sections` or `entries` mode |
 | `label` | Query label |
 | `source`, `meta` | Optional document identity |
@@ -609,7 +610,7 @@ An illustrative response is:
 
 ```json
 {
-  "schema": "mant.outline/v5",
+  "schema": "mant.outline/v6",
   "detail": "entries",
   "label": "tool.md",
   "source": {
@@ -652,12 +653,12 @@ An illustrative response is:
 
 ## Excerpt Projection
 
-`mant.excerpt/v5` returns complete selected content without returning unrelated
+`mant.excerpt/v6` returns complete selected content without returning unrelated
 sections:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.excerpt/v5` |
+| `schema` | `mant.excerpt/v6` |
 | `label` | Query label |
 | `producer`, `source`, `meta` | Optional document identity |
 | `diagnostics` | Relevant recoverable findings |
@@ -681,7 +682,7 @@ and finally resolve semantic aliases. The `explain` view instead resolves an
 exact entry path or ID, then an entry alias using that entry's case policy.
 Only when no entry matches does an exact section, root, or tldr selector return
 an entry-required error. A same-named section therefore cannot shadow an
-option, command, or environment variable. A repeated alias is an error rather
+option, command, variable, or environment variable. A repeated alias is an error rather
 than a first-match selection; the diagnostic returns every candidate path and
 ID in source order.
 
@@ -691,14 +692,14 @@ There is intentionally no separate explanation response schema.
 
 ## Search Projection
 
-`mant.search/v5` searches one canonical full CommonMark render and returns
+`mant.search/v6` searches one canonical full CommonMark render and returns
 both structural locations and rendered coordinates.
 
 ### Result Envelope
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.search/v5` |
+| `schema` | `mant.search/v6` |
 | `label`, `source`, `meta` | Source identity |
 | `query` | Fully normalized search settings |
 | `render` | Coordinate-space descriptor |
@@ -754,7 +755,7 @@ A complete no-match response is:
 
 ```json
 {
-  "schema": "mant.search/v5",
+  "schema": "mant.search/v6",
   "label": "tar",
   "query": {
     "pattern": "definitely-not-present",
@@ -786,7 +787,7 @@ A complete no-match response is:
 
 `mant --mcp` is a long-running Model Context Protocol server over standard
 input and output. It is an alternate transport over the same `mant-core`
-queries, not `mant.cli/v5` framing and not a separate document model.
+queries, not `mant.cli/v6` framing and not a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
 line is limited to 8 MiB. Standard output is exclusively MCP traffic;
@@ -828,10 +829,10 @@ read-only tools:
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
 | `mant_documents_list` | None | `query`, `kind`, `source`, `section`, `limit`, `offset` | Paginated document catalog |
-| `mant_document_outline` | `name` | `source` or `section`; `detail`, default `entries` | `mant.outline/v5` |
-| `mant_document_get` | `name`, non-empty `nodes` | `source` or `section` | `mant.excerpt/v5` |
-| `mant_document_explain` | `name`, `entry` | `source` or `section` | `mant.excerpt/v5` |
-| `mant_document_search` | `name`, `pattern` | `source` or `section`, plus search settings | `mant.search/v5` |
+| `mant_document_outline` | `name` | `source` or `section`; `detail`, default `entries` | `mant.outline/v6` |
+| `mant_document_get` | `name`, non-empty `nodes` | `source` or `section` | `mant.excerpt/v6` |
+| `mant_document_explain` | `name`, `entry` | `source` or `section` | `mant.excerpt/v6` |
+| `mant_document_search` | `name`, `pattern` | `source` or `section`, plus search settings | `mant.search/v6` |
 
 Every tool is annotated read-only, non-destructive, and
 closed-world. Document tools resolve one name through root Markdown,
@@ -944,7 +945,7 @@ than inventing a ManT error schema.
 2. Run `mant --protocol-version --compact` and require compatible identifiers.
 3. Obtain `mant --schema request` and the expected response schema, or use a
    schema catalog pinned with the executable.
-4. Construct a closed `mant.request/v5` object.
+4. Construct a closed `mant.request/v6` object.
 5. Spawn `mant --request-json --format json --compact`.
 6. Write one UTF-8 request and close stdin.
 7. Drain stdout and stderr concurrently and apply a timeout.

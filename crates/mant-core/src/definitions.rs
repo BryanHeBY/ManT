@@ -286,9 +286,13 @@ fn identify_item(
     retained.extend(anchors.iter().cloned());
 
     let existing = anchors.first().cloned();
-    let preferred = existing
-        .clone()
-        .unwrap_or_else(|| format!("{}-{}", role_id_prefix(role), slug(&names[0])));
+    let preferred = existing.clone().unwrap_or_else(|| {
+        format!(
+            "{}-{}",
+            role_id_prefix(role),
+            role_name_slug(role, &names[0])
+        )
+    });
     // A copied libmandoc anchor may itself be an explicit `.Tg` destination,
     // so it is allowed to match the reserved set. Generated IDs are not.
     let id = if existing.is_some() && !used.contains(&preferred) {
@@ -311,11 +315,25 @@ fn identify_item(
     });
 }
 
+fn role_name_slug(role: DefinitionRole, name: &str) -> String {
+    if role == DefinitionRole::Variable {
+        match name {
+            "$?" => return "question-mark".to_owned(),
+            "$$" => return "dollar-dollar".to_owned(),
+            "$^" => return "caret".to_owned(),
+            "$_" => return "underscore".to_owned(),
+            _ => {}
+        }
+    }
+    slug(name)
+}
+
 const fn role_id_prefix(role: DefinitionRole) -> &'static str {
     match role {
         DefinitionRole::Option => "option",
         DefinitionRole::Command => "command",
         DefinitionRole::EnvironmentVariable => "environment",
+        DefinitionRole::Variable => "variable",
     }
 }
 

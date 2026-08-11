@@ -29,12 +29,12 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
         "https://json-schema.org/draft/2020-12/schema"
     );
     assert_eq!(schema["title"], "QueryRequest");
-    assert_eq!(schema["$id"], "urn:mant:request:v5");
+    assert_eq!(schema["$id"], "urn:mant:request:v6");
     assert_eq!(schema["additionalProperties"], false);
     assert!(required(&schema).contains(&"schema"));
     assert!(required(&schema).contains(&"input"));
     assert!(required(&schema).contains(&"view"));
-    assert!(encoded.contains("mant.request/v5"));
+    assert!(encoded.contains("mant.request/v6"));
     assert!(encoded.contains("\"document\""));
     assert!(encoded.contains("\"name\""));
     assert!(encoded.contains("\"source\""));
@@ -48,10 +48,10 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
 #[test]
 fn response_schemas_follow_the_serialized_wire_shapes() {
     for (schema, marker) in [
-        (query_bundle_json_schema(), "mant.query/v5"),
-        (query_outline_json_schema(), "mant.outline/v5"),
-        (query_excerpt_json_schema(), "mant.excerpt/v5"),
-        (query_search_json_schema(), "mant.search/v5"),
+        (query_bundle_json_schema(), "mant.query/v6"),
+        (query_outline_json_schema(), "mant.outline/v6"),
+        (query_excerpt_json_schema(), "mant.excerpt/v6"),
+        (query_search_json_schema(), "mant.search/v6"),
     ] {
         let encoded = serde_json::to_string(&schema).expect("schema JSON");
         assert!(encoded.contains(marker), "missing marker {marker}");
@@ -64,8 +64,10 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(fields.contains(&"label"));
     assert!(!fields.contains(&"document"));
     assert!(!fields.contains(&"tldr"));
-    assert!(encoded_query.contains("mant.document/v5"));
+    assert!(encoded_query.contains("mant.document/v6"));
     assert!(encoded_query.contains("DefinitionIdentity"));
+    assert!(encoded_query.contains("\"variable\""));
+    assert!(encoded_query.contains("\"environment-variable\""));
     assert!(encoded_query.contains("\"man\""));
     assert!(encoded_query.contains("\"mdoc\""));
     assert!(encoded_query.contains("\"markdown\""));

@@ -29,7 +29,7 @@ use mant_ast::{
 };
 
 let request = QueryRequest {
-    schema: RequestSchema::V5,
+    schema: RequestSchema::V6,
     input: QueryInput::Document {
         name: "git".to_owned(),
         source: None,
@@ -40,7 +40,7 @@ let request = QueryRequest {
     },
 };
 
-assert_eq!(request.schema, RequestSchema::V5);
+assert_eq!(request.schema, RequestSchema::V6);
 assert!(query_json_schema_catalog().contains_key("request"));
 ```
 

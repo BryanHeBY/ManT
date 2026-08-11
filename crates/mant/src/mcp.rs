@@ -152,13 +152,13 @@ struct GetParams {
     nodes: Vec<String>,
 }
 
-/// Parameters for resolving a single option, command, or environment entry.
+/// Parameters for resolving a single option, command, variable, or environment entry.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ExplainParams {
     #[serde(flatten)]
     selector: DocumentSelector,
-    /// Option spelling, command name, environment variable, outline path, or stable ID.
+    /// Option spelling, command or variable name, outline path, or stable ID.
     entry: String,
 }
 
@@ -413,7 +413,7 @@ impl MantMcpServer {
         Ok(Json(excerpt))
     }
 
-    /// Explain exactly one option, command, or environment variable by alias or ID.
+    /// Explain exactly one option, command, variable, or environment variable by alias or ID.
     #[tool(
         name = "mant_document_explain",
         annotations(
@@ -611,7 +611,7 @@ fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
         section: selector.section,
     };
     QueryRequest {
-        schema: mant_ast::RequestSchema::V5,
+        schema: mant_ast::RequestSchema::V6,
         input,
         view,
     }
@@ -846,7 +846,7 @@ mod tests {
             source: None,
         };
         let mut excerpt = QueryExcerpt {
-            schema: ExcerptSchema::V5,
+            schema: ExcerptSchema::V6,
             label: "demo".to_owned(),
             producer: None,
             source: None,
@@ -869,7 +869,7 @@ mod tests {
         use mant_ast::{Diagnostic, DiagnosticLevel, OutlineDetail, OutlineSchema, QueryOutline};
 
         let mut outline = QueryOutline {
-            schema: OutlineSchema::V5,
+            schema: OutlineSchema::V6,
             detail: OutlineDetail::Entries,
             label: "demo".to_owned(),
             source: None,

@@ -170,7 +170,7 @@ fn assert_semantic_replies(replies: &[Value]) {
         .expect("semantic outline reply");
     assert_eq!(
         outline["result"]["structuredContent"]["schema"],
-        "mant.outline/v5"
+        "mant.outline/v6"
     );
     let encoded = outline["result"]["structuredContent"].to_string();
     for role in ["option", "command", "environment-variable"] {

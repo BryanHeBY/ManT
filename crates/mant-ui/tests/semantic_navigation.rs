@@ -11,6 +11,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         (DefinitionRole::Option, "--help"),
         (DefinitionRole::Command, "build"),
         (DefinitionRole::EnvironmentVariable, "MANT_HOME"),
+        (DefinitionRole::Variable, "$LASTEXITCODE"),
     ]
     .into_iter()
     .enumerate()
@@ -28,11 +29,11 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     })
     .collect();
     let bundle = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tool".to_owned(),
         tldr: None,
         document: Some(MantDocument {
-            schema: DocumentSchema::V5,
+            schema: DocumentSchema::V6,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
@@ -62,7 +63,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     };
 
     let view = DocumentView::new(&bundle);
-    assert_eq!(view.navigation()[1].title, "ENTRIES (3)");
+    assert_eq!(view.navigation()[1].title, "ENTRIES (4)");
     assert_eq!(
         view.navigation()[2..]
             .iter()
@@ -72,6 +73,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             NavKind::Entry(DefinitionRole::Option),
             NavKind::Entry(DefinitionRole::Command),
             NavKind::Entry(DefinitionRole::EnvironmentVariable),
+            NavKind::Entry(DefinitionRole::Variable),
         ]
     );
 }

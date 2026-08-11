@@ -201,6 +201,7 @@ fn parse_declaration(value: &str, source: SourceSpan) -> Result<EntryDeclaration
                     "option" => DefinitionRole::Option,
                     "command" => DefinitionRole::Command,
                     "environment-variable" => DefinitionRole::EnvironmentVariable,
+                    "variable" => DefinitionRole::Variable,
                     _ => return Err(format!("unknown semantic-entry role '{value}'")),
                 });
             }
@@ -629,6 +630,9 @@ fn entry_names(
         }
         DefinitionRole::EnvironmentVariable => plain_entry_names(value, is_environment_name)
             .ok_or(EntryRejectionReason::InvalidEntryName),
+        DefinitionRole::Variable => {
+            plain_entry_names(value, is_variable_name).ok_or(EntryRejectionReason::InvalidEntryName)
+        }
     }
 }
 
@@ -652,6 +656,23 @@ fn is_environment_name(value: &str) -> bool {
         .or_else(|| value.strip_prefix("$ENV:"))
         .or_else(|| value.strip_prefix('$'))
         .unwrap_or(value);
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+        && value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+}
+
+fn is_variable_name(value: &str) -> bool {
+    let Some(value) = value.strip_prefix('$') else {
+        return false;
+    };
+    if matches!(value, "?" | "$" | "^") {
+        return true;
+    }
     !value.is_empty()
         && value
             .chars()

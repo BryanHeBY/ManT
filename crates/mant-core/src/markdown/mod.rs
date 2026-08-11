@@ -236,7 +236,7 @@ fn parse_document_with_entries(
     );
 
     MantDocument {
-        schema: DocumentSchema::V5,
+        schema: DocumentSchema::V6,
         producer: markdown_producer(),
         source: DocumentSource {
             format: SourceFormat::Markdown,

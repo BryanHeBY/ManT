@@ -193,9 +193,9 @@ by `:`, `—`, or `–` and a description:
 This legacy shorthand is case-sensitive. Aliases may be separated by commas,
 the historical `-h/--help` notation, or vertical bars.
 
-Role-aware entries, including Windows switches, commands, and environment
-variables, use an explicit invisible directive before one complete bullet
-list. Both the role and matching policy are required:
+Role-aware entries, including Windows switches, commands, variables, and
+environment variables, use an explicit invisible directive before one
+complete bullet list. Both the role and matching policy are required:
 
 ```markdown
 <!-- mant:entries role=option case=insensitive -->
@@ -222,11 +222,18 @@ list. Both the role and matching policy are required:
 
 <!-- mant:entries role=environment-variable case=insensitive -->
 - `PATH`, `$env:PATH`: Control executable discovery.
+
+<!-- mant:entries role=variable case=insensitive -->
+- `$?`: Hold the last PowerShell success state.
 - `$LASTEXITCODE`: Hold the last native process exit code.
+- `$PSVersionTable`: Describe the running PowerShell version.
 ```
 
-`role` is `option`, `command`, or `environment-variable`; `case` is
-`sensitive` or `insensitive`. Option declarations may additionally use
+`role` is `option`, `command`, `variable`, or `environment-variable`; `case`
+is `sensitive` or `insensitive`. A variable begins with `$` and may use an
+ASCII identifier or one of the special names `$?`, `$$`, and `$^`; `$_` is an
+ordinary identifier form. `$env:PATH` remains an environment variable rather
+than a general variable. Option declarations may additionally use
 `attached=fixed`. It retains unbracketed values attached with `:` or `=` as
 part of the semantic name, so `/F:Y` and `perf=default` remain distinct from
 `/F` and `perf=`. An angle-bracketed value such as `<NAME>` remains an explicit
@@ -345,7 +352,7 @@ With a complete document name or Markdown path and a terminal on stdin and stdou
 projection option or `--format` selects deterministic output instead.
 
 The resizable sidebar mirrors the section hierarchy and groups every semantic
-entry role: options, commands, and environment variables.
+entry role: options, commands, variables, and environment variables.
 Selecting an item puts its heading at the top of the content pane. After
 content scrolling settles, the sidebar follows the first visible section.
 Page-local references can be followed directly.
@@ -389,7 +396,7 @@ errors, and Rust panics.
   alias for `entries`.
 - `--node NODE`: Return a node by path or ID; repeat the option to select
   several nodes.
-- `--explain ENTRY`: Return exactly one semantic option, command, or
+- `--explain ENTRY`: Return exactly one semantic option, command, variable, or
   environment entry.
 
 Path `0` and ID alias `tldr` are reserved for either an external tldr page or a
@@ -446,7 +453,7 @@ JSON queries, schemas, protocol descriptions, and update reports.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v5` object from standard input.
+- `--request-json`: Read one closed `mant.request/v6` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
@@ -459,18 +466,18 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v5",
-  "nativeApiVersion": "5",
-  "requestSchema": "mant.request/v5",
-  "querySchema": "mant.query/v5",
-  "documentSchema": "mant.document/v5",
-  "outlineSchema": "mant.outline/v5",
-  "excerptSchema": "mant.excerpt/v5",
-  "searchSchema": "mant.search/v5"
+  "protocol": "mant.cli/v6",
+  "nativeApiVersion": "6",
+  "requestSchema": "mant.request/v6",
+  "querySchema": "mant.query/v6",
+  "documentSchema": "mant.document/v6",
+  "outlineSchema": "mant.outline/v6",
+  "excerptSchema": "mant.excerpt/v6",
+  "searchSchema": "mant.search/v6"
 }
 ```
 
-Request and response contracts advanced to v5 for explicit source selection,
+Request and response contracts advanced to v6 for explicit source selection,
 the first-class explain view, and role- and case-aware semantic entries. The
 independent `mant.markdown/v1` search-coordinate contract remains unchanged.
 Future revisions may advance individual contracts only when their wire shapes

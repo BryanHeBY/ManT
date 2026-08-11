@@ -8,7 +8,7 @@ presentation.
 ## What this crate provides
 
 - A hierarchy-aware, collapsible sidebar for sections and every semantic entry
-  role: options, commands, and environment variables.
+  role: options, commands, variables, and environment variables.
 - Settled-scroll navigation following and selectable page-local references.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.

@@ -279,7 +279,7 @@ Gamma.
     assert_eq!(ids, ["foo-2", "foo-2-2"]);
 
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "collision".to_owned(),
         document: Some(document),
         tldr: None,
@@ -446,7 +446,7 @@ Root body.
     );
 
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "demo.md".to_owned(),
         document: Some(document),
         tldr: None,
@@ -496,7 +496,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
 
     let outline = build_outline_with_detail(
         &QueryBundle {
-            schema: QuerySchema::V5,
+            schema: QuerySchema::V6,
             label: "tool.md".to_owned(),
             document: Some(document),
             tldr: None,
@@ -543,7 +543,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     }));
 
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -578,6 +578,80 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
 }
 
 #[test]
+fn declared_variables_keep_shell_and_powershell_automatic_names() {
+    let parsed = parse_markdown(
+        "# Shell\n\n## Variables\n\n<!-- mant:entries role=variable case=insensitive -->\n- `$?`: Last success state.\n- `$$`: Current process identifier.\n- `$^`: First pipeline input.\n- `$_`: Current pipeline item.\n- `$null`: Null value.\n- `$LASTEXITCODE`: Native exit status.\n- `$PSVersionTable`: PowerShell version data.\n- `$PROFILE`: Profile paths.\n- `$PATH`: Ordinary shell variable.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `$env:PATH`: Process executable path.\n",
+        Some("shell.md".to_owned()),
+    )
+    .expect("variable semantic entries");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let query = QueryBundle {
+        schema: QuerySchema::V6,
+        label: "shell".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    let outline =
+        build_outline_with_detail(&query, OutlineDetail::Entries).expect("variable entry outline");
+    let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
+        panic!("variables section");
+    };
+    assert_eq!(children.len(), 9);
+    assert!(children.iter().all(|entry| matches!(
+        entry,
+        OutlineNode::DocumentEntry {
+            role: DefinitionRole::Variable,
+            ..
+        }
+    )));
+    assert!(matches!(
+        &children[0],
+        OutlineNode::DocumentEntry { id, names, .. }
+            if id == "variable-question-mark" && names == &["$?"]
+    ));
+    for selector in ["$?", "$$", "$^", "$_", "$lastexitcode", "$PSVersionTable"] {
+        let explanation = select_explanation(&query, selector).expect("variable selector");
+        assert!(matches!(
+            explanation.selections.as_slice(),
+            [ExcerptSelection::DocumentEntry { entry, .. }]
+                if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Variable)
+        ));
+    }
+    assert!(matches!(
+        select_explanation(&query, "$env:PATH")
+            .expect("environment variable selector")
+            .selections
+            .as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+    ));
+    assert!(matches!(
+        select_explanation(&query, "$PATH")
+            .expect("ordinary variable selector")
+            .selections
+            .as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Variable)
+    ));
+}
+
+#[test]
+fn variable_declarations_reject_environment_provider_names_per_item() {
+    let parsed = parse_markdown(
+        "# Shell\n\n<!-- mant:entries role=variable case=insensitive -->\n- `$good`: Ordinary variable.\n- `$env:PATH`: Environment provider variable.\n",
+        None,
+    )
+    .expect("invalid variable remains visible");
+    assert!(matches!(parsed.document.blocks[0], Block::List { .. }));
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.invalid-entry-name")
+            && diagnostic.message.contains("$env:PATH")
+            && diagnostic.source.is_some_and(|source| source.line == 5)
+    }));
+}
+
+#[test]
 fn duplicate_entry_aliases_require_a_stable_path_or_id() {
     let parsed = parse_markdown(
         "# tool\n\n## Query\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force query.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
@@ -585,7 +659,7 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
     )
     .expect("duplicate entries remain valid input");
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -619,7 +693,7 @@ fn the_same_alias_in_different_roles_is_ambiguous() {
     )
     .expect("cross-role alias fixture");
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -646,7 +720,7 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
     )
     .expect("entry ID precedence fixture");
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -670,7 +744,7 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
     )
     .expect("case-sensitive entries");
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -744,7 +818,7 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     .expect("fixed attached option values");
     assert!(parsed.document.diagnostics.is_empty());
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "tool.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -799,7 +873,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
     assert!(parsed.document.diagnostics.is_empty());
 
     let query = QueryBundle {
-        schema: QuerySchema::V5,
+        schema: QuerySchema::V6,
         label: "native.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -874,7 +948,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
 
     let outline = build_outline_with_detail(
         &QueryBundle {
-            schema: QuerySchema::V5,
+            schema: QuerySchema::V6,
             label: "tool.md".to_owned(),
             document: Some(parsed.document),
             tldr: None,
