@@ -4,6 +4,7 @@
 //! section navigation, scroll synchronization, links, and future search ranges
 //! can all address the exact rows that Ratatui renders.
 
+mod model;
 mod search;
 mod wrap;
 
@@ -24,6 +25,7 @@ use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 use crate::theme;
+use model::{LineSurface, LogicalLine, LogicalLinkRange, StyledInlineLine, WrapMode};
 
 pub use self::search::RenderedSearchMatch;
 #[cfg(test)]
@@ -57,7 +59,7 @@ pub enum NavKind {
     Root,
     Section,
     EntryGroup,
-    Option,
+    Entry(DefinitionRole),
 }
 
 /// Renderer-independent terminal view before width-dependent wrapping.
@@ -92,120 +94,6 @@ struct RenderedLinkRegion {
     row: usize,
     start_column: usize,
     end_column: usize,
-}
-
-#[derive(Debug, Clone)]
-struct LogicalLine {
-    indent: usize,
-    continuation_indent: usize,
-    spans: Vec<Span<'static>>,
-    surface: LineSurface,
-    wrap_mode: WrapMode,
-    table_cells: Option<Vec<Vec<LogicalLine>>>,
-    links: Vec<LogicalLinkRange>,
-}
-
-#[derive(Debug, Clone)]
-struct LogicalLinkRange {
-    target: String,
-    start_column: usize,
-    end_column: usize,
-}
-
-#[derive(Debug, Clone, Default)]
-struct StyledInlineLine {
-    spans: Vec<Span<'static>>,
-    links: Vec<LogicalLinkRange>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WrapMode {
-    Word,
-    Character,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LineSurface {
-    Normal,
-    Code,
-    Tldr,
-    TldrTop,
-    TldrBottom,
-    Divider,
-    Rule,
-}
-
-impl LogicalLine {
-    fn empty() -> Self {
-        Self {
-            indent: 0,
-            continuation_indent: 0,
-            spans: Vec::new(),
-            surface: LineSurface::Normal,
-            wrap_mode: WrapMode::Word,
-            table_cells: None,
-            links: Vec::new(),
-        }
-    }
-
-    fn plain(indent: usize, value: impl Into<String>, style: Style) -> Self {
-        Self {
-            indent,
-            continuation_indent: indent,
-            spans: vec![Span::styled(value.into(), style)],
-            surface: LineSurface::Normal,
-            wrap_mode: WrapMode::Word,
-            table_cells: None,
-            links: Vec::new(),
-        }
-    }
-
-    fn surface(mut self, surface: LineSurface) -> Self {
-        self.surface = surface;
-        self
-    }
-
-    fn wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
-        self.wrap_mode = wrap_mode;
-        self
-    }
-
-    fn with_links(mut self, links: Vec<LogicalLinkRange>) -> Self {
-        self.links = links;
-        self
-    }
-
-    fn hanging(indent: usize, continuation_indent: usize, spans: Vec<Span<'static>>) -> Self {
-        Self {
-            indent,
-            continuation_indent,
-            spans,
-            surface: LineSurface::Normal,
-            wrap_mode: WrapMode::Word,
-            table_cells: None,
-            links: Vec::new(),
-        }
-    }
-
-    fn table(indent: usize, cells: Vec<Vec<Self>>) -> Self {
-        Self {
-            indent,
-            continuation_indent: indent,
-            spans: Vec::new(),
-            surface: LineSurface::Normal,
-            wrap_mode: WrapMode::Word,
-            table_cells: Some(cells),
-            links: Vec::new(),
-        }
-    }
-
-    fn rule(indent: usize) -> Self {
-        let mut line = Self::empty();
-        line.indent = indent;
-        line.continuation_indent = indent;
-        line.surface = LineSurface::Rule;
-        line
-    }
 }
 
 impl DocumentView {
@@ -250,15 +138,16 @@ impl DocumentView {
 
         if let Some(document) = &bundle.document {
             if !document.blocks.is_empty() {
-                builder.anchor(
-                    ROOT_ID,
-                    "OVERVIEW",
-                    0,
-                    NavKind::Root,
-                    false,
-                    document.sections.is_empty(),
-                    None,
-                );
+                builder.anchor(NavItem {
+                    id: ROOT_ID.to_owned(),
+                    target_id: ROOT_ID.to_owned(),
+                    title: "OVERVIEW".to_owned(),
+                    depth: 0,
+                    kind: NavKind::Root,
+                    has_children: false,
+                    is_last: document.sections.is_empty(),
+                    parent_id: None,
+                });
                 builder.blocks(&document.blocks, 0);
             }
             let section_count = document.sections.len();
@@ -429,15 +318,16 @@ impl DocumentBuilder {
         source_label: &'static str,
         document_gap: u16,
     ) {
-        self.anchor(
-            TLDR_ID,
-            "TLDR QUICK REFERENCE",
-            0,
-            NavKind::Tldr,
-            false,
-            false,
-            None,
-        );
+        self.anchor(NavItem {
+            id: TLDR_ID.to_owned(),
+            target_id: TLDR_ID.to_owned(),
+            title: "TLDR QUICK REFERENCE".to_owned(),
+            depth: 0,
+            kind: NavKind::Tldr,
+            has_children: false,
+            is_last: false,
+            parent_id: None,
+        });
         self.push(LogicalLine::empty().surface(LineSurface::TldrTop));
         for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
             self.push(LogicalLine::empty().surface(LineSurface::Tldr));
@@ -545,43 +435,14 @@ impl DocumentBuilder {
         });
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn anchor(
-        &mut self,
-        id: &str,
-        title: &str,
-        depth: usize,
-        kind: NavKind,
-        has_children: bool,
-        is_last: bool,
-        parent_id: Option<&str>,
-    ) {
-        self.anchors.insert(id.to_owned(), self.lines.len());
-        self.navigation(id, id, title, depth, kind, has_children, is_last, parent_id);
+    fn anchor(&mut self, item: NavItem) {
+        self.anchors
+            .insert(item.target_id.clone(), self.lines.len());
+        self.navigation(item);
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn navigation(
-        &mut self,
-        id: &str,
-        target_id: &str,
-        title: &str,
-        depth: usize,
-        kind: NavKind,
-        has_children: bool,
-        is_last: bool,
-        parent_id: Option<&str>,
-    ) {
-        self.navigation.push(NavItem {
-            id: id.to_owned(),
-            target_id: target_id.to_owned(),
-            title: title.to_owned(),
-            depth,
-            kind,
-            has_children,
-            is_last,
-            parent_id: parent_id.map(str::to_owned),
-        });
+    fn navigation(&mut self, item: NavItem) {
+        self.navigation.push(item);
     }
 
     fn section_with_position(
@@ -592,41 +453,42 @@ impl DocumentBuilder {
         parent_id: Option<&str>,
     ) {
         self.spacing(section.spacing_before_lines);
-        let options = section_option_entries(&section.blocks);
-        let has_children = !options.is_empty() || !section.children.is_empty();
-        self.anchor(
-            &section.id,
-            &section.title,
+        let entries = section_semantic_entries(&section.blocks);
+        let has_children = !entries.is_empty() || !section.children.is_empty();
+        self.anchor(NavItem {
+            id: section.id.clone(),
+            target_id: section.id.clone(),
+            title: section.title.clone(),
             depth,
-            NavKind::Section,
+            kind: NavKind::Section,
             has_children,
             is_last,
-            parent_id,
-        );
-        if !options.is_empty() {
-            let group_id = format!("__mant-options__{}", section.id);
-            self.navigation(
-                &group_id,
-                &section.id,
-                &format!("OPTIONS ({})", options.len()),
-                depth + 1,
-                NavKind::EntryGroup,
-                true,
-                section.children.is_empty(),
-                Some(&section.id),
-            );
-            let option_count = options.len();
-            for (index, identity) in options.into_iter().enumerate() {
-                self.navigation(
-                    &identity.id,
-                    &identity.id,
-                    &identity.names.join(", "),
-                    depth + 2,
-                    NavKind::Option,
-                    false,
-                    index + 1 == option_count,
-                    Some(&group_id),
-                );
+            parent_id: parent_id.map(str::to_owned),
+        });
+        if !entries.is_empty() {
+            let group_id = format!("__mant-entries__{}", section.id);
+            self.navigation(NavItem {
+                id: group_id.clone(),
+                target_id: section.id.clone(),
+                title: format!("ENTRIES ({})", entries.len()),
+                depth: depth + 1,
+                kind: NavKind::EntryGroup,
+                has_children: true,
+                is_last: section.children.is_empty(),
+                parent_id: Some(section.id.clone()),
+            });
+            let entry_count = entries.len();
+            for (index, identity) in entries.into_iter().enumerate() {
+                self.navigation(NavItem {
+                    id: identity.id.clone(),
+                    target_id: identity.id.clone(),
+                    title: identity.names.join(", "),
+                    depth: depth + 2,
+                    kind: NavKind::Entry(identity.role),
+                    has_children: false,
+                    is_last: index + 1 == entry_count,
+                    parent_id: Some(group_id.clone()),
+                });
             }
         }
         self.push(LogicalLine::plain(
@@ -959,33 +821,31 @@ fn count_sections(sections: &[Section]) -> usize {
         .sum()
 }
 
-fn section_option_entries(blocks: &[Block]) -> Vec<&DefinitionIdentity> {
+fn section_semantic_entries(blocks: &[Block]) -> Vec<&DefinitionIdentity> {
     let mut entries = Vec::new();
-    collect_option_entries(blocks, &mut entries);
+    collect_semantic_entries(blocks, &mut entries);
     entries
 }
 
-fn collect_option_entries<'a>(blocks: &'a [Block], entries: &mut Vec<&'a DefinitionIdentity>) {
+fn collect_semantic_entries<'a>(blocks: &'a [Block], entries: &mut Vec<&'a DefinitionIdentity>) {
     for block in blocks {
         match block {
             Block::DefinitionList { items, .. } => {
                 for item in items {
-                    if let Some(identity) = &item.identity
-                        && identity.role == DefinitionRole::Option
-                    {
+                    if let Some(identity) = &item.identity {
                         entries.push(identity);
                     }
-                    collect_option_entries(&item.description, entries);
+                    collect_semantic_entries(&item.description, entries);
                 }
             }
             Block::List { items, .. } => {
                 for item in items {
-                    collect_option_entries(&item.blocks, entries);
+                    collect_semantic_entries(&item.blocks, entries);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
-                    collect_option_entries(&cell.blocks, entries);
+                    collect_semantic_entries(&cell.blocks, entries);
                 }
             }
             Block::Paragraph { .. }

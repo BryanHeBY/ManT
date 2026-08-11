@@ -5,18 +5,21 @@
 //! document; diagnostics go to standard error.
 
 mod arguments;
+mod error;
 mod mcp;
+mod presentation;
 
 use std::io::{self, IsTerminal, Read, Write};
 
-use mant_ast::{QueryBundle, QueryRequest, QueryView, SourceFormat, TldrCacheUpdate};
-use mant_core::{
-    ProjectionError, QueryError, QueryExecutionError, QueryPolicy, QueryViewResult, SearchError,
-};
-use mant_sources::DocumentSourcesUpdate;
-use serde::Serialize;
-
 use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
+use error::{
+    Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
+};
+use mant_ast::{QueryBundle, QueryRequest, QueryView, TldrCacheUpdate};
+use mant_core::QueryPolicy;
+use mant_sources::DocumentSourcesUpdate;
+use presentation::{render_json, render_query_result};
+use serde::Serialize;
 
 // ── Stable process protocol ────────────────────────────────────────────────
 
@@ -366,126 +369,6 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
     }
 }
 
-/// Render one already-loaded projection without re-reading local source data.
-fn render_query_result(
-    result: &QueryViewResult,
-    format: QueryFormat,
-    pretty: bool,
-    preserve_anchors: bool,
-) -> Result<String, Failure> {
-    match result {
-        QueryViewResult::Full(query) => render_full_query(query, format, pretty, preserve_anchors),
-        QueryViewResult::Outline(outline) => match format {
-            QueryFormat::Markdown => Ok(mant_core::render_outline_markdown(&outline)),
-            QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_outline_text(&outline)),
-            QueryFormat::Json => {
-                mant_core::render_outline_json(&outline, pretty).map_err(Failure::operational)
-            }
-        },
-        QueryViewResult::Excerpt(excerpt) => {
-            render_excerpt(&excerpt, format, pretty, preserve_anchors)
-        }
-        QueryViewResult::Search(search) => match format {
-            QueryFormat::Markdown => Ok(mant_core::render_search_markdown(&search)),
-            QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_search_text(&search)),
-            QueryFormat::Json => {
-                mant_core::render_search_json(&search, pretty).map_err(Failure::operational)
-            }
-        },
-    }
-}
-
-fn render_excerpt(
-    excerpt: &mant_ast::QueryExcerpt,
-    format: QueryFormat,
-    pretty: bool,
-    preserve_anchors: bool,
-) -> Result<String, Failure> {
-    match format {
-        QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown_with_options(
-            excerpt,
-            mant_core::MarkdownOptions { preserve_anchors },
-        )),
-        QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_excerpt_text(excerpt)),
-        QueryFormat::Json => {
-            mant_core::render_excerpt_json(excerpt, pretty).map_err(Failure::operational)
-        }
-    }
-}
-
-fn render_full_query(
-    query: &QueryBundle,
-    format: QueryFormat,
-    pretty: bool,
-    preserve_anchors: bool,
-) -> Result<String, Failure> {
-    match format {
-        QueryFormat::Markdown => Ok(mant_core::render_markdown_with_options(
-            query,
-            mant_core::MarkdownOptions { preserve_anchors },
-        )),
-        QueryFormat::Text => Ok(mant_core::render_query_text(query)),
-        QueryFormat::Man => {
-            let Some(document) = query.document.as_ref() else {
-                return Err(Failure::operational(
-                    "manual page is unavailable; --format man cannot render tldr-only content",
-                ));
-            };
-            if document.source.format == SourceFormat::Markdown {
-                return Err(Failure::usage(
-                    "--format man applies only to roff manual pages",
-                ));
-            }
-            Ok(mant_core::render_query_man(query))
-        }
-        QueryFormat::Json => {
-            mant_core::render_query_json(query, pretty).map_err(Failure::operational)
-        }
-    }
-}
-
-fn projection_failure(error: ProjectionError) -> Failure {
-    match error {
-        ProjectionError::MissingContent { .. } => Failure::operational(error),
-        ProjectionError::EmptySelection
-        | ProjectionError::EmptySelector
-        | ProjectionError::UnknownSelector { .. }
-        | ProjectionError::AmbiguousSelector { .. }
-        | ProjectionError::ExplanationRequiresEntry { .. } => Failure::usage(error),
-    }
-}
-
-fn query_failure(error: QueryError) -> Failure {
-    match error {
-        QueryError::EmptyName
-        | QueryError::InvalidSection
-        | QueryError::InvalidSource
-        | QueryError::ConflictingSourceSelectors
-        | QueryError::EmptyMarkdownPath
-        | QueryError::EmptySelection
-        | QueryError::EmptySelector
-        | QueryError::EmptyEntry
-        | QueryError::InvalidSearch(_) => Failure::usage(error),
-        QueryError::Markdown { .. }
-        | QueryError::EmptyMarkdown { .. }
-        | QueryError::Registry { .. }
-        | QueryError::Manual(_)
-        | QueryError::NoReadableContent { .. } => Failure::operational(error),
-    }
-}
-
-fn query_execution_failure(error: QueryExecutionError) -> Failure {
-    match error {
-        QueryExecutionError::Query(error) => query_failure(error),
-        QueryExecutionError::Projection(error) => projection_failure(error),
-        QueryExecutionError::Search(error) => search_failure(error),
-    }
-}
-
-fn search_failure(error: SearchError) -> Failure {
-    Failure::usage(error)
-}
-
 fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<QueryRequest, Failure> {
     match source {
         QuerySource::Arguments(request) => return Ok(request),
@@ -523,70 +406,12 @@ fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
     Ok(())
 }
 
-fn render_json(value: &impl Serialize, pretty: bool) -> Result<String, Failure> {
-    if pretty {
-        serde_json::to_string_pretty(value).map_err(Failure::operational)
-    } else {
-        serde_json::to_string(value).map_err(Failure::operational)
-    }
-}
-
 fn write_output(output: &mut dyn Write, rendered: &str) -> io::Result<()> {
     output.write_all(rendered.as_bytes())?;
     if !rendered.ends_with('\n') {
         output.write_all(b"\n")?;
     }
     output.flush()
-}
-
-// ── Concise error presentation ────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FailureKind {
-    Usage,
-    Operational,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Failure {
-    kind: FailureKind,
-    message: String,
-}
-
-impl Failure {
-    fn usage(message: impl std::fmt::Display) -> Self {
-        Self {
-            kind: FailureKind::Usage,
-            message: message.to_string(),
-        }
-    }
-
-    fn operational(message: impl std::fmt::Display) -> Self {
-        Self {
-            kind: FailureKind::Operational,
-            message: message.to_string(),
-        }
-    }
-}
-
-fn report_failure(error: &Failure, diagnostics: &mut dyn Write) -> u8 {
-    let _ = writeln!(diagnostics, "mant: {}", error.message);
-    if error.kind == FailureKind::Usage {
-        let _ = writeln!(diagnostics, "Try 'mant --help' for more information.");
-        2
-    } else {
-        1
-    }
-}
-
-/** Preserve clap's actionable usage and suggestion text on the injected stream. */
-fn report_argument_error(error: &clap::Error, diagnostics: &mut dyn Write) -> u8 {
-    let rendered = error.to_string();
-    let _ = diagnostics.write_all(rendered.as_bytes());
-    if !rendered.ends_with('\n') {
-        let _ = diagnostics.write_all(b"\n");
-    }
-    2
 }
 
 #[cfg(test)]
@@ -687,7 +512,7 @@ mod tests {
                 arguments::parse(&["git".to_owned(), "--ui".to_owned()]).expect("UI query");
             let error = resolve_process_presentation(&mut command, terminal)
                 .expect_err("incomplete terminal must fail");
-            assert!(error.message.contains("interactive view requires"));
+            assert!(error.message().contains("interactive view requires"));
         }
     }
 

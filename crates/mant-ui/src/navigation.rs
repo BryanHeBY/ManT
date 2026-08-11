@@ -13,6 +13,8 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use mant_ast::DefinitionRole;
+
 use crate::{NavItem, NavKind, theme};
 
 const ITEM_LEFT_PADDING: &str = " ";
@@ -82,7 +84,9 @@ fn item_lines(
             NavKind::Root | NavKind::Section if item.depth == 0 => theme::SUBTEXT_BRIGHT,
             NavKind::Root | NavKind::Section => theme::BLUE,
             NavKind::EntryGroup => theme::YELLOW,
-            NavKind::Option => theme::GREEN,
+            NavKind::Entry(DefinitionRole::Option) => theme::GREEN,
+            NavKind::Entry(DefinitionRole::Command) => theme::PEACH,
+            NavKind::Entry(DefinitionRole::EnvironmentVariable) => theme::LINK,
         }
     };
     let background = if selected {
@@ -166,7 +170,7 @@ fn tree_prefix(item: &NavItem, expanded: bool) -> String {
     }
     prefix.push_str(if item.has_children {
         if expanded { "▾ " } else { "▸ " }
-    } else if item.kind == NavKind::Option {
+    } else if matches!(item.kind, NavKind::Entry(_)) {
         "◇ "
     } else {
         "· "

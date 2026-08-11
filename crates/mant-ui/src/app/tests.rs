@@ -402,7 +402,7 @@ fn default_geometry_keeps_the_established_sidebar_and_content_padding() {
 }
 
 #[test]
-fn semantic_options_are_revealed_only_after_their_group_expands() {
+fn semantic_entries_are_revealed_only_after_their_group_expands() {
     let mut app = App::new(&navigation_bundle());
 
     assert_eq!(app.visible_navigation_indices(), vec![0, 1, 3]);
