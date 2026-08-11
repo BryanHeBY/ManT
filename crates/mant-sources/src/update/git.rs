@@ -19,7 +19,7 @@ pub(super) fn update(
         return Ok(context.unchanged(revision));
     }
 
-    let workspace = UpdateWorkspace::new(&context.paths.sources, context.name);
+    let workspace = UpdateWorkspace::new(&context.paths.sources, context.name)?;
     run_git(
         &context.paths.root,
         [

@@ -39,6 +39,7 @@ pub struct RegisteredDocument {
 pub struct RegisteredDocumentIndex {
     config: SourceConfig,
     documents: Vec<RegisteredDocument>,
+    ready_sources: std::collections::BTreeSet<String>,
 }
 
 impl RegisteredDocumentIndex {
@@ -57,11 +58,13 @@ impl RegisteredDocumentIndex {
                 origin: RegisteredDocumentOrigin::Documents,
             })
             .collect::<Vec<_>>();
+        let mut ready_sources = std::collections::BTreeSet::new();
         for source in config.precedence() {
             let directory = paths.sources.join(source);
             if !source_directory_ready(&directory) {
                 continue;
             }
+            ready_sources.insert(source.to_owned());
             documents.extend(scan_directory(&directory).into_iter().map(|(name, path)| {
                 RegisteredDocument {
                     name,
@@ -70,7 +73,11 @@ impl RegisteredDocumentIndex {
                 }
             }));
         }
-        Ok(Self { config, documents })
+        Ok(Self {
+            config,
+            documents,
+            ready_sources,
+        })
     }
 
     /// Resolve ordered public-name candidates using root and source precedence.
@@ -88,6 +95,13 @@ impl RegisteredDocumentIndex {
         {
             return Err(SourceConfigError::new(format!(
                 "document source '{source}' is not configured"
+            )));
+        }
+        if let Some(source) = source
+            && !self.ready_sources.contains(source)
+        {
+            return Err(SourceConfigError::new(format!(
+                "document source '{source}' is not installed; run 'mant --update-docs' first"
             )));
         }
         Ok(candidates

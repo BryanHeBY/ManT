@@ -246,8 +246,11 @@ pub(in crate::update) fn activate_source(
 ) -> Result<(), String> {
     let metadata_text = toml::to_string_pretty(metadata)
         .map_err(|error| format!("could not encode source metadata: {error}"))?;
-    fs::write(staging.join(SOURCE_METADATA_FILE), metadata_text)
+    let metadata_path = staging.join(SOURCE_METADATA_FILE);
+    fs::write(&metadata_path, metadata_text)
         .map_err(|error| format!("could not write source metadata: {error}"))?;
+    sync_file(&metadata_path, "source metadata")?;
+    sync_directory(staging)?;
     replace_directory(staging, target)
 }
 
@@ -305,8 +308,10 @@ pub(in crate::update) fn install_selected_documents(
         let filename = path
             .file_name()
             .ok_or_else(|| format!("invalid Markdown path: {}", relative.display()))?;
-        fs::copy(path, staging.join(filename))
+        let installed = staging.join(filename);
+        fs::copy(path, &installed)
             .map_err(|error| format!("could not install '{}': {error}", relative.display()))?;
+        sync_file(&installed, "installed document")?;
     }
     Ok(candidates.len())
 }
@@ -382,14 +387,43 @@ fn replace_directory(staging: &Path, target: &Path) -> Result<(), String> {
     if had_target {
         fs::rename(target, &backup)
             .map_err(|error| format!("could not preserve previous source: {error}"))?;
+        sync_parent_directory(target)?;
     }
     if let Err(error) = fs::rename(staging, target) {
         if had_target {
             let _ = fs::rename(&backup, target);
+            let _ = sync_parent_directory(target);
         }
         return Err(format!("could not activate updated source: {error}"));
     }
+    sync_parent_directory(target)?;
     remove_internal_dir(&backup);
+    sync_parent_directory(target)?;
+    Ok(())
+}
+
+fn sync_file(path: &Path, label: &str) -> Result<(), String> {
+    fs::File::open(path)
+        .and_then(|file| file.sync_all())
+        .map_err(|error| format!("could not sync {label}: {error}"))
+}
+
+fn sync_parent_directory(path: &Path) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "source target has no parent directory".to_owned())?;
+    sync_directory(parent)
+}
+
+#[cfg(unix)]
+fn sync_directory(path: &Path) -> Result<(), String> {
+    fs::File::open(path)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| format!("could not sync directory '{}': {error}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn sync_directory(_path: &Path) -> Result<(), String> {
     Ok(())
 }
 

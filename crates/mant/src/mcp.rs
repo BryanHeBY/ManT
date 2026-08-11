@@ -347,10 +347,17 @@ impl MantMcpServer {
         parameters: Parameters<DocumentListParams>,
     ) -> Result<Json<DocumentCatalog>, String> {
         let parameters = validate_document_list(parameters.0)?;
-        let documents = task::spawn_blocking(mant_core::list_available_documents)
+        let permit = Arc::clone(&self.query_gate)
+            .acquire_owned()
             .await
-            .map_err(|error| format!("MCP document discovery worker failed: {error}"))?
-            .map_err(|error| error.to_string())?;
+            .map_err(|_| "MCP query service is shutting down".to_owned())?;
+        let documents = task::spawn_blocking(move || {
+            let _permit = permit;
+            mant_core::list_available_documents()
+        })
+        .await
+        .map_err(|error| format!("MCP document discovery worker failed: {error}"))?
+        .map_err(|error| error.to_string())?;
         Ok(Json(build_document_catalog(documents, &parameters)))
     }
 

@@ -14,7 +14,7 @@ pub(super) fn update(
     context: &SourceUpdateContext<'_>,
     url: &str,
 ) -> Result<SourceUpdateResult, String> {
-    let workspace = UpdateWorkspace::new(&context.paths.sources, context.name);
+    let workspace = UpdateWorkspace::new(&context.paths.sources, context.name)?;
     let validators = context
         .metadata
         .as_ref()
