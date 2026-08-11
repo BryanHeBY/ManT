@@ -114,12 +114,20 @@ fn resolve_manual_redirects_with_budget(
     loop {
         let identity =
             fs::canonicalize(&current).map_err(|error| source_error(&current, &error))?;
-        if !visited.insert(identity) {
+        if !identity.starts_with(&manual_root) {
+            return Err(ManualError::unsafe_path(
+                &current,
+                "indexed manual page resolves outside the manual root",
+            ));
+        }
+        if !visited.insert(identity.clone()) {
             return Err(ManualError::redirect(
                 &current,
                 "manual .so redirect cycle detected",
             ));
         }
+
+        current = identity;
 
         let loaded = load_manual_source_with_budget(&current, &mut budget)?;
 
@@ -525,8 +533,8 @@ mod tests {
             path: top_level_link,
             manual_root: root.clone(),
         })
-        .expect("read an explicitly indexed top-level symlink");
-        assert_eq!(linked.meta.title.as_deref(), Some("OUTSIDE"));
+        .expect_err("reject a top-level symlink escaping the manual root");
+        assert_eq!(linked.kind(), ManualErrorKind::UnsafePath);
 
         symlink(&outside, man1.join("escape.1")).expect("link outside manual root");
         let alias = man1.join("alias.1");

@@ -5,6 +5,8 @@
 //! consumers receive typed events and can never mistake an escape operand for
 //! visible document text.
 
+use crate::text_safety::push_terminal_safe;
+
 const ASCII_BREAK: char = '\u{1d}';
 const ASCII_HYPH: char = '\u{1e}';
 const ASCII_NBRSP: char = '\u{1f}';
@@ -201,7 +203,7 @@ impl Decoder {
             // An undefined escape prints its trigger without the backslash in
             // roff. Keeping that behavior preserves intentional literal text
             // while all known control families are handled above.
-            other => self.text.push(other),
+            other => push_terminal_safe(&mut self.text, other),
         }
     }
 
@@ -231,7 +233,7 @@ impl Decoder {
             ASCII_BREAK => {}
             ASCII_HYPH => self.text.push('-'),
             ASCII_NBRSP => self.text.push(' '),
-            other => self.text.push(other),
+            other => push_terminal_safe(&mut self.text, other),
         }
     }
 
@@ -429,5 +431,11 @@ mod tests {
         assert_eq!(visible_text(r"\EfBbold\EfR"), "bold");
         assert_eq!(visible_text(r"before\N1after"), "beforeafter");
         assert_eq!(visible_text(r"before\zXafter"), "beforeafter");
+    }
+
+    #[test]
+    fn masks_terminal_controls_in_source_and_undefined_escapes() {
+        assert_eq!(visible_text("before\u{1b}[2Jafter"), "before [2Jafter");
+        assert_eq!(visible_text("before\\\u{7}after"), "before after");
     }
 }

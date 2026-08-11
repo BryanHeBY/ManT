@@ -4,6 +4,8 @@ use std::{error::Error, fmt};
 
 use mant_ast::{TldrCommandPart, TldrDocument, TldrExample, TldrOrigin};
 
+use crate::text_safety::mask_terminal_controls;
+
 /// Source identity attached to a parsed tldr page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TldrPageLocation {
@@ -80,6 +82,8 @@ pub fn parse_tldr_page(
     markdown: &str,
     location: TldrPageLocation,
 ) -> Result<TldrDocument, TldrParseError> {
+    let sanitized = mask_terminal_controls(markdown).0;
+    let markdown = sanitized.as_deref().unwrap_or(markdown);
     let normalized = markdown.replace("\r\n", "\n").replace('\r', "\n");
     let mut title = String::new();
     let mut description = Vec::new();
@@ -417,6 +421,19 @@ mod tests {
             "Run a command whose explanation is wrapped only for source readability"
         );
         assert_eq!(page.examples[0].command, "demo --long-option value");
+    }
+
+    #[test]
+    fn masks_terminal_control_characters_before_parsing() {
+        let page = parse_tldr_page(
+            "# de\u{1b}[2Jmo\n> safe\u{85} description\n- Run: `demo\u{7}`\n",
+            location(),
+        )
+        .expect("valid tldr page");
+
+        assert_eq!(page.title, "de [2Jmo");
+        assert_eq!(page.description, ["safe description"]);
+        assert_eq!(page.examples[0].command, "demo ");
     }
 
     #[test]

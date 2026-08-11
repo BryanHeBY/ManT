@@ -15,8 +15,8 @@ use libmandoc_rs::{
     Compression, Document, IncludePolicy, MacroSet, Node, ParseOptions, ParseReport, Parser,
 };
 use mant_ast::{
-    DocumentMeta, DocumentSchema, DocumentSource, Engine, MantDocument, Producer, SourceFormat,
-    SourceSpan,
+    Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, Engine,
+    MantDocument, Producer, SourceFormat, SourceSpan,
 };
 
 use self::{
@@ -24,6 +24,7 @@ use self::{
     source::{load_manual_source, resolve_manual_redirects},
 };
 use crate::ManualPage;
+use crate::text_safety::mask_terminal_control_bytes;
 
 pub use error::{ManualError, ManualErrorKind};
 pub use source::MAX_MANUAL_BYTES;
@@ -62,13 +63,25 @@ fn parse_plain_manual(
     source: &[u8],
     alias_target: Option<&str>,
 ) -> Result<MantDocument, ManualError> {
+    let (source, masked_controls) = mask_terminal_control_bytes(source);
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
         compression: Compression::Plain,
     })
-    .parse_bytes(path, source)
+    .parse_bytes(path, source.as_ref())
     .map_err(ManualError::from)?;
     let mut document = lower_mandoc_document(path, &report);
+    if masked_controls > 0 {
+        document.diagnostics.insert(
+            0,
+            Diagnostic {
+                level: DiagnosticLevel::Warning,
+                code: Some("manual.control-characters".to_owned()),
+                message: format!("masked {masked_controls} terminal-unsafe control character(s)"),
+                source: None,
+            },
+        );
+    }
     if let Some(alias_target) = alias_target {
         document.meta.alias_target = Some(alias_target.to_owned());
     }
@@ -759,6 +772,20 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.level == DiagnosticLevel::Unsupported)
+        );
+    }
+
+    #[test]
+    fn masks_terminal_controls_before_native_parsing() {
+        let path = temporary_source("controls", ".TH SAFE 1\n.SH NAME\nsafe \x1b[2J text\n");
+
+        let document = parse_manual_source(&path).expect("parse sanitized manual");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        assert!(
+            document.diagnostics.iter().any(|diagnostic| {
+                diagnostic.code.as_deref() == Some("manual.control-characters")
+            })
         );
     }
 

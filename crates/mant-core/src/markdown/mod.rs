@@ -36,6 +36,7 @@ use self::{
     options::{extract_entry_directives, normalize_entry_lists},
     source::MarkdownSource,
 };
+use crate::text_safety::mask_terminal_controls;
 use crate::{
     projection::DOCUMENT_ROOT_ID,
     tldr::{TldrPageLocation, TldrParseError, parse_tldr_page},
@@ -135,29 +136,22 @@ pub fn parse_markdown(
 /// raw control characters would pass escape sequences through to terminals.
 /// Replacements keep every byte offset valid for source coordinates.
 fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<String> {
-    let keeps_character =
-        |character: char| !character.is_control() || matches!(character, '\t' | '\n' | '\r');
     let bom = source_text.starts_with('\u{feff}');
-    if !bom && source_text.chars().all(keeps_character) {
-        return None;
-    }
-
-    let mut sanitized = String::with_capacity(source_text.len());
-    let mut controls = 0usize;
     let rest = if bom {
-        sanitized.push_str("   ");
         &source_text['\u{feff}'.len_utf8()..]
     } else {
         source_text
     };
-    for character in rest.chars() {
-        if keeps_character(character) {
-            sanitized.push(character);
-        } else {
-            controls += 1;
-            sanitized.extend(std::iter::repeat_n(' ', character.len_utf8()));
-        }
+    let (masked, controls) = mask_terminal_controls(rest);
+    if !bom && masked.is_none() {
+        return None;
     }
+
+    let mut sanitized = String::with_capacity(source_text.len());
+    if bom {
+        sanitized.push_str("   ");
+    }
+    sanitized.push_str(masked.as_deref().unwrap_or(rest));
 
     if bom {
         diagnostics.push(Diagnostic {

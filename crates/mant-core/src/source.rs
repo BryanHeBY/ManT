@@ -276,7 +276,8 @@ fn normalize_locale(locale: &str) -> Option<String> {
 
 fn scan_manual_root(root: &Path, locale: Option<&str>) -> Vec<ManualPage> {
     let mut candidates = BTreeMap::<(String, String), (u8, PathBuf)>::new();
-    scan_directory(root, root, locale, &mut candidates);
+    let canonical_root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    scan_directory(root, root, &canonical_root, locale, &mut candidates);
     candidates
         .into_iter()
         .map(|((name, section), (_, path))| ManualPage {
@@ -291,6 +292,7 @@ fn scan_manual_root(root: &Path, locale: Option<&str>) -> Vec<ManualPage> {
 fn scan_directory(
     root: &Path,
     directory: &Path,
+    canonical_root: &Path,
     locale: Option<&str>,
     candidates: &mut BTreeMap<(String, String), (u8, PathBuf)>,
 ) {
@@ -305,7 +307,7 @@ fn scan_directory(
             continue;
         };
         if file_type.is_dir() {
-            scan_directory(root, &path, locale, candidates);
+            scan_directory(root, &path, canonical_root, locale, candidates);
             continue;
         }
         if !file_type.is_file() && !file_type.is_symlink() {
@@ -314,6 +316,9 @@ fn scan_directory(
         let Some((name, section)) = manual_identity(root, &path) else {
             continue;
         };
+        if !fs::canonicalize(&path).is_ok_and(|path| path.starts_with(canonical_root)) {
+            continue;
+        }
         let priority = locale_priority(root, &path, locale);
         let key = (name, section);
         match candidates.get(&key) {
@@ -447,6 +452,26 @@ mod tests {
         ));
 
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn indexes_only_symlinks_that_remain_inside_the_manual_root() {
+        use std::os::unix::fs::symlink;
+
+        let base = temporary_root("symlink-boundary");
+        let root = base.join("root");
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("manual section");
+        fs::write(man1.join("target.1"), ".TH TARGET 1\n").expect("inside target");
+        fs::write(base.join("outside.1"), ".TH OUTSIDE 1\n").expect("outside target");
+        symlink(man1.join("target.1"), man1.join("inside.1")).expect("inside symlink");
+        symlink(base.join("outside.1"), man1.join("outside.1")).expect("outside symlink");
+
+        let index = ManualIndex::from_roots(vec![root]);
+        assert!(index.find("inside", Some("1")).is_some());
+        assert!(index.find("outside", Some("1")).is_none());
+        fs::remove_dir_all(base).expect("remove fixture");
     }
 
     #[test]

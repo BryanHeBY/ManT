@@ -12,6 +12,7 @@ mod projection;
 mod query;
 mod search;
 mod source;
+mod text_safety;
 mod tldr;
 
 pub use catalog::{
