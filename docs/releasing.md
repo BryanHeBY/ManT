@@ -81,8 +81,8 @@ user-scoped copy makes `mant mant` and MCP document discovery work without a
 repository checkout.
 
 Linux x64 uses the baseline target so the executable does not require AVX2.
-Windows x64 is distributed as a ZIP and contains the Markdown-native product;
-it does not include libmandoc or Unix manual support. The bundled `mant.md` can
+Windows x64 is distributed as a ZIP and contains bundled libmandoc alongside
+Markdown support. The bundled `mant.md` can
 be installed at `%APPDATA%\ManT\documents\mant.md`.
 macOS supports Cargo installation and local source builds, but public macOS
 archives remain disabled until they can be Developer ID-signed and notarized.

@@ -38,20 +38,24 @@ for diagnostic in report.diagnostics {
 
 Use `Parser::parse_bytes` if the caller owns the source transport. Its auto
 mode recognizes zstd frames; gzip byte streams should be passed to
-`parse_file`, where libmandoc opens them natively.
+`parse_file`. Unix can retain libmandoc's native gzip transport; Windows
+decodes gzip in Rust before entering the memory parser.
 
 `IncludePolicy::Deny` is the default. `SourceTree` preserves ordinary manual
 tree lookup. `Root(path)` resolves `.so` requests against a directory the
 caller explicitly chooses, rejects absolute and lexical parent paths, and
-does not fall back to the process working directory.
+does not fall back to the process working directory. Native C file inclusion
+is currently Unix-only; Windows callers resolve sources first and use the
+default memory-only policy.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
 
 ## Compression contract
 
-`Compression::Auto` parses ordinary files through libmandoc (including its
-native gzip support) and stages `.zst` input through Rust's zstd decoder.
+`Compression::Auto` recognizes gzip and zstd manual files. Windows decodes
+both in Rust; Unix retains libmandoc's native gzip reader and uses Rust for
+zstd.
 `Compression::Plain` bypasses top-level compression detection, and
 `Compression::Zstd` requires a zstd frame. Other compression formats are not
 currently part of this crate's supported contract.
@@ -71,16 +75,18 @@ Maintainers use `scripts/sync-vendor` to regenerate the vendor tree:
 ```
 
 The script reads `upstream/SOURCE` for tarball URL and SHA-256, and
-`patches/series` for the ordered patch list. Each patch, when present,
-has a matching roff reproducer under `tests/`.
+`patches/series` for the ordered patch list. Semantic parser patches have
+matching roff reproducers; portability patches are covered by the target CI
+matrix.
 
 ## Build requirements and supported targets
 
 The source package vendors libmandoc 1.14.6 and compiles it with the `cc`
-crate.  A working C compiler and zlib development library are therefore
-required at build time.  Checked configurations are supplied for Linux with
-glibc and macOS; Linux/musl and Windows are rejected rather than being built
-from an unverified configuration.
+crate, so a working C compiler is required. Checked configurations are
+supplied for Linux/glibc, macOS, and Windows/MSVC. Unix native-file parsing
+also requires zlib development headers; Windows builds the memory-only parser
+and does not link system zlib. Linux/musl remains rejected until it has a
+checked configuration.
 
 ## Licensing
 

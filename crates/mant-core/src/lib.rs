@@ -5,7 +5,6 @@ mod catalog;
 mod definitions;
 mod executable;
 mod inline;
-#[cfg(unix)]
 mod mandoc;
 mod markdown;
 mod output;
@@ -19,7 +18,6 @@ mod tldr;
 pub use catalog::{
     AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, list_available_documents,
 };
-#[cfg(unix)]
 pub use mandoc::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_page,
     parse_manual_source,

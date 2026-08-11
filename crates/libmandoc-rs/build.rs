@@ -54,6 +54,7 @@ fn main() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo output directory"));
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target operating system");
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let memory_only = target_os == "windows";
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
 
     fs::copy(crate_dir.join(config), out_dir.join("config.h"))
@@ -73,10 +74,14 @@ fn main() {
         // on every incremental Cargo invocation. Clang ignores this through
         // flag_if_supported, while GCC development output remains readable.
         .flag_if_supported("-Wno-maybe-uninitialized")
-        .flag_if_supported("-Wno-unused-parameter")
+        .flag_if_supported("-Wno-unused-parameter");
+    if memory_only {
+        build.define("MANDOC_MEMORY_ONLY", None);
+    } else {
         // Only read.c calls open() in the selected parser sources. Redirecting
         // it avoids a process-wide chdir while preserving source-relative .so.
-        .define("open", "mant_mandoc_source_open");
+        build.define("open", "mant_mandoc_source_open");
+    }
 
     for source in LIBMANDOC_SOURCES.iter().chain(compat_sources.iter()) {
         build.file(vendor_dir.join(source));
@@ -84,8 +89,10 @@ fn main() {
     build.file(crate_dir.join("shim/mant_mandoc_shim.c"));
     build.compile("mant_mandoc");
 
-    // read.c transparently handles compressed manual sources through zlib.
-    println!("cargo:rustc-link-lib=z");
+    if !memory_only {
+        // Unix native-file parsing retains libmandoc's gzip transport.
+        println!("cargo:rustc-link-lib=z");
+    }
     println!("cargo:rerun-if-changed=build.rs");
     // Target selection lives here and is pulled in via #[path]; Cargo does not
     // discover that dependency, so track it explicitly or edits to the config

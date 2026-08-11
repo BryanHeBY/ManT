@@ -8,12 +8,16 @@
 #include "config.h"
 
 #include <errno.h>
+#ifndef MANDOC_MEMORY_ONLY
 #include <fcntl.h>
+#endif
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef MANDOC_MEMORY_ONLY
 #include <unistd.h>
+#endif
 
 #include "mandoc.h"
 #include "mdoc.h"
@@ -68,6 +72,7 @@ struct mant_mandoc_document {
 	struct mant_mandoc_node	*root;
 };
 
+#ifndef MANDOC_MEMORY_ONLY
 static char *source_root;
 static int source_root_strict;
 /* Absolute top-level file path that parse_file itself is allowed to open. */
@@ -82,6 +87,7 @@ static char *source_path;
  * the include resolver try both bases the way man(1) does.
  */
 static char *source_dir;
+#endif
 
 /*
  * Maximum recursion depth for any tree copied or flattened out of libmandoc.
@@ -112,10 +118,12 @@ static char *read_diagnostics(FILE *);
 static struct mant_mandoc_node *copy_node(const struct roff_node *, int);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
+#ifndef MANDOC_MEMORY_ONLY
 static void set_source_root_from_path(const char *);
 static void set_source_root_directory(const char *, const char *);
 static int open_under_base(const char *, const char *, int, mode_t);
 static int is_safe_relative_path(const char *);
+#endif
 static void copy_normalized_data(struct mant_mandoc_node *,
     const struct roff_node *);
 static struct mant_mandoc_table_cell *copy_table_cells(
@@ -144,8 +152,11 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
 	struct roff_meta			*meta;
-	FILE				*input, *messages;
-	int				 fd, options, saved_errno;
+	FILE				*messages;
+	int				 options;
+#ifndef MANDOC_MEMORY_ONLY
+	int				 fd, saved_errno;
+#endif
 
 	document = calloc(1, sizeof(*document));
 	if (document == NULL)
@@ -158,6 +169,18 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		document->error = copy_string("manual source buffer is missing");
 		return document;
 	}
+#ifdef MANDOC_MEMORY_ONLY
+	if (buffer == NULL) {
+		document->error = copy_string(
+		    "memory-only libmandoc requires caller-owned source bytes");
+		return document;
+	}
+	if (allow_include) {
+		document->error = copy_string(
+		    "file inclusion is unavailable in memory-only libmandoc");
+		return document;
+	}
+#endif
 
 	options = MPARSE_UTF8 | MPARSE_LATIN1 | MPARSE_VALIDATE | MPARSE_COMMENT;
 	if (allow_include)
@@ -167,6 +190,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	setprogname("mant");
 	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
+#ifndef MANDOC_MEMORY_ONLY
 	if (allow_include) {
 		free(source_path);
 		source_path = buffer == NULL ? copy_string(path) : NULL;
@@ -175,9 +199,12 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		else
 			set_source_root_directory(include_root, path);
 	}
+#endif
 	mchars_alloc();
 	parser = mparse_alloc(options, MANDOC_OS_OTHER, NULL);
-	input = NULL;
+#ifdef MANDOC_MEMORY_ONLY
+	mparse_readmem(parser, buffer, length, path);
+#else
 	if (buffer == NULL) {
 		fd = mparse_open(parser, path);
 		if (fd == -1) {
@@ -185,27 +212,11 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 			document->error = copy_string(strerror(saved_errno));
 			goto cleanup;
 		}
-	} else {
-		input = tmpfile();
-		if (input == NULL ||
-		    fwrite(buffer, 1, length, input) != length ||
-		    fflush(input) != 0 || fseek(input, 0, SEEK_SET) != 0) {
-			saved_errno = errno;
-			document->error = copy_string(saved_errno == 0 ?
-			    "could not stage decompressed manual source" :
-			    strerror(saved_errno));
-			goto cleanup;
-		}
-		fd = fileno(input);
-	}
-
-	mparse_readfd(parser, fd, path);
-	if (input == NULL)
+		mparse_readfd(parser, fd, path);
 		close(fd);
-	else {
-		fclose(input);
-		input = NULL;
-	}
+	} else
+		mparse_readmem(parser, buffer, length, path);
+#endif
 	meta = mparse_result(parser);
 	document->macroset = (int)meta->macroset;
 	document->title = copy_string(meta->title);
@@ -222,9 +233,9 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	if (!document->ok)
 		document->error = copy_string("libmandoc produced no syntax tree");
 
+#ifndef MANDOC_MEMORY_ONLY
 cleanup:
-	if (input != NULL)
-		fclose(input);
+#endif
 	mandoc_msg_setinfilename(NULL);
 	mandoc_msg_setoutfile(stderr);
 	if (messages != NULL) {
@@ -233,6 +244,7 @@ cleanup:
 	}
 	mparse_free(parser);
 	mchars_free();
+#ifndef MANDOC_MEMORY_ONLY
 	free(source_root);
 	source_root = NULL;
 	free(source_dir);
@@ -240,9 +252,11 @@ cleanup:
 	free(source_path);
 	source_path = NULL;
 	source_root_strict = 0;
+#endif
 	return document;
 }
 
+#ifndef MANDOC_MEMORY_ONLY
 /* Open `path` under `base`, leaving errno describing any failure. */
 static int
 open_under_base(const char *base, const char *path, int flags, mode_t mode)
@@ -343,6 +357,7 @@ is_safe_relative_path(const char *path)
 	}
 	return 1;
 }
+#endif
 
 void
 mant_mandoc_document_free(struct mant_mandoc_document *document)
@@ -378,6 +393,7 @@ copy_string(const char *source)
 	return copy;
 }
 
+#ifndef MANDOC_MEMORY_ONLY
 static void
 set_source_root_from_path(const char *path)
 {
@@ -450,6 +466,7 @@ set_source_root_directory(const char *directory, const char *path)
 		*last_slash = '\0';
 	}
 }
+#endif
 
 static char *
 read_diagnostics(FILE *stream)

@@ -26,13 +26,13 @@ arguments. A complete query on terminal stdin and stdout is handed directly to
 `mant-ui`; projections, explicit formats, redirection, request JSON, and MCP
 remain deterministic non-interactive surfaces.
 
-On Unix, `libmandoc-rs` is the boundary around the bundled C parser. Its deliberately
-small private C shim hides libmandoc structure layouts and parser handles; the
+On Linux, macOS, and Windows, `libmandoc-rs` is the boundary around the bundled
+C parser. Its deliberately small private C shim hides libmandoc structure layouts and parser handles; the
 crate copies each completed parse into an owned, renderer-neutral tree with
 structured diagnostics. The crate exposes no ManT-specific types and never
 formats JSON. `mant-core` alone lowers that parse tree into ManT's public
-document contract. Windows omits this target-specific dependency and retains
-the Markdown, projection, tldr, and source-neutral query layers.
+document contract. Windows builds a checked memory-only parser configuration;
+Rust supplies bytes without exposing POSIX file transport to the C layer.
 
 ## Stable and unstable models
 
@@ -230,10 +230,12 @@ with includes denied. Libmandoc therefore opens no manual source or include
 path for ManT.
 
 One immutable `ManualIndex` owns both catalog discovery and exact lookup. It
-derives roots from `MANT_MANPATH`, `MANPATH`, user/XDG data, PATH prefixes, and
-conventional system locations, then indexes only the raw, gzip, and zstd
-formats the parser can consume. Ordinary CLI, TUI, and MCP requests therefore
-do not spawn a host `man` process or depend on its database being initialized.
+derives roots from `MANT_MANPATH`, `MANPATH`, and platform conventions, then
+indexes flat pages and traditional `man<section>` hierarchies in the raw, gzip,
+and zstd formats the parser can consume. Unix adds user/XDG, PATH, and system
+locations; Windows defaults only to `%USERPROFILE%\.local\share\man`.
+Ordinary CLI, TUI, and MCP requests therefore do not spawn a host `man`
+process or depend on its database being initialized.
 
 Libmandoc is the only manual parser. An unsupported diagnostic does not discard
 an otherwise complete document, and recoverable findings remain structured in

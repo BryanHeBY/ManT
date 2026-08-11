@@ -52,11 +52,10 @@ caller needs the parsed document and tldr preface without query composition.
 | --- | --- | --- |
 | Linux with glibc | Yes | Bundled `libmandoc-rs` |
 | macOS | Yes | Bundled `libmandoc-rs` |
-| Windows | Yes | Not available |
+| Windows | Yes | Bundled `libmandoc-rs` |
 
-Unix builds compile the target-specific `libmandoc-rs` dependency. Windows
-omits it entirely while retaining registered documents, parsing, projections,
-search, output, tldr, and the same versioned contracts.
+Every supported target compiles `libmandoc-rs`. Windows uses its memory-only C
+transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
 
 ## Layering
 
@@ -71,5 +70,5 @@ Architecture and source-resolution details are documented in the
 
 ## License
 
-Apache-2.0. Unix builds also contain the separately attributed vendored mandoc
+Apache-2.0. Native builds also contain the separately attributed vendored mandoc
 sources supplied by `libmandoc-rs`.

@@ -7,8 +7,8 @@ live in the [project README](../README.md).
 
 - Linux, macOS, or Windows
 - Rust 1.88 or newer with `cargo`, `clippy`, and `rustfmt`
-- For Unix native-manual work: GCC on Linux or Clang on macOS, zlib
-  development headers, and local manual source trees
+- For native-manual work: GCC on Linux, Clang on macOS, or MSVC on Windows;
+  Unix also needs zlib development headers
 
 The workspace vendors libmandoc and maintains its own manual index, so system
 `man` and `mandoc` executables are not prerequisites. Markdown parsing and the
@@ -29,19 +29,18 @@ Run the complete local verification boundary before handing off a change:
 bash scripts/check.sh
 ```
 
-On Windows, run the portable product boundary from PowerShell:
+On Windows, run the native product boundary from PowerShell:
 
 ```powershell
 .\scripts\check-windows.ps1
 ```
 
-It tests `mant-ast`, `mant-core`, `mant-ui`, and `mant` without building the
-Unix-only `libmandoc-rs` workspace member or roff fixture suites.
+It tests `libmandoc-rs`, `mant-ast`, `mant-core`, `mant-ui`, and `mant`,
+including the shared roff fixture suites.
 
-Those four portable crates are also the workspace `default-members`, so a bare
-`cargo build`, `cargo test`, or `cargo clippy` works on Windows. Unix verification
-deliberately passes `--workspace` to include the standalone `libmandoc-rs`
-package and its native parser tests.
+The product crates are workspace `default-members`, so a bare `cargo build`,
+`cargo test`, or `cargo clippy` works on Windows. Both platform verification
+scripts include the standalone `libmandoc-rs` package and native parser tests.
 
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,

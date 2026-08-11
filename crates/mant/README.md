@@ -29,14 +29,15 @@ Or compile from crates.io:
 cargo install mant --locked
 ```
 
-Source builds require Rust 1.88+. Linux and macOS manual support also requires
-a C compiler and zlib development headers; Windows builds are pure Rust.
+Source builds require Rust 1.88+ and a C compiler. Linux and macOS additionally
+require zlib development headers; Windows uses the checked MSVC memory-parser
+configuration without a system zlib.
 
 | Target | Prebuilt archive | Source capabilities |
 | --- | --- | --- |
 | Linux x64, glibc | Yes | Markdown and native man/mdoc |
 | Linux arm64, glibc | Yes | Markdown and native man/mdoc |
-| Windows x64, MSVC | Yes | Markdown |
+| Windows x64, MSVC | Yes | Markdown and native man/mdoc |
 | macOS | Source build | Markdown and native man/mdoc |
 
 Targets without a matching archive fall back from `cargo binstall` to a Cargo
@@ -87,10 +88,10 @@ protocol messages only; use CLI JSON output to inspect lowering diagnostics.
 
 ## Document sources
 
-On Linux and macOS, ManT indexes raw, gzip, and zstd manual sources and parses
+On Linux, macOS, and Windows, ManT indexes raw, gzip, and zstd manual sources and parses
 their roff through bundled libmandoc. It does not require a system `man` or
-`mandoc` executable at runtime. Windows intentionally omits this Unix source
-family.
+`mandoc` executable at runtime. Windows defaults to
+`%USERPROFILE%\.local\share\man` and also honors configured manual paths.
 
 Reusable Markdown documents can be registered by filename below:
 
@@ -112,7 +113,7 @@ checkout.
 ## Crate architecture
 
 - `mant-ast` defines the versioned document and query contracts.
-- `libmandoc-rs` owns the Unix libmandoc parser boundary.
+- `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
 - `mant-core` performs source lookup, lowering, projections, search, and output.
 - `mant-ui` provides the source-neutral Ratatui frontend.
 - `mant` owns command-line, terminal-selection, and MCP process boundaries.

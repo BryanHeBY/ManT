@@ -20,7 +20,6 @@ impl std::fmt::Display for LimitExceeded {
 
 impl std::error::Error for LimitExceeded {}
 
-#[cfg(unix)]
 pub(crate) fn is_limit_exceeded(error: &io::Error) -> bool {
     error
         .get_ref()

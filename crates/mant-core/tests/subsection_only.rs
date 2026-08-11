@@ -1,5 +1,3 @@
-#![cfg(unix)]
-
 //! Regression test for Pandoc-style pages whose only structure is `.SS`
 //! subsections with no enclosing `.SH`.
 //!

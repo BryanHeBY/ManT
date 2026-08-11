@@ -35,6 +35,9 @@ struct RawDocument {
 mod tests {
     use std::{fs, process};
 
+    #[cfg(windows)]
+    use std::io::Write;
+
     use super::{
         Compression, DisplayKind, Document, IncludePolicy, MacroSet, Node, NodeKind,
         NormalizedListKind, ParseError, ParseOptions, Parser, TableAlignment,
@@ -132,6 +135,43 @@ mod tests {
         assert!(document.metadata.has_body);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_parser_decompresses_gzip_before_calling_libmandoc() {
+        use flate2::{Compression as GzipCompression, write::GzEncoder};
+
+        let path = source_path("gzip-mandoc-session").with_extension("1.gz");
+        let mut encoder = GzEncoder::new(Vec::new(), GzipCompression::fast());
+        encoder
+            .write_all(b".TH GZIP-MANT 1\n.SH NAME\ngzip-mant \\- compressed manual\n")
+            .expect("encode gzip source");
+        fs::write(&path, encoder.finish().expect("finish gzip source")).expect("write gzip source");
+
+        let report = Parser::default()
+            .parse_file(&path)
+            .expect("parse gzip manual");
+        fs::remove_file(path).expect("remove gzip source");
+
+        assert_eq!(report.document.metadata.title.as_deref(), Some("GZIP-MANT"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_rejects_c_file_inclusion_but_accepts_memory_parsing() {
+        let report = Parser::default()
+            .parse_bytes("memory.1", b".TH MEMORY 1\n.SH NAME\nmemory \\- portable\n")
+            .expect("parse caller-owned bytes");
+        assert_eq!(report.document.metadata.title.as_deref(), Some("MEMORY"));
+
+        let error = Parser::new(ParseOptions {
+            includes: IncludePolicy::SourceTree,
+            compression: Compression::Plain,
+        })
+        .parse_bytes("memory.1", b".so target.1\n")
+        .expect_err("reject native C file inclusion");
+        assert_eq!(error.kind, super::ParseErrorKind::Unsupported);
+    }
+
     #[test]
     fn invalid_zstd_sources_fail_before_reaching_libmandoc() {
         let path = source_path("invalid-zstd-mandoc-session").with_extension("1.zst");
@@ -149,6 +189,7 @@ mod tests {
         assert!(!error.message.contains("unsupported control character"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn zstd_sources_keep_their_original_include_root() {
         let root = std::env::temp_dir().join(format!(
@@ -270,6 +311,7 @@ mod tests {
         fs::remove_file(path).expect("remove temporary manual source");
     }
 
+    #[cfg(unix)]
     #[test]
     fn source_relative_includes_do_not_change_process_cwd() {
         let root =
@@ -311,6 +353,7 @@ mod tests {
         assert_eq!(zstd.document.metadata.title.as_deref(), Some("BYTES"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn parser_only_expands_includes_when_policy_allows_a_root() {
         let base = std::env::temp_dir().join(format!(
@@ -348,6 +391,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn explicit_include_root_does_not_fall_back_to_process_cwd() {
         let identifier = format!("libmandoc-rs-ambient-{}", process::id());

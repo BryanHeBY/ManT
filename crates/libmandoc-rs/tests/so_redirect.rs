@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! Regression test for bare same-directory `.so` redirect stubs.
 //!
 //! A stub such as fedora's `man1/lastb.1` containing `.so last.1` names its

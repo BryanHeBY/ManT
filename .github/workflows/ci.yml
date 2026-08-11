@@ -113,8 +113,8 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   windows-native:
-    # Windows intentionally builds the Markdown/TUI/CLI/MCP product without
-    # the Unix-only libmandoc crate or native manual-page fixtures.
+    # Windows builds the same memory-only libmandoc parser and manual fixtures
+    # as Unix while Rust owns source I/O, decompression, and .so redirects.
     name: Native (Windows x64)
     runs-on: windows-2025
     timeout-minutes: 30

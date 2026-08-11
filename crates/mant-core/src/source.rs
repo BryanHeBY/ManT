@@ -9,6 +9,7 @@ use std::{
     sync::OnceLock,
 };
 
+#[cfg(unix)]
 const DEFAULT_MANUAL_ROOTS: [&str; 4] = [
     "/usr/local/share/man",
     "/usr/local/man",
@@ -178,9 +179,6 @@ pub fn locate_manual_source_in(
 }
 
 fn discover_manual_roots_with(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    if cfg!(not(unix)) {
-        return Vec::new();
-    }
     if let Some(explicit) = environment.get(OsStr::new("MANT_MANPATH")) {
         return deduplicate_paths(
             env::split_paths(explicit).filter(|path| !path.as_os_str().is_empty()),
@@ -204,20 +202,31 @@ fn discover_manual_roots_with(environment: &HashMap<OsString, OsString>) -> Vec<
 
 fn conventional_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
+    #[cfg(windows)]
+    if let Some(profile) = environment
+        .get(OsStr::new("USERPROFILE"))
+        .map(PathBuf::from)
+    {
+        roots.push(profile.join(".local/share/man"));
+    }
+    #[cfg(unix)]
     if let Some(home) = environment.get(OsStr::new("HOME")).map(PathBuf::from) {
         roots.push(home.join(".local/share/man"));
         roots.push(home.join(".local/man"));
         roots.push(home.join("man"));
     }
+    #[cfg(unix)]
     if let Some(data_home) = environment
         .get(OsStr::new("XDG_DATA_HOME"))
         .map(PathBuf::from)
     {
         roots.push(data_home.join("man"));
     }
+    #[cfg(unix)]
     if let Some(data_dirs) = environment.get(OsStr::new("XDG_DATA_DIRS")) {
         roots.extend(env::split_paths(data_dirs).map(|root| root.join("man")));
     }
+    #[cfg(unix)]
     if let Some(path) = environment.get(OsStr::new("PATH")) {
         for binary_dir in env::split_paths(path) {
             if let Some(prefix) = binary_dir.parent() {
@@ -226,6 +235,7 @@ fn conventional_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<P
             }
         }
     }
+    #[cfg(unix)]
     roots.extend(DEFAULT_MANUAL_ROOTS.map(PathBuf::from));
     deduplicate_paths(roots)
 }
@@ -319,21 +329,33 @@ fn manual_identity(root: &Path, path: &Path) -> Option<(String, String)> {
             .strip_prefix("man")
             .filter(|section| !section.is_empty())
             .map(ToOwned::to_owned)
-    })?;
+    });
     let filename = path.file_name()?.to_str()?;
     let stem = SUPPORTED_COMPRESSION_SUFFIXES
         .iter()
         .find_map(|suffix| filename.strip_suffix(suffix))
         .unwrap_or(filename);
     let (name, file_section) = stem.rsplit_once('.')?;
-    let section_matches_directory = file_section == section_directory
-        || file_section
-            .strip_prefix(&section_directory)
-            .is_some_and(|suffix| !suffix.is_empty() && suffix.chars().all(char::is_alphabetic));
-    if name.is_empty() || file_section.is_empty() || !section_matches_directory {
+    let section_matches_directory = section_directory.as_ref().is_some_and(|directory| {
+        file_section == directory
+            || file_section
+                .strip_prefix(directory)
+                .is_some_and(|suffix| !suffix.is_empty() && suffix.chars().all(char::is_alphabetic))
+    });
+    let flat_root_page = relative.components().count() == 1 && valid_flat_section(file_section);
+    if name.is_empty() || (!section_matches_directory && !flat_root_page) {
         return None;
     }
     Some((name.to_owned(), file_section.to_owned()))
+}
+
+fn valid_flat_section(section: &str) -> bool {
+    let mut characters = section.chars();
+    match characters.next() {
+        Some('1'..='9') => characters.all(char::is_alphabetic),
+        Some('l' | 'n') => characters.next().is_none(),
+        _ => false,
+    }
 }
 
 fn locale_priority(root: &Path, path: &Path, locale: Option<&str>) -> u8 {
@@ -367,10 +389,7 @@ fn locale_priority(root: &Path, path: &Path, locale: Option<&str>) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::PathBuf};
-
-    #[cfg(unix)]
-    use std::{collections::HashMap, ffi::OsString};
+    use std::{collections::HashMap, ffi::OsString, fs, path::PathBuf};
 
     use super::{
         LocateError, ManualIndex, ManualRequest, deduplicate_paths, locate_manual_source_in,
@@ -395,10 +414,12 @@ mod tests {
         fs::create_dir_all(root.join("man3")).expect("manual section");
         fs::write(root.join("man1/printf.1.gz"), b"gzip placeholder").expect("manual");
         fs::write(root.join("man3/printf.3.zst"), b"zstd placeholder").expect("manual");
+        fs::write(root.join("flat-tool.1"), b"flat manual").expect("flat manual");
+        fs::write(root.join("README.md"), b"not a manual").expect("readme");
         fs::write(root.join("man1/ignored.1.xz"), b"unsupported").expect("manual");
 
         let index = ManualIndex::from_roots(vec![root.clone()]);
-        assert_eq!(index.pages().len(), 2);
+        assert_eq!(index.pages().len(), 3);
         assert_eq!(
             locate_manual_source_in(&ManualRequest::new("printf", None), &index)
                 .expect("default section")
@@ -412,6 +433,12 @@ mod tests {
             root.join("man3/printf.3.zst")
         );
         assert_eq!(index.pages()[0].manual_root, root);
+        assert_eq!(
+            locate_manual_source_in(&ManualRequest::new("flat-tool", None), &index)
+                .expect("flat root page")
+                .path,
+            root.join("flat-tool.1")
+        );
         assert!(matches!(
             locate_manual_source_in(&ManualRequest::new("ignored", None), &index),
             Err(LocateError::NotFound { .. })
@@ -471,6 +498,28 @@ mod tests {
         assert!(roots.contains(&PathBuf::from("/home/demo/.local/share/man")));
         assert!(roots.contains(&PathBuf::from("/opt/share/man")));
         assert!(roots.contains(&PathBuf::from("/usr/share/man")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_defaults_to_user_share_man_and_honors_manpath() {
+        let profile = PathBuf::from(r"C:\Users\demo");
+        let environment = HashMap::from([(
+            OsString::from("USERPROFILE"),
+            profile.as_os_str().to_owned(),
+        )]);
+        assert_eq!(
+            discover_manual_roots_with(&environment),
+            vec![profile.join(".local/share/man")]
+        );
+
+        let custom = PathBuf::from(r"D:\manuals");
+        let mut environment = environment;
+        environment.insert(
+            OsString::from("MANPATH"),
+            std::env::join_paths([&custom]).expect("join Windows MANPATH"),
+        );
+        assert_eq!(discover_manual_roots_with(&environment), vec![custom]);
     }
 
     #[test]

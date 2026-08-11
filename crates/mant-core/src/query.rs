@@ -11,11 +11,9 @@ use std::{
 use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
 use crate::{
-    ManualPage, ManualRequest, find_registered_document, parse_markdown, read_cached_tldr_page,
+    ManualPage, ManualRequest, find_registered_document, locate_manual_source, parse_manual_page,
+    parse_markdown, read_cached_tldr_page,
 };
-
-#[cfg(unix)]
-use crate::{locate_manual_source, parse_manual_page};
 
 /// Upper bound on a single Markdown source, shared by every input path.
 ///
@@ -130,31 +128,11 @@ impl QueryHost for SystemQueryHost {
     }
 
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String> {
-        #[cfg(unix)]
-        {
-            locate_manual_source(request).map_err(|error| error.to_string())
-        }
-        #[cfg(not(unix))]
-        {
-            Err(format!(
-                "native manual pages are unavailable on this platform; register a Markdown document named '{}'",
-                request.name
-            ))
-        }
+        locate_manual_source(request).map_err(|error| error.to_string())
     }
 
     fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String> {
-        #[cfg(unix)]
-        {
-            parse_manual_page(page).map_err(|error| error.to_string())
-        }
-        #[cfg(not(unix))]
-        {
-            Err(format!(
-                "native manual parsing is unavailable on this platform: {}",
-                page.path.display()
-            ))
-        }
+        parse_manual_page(page).map_err(|error| error.to_string())
     }
 
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String> {

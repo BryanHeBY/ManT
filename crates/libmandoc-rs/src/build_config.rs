@@ -15,6 +15,19 @@ const MACOS_COMPAT_SOURCES: &[&str] = &[
     "compat_recallocarray.c",
 ];
 
+const WINDOWS_MSVC_COMPAT_SOURCES: &[&str] = &[
+    "compat_err.c",
+    "compat_ohash.c",
+    "compat_progname.c",
+    "compat_reallocarray.c",
+    "compat_recallocarray.c",
+    "compat_strlcat.c",
+    "compat_strlcpy.c",
+    "compat_strndup.c",
+    "compat_strtonum.c",
+    "compat_vasprintf.c",
+];
+
 pub(crate) fn target_configuration(
     target_os: &str,
     target_env: &str,
@@ -22,16 +35,22 @@ pub(crate) fn target_configuration(
     match (target_os, target_env) {
         ("linux", "gnu") => ("config/linux-gnu.h", LINUX_COMPAT_SOURCES),
         ("macos", _) => ("config/macos.h", MACOS_COMPAT_SOURCES),
+        ("windows", "msvc") => ("config/windows-msvc.h", WINDOWS_MSVC_COMPAT_SOURCES),
         ("linux", env) => {
             panic!("libmandoc-rs does not yet provide a checked configuration for Linux/{env}")
         }
-        (os, _) => panic!("libmandoc-rs only supports Linux/glibc and macOS, not {os}"),
+        (os, env) => panic!(
+            "libmandoc-rs only supports Linux/glibc, macOS, and Windows/MSVC, not {os}/{env}"
+        ),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{LINUX_COMPAT_SOURCES, MACOS_COMPAT_SOURCES, target_configuration};
+    use super::{
+        LINUX_COMPAT_SOURCES, MACOS_COMPAT_SOURCES, WINDOWS_MSVC_COMPAT_SOURCES,
+        target_configuration,
+    };
 
     #[test]
     fn target_families_select_explicit_compatibility_sources() {
@@ -42,6 +61,10 @@ mod tests {
         assert_eq!(
             target_configuration("macos", ""),
             ("config/macos.h", MACOS_COMPAT_SOURCES)
+        );
+        assert_eq!(
+            target_configuration("windows", "msvc"),
+            ("config/windows-msvc.h", WINDOWS_MSVC_COMPAT_SOURCES)
         );
     }
 

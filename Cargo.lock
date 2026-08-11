@@ -627,6 +627,7 @@ name = "libmandoc-rs"
 version = "0.6.0"
 dependencies = [
  "cc",
+ "flate2",
  "serde",
  "serde_json",
  "zstd",

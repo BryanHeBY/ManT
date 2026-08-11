@@ -150,8 +150,7 @@ Manual pages have one parser path: ManT performs bounded reads, decompression,
 and constrained redirect-only `.so` alias resolution, then gives plain roff
 bytes to `libmandoc-rs` with includes denied. Renderer selection is
 deliberately absent from `mant.request/v5`. This native-manual source family is
-available on Unix; Windows implements the same protocol over registered and
-explicit Markdown.
+available on Linux, macOS, and Windows through the same owned AST boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires readable native manual content. A request JSON
@@ -202,14 +201,14 @@ one configured repository and bypasses root Markdown and manuals:
 `source` and `section` are mutually exclusive. A missing document in an
 explicit source is an error rather than a fallback.
 
-`section` is optional and bypasses registered Markdown. On Windows it produces
-an explicit unsupported-source diagnostic. On Unix, the native index reads `MANT_MANPATH` as a
-complete root override, otherwise honors `MANPATH`, then checks user/XDG,
-PATH-derived, and conventional system manual roots. To query a project-local
-roff source, place it below a hierarchy such as `project-man/man1/tool.1`, set
-`MANT_MANPATH` to `project-man`, and request name `tool`; a raw `.1` path is not
-a request input variant. Only raw, gzip, and zstd sources are indexed because
-those are the formats ManT's bounded input layer decodes before parsing.
+`section` is optional and bypasses registered Markdown. The native index reads
+`MANT_MANPATH` as a complete root override, otherwise honors `MANPATH`, then
+checks platform conventions. Unix additionally derives user/XDG, PATH, and
+system roots; Windows defaults only to `%USERPROFILE%\.local\share\man`.
+A root may contain `tool.1` directly or a hierarchy such as
+`project-man/man1/tool.1`. A raw `.1` path is not a request input variant. Only
+raw, gzip, and zstd sources are indexed because those are the formats ManT's
+bounded input layer decodes before parsing.
 
 A local Markdown file is selected by path:
 

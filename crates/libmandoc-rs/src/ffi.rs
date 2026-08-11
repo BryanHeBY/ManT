@@ -23,6 +23,7 @@ struct CTableCell {
 }
 
 unsafe extern "C" {
+    #[cfg(unix)]
     fn mant_mandoc_parse_file(
         path: *const c_char,
         include_root: *const c_char,
@@ -91,6 +92,7 @@ impl Drop for DocumentHandle {
     }
 }
 
+#[cfg(unix)]
 pub(super) fn parse_file(
     path: &CStr,
     include_root: Option<&CStr>,

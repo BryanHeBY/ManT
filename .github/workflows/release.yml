@@ -62,7 +62,7 @@ jobs:
           rustup default stable
 
       # Rebuild and test natively on every release target. Unix jobs cover
-      # libmandoc's C configuration; Windows covers the Markdown-only product.
+      # libmandoc uses checked target configurations on Unix and Windows.
       - name: Build and test Unix release binaries
         if: runner.os != 'Windows'
         run: bash scripts/check.sh

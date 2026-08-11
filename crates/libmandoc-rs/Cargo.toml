@@ -29,6 +29,7 @@ default = []
 serde = ["dep:serde"]
 
 [dependencies]
+flate2.workspace = true
 serde = { workspace = true, optional = true }
 zstd.workspace = true
 

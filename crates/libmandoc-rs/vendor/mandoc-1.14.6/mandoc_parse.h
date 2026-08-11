@@ -40,5 +40,7 @@ void		  mparse_copy(const struct mparse *);
 void		  mparse_free(struct mparse *);
 int		  mparse_open(struct mparse *, const char *);
 void		  mparse_readfd(struct mparse *, int, const char *);
+void		  mparse_readmem(struct mparse *, const unsigned char *, size_t,
+			const char *);
 void		  mparse_reset(struct mparse *);
 struct roff_meta *mparse_result(struct mparse *);

@@ -5,10 +5,18 @@ use std::{
     fmt,
     fs::File,
     io,
-    os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
+
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+
+#[cfg(windows)]
+use std::io::Read;
+
+#[cfg(windows)]
+use flate2::read::MultiGzDecoder;
 
 use crate::{Diagnostic, Document, RawDocument, diagnostics, ffi};
 
@@ -64,6 +72,7 @@ pub enum ParseErrorKind {
     InvalidPath,
     Read,
     Decompression,
+    Unsupported,
     Parse,
 }
 
@@ -118,7 +127,7 @@ impl Parser {
             Compression::Auto if path.extension().is_some_and(|extension| extension == "zst") => {
                 self.parse_zstd_file(path)
             }
-            Compression::Auto => self.parse_native_file(path),
+            Compression::Auto => self.parse_auto_file(path),
             Compression::Plain => {
                 let source = std::fs::read(path).map_err(|error| read_error(path, &error))?;
                 self.parse_plain_bytes(path, &source)
@@ -157,12 +166,37 @@ impl Parser {
         self.parse_plain_bytes(path, &source)
     }
 
+    #[cfg(unix)]
+    fn parse_auto_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
+        self.parse_native_file(path)
+    }
+
+    #[cfg(windows)]
+    fn parse_auto_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
+        let source = File::open(path).map_err(|error| read_error(path, &error))?;
+        if path.extension().is_some_and(|extension| extension == "gz") {
+            let mut decoded = Vec::new();
+            MultiGzDecoder::new(source)
+                .read_to_end(&mut decoded)
+                .map_err(|error| gzip_decompression_error(path, &error))?;
+            self.parse_plain_bytes(path, &decoded)
+        } else {
+            let mut source = source;
+            let mut bytes = Vec::new();
+            source
+                .read_to_end(&mut bytes)
+                .map_err(|error| read_error(path, &error))?;
+            self.parse_plain_bytes(path, &bytes)
+        }
+    }
+
     fn parse_zstd_bytes(&self, path: &Path, source: &[u8]) -> Result<ParseReport, ParseError> {
         let source =
             zstd::stream::decode_all(source).map_err(|error| decompression_error(path, &error))?;
         self.parse_plain_bytes(path, &source)
     }
 
+    #[cfg(unix)]
     fn parse_native_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
         self.finish(path, |c_path, include_root, allow_includes| {
             ffi::parse_file(c_path, include_root.map(CString::as_c_str), allow_includes)
@@ -185,7 +219,7 @@ impl Parser {
         path: &Path,
         parse: impl FnOnce(&CString, Option<&CString>, bool) -> Result<RawDocument, String>,
     ) -> Result<ParseReport, ParseError> {
-        let c_path = CString::new(path.as_os_str().as_bytes()).map_err(|_| ParseError {
+        let c_path = path_label(path).map_err(|_| ParseError {
             path: path.to_path_buf(),
             kind: ParseErrorKind::InvalidPath,
             message: "manual source path contains a NUL byte".into(),
@@ -211,12 +245,16 @@ impl Parser {
     fn include_root(&self) -> Result<(Option<CString>, bool), ParseError> {
         match &self.options.includes {
             IncludePolicy::Deny => Ok((None, false)),
+            #[cfg(unix)]
             IncludePolicy::SourceTree => Ok((None, true)),
+            #[cfg(windows)]
+            IncludePolicy::SourceTree => Err(unsupported_includes(PathBuf::new())),
             IncludePolicy::Root(root) if root.as_os_str().is_empty() => Err(ParseError {
                 path: root.clone(),
                 kind: ParseErrorKind::InvalidPath,
                 message: "manual include root is empty".into(),
             }),
+            #[cfg(unix)]
             IncludePolicy::Root(root) => CString::new(root.as_os_str().as_bytes())
                 .map(Some)
                 .map(|root| (root, true))
@@ -225,7 +263,30 @@ impl Parser {
                     kind: ParseErrorKind::InvalidPath,
                     message: "manual include root contains a NUL byte".into(),
                 }),
+            #[cfg(windows)]
+            IncludePolicy::Root(root) => Err(unsupported_includes(root.clone())),
         }
+    }
+}
+
+#[cfg(unix)]
+fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
+    CString::new(path.as_os_str().as_bytes())
+}
+
+#[cfg(windows)]
+fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
+    CString::new(path.to_string_lossy().as_bytes())
+}
+
+#[cfg(windows)]
+fn unsupported_includes(path: PathBuf) -> ParseError {
+    ParseError {
+        path,
+        kind: ParseErrorKind::Unsupported,
+        message:
+            "libmandoc file inclusion is unavailable on Windows; resolve .so sources before parsing"
+                .into(),
     }
 }
 
@@ -246,5 +307,14 @@ fn decompression_error(path: &Path, error: &io::Error) -> ParseError {
         path: path.to_path_buf(),
         kind: ParseErrorKind::Decompression,
         message: format!("could not decompress zstd manual source: {error}"),
+    }
+}
+
+#[cfg(windows)]
+fn gzip_decompression_error(path: &Path, error: &io::Error) -> ParseError {
+    ParseError {
+        path: path.to_path_buf(),
+        kind: ParseErrorKind::Decompression,
+        message: format!("could not decompress gzip manual source: {error}"),
     }
 }

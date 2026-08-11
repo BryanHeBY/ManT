@@ -1,5 +1,3 @@
-#![cfg(unix)]
-
 //! Integration tests for the Debian sid gzip fixture corpus.
 //!
 //! This directory adds the first section-7 fixtures (groff macro reference

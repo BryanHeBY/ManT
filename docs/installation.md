@@ -33,9 +33,8 @@ release's `SHA256SUMS` manifest before installation.
 | Manual archive | Prebuilt archive | Not published | Prebuilt archive | Optional |
 | Repository checkout | Source build | Source build | Source build | No |
 
-Linux and macOS builds parse Markdown and native man/mdoc documents. Windows
-provides the same Markdown, TUI, structured output, tldr, and MCP interfaces,
-but does not parse Unix man/roff sources.
+Linux, macOS, and Windows parse Markdown and native man/mdoc documents and
+provide the same TUI, structured output, tldr, and MCP interfaces.
 
 ## Installer behavior and options
 
@@ -129,9 +128,9 @@ mant git
 ```
 
 This requires Rust 1.88+. Linux additionally requires a C compiler and zlib
-development headers; macOS requires Clang and zlib. Windows builds are pure
-Rust. On Unix, neither a `man` nor a `mandoc` executable is required at
-runtime.
+development headers; macOS requires Clang and zlib. Windows requires the MSVC
+C toolchain but no system zlib. Neither a `man` nor a `mandoc` executable is
+required at runtime.
 
 ## Manual release archives
 

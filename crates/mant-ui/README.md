@@ -41,9 +41,8 @@ invoke `App::draw` from their frame callback instead.
 ## Platform behavior
 
 The frontend is portable across Linux, macOS, and Windows and does not inspect
-the original document source. Unix callers can provide normalized man, mdoc,
-or Markdown queries. Windows callers use the same complete TUI feature set
-with Markdown queries without compiling libmandoc.
+the original document source. Callers on every supported platform can provide
+normalized man, mdoc, or Markdown queries.
 
 Install [`mant`](https://crates.io/crates/mant) for the complete executable.
 This component crate is a library and does not install a second command.

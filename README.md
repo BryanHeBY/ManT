@@ -5,10 +5,10 @@
 [![crates.io](https://img.shields.io/crates/v/mant.svg?logo=rust)](https://crates.io/crates/mant)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-ManT turns dense local Unix manuals and structurally compatible Markdown into
+ManT turns dense local manuals and structurally compatible Markdown into
 navigable documents for people and precise, reusable knowledge for agents.
-On Windows, the same reader and machine interfaces operate on Markdown
-documents while Unix manual parsing remains an explicit Unix capability.
+Linux, macOS, and Windows use the same bundled parser and normalized model;
+Windows can index user-collected roff pages without requiring a Unix runtime.
 One native `mant` executable provides the full-screen reader, deterministic
 Markdown/text/JSON output, generated schemas, and a read-only MCP server.
 
@@ -70,9 +70,9 @@ independent of terminal detection.
   searching an entire page.
 - **Search results are reusable.** Matches include stable outline nodes and
   generated-Markdown line and column coordinates.
-- **Local-first and reproducible.** Unix builds bundle their primary libmandoc
+- **Local-first and reproducible.** Builds bundle their primary libmandoc
   parser; ordinary use needs no network service or system `man`/`mandoc`
-  executable. Windows keeps the same property for Markdown documents.
+  executable on any supported platform.
 - **Markdown uses the same model.** Project documentation gains the same
   outline, excerpt, search, TUI, JSON, and MCP capabilities.
 
@@ -142,9 +142,10 @@ The [JSON protocol and Schema reference](docs/protocol.md) documents every
 versioned request and response projection, normalized AST node, coordinate
 rule, and MCP tool.
 
-## Unix manual sources and tldr
+## Local manual sources and tldr
 
-On Linux and macOS, ManT indexes raw, gzip, and zstd manual sources directly.
+ManT indexes raw, gzip, and zstd manual sources directly on Linux, macOS, and
+Windows.
 It performs bounded reads and decompression before passing plain roff bytes to
 bundled libmandoc. Rust resolves redirect-only `.so` alias chains against the
 indexed manual root with canonical-path, cycle, depth, and total-byte checks;
@@ -156,6 +157,10 @@ mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
 MANT_MANPATH="$PWD/project-man" mant widget --manual
 ```
+
+Roots may also contain flat files such as `widget.1` directly. On Windows the
+fallback root is `%USERPROFILE%\.local\share\man`; `MANPATH` and
+`MANT_MANPATH` use semicolon-separated entries.
 
 When compatible local tldr data exists, the reader places it before the full
 manual as reserved section `0`. Reads prefer installed-client caches and then
@@ -176,8 +181,8 @@ mant mant
 An unqualified name checks the user directory first, then
 configured repository sources, and finally the native manual index. Only
 `.md` and `.markdown` files directly inside each installed directory are
-discoverable; nested directories and symbolic links are ignored. On Unix,
-`--manual` bypasses Markdown and selects a native manual.
+discoverable; nested directories and symbolic links are ignored. `--manual`
+bypasses Markdown and selects a native manual on every supported platform.
 
 Repository sources are top-level tables in `sources.toml` beside `documents/`:
 
@@ -257,7 +262,7 @@ mant
 ├─ integration ────→ schemas / request JSON / MCP stdio
 └─ mant-core
    ├─ mant-ast
-   └─ libmandoc-rs (Unix)
+   └─ libmandoc-rs
       └─ vendored libmandoc + private C shim
 ```
 

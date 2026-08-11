@@ -103,6 +103,8 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
         "MANT_MANPATH",
         "MANPATH",
         "project-man/man1/widget.1",
+        "%USERPROFILE%\\.local\\share\\man",
+        "pages can live directly below it as `widget.1`",
         "without invoking `man`",
         "Do not pass `./widget.1`",
     ] {
@@ -112,7 +114,7 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
         );
     }
     assert!(
-        PROTOCOL_REFERENCE.contains("the native index reads `MANT_MANPATH`"),
+        PROTOCOL_REFERENCE.contains("`MANT_MANPATH` as a complete root override"),
         "the request reference should define the manual lookup environment"
     );
 }

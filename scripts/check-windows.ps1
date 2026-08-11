@@ -1,4 +1,4 @@
-# Run the complete verification boundary for ManT's Markdown-only Windows build.
+# Run the complete verification boundary for ManT's native Windows build.
 
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
@@ -21,6 +21,7 @@ function Invoke-Native {
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 $Packages = @(
+    "--package", "libmandoc-rs",
     "--package", "mant-ast",
     "--package", "mant-core",
     "--package", "mant-ui",

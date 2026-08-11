@@ -2,12 +2,13 @@
 
 use std::{
     collections::HashSet,
-    ffi::OsStr,
     fs::{self, File},
     io::{self, Cursor, Read},
-    os::unix::ffi::OsStrExt,
     path::{Component, Path, PathBuf},
 };
+
+#[cfg(unix)]
+use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
 
 use flate2::read::MultiGzDecoder;
 
@@ -105,13 +106,15 @@ fn resolve_manual_redirects_with_budget(
 ) -> Result<ResolvedManualSource, ManualError> {
     let manual_root = fs::canonicalize(&page.manual_root)
         .map_err(|error| source_error(&page.manual_root, &error))?;
-    let mut current = canonical_manual_path(&page.path, &manual_root)?;
+    let mut current = page.path.clone();
     let mut visited = HashSet::new();
     let mut redirects = 0_usize;
     let mut alias_target = None;
 
     loop {
-        if !visited.insert(current.clone()) {
+        let identity =
+            fs::canonicalize(&current).map_err(|error| source_error(&current, &error))?;
+        if !visited.insert(identity) {
             return Err(ManualError::redirect(
                 &current,
                 "manual .so redirect cycle detected",
@@ -136,20 +139,6 @@ fn resolve_manual_redirects_with_budget(
         current = resolve_redirect_target(&current, &manual_root, &target)?;
         redirects += 1;
     }
-}
-
-fn canonical_manual_path(path: &Path, manual_root: &Path) -> Result<PathBuf, ManualError> {
-    let canonical = fs::canonicalize(path).map_err(|error| source_error(path, &error))?;
-    if !canonical.starts_with(manual_root) {
-        return Err(ManualError::unsafe_path(
-            path,
-            format!(
-                "manual source resolves outside manual root '{}'",
-                manual_root.display()
-            ),
-        ));
-    }
-    Ok(canonical)
 }
 
 fn remaining_budget(
@@ -246,7 +235,10 @@ fn resolve_redirect_target(
     manual_root: &Path,
     target: &[u8],
 ) -> Result<PathBuf, ManualError> {
-    let target_path = Path::new(OsStr::from_bytes(target));
+    #[cfg(unix)]
+    let target_path = PathBuf::from(OsStr::from_bytes(target));
+    #[cfg(windows)]
+    let target_path = redirect_path(source_path, target)?;
     if target_path
         .components()
         .any(|component| !matches!(component, Component::Normal(_)))
@@ -260,11 +252,11 @@ fn resolve_redirect_target(
         ));
     }
 
-    let mut bases = vec![manual_root.join(target_path)];
+    let mut bases = vec![manual_root.join(&target_path)];
     if target_path.components().count() == 1
         && let Some(source_directory) = source_path.parent()
     {
-        bases.push(source_directory.join(target_path));
+        bases.push(source_directory.join(&target_path));
     }
 
     let mut candidates = Vec::new();
@@ -300,6 +292,13 @@ fn resolve_redirect_target(
             target_path.to_string_lossy()
         ),
     ))
+}
+
+#[cfg(windows)]
+fn redirect_path(source_path: &Path, target: &[u8]) -> Result<PathBuf, ManualError> {
+    std::str::from_utf8(target)
+        .map(PathBuf::from)
+        .map_err(|_| ManualError::unsafe_path(source_path, "manual .so target must be UTF-8"))
 }
 
 fn compression_candidates(path: &Path) -> Vec<PathBuf> {
@@ -345,9 +344,11 @@ mod tests {
     use std::{
         fs,
         io::{Read, Write},
-        os::unix::fs::symlink,
         process,
     };
+
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
 
     use crate::{ManualErrorKind, ManualPage};
     use flate2::{Compression as GzipCompression, write::GzEncoder};
@@ -479,6 +480,7 @@ mod tests {
         assert!(error.message().contains("redirect-only"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn redirect_chains_reject_cycles_parent_paths_and_escaping_symlinks() {
         let base = std::env::temp_dir().join(format!("mant-hostile-so-{}", process::id()));
@@ -517,14 +519,14 @@ mod tests {
         .expect("write outside source");
         let top_level_link = man1.join("top-level-link.1");
         symlink(&outside, &top_level_link).expect("link top-level page outside manual root");
-        let top_level_error = parse_manual_page(&ManualPage {
+        let linked = parse_manual_page(&ManualPage {
             name: "top-level-link".to_owned(),
             section: "1".to_owned(),
             path: top_level_link,
             manual_root: root.clone(),
         })
-        .expect_err("reject a top-level symlink escaping the manual root");
-        assert_eq!(top_level_error.kind(), ManualErrorKind::UnsafePath);
+        .expect("read an explicitly indexed top-level symlink");
+        assert_eq!(linked.meta.title.as_deref(), Some("OUTSIDE"));
 
         symlink(&outside, man1.join("escape.1")).expect("link outside manual root");
         let alias = man1.join("alias.1");

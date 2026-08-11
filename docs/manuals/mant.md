@@ -1,7 +1,7 @@
 <!-- mant:tldr:start -->
 # mant
 
-> Turn local Unix manual pages and cross-platform Markdown into structured documents.
+> Turn local manual pages and cross-platform Markdown into structured documents.
 
 - Read a complete manual interactively:
 
@@ -36,7 +36,7 @@
 
 ## Name
 
-`mant` — read and query structured Unix manual pages and cross-platform Markdown.
+`mant` — read and query structured manual pages and cross-platform Markdown.
 
 ## Synopsis
 
@@ -53,10 +53,9 @@ mant --mcp
 ## Description
 
 `mant` is ManT's native interactive reader, structured command-line interface,
-and MCP server. On Unix it parses local man and mdoc sources through bundled
-libmandoc. On Windows it operates as a Markdown-native document reader. Both
-paths expose hierarchy, semantic options, references, and visible text through
-one normalized document model.
+and MCP server. Linux, macOS, and Windows parse local man and mdoc sources
+through bundled libmandoc. Every platform exposes hierarchy, semantic options,
+references, and visible text through one normalized document model.
 
 Local Markdown enters the same model, so terminal navigation, outlines,
 excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
@@ -80,20 +79,19 @@ registered directory are visible. Nested directories and symbolic links are
 ignored. Root documents always win; source priority and name resolve remaining
 duplicates; `.md` wins over `.markdown` within one directory. `--source NAME`
 selects exactly one configured repository. `--manual` or `--section` selects a
-native manual on Unix and cannot be combined with `--source`.
+native manual and cannot be combined with `--source`.
 
 ### Manual Pages
 
-On Linux and macOS, manual page names are located through ManT's native manual
-index. ManT reads raw, gzip, and zstd roff sources and resolves redirect-only
+On Linux, macOS, and Windows, manual page names are located through ManT's
+native manual index. ManT reads raw, gzip, and zstd roff sources and resolves redirect-only
 `.so` alias chains within the indexed manual root. All file and decompression
 I/O for manual sources remains in ManT; bundled libmandoc receives only the
 final plain roff bytes. Neither a system `man` nor a system `mandoc` executable
 is required for ordinary use.
 
-Windows intentionally omits libmandoc and native man/roff lookup. Register a
-Markdown document with the desired name, pass an explicit Markdown path, or
-pipe Markdown through standard input instead.
+Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
+and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 
 - `--section SECTION`: Select a manual section such as `1` or `3p`.
 - `--manual`: Require a native manual instead of registered Markdown with the
@@ -106,9 +104,9 @@ invoke a host renderer or maintain an alternate HTML parsing path.
 ### Local Roff Trees
 
 Use `MANT_MANPATH` or `MANPATH` to make project-local man or mdoc sources
-visible without copying them into a system directory. Each entry must be the
-root of a hierarchy containing section directories such as `man1/` or
-`man3/`; it must not name the section directory or source file itself.
+visible without copying them into a system directory. Each entry names a root;
+pages can live directly below it as `widget.1`, or in section directories such
+as `man1/widget.1`. The entry must not name an individual source file.
 
 For example, expose `widget.1` as document name `widget`:
 
@@ -121,7 +119,10 @@ MANT_MANPATH="$PWD/project-man" mant widget --section 1
 `MANT_MANPATH` is a complete ManT-specific override. `MANPATH` also replaces
 the derived defaults unless it contains an empty component; an empty component
 inserts user/XDG, PATH-derived, and conventional system roots at that point.
-This preserves familiar colon-list behavior without invoking `man`.
+This preserves familiar path-list behavior without invoking `man`. Unix uses
+colon-separated entries; Windows uses semicolon-separated entries. Its
+conventional fallback contains only `%USERPROFILE%\.local\share\man`; other
+locations remain explicit.
 
 Do not pass `./widget.1` as the input operand: path-like operands are reserved
 for Markdown documents. Register local roff in a manual hierarchy and query
@@ -370,9 +371,8 @@ On macOS, documents live below `~/Library/Application Support/ManT` and the
 private tldr checkout lives below `~/Library/Caches/ManT/tldr-pages`.
 
 On Windows, documents live below `%APPDATA%\ManT`. ManT's private
-tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. A Windows
-installation provides Markdown, TUI, structured output, tldr, and MCP support;
-native Unix manual parsing is not part of that build.
+tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. The native
+manual fallback root is `%USERPROFILE%\.local\share\man`.
 
 `sources.toml` lives at the data root. Personal documents and installed source
 directories remain below `documents/`; see `docs/sources.md` for the source
@@ -380,9 +380,9 @@ schema and update lifecycle.
 
 ## Environment
 
-- `MANT_MANPATH`: Completely replace ManT's manual roots with a colon-separated
-  list on Unix. Each root contains section directories such as `man1/`, not an
-  individual roff file.
+- `MANT_MANPATH`: Completely replace ManT's manual roots. Lists use colons on
+  Unix and semicolons on Windows. A root may contain flat roff files or section
+  directories such as `man1/`, but is never an individual roff file.
 - `MANPATH`: Override the derived manual roots. Empty components insert the
   user/XDG, PATH-derived, and conventional system roots.
 - `MANT_TLDR_DIR`: Use one explicit tldr checkout for reads and updates.
@@ -397,8 +397,8 @@ schema and update lifecycle.
   XDG overrides are absent.
 - `APPDATA`: Select the per-user registered Markdown root on Windows.
 - `LOCALAPPDATA`: Select ManT and installed-client cache roots on Windows.
-- `USERPROFILE`: Supply compatible installed-client tldr cache locations on
-  Windows when available.
+- `USERPROFILE`: Supply the default Windows manual root and compatible
+  installed-client tldr cache locations.
 
 ## General
 

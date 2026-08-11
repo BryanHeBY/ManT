@@ -122,7 +122,7 @@ For `mant tool`, Markdown lookup is:
 1. `documents/tool.md` or `documents/tool.markdown`;
 2. configured sources by descending `priority`, then source name in ascending
    bytewise order;
-3. the native Unix manual index.
+3. the native manual index.
 
 Within one directory, `.md` wins over `.markdown` for the same stem. Shadowed
 source candidates remain discoverable. Select exactly one configured source

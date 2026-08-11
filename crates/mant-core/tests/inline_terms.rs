@@ -1,5 +1,3 @@
-#![cfg(unix)]
-
 //! End-to-end lowering and rendering tests for definition-list term layout.
 //!
 //! The `inline-terms.1` fixture exercises every decision the model makes:
