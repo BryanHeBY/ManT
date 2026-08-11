@@ -5,21 +5,23 @@ use std::{
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
-    process::Command,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use super::{
-    archive::extract_archive,
-    config::{
-        ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfigError, SourceLocation,
-        load_source_config,
-    },
-    download::{DownloadOutcome, Validators, download_archive},
+mod archive;
+mod git;
+mod metadata;
+mod workspace;
+
+use metadata::SourceMetadata;
+use workspace::UpdateWorkspace;
+
+use super::config::{
+    ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfigError, SourceLocation,
+    load_source_config,
 };
 
-const METADATA_VERSION: u8 = 2;
 const MAX_METADATA_BYTES: u64 = 64 * 1024;
 const MAX_SOURCE_DOCUMENTS: usize = 10_000;
 const MAX_SOURCE_DEPTH: usize = 32;
@@ -70,34 +72,6 @@ impl DocumentSourcesUpdate {
             .iter()
             .any(|source| source.action == SourceUpdateAction::Failed)
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct SourceMetadata {
-    version: u8,
-    source: String,
-    kind: SourceMetadataKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    repo: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    branch: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    url: Option<String>,
-    revision: String,
-    config_fingerprint: String,
-    documents: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    etag: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    last_modified: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-enum SourceMetadataKind {
-    Git,
-    Archive,
 }
 
 /// Update every configured source without exposing this operation to MCP.
@@ -189,211 +163,70 @@ fn update_one_source(
     }
 }
 
+pub(in crate::update) struct SourceUpdateContext<'a> {
+    pub(in crate::update) paths: &'a DocumentPaths,
+    pub(in crate::update) name: &'a str,
+    pub(in crate::update) configured: &'a ConfiguredSource,
+    pub(in crate::update) target: PathBuf,
+    pub(in crate::update) fingerprint: String,
+    pub(in crate::update) metadata: Option<SourceMetadata>,
+}
+
+impl<'a> SourceUpdateContext<'a> {
+    fn prepare(
+        paths: &'a DocumentPaths,
+        name: &'a str,
+        configured: &'a ConfiguredSource,
+    ) -> Result<Self, String> {
+        let target = paths.sources.join(name);
+        recover_directory(&target)?;
+        let fingerprint = source_fingerprint(configured);
+        let metadata = read_metadata(&target)
+            .filter(|metadata| metadata.matches(name, configured, &fingerprint));
+        Ok(Self {
+            paths,
+            name,
+            configured,
+            target,
+            fingerprint,
+            metadata,
+        })
+    }
+
+    pub(in crate::update) fn unchanged(&self, revision: String) -> SourceUpdateResult {
+        unchanged_result(
+            self.name,
+            revision,
+            self.metadata.as_ref().map_or(0, SourceMetadata::documents),
+        )
+    }
+
+    pub(in crate::update) fn updated(
+        &self,
+        revision: String,
+        documents: u32,
+    ) -> SourceUpdateResult {
+        SourceUpdateResult {
+            source: self.name.to_owned(),
+            action: SourceUpdateAction::Updated,
+            revision: Some(revision),
+            documents: Some(documents),
+            error: None,
+        }
+    }
+}
+
 fn try_update_one_source(
     paths: &DocumentPaths,
     name: &str,
     source: &ConfiguredSource,
 ) -> Result<SourceUpdateResult, String> {
-    let target = paths.sources.join(name);
-    recover_directory(&target)?;
-    let fingerprint = source_fingerprint(source);
-    let metadata = read_metadata(&target)
-        .filter(|metadata| metadata_matches(metadata, name, source, &fingerprint));
+    let context = SourceUpdateContext::prepare(paths, name, source)?;
 
     match &source.location {
-        SourceLocation::Git { repo, branch } => update_git_source(
-            paths,
-            name,
-            source,
-            repo,
-            branch,
-            &target,
-            &fingerprint,
-            metadata.as_ref(),
-        ),
-        SourceLocation::Archive { url } => update_archive_source(
-            paths,
-            name,
-            source,
-            url,
-            &target,
-            &fingerprint,
-            metadata.as_ref(),
-        ),
+        SourceLocation::Git { repo, branch } => git::update(&context, repo, branch),
+        SourceLocation::Archive { url } => archive::update(&context, url),
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn update_git_source(
-    paths: &DocumentPaths,
-    name: &str,
-    source: &ConfiguredSource,
-    repo: &str,
-    branch: &str,
-    target: &Path,
-    fingerprint: &str,
-    metadata: Option<&SourceMetadata>,
-) -> Result<SourceUpdateResult, String> {
-    let revision = remote_revision(&paths.root, repo, branch)?;
-    if let Some(metadata) = metadata
-        && metadata.revision == revision
-    {
-        return Ok(unchanged_result(name, revision, metadata.documents));
-    }
-
-    let checkout = paths.sources.join(format!(".{name}.checkout"));
-    let staging = paths.sources.join(format!(".{name}.staging"));
-    remove_internal_dir(&checkout);
-    remove_internal_dir(&staging);
-
-    let result = (|| {
-        run_git(
-            &paths.root,
-            [
-                OsStr::new("clone"),
-                OsStr::new("--depth"),
-                OsStr::new("1"),
-                OsStr::new("--single-branch"),
-                OsStr::new("--no-local"),
-                OsStr::new("--no-tags"),
-                OsStr::new("--branch"),
-                OsStr::new(branch),
-                OsStr::new("--"),
-                OsStr::new(repo),
-                checkout.as_os_str(),
-            ],
-        )?;
-        let checked_out = git_revision(&paths.root, &checkout)?;
-        if checked_out != revision {
-            return Err(format!(
-                "remote branch moved while updating (expected {revision}, checked out {checked_out}); retry"
-            ));
-        }
-        let commit_count = run_git(
-            &paths.root,
-            [
-                OsStr::new("-C"),
-                checkout.as_os_str(),
-                OsStr::new("rev-list"),
-                OsStr::new("--count"),
-                OsStr::new("HEAD"),
-            ],
-        )?;
-        if commit_count.trim() != "1" {
-            return Err("git did not produce the required single-commit checkout".to_owned());
-        }
-        fs::create_dir(&staging)
-            .map_err(|error| format!("could not create staging directory: {error}"))?;
-        let documents = install_selected_documents(&checkout, &staging, source)?;
-        let document_count = u32::try_from(documents).unwrap_or(u32::MAX);
-        let metadata = SourceMetadata {
-            version: METADATA_VERSION,
-            source: name.to_owned(),
-            kind: SourceMetadataKind::Git,
-            repo: Some(repo.to_owned()),
-            branch: Some(branch.to_owned()),
-            url: None,
-            revision: revision.clone(),
-            config_fingerprint: fingerprint.to_owned(),
-            documents: document_count,
-            etag: None,
-            last_modified: None,
-        };
-        activate_source(&staging, target, &metadata)?;
-        Ok(SourceUpdateResult {
-            source: name.to_owned(),
-            action: SourceUpdateAction::Updated,
-            revision: Some(revision),
-            documents: Some(document_count),
-            error: None,
-        })
-    })();
-
-    remove_internal_dir(&checkout);
-    remove_internal_dir(&staging);
-    result
-}
-
-#[allow(clippy::too_many_arguments)]
-fn update_archive_source(
-    paths: &DocumentPaths,
-    name: &str,
-    source: &ConfiguredSource,
-    url: &str,
-    target: &Path,
-    fingerprint: &str,
-    metadata: Option<&SourceMetadata>,
-) -> Result<SourceUpdateResult, String> {
-    let download = paths.sources.join(format!(".{name}.download"));
-    let checkout = paths.sources.join(format!(".{name}.checkout"));
-    let staging = paths.sources.join(format!(".{name}.staging"));
-    remove_internal_dir(&download);
-    remove_internal_dir(&checkout);
-    remove_internal_dir(&staging);
-
-    let validators = metadata.and_then(|metadata| {
-        if metadata.etag.is_none() && metadata.last_modified.is_none() {
-            None
-        } else {
-            Some(Validators {
-                etag: metadata.etag.clone(),
-                last_modified: metadata.last_modified.clone(),
-            })
-        }
-    });
-    let result = (|| match download_archive(url, &download, validators.as_ref())? {
-        DownloadOutcome::NotModified => {
-            let metadata = metadata.ok_or_else(|| {
-                "archive server returned not-modified without installed metadata".to_owned()
-            })?;
-            Ok(unchanged_result(
-                name,
-                metadata.revision.clone(),
-                metadata.documents,
-            ))
-        }
-        DownloadOutcome::Downloaded {
-            revision,
-            validators,
-        } => {
-            if let Some(metadata) = metadata
-                && metadata.revision == revision
-            {
-                return Ok(unchanged_result(name, revision, metadata.documents));
-            }
-            extract_archive(&download, &checkout)?;
-            fs::create_dir(&staging)
-                .map_err(|error| format!("could not create staging directory: {error}"))?;
-            let documents = install_selected_documents(&checkout, &staging, source)?;
-            let document_count = u32::try_from(documents).unwrap_or(u32::MAX);
-            let metadata = SourceMetadata {
-                version: METADATA_VERSION,
-                source: name.to_owned(),
-                kind: SourceMetadataKind::Archive,
-                repo: None,
-                branch: None,
-                url: Some(url.to_owned()),
-                revision: revision.clone(),
-                config_fingerprint: fingerprint.to_owned(),
-                documents: document_count,
-                etag: validators.etag,
-                last_modified: validators.last_modified,
-            };
-            activate_source(&staging, target, &metadata)?;
-            Ok(SourceUpdateResult {
-                source: name.to_owned(),
-                action: SourceUpdateAction::Updated,
-                revision: Some(revision),
-                documents: Some(document_count),
-                error: None,
-            })
-        }
-    })();
-
-    remove_internal_dir(&download);
-    remove_internal_dir(&checkout);
-    remove_internal_dir(&staging);
-    result
 }
 
 fn unchanged_result(source: &str, revision: String, documents: u32) -> SourceUpdateResult {
@@ -406,32 +239,11 @@ fn unchanged_result(source: &str, revision: String, documents: u32) -> SourceUpd
     }
 }
 
-fn metadata_matches(
+pub(in crate::update) fn activate_source(
+    staging: &Path,
+    target: &Path,
     metadata: &SourceMetadata,
-    name: &str,
-    source: &ConfiguredSource,
-    fingerprint: &str,
-) -> bool {
-    metadata.version == METADATA_VERSION
-        && metadata.source == name
-        && metadata.config_fingerprint == fingerprint
-        && match &source.location {
-            SourceLocation::Git { repo, branch } => {
-                metadata.kind == SourceMetadataKind::Git
-                    && metadata.repo.as_deref() == Some(repo)
-                    && metadata.branch.as_deref() == Some(branch)
-                    && metadata.url.is_none()
-            }
-            SourceLocation::Archive { url } => {
-                metadata.kind == SourceMetadataKind::Archive
-                    && metadata.url.as_deref() == Some(url)
-                    && metadata.repo.is_none()
-                    && metadata.branch.is_none()
-            }
-        }
-}
-
-fn activate_source(staging: &Path, target: &Path, metadata: &SourceMetadata) -> Result<(), String> {
+) -> Result<(), String> {
     let metadata_text = toml::to_string_pretty(metadata)
         .map_err(|error| format!("could not encode source metadata: {error}"))?;
     fs::write(staging.join(SOURCE_METADATA_FILE), metadata_text)
@@ -439,66 +251,7 @@ fn activate_source(staging: &Path, target: &Path, metadata: &SourceMetadata) -> 
     replace_directory(staging, target)
 }
 
-fn remote_revision(working_directory: &Path, repo: &str, branch: &str) -> Result<String, String> {
-    let reference = format!("refs/heads/{branch}");
-    let output = run_git(
-        working_directory,
-        [
-            OsStr::new("ls-remote"),
-            OsStr::new("--exit-code"),
-            OsStr::new("--refs"),
-            OsStr::new("--"),
-            OsStr::new(repo),
-            OsStr::new(&reference),
-        ],
-    )?;
-    let line = output
-        .lines()
-        .next()
-        .ok_or_else(|| format!("branch '{branch}' was not found in '{repo}'"))?;
-    let revision = line.split_whitespace().next().unwrap_or_default();
-    if !matches!(revision.len(), 40 | 64) || !revision.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
-        return Err("git returned an invalid remote revision".to_owned());
-    }
-    Ok(revision.to_ascii_lowercase())
-}
-
-fn git_revision(working_directory: &Path, checkout: &Path) -> Result<String, String> {
-    let output = run_git(
-        working_directory,
-        [
-            OsStr::new("-C"),
-            checkout.as_os_str(),
-            OsStr::new("rev-parse"),
-            OsStr::new("HEAD"),
-        ],
-    )?;
-    Ok(output.trim().to_ascii_lowercase())
-}
-
-fn run_git<'a>(
-    working_directory: &Path,
-    arguments: impl IntoIterator<Item = &'a OsStr>,
-) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(arguments)
-        .current_dir(working_directory)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()
-        .map_err(|error| format!("could not run git: {error}"))?;
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(if detail.is_empty() {
-            format!("git exited with {}", output.status)
-        } else {
-            format!("git failed: {detail}")
-        });
-    }
-    String::from_utf8(output.stdout).map_err(|_| "git output was not UTF-8".to_owned())
-}
-
-fn install_selected_documents(
+pub(in crate::update) fn install_selected_documents(
     checkout: &Path,
     staging: &Path,
     source: &ConfiguredSource,
