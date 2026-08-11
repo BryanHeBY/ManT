@@ -183,6 +183,9 @@ sources, and finally the native manual index. Only
 `.md` and `.markdown` files directly inside each installed directory are
 discoverable; nested directories and symbolic links are ignored. `--manual`
 bypasses Markdown and selects a native manual on every supported platform.
+On Windows, packages should keep canonical executable suffixes such as
+`tool.exe.md`; `mant tool` falls back through `PATHEXT`, while `mant tool.exe`
+is exact. This behavior is independent of the calling shell.
 
 Document sources are top-level tables in `sources.toml` beside `documents/`:
 

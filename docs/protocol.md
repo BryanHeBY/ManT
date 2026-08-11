@@ -204,6 +204,14 @@ one configured source and bypasses root Markdown and manuals:
 `source` and `section` are mutually exclusive. A missing document in an
 explicit source is an error rather than a fallback.
 
+On Windows only, an extensionless document name is tried exactly and then with
+each suffix from `PATHEXT` in order. Thus `cargo` can resolve a registered
+`cargo.exe.md` or native `cargo.exe` manual, while an explicit `cargo.exe`
+never expands further. Canonical document filenames should retain the suffix.
+This rule does not inspect the parent shell or PowerShell version; `.ps1` is
+eligible only when `PATHEXT` contains it. An unset or empty `PATHEXT` uses
+`.COM`, `.EXE`, `.BAT`, and `.CMD`. Non-Windows platforms use exact names.
+
 `section` is optional and bypasses registered Markdown. The native index reads
 `MANT_MANPATH` as a complete root override, otherwise honors `MANPATH`, then
 checks platform conventions. Unix additionally derives user/XDG, PATH, and

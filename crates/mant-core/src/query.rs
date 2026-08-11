@@ -11,8 +11,8 @@ use std::{
 use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
 use crate::{
-    ManualPage, ManualRequest, find_registered_document, locate_manual_source, parse_manual_page,
-    parse_markdown, read_cached_tldr_page,
+    ManualPage, ManualRequest, executable::query_name_candidates, find_registered_document,
+    locate_manual_source, parse_manual_page, parse_markdown, read_cached_tldr_page,
 };
 
 /// Upper bound on a single Markdown source, shared by every input path.
@@ -103,6 +103,7 @@ pub fn query_with_policy(
 }
 
 trait QueryHost {
+    fn name_candidates(&self, name: &str) -> Vec<String>;
     fn locate_registered_document(
         &self,
         name: &str,
@@ -117,6 +118,10 @@ trait QueryHost {
 struct SystemQueryHost;
 
 impl QueryHost for SystemQueryHost {
+    fn name_candidates(&self, name: &str) -> Vec<String> {
+        query_name_candidates(name)
+    }
+
     fn locate_registered_document(
         &self,
         name: &str,
@@ -265,16 +270,19 @@ fn query_named_document(
         return Err(QueryError::ConflictingSourceSelectors);
     }
     let require_manual = policy.manual_only || section.is_some();
+    let candidates = host.name_candidates(name);
 
     // An unqualified name first consults the platform-native registration
     // namespace. Section selectors and the explicit manual-only policy bypass
     // Markdown name discovery.
     if section.is_none() && !policy.manual_only {
-        let registered = host
-            .locate_registered_document(name, source)
-            .map_err(|detail| QueryError::Registry { detail })?;
-        if let Some(path) = registered {
-            return query_registered_document(name, &path, host);
+        for candidate in &candidates {
+            let registered = host
+                .locate_registered_document(candidate, source)
+                .map_err(|detail| QueryError::Registry { detail })?;
+            if let Some(path) = registered {
+                return query_registered_document(name, &path, host);
+            }
         }
         if source.is_some() {
             return Err(QueryError::NoReadableContent {
@@ -283,12 +291,10 @@ fn query_named_document(
         }
     }
 
-    let manual_request = ManualRequest::new(name, section.clone());
-
     // A malformed or unreadable community cache must never hide a valid man
     // page. It is an optional augmentation and is never updated during query.
     let tldr = host.read_tldr(name).ok().flatten();
-    let mut manual = load_manual(&manual_request, host);
+    let mut manual = load_manual(name, &candidates, section.as_deref(), host);
 
     // A malformed page may omit its own section metadata. Preserve the
     // requested section so labels stay `name(N)`.
@@ -359,29 +365,39 @@ fn query_registered_document(
 }
 
 fn load_manual(
-    request: &ManualRequest,
+    requested_name: &str,
+    candidates: &[String],
+    section: Option<&str>,
     host: &dyn QueryHost,
 ) -> Result<Option<MantDocument>, String> {
-    let located = host.locate_manual(request);
-    let (source_path, direct) = match located {
-        Ok(page) => {
-            let direct = host.parse_manual(&page);
-            (Some(page.path), direct)
+    let mut first_locate_error = None;
+    let mut located = None;
+    for candidate in candidates {
+        let request = ManualRequest::new(candidate, section.map(ToOwned::to_owned));
+        match host.locate_manual(&request) {
+            Ok(page) => {
+                located = Some(page);
+                break;
+            }
+            Err(error) => {
+                first_locate_error.get_or_insert(error);
+            }
         }
-        Err(error) => (None, Err(error)),
+    }
+    let Some(page) = located else {
+        let error =
+            first_locate_error.unwrap_or_else(|| "no name candidates were available".to_owned());
+        return Err(format!(
+            "could not load manual '{requested_name}': manual source: {error}"
+        ));
     };
 
-    let document = direct.map_err(|error| {
-        format!(
-            "could not load manual '{}': manual source: {error}",
-            request.name
-        )
+    let source_path = page.path.clone();
+    let document = host.parse_manual(&page).map_err(|error| {
+        format!("could not load manual '{requested_name}': manual source: {error}")
     })?;
     if document.sections.is_empty() {
-        let path = source_path.as_deref().map_or_else(
-            || "<unknown source>".to_owned(),
-            |path| path.display().to_string(),
-        );
+        let path = source_path.display();
         let diagnostics = document
             .diagnostics
             .iter()
@@ -399,8 +415,7 @@ fn load_manual(
             format!("; diagnostics: {diagnostics}")
         };
         return Err(format!(
-            "could not load manual '{}': libmandoc parsed {path} but produced no readable sections{detail}",
-            request.name,
+            "could not load manual '{requested_name}': libmandoc parsed {path} but produced no readable sections{detail}",
         ));
     }
     Ok(Some(document))
@@ -429,8 +444,11 @@ mod tests {
 
     #[derive(Clone)]
     struct StubHost {
+        name_candidates: Option<Vec<String>>,
         registered_document: Option<PathBuf>,
+        registered_name: Option<String>,
         locate: Result<ManualPage, String>,
+        manual_name: Option<String>,
         direct: Result<MantDocument, String>,
         tldr: Result<Option<TldrDocument>, String>,
         markdown: Result<String, String>,
@@ -438,20 +456,40 @@ mod tests {
     }
 
     impl QueryHost for StubHost {
+        fn name_candidates(&self, name: &str) -> Vec<String> {
+            self.name_candidates
+                .clone()
+                .unwrap_or_else(|| vec![name.to_owned()])
+        }
+
         fn locate_registered_document(
             &self,
-            _name: &str,
+            name: &str,
             source: Option<&str>,
         ) -> Result<Option<PathBuf>, String> {
             self.calls
                 .lock()
                 .expect("calls lock")
                 .push(if source.is_some() { "source" } else { "name" });
+            if self
+                .registered_name
+                .as_deref()
+                .is_some_and(|registered_name| registered_name != name)
+            {
+                return Ok(None);
+            }
             Ok(self.registered_document.clone())
         }
 
-        fn locate_manual(&self, _request: &ManualRequest) -> Result<ManualPage, String> {
+        fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String> {
             self.calls.lock().expect("calls lock").push("locate");
+            if self
+                .manual_name
+                .as_deref()
+                .is_some_and(|manual_name| manual_name != request.name)
+            {
+                return Err("source not found".to_owned());
+            }
             self.locate.clone()
         }
 
@@ -520,13 +558,16 @@ mod tests {
 
     fn host(direct: Result<MantDocument, String>) -> StubHost {
         StubHost {
+            name_candidates: None,
             registered_document: None,
+            registered_name: None,
             locate: Ok(ManualPage {
                 name: "tool".to_owned(),
                 section: "1".to_owned(),
                 path: PathBuf::from("/man/tool.1"),
                 manual_root: PathBuf::from("/man"),
             }),
+            manual_name: None,
             direct,
             tldr: Ok(None),
             markdown: Err("Markdown unavailable".to_owned()),
@@ -776,6 +817,74 @@ mod tests {
             *host.calls.lock().expect("calls lock"),
             ["name", "markdown"],
             "a registered name must not consult man or external tldr caches"
+        );
+    }
+
+    #[test]
+    fn windows_suffix_fallback_can_resolve_registered_markdown() {
+        let mut host = host(Err("manual parser must not run".to_owned()));
+        host.name_candidates = Some(vec!["tool".to_owned(), "tool.EXE".to_owned()]);
+        host.registered_name = Some("tool.EXE".to_owned());
+        host.registered_document = Some(PathBuf::from("/data/mant/tool.exe.md"));
+        host.markdown = Ok("# Tool executable\n\nWindows command documentation.\n".to_owned());
+
+        let result = query_with(&request(), QueryPolicy::default(), &host)
+            .expect("registered executable document");
+
+        assert_eq!(result.label, "tool");
+        assert_eq!(
+            result.document.expect("document").source.path.as_deref(),
+            Some("/data/mant/tool.exe.md")
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["name", "name", "markdown"]
+        );
+    }
+
+    #[test]
+    fn windows_suffix_fallback_can_resolve_a_native_manual() {
+        let mut host = host(Ok(document(SourceFormat::Man, false, true)));
+        host.name_candidates = Some(vec!["tool".to_owned(), "tool.EXE".to_owned()]);
+        host.manual_name = Some("tool.EXE".to_owned());
+        host.locate = Ok(ManualPage {
+            name: "tool.exe".to_owned(),
+            section: "1".to_owned(),
+            path: PathBuf::from("/man/tool.exe.1"),
+            manual_root: PathBuf::from("/man"),
+        });
+
+        let result = query_with(&request(), QueryPolicy::default(), &host)
+            .expect("native executable manual");
+
+        assert_eq!(result.label, "tool");
+        assert_eq!(
+            result.document.expect("manual").source.format,
+            SourceFormat::Man
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["name", "name", "tldr", "locate", "locate", "parse"]
+        );
+    }
+
+    #[test]
+    fn exact_names_win_before_windows_suffix_fallback() {
+        let mut host = host(Err("manual parser must not run".to_owned()));
+        host.name_candidates = Some(vec!["tool".to_owned(), "tool.EXE".to_owned()]);
+        host.registered_document = Some(PathBuf::from("/data/mant/tool.md"));
+        host.markdown = Ok("# Exact tool\n\nExact-name documentation.\n".to_owned());
+
+        let result = query_with(&request(), QueryPolicy::default(), &host)
+            .expect("exact registered document");
+
+        assert_eq!(
+            result.document.expect("document").source.path.as_deref(),
+            Some("/data/mant/tool.md")
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["name", "markdown"]
         );
     }
 

@@ -68,7 +68,7 @@ impl ManualIndex {
         for root in &roots {
             for page in scan_manual_root(root, locale) {
                 effective
-                    .entry((page.name.clone(), page.section.clone()))
+                    .entry((manual_name_key(&page.name), page.section.clone()))
                     .or_insert(page);
             }
         }
@@ -95,9 +95,32 @@ impl ManualIndex {
     pub fn find(&self, name: &str, section: Option<&str>) -> Option<&ManualPage> {
         let name = name.trim();
         let section = section.map(str::trim);
-        self.pages
-            .iter()
-            .find(|page| page.name == name && section.is_none_or(|section| page.section == section))
+        self.pages.iter().find(|page| {
+            manual_names_equal(&page.name, name)
+                && section.is_none_or(|section| page.section == section)
+        })
+    }
+}
+
+fn manual_names_equal(left: &str, right: &str) -> bool {
+    #[cfg(windows)]
+    {
+        left.eq_ignore_ascii_case(right)
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
+fn manual_name_key(name: &str) -> String {
+    #[cfg(windows)]
+    {
+        name.to_ascii_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        name.to_owned()
     }
 }
 
@@ -538,5 +561,21 @@ mod tests {
             locate_manual_source_in(&ManualRequest::new("git", Some(" ".to_owned())), &index,),
             Err(LocateError::InvalidSection)
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_manual_names_are_ascii_case_insensitive() {
+        let index = ManualIndex {
+            roots: vec![PathBuf::from(r"C:\man")],
+            pages: vec![super::ManualPage {
+                name: "cargo.exe".to_owned(),
+                section: "1".to_owned(),
+                path: PathBuf::from(r"C:\man\cargo.exe.1"),
+                manual_root: PathBuf::from(r"C:\man"),
+            }],
+        };
+
+        assert!(index.find("cargo.EXE", None).is_some());
     }
 }

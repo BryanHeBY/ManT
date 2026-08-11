@@ -154,6 +154,12 @@ with:
 mant tool --source team
 ```
 
+Windows packages should keep executable suffixes in document stems, for
+example `tool.exe.md`. An extensionless query first checks `tool`, then
+`tool` plus each `PATHEXT` suffix in order; an explicitly suffixed query is
+exact. The behavior is Windows-wide rather than PowerShell-specific, and
+non-Windows platforms do not omit executable suffixes.
+
 `--source` cannot be combined with `--section` or `--manual`, and an explicit
 source never falls back to root documents or native manuals. The JSON request
 contract uses the same optional `source` field on a `document` input.

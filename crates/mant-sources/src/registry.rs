@@ -125,7 +125,18 @@ fn source_directory_ready(directory: &Path) -> bool {
 fn find_in_directory(directory: &Path, document: &str) -> Option<PathBuf> {
     scan_directory(directory)
         .into_iter()
-        .find_map(|(name, path)| (name == document).then_some(path))
+        .find_map(|(name, path)| document_names_equal(&name, document).then_some(path))
+}
+
+fn document_names_equal(left: &str, right: &str) -> bool {
+    #[cfg(windows)]
+    {
+        left.eq_ignore_ascii_case(right)
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
 }
 
 /// Scan exactly one directory. Directories and symbolic links are ignored.
@@ -254,5 +265,11 @@ mod tests {
         );
         let _ = std::mem::size_of::<SourceConfig>();
         assert_eq!(values["docs"].priority, -1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_registered_names_are_ascii_case_insensitive() {
+        assert!(super::document_names_equal("cargo.exe", "cargo.EXE"));
     }
 }

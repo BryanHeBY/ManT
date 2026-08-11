@@ -81,6 +81,15 @@ duplicates; `.md` wins over `.markdown` within one directory. `--source NAME`
 selects exactly one configured Git or archive source. `--manual` or `--section` selects a
 native manual and cannot be combined with `--source`.
 
+Windows document packages should retain executable suffixes in canonical
+filenames, such as `cargo.exe.md`. An extensionless query such as `mant cargo`
+first tries the exact name, then appends extensions from `PATHEXT` in order, so
+it can resolve `cargo.exe`; an explicit `mant cargo.exe` remains exact. This is
+a Windows platform rule independent of the calling shell and PowerShell
+version. Script suffixes such as `.ps1` participate only when present in
+`PATHEXT`; an unset or empty value uses `.COM`, `.EXE`, `.BAT`, and `.CMD`.
+Other platforms never elide these suffixes.
+
 ### Manual Pages
 
 On Linux, macOS, and Windows, manual page names are located through ManT's
@@ -474,6 +483,8 @@ schema and update lifecycle.
   ManT document roots.
 - `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manual sources
   and translated tldr pages before English fallback.
+- `PATHEXT`: On Windows, order executable suffix fallback for extensionless
+  registered-document and native-manual queries.
 - `HOME`: Supply conventional document, manual, and cache locations when their
   XDG overrides are absent.
 - `APPDATA`: Select the per-user registered Markdown root on Windows.
