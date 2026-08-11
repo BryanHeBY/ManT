@@ -157,6 +157,33 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn windows_parser_accepts_the_date_formats_used_by_libmandoc() {
+        for date in [
+            "2026-07-20",
+            "Jul 20, 2026",
+            "July 20, 2026",
+            "$Mdocdate: Jul 20 2026 $",
+        ] {
+            let source =
+                format!(".TH WINDOWS-DATE 1 \"{date}\"\n.SH NAME\nwindows-date \\- portable\n");
+            let report = Parser::default()
+                .parse_bytes("windows-date.1", source.as_bytes())
+                .expect("parse a supported manual date");
+
+            assert!(
+                report.diagnostics.is_empty(),
+                "unexpected diagnostics for {date}: {:?}",
+                report.diagnostics
+            );
+            assert_eq!(
+                report.document.metadata.date.as_deref(),
+                Some("July 20, 2026")
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn windows_rejects_c_file_inclusion_but_accepts_memory_parsing() {
         let report = Parser::default()
             .parse_bytes("memory.1", b".TH MEMORY 1\n.SH NAME\nmemory \\- portable\n")

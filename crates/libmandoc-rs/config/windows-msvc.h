@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <time.h>
 
 #define MAN_CONF_FILE ""
 #define MANPATH_BASE ""
@@ -22,6 +23,7 @@
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #define strdup _strdup
+#define strptime mant_strptime
 
 #define HAVE_DIRENT_NAMLEN 0
 #define HAVE_ENDIAN 0
@@ -47,7 +49,7 @@
 #define HAVE_STRLCAT 0
 #define HAVE_STRLCPY 0
 #define HAVE_STRNDUP 0
-#define HAVE_STRPTIME 0
+#define HAVE_STRPTIME 1
 #define HAVE_STRSEP 0
 #define HAVE_STRTONUM 0
 #define HAVE_SYS_ENDIAN 0
@@ -77,3 +79,4 @@ extern size_t strlcpy(char *, const char *, size_t);
 extern char *strndup(const char *, size_t);
 extern long long strtonum(const char *, long long, long long, const char **);
 extern int vasprintf(char **, const char *, va_list);
+extern char *mant_strptime(const char *, const char *, struct tm *);

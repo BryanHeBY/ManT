@@ -86,6 +86,9 @@ fn main() {
     for source in LIBMANDOC_SOURCES.iter().chain(compat_sources.iter()) {
         build.file(vendor_dir.join(source));
     }
+    if memory_only {
+        build.file(crate_dir.join("shim/windows_compat.c"));
+    }
     build.file(crate_dir.join("shim/mant_mandoc_shim.c"));
     build.compile("mant_mandoc");
 
