@@ -62,44 +62,99 @@ Verify both the decoded member hash and the checked-in zstd hash. Recompression
 with another zstd version may produce different container bytes while still
 decoding to the required raw hash.
 
-## Observed parser behaviour
+## `mant` parsing verification
 
-Both pages complete the bundled libmandoc pipeline. The ripgrep page yields 14
-top-level sections and 104 semantic option entries. The much larger
-Pandoc-generated rclone page yields 191 top-level and 3,430 total section nodes;
-it also emits many diagnostics for Pandoc's GNU font extensions such as
-`\f[V]`. Those diagnostics are not represented as a zero-warning claim in
-`VERIFIED_TOPICS.txt`.
+On 2026-08-11, 21 official Windows release archives from established Rust and
+Go CLI projects were inspected. Seven archives contained roff; all **47
+topic/section requests** completed ManT's bundled libmandoc path.
 
-Manual review covered the document start and end, ripgrep's grouped options and
-`--glob` excerpt, rclone's synopsis, PowerShell completion, global flags,
-Microsoft OneDrive, Local Filesystem Windows paths, license, and authors. The
-corresponding integration tests pin the stable structure and the Windows path
-text that the review found most valuable.
+No parser crash was observed. As in the Linux distribution corpora, this count
+measures parser completion and does not claim perfect structure or typography
+for every page. Unlike the broader distribution scans, every page in this
+smaller set also had its generated Markdown outline, beginning, and ending
+reviewed for empty sections, truncation, control characters, and leaked roff
+markup.
 
-The neighbouring [`VERIFIED_TOPICS.txt`] uses the same broader-scan convention
-as the Linux distribution corpora. On 2026-08-11, all **9 manual pages** from
-these **4 official Windows release archives** completed the same parser path:
+The scan scope is recorded in [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt), grouped
+by the release archive that ships each page. Archives without roff remain in the
+table below as zero-page inspection results; they are not represented as
+verified topic requests.
 
-| Release archive | Language | Pages scanned | Checked-in representative |
-| --- | --- | ---: | --- |
-| `ripgrep-15.2.0-x86_64-pc-windows-msvc.zip` | Rust | 1 | `rg.1.zst` |
-| `fd-v10.4.2-x86_64-pc-windows-msvc.zip` ([fd v10.4.2]) | Rust | 1 | — |
-| `zoxide-0.10.0-x86_64-pc-windows-msvc.zip` ([zoxide v0.10.0]) | Rust | 6 | — |
-| `rclone-v1.75.0-windows-amd64.zip` | Go | 1 | `rclone.1.zst` |
+| Release | Language | Windows archive | Topics | Notes |
+| --- | --- | --- | ---: | --- |
+| [ripgrep 15.2.0] | Rust | `ripgrep-15.2.0-x86_64-pc-windows-msvc.zip` | 1 | Fixed as `rg.1.zst` |
+| [fd v10.4.2] | Rust | `fd-v10.4.2-x86_64-pc-windows-msvc.zip` | 1 | scanned |
+| [zoxide v0.10.0] | Rust | `zoxide-0.10.0-x86_64-pc-windows-msvc.zip` | 6 | scanned |
+| [bat v0.26.1] | Rust | `bat-v0.26.1-x86_64-pc-windows-msvc.zip` | 1 | scanned |
+| [hyperfine v1.20.0] | Rust | `hyperfine-v1.20.0-x86_64-pc-windows-msvc.zip` | 1 | scanned |
+| [rclone v1.75.0] | Go | `rclone-v1.75.0-windows-amd64.zip` | 1 | Fixed as `rclone.1.zst` |
+| [Git LFS v3.7.1] | Go | `git-lfs-windows-amd64-v3.7.1.zip` | 36 | scanned |
+| [eza v0.23.5] | Rust | `eza.exe_x86_64-pc-windows-gnu.zip` | 0 | no roff in archive |
+| [starship v1.26.0] | Rust | `starship-x86_64-pc-windows-msvc.zip` | 0 | no roff in archive |
+| [bottom 0.14.7] | Rust | `bottom_x86_64-pc-windows-msvc.zip` | 0 | no roff in archive |
+| [delta 0.19.2] | Rust | `delta-0.19.2-x86_64-pc-windows-msvc.zip` | 0 | no roff in archive |
+| [dust v1.2.4] | Rust | `dust-v1.2.4-x86_64-pc-windows-msvc.zip` | 0 | no roff in archive |
+| [GitHub CLI v2.97.0] | Go | `gh_2.97.0_windows_amd64.zip` | 0 | no roff in archive |
+| [age v1.3.1] | Go | `age-v1.3.1-windows-amd64.zip` | 0 | no roff in archive |
+| [restic v0.19.1] | Go | `restic_0.19.1_windows_amd64.zip` | 0 | no roff in archive |
+| [fzf v0.74.2] | Go | `fzf-0.74.2-windows_amd64.zip` | 0 | no roff in archive |
+| [lazygit v0.64.0] | Go | `lazygit_0.64.0_windows_x86_64.zip` | 0 | no roff in archive |
+| [Syncthing v2.1.3] | Go | `syncthing-windows-amd64-v2.1.3.zip` | 0 | no roff in archive |
+| [yq v4.53.3] | Go | `yq_windows_amd64.zip` | 0 | no roff in archive |
+| [Hugo v0.164.0] | Go | `hugo_0.164.0_windows-amd64.zip` | 0 | no roff in archive |
+| [Caddy v2.11.4] | Go | `caddy_2.11.4_windows_amd64.zip` | 0 | no roff in archive |
 
 The fd archive SHA-256 is
 `b2816e506390a89941c63c9187d58a3cc10e9a55f2ef0685f9ea0eccaf7c98c8`; the
 zoxide archive SHA-256 is
 `f465ae548f8754c8e7edbc60b45fbf58c92bfe123db83d790252d6810fa5daf1`.
-Their pages are scan evidence, not redistributed fixtures, so their bytes and
-license texts are intentionally not copied into this repository.
+The additionally scanned archives have these SHA-256 values:
+
+- `bat-v0.26.1-x86_64-pc-windows-msvc.zip`: `0f729b4b6f5f28d395c641eacc2e9ff68d0096b85aa0eec344aa62425144b69b`
+- `hyperfine-v1.20.0-x86_64-pc-windows-msvc.zip`: `2508c549b049b1d4342d08edc1cb42bfac169082b6e3069431b5bab9822dbb32`
+- `git-lfs-windows-amd64-v3.7.1.zip`: `8683cdc3d6c029b49393dcebbaa6265bd6efd9abdcf837be855b4cd42e5e80b6`
+
+These pages are scan evidence, not redistributed fixtures, so their bytes and
+license texts are intentionally not copied into this repository. The 38 pages
+added by the second scan produced 237 section nodes and 3,035 lines of Markdown.
+Full representative-content review covered bat, hyperfine, and Git LFS's main,
+completion, migrate, config(5), and faq(7) pages.
+
+Observed upstream-generator behaviour:
+
+- Git LFS's Asciidoctor template requests the denied external `www.tmac` file
+  and an unknown colour-only `LINKSTYLE` macro on every page. The local URL
+  macro and document bodies remain intact.
+- `git-lfs-push(1)` omits breaks between its final three synopsis forms, so the
+  joined rendering follows the release bytes.
+- Hyperfine has one unmatched final `.RE`; its examples and `AUTHOR` section
+  remain complete.
+- The fixed ripgrep page yields 14 top-level sections and 104 semantic option
+  entries. The larger Pandoc-generated rclone page yields 191 top-level and
+  3,430 total section nodes and reports diagnostics for GNU font extensions
+  such as `\f[V]`; `VERIFIED_TOPICS.txt` therefore makes no zero-warning claim.
 
 [ripgrep 15.2.0]: https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0
 [rclone v1.75.0]: https://github.com/rclone/rclone/releases/tag/v1.75.0
 [fd v10.4.2]: https://github.com/sharkdp/fd/releases/tag/v10.4.2
 [zoxide v0.10.0]: https://github.com/ajeetdsouza/zoxide/releases/tag/v0.10.0
-[VERIFIED_TOPICS.txt]: VERIFIED_TOPICS.txt
+[bat v0.26.1]: https://github.com/sharkdp/bat/releases/tag/v0.26.1
+[hyperfine v1.20.0]: https://github.com/sharkdp/hyperfine/releases/tag/v1.20.0
+[Git LFS v3.7.1]: https://github.com/git-lfs/git-lfs/releases/tag/v3.7.1
+[eza v0.23.5]: https://github.com/eza-community/eza/releases/tag/v0.23.5
+[starship v1.26.0]: https://github.com/starship/starship/releases/tag/v1.26.0
+[bottom 0.14.7]: https://github.com/ClementTsang/bottom/releases/tag/0.14.7
+[delta 0.19.2]: https://github.com/dandavison/delta/releases/tag/0.19.2
+[dust v1.2.4]: https://github.com/bootandy/dust/releases/tag/v1.2.4
+[GitHub CLI v2.97.0]: https://github.com/cli/cli/releases/tag/v2.97.0
+[age v1.3.1]: https://github.com/FiloSottile/age/releases/tag/v1.3.1
+[restic v0.19.1]: https://github.com/restic/restic/releases/tag/v0.19.1
+[fzf v0.74.2]: https://github.com/junegunn/fzf/releases/tag/v0.74.2
+[lazygit v0.64.0]: https://github.com/jesseduffield/lazygit/releases/tag/v0.64.0
+[Syncthing v2.1.3]: https://github.com/syncthing/syncthing/releases/tag/v2.1.3
+[yq v4.53.3]: https://github.com/mikefarah/yq/releases/tag/v4.53.3
+[Hugo v0.164.0]: https://github.com/gohugoio/hugo/releases/tag/v0.164.0
+[Caddy v2.11.4]: https://github.com/caddyserver/caddy/releases/tag/v2.11.4
 [MIT]: ../LICENSES/RIPGREP-LICENSE-MIT.txt
 [Unlicense]: ../LICENSES/RIPGREP-UNLICENSE.txt
 [rclone MIT]: ../LICENSES/RCLONE-COPYING.txt

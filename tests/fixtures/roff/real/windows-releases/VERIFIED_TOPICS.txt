@@ -1,15 +1,16 @@
-# mant verified topics: official Windows release archives
+# mant verified topics: windows-releases
 # scanned 2026-08-11 through bundled libmandoc; no parser crash observed
-# Exact official ZIP members; original CRLF/LF bytes preserved after decoding.
-# releases: 4; total pages: 9; checked-in representative fixtures: 2
+# Official x86_64 Windows release ZIP members only.
+# Every listed page also had its generated Markdown structure and bounds reviewed.
+# releases: 7; total pages: 47
 
-## ripgrep 15.2.0 (Rust, x86_64-pc-windows-msvc)
+## ripgrep 15.2.0 (1 page)
 mant rg --section 1
 
-## fd v10.4.2 (Rust, x86_64-pc-windows-msvc)
+## fd v10.4.2 (1 page)
 mant fd --section 1
 
-## zoxide v0.10.0 (Rust, x86_64-pc-windows-msvc)
+## zoxide v0.10.0 (6 pages)
 mant zoxide --section 1
 mant zoxide-add --section 1
 mant zoxide-import --section 1
@@ -17,5 +18,49 @@ mant zoxide-init --section 1
 mant zoxide-query --section 1
 mant zoxide-remove --section 1
 
-## rclone v1.75.0 (Go, windows-amd64)
+## bat v0.26.1 (1 page)
+mant bat --section 1
+
+## hyperfine v1.20.0 (1 page)
+mant hyperfine --section 1
+
+## rclone v1.75.0 (1 page)
 mant rclone --section 1
+
+## Git LFS v3.7.1 (36 pages)
+mant git-lfs --section 1
+mant git-lfs-checkout --section 1
+mant git-lfs-clean --section 1
+mant git-lfs-clone --section 1
+mant git-lfs-completion --section 1
+mant git-lfs-dedup --section 1
+mant git-lfs-env --section 1
+mant git-lfs-ext --section 1
+mant git-lfs-fetch --section 1
+mant git-lfs-filter-process --section 1
+mant git-lfs-fsck --section 1
+mant git-lfs-install --section 1
+mant git-lfs-lock --section 1
+mant git-lfs-locks --section 1
+mant git-lfs-logs --section 1
+mant git-lfs-ls-files --section 1
+mant git-lfs-merge-driver --section 1
+mant git-lfs-migrate --section 1
+mant git-lfs-pointer --section 1
+mant git-lfs-post-checkout --section 1
+mant git-lfs-post-commit --section 1
+mant git-lfs-post-merge --section 1
+mant git-lfs-pre-push --section 1
+mant git-lfs-prune --section 1
+mant git-lfs-pull --section 1
+mant git-lfs-push --section 1
+mant git-lfs-smudge --section 1
+mant git-lfs-standalone-file --section 1
+mant git-lfs-status --section 1
+mant git-lfs-track --section 1
+mant git-lfs-uninstall --section 1
+mant git-lfs-unlock --section 1
+mant git-lfs-untrack --section 1
+mant git-lfs-update --section 1
+mant git-lfs-config --section 5
+mant git-lfs-faq --section 7
