@@ -77,7 +77,7 @@ fn is_executable(path: &std::path::Path) -> bool {
 pub(crate) fn query_name_candidates(name: &str) -> Vec<String> {
     #[cfg(windows)]
     {
-        return windows_name_candidates(name, env::var("PATHEXT").ok().as_deref());
+        windows_name_candidates(name, env::var("PATHEXT").ok().as_deref())
     }
     #[cfg(not(windows))]
     {
