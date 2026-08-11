@@ -6,13 +6,13 @@ use mant_ast::{
 };
 use serde_json::Value;
 
-const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query-v4.json");
+const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query-v5.json");
 
 #[test]
 fn shared_query_fixture_round_trips_without_shape_changes() {
     let query: QueryBundle = serde_json::from_str(MINIMAL_QUERY).expect("valid shared fixture");
 
-    assert_eq!(query.schema, QuerySchema::V4);
+    assert_eq!(query.schema, QuerySchema::V5);
     assert_eq!(query.label, "ls");
     let manual = query.document.as_ref().expect("manual document");
     assert_eq!(manual.source.format, SourceFormat::Man);
@@ -48,7 +48,7 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
 
 #[test]
 fn unknown_query_schema_is_rejected() {
-    let incompatible = MINIMAL_QUERY.replace("mant.query/v4", "mant.query/v1");
+    let incompatible = MINIMAL_QUERY.replace("mant.query/v5", "mant.query/v1");
     let error = serde_json::from_str::<QueryBundle>(&incompatible).expect_err("unknown schema");
 
     assert!(error.to_string().contains("unknown variant"));
@@ -163,6 +163,15 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     )
     .expect_err("unknown view field");
     assert!(error.to_string().contains("unknown field"));
+}
+
+#[test]
+fn request_v5_rejects_the_obsolete_options_outline_detail() {
+    let error = serde_json::from_str::<QueryRequest>(
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
+    )
+    .expect_err("request v5 uses the canonical entries spelling");
+    assert!(error.to_string().contains("unknown variant `options`"));
 }
 
 #[test]

@@ -48,10 +48,10 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
 #[test]
 fn response_schemas_follow_the_serialized_wire_shapes() {
     for (schema, marker) in [
-        (query_bundle_json_schema(), "mant.query/v4"),
-        (query_outline_json_schema(), "mant.outline/v4"),
-        (query_excerpt_json_schema(), "mant.excerpt/v4"),
-        (query_search_json_schema(), "mant.search/v4"),
+        (query_bundle_json_schema(), "mant.query/v5"),
+        (query_outline_json_schema(), "mant.outline/v5"),
+        (query_excerpt_json_schema(), "mant.excerpt/v5"),
+        (query_search_json_schema(), "mant.search/v5"),
     ] {
         let encoded = serde_json::to_string(&schema).expect("schema JSON");
         assert!(encoded.contains(marker), "missing marker {marker}");
@@ -64,7 +64,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(fields.contains(&"label"));
     assert!(!fields.contains(&"document"));
     assert!(!fields.contains(&"tldr"));
-    assert!(encoded_query.contains("mant.document/v4"));
+    assert!(encoded_query.contains("mant.document/v5"));
     assert!(encoded_query.contains("DefinitionIdentity"));
     assert!(encoded_query.contains("\"man\""));
     assert!(encoded_query.contains("\"mdoc\""));
@@ -76,6 +76,13 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     let outline = serde_json::to_string(&query_outline_json_schema()).expect("outline schema JSON");
     assert!(outline.contains("document-entry"));
     assert!(outline.contains("entries"));
+    for field in ["path", "id", "role", "case", "names"] {
+        assert!(outline.contains(&format!("\"{field}\"")));
+    }
+
+    let excerpt = serde_json::to_string(&query_excerpt_json_schema()).expect("excerpt schema JSON");
+    assert!(excerpt.contains("document-entry"));
+    assert!(excerpt.contains("DefinitionCase"));
 
     let search = serde_json::to_string(&query_search_json_schema()).expect("search schema JSON");
     assert!(search.contains("startLine"));

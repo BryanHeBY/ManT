@@ -234,7 +234,7 @@ pub fn query_markdown_text(
         });
     }
     Ok(QueryBundle {
-        schema: QuerySchema::V4,
+        schema: QuerySchema::V5,
         label,
         document: (!document_is_empty).then_some(parsed.document),
         tldr: parsed.tldr,
@@ -303,7 +303,7 @@ fn query_named_document(
     if require_manual {
         return match manual {
             Ok(Some(manual)) => Ok(QueryBundle {
-                schema: QuerySchema::V4,
+                schema: QuerySchema::V5,
                 label: name.to_owned(),
                 document: Some(manual),
                 tldr,
@@ -320,13 +320,13 @@ fn query_named_document(
 
     match manual {
         Ok(Some(manual)) => Ok(QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: name.to_owned(),
             document: Some(manual),
             tldr,
         }),
         Ok(None) | Err(_) if tldr.is_some() => Ok(QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: name.to_owned(),
             document: None,
             tldr,
@@ -473,7 +473,7 @@ mod tests {
 
     fn document(format: SourceFormat, unsupported: bool, readable: bool) -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V4,
+            schema: DocumentSchema::V5,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),

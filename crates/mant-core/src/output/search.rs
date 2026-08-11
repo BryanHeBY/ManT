@@ -167,7 +167,7 @@ mod tests {
 
     fn result() -> QuerySearch {
         QuerySearch {
-            schema: SearchSchema::V4,
+            schema: SearchSchema::V5,
             label: "tar".to_owned(),
             source: None,
             meta: Some(mant_ast::DocumentMeta {

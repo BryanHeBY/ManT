@@ -49,15 +49,19 @@ fn stdio_mode_lists_and_queries_registered_markdown_documents() {
     request_document_list(&mut input);
     request_document_search(&mut input);
     request_document_get(&mut input);
+    request_document_outline(&mut input);
+    request_document_explain(&mut input, 7, "query");
+    request_document_explain(&mut input, 8, "/s");
+    request_document_explain(&mut input, 9, "path");
+    request_document_explain(&mut input, 10, "/f");
+    request_document_explain(&mut input, 11, "option-f-2");
     input.flush().expect("flush tool call");
 
     // JSON-RPC permits concurrent requests to complete out of order. Select
     // replies by ID instead of treating stdio arrival order as a contract.
-    let replies = [
-        parse_reply(lines.next().expect("first tool reply")),
-        parse_reply(lines.next().expect("second tool reply")),
-        parse_reply(lines.next().expect("third tool reply")),
-    ];
+    let replies = (0..9)
+        .map(|_| parse_reply(lines.next().expect("tool reply")))
+        .collect::<Vec<_>>();
     assert_tool_replies(&replies);
 
     assert_silent_shutdown(child, input, diagnostics, fixture_root);
@@ -138,6 +142,44 @@ fn assert_tool_replies(replies: &[Value]) {
             .is_none(),
         "MCP excerpts must discard lowering diagnostics"
     );
+
+    let outline = replies
+        .iter()
+        .find(|reply| reply["id"] == 6)
+        .expect("semantic outline reply");
+    assert_eq!(
+        outline["result"]["structuredContent"]["schema"],
+        "mant.outline/v5"
+    );
+    let encoded = outline["result"]["structuredContent"].to_string();
+    for role in ["option", "command", "environment-variable"] {
+        assert!(encoded.contains(&format!("\"role\":\"{role}\"")));
+    }
+
+    for (id, role) in [
+        (7, "command"),
+        (8, "option"),
+        (9, "environment-variable"),
+        (11, "option"),
+    ] {
+        let explanation = replies
+            .iter()
+            .find(|reply| reply["id"] == id)
+            .expect("semantic explanation reply");
+        assert_ne!(explanation["result"]["isError"], true);
+        assert_eq!(
+            explanation["result"]["structuredContent"]["selections"][0]["entry"]["identity"]["role"],
+            role
+        );
+    }
+    let ambiguity = replies
+        .iter()
+        .find(|reply| reply["id"] == 10)
+        .expect("ambiguous explanation reply");
+    assert_eq!(ambiguity["result"]["isError"], true);
+    let encoded = ambiguity["result"].to_string();
+    assert!(encoded.contains("option-f"));
+    assert!(encoded.contains("option-f-2"));
 }
 
 fn assert_silent_shutdown(
@@ -254,6 +296,42 @@ fn request_document_get(input: &mut impl Write) {
     );
 }
 
+fn request_document_outline(input: &mut impl Write) {
+    write_message(
+        input,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "mant_document_outline",
+                "arguments": {
+                    "name": "mcp-registered",
+                    "detail": "entries"
+                }
+            }
+        }),
+    );
+}
+
+fn request_document_explain(input: &mut impl Write, id: u8, entry: &str) {
+    write_message(
+        input,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/call",
+            "params": {
+                "name": "mant_document_explain",
+                "arguments": {
+                    "name": "mcp-registered",
+                    "entry": entry
+                }
+            }
+        }),
+    );
+}
+
 fn write_message(input: &mut impl Write, message: &Value) {
     writeln!(input, "{message}").expect("write MCP request");
 }
@@ -267,7 +345,7 @@ fn registered_document_fixture() -> PathBuf {
     fs::create_dir_all(&documents).expect("create document directory");
     fs::write(
         documents.join("mcp-registered.md"),
-        "Read the MCP needle.\n\n> preserved unsupported quote\n\n# Guide\n\nDocument body.\n",
+        "# MCP registered\n\nRead the MCP needle.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
     )
     .expect("write registered document");
     let manual_section = fixture_root.join("manuals/man1");

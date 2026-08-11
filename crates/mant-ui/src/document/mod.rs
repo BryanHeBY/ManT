@@ -1097,10 +1097,10 @@ mod tests {
 
     fn bundle() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V4,
+                schema: DocumentSchema::V5,
                 producer: Producer {
                     name: "mant".to_owned(),
                     version: "test".to_owned(),

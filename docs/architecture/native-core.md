@@ -37,8 +37,8 @@ Rust supplies bytes without exposing POSIX file transport to the C layer.
 
 ## Stable and unstable models
 
-`mant.document/v4` is the stable structured-document contract consumed by the
-UI and output renderers. `mant.query/v4` combines an optional document with an
+`mant.document/v5` is the stable structured-document contract consumed by the
+UI and output renderers. `mant.query/v5` combines an optional document with an
 optional tldr document while preserving their different sources and licences.
 The document source is man, mdoc, or Markdown. Blocks before the first heading
 live in the document's root `blocks`; heading content remains in the recursive
@@ -107,7 +107,7 @@ mant --mcp                         -> read-only MCP tools over stdio
 
 For process integrations, `mant --request-json --format json --compact` reads
 one closed, versioned `QueryRequest` object from standard input and emits
-exactly one `mant.query/v4` object on standard output. Standard error contains
+exactly one `mant.query/v5` object on standard output. Standard error contains
 concise diagnostics only. Status 0 means success, 2 means invalid invocation
 or request, and 1 means an operational failure. Interactive search and
 navigation operate on the already loaded in-memory document and never spawn
@@ -133,15 +133,12 @@ closed `view`. The input is either a document name with an optional source or ma
 local Markdown path; raw document content is deliberately not part of the
 process contract. Direct `mant -` reads bounded UTF-8 input before constructing
 an in-memory query and does not add a third public input variant. Unknown
-fields are rejected at every level. `full` returns
-`mant.query/v4`, `outline` selects either section-only or option-aware
-structure, `excerpt` selects one or more node paths, IDs, or aliases, and
-`search` returns `mant.search/v4`.
-The direct-only `--explain` convenience flag normalizes to exactly one
-`excerpt` selector, then rejects anything other than a semantic manual entry.
-It deliberately adds no request or response variant, so agents retain one
-stable excerpt contract for both explicit `--node` requests and option-focused
-explanations.
+fields are rejected at every level. `full` returns `mant.query/v5`, `outline`
+selects either section-only or entry-aware structure, `excerpt` selects one or
+more node paths, IDs, or aliases, `explain` resolves exactly one semantic
+entry, and `search` returns `mant.search/v5`. Both `--explain` and the request
+view use the same entry-only projection and return `mant.excerpt/v5`, avoiding
+a separate explanation response shape.
 `mant --schema request` exposes that exact input contract; `query`,
 `outline`, `excerpt`, and `search` expose the output contracts, while `all`
 returns a named catalog. The schemas are derived with
@@ -161,15 +158,15 @@ recoverable parser findings are structured diagnostics in the query result.
 Outline and excerpt views are projections of the same complete native
 document, so they never reimplement parsing rules. Outlines expose both a
 one-based tree path such as `4.2` and the document-local section ID. Passing
-`--outline` includes semantic option entries with paths such as `4.2/o3` by
-default. `--outline sections` is the explicit compact view for callers that
-only need section topology.
+`--outline` includes semantic option, command, and environment entries with
+paths such as `4.2/o3` by default. `--outline sections` is the explicit compact
+view for callers that only need section topology.
 Markdown content before the first heading is exposed as path `root` with ID
 `document-overview`; it does not consume or renumber ordinary heading paths.
-Excerpt selection accepts a section path, option path, document ID, or option
+Excerpt selection accepts a section path, entry path, document ID, or entry
 alias; it includes complete selected content, deduplicates overlaps, and
-preserves source order. Their JSON contracts are `mant.outline/v4` and
-`mant.excerpt/v4`; plain text and CommonMark are also available. The TUI
+preserves source order. Their JSON contracts are `mant.outline/v5` and
+`mant.excerpt/v5`; plain text and CommonMark are also available. The TUI
 constructs the same full query in memory; agents can select outline and excerpt
 projections directly through `--request-json`.
 
@@ -222,7 +219,7 @@ layout conventions out of the general Markdown AST and renderers.
 
 The primary path discovers manual hierarchies in Rust, reads the located
 source, and lowers libmandoc's validated man(7) or mdoc(7) tree directly into
-`mant.document/v4`. Rust owns compression handling and preserves the original
+`mant.document/v5`. Rust owns compression handling and preserves the original
 source path and indexed manual root. Both stored and decoded bytes are capped
 across the complete input chain before plain roff bytes cross the parser
 boundary. Rust recognizes redirect-only `.so` aliases, resolves raw, gzip, or

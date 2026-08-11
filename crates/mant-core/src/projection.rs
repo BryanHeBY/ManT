@@ -178,7 +178,7 @@ pub fn build_outline_with_detail(
         nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V4,
+        schema: OutlineSchema::V5,
         detail,
         label: query.label.clone(),
         source: query
@@ -241,7 +241,7 @@ pub fn select_excerpt(
             document_root_selected = true;
             continue;
         }
-        let candidate = resolve_candidate(query, &located, selector, false)?;
+        let candidate = resolve_candidate(query, &located, selector)?;
         if selected_ids.insert(candidate.id()) {
             selected.push(candidate);
         }
@@ -292,7 +292,7 @@ pub fn select_excerpt(
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V4,
+        schema: ExcerptSchema::V5,
         label: query.label.clone(),
         producer: document.map(|document| document.producer.clone()),
         source: document.map(|document| document.source.clone()),
@@ -327,43 +327,79 @@ pub fn select_explanation(
     if selector.is_empty() {
         return Err(ProjectionError::EmptySelector);
     }
+    let mut located = Vec::new();
+    if let Some(manual) = &query.document {
+        collect_root_entries(&manual.blocks, &mut located);
+        collect_sections(&manual.sections, &[], &[], &mut located);
+    }
+    let candidate = resolve_explanation_candidate(query, &located, selector)?;
+    select_excerpt(query, &[candidate.path().to_owned()])
+}
+
+fn resolve_explanation_candidate<'a>(
+    query: &QueryBundle,
+    located: &'a [LocatedNode<'a>],
+    selector: &str,
+) -> Result<&'a LocatedNode<'a>, ProjectionError> {
+    if let Some(candidate) = located.iter().find(|candidate| {
+        !candidate.is_section() && (candidate.path() == selector || candidate.id() == selector)
+    }) {
+        return Ok(candidate);
+    }
+
+    let matches = located
+        .iter()
+        .filter(|candidate| candidate.matches_alias(selector))
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [candidate] => return Ok(candidate),
+        [] => {}
+        _ => {
+            return Err(ProjectionError::AmbiguousSelector {
+                document: query.label.clone(),
+                selector: selector.to_owned(),
+                candidates: matches
+                    .into_iter()
+                    .map(|candidate| SelectorCandidate {
+                        path: candidate.path().to_owned(),
+                        id: candidate.id().to_owned(),
+                    })
+                    .collect(),
+            });
+        }
+    }
+
     let selects_tldr = matches!(selector, TLDR_PATH | TLDR_ID) && query.tldr.is_some();
     let selects_root = matches!(selector, DOCUMENT_ROOT_PATH | DOCUMENT_ROOT_ID)
         && query
             .document
             .as_ref()
             .is_some_and(|document| !document.blocks.is_empty());
-    if selects_tldr || selects_root {
+    let selects_section = located.iter().any(|candidate| {
+        candidate.is_section() && (candidate.path() == selector || candidate.id() == selector)
+    });
+    if selects_tldr || selects_root || selects_section {
         return Err(ProjectionError::ExplanationRequiresEntry {
             document: query.label.clone(),
             selector: selector.to_owned(),
         });
     }
-    let mut located = Vec::new();
-    if let Some(manual) = &query.document {
-        collect_root_entries(&manual.blocks, &mut located);
-        collect_sections(&manual.sections, &[], &[], &mut located);
-    }
-    let candidate = resolve_candidate(query, &located, selector, true)?;
-    select_excerpt(query, &[candidate.path().to_owned()])
+
+    Err(ProjectionError::UnknownSelector {
+        document: query.label.clone(),
+        selector: selector.to_owned(),
+    })
 }
 
 fn resolve_candidate<'a>(
     query: &QueryBundle,
     located: &'a [LocatedNode<'a>],
     selector: &str,
-    entries_only: bool,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
     if let Some(candidate) = located
         .iter()
         .find(|candidate| candidate.path() == selector || candidate.id() == selector)
     {
-        if entries_only && candidate.is_section() {
-            return Err(ProjectionError::ExplanationRequiresEntry {
-                document: query.label.clone(),
-                selector: selector.to_owned(),
-            });
-        }
         return Ok(candidate);
     }
 
@@ -697,10 +733,10 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V4,
+                schema: DocumentSchema::V5,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),

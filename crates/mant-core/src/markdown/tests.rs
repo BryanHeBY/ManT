@@ -279,7 +279,7 @@ Gamma.
     assert_eq!(ids, ["foo-2", "foo-2-2"]);
 
     let query = QueryBundle {
-        schema: QuerySchema::V4,
+        schema: QuerySchema::V5,
         label: "collision".to_owned(),
         document: Some(document),
         tldr: None,
@@ -446,7 +446,7 @@ Root body.
     );
 
     let query = QueryBundle {
-        schema: QuerySchema::V4,
+        schema: QuerySchema::V5,
         label: "demo.md".to_owned(),
         document: Some(document),
         tldr: None,
@@ -496,7 +496,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
 
     let outline = build_outline_with_detail(
         &QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: "tool.md".to_owned(),
             document: Some(document),
             tldr: None,
@@ -543,7 +543,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     }));
 
     let query = QueryBundle {
-        schema: QuerySchema::V4,
+        schema: QuerySchema::V5,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -554,12 +554,21 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.identity.as_ref().is_some_and(|identity| identity.names == ["/query"])
     ));
-    let command = select_explanation(&query, "QUERY").expect("command beats same-named section");
-    assert!(matches!(
-        command.selections.as_slice(),
-        [ExcerptSelection::DocumentEntry { entry, .. }]
-            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Command)
-    ));
+    for selector in ["query", "QUERY"] {
+        let command = select_explanation(&query, selector)
+            .expect("command alias beats a same-named section ID");
+        assert!(matches!(
+            command.selections.as_slice(),
+            [ExcerptSelection::DocumentEntry { entry, .. }]
+                if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Command)
+        ));
+    }
+    for selector in ["3", "environment"] {
+        assert!(matches!(
+            select_explanation(&query, selector),
+            Err(ProjectionError::ExplanationRequiresEntry { .. })
+        ));
+    }
     let environment = select_explanation(&query, "path").expect("environment alias");
     assert!(matches!(
         environment.selections.as_slice(),
@@ -571,12 +580,12 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
 #[test]
 fn duplicate_entry_aliases_require_a_stable_path_or_id() {
     let parsed = parse_markdown(
-        "# tool\n\n## Query\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force query.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force deletion.\n",
+        "# tool\n\n## Query\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force query.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
         None,
     )
     .expect("duplicate entries remain valid input");
     let query = QueryBundle {
-        schema: QuerySchema::V4,
+        schema: QuerySchema::V5,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -603,6 +612,81 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
 }
 
 #[test]
+fn the_same_alias_in_different_roles_is_ambiguous() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `PATH`: Run a command.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=sensitive -->\n- `PATH`: Configure discovery.\n",
+        None,
+    )
+    .expect("cross-role alias fixture");
+    let query = QueryBundle {
+        schema: QuerySchema::V5,
+        label: "tool".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+
+    let error = select_explanation(&query, "PATH").expect_err("cross-role alias is ambiguous");
+    let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
+        panic!("expected structured ambiguity");
+    };
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|candidate| candidate.id.as_str())
+            .collect::<Vec<_>>(),
+        ["command-path", "environment-path"]
+    );
+}
+
+#[test]
+fn exact_entry_id_takes_precedence_over_another_entry_alias() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## Commands\n\n<!-- mant:entries role=command case=sensitive -->\n- `query`: Query data.\n- `command-query`: A command whose alias resembles an ID.\n",
+        None,
+    )
+    .expect("entry ID precedence fixture");
+    let query = QueryBundle {
+        schema: QuerySchema::V5,
+        label: "tool".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+
+    let explanation = select_explanation(&query, "command-query").expect("exact entry ID");
+    assert!(matches!(
+        explanation.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| {
+                identity.id == "command-query" && identity.names == ["query"]
+            })
+    ));
+}
+
+#[test]
+fn declared_case_policy_preserves_distinct_sensitive_aliases() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `-p`: Lowercase mode.\n- `-P`: Uppercase mode.\n",
+        None,
+    )
+    .expect("case-sensitive entries");
+    let query = QueryBundle {
+        schema: QuerySchema::V5,
+        label: "tool".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+
+    for (selector, expected) in [("p", "-p"), ("P", "-P")] {
+        let explanation = select_explanation(&query, selector).expect("case-sensitive alias");
+        assert!(matches!(
+            explanation.selections.as_slice(),
+            [ExcerptSelection::DocumentEntry { entry, .. }]
+                if entry.identity.as_ref().is_some_and(|identity| identity.names == [expected])
+        ));
+    }
+}
+
+#[test]
 fn malformed_declared_entry_lists_remain_visible_and_report_the_list_location() {
     let parsed = parse_markdown(
         "# tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `--good`: Valid.\n- ordinary prose\n",
@@ -617,5 +701,67 @@ fn malformed_declared_entry_lists_remain_visible_and_report_the_list_location() 
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
             && diagnostic.source.is_some_and(|source| source.line == 6)
+    }));
+}
+
+#[test]
+fn declared_entry_grammar_accepts_blank_lines_delimiters_and_colon_conventions() {
+    let parsed = parse_markdown(
+        "<!-- mant:entries role=option case=insensitive -->\n\n- `/server:NAME`: Uppercase placeholder.\n- `/target:<HOST>` — Angle-bracket placeholder.\n- `/server:name` – Lowercase fixed value.\n- `/mode:auto`: Alphabetic fixed value.\n\n# Details\n",
+        None,
+    )
+    .expect("declared root entries");
+    assert!(parsed.document.diagnostics.is_empty());
+    let Block::DefinitionList { items, .. } = &parsed.document.blocks[0] else {
+        panic!("the next non-empty root list should become semantic entries");
+    };
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| {
+                item.identity
+                    .as_ref()
+                    .expect("semantic identity")
+                    .names
+                    .clone()
+            })
+            .collect::<Vec<_>>(),
+        [
+            vec!["/server".to_owned()],
+            vec!["/target".to_owned()],
+            vec!["/server:name".to_owned()],
+            vec!["/mode:auto".to_owned()],
+        ]
+    );
+}
+
+#[test]
+fn declared_entry_directive_does_not_skip_an_intervening_construct() {
+    let parsed = parse_markdown(
+        "# Tool\n\n<!-- mant:entries role=option case=insensitive -->\n## Options\n\n- `/query`: Query data.\n",
+        None,
+    )
+    .expect("invalid directive placement remains recoverable");
+    assert!(matches!(
+        parsed.document.sections[0].blocks[0],
+        Block::List { .. }
+    ));
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
+            && diagnostic.message.contains("immediately precede")
+    }));
+}
+
+#[test]
+fn declared_entry_description_requires_a_leading_paragraph_delimiter() {
+    let parsed = parse_markdown(
+        "# Tool\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`\n\n  Query data in a following paragraph.\n",
+        None,
+    )
+    .expect("invalid declared entry remains recoverable");
+    assert!(matches!(parsed.document.blocks[0], Block::List { .. }));
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
+            && diagnostic.message.contains("invalid item")
     }));
 }

@@ -254,11 +254,11 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_core::native_api_version(),
                 request_schema: "mant.request/v5",
-                query_schema: "mant.query/v4",
-                document_schema: "mant.document/v4",
-                outline_schema: "mant.outline/v4",
-                excerpt_schema: "mant.excerpt/v4",
-                search_schema: "mant.search/v4",
+                query_schema: "mant.query/v5",
+                document_schema: "mant.document/v5",
+                outline_schema: "mant.outline/v5",
+                excerpt_schema: "mant.excerpt/v5",
+                search_schema: "mant.search/v5",
             },
             pretty,
         ),
@@ -831,6 +831,13 @@ mod tests {
                 ..Self::new()
             }
         }
+
+        fn with_semantic_markdown() -> Self {
+            Self {
+                document: Some(semantic_markdown()),
+                ..Self::new()
+            }
+        }
     }
 
     impl CliHost for FakeHost {
@@ -846,7 +853,7 @@ mod tests {
                 QueryInput::MarkdownFile { path } => path.clone(),
             };
             Ok(QueryBundle {
-                schema: QuerySchema::V4,
+                schema: QuerySchema::V5,
                 label,
                 document: self.document.clone(),
                 tldr: self.tldr.clone(),
@@ -856,7 +863,7 @@ mod tests {
         fn query_markdown(&self, _source: &str) -> Result<QueryBundle, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
             Ok(QueryBundle {
-                schema: QuerySchema::V4,
+                schema: QuerySchema::V5,
                 label: "stdin".to_owned(),
                 document: self.document.clone(),
                 tldr: None,
@@ -901,7 +908,7 @@ mod tests {
 
     fn manual() -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V4,
+            schema: DocumentSchema::V5,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
@@ -969,6 +976,15 @@ mod tests {
         manual
     }
 
+    fn semantic_markdown() -> MantDocument {
+        mant_core::parse_markdown(
+            "# Tool\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
+            Some("semantic.md".to_owned()),
+        )
+        .expect("semantic Markdown fixture")
+        .document
+    }
+
     fn tldr() -> TldrDocument {
         TldrDocument {
             title: "demo".to_owned(),
@@ -1009,7 +1025,7 @@ mod tests {
         );
 
         assert_eq!(status, 0);
-        assert_eq!(output, "{\"schema\":\"mant.query/v4\",\"label\":\"git\"}\n");
+        assert_eq!(output, "{\"schema\":\"mant.query/v5\",\"label\":\"git\"}\n");
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 1);
     }
@@ -1049,7 +1065,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
-        assert_eq!(outline["schema"], "mant.outline/v4");
+        assert_eq!(outline["schema"], "mant.outline/v5");
         assert_eq!(outline["detail"], "sections");
         assert!(diagnostics.is_empty());
 
@@ -1060,7 +1076,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(excerpt["schema"], "mant.excerpt/v4");
+        assert_eq!(excerpt["schema"], "mant.excerpt/v5");
         assert_eq!(excerpt["selections"][0]["path"], "2.1");
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 2);
@@ -1084,7 +1100,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(value["schema"], "mant.excerpt/v4");
+        assert_eq!(value["schema"], "mant.excerpt/v5");
         assert_eq!(value["selections"][0]["path"], "2.1");
         assert_eq!(value["selections"][0]["section"]["title"], "Common options");
         assert!(diagnostics.is_empty());
@@ -1156,7 +1172,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(value["schema"], "mant.excerpt/v4");
+        assert_eq!(value["schema"], "mant.excerpt/v5");
         assert_eq!(value["selections"][0]["kind"], "document-entry");
         assert_eq!(value["selections"][0]["id"], "exclude");
         assert!(diagnostics.is_empty());
@@ -1165,6 +1181,112 @@ mod tests {
         assert_eq!(status, 2);
         assert!(output.is_empty());
         assert!(diagnostics.contains("is not a semantic entry; use --node for sections"));
+    }
+
+    #[test]
+    fn semantic_entries_work_through_cli_and_request_json() {
+        let host = FakeHost::with_semantic_markdown();
+        let (status, output, diagnostics) = invoke(
+            &["demo", "--outline=entries", "--format", "json", "--compact"],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
+        assert_eq!(outline["schema"], "mant.outline/v5");
+        let encoded = outline.to_string();
+        for role in ["option", "command", "environment-variable"] {
+            assert!(encoded.contains(&format!("\"role\":\"{role}\"")));
+        }
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["demo", "--outline=options", "--format", "json", "--compact"],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let outline: serde_json::Value = serde_json::from_str(&output).expect("alias outline");
+        assert_eq!(outline["detail"], "entries");
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["demo", "--explain=query", "--format", "json", "--compact"],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
+        assert_eq!(excerpt["selections"][0]["kind"], "document-entry");
+        assert_eq!(
+            excerpt["selections"][0]["entry"]["identity"]["role"],
+            "command"
+        );
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["demo", "--node=query", "--format", "json", "--compact"],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let excerpt: serde_json::Value = serde_json::from_str(&output).expect("section excerpt");
+        assert_eq!(excerpt["selections"][0]["kind"], "document-section");
+        assert_eq!(excerpt["selections"][0]["id"], "query");
+        assert!(diagnostics.is_empty());
+
+        for (selector, role) in [("/s", "option"), ("$ENV:PATH", "environment-variable")] {
+            let argument = format!("--explain={selector}");
+            let (status, output, diagnostics) = invoke(
+                &["demo", &argument, "--format", "json", "--compact"],
+                b"",
+                &host,
+            );
+            assert_eq!(status, 0);
+            let excerpt: serde_json::Value =
+                serde_json::from_str(&output).expect("role explanation");
+            assert_eq!(excerpt["selections"][0]["entry"]["identity"]["role"], role);
+            assert!(diagnostics.is_empty());
+        }
+
+        let (status, output, diagnostics) = invoke(
+            &["--request-json", "--format", "json", "--compact"],
+            br#"{"schema":"mant.request/v5","input":{"kind":"document","name":"demo"},"view":{"kind":"explain","entry":"query"}}"#,
+            &host,
+        );
+        assert_eq!(status, 0);
+        let excerpt: serde_json::Value = serde_json::from_str(&output).expect("request excerpt");
+        assert_eq!(
+            excerpt["selections"][0]["entry"]["identity"]["role"],
+            "command"
+        );
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(&["demo", "--explain=/f"], b"", &host);
+        assert_eq!(status, 2);
+        assert!(output.is_empty());
+        assert!(diagnostics.contains("multiple semantic entries"));
+        assert!(diagnostics.contains("option-f"));
+        assert!(diagnostics.contains("option-f-2"));
+
+        let (status, output, diagnostics) = invoke(
+            &[
+                "demo",
+                "--explain=option-f-2",
+                "--format",
+                "json",
+                "--compact",
+            ],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let excerpt: serde_json::Value = serde_json::from_str(&output).expect("qualified entry");
+        assert_eq!(
+            excerpt["selections"][0]["entry"]["identity"]["id"],
+            "option-f-2"
+        );
+        assert!(diagnostics.is_empty());
     }
 
     #[test]
@@ -1196,7 +1318,7 @@ mod tests {
 
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-        assert_eq!(value["schema"], "mant.search/v4");
+        assert_eq!(value["schema"], "mant.search/v5");
         assert_eq!(value["total"], 1);
         assert_eq!(value["matches"][0]["node"]["path"], "2.1");
         assert_eq!(value["matches"][0]["section"]["id"], "common-3");
@@ -1220,7 +1342,7 @@ mod tests {
 
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-        assert_eq!(value["schema"], "mant.search/v4");
+        assert_eq!(value["schema"], "mant.search/v5");
         assert_eq!(value["query"]["syntax"], "literal");
         assert_eq!(value["query"]["scope"], "visible");
         assert!(
@@ -1262,9 +1384,9 @@ mod tests {
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
         assert_eq!(value["nativeApiVersion"], "5");
         assert_eq!(value["requestSchema"], "mant.request/v5");
-        assert_eq!(value["outlineSchema"], "mant.outline/v4");
-        assert_eq!(value["excerptSchema"], "mant.excerpt/v4");
-        assert_eq!(value["searchSchema"], "mant.search/v4");
+        assert_eq!(value["outlineSchema"], "mant.outline/v5");
+        assert_eq!(value["excerptSchema"], "mant.excerpt/v5");
+        assert_eq!(value["searchSchema"], "mant.search/v5");
         assert!(diagnostics.is_empty());
     }
 

@@ -39,8 +39,8 @@ grep -Fq 'mant README.md' <<<"$help"
 grep -Fq -- '--ui' <<<"$help"
 
 query=$("$MANT" README.md --format json --compact)
-grep -Fq '"schema":"mant.query/v4"' <<<"$query"
-grep -Fq '"schema":"mant.document/v4"' <<<"$query"
+grep -Fq '"schema":"mant.query/v5"' <<<"$query"
+grep -Fq '"schema":"mant.document/v5"' <<<"$query"
 
 printf '\nlocal verification succeeded\n'
 printf '  executable: %s\n' "$MANT"

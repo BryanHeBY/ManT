@@ -115,7 +115,7 @@ pub fn search_query(
     let truncated = consumed < total;
 
     Ok(QuerySearch {
-        schema: SearchSchema::V4,
+        schema: SearchSchema::V5,
         label: query.label.clone(),
         source: query
             .document
@@ -502,10 +502,10 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V4,
+                schema: DocumentSchema::V5,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),

@@ -428,10 +428,10 @@ mod tests {
 
     fn query() -> QueryBundle {
         QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V4,
+                schema: DocumentSchema::V5,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -585,10 +585,10 @@ mod tests {
     fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
         fn document_with(blocks: Vec<Block>) -> QueryBundle {
             QueryBundle {
-                schema: QuerySchema::V4,
+                schema: QuerySchema::V5,
                 label: "demo".to_owned(),
                 document: Some(MantDocument {
-                    schema: DocumentSchema::V4,
+                    schema: DocumentSchema::V5,
                     producer: Producer {
                         name: "test".to_owned(),
                         version: "1".to_owned(),
@@ -656,10 +656,10 @@ mod tests {
     #[test]
     fn inline_definition_descriptions_are_tight_against_their_terms() {
         let bundle = QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V4,
+                schema: DocumentSchema::V5,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),
@@ -741,10 +741,10 @@ mod tests {
     #[test]
     fn man_format_keeps_inline_definitions_tight() {
         let bundle = QueryBundle {
-            schema: QuerySchema::V4,
+            schema: QuerySchema::V5,
             label: "demo".to_owned(),
             document: Some(MantDocument {
-                schema: DocumentSchema::V4,
+                schema: DocumentSchema::V5,
                 producer: Producer {
                     name: "test".to_owned(),
                     version: "1".to_owned(),

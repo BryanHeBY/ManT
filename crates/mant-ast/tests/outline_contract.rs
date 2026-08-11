@@ -17,7 +17,7 @@ fn source() -> DocumentSource {
 #[test]
 fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
-        schema: OutlineSchema::V4,
+        schema: OutlineSchema::V5,
         detail: OutlineDetail::Entries,
         label: "demo(1)".to_owned(),
         source: Some(source()),
@@ -38,7 +38,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     };
 
     let value = serde_json::to_value(outline).expect("outline JSON");
-    assert_eq!(value["schema"], "mant.outline/v4");
+    assert_eq!(value["schema"], "mant.outline/v5");
     assert_eq!(value["detail"], "entries");
     assert_eq!(value["label"], "demo(1)");
     assert_eq!(value["nodes"][0]["kind"], "document-section");
@@ -58,7 +58,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         source: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V4,
+        schema: ExcerptSchema::V5,
         label: "demo(1)".to_owned(),
         producer: Some(Producer {
             name: "mant".to_owned(),
@@ -82,7 +82,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     };
 
     let value = serde_json::to_value(excerpt).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.excerpt/v4");
+    assert_eq!(value["schema"], "mant.excerpt/v5");
     assert_eq!(value["selections"][0]["kind"], "document-section");
     assert_eq!(value["selections"][0]["breadcrumbs"][0]["path"], "2");
     assert_eq!(value["selections"][0]["section"]["id"], "common-3");
@@ -104,7 +104,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         spacing_before_lines: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V4,
+        schema: ExcerptSchema::V5,
         label: "demo(1)".to_owned(),
         producer: None,
         source: Some(source()),
@@ -137,7 +137,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         source: None,
     }];
     let outline = QueryOutline {
-        schema: OutlineSchema::V4,
+        schema: OutlineSchema::V5,
         detail: OutlineDetail::Sections,
         label: "guide.md".to_owned(),
         source: Some(DocumentSource {
@@ -152,7 +152,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         }],
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V4,
+        schema: ExcerptSchema::V5,
         label: "guide.md".to_owned(),
         producer: None,
         source: outline.source.clone(),
@@ -190,7 +190,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         origin: TldrOrigin::TldrPages,
     };
     let outline = QueryOutline {
-        schema: OutlineSchema::V4,
+        schema: OutlineSchema::V5,
         detail: OutlineDetail::Sections,
         label: "demo".to_owned(),
         source: None,
@@ -202,7 +202,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         }],
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V4,
+        schema: ExcerptSchema::V5,
         label: "demo".to_owned(),
         producer: None,
         source: None,

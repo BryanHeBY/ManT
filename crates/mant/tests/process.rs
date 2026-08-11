@@ -158,10 +158,10 @@ fn protocol_version_is_a_clean_json_document() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("protocol JSON");
     assert_eq!(value["protocol"], "mant.cli/v5");
     assert_eq!(value["requestSchema"], "mant.request/v5");
-    assert_eq!(value["querySchema"], "mant.query/v4");
-    assert_eq!(value["outlineSchema"], "mant.outline/v4");
-    assert_eq!(value["excerptSchema"], "mant.excerpt/v4");
-    assert_eq!(value["searchSchema"], "mant.search/v4");
+    assert_eq!(value["querySchema"], "mant.query/v5");
+    assert_eq!(value["outlineSchema"], "mant.outline/v5");
+    assert_eq!(value["excerptSchema"], "mant.excerpt/v5");
+    assert_eq!(value["searchSchema"], "mant.search/v5");
 
     for (field, marker) in value.as_object().expect("protocol descriptor") {
         let documented = format!(

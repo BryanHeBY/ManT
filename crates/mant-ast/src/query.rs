@@ -11,9 +11,9 @@ use crate::{
 /// Exact schema marker for a complete `ManT` query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum QuerySchema {
-    /// Query envelope built around `mant.document/v4`.
-    #[serde(rename = "mant.query/v4")]
-    V4,
+    /// Query envelope built around `mant.document/v5`.
+    #[serde(rename = "mant.query/v5")]
+    V5,
 }
 
 /// Exact schema marker for a native query request.
@@ -104,7 +104,7 @@ pub struct QueryRequest {
 /// Native result consumed by JSON, Markdown, and interactive frontends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:query:v4"))]
+#[schemars(extend("$id" = "urn:mant:query:v5"))]
 pub struct QueryBundle {
     pub schema: QuerySchema,
     pub label: String,

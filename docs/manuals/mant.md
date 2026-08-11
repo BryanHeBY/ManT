@@ -172,9 +172,9 @@ by `:`, `—`, or `–` and a description:
 This legacy shorthand is case-sensitive. Aliases may be separated by commas,
 the historical `-h/--help` notation, or vertical bars.
 
-Windows switches, commands, and environment variables use an explicit
-invisible directive immediately before one complete bullet list. Both the role
-and matching policy are required:
+Role-aware entries, including Windows switches, commands, and environment
+variables, use an explicit invisible directive before one complete bullet
+list. Both the role and matching policy are required:
 
 ```markdown
 <!-- mant:entries role=option case=insensitive -->
@@ -194,10 +194,45 @@ and matching policy are required:
 ```
 
 `role` is `option`, `command`, or `environment-variable`; `case` is
-`sensitive` or `insensitive`. Value placeholders remain visible, while `/S`
-and `/server` become selectors; fixed values such as `/reg:32` remain part of
-the selector. The directive applies only to the immediately following bullet
-list. Unknown fields, missing policies, and malformed declared lists produce a
+`sensitive` or `insensitive`. The directive must be the only construct on its
+line and targets a bullet list beginning on the next non-empty line. Blank
+lines are allowed, but a heading, paragraph, or other intervening construct
+invalidates the declaration.
+
+Every item in a declared list must begin with one or more inline-code terms,
+optionally separated by commas or `|`, and then contain `:`, `—`, or `–` in the
+same leading paragraph. The delimiter is required even when further
+description blocks follow. For example:
+
+```markdown
+<!-- mant:entries role=option case=insensitive -->
+- `/query`, `/Q`: Query the current state.
+```
+
+This is intentionally not a semantic entry because the leading paragraph has
+no description delimiter:
+
+```markdown
+<!-- mant:entries role=option case=insensitive -->
+- `/query`, `/Q`
+  Query the current state.
+```
+
+Value placeholders remain visible while normalized selectors omit them.
+Whitespace placeholders such as `/S COMPUTER` become `/S`. A colon suffix in
+uppercase placeholder form, optionally enclosed in angle brackets, is also
+omitted: `/server:NAME` becomes `/server`, as does `/server:<NAME>`.
+Lowercase colon suffixes are fixed values, so `/server:name` remains the full
+selector. Numeric and lowercase alphabetic values such as `/reg:32` and
+`/mode:auto` likewise remain part of the selector.
+
+Case policy belongs only to the declared list. It does not change section
+paths or IDs. Use `sensitive` when `-p` and `-P` differ, and `insensitive` for
+Windows `/S` versus `/s`, PowerShell command and parameter names, or
+environment spellings such as `PATH`, `$env:PATH`, and `$ENV:PATH`. Outlines
+always retain the canonical spelling written by the author.
+
+Unknown fields, missing policies, and malformed declared lists produce a
 source-located recoverable diagnostic without dropping or reordering content.
 
 Recognized entries receive role-specific stable IDs and aliases, appear
@@ -205,6 +240,10 @@ beneath their owning section in `--outline`, and are selectable through
 `--node` and `--explain`. A mixed ordinary/option list remains an ordinary list
 rather than being guessed. When an alias occurs more than once, selection
 fails with candidate paths and IDs; use one of those stable qualifiers.
+
+Semantic tables are not currently inferred or declared. Convert an interface
+table to a declared bullet list when its rows must appear in outlines and work
+with `--explain`; ordinary tables remain ordinary document content.
 
 An optional leading tldr preface is parsed independently with the tldr-pages
 dialect. Invisible CommonMark HTML comments delimit it, so GitHub renders the
@@ -294,13 +333,22 @@ errors, and Rust panics.
 
 ## Document Selection
 
-- `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and `sections` is the compact form.
+- `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and `sections` is the compact form. The CLI accepts historical `options` as an alias for `entries`.
 - `--node NODE`: Return a node by path or ID; repeat the option to select several nodes.
 - `--explain ENTRY`: Return exactly one semantic option, command, or environment entry.
 
 Path `0` and ID alias `tldr` are reserved for either an external tldr page or a
 Markdown document's explicitly marked tldr preface. Remaining headings use
 one-based paths such as `2.3`, and semantic entries use paths such as `2.3/o4`.
+
+`--node` first recognizes the reserved tldr and document-root selectors, then
+resolves exact paths or IDs across sections and entries, and finally resolves
+entry aliases. `--explain` is entry-only: it resolves an exact entry path or
+ID first, then entry aliases using their declared case policy. Duplicate
+aliases return deterministic candidate paths and IDs. Only when no entry
+matches does an exact section, root, or tldr selector produce the instruction
+to use `--node`; consequently a command alias may have the same spelling as a
+section ID without being shadowed.
 
 ## Search
 
@@ -356,19 +404,20 @@ The current protocol descriptor is:
   "protocol": "mant.cli/v5",
   "nativeApiVersion": "5",
   "requestSchema": "mant.request/v5",
-  "querySchema": "mant.query/v4",
-  "documentSchema": "mant.document/v4",
-  "outlineSchema": "mant.outline/v4",
-  "excerptSchema": "mant.excerpt/v4",
-  "searchSchema": "mant.search/v4"
+  "querySchema": "mant.query/v5",
+  "documentSchema": "mant.document/v5",
+  "outlineSchema": "mant.outline/v5",
+  "excerptSchema": "mant.excerpt/v5",
+  "searchSchema": "mant.search/v5"
 }
 ```
 
-The request and CLI framing advanced to v5 when explicit source selection was
-added; response document and projection schemas remain v4. Future revisions
-may advance individual contracts only when their wire shapes change, so
-consumers must still compare every exact schema identifier. Generated schemas
-use JSON Schema Draft 2020-12 and remain the authoritative field-level
+Request and response contracts advanced to v5 for explicit source selection,
+the first-class explain view, and role- and case-aware semantic entries. The
+independent `mant.markdown/v1` search-coordinate contract remains unchanged.
+Future revisions may advance individual contracts only when their wire shapes
+change, so consumers must compare every exact schema identifier. Generated
+schemas use JSON Schema Draft 2020-12 and remain the authoritative field-level
 definition.
 The repository's `docs/protocol.md` supplies the complete field reference,
 examples, compatibility policy, coordinate rules, and MCP tool contracts.

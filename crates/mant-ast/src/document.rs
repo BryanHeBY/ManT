@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
     /// Source-neutral model with role-aware, case-aware semantic entries.
-    #[serde(rename = "mant.document/v4")]
-    V4,
+    #[serde(rename = "mant.document/v5")]
+    V5,
 }
 
 /// A normalized document ready for interactive or textual rendering.

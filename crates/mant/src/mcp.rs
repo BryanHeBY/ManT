@@ -408,7 +408,7 @@ impl MantMcpServer {
     #[tool(
         name = "mant_document_explain",
         annotations(
-            title = "ManT option explanation",
+            title = "ManT semantic entry explanation",
             read_only_hint = true,
             destructive_hint = false,
             open_world_hint = false
@@ -858,7 +858,7 @@ mod tests {
             source: None,
         };
         let mut excerpt = QueryExcerpt {
-            schema: ExcerptSchema::V4,
+            schema: ExcerptSchema::V5,
             label: "demo".to_owned(),
             producer: None,
             source: None,
