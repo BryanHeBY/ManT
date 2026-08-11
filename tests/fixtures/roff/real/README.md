@@ -1,8 +1,8 @@
 # Fixed real-man roff fixtures
 
 This directory is a source catalogue, not a flat collection of files. Each
-child directory represents one independently reproducible distribution
-snapshot and owns its package provenance, hashes, transformation notes, and
+child directory represents one independently reproducible source snapshot and
+owns its package or release provenance, hashes, transformation notes, and
 license mapping. The shared `LICENSES/` directory contains the complete texts
 required by the third-party manuals.
 
@@ -11,6 +11,7 @@ required by the third-party manuals.
 | [`archlinux/`](archlinux/README.md) | Immutable Arch Linux Archive packages | Original gzip members and two documented lossless zstd recompressions | Direct gzip input, POSIX `sh(1p)`, zstd input, and broad real-man regression coverage |
 | [`fedora44/`](fedora44/README.md) | Fedora Linux 44 Everything packages | Lossless `*.1.zst` recompressions | zstd decoding, Bash-backed `sh(1)`, and a second current generator corpus |
 | [`debian/`](debian/README.md) | Debian sid binary packages | Original gzip package members | Third-distribution gzip input, mdoc-formatted dash `sh(1)`, and section-7 macro pages |
+| [`windows-releases/`](windows-releases/README.md) | Official upstream Windows release ZIPs | Lossless `*.1.zst` recompressions of the ZIP members | CRLF input, Rust and Go release artifacts, PowerShell content, Windows paths, and a large Pandoc-generated page |
 
 All fixtures are parsed through ManT's bundled libmandoc. Tests never consult
 the host manual database. Fixed compressed roff sources replace the former
@@ -67,9 +68,9 @@ fail, but `man(1)` fails on them identically, so ManT stays faithful.
 
 ## Adding or replacing a fixture source
 
-Create or update a distribution-specific directory rather than adding a page
-to this root. Its README must record the source repository, retrieval date,
-exact package and member paths, upstream and fixture hashes, transformations,
-and applicable license text. Update the native topology assertions in the same
-commit. These third-party licenses govern only their fixtures; ManT remains
-under the repository-level Apache-2.0 license.
+Create or update a source-specific directory rather than adding a page to this
+root. Its README must record the source repository, retrieval date, exact
+package or release archive and member paths, upstream and fixture hashes,
+transformations, and applicable license text. Update the native topology
+assertions in the same commit. These third-party licenses govern only their
+fixtures; ManT remains under the repository-level Apache-2.0 license.
