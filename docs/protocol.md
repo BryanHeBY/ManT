@@ -146,10 +146,12 @@ findings belong to `document.diagnostics` or `excerpt.diagnostics`.
 
 ### Source Resolution Policy
 
-Manual pages have one parser path: the located roff source is lowered directly
-through `libmandoc-rs`. Renderer selection is deliberately absent from
-`mant.request/v5`. This native-manual source family is available on Unix;
-Windows implements the same protocol over registered and explicit Markdown.
+Manual pages have one parser path: ManT performs bounded reads, decompression,
+and constrained redirect-only `.so` alias resolution, then gives plain roff
+bytes to `libmandoc-rs` with includes denied. Renderer selection is
+deliberately absent from `mant.request/v5`. This native-manual source family is
+available on Unix; Windows implements the same protocol over registered and
+explicit Markdown.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires readable native manual content. A request JSON

@@ -10,7 +10,8 @@ process.
 - Registered Markdown discovery under native platform data directories.
 - A conservative, source-positioned Markdown parser with explicit loss
   diagnostics and optional embedded tldr content.
-- Native manual indexing and `man(7)`/`mdoc(7)` lowering on Unix.
+- Bounded native manual loading, constrained `.so` alias resolution, and
+  `man(7)`/`mdoc(7)` lowering on Unix.
 - Semantic outlines containing addressable sections and command options.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.

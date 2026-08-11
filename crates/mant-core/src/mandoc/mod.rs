@@ -6,33 +6,26 @@ pub(crate) mod inline;
 mod layout;
 mod navigation;
 mod roff_escape;
+mod source;
 
-use std::{
-    fs::File,
-    io::{self, Cursor, Read},
-    path::Path,
-};
+use std::path::Path;
 
-use flate2::read::MultiGzDecoder;
 use libmandoc_rs::{
-    Compression, Document, IncludePolicy, MacroSet, Node, ParseErrorKind, ParseOptions,
-    ParseReport, Parser,
+    Compression, Document, IncludePolicy, MacroSet, Node, ParseOptions, ParseReport, Parser,
 };
 use mant_ast::{
     DocumentMeta, DocumentSchema, DocumentSource, Engine, MantDocument, Producer, SourceFormat,
     SourceSpan,
 };
 
-use self::roff_escape::visible_text;
+use self::{
+    roff_escape::visible_text,
+    source::{load_manual_source, resolve_manual_redirects},
+};
 use crate::ManualPage;
 
 pub use libmandoc_rs::ParseError;
-
-/// Upper bound on both the stored and decoded form of one manual source.
-///
-/// The loader enforces the limit while reading instead of trusting file
-/// metadata, so special files and high-ratio compressed inputs remain bounded.
-pub const MAX_MANUAL_BYTES: u64 = 16 * 1024 * 1024;
+pub use source::MAX_MANUAL_BYTES;
 
 /// Parse and normalize one standalone man or mdoc source file.
 ///
@@ -44,7 +37,8 @@ pub const MAX_MANUAL_BYTES: u64 = 16 * 1024 * 1024;
 ///
 /// Returns [`ParseError`] when the source cannot be opened, decoded, or parsed.
 pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ParseError> {
-    parse_manual_source_with_policy(path, IncludePolicy::Deny)
+    let loaded = load_manual_source(path)?;
+    parse_plain_manual(path, &loaded.source, None)
 }
 
 /// Parse an indexed manual, resolving `.so` redirects against its discovered
@@ -54,69 +48,29 @@ pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ParseError> {
 ///
 /// Returns [`ParseError`] when the source cannot be opened, decoded, or parsed.
 pub fn parse_manual_page(page: &ManualPage) -> Result<MantDocument, ParseError> {
-    parse_manual_source_with_policy(&page.path, IncludePolicy::Root(page.manual_root.clone()))
+    let resolved = resolve_manual_redirects(page)?;
+    parse_plain_manual(
+        &page.path,
+        &resolved.source,
+        resolved.alias_target.as_deref(),
+    )
 }
 
-fn parse_manual_source_with_policy(
+fn parse_plain_manual(
     path: &Path,
-    includes: IncludePolicy,
+    source: &[u8],
+    alias_target: Option<&str>,
 ) -> Result<MantDocument, ParseError> {
-    let source = load_manual_source(path)?;
     let report = Parser::new(ParseOptions {
-        includes,
+        includes: IncludePolicy::Deny,
         compression: Compression::Plain,
     })
-    .parse_bytes(path, &source)?;
-    Ok(lower_mandoc_document(path, &report))
-}
-
-fn load_manual_source(path: &Path) -> Result<Vec<u8>, ParseError> {
-    let file =
-        File::open(path).map_err(|error| source_error(path, ParseErrorKind::Read, &error))?;
-    let stored = read_capped(file, MAX_MANUAL_BYTES)
-        .map_err(|error| source_error(path, ParseErrorKind::Read, &error))?;
-
-    if stored.starts_with(&[0x1f, 0x8b]) || path.extension().is_some_and(|value| value == "gz") {
-        return read_capped(MultiGzDecoder::new(Cursor::new(stored)), MAX_MANUAL_BYTES)
-            .map_err(|error| decompression_error(path, "gzip", &error));
+    .parse_bytes(path, source)?;
+    let mut document = lower_mandoc_document(path, &report);
+    if let Some(alias_target) = alias_target {
+        document.meta.alias_target = Some(alias_target.to_owned());
     }
-    if stored.starts_with(&[0x28, 0xb5, 0x2f, 0xfd])
-        || path.extension().is_some_and(|value| value == "zst")
-    {
-        let decoder = zstd::stream::read::Decoder::new(Cursor::new(stored))
-            .map_err(|error| decompression_error(path, "zstd", &error))?;
-        return read_capped(decoder, MAX_MANUAL_BYTES)
-            .map_err(|error| decompression_error(path, "zstd", &error));
-    }
-    Ok(stored)
-}
-
-fn read_capped(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
-    let mut source = Vec::new();
-    reader.take(limit + 1).read_to_end(&mut source)?;
-    if source.len() as u64 > limit {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("manual source exceeds the {limit}-byte limit"),
-        ));
-    }
-    Ok(source)
-}
-
-fn source_error(path: &Path, kind: ParseErrorKind, error: &io::Error) -> ParseError {
-    ParseError {
-        path: path.to_path_buf(),
-        kind,
-        message: error.to_string(),
-    }
-}
-
-fn decompression_error(path: &Path, format: &str, error: &io::Error) -> ParseError {
-    ParseError {
-        path: path.to_path_buf(),
-        kind: ParseErrorKind::Decompression,
-        message: format!("could not decompress {format} manual source: {error}"),
-    }
+    Ok(document)
 }
 
 /// Convert a completed low-level parse into the stable document contract.
@@ -233,89 +187,16 @@ fn part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        io::{Read, Write},
-        process,
-    };
+    use std::{fs, process};
 
-    use flate2::{Compression as GzipCompression, write::GzEncoder};
     use mant_ast::{Block, DiagnosticLevel, Inline, SourceFormat};
 
-    use crate::ManualPage;
-
-    use super::{MAX_MANUAL_BYTES, parse_manual_page, parse_manual_source, read_capped};
+    use super::parse_manual_source;
 
     fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
         fs::write(&path, source).expect("write temporary roff fixture");
         path
-    }
-
-    #[test]
-    fn decodes_gzip_and_zstd_before_calling_libmandoc() {
-        let source = b".TH COMPRESSED 1\n.SH NAME\ncompressed \\- decoded by mant\n";
-        let base = std::env::temp_dir().join(format!("mant-compressed-{}", process::id()));
-        fs::create_dir_all(&base).expect("create compressed fixture directory");
-
-        let gzip_path = base.join("gzip.1");
-        let mut gzip = GzEncoder::new(Vec::new(), GzipCompression::fast());
-        gzip.write_all(source).expect("encode gzip fixture");
-        fs::write(&gzip_path, gzip.finish().expect("finish gzip fixture"))
-            .expect("write gzip fixture");
-
-        let zstd_path = base.join("zstd.1");
-        fs::write(
-            &zstd_path,
-            zstd::stream::encode_all(source.as_slice(), 1).expect("encode zstd fixture"),
-        )
-        .expect("write zstd fixture");
-
-        for path in [&gzip_path, &zstd_path] {
-            let document = parse_manual_source(path).expect("decode compressed manual by magic");
-            assert_eq!(document.meta.title.as_deref(), Some("COMPRESSED"));
-        }
-        fs::remove_dir_all(base).expect("remove compressed fixtures");
-    }
-
-    #[test]
-    fn indexed_pages_expand_redirects_against_their_explicit_root() {
-        let root = std::env::temp_dir().join(format!("mant-indexed-so-{}", process::id()));
-        let man1 = root.join("man1");
-        fs::create_dir_all(&man1).expect("create manual section");
-        fs::write(
-            man1.join("target.1"),
-            ".TH INDEXED-TARGET 1\n.SH NAME\ntarget \\- explicit include root\n",
-        )
-        .expect("write redirect target");
-        let alias = man1.join("alias.1.gz");
-        let mut gzip = GzEncoder::new(Vec::new(), GzipCompression::fast());
-        gzip.write_all(b".so target.1\n")
-            .expect("encode redirect stub");
-        fs::write(&alias, gzip.finish().expect("finish redirect stub"))
-            .expect("write redirect stub");
-
-        let document = parse_manual_page(&ManualPage {
-            name: "alias".to_owned(),
-            section: "1".to_owned(),
-            path: alias,
-            manual_root: root.clone(),
-        })
-        .expect("load indexed redirect");
-        fs::remove_dir_all(root).expect("remove indexed redirect fixture");
-
-        assert_eq!(document.meta.title.as_deref(), Some("INDEXED-TARGET"));
-    }
-
-    #[test]
-    fn manual_reads_are_bounded_without_trusting_reader_metadata() {
-        let error = read_capped(
-            std::io::repeat(0).take(MAX_MANUAL_BYTES + 1),
-            MAX_MANUAL_BYTES,
-        )
-        .expect_err("reject an oversized streaming source");
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("exceeds"));
     }
 
     #[test]

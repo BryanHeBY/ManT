@@ -146,8 +146,9 @@ rule, and MCP tool.
 
 On Linux and macOS, ManT indexes raw, gzip, and zstd manual sources directly.
 It performs bounded reads and decompression before passing plain roff bytes to
-bundled libmandoc; `.so` redirects resolve against the indexed manual root,
-never the process working directory. Project-local pages can be exposed
+bundled libmandoc. Rust resolves redirect-only `.so` alias chains against the
+indexed manual root with canonical-path, cycle, depth, and total-byte checks;
+libmandoc never opens another file for ManT. Project-local pages can be exposed
 through `MANT_MANPATH` (a complete override) or `MANPATH`:
 
 ```sh

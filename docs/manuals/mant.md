@@ -85,10 +85,11 @@ native manual on Unix and cannot be combined with `--source`.
 ### Manual Pages
 
 On Linux and macOS, manual page names are located through ManT's native manual
-index. ManT reads
-raw, gzip, and zstd roff sources and lowers man or mdoc semantics through its
-bundled libmandoc parser. Neither a system `man` nor a system `mandoc`
-executable is required for ordinary use.
+index. ManT reads raw, gzip, and zstd roff sources and resolves redirect-only
+`.so` alias chains within the indexed manual root. All file and decompression
+I/O for manual sources remains in ManT; bundled libmandoc receives only the
+final plain roff bytes. Neither a system `man` nor a system `mandoc` executable
+is required for ordinary use.
 
 Windows intentionally omits libmandoc and native man/roff lookup. Register a
 Markdown document with the desired name, pass an explicit Markdown path, or
