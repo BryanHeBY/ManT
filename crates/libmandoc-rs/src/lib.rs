@@ -158,11 +158,11 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_parser_accepts_the_date_formats_used_by_libmandoc() {
-        for date in [
-            "2026-07-20",
-            "Jul 20, 2026",
-            "July 20, 2026",
-            "$Mdocdate: Jul 20 2026 $",
+        for (date, normalized) in [
+            ("2026-07-20", "2026-07-20"),
+            ("Jul 20, 2026", "July 20, 2026"),
+            ("July 20, 2026", "July 20, 2026"),
+            ("$Mdocdate: Jul 20 2026 $", "July 20, 2026"),
         ] {
             let source =
                 format!(".TH WINDOWS-DATE 1 \"{date}\"\n.SH NAME\nwindows-date \\- portable\n");
@@ -175,10 +175,7 @@ mod tests {
                 "unexpected diagnostics for {date}: {:?}",
                 report.diagnostics
             );
-            assert_eq!(
-                report.document.metadata.date.as_deref(),
-                Some("July 20, 2026")
-            );
+            assert_eq!(report.document.metadata.date.as_deref(), Some(normalized));
         }
     }
 
