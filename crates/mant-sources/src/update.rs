@@ -494,6 +494,8 @@ mod tests {
 
     use zip::{ZipWriter, write::SimpleFileOptions};
 
+    #[cfg(windows)]
+    use super::sync_file;
     use super::{
         ConfiguredSource, DocumentPaths, SourceLocation, SourceUpdateAction,
         install_selected_documents, recover_directory, source_fingerprint, try_update_one_source,
