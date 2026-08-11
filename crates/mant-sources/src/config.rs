@@ -224,12 +224,17 @@ fn validate_source(name: &str, source: SourceDeclaration) -> Result<ConfiguredSo
     }
     let location = match (source.repo, source.branch, source.url) {
         (Some(repo), Some(branch), None) => {
-            if repo.trim().is_empty() || repo.trim() != repo || repo.starts_with('-') {
+            if repo.trim().is_empty()
+                || repo.trim() != repo
+                || repo.starts_with('-')
+                || repo.chars().any(char::is_control)
+            {
                 return Err(
-                    "repo must be a trimmed, non-empty Git URL or path and must not start with '-'"
+                    "repo must be a trimmed, non-empty Git URL or path without control characters and must not start with '-'"
                         .to_owned(),
                 );
             }
+            validate_git_location(&repo)?;
             if branch.trim().is_empty() || branch.trim() != branch || branch.starts_with('-') {
                 return Err(
                     "branch must be trimmed, non-empty, and must not start with '-'".to_owned(),
@@ -241,11 +246,11 @@ fn validate_source(name: &str, source: SourceDeclaration) -> Result<ConfiguredSo
             let lower = url.to_ascii_lowercase();
             if url.trim().is_empty()
                 || url.trim() != url
-                || !(lower.starts_with("https://") || lower.starts_with("http://"))
+                || !lower.starts_with("https://")
                 || url.chars().any(char::is_control)
             {
                 return Err(
-                    "url must be one trimmed HTTP or HTTPS archive URL without control characters"
+                    "url must be one trimmed HTTPS archive URL without control characters"
                         .to_owned(),
                 );
             }
@@ -276,6 +281,21 @@ fn validate_source(name: &str, source: SourceDeclaration) -> Result<ConfiguredSo
         exclude: source.exclude,
         priority: source.priority,
     })
+}
+
+fn validate_git_location(repo: &str) -> Result<(), String> {
+    if repo.contains("::") {
+        return Err("repo must not use a Git remote-helper transport".to_owned());
+    }
+    let Some((scheme, _)) = repo.split_once("://") else {
+        // Local paths and Git's scp-like SSH syntax do not carry `://`.
+        return Ok(());
+    };
+    if matches!(scheme.to_ascii_lowercase().as_str(), "https" | "ssh") {
+        Ok(())
+    } else {
+        Err("repo URL scheme must be HTTPS or SSH; local repositories must use a path".to_owned())
+    }
 }
 
 pub(crate) fn is_source_name(name: &str) -> bool {
@@ -438,6 +458,41 @@ priority = -1
         ] {
             fs::write(&config, text).expect("write invalid source");
             assert!(load_source_config_from(&config).is_err(), "accepted {text}");
+        }
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn git_transport_helpers_and_insecure_archive_urls_are_rejected() {
+        let root = temp("transport-policy");
+        fs::create_dir_all(&root).expect("create fixture");
+        let config = root.join("sources.toml");
+        for repo in [
+            "ext::sh -c id",
+            "hg::https://example.invalid/repo",
+            "git://example.invalid/repo.git",
+            "file:///tmp/repo",
+        ] {
+            fs::write(
+                &config,
+                format!("[bad]\nrepo = {repo:?}\nbranch = 'main'\n"),
+            )
+            .expect("write invalid Git source");
+            assert!(load_source_config_from(&config).is_err(), "accepted {repo}");
+        }
+        fs::write(&config, "[bad]\nurl = 'http://example.invalid/docs.zip'\n")
+            .expect("write insecure archive source");
+        assert!(load_source_config_from(&config).is_err());
+
+        for repo in [
+            "https://example.invalid/repo.git",
+            "ssh://git@example.invalid/repo.git",
+            "git@example.invalid:org/repo.git",
+            "../local-repo",
+        ] {
+            fs::write(&config, format!("[ok]\nrepo = {repo:?}\nbranch = 'main'\n"))
+                .expect("write valid Git source");
+            assert!(load_source_config_from(&config).is_ok(), "rejected {repo}");
         }
         fs::remove_dir_all(root).expect("remove fixture");
     }

@@ -66,9 +66,9 @@ Fields are:
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `repo` | For Git | Git URL or local repository path; relative paths use the ManT data root |
+| `repo` | For Git | HTTPS/SSH Git URL or local repository path; relative paths use the ManT data root |
 | `branch` | For Git | Exact branch checked through `refs/heads/<branch>` |
-| `url` | For archive | Direct HTTP or HTTPS URL of a ZIP, tar, tar.gz/tgz, or tar.zst/tzst archive |
+| `url` | For archive | Direct HTTPS URL of a ZIP, tar, tar.gz/tgz, or tar.zst/tzst archive |
 | `path` | No | Directory inside the checkout; defaults to `.` |
 | `include` | No | Exact relative files or directory subtrees below `path` |
 | `exclude` | No | Exact relative files or directory subtrees removed after inclusion |
@@ -111,13 +111,16 @@ if any source failed.
 
 For a Git source, ManT reads the branch head with `git ls-remote`. It skips an
 unchanged source or performs a depth-one, single-branch clone without tags,
-local hardlinks, or submodule initialization.
+local hardlinks, or submodule initialization. Git transport is restricted to
+HTTPS, SSH, and local paths; remote-helper syntax and other protocols are
+rejected.
 
 For an archive source, ManT sends saved `ETag` and `Last-Modified` validators
 when available. A `304 Not Modified` response avoids downloading and
 extracting the artifact. Otherwise ManT streams the response to a bounded
 temporary file and records its SHA-256 digest as the revision; the digest also
-detects unchanged content when a server provides no validators.
+detects unchanged content when a server provides no validators. Redirects stay
+on HTTPS and are limited to five hops.
 
 Both paths then select only regular `.md` and `.markdown` files, flatten them,
 check public-name collisions, and write `.mant-source.toml`. The normalized

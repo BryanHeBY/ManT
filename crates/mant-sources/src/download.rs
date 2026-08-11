@@ -37,15 +37,7 @@ pub(crate) fn download_archive(
     destination: &Path,
     validators: Option<&Validators>,
 ) -> Result<DownloadOutcome, String> {
-    let uri = url
-        .parse::<ureq::http::Uri>()
-        .map_err(|error| format!("invalid archive URL: {error}"))?;
-    let mut config = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(120)));
-    if uri.host().is_some_and(is_loopback_host) {
-        config = config.proxy(None);
-    }
-    let config = config.build();
-    let agent: ureq::Agent = config.into();
+    let agent = archive_agent(url)?;
     let mut request = agent
         .get(url)
         .header("Accept-Encoding", "identity")
@@ -86,52 +78,78 @@ pub(crate) fn download_archive(
         last_modified: response_header(&response, "last-modified"),
     };
 
-    let result = (|| {
-        let mut output = File::options()
-            .write(true)
-            .create_new(true)
-            .open(destination)
-            .map_err(|error| format!("could not create archive download: {error}"))?;
-        let mut reader = response.body_mut().as_reader();
-        let mut hasher = Sha256::new();
-        let mut total = 0_u64;
-        let mut buffer = vec![0_u8; 64 * 1024];
-        loop {
-            let count = reader
-                .read(&mut buffer)
-                .map_err(|error| format!("could not read archive response: {error}"))?;
-            if count == 0 {
-                break;
-            }
-            total = total
-                .checked_add(u64::try_from(count).expect("buffer length fits in u64"))
-                .ok_or_else(|| "archive download size overflow".to_owned())?;
-            if total > MAX_ARCHIVE_BYTES {
-                return Err(format!(
-                    "downloaded archive exceeds the {MAX_ARCHIVE_BYTES}-byte limit"
-                ));
-            }
-            output
-                .write_all(&buffer[..count])
-                .map_err(|error| format!("could not write archive download: {error}"))?;
-            hasher.update(&buffer[..count]);
-        }
-        output
-            .sync_all()
-            .map_err(|error| format!("could not sync archive download: {error}"))?;
-        let mut revision = String::with_capacity(64);
-        for byte in hasher.finalize() {
-            write!(&mut revision, "{byte:02x}").expect("writing to a string cannot fail");
-        }
-        Ok(DownloadOutcome::Downloaded {
-            revision,
-            validators: response_validators,
-        })
-    })();
+    let result = write_download(&mut response, destination, response_validators);
     if result.is_err() {
         let _ = fs::remove_file(destination);
     }
     result
+}
+
+fn archive_agent(url: &str) -> Result<ureq::Agent, String> {
+    let uri = url
+        .parse::<ureq::http::Uri>()
+        .map_err(|error| format!("invalid archive URL: {error}"))?;
+    let test_loopback_http =
+        cfg!(test) && uri.scheme_str() == Some("http") && uri.host().is_some_and(is_loopback_host);
+    if uri.scheme_str() != Some("https") && !test_loopback_http {
+        return Err("archive URL must use HTTPS".to_owned());
+    }
+    let mut config = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(120)))
+        .https_only(!test_loopback_http)
+        .max_redirects(5)
+        .max_redirects_will_error(true);
+    if test_loopback_http {
+        config = config.proxy(None);
+    }
+    Ok(config.build().into())
+}
+
+fn write_download(
+    response: &mut ureq::http::Response<ureq::Body>,
+    destination: &Path,
+    validators: Validators,
+) -> Result<DownloadOutcome, String> {
+    let mut output = File::options()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|error| format!("could not create archive download: {error}"))?;
+    let mut reader = response.body_mut().as_reader();
+    let mut hasher = Sha256::new();
+    let mut total = 0_u64;
+    let mut buffer = vec![0_u8; 64 * 1024];
+    loop {
+        let count = reader
+            .read(&mut buffer)
+            .map_err(|error| format!("could not read archive response: {error}"))?;
+        if count == 0 {
+            break;
+        }
+        total = total
+            .checked_add(u64::try_from(count).expect("buffer length fits in u64"))
+            .ok_or_else(|| "archive download size overflow".to_owned())?;
+        if total > MAX_ARCHIVE_BYTES {
+            return Err(format!(
+                "downloaded archive exceeds the {MAX_ARCHIVE_BYTES}-byte limit"
+            ));
+        }
+        output
+            .write_all(&buffer[..count])
+            .map_err(|error| format!("could not write archive download: {error}"))?;
+        hasher.update(&buffer[..count]);
+    }
+    output
+        .sync_all()
+        .map_err(|error| format!("could not sync archive download: {error}"))?;
+    let mut revision = String::with_capacity(64);
+    for byte in hasher.finalize() {
+        write!(&mut revision, "{byte:02x}").expect("writing to a string cannot fail");
+    }
+    Ok(DownloadOutcome::Downloaded {
+        revision,
+        validators,
+    })
 }
 
 fn is_loopback_host(host: &str) -> bool {

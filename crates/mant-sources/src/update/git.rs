@@ -114,9 +114,21 @@ fn run_git<'a>(
     arguments: impl IntoIterator<Item = &'a OsStr>,
 ) -> Result<String, String> {
     let output = Command::new("git")
+        .args([
+            "-c",
+            "protocol.allow=never",
+            "-c",
+            "protocol.https.allow=always",
+            "-c",
+            "protocol.ssh.allow=always",
+            "-c",
+            "protocol.file.allow=always",
+        ])
         .args(arguments)
         .current_dir(working_directory)
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_PROTOCOL_FROM_USER", "0")
+        .env("GIT_ALLOW_PROTOCOL", "https:ssh:file")
         .output()
         .map_err(|error| format!("could not run git: {error}"))?;
     if !output.status.success() {
