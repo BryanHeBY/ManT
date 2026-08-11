@@ -144,9 +144,11 @@ rule, and MCP tool.
 
 ## Unix manual sources and tldr
 
-On Linux and macOS, ManT indexes raw, gzip, and zstd manual sources directly
-and parses their roff through bundled libmandoc. Project-local pages can be exposed through
-`MANT_MANPATH` (a complete override) or `MANPATH`:
+On Linux and macOS, ManT indexes raw, gzip, and zstd manual sources directly.
+It performs bounded reads and decompression before passing plain roff bytes to
+bundled libmandoc; `.so` redirects resolve against the indexed manual root,
+never the process working directory. Project-local pages can be exposed
+through `MANT_MANPATH` (a complete override) or `MANPATH`:
 
 ```sh
 mkdir -p ./project-man/man1

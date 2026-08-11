@@ -221,8 +221,10 @@ layout conventions out of the general Markdown AST and renderers.
 The primary path discovers manual hierarchies in Rust, reads the located
 source, and lowers libmandoc's validated man(7) or mdoc(7) tree directly into
 `mant.document/v4`. Rust owns compression handling and preserves the original
-source path and include base directory. `.so` aliases and includes must work
-without exposing temporary paths in the result.
+source path and indexed manual root. Both stored and decoded top-level inputs
+are capped before plain roff bytes cross the parser boundary. `.so` aliases
+resolve against the explicit manual root without a process-working-directory
+fallback or temporary paths in the result.
 
 One immutable `ManualIndex` owns both catalog discovery and exact lookup. It
 derives roots from `MANT_MANPATH`, `MANPATH`, user/XDG data, PATH prefixes, and

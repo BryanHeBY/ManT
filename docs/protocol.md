@@ -207,7 +207,7 @@ PATH-derived, and conventional system manual roots. To query a project-local
 roff source, place it below a hierarchy such as `project-man/man1/tool.1`, set
 `MANT_MANPATH` to `project-man`, and request name `tool`; a raw `.1` path is not
 a request input variant. Only raw, gzip, and zstd sources are indexed because
-those are the formats the bundled parser can open directly.
+those are the formats ManT's bounded input layer decodes before parsing.
 
 A local Markdown file is selected by path:
 

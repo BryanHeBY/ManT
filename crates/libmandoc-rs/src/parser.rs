@@ -212,6 +212,11 @@ impl Parser {
         match &self.options.includes {
             IncludePolicy::Deny => Ok((None, false)),
             IncludePolicy::SourceTree => Ok((None, true)),
+            IncludePolicy::Root(root) if root.as_os_str().is_empty() => Err(ParseError {
+                path: root.clone(),
+                kind: ParseErrorKind::InvalidPath,
+                message: "manual include root is empty".into(),
+            }),
             IncludePolicy::Root(root) => CString::new(root.as_os_str().as_bytes())
                 .map(Some)
                 .map(|root| (root, true))

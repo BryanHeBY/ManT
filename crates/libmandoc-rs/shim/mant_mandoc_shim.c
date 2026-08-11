@@ -70,6 +70,8 @@ struct mant_mandoc_document {
 
 static char *source_root;
 static int source_root_strict;
+/* Absolute top-level file path that parse_file itself is allowed to open. */
+static char *source_path;
 /*
  * Directory that literally contains the parsed file, kept unstripped.
  *
@@ -111,8 +113,9 @@ static struct mant_mandoc_node *copy_node(const struct roff_node *, int);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
 static void set_source_root_from_path(const char *);
-static void set_source_root_directory(const char *);
+static void set_source_root_directory(const char *, const char *);
 static int open_under_base(const char *, const char *, int, mode_t);
+static int is_safe_relative_path(const char *);
 static void copy_normalized_data(struct mant_mandoc_node *,
     const struct roff_node *);
 static struct mant_mandoc_table_cell *copy_table_cells(
@@ -165,10 +168,12 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
 	if (allow_include) {
+		free(source_path);
+		source_path = buffer == NULL ? copy_string(path) : NULL;
 		if (include_root == NULL)
 			set_source_root_from_path(path);
 		else
-			set_source_root_directory(include_root);
+			set_source_root_directory(include_root, path);
 	}
 	mchars_alloc();
 	parser = mparse_alloc(options, MANDOC_OS_OTHER, NULL);
@@ -232,6 +237,8 @@ cleanup:
 	source_root = NULL;
 	free(source_dir);
 	source_dir = NULL;
+	free(source_path);
+	source_path = NULL;
 	source_root_strict = 0;
 	return document;
 }
@@ -274,8 +281,20 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 		mode = (mode_t)va_arg(arguments, int);
 		va_end(arguments);
 	}
-	if (*path == '/' || (source_root == NULL && source_dir == NULL))
+	if (*path == '/') {
+		if (source_root_strict &&
+		    (source_path == NULL || strcmp(path, source_path) != 0)) {
+			errno = EPERM;
+			return -1;
+		}
 		return openat(AT_FDCWD, path, flags, mode);
+	}
+	if (source_root == NULL && source_dir == NULL)
+		return openat(AT_FDCWD, path, flags, mode);
+	if (source_root_strict && !is_safe_relative_path(path)) {
+		errno = EPERM;
+		return -1;
+	}
 
 	/*
 	 * Try the stripped hierarchy root first (`.so man1/foo.1`), then the
@@ -302,6 +321,27 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 	if (fd == -1)
 		errno = saved_errno;
 	return fd;
+}
+
+/* Reject lexical escapes when a caller supplied an explicit include root. */
+static int
+is_safe_relative_path(const char *path)
+{
+	const char *component, *end;
+
+	component = path;
+	while (*component != '\0') {
+		while (*component == '/')
+			component++;
+		end = component;
+		while (*end != '\0' && *end != '/')
+			end++;
+		if (end - component == 2 && component[0] == '.' &&
+		    component[1] == '.')
+			return 0;
+		component = end;
+	}
+	return 1;
 }
 
 void
@@ -375,13 +415,40 @@ set_source_root_from_path(const char *path)
 }
 
 static void
-set_source_root_directory(const char *directory)
+set_source_root_directory(const char *directory, const char *path)
 {
+	char	*last_slash;
+	size_t	 root_length;
+
 	free(source_root);
 	free(source_dir);
 	source_dir = NULL;
 	source_root_strict = 1;
 	source_root = copy_string(directory);
+	if (source_root == NULL || path == NULL)
+		return;
+
+	/* Bare redirects may resolve beside the source, but only inside root. */
+	root_length = strlen(source_root);
+	if (root_length == 0)
+		return;
+	while (root_length > 1 && source_root[root_length - 1] == '/')
+		source_root[--root_length] = '\0';
+	if (strncmp(path, source_root, root_length) != 0 ||
+	    (root_length != 1 && path[root_length] != '/'))
+		return;
+	source_dir = copy_string(path);
+	if (source_dir == NULL)
+		return;
+	last_slash = strrchr(source_dir, '/');
+	if (last_slash == NULL) {
+		free(source_dir);
+		source_dir = NULL;
+	} else if (last_slash == source_dir) {
+		last_slash[1] = '\0';
+	} else {
+		*last_slash = '\0';
+	}
 }
 
 static char *

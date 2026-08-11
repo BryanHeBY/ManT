@@ -95,11 +95,13 @@ mod tests {
                     name: "printf".to_owned(),
                     section: "1".to_owned(),
                     path: PathBuf::from("/usr/share/man/man1/printf.1.gz"),
+                    manual_root: PathBuf::from("/usr/share/man"),
                 },
                 ManualPage {
                     name: "printf".to_owned(),
                     section: "3".to_owned(),
                     path: PathBuf::from("/usr/share/man/man3/printf.3.gz"),
+                    manual_root: PathBuf::from("/usr/share/man"),
                 },
             ],
         );

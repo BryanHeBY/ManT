@@ -10,10 +10,12 @@ use std::{
 
 use mant_ast::{MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, TldrDocument};
 
-use crate::{ManualRequest, find_registered_document, parse_markdown, read_cached_tldr_page};
+use crate::{
+    ManualPage, ManualRequest, find_registered_document, parse_markdown, read_cached_tldr_page,
+};
 
 #[cfg(unix)]
-use crate::{locate_manual_source, parse_manual_source};
+use crate::{locate_manual_source, parse_manual_page};
 
 /// Upper bound on a single Markdown source, shared by every input path.
 ///
@@ -108,8 +110,8 @@ trait QueryHost {
         name: &str,
         source: Option<&str>,
     ) -> Result<Option<PathBuf>, String>;
-    fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String>;
-    fn parse_manual(&self, path: &Path) -> Result<MantDocument, String>;
+    fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String>;
+    fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String>;
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }
@@ -127,7 +129,7 @@ impl QueryHost for SystemQueryHost {
             .map_err(|error| error.to_string())
     }
 
-    fn locate_manual(&self, request: &ManualRequest) -> Result<PathBuf, String> {
+    fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String> {
         #[cfg(unix)]
         {
             locate_manual_source(request).map_err(|error| error.to_string())
@@ -141,16 +143,16 @@ impl QueryHost for SystemQueryHost {
         }
     }
 
-    fn parse_manual(&self, path: &Path) -> Result<MantDocument, String> {
+    fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String> {
         #[cfg(unix)]
         {
-            parse_manual_source(path).map_err(|error| error.to_string())
+            parse_manual_page(page).map_err(|error| error.to_string())
         }
         #[cfg(not(unix))]
         {
             Err(format!(
                 "native manual parsing is unavailable on this platform: {}",
-                path.display()
+                page.path.display()
             ))
         }
     }
@@ -397,9 +399,9 @@ fn load_manual(
 ) -> Result<Option<MantDocument>, String> {
     let located = host.locate_manual(request);
     let (source_path, direct) = match located {
-        Ok(path) => {
-            let direct = host.parse_manual(&path);
-            (Some(path), direct)
+        Ok(page) => {
+            let direct = host.parse_manual(&page);
+            (Some(page.path), direct)
         }
         Err(error) => (None, Err(error)),
     };
@@ -453,7 +455,7 @@ mod tests {
         TldrDocument, TldrOrigin,
     };
 
-    use crate::ManualRequest;
+    use crate::{ManualPage, ManualRequest};
 
     use super::{
         MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, query_markdown_text, query_with,
@@ -463,7 +465,7 @@ mod tests {
     #[derive(Clone)]
     struct StubHost {
         registered_document: Option<PathBuf>,
-        locate: Result<PathBuf, String>,
+        locate: Result<ManualPage, String>,
         direct: Result<MantDocument, String>,
         tldr: Result<Option<TldrDocument>, String>,
         markdown: Result<String, String>,
@@ -483,12 +485,12 @@ mod tests {
             Ok(self.registered_document.clone())
         }
 
-        fn locate_manual(&self, _request: &ManualRequest) -> Result<PathBuf, String> {
+        fn locate_manual(&self, _request: &ManualRequest) -> Result<ManualPage, String> {
             self.calls.lock().expect("calls lock").push("locate");
             self.locate.clone()
         }
 
-        fn parse_manual(&self, _path: &Path) -> Result<MantDocument, String> {
+        fn parse_manual(&self, _page: &ManualPage) -> Result<MantDocument, String> {
             self.calls.lock().expect("calls lock").push("parse");
             self.direct.clone()
         }
@@ -554,7 +556,12 @@ mod tests {
     fn host(direct: Result<MantDocument, String>) -> StubHost {
         StubHost {
             registered_document: None,
-            locate: Ok(PathBuf::from("/man/tool.1")),
+            locate: Ok(ManualPage {
+                name: "tool".to_owned(),
+                section: "1".to_owned(),
+                path: PathBuf::from("/man/tool.1"),
+                manual_root: PathBuf::from("/man"),
+            }),
             direct,
             tldr: Ok(None),
             markdown: Err("Markdown unavailable".to_owned()),

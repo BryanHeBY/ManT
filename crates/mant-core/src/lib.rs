@@ -24,7 +24,7 @@ pub use documents::{
     list_registered_documents,
 };
 #[cfg(unix)]
-pub use mandoc::{lower_mandoc_document, parse_manual_source};
+pub use mandoc::{MAX_MANUAL_BYTES, lower_mandoc_document, parse_manual_page, parse_manual_source};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
     MarkdownOptions, render_excerpt_json, render_excerpt_markdown,

@@ -46,3 +46,73 @@ fn resolves_bare_same_directory_so_target_inside_a_man_section() {
         "the redirect target's sections must be inlined",
     );
 }
+
+#[test]
+fn explicit_root_keeps_bare_redirects_inside_the_source_section() {
+    let root =
+        std::env::temp_dir().join(format!("libmandoc-rs-explicit-bare-so-{}", process::id()));
+    let man1 = root.join("man1");
+    fs::create_dir_all(&man1).expect("create temporary manual tree");
+    fs::write(
+        man1.join("target.1"),
+        ".TH EXPLICIT-TARGET 1\n.SH NAME\ntarget \\- redirect destination\n",
+    )
+    .expect("write included source");
+    let alias = man1.join("alias.1");
+    fs::write(&alias, ".so target.1\n").expect("write alias source");
+
+    let report = Parser::new(ParseOptions {
+        includes: IncludePolicy::Root(root.clone()),
+        compression: Compression::Plain,
+    })
+    .parse_bytes(&alias, b".so target.1\n")
+    .expect("resolve bare include without a cwd fallback");
+    fs::remove_dir_all(&root).expect("remove temporary manual tree");
+
+    assert_eq!(
+        report.document.metadata.title.as_deref(),
+        Some("EXPLICIT-TARGET")
+    );
+}
+
+#[test]
+fn explicit_root_rejects_parent_directory_redirects() {
+    let base =
+        std::env::temp_dir().join(format!("libmandoc-rs-parent-escape-so-{}", process::id()));
+    let root = base.join("approved");
+    let man1 = root.join("man1");
+    fs::create_dir_all(&man1).expect("create temporary manual tree");
+    fs::write(
+        base.join("outside.1"),
+        ".TH OUTSIDE 1\n.SH NAME\noutside \\- must not be included\n",
+    )
+    .expect("write outside source");
+    let alias = man1.join("alias.1");
+
+    let result = Parser::new(ParseOptions {
+        includes: IncludePolicy::Root(root),
+        compression: Compression::Plain,
+    })
+    .parse_bytes(&alias, b".so ../../outside.1\n");
+    fs::remove_dir_all(&base).expect("remove temporary manual tree");
+
+    if let Ok(report) = result {
+        assert_ne!(
+            report.document.metadata.title.as_deref(),
+            Some("OUTSIDE"),
+            "an explicit root must not permit lexical parent traversal"
+        );
+    }
+}
+
+#[test]
+fn explicit_root_rejects_an_empty_directory() {
+    let error = Parser::new(ParseOptions {
+        includes: IncludePolicy::Root("".into()),
+        compression: Compression::Plain,
+    })
+    .parse_bytes("alias.1", b".so target.1\n")
+    .expect_err("an empty include root must not mean the filesystem root");
+
+    assert_eq!(error.message, "manual include root is empty");
+}

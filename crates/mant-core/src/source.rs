@@ -42,6 +42,8 @@ pub struct ManualPage {
     pub name: String,
     pub section: String,
     pub path: PathBuf,
+    /// Approved hierarchy root used to resolve this page's `.so` redirects.
+    pub manual_root: PathBuf,
 }
 
 /// Immutable index shared by discovery and exact manual lookup.
@@ -146,7 +148,7 @@ pub fn discover_manual_roots() -> Vec<PathBuf> {
 /// # Errors
 ///
 /// Returns [`LocateError`] for invalid requests and missing local sources.
-pub fn locate_manual_source(request: &ManualRequest) -> Result<PathBuf, LocateError> {
+pub fn locate_manual_source(request: &ManualRequest) -> Result<ManualPage, LocateError> {
     locate_manual_source_in(request, system_manual_index())
 }
 
@@ -158,7 +160,7 @@ pub fn locate_manual_source(request: &ManualRequest) -> Result<PathBuf, LocateEr
 pub fn locate_manual_source_in(
     request: &ManualRequest,
     index: &ManualIndex,
-) -> Result<PathBuf, LocateError> {
+) -> Result<ManualPage, LocateError> {
     let name = request.name.trim();
     if name.is_empty() {
         return Err(LocateError::EmptyName);
@@ -169,7 +171,7 @@ pub fn locate_manual_source_in(
     }
     index
         .find(name, section)
-        .map(|page| page.path.clone())
+        .cloned()
         .ok_or_else(|| LocateError::NotFound {
             name: name.to_owned(),
         })
@@ -266,6 +268,7 @@ fn scan_manual_root(root: &Path, locale: Option<&str>) -> Vec<ManualPage> {
             name,
             section,
             path,
+            manual_root: root.to_path_buf(),
         })
         .collect()
 }
@@ -398,14 +401,17 @@ mod tests {
         assert_eq!(index.pages().len(), 2);
         assert_eq!(
             locate_manual_source_in(&ManualRequest::new("printf", None), &index)
-                .expect("default section"),
+                .expect("default section")
+                .path,
             root.join("man1/printf.1.gz")
         );
         assert_eq!(
             locate_manual_source_in(&ManualRequest::new("printf", Some("3".to_owned())), &index,)
-                .expect("selected section"),
+                .expect("selected section")
+                .path,
             root.join("man3/printf.3.zst")
         );
+        assert_eq!(index.pages()[0].manual_root, root);
         assert!(matches!(
             locate_manual_source_in(&ManualRequest::new("ignored", None), &index),
             Err(LocateError::NotFound { .. })

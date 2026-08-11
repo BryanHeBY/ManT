@@ -41,8 +41,9 @@ mode recognizes zstd frames; gzip byte streams should be passed to
 `parse_file`, where libmandoc opens them natively.
 
 `IncludePolicy::Deny` is the default. `SourceTree` preserves ordinary manual
-tree lookup, while `Root(path)` confines `.so` resolution to a directory the
-caller explicitly chooses.
+tree lookup. `Root(path)` resolves `.so` requests against a directory the
+caller explicitly chooses, rejects absolute and lexical parent paths, and
+does not fall back to the process working directory.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
