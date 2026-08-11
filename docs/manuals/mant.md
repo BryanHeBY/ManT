@@ -192,6 +192,11 @@ list. Both the role and matching policy are required:
 - `/S COMPUTER`: Select a remote computer.
 - `/server:NAME`: Select a server.
 - `/reg:32`, `/reg:64`: Select registry views.
+- `type= TYPE`: Select a service type.
+- `//B`: Select Windows Script Host batch mode.
+- `+r`: Set an attribute.
+- `/+N`: Select a character offset.
+- `/driver.exclude`: Select Driver Verifier exclusions.
 
 <!-- mant:entries role=command case=insensitive -->
 - `query`: Read keys and values.
@@ -234,6 +239,15 @@ omitted: `/server:NAME` becomes `/server`, as does `/server:<NAME>`.
 Lowercase colon suffixes are fixed values, so `/server:name` remains the full
 selector. Numeric and lowercase alphabetic values such as `/reg:32` and
 `/mode:auto` likewise remain part of the selector.
+
+Declared option lists also accept conservative Windows-native token families.
+An ASCII identifier followed by `=` retains the equals sign while omitting an
+uppercase or angle-bracket placeholder, so `type= TYPE` and `board=N` become
+`type=` and `board=`. Windows Script Host `//` names preserve both slashes and
+apply the same colon-placeholder rule. Safe leading-plus, slash-plus, and
+dotted-slash tokens such as `+r`, `/+N`, and `/driver.exclude` remain complete
+selectors. Arbitrary prose, paths, empty dotted segments, and lowercase
+equals-value placeholders are rejected.
 
 Case policy belongs only to the declared list. It does not change section
 paths or IDs. Use `sensitive` when `-p` and `-P` differ, and `insensitive` for
@@ -406,7 +420,8 @@ valid only with JSON query output.
 - `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
-  diagnostics are omitted; inspect them with ordinary CLI JSON output.
+  diagnostics are omitted; an incomplete entry outline retains only
+  `entriesComplete: false`. Inspect details with ordinary CLI or request JSON.
 
 ### Protocol Discovery
 

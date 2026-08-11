@@ -829,6 +829,19 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
             && diagnostic.message.contains("type= lowercase")
             && diagnostic.source.is_some_and(|source| source.line == 8)
     }));
+
+    let outline = build_outline_with_detail(
+        &QueryBundle {
+            schema: QuerySchema::V5,
+            label: "tool.md".to_owned(),
+            document: Some(parsed.document),
+            tldr: None,
+        },
+        OutlineDetail::Entries,
+    )
+    .expect("incomplete semantic outline");
+    assert!(!outline.entries_complete);
+    assert_eq!(outline.diagnostics.len(), 2);
 }
 
 #[test]

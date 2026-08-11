@@ -124,7 +124,9 @@ local state through `mant-sources` without its update feature and never invokes
 Git or HTTP. Ordinary names continue to fall back to the
 native manual index. Input and output schemas derive directly from Rust types.
 MCP drops lowering diagnostics and keeps standard error silent; the ordinary
-CLI JSON surface remains the diagnostic inspection path. MCP is an alternate process
+CLI and request JSON surfaces remain the diagnostic inspection paths. An MCP
+outline retains only the compact `entriesComplete: false` signal when rejected
+declarations make semantic discovery incomplete. MCP is an alternate process
 protocol; it does not add another executable or a second document
 interpretation path.
 

@@ -145,7 +145,8 @@ operates on one in-memory document.
 | `1` | Operational failure such as source lookup or parsing failure | Diagnostic on stderr |
 
 Fatal failures do not return a partial JSON error envelope. Recoverable parser
-findings belong to `document.diagnostics` or `excerpt.diagnostics`.
+findings belong to `document.diagnostics`, `outline.diagnostics`, or
+`excerpt.diagnostics`.
 
 ### Source Resolution Policy
 
@@ -580,6 +581,8 @@ before an agent requests content:
 | `detail` | Echoed `sections` or `entries` mode |
 | `label` | Query label |
 | `source`, `meta` | Optional document identity |
+| `diagnostics` | Optional recoverable parser findings |
+| `entriesComplete` | Present as `false` only when semantic-entry declarations were rejected |
 | `nodes` | Recursive addressable tree |
 
 Node kinds are:
@@ -592,7 +595,9 @@ Node kinds are:
 | `document-entry` | `1.2/o3` | `role`, `case`, and normalized `names` |
 
 `detail = "sections"` omits semantic entries. `detail = "entries"` includes
-all recognized entry roles.
+all recognized entry roles. A missing `entriesComplete` field means `true`;
+the exceptional `false` value distinguishes a genuinely empty entry outline
+from one made incomplete by rejected source declarations.
 
 Paths are convenient human locations. IDs and aliases are better selectors
 when nearby section numbering changes. Neither is globally unique across
@@ -784,12 +789,13 @@ queries, not `mant.cli/v5` framing and not a separate document model.
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
 line is limited to 8 MiB. Standard output is exclusively MCP traffic;
 standard error is deliberately silent. Lowering diagnostics are omitted from
-MCP excerpts, while tool failures use structured MCP error results and fatal
-transport failures use a non-zero process status. Diagnose source lowering
-through ordinary CLI JSON output, whose document contains structured parser
-findings. There is no HTTP listener and there are no mutation tools. Each call
-reads the local files visible at that time; MCP does not invoke Git or HTTP,
-update sources, or promise one fixed snapshot across calls.
+MCP outlines and excerpts, while tool failures use structured MCP error results
+and fatal transport failures use a non-zero process status. An incomplete MCP
+entry outline retains only `entriesComplete: false`; diagnose the exact source
+finding through ordinary CLI or request JSON output. There is no HTTP listener
+and there are no mutation tools. Each call reads the local files visible at
+that time; MCP does not invoke Git or HTTP, update sources, or promise one fixed
+snapshot across calls.
 
 MCP protocol versions are negotiated by the standard `initialize` exchange.
 With the current runtime, a client requesting `2025-11-25` receives:

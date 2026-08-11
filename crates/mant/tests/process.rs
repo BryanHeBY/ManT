@@ -488,6 +488,70 @@ fn cli_json_remains_the_lowering_diagnostic_surface() {
 }
 
 #[test]
+fn cli_and_request_outlines_report_rejected_semantic_entries() {
+    let path = std::env::temp_dir().join(format!(
+        "mant-semantic-outline-process-{}.md",
+        std::process::id()
+    ));
+    fs::write(
+        &path,
+        "# Incomplete entries\n\n<!-- mant:entries role=option case=insensitive -->\n- `/valid`: Valid.\n- `/driver..exclude`: Invalid.\n",
+    )
+    .expect("write semantic outline fixture");
+
+    let direct = Command::new(executable())
+        .args([
+            path.to_str().expect("UTF-8 path"),
+            "--outline=entries",
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .output()
+        .expect("query direct outline");
+    assert!(direct.status.success(), "{direct:?}");
+    assert!(direct.stderr.is_empty());
+    let direct: serde_json::Value =
+        serde_json::from_slice(&direct.stdout).expect("direct outline JSON");
+    assert_eq!(direct["entriesComplete"], false);
+    assert_eq!(
+        direct["diagnostics"][0]["code"],
+        "markdown.semantic-entry.invalid-option-name"
+    );
+
+    let mut child = Command::new(executable())
+        .args(["--request-json", "--format", "json", "--compact"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start outline request");
+    let request = serde_json::json!({
+        "schema": "mant.request/v5",
+        "input": {
+            "kind": "markdown-file",
+            "path": path.to_str().expect("UTF-8 path"),
+        },
+        "view": { "kind": "outline", "detail": "entries" },
+    });
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(request.to_string().as_bytes())
+        .expect("write outline request");
+    let protocol = child.wait_with_output().expect("wait for outline request");
+    fs::remove_file(path).expect("remove semantic outline fixture");
+
+    assert!(protocol.status.success(), "{protocol:?}");
+    assert!(protocol.stderr.is_empty());
+    let protocol: serde_json::Value =
+        serde_json::from_slice(&protocol.stdout).expect("request outline JSON");
+    assert_eq!(protocol["entriesComplete"], false);
+    assert_eq!(protocol["diagnostics"], direct["diagnostics"]);
+}
+
+#[test]
 fn unqualified_names_prefer_registered_markdown() {
     let fixture_root = std::env::temp_dir().join(format!(
         "mant-registered-document-process-{}",

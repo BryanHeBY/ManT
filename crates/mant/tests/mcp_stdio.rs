@@ -155,6 +155,16 @@ fn assert_tool_replies(replies: &[Value]) {
     for role in ["option", "command", "environment-variable"] {
         assert!(encoded.contains(&format!("\"role\":\"{role}\"")));
     }
+    assert_eq!(
+        outline["result"]["structuredContent"]["entriesComplete"],
+        false
+    );
+    assert!(
+        outline["result"]["structuredContent"]
+            .get("diagnostics")
+            .is_none(),
+        "MCP outlines must expose completeness without lowering diagnostics"
+    );
 
     for (id, role) in [
         (7, "command"),
@@ -345,7 +355,7 @@ fn registered_document_fixture() -> PathBuf {
     fs::create_dir_all(&documents).expect("create document directory");
     fs::write(
         documents.join("mcp-registered.md"),
-        "# MCP registered\n\nRead the MCP needle.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
+        "# MCP registered\n\nRead the MCP needle.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n\n## Invalid declaration\n\n<!-- mant:entries role=option case=insensitive -->\n- `/driver..exclude`: Keep malformed entries out of the outline.\n",
     )
     .expect("write registered document");
     let manual_section = fixture_root.join("manuals/man1");

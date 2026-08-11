@@ -1086,7 +1086,7 @@ mod tests {
         assert_eq!(status, 2);
         assert!(output.is_empty());
         assert!(diagnostics.contains("document 'demo' has no outline node '9'"));
-        assert!(diagnostics.contains("mant demo --outline"));
+        assert!(diagnostics.contains("inspect its entries outline as JSON"));
     }
 
     #[test]

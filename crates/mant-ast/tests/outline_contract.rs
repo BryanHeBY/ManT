@@ -22,6 +22,8 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
         label: "demo(1)".to_owned(),
         source: Some(source()),
         meta: Some(DocumentMeta::default()),
+        diagnostics: Vec::new(),
+        entries_complete: true,
         nodes: vec![OutlineNode::DocumentSection {
             path: "2".to_owned(),
             id: "options-2".to_owned(),
@@ -45,6 +47,22 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     assert_eq!(value["nodes"][0]["path"], "2");
     assert_eq!(value["nodes"][0]["children"][0]["kind"], "document-entry");
     assert_eq!(value["nodes"][0]["children"][0]["names"][1], "--all");
+    assert!(value.get("diagnostics").is_none());
+    assert!(value.get("entriesComplete").is_none());
+}
+
+#[test]
+fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
+    let outline: QueryOutline = serde_json::from_value(serde_json::json!({
+        "schema": "mant.outline/v5",
+        "detail": "entries",
+        "label": "demo",
+        "nodes": [],
+    }))
+    .expect("outline optional-field defaults");
+
+    assert!(outline.entries_complete);
+    assert!(outline.diagnostics.is_empty());
 }
 
 #[test]
@@ -145,6 +163,8 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
             path: Some("guide.md".to_owned()),
         }),
         meta: Some(DocumentMeta::default()),
+        diagnostics: Vec::new(),
+        entries_complete: true,
         nodes: vec![OutlineNode::DocumentRoot {
             path: "root".to_owned(),
             id: "document-overview".to_owned(),
@@ -195,6 +215,8 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         label: "demo".to_owned(),
         source: None,
         meta: None,
+        diagnostics: Vec::new(),
+        entries_complete: true,
         nodes: vec![OutlineNode::Tldr {
             path: "0".to_owned(),
             id: "tldr".to_owned(),

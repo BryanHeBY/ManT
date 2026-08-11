@@ -378,9 +378,10 @@ impl MantMcpServer {
         let parameters = parameters.0;
         let detail = parameters.detail.unwrap_or(OutlineDetail::Entries);
         let request = request_for(parameters.selector, QueryView::Outline { detail });
-        let QueryViewResult::Outline(outline) = self.query(request).await? else {
+        let QueryViewResult::Outline(mut outline) = self.query(request).await? else {
             unreachable!("outline request materializes an outline")
         };
+        discard_outline_diagnostics(&mut outline);
         Ok(Json(outline))
     }
 
@@ -596,6 +597,11 @@ fn build_document_catalog(
 /// structured tool errors, avoiding repeated parser noise in agent context.
 fn discard_lowering_diagnostics(excerpt: &mut QueryExcerpt) {
     excerpt.diagnostics.clear();
+}
+
+/// Retain the compact completeness signal while omitting parser detail.
+fn discard_outline_diagnostics(outline: &mut QueryOutline) {
+    outline.diagnostics.clear();
 }
 
 fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
@@ -856,6 +862,31 @@ mod tests {
 
         super::discard_lowering_diagnostics(&mut excerpt);
         assert!(excerpt.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn outlines_keep_completeness_without_lowering_diagnostics() {
+        use mant_ast::{Diagnostic, DiagnosticLevel, OutlineDetail, OutlineSchema, QueryOutline};
+
+        let mut outline = QueryOutline {
+            schema: OutlineSchema::V5,
+            detail: OutlineDetail::Entries,
+            label: "demo".to_owned(),
+            source: None,
+            meta: None,
+            diagnostics: vec![Diagnostic {
+                level: DiagnosticLevel::Warning,
+                code: Some("markdown.semantic-entry.invalid-option-name".to_owned()),
+                message: "finding".to_owned(),
+                source: None,
+            }],
+            entries_complete: false,
+            nodes: Vec::new(),
+        };
+
+        super::discard_outline_diagnostics(&mut outline);
+        assert!(outline.diagnostics.is_empty());
+        assert!(!outline.entries_complete);
     }
 
     // Read the wrapped source to end (or first error) on a current-thread

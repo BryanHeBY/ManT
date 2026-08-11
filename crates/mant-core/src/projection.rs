@@ -87,7 +87,7 @@ impl fmt::Display for ProjectionError {
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::UnknownSelector { document, selector } => write!(
                 formatter,
-                "document '{document}' has no outline node '{selector}'; run 'mant {document} --outline'"
+                "document '{document}' has no outline node '{selector}'; inspect its entries outline as JSON for available selectors and diagnostics"
             ),
             Self::AmbiguousSelector {
                 document,
@@ -141,6 +141,16 @@ pub fn build_outline_with_detail(
             document: query.label.clone(),
         });
     }
+    let diagnostics = query
+        .document
+        .as_ref()
+        .map_or_else(Vec::new, |document| document.diagnostics.clone());
+    let entries_complete = diagnostics.iter().all(|diagnostic| {
+        !diagnostic
+            .code
+            .as_deref()
+            .is_some_and(|code| code.starts_with("markdown.semantic-entry"))
+    });
     let mut nodes = Vec::new();
     if query.tldr.is_some() {
         nodes.push(OutlineNode::Tldr {
@@ -189,6 +199,8 @@ pub fn build_outline_with_detail(
             .document
             .as_ref()
             .map(|document| document.meta.clone()),
+        diagnostics,
+        entries_complete,
         nodes,
     })
 }

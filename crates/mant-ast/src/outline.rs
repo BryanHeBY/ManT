@@ -35,7 +35,26 @@ pub struct QueryOutline {
     pub source: Option<DocumentSource>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<DocumentMeta>,
+    /// Recoverable parser findings available to diagnostic-oriented transports.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<Diagnostic>,
+    /// False when semantic-entry declarations were rejected during lowering.
+    ///
+    /// The field is omitted for complete outlines so compact transports pay no
+    /// steady-state bandwidth cost.
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub entries_complete: bool,
     pub nodes: Vec<OutlineNode>,
+}
+
+const fn default_true() -> bool {
+    true
+}
+
+// Serde's `skip_serializing_if` predicate receives a reference.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_true(value: &bool) -> bool {
+    *value
 }
 
 /// One uniquely addressable node in a query outline.
