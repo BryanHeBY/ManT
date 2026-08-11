@@ -1,9 +1,9 @@
 # mant-core
 
 `mant-core` is ManT's renderer-independent document engine. It resolves local
-documents through `mant-sources` into the contracts from `mant-ast`, builds semantic projections, and
-produces deterministic output without owning a terminal or command-line
-process.
+documents through `mant-sources` into the contracts from `mant-ast`, builds
+semantic projections, and produces deterministic output without owning a
+terminal or command-line process.
 
 ## What this crate provides
 

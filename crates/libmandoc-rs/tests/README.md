@@ -1,12 +1,10 @@
-# Patch regression tests
+# Integration tests
 
-Each `*.roff` file in this directory is a minimal roff input that
-reproduces a single parser bug addressed by a corresponding C patch
-under `patches/`.  The naming convention is `NNNN.descriptive-tag.roff`
-to match the patch number.
+Rust integration tests in this directory exercise public parser behavior that
+does not belong in unit tests. Parser regressions should embed or load the
+smallest useful roff input and make an explicit assertion; merely placing a
+`.roff` file here does not register a test.
 
-Tests are run by the CI sync-libmandoc-vendor step: after applying
-patches, it feeds each reproducer through the built libmandoc parser
-and checks that the output matches expectations.
-
-Currently empty – no C-level patches exist yet.
+The vendor synchronization script separately verifies that `vendor/` is the
+exact result of applying `patches/series` to the pinned upstream snapshot. It
+does not run parser fixtures.

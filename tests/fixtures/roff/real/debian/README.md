@@ -52,25 +52,27 @@ sha256sum groff_me.7.gz
 When replacing a fixture, update its package pool URL, version, member path,
 hash, and applicable license references in the same commit.
 
-## `mant` 解析验证
+## `mant` parsing verification
 
-2026-07-21 对从 Debian sid 下载的 40 个软件包中的 **919 个 topic/section
-请求**执行了 ManT 内置 libmandoc 链路的批量扫描。
+On 2026-07-21, a batch scan exercised **919 topic/section requests** from
+40 Debian sid packages through ManT's bundled libmandoc path.
 
-观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
-均完全保真；已知限制见父目录 README。
+No parser crash was observed. This count measures successful completion, not
+perfect structural or rendering fidelity for every page; see the parent
+README for the corpus limitations.
 
-扫描范围与代表性 topic 见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
+[VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt) records the exact scope and
+representative topics, grouped by source package.
 
-| 软件包 | Topics | 备注 |
-| ------ | ------ | ---- |
-| coreutils | 100 | GNU coreutils 全量 |
+| Package group | Topics | Notes |
+| ------------- | ------ | ----- |
+| coreutils | 100 | Complete GNU coreutils set |
 | util-linux | 49 | mount, fdisk, ... |
-| groff | 41 | groff 工具链和宏包 |
-| mtools | 30 | FAT 文件系统工具 |
-| mandoc | 12 | mandoc 工具链 |
+| groff | 41 | groff toolchain and macro packages |
+| mtools | 30 | FAT filesystem tools |
+| mandoc | 12 | mandoc toolchain |
 | procps-ng | 6 | ps, top, ... |
-| 其他 | 各1–6 | bash, cpio, curl, diffutils, findutils, gawk, graphviz, grep, mutt, nmap, parted, recode, rsync, screen, sed, socat, tmux, units, xterm |
+| Other | 1–6 each | bash, cpio, curl, diffutils, findutils, gawk, graphviz, grep, mutt, nmap, parted, recode, rsync, screen, sed, socat, tmux, units, xterm |
 
 [GNU cpio]: https://www.gnu.org/software/cpio/
 [GNU groff]: https://www.gnu.org/software/groff/

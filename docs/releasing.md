@@ -14,8 +14,10 @@ releases; publishing remains a deliberate human action.
    scripts/update-reader-screenshot.sh
    ```
 
-   Commit the resulting `docs/assets/screenshots/mant-reader.png`; do not edit
-   or recapture it outside the pinned script environment.
+   Commit the resulting `docs/assets/screenshots/mant-reader.png`. The script
+   pins its font, geometry, terminal settings, and interaction sequence, but
+   uses host-provided rendering tools. Compare captures with the same host
+   toolchain where practical and always inspect the image before committing it.
 3. Run the complete local verification boundary:
 
    ```sh
@@ -168,11 +170,17 @@ $env:MANT_RELEASE_TAG = "vMAJOR.MINOR.PATCH"
 .\scripts\package-release.ps1
 ```
 
-Before publishing, inspect that both the executable and self-hosted document are
-present:
+Before publishing, inspect that the executable, self-hosted document, project
+license, and bundled libmandoc license are present:
 
 ```sh
 tar -tzf dist/mant-MAJOR.MINOR.PATCH-linux-ARCH.tar.gz
+```
+
+On Windows, list the ZIP with the bundled `tar.exe`:
+
+```powershell
+tar.exe -tf dist\mant-MAJOR.MINOR.PATCH-windows-x64.zip
 ```
 
 The tagged GitHub workflow remains the public-release source of truth because

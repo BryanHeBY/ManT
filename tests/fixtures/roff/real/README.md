@@ -16,10 +16,10 @@ required by the third-party manuals.
 
 All fixtures are parsed through ManT's bundled libmandoc. Tests never consult
 the host manual database. Fixed compressed roff sources replace the former
-generated HTML snapshots, making parser regressions reproducible across Linux
-and macOS while retaining upstream notices embedded in the manuals.
+generated HTML snapshots, making parser regressions reproducible across Linux,
+macOS, and Windows while retaining upstream notices embedded in the manuals.
 
-Each distribution directory also contains a human-readable
+Each source directory also contains a human-readable
 `VERIFIED_TOPICS.txt` summary of the topic/section requests scanned through
 ManT's bundled libmandoc path. Its header records the total scan breadth; the
 neighbouring README records the package provenance and observed parser
@@ -50,18 +50,21 @@ The summaries follow these principles:
   This keeps the record compact without losing the essential information —
   which package, how many pages, which section, and what kind of names.
 
-### Known libmandoc / lookup limitations found during spot-check
+### Regressions found during spot-checks
 
-| Page | Issue | Scope |
-| ---- | ----- | ----- |
-| `ps(1)`, `top(1)`, `free(1)`, `pgrep(1)` (procps-ng) | All `.SH` section titles lost | All procps-ng pages — **fixed** by `sanitize_roff_text` |
+The corpus scans exposed these issues, which now have focused regression
+tests:
+
+| Page | Issue | Resolution |
+| ---- | ----- | ---------- |
 | MariaDB/MySQL `3` pages (Pandoc-generated, `.SS`-only) | Root-level `.SS` subsections dropped → "no readable sections" | ~122 pages — **fixed** by promoting root-level `.SS` to sections |
-| Any sectioned lookup (`--section N`) | `man -w <section> -- <topic>` collided with the `--` terminator on man-db | **fixed** by passing the section as `-S <section>` |
 | `lastb(1)` and other `.so` stubs with a bare same-directory target | The include resolver stripped the `man#` component, so `.so last.1` looked under the hierarchy root instead of next to the stub | **fixed** by also resolving includes against the unstripped stub directory |
 
 A previous scan flagged `.nf`/`.EX` code blocks as H1 heading leaks — this was a
 false positive from the grep detection pattern; lines inside fenced code blocks
 were matched.  The markdown and text output are correct.
+
+### Current partial-corpus limitation
 
 The `.so` redirects whose targets are absent from a partial corpus (for example
 `mariadb-embedded(1)` → a `mariadb(1)` page that was never downloaded) still

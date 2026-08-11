@@ -74,30 +74,32 @@ When replacing a fixture, update its archive URL, package version, member path,
 raw and fixture hashes, applicable shared license files, and native topology
 assertions in the same commit.
 
-## `mant` 解析验证
+## `mant` parsing verification
 
-2026-07-21 对从 Arch Linux 下载的 43 个软件包中的 **3,745 个 topic/section
-请求**执行了 ManT 内置 libmandoc 链路的批量扫描。
+On 2026-07-21, a batch scan exercised **3,745 topic/section requests** from
+43 Arch Linux packages through ManT's bundled libmandoc path.
 
-观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
-均完全保真；已知限制见父目录 README。
+No parser crash was observed. This count measures successful completion, not
+perfect structural or rendering fidelity for every page; see the parent
+README for the corpus limitations.
 
-扫描范围与代表性 topic 见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
+[VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt) records the exact scope and
+representative topics, grouped by source package.
 
-| 软件包 | Topics | 备注 |
-| ------ | ------ | ---- |
-| tcl/tk | 1,199 | Tcl 命令和 C API（section n） |
-| library (s3) | 464 | ncurses、util-linux 等库函数 |
-| coreutils | 118 | GNU coreutils 全量（ls, cat, cp, ...） |
+| Package group | Topics | Notes |
+| ------------- | ------ | ----- |
+| tcl/tk | 1,199 | Tcl commands and C APIs (section n) |
+| library (s3) | 464 | ncurses, util-linux, and other library functions |
+| coreutils | 118 | Complete GNU coreutils set (ls, cat, cp, ...) |
 | util-linux | 102 | mount, fdisk, losetup, ... |
-| curl | 93 | libcurl API（section 3） |
-| graphviz | 46 | 图形布局工具和 C API |
+| curl | 93 | libcurl APIs (section 3) |
+| graphviz | 46 | Graph layout tools and C APIs |
 | procps-ng | 31 | ps, top, kill, free, ... |
-| mtools | 30 | FAT 文件系统工具 |
+| mtools | 30 | FAT filesystem tools |
 | openssh | 14 | ssh, sshd, scp, sftp, ... |
-| mandoc | 12 | mandoc 工具链 |
-| system (s8) | 11 | 系统管理工具 |
-| 其他（bash, cpio, diffutils, findutils, gnuplot, grep, mutt, nmap, parted, recode, rsync, screen, sed, socat, tmux, xterm） | 1–5 各 | — |
+| mandoc | 12 | mandoc toolchain |
+| system (s8) | 11 | System administration tools |
+| Other (bash, cpio, diffutils, findutils, gnuplot, grep, mutt, nmap, parted, recode, rsync, screen, sed, socat, tmux, xterm) | 1–5 each | — |
 
 [GNU coreutils]: https://www.gnu.org/software/coreutils/
 [Git]: https://git-scm.com/

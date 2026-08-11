@@ -2,8 +2,9 @@
 # Each entry references a numbered patch file in this directory.
 #
 # Conventions:
-# - One patch per deterministic roff/man/mdoc semantic error.
-# - Every patch has a matching tests/<patch-name>.roff reproducer.
-# - Patches are submitted upstream where possible; delete when merged.
+# - Keep each semantic or portability change independently reviewable.
+# - Semantic parser patches require an explicit Rust regression test.
+# - Portability patches are exercised by the relevant target CI jobs.
+# - Submit patches upstream where possible; delete them when merged.
 #
 0001-memory-only-input.patch

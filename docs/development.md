@@ -5,7 +5,7 @@ live in the [project README](../README.md).
 
 ## Prerequisites
 
-- Linux, macOS, or Windows
+- Linux with glibc, macOS, or Windows
 - Rust 1.88 or newer with `cargo`, `clippy`, and `rustfmt`
 - For native-manual work: GCC on Linux, Clang on macOS, or MSVC on Windows;
   Unix also needs zlib development headers
@@ -73,11 +73,14 @@ tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
 scripts/install.sh           Latest-release installer for Linux and macOS
 scripts/install.ps1          Latest-release installer for Windows x64
-scripts/update-reader-screenshot.sh  Reproducible Linux README screenshot
+scripts/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
 scripts/package-release.sh   Reproducible Linux release archive assembly
 scripts/package-release.ps1 Windows x64 ZIP assembly
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/installation.md         User installation methods and platform requirements
+docs/sources.md              Markdown source configuration and update behavior
+docs/protocol.md             Versioned process and MCP interface reference
+docs/releasing.md            Maintainer release procedure
 docs/manuals/                Self-hosted Markdown manual shipped in releases
 docs/assets/                 README screenshots and documentation assets
 ```
@@ -109,7 +112,11 @@ The script builds the release executable, registers the repository's ManT
 manual in an isolated XDG hierarchy, opens it in a fixed Xvfb/xterm surface,
 activates View → Expand All, and captures the result. It requires Xvfb, xterm,
 xdotool, Fontconfig, and ImageMagick; the pinned JetBrains Mono files and their
-OFL-1.1 license live under `docs/assets/fonts/`.
+OFL-1.1 license live under `docs/assets/fonts/`. The script pins its font,
+geometry, terminal settings, and interaction sequence. The rendering tools
+come from the host, however, so byte-identical captures are expected only with
+the same host toolchain. Always inspect the resulting image before committing
+it.
 
 `libmandoc-rs` also has a self-contained package boundary: its parser,
 compression, include-policy, diagnostics, and optional `serde` tests must pass

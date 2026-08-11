@@ -107,11 +107,12 @@ mant --mcp                         -> read-only MCP tools over stdio
 
 For process integrations, `mant --request-json --format json --compact` reads
 one closed, versioned `QueryRequest` object from standard input and emits
-exactly one `mant.query/v5` object on standard output. Standard error contains
-concise diagnostics only. Status 0 means success, 2 means invalid invocation
-or request, and 1 means an operational failure. Interactive search and
-navigation operate on the already loaded in-memory document and never spawn
-additional processes.
+exactly one versioned projection on standard output: `mant.query/v5`,
+`mant.outline/v5`, `mant.excerpt/v5`, or `mant.search/v5`, according to the
+requested view. Standard error contains concise diagnostics only. Status 0
+means success, 2 means invalid invocation or request, and 1 means an
+operational failure. Interactive search and navigation operate on the already
+loaded in-memory document and never spawn additional processes.
 
 For agent clients that speak the Model Context Protocol, `mant --mcp`
 keeps standard output exclusively for JSON-RPC and exposes five generated,
@@ -152,10 +153,12 @@ executable. Local development runs it directly through Cargo; release builds
 produce `target/release/mant`. There is no companion command lookup, private
 executable extraction, or runtime outside the native process.
 
-Direct `mant` queries default to Markdown for useful terminal and agent
-output. `--format json` is pretty by default and `--compact` is available to
+A complete query attached to a terminal opens the TUI; a non-interactive
+complete query defaults to Markdown. Outline and search projections default to
+text. `--format json` is pretty by default and `--compact` is available to
 process clients. Fatal native failures cross the boundary as concise errors;
-recoverable parser findings are structured diagnostics in the query result.
+recoverable parser findings are structured diagnostics in the complete query
+result.
 
 Outline and excerpt views are projections of the same complete native
 document, so they never reimplement parsing rules. Outlines expose both a
@@ -258,8 +261,8 @@ one user data root containing `sources.toml` and a `documents/` tree. Personal
 documents are flat at that tree's root; installed source directories and their
 revision metadata live below `documents/sources/`. The native CLI alone updates
 Git repositories or direct archives with transactional directory replacement.
-The private tldr
-checkout remains below the platform cache root. Installed-client tldr roots
+The private tldr checkout remains below the platform cache root.
+Installed-client tldr roots
 precede the private checkout, which remains the final read fallback even when
 a client executable is present.
 

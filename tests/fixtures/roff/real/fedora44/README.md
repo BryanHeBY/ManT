@@ -54,28 +54,30 @@ When replacing a fixture, update both RPM URLs, source RPM URL, package and
 raw-roff hashes, fixture hash, applicable license files, and topology
 assertions in the same commit.
 
-## `mant` 解析验证
+## `mant` parsing verification
 
-2026-07-21 对从 Fedora Linux 44 下载的 41 个软件包中的 **857 个 topic/section
-请求**执行了 ManT 内置 libmandoc 链路的批量扫描。
+On 2026-07-21, a batch scan exercised **857 topic/section requests** from
+41 Fedora Linux 44 packages through ManT's bundled libmandoc path.
 
-观察结果：未出现解析崩溃。该统计衡量进程完成性，不代表每页的结构或排版
-均完全保真；已知限制见父目录 README。
+No parser crash was observed. This count measures successful completion, not
+perfect structural or rendering fidelity for every page; see the parent
+README for the corpus limitations.
 
-扫描范围与代表性 topic 见 [VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt)，按来源软件包分组。
+[VERIFIED_TOPICS.txt](VERIFIED_TOPICS.txt) records the exact scope and
+representative topics, grouped by source package.
 
-| 软件包 | Topics | 备注 |
-| ------ | ------ | ---- |
-| tcl/tk | 99 | Tcl 命令和 C API |
+| Package group | Topics | Notes |
+| ------------- | ------ | ----- |
+| tcl/tk | 99 | Tcl commands and C APIs |
 | util-linux | 69 | mount, fdisk, ... |
-| groff | 36 | groff 工具链和宏包 |
-| mtools | 27 | FAT 文件系统工具 |
+| groff | 36 | groff toolchain and macro packages |
+| mtools | 27 | FAT filesystem tools |
 | procps-ng | 25 | ps, top, kill, ... |
-| zsh | 17 | Z shell 及其模块 |
-| system (s8) | 10 | 系统管理 |
+| zsh | 17 | Z shell and its modules |
+| system (s8) | 10 | System administration |
 | coreutils | 6 | — |
 | mandoc | 6 | — |
-| 其他 | 各1–5 | bash, cpio, curl, diffutils, findutils, gawk, git, gnuplot, graphviz, grep, mutt, nmap, openssh, recode, rsync, screen, sed, socat, tmux, units, xterm |
+| Other | 1–5 each | bash, cpio, curl, diffutils, findutils, gawk, git, gnuplot, graphviz, grep, mutt, nmap, openssh, recode, rsync, screen, sed, socat, tmux, units, xterm |
 
 [clang 22.1.1-2.fc44]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/os/Packages/c/clang-22.1.1-2.fc44.x86_64.rpm
 [llvm source RPM]: https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Everything/source/tree/Packages/l/llvm-22.1.1-2.fc44.src.rpm

@@ -176,7 +176,8 @@ Every request has three required fields:
 
 An unqualified name first checks the singular per-user `documents` directory,
 then installed sources configured by `sources.toml` in descending
-`priority` and source-name order, then the native manual index. Linux uses
+`priority` and ascending bytewise source-name order, then the native manual
+index. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as the
 data root. Only regular `.md` and `.markdown` files immediately inside each
@@ -214,9 +215,10 @@ eligible only when `PATHEXT` contains it. An unset or empty `PATHEXT` uses
 `.COM`, `.EXE`, `.BAT`, and `.CMD`. Non-Windows platforms use exact names.
 
 `section` is optional and bypasses registered Markdown. The native index reads
-`MANT_MANPATH` as a complete root override, otherwise honors `MANPATH`, then
-checks platform conventions. Unix additionally derives user/XDG, PATH, and
-system roots; Windows defaults only to `%USERPROFILE%\.local\share\man`.
+`MANT_MANPATH` as a complete root override. Otherwise, a set `MANPATH` replaces
+the defaults except where an empty component inserts them; an unset `MANPATH`
+uses platform conventions. Unix derives user/XDG, PATH, and system roots;
+Windows defaults only to `%USERPROFILE%\.local\share\man`.
 A root may contain `tool.1` directly or a hierarchy such as
 `project-man/man1/tool.1`. A raw `.1` path is not a request input variant. Only
 raw, gzip, and zstd sources are indexed because those are the formats ManT's

@@ -61,8 +61,8 @@ jobs:
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
 
-      # Rebuild and test natively on every release target. Unix jobs cover
-      # libmandoc uses checked target configurations on Unix and Windows.
+      # Rebuild and test natively on every release target. The checked
+      # libmandoc configurations run on both Unix and Windows.
       - name: Build and test Unix release binaries
         if: runner.os != 'Windows'
         run: bash scripts/check.sh

@@ -37,9 +37,10 @@ for diagnostic in report.diagnostics {
 ```
 
 Use `Parser::parse_bytes` if the caller owns the source transport. Its auto
-mode recognizes zstd frames; gzip byte streams should be passed to
-`parse_file`. Unix can retain libmandoc's native gzip transport; Windows
-decodes gzip in Rust before entering the memory parser.
+mode recognizes plain input and zstd frames; callers must decompress gzip byte
+streams first or pass the file to `parse_file`. Unix can retain libmandoc's
+native gzip file transport; Windows decodes gzip files in Rust before entering
+the memory parser.
 
 `IncludePolicy::Deny` is the default. `SourceTree` preserves ordinary manual
 tree lookup. `Root(path)` resolves `.so` requests against a directory the
@@ -53,12 +54,12 @@ for the public AST, parser configuration, reports, diagnostics, and errors.
 
 ## Compression contract
 
-`Compression::Auto` recognizes gzip and zstd manual files. Windows decodes
-both in Rust; Unix retains libmandoc's native gzip reader and uses Rust for
-zstd.
-`Compression::Plain` bypasses top-level compression detection, and
-`Compression::Zstd` requires a zstd frame. Other compression formats are not
-currently part of this crate's supported contract.
+For `parse_file`, `Compression::Auto` recognizes plain, gzip, and zstd manual
+files. Windows decodes gzip and zstd in Rust; Unix retains libmandoc's native
+gzip reader and uses Rust for zstd. For `parse_bytes`, auto mode recognizes
+plain input and zstd, not gzip. `Compression::Plain` bypasses top-level
+compression detection, and `Compression::Zstd` requires a zstd frame. Other
+compression formats are not part of this crate's supported contract.
 
 ## Vendor layering
 
@@ -75,9 +76,10 @@ Maintainers use `scripts/sync-vendor` to regenerate the vendor tree:
 ```
 
 The script reads `upstream/SOURCE` for tarball URL and SHA-256, and
-`patches/series` for the ordered patch list. Semantic parser patches have
-matching roff reproducers; portability patches are covered by the target CI
-matrix.
+`patches/series` for the ordered patch list. `--verify` reconstructs the tree
+from those inputs and compares it with `vendor/`. Semantic parser changes need
+a Rust test with the smallest useful roff input; portability patches are
+covered by the relevant target CI jobs.
 
 ## Build requirements and supported targets
 
