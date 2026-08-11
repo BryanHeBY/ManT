@@ -392,12 +392,9 @@ mod tests {
     use std::{collections::HashMap, ffi::OsString, fs, path::PathBuf};
 
     use super::{
-        LocateError, ManualIndex, ManualRequest, deduplicate_paths, locate_manual_source_in,
-        normalize_locale,
+        LocateError, ManualIndex, ManualRequest, deduplicate_paths, discover_manual_roots_with,
+        locate_manual_source_in, normalize_locale,
     };
-
-    #[cfg(unix)]
-    use super::discover_manual_roots_with;
 
     fn temporary_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
