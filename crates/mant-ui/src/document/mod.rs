@@ -1087,9 +1087,9 @@ fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSchema,
-        DocumentSource, LayoutHint, ListItem, MantDocument, Producer, QuerySchema, SourceFormat,
-        TableCell, TableRow, TldrDocument, TldrExample,
+        DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
+        DocumentSchema, DocumentSource, LayoutHint, ListItem, MantDocument, Producer, QuerySchema,
+        SourceFormat, TableCell, TableRow, TldrDocument, TldrExample,
     };
     use unicode_width::UnicodeWidthStr;
 
@@ -1500,6 +1500,7 @@ mod tests {
                     identity: Some(DefinitionIdentity {
                         id: "help-option".to_owned(),
                         role: DefinitionRole::Option,
+                        case: DefinitionCase::Sensitive,
                         names: vec!["-h".to_owned()],
                     }),
                     terms: vec![vec![Inline::Strong {

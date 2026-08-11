@@ -47,7 +47,7 @@ fn exercise(label: &str, source: &str) {
     // the parser must stay inside controlled behavior too.
     let _ = parse_markdown(&rendered, None);
 
-    for detail in [OutlineDetail::Sections, OutlineDetail::Options] {
+    for detail in [OutlineDetail::Sections, OutlineDetail::Entries] {
         let Ok(outline) = build_outline_with_detail(&query, detail) else {
             continue;
         };

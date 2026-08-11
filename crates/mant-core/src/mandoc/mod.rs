@@ -84,7 +84,9 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument 
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
     let explicit_targets = navigation::explicit_targets(&parsed.root);
     let mut retained_targets = explicit_targets.clone();
+    let mut root_blocks = Vec::new();
     retained_targets.extend(crate::definitions::identify_definitions(
+        &mut root_blocks,
         &mut sections,
         &explicit_targets,
     ));
@@ -119,7 +121,7 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument 
             alias_target: parsed.metadata.alias_target.clone(),
         },
         diagnostics,
-        blocks: Vec::new(),
+        blocks: root_blocks,
         sections,
     }
 }

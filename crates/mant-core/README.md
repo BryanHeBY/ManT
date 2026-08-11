@@ -12,7 +12,7 @@ process.
   diagnostics and optional embedded tldr content.
 - Bounded native manual loading, constrained `.so` alias resolution, and
   `man(7)`/`mdoc(7)` lowering on Unix.
-- Semantic outlines containing addressable sections and command options.
+- Semantic outlines containing addressable sections and role-aware entries.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized AST.
@@ -36,7 +36,7 @@ let query = query_markdown_text(
     "# Demo\n\n## Options\n\n- `--verbose`: Show more detail.\n",
     Some("demo.md".to_owned()),
 )?;
-let outline = build_outline_with_detail(&query, OutlineDetail::Options)?;
+let outline = build_outline_with_detail(&query, OutlineDetail::Entries)?;
 
 println!("{}", render_outline_text(&outline));
 # Ok::<(), Box<dyn std::error::Error>>(())

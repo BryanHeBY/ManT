@@ -7,9 +7,9 @@ use std::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ast::{
-    Block as AstBlock, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-    DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle,
-    QuerySchema, Section, SourceFormat, TldrDocument, TldrOrigin,
+    Block as AstBlock, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole,
+    DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer,
+    QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
@@ -86,6 +86,7 @@ fn navigation_bundle() -> QueryBundle {
                         identity: Some(DefinitionIdentity {
                             id: "help-option".to_owned(),
                             role: DefinitionRole::Option,
+                            case: DefinitionCase::Sensitive,
                             names: vec!["-h".to_owned(), "--help".to_owned()],
                         }),
                         terms: vec![vec![Inline::Text {

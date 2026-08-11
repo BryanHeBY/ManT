@@ -60,7 +60,7 @@ every destination as an untyped URI:
 - `anchor` marks a zero-width document-local destination such as mdoc `Tg`.
 
 Definition-list entries may also carry a semantic `identity` with a stable
-document-local ID, a role, and normalized names. The current document
+document-local ID, a role, a name-matching case policy, and normalized names. The current document
 contract assigns this identity to recognized command-line options, commands,
 and environment variables. It preserves the complete
 rendered term and description while making aliases such as `-g` and
@@ -92,7 +92,7 @@ internals:
 mant <name> [--format <format>]   -> query Markdown, text, or JSON
 mant <path.md> [--format <format>] -> query one local Markdown file
 mant -                             -> read Markdown directly from stdin
-mant <name> --outline [sections|options] -> selectable section and option tree
+mant <name> --outline [sections|entries] -> selectable section and semantic-entry tree
 mant <name> --node <path-or-id>   -> selected section subtrees
 mant <name> --explain <alias-or-id> -> one option, command, or environment entry
 mant <name> --search <pattern>    -> matches with node and Markdown locations

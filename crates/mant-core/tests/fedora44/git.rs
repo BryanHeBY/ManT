@@ -15,7 +15,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert_eq!(document.meta.os.as_deref(), Some("Git 2.53.0"));
 
     let query = query_for_document("git", document);
-    let outline = build_outline_with_detail(&query, OutlineDetail::Options)
+    let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build git option outline: {error}"));
     assert_eq!(count_outline_entries(&outline.nodes), 25);
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());

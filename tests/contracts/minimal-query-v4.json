@@ -92,6 +92,7 @@
                 "identity": {
                   "id": "almost-all-option",
                   "role": "option",
+                  "case": "sensitive",
                   "names": ["-A", "--almost-all"]
                 },
                 "terms": [

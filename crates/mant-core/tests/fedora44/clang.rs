@@ -19,7 +19,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert!(source_path_ends_with(document, "fedora44/clang.1.zst"));
 
     let query = query_for_document("clang", document);
-    let outline = build_outline_with_detail(&query, OutlineDetail::Options)
+    let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build clang option outline: {error}"));
     assert_eq!(count_outline_entries(&outline.nodes), 78);
     assert!(find_outline_entry(&outline.nodes, "-std").is_some());

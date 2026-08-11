@@ -1,10 +1,10 @@
 //! Locks the public JSON shapes used for outline discovery and excerpts.
 
 use mant_ast::{
-    Block, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSource,
-    ExcerptSchema, ExcerptSelection, Inline, LayoutHint, OutlineDetail, OutlineNode,
-    OutlineReference, OutlineSchema, Producer, QueryExcerpt, QueryOutline, Section, SourceFormat,
-    TldrDocument, TldrOrigin,
+    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
+    DocumentSource, ExcerptSchema, ExcerptSelection, Inline, LayoutHint, OutlineDetail,
+    OutlineNode, OutlineReference, OutlineSchema, Producer, QueryExcerpt, QueryOutline, Section,
+    SourceFormat, TldrDocument, TldrOrigin,
 };
 
 fn source() -> DocumentSource {
@@ -18,7 +18,7 @@ fn source() -> DocumentSource {
 fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
         schema: OutlineSchema::V4,
-        detail: OutlineDetail::Options,
+        detail: OutlineDetail::Entries,
         label: "demo(1)".to_owned(),
         source: Some(source()),
         meta: Some(DocumentMeta::default()),
@@ -31,6 +31,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
                 id: "all".to_owned(),
                 title: "-a, --all".to_owned(),
                 role: DefinitionRole::Option,
+                case: DefinitionCase::Sensitive,
                 names: vec!["-a".to_owned(), "--all".to_owned()],
             }],
         }],
@@ -38,7 +39,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
 
     let value = serde_json::to_value(outline).expect("outline JSON");
     assert_eq!(value["schema"], "mant.outline/v4");
-    assert_eq!(value["detail"], "options");
+    assert_eq!(value["detail"], "entries");
     assert_eq!(value["label"], "demo(1)");
     assert_eq!(value["nodes"][0]["kind"], "document-section");
     assert_eq!(value["nodes"][0]["path"], "2");
@@ -95,6 +96,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         identity: Some(DefinitionIdentity {
             id: "all".to_owned(),
             role: DefinitionRole::Option,
+            case: DefinitionCase::Sensitive,
             names: vec!["-a".to_owned(), "--all".to_owned()],
         }),
         terms: Vec::new(),

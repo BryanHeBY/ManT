@@ -72,13 +72,13 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     assert_eq!(request.view, QueryView::Full {});
 
     let outline: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"entries"}}"#,
     )
     .expect("valid outline request");
     assert_eq!(
         outline.view,
         QueryView::Outline {
-            detail: OutlineDetail::Options,
+            detail: OutlineDetail::Entries,
         }
     );
 
@@ -90,6 +90,17 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
         excerpt.view,
         QueryView::Excerpt {
             nodes: vec!["acls".to_owned()],
+        }
+    );
+
+    let explain: QueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"explain","entry":"--exclude"}}"#,
+    )
+    .expect("valid explanation request");
+    assert_eq!(
+        explain.view,
+        QueryView::Explain {
+            entry: "--exclude".to_owned(),
         }
     );
 

@@ -12,9 +12,8 @@ use std::{
 };
 
 use mant_ast::{
-    ExcerptSelection, OutlineDetail, QueryBundle, QueryExcerpt, QueryInput, QueryOutline,
-    QueryRequest, QueryView, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-    default_search_limit,
+    OutlineDetail, QueryBundle, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QueryView,
+    SearchCase, SearchQuery, SearchScope, SearchSyntax, default_search_limit,
 };
 use rmcp::{
     Json, ServerHandler, ServiceExt,
@@ -136,7 +135,7 @@ struct DocumentSelector {
 struct OutlineParams {
     #[serde(flatten)]
     selector: DocumentSelector,
-    /// Include only sections, or include addressable option and command entries.
+    /// Include only sections, or include every addressable semantic entry.
     detail: Option<OutlineDetail>,
 }
 
@@ -368,7 +367,7 @@ impl MantMcpServer {
         parameters: Parameters<OutlineParams>,
     ) -> Result<Json<QueryOutline>, String> {
         let parameters = parameters.0;
-        let detail = parameters.detail.unwrap_or(OutlineDetail::Options);
+        let detail = parameters.detail.unwrap_or(OutlineDetail::Entries);
         let request = request_for(parameters.selector, QueryView::Outline { detail })?;
         let query = self.query(request).await?;
         let outline = mant_core::build_outline_with_detail(&query, detail)
@@ -423,22 +422,15 @@ impl MantMcpServer {
         let entry = non_empty(&parameters.entry, "entry")?;
         let request = request_for(
             parameters.selector,
-            QueryView::Excerpt {
-                nodes: vec![entry.clone()],
+            QueryView::Explain {
+                entry: entry.clone(),
             },
         )?;
         let query = self.query(request).await?;
         let mut excerpt =
-            mant_core::select_excerpt(&query, &[entry]).map_err(|error| error.to_string())?;
-        if matches!(
-            excerpt.selections.as_slice(),
-            [ExcerptSelection::DocumentEntry { .. }]
-        ) {
-            discard_lowering_diagnostics(&mut excerpt);
-            Ok(Json(excerpt))
-        } else {
-            Err("entry does not resolve to one option, command, or environment variable".to_owned())
-        }
+            mant_core::select_explanation(&query, &entry).map_err(|error| error.to_string())?;
+        discard_lowering_diagnostics(&mut excerpt);
+        Ok(Json(excerpt))
     }
 
     /// Search document text and return exact matching nodes and Markdown coordinates.

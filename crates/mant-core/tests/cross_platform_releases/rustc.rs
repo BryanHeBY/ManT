@@ -33,7 +33,7 @@ fn keeps_compiler_options_environment_and_release_metadata() {
 
     let outline = build_outline_with_detail(
         &cross_platform_release_query("rustc"),
-        OutlineDetail::Options,
+        OutlineDetail::Entries,
     )
     .expect("build rustc option outline");
     assert_eq!(count_outline_entries(&outline.nodes), 31);

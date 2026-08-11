@@ -64,6 +64,11 @@ pub enum QueryView {
         #[schemars(length(min = 1))]
         nodes: Vec<String>,
     },
+    /// Resolve exactly one semantic entry and return its complete description.
+    Explain {
+        #[schemars(length(min = 1))]
+        entry: String,
+    },
     Search {
         #[schemars(length(min = 1, max = 4096))]
         pattern: String,

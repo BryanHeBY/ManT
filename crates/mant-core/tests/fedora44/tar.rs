@@ -20,7 +20,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     assert_eq!(document.meta.os.as_deref(), Some("TAR"));
 
     let query = query_for_document("tar", document);
-    let outline = build_outline_with_detail(&query, OutlineDetail::Options)
+    let outline = build_outline_with_detail(&query, OutlineDetail::Entries)
         .unwrap_or_else(|error| panic!("build tar option outline: {error}"));
     assert_eq!(count_outline_entries(&outline.nodes), 156);
     assert!(find_outline_entry(&outline.nodes, "--acls").is_some());
@@ -46,7 +46,7 @@ fn options_are_addressable_in_v4_outlines_and_excerpts() {
     assert!(!identity.id.is_empty());
 
     let outline =
-        build_outline_with_detail(&query, OutlineDetail::Options).expect("tar option outline");
+        build_outline_with_detail(&query, OutlineDetail::Entries).expect("tar option outline");
     let outlined = find_outline_entry(&outline.nodes, "--acls").expect("outlined --acls");
     assert_eq!(outlined.id(), identity.id);
 

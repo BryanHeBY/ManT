@@ -36,7 +36,7 @@ let request = QueryRequest {
         section: None,
     },
     view: QueryView::Outline {
-        detail: OutlineDetail::Options,
+        detail: OutlineDetail::Entries,
     },
 };
 

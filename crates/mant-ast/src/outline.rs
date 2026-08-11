@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Block, DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta, DocumentSource, Producer,
-    Section, TldrDocument,
+    Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta,
+    DocumentSource, Producer, Section, TldrDocument,
 };
 
 /// Exact schema marker for a query outline response.
@@ -20,7 +20,7 @@ pub enum OutlineSchema {
 #[serde(rename_all = "kebab-case")]
 pub enum OutlineDetail {
     Sections,
-    Options,
+    Entries,
 }
 
 /// A block-free tree used to discover selectable query content.
@@ -68,6 +68,7 @@ pub enum OutlineNode {
         id: String,
         title: String,
         role: DefinitionRole,
+        case: DefinitionCase,
         names: Vec<String>,
     },
 }

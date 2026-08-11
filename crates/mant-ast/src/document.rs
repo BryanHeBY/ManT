@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Exact schema marker for a normalized structured document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
-    /// Source-neutral model with addressable semantic definition entries.
+    /// Source-neutral model with role-aware, case-aware semantic entries.
     #[serde(rename = "mant.document/v4")]
     V4,
 }
@@ -271,8 +271,18 @@ pub struct DefinitionIdentity {
     /// Unique within one document and shared with the term's inline anchor.
     pub id: String,
     pub role: DefinitionRole,
+    /// Matching policy used for aliases in semantic entry lookup.
+    pub case: DefinitionCase,
     /// Plain normalized names suitable for outlines and agent selection.
     pub names: Vec<String>,
+}
+
+/// Case policy used when matching one semantic entry's names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum DefinitionCase {
+    Sensitive,
+    Insensitive,
 }
 
 /// Semantic role assigned before roff macro details leave the native layer.

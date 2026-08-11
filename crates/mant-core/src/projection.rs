@@ -3,8 +3,9 @@
 use std::{collections::HashSet, error::Error, fmt};
 
 use mant_ast::{
-    Block, DefinitionItem, ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode,
-    OutlineReference, OutlineSchema, QueryBundle, QueryExcerpt, QueryOutline, Section,
+    Block, DefinitionCase, DefinitionItem, DefinitionRole, ExcerptSchema, ExcerptSelection,
+    OutlineDetail, OutlineNode, OutlineReference, OutlineSchema, QueryBundle, QueryExcerpt,
+    QueryOutline, Section,
 };
 
 const TLDR_PATH: &str = "0";
@@ -29,6 +30,9 @@ pub(crate) fn is_reserved_selector(value: &str) -> bool {
 }
 
 fn is_outline_path(value: &str) -> bool {
+    if let Some(entry) = value.strip_prefix("root/o") {
+        return !entry.is_empty() && entry.bytes().all(|byte| byte.is_ascii_digit());
+    }
     let (sections, entry) = value
         .split_once("/o")
         .map_or((value, None), |(sections, entry)| (sections, Some(entry)));
@@ -44,10 +48,31 @@ fn is_outline_path(value: &str) -> bool {
 /// Failure to derive an addressable view from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectionError {
-    MissingContent { document: String },
+    MissingContent {
+        document: String,
+    },
     EmptySelection,
     EmptySelector,
-    UnknownSelector { document: String, selector: String },
+    UnknownSelector {
+        document: String,
+        selector: String,
+    },
+    AmbiguousSelector {
+        document: String,
+        selector: String,
+        candidates: Vec<SelectorCandidate>,
+    },
+    ExplanationRequiresEntry {
+        document: String,
+        selector: String,
+    },
+}
+
+/// One stable qualification offered when a semantic alias is ambiguous.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectorCandidate {
+    pub path: String,
+    pub id: String,
 }
 
 impl fmt::Display for ProjectionError {
@@ -61,6 +86,27 @@ impl fmt::Display for ProjectionError {
             Self::UnknownSelector { document, selector } => write!(
                 formatter,
                 "document '{document}' has no outline node '{selector}'; run 'mant {document} --outline'"
+            ),
+            Self::AmbiguousSelector {
+                document,
+                selector,
+                candidates,
+            } => {
+                write!(
+                    formatter,
+                    "document '{document}' has multiple semantic entries named '{selector}': "
+                )?;
+                for (index, candidate) in candidates.iter().enumerate() {
+                    if index > 0 {
+                        formatter.write_str(", ")?;
+                    }
+                    write!(formatter, "{} ({})", candidate.path, candidate.id)?;
+                }
+                formatter.write_str("; select one by path or ID")
+            }
+            Self::ExplanationRequiresEntry { document, selector } => write!(
+                formatter,
+                "document '{document}' outline node '{selector}' is not a semantic entry; use --node for sections"
             ),
         }
     }
@@ -108,6 +154,26 @@ pub fn build_outline_with_detail(
                 id: DOCUMENT_ROOT_ID.to_owned(),
                 title: DOCUMENT_ROOT_TITLE.to_owned(),
             });
+            if detail == OutlineDetail::Entries {
+                let mut entries = Vec::new();
+                collect_definition_entries(&manual.blocks, &mut entries);
+                nodes.extend(
+                    entries
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(index, entry)| {
+                            let identity = entry.identity.as_ref()?;
+                            Some(OutlineNode::DocumentEntry {
+                                path: format!("{DOCUMENT_ROOT_PATH}/o{}", index + 1),
+                                id: identity.id.clone(),
+                                title: identity.names.join(", "),
+                                role: identity.role,
+                                case: identity.case,
+                                names: identity.names.clone(),
+                            })
+                        }),
+                );
+            }
         }
         nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
@@ -149,6 +215,7 @@ pub fn select_excerpt(
     }
     let mut located = Vec::new();
     if let Some(manual) = &query.document {
+        collect_root_entries(&manual.blocks, &mut located);
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
 
@@ -174,13 +241,7 @@ pub fn select_excerpt(
             document_root_selected = true;
             continue;
         }
-        let candidate = located
-            .iter()
-            .find(|candidate| candidate.matches(selector))
-            .ok_or_else(|| ProjectionError::UnknownSelector {
-                document: query.label.clone(),
-                selector: selector.to_owned(),
-            })?;
+        let candidate = resolve_candidate(query, &located, selector, false)?;
         if selected_ids.insert(candidate.id()) {
             selected.push(candidate);
         }
@@ -191,6 +252,9 @@ pub fn select_excerpt(
         .map(|candidate| candidate.coordinates().to_vec())
         .collect::<Vec<_>>();
     selected.retain(|candidate| {
+        if document_root_selected && candidate.path().starts_with("root/o") {
+            return false;
+        }
         !selected_sections.iter().any(|ancestor| {
             if candidate.is_section() {
                 ancestor != candidate.coordinates()
@@ -240,6 +304,93 @@ pub fn select_excerpt(
     })
 }
 
+/// Select exactly one semantic entry by stable path, ID, or alias.
+///
+/// Exact paths and IDs take precedence over aliases. Repeated aliases are
+/// rejected with deterministic candidates instead of silently choosing the
+/// first entry in source order.
+///
+/// # Errors
+///
+/// Returns an error when the selector is empty, unknown, names a section, or
+/// matches more than one semantic entry.
+pub fn select_explanation(
+    query: &QueryBundle,
+    selector: &str,
+) -> Result<QueryExcerpt, ProjectionError> {
+    if query.tldr.is_none() && query.document.is_none() {
+        return Err(ProjectionError::MissingContent {
+            document: query.label.clone(),
+        });
+    }
+    let selector = selector.trim();
+    if selector.is_empty() {
+        return Err(ProjectionError::EmptySelector);
+    }
+    let selects_tldr = matches!(selector, TLDR_PATH | TLDR_ID) && query.tldr.is_some();
+    let selects_root = matches!(selector, DOCUMENT_ROOT_PATH | DOCUMENT_ROOT_ID)
+        && query
+            .document
+            .as_ref()
+            .is_some_and(|document| !document.blocks.is_empty());
+    if selects_tldr || selects_root {
+        return Err(ProjectionError::ExplanationRequiresEntry {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+        });
+    }
+    let mut located = Vec::new();
+    if let Some(manual) = &query.document {
+        collect_root_entries(&manual.blocks, &mut located);
+        collect_sections(&manual.sections, &[], &[], &mut located);
+    }
+    let candidate = resolve_candidate(query, &located, selector, true)?;
+    select_excerpt(query, &[candidate.path().to_owned()])
+}
+
+fn resolve_candidate<'a>(
+    query: &QueryBundle,
+    located: &'a [LocatedNode<'a>],
+    selector: &str,
+    entries_only: bool,
+) -> Result<&'a LocatedNode<'a>, ProjectionError> {
+    if let Some(candidate) = located
+        .iter()
+        .find(|candidate| candidate.path() == selector || candidate.id() == selector)
+    {
+        if entries_only && candidate.is_section() {
+            return Err(ProjectionError::ExplanationRequiresEntry {
+                document: query.label.clone(),
+                selector: selector.to_owned(),
+            });
+        }
+        return Ok(candidate);
+    }
+
+    let matches = located
+        .iter()
+        .filter(|candidate| candidate.matches_alias(selector))
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [] => Err(ProjectionError::UnknownSelector {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+        }),
+        [candidate] => Ok(candidate),
+        _ => Err(ProjectionError::AmbiguousSelector {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+            candidates: matches
+                .into_iter()
+                .map(|candidate| SelectorCandidate {
+                    path: candidate.path().to_owned(),
+                    id: candidate.id().to_owned(),
+                })
+                .collect(),
+        }),
+    }
+}
+
 fn outline_nodes(
     sections: &[Section],
     parent: &[usize],
@@ -253,7 +404,7 @@ fn outline_nodes(
             coordinates.push(index + 1);
             let path = format_path(&coordinates);
             let mut children = Vec::new();
-            if detail == OutlineDetail::Options {
+            if detail == OutlineDetail::Entries {
                 let mut entries = Vec::new();
                 collect_definition_entries(&section.blocks, &mut entries);
                 children.extend(
@@ -267,6 +418,7 @@ fn outline_nodes(
                                 id: identity.id.clone(),
                                 title: identity.names.join(", "),
                                 role: identity.role,
+                                case: identity.case,
                                 names: identity.names.clone(),
                             })
                         }),
@@ -333,16 +485,13 @@ impl LocatedNode<'_> {
         }
     }
 
-    fn matches(&self, selector: &str) -> bool {
-        if self.path() == selector || self.id() == selector {
-            return true;
-        }
+    fn matches_alias(&self, selector: &str) -> bool {
         match self {
             Self::Entry { entry, .. } => entry.identity.as_ref().is_some_and(|identity| {
                 identity
                     .names
                     .iter()
-                    .any(|name| name == selector || name.trim_start_matches('-') == selector)
+                    .any(|name| semantic_name_matches(identity.role, identity.case, name, selector))
             }),
             Self::Section { .. } => false,
         }
@@ -388,6 +537,32 @@ impl LocatedNode<'_> {
     }
 }
 
+fn semantic_name_matches(
+    role: DefinitionRole,
+    case: DefinitionCase,
+    name: &str,
+    selector: &str,
+) -> bool {
+    let equivalent = |left: &str, right: &str| match case {
+        DefinitionCase::Sensitive => left == right,
+        DefinitionCase::Insensitive => left.eq_ignore_ascii_case(right),
+    };
+    if equivalent(name, selector) {
+        return true;
+    }
+    match role {
+        DefinitionRole::Option => equivalent(name.trim_start_matches('-'), selector),
+        DefinitionRole::EnvironmentVariable => {
+            let normalized = name
+                .strip_prefix("$env:")
+                .or_else(|| name.strip_prefix("$ENV:"))
+                .unwrap_or(name);
+            equivalent(normalized, selector)
+        }
+        DefinitionRole::Command => false,
+    }
+}
+
 fn collect_sections<'a>(
     sections: &'a [Section],
     parent_coordinates: &[usize],
@@ -428,6 +603,29 @@ fn collect_sections<'a>(
             });
         }
         collect_sections(&section.children, &coordinates, &child_breadcrumbs, output);
+    }
+}
+
+fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a>>) {
+    let mut entries = Vec::new();
+    collect_definition_entries(blocks, &mut entries);
+    let breadcrumbs = vec![OutlineReference {
+        path: DOCUMENT_ROOT_PATH.to_owned(),
+        id: DOCUMENT_ROOT_ID.to_owned(),
+        title: DOCUMENT_ROOT_TITLE.to_owned(),
+    }];
+    for (index, entry) in entries.into_iter().enumerate() {
+        let Some(identity) = &entry.identity else {
+            continue;
+        };
+        output.push(LocatedNode::Entry {
+            order: output.len(),
+            coordinates: Vec::new(),
+            path: format!("{DOCUMENT_ROOT_PATH}/o{}", index + 1),
+            title: identity.names.join(", "),
+            breadcrumbs: breadcrumbs.clone(),
+            entry,
+        });
     }
 }
 

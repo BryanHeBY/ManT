@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{DefinitionRole, DocumentMeta, DocumentSource, SourceSpan};
+use crate::{DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, SourceSpan};
 
 pub const DEFAULT_SEARCH_LIMIT: u32 = 100;
 
@@ -173,6 +173,7 @@ pub enum SearchNode {
         id: String,
         title: String,
         role: DefinitionRole,
+        case: DefinitionCase,
         names: Vec<String>,
     },
 }

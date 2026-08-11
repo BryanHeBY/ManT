@@ -1,12 +1,14 @@
 //! Contract-focused tests for Markdown lowering and source preservation.
 
 use mant_ast::{
-    Block, ExcerptSelection, Inline, ListKind, OutlineDetail, OutlineNode, QueryBundle,
-    QuerySchema, SearchCase, SearchNode, SearchQuery, SearchScope, SearchSyntax, SourceFormat,
-    TableAlignment, TldrOrigin,
+    Block, DefinitionCase, DefinitionRole, ExcerptSelection, Inline, ListKind, OutlineDetail,
+    OutlineNode, QueryBundle, QuerySchema, SearchCase, SearchNode, SearchQuery, SearchScope,
+    SearchSyntax, SourceFormat, TableAlignment, TldrOrigin,
 };
 
-use crate::{build_outline_with_detail, search_query, select_excerpt};
+use crate::{
+    ProjectionError, build_outline_with_detail, search_query, select_excerpt, select_explanation,
+};
 
 use super::{parse_document, parse_markdown};
 
@@ -499,7 +501,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
             document: Some(document),
             tldr: None,
         },
-        OutlineDetail::Options,
+        OutlineDetail::Entries,
     )
     .expect("Markdown document has an outline");
     let OutlineNode::DocumentSection { children, .. } = &outline.nodes[0] else {
@@ -509,4 +511,111 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
         &children[0],
         OutlineNode::DocumentEntry { names, .. } if names == &["-h", "--help"]
     ));
+}
+
+#[test]
+fn declared_entries_cover_windows_options_commands_and_environment_variables() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/query`: Query tasks.\n- `/?`: Display help.\n- `/S COMPUTER`: Select a remote computer.\n- `/server:NAME`: Select a server.\n- `/reg:32`, `/reg:64`: Select registry views.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Read values.\n- `winget install`: Install a package.\n\n### query\n\nBehavioral details.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n- `$LASTEXITCODE`: Hold the last native exit code.\n",
+        Some("tool.md".to_owned()),
+    )
+    .expect("declared semantic entries");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let Block::DefinitionList {
+        items: option_items,
+        ..
+    } = &parsed.document.sections[0].blocks[0]
+    else {
+        panic!("declared options should become definitions");
+    };
+    let identities = option_items
+        .iter()
+        .map(|item| item.identity.as_ref().expect("semantic identity"))
+        .collect::<Vec<_>>();
+    assert_eq!(identities[0].names, ["/query"]);
+    assert_eq!(identities[1].id, "option-help");
+    assert_eq!(identities[2].names, ["/S"]);
+    assert_eq!(identities[3].names, ["/server"]);
+    assert_eq!(identities[4].names, ["/reg:32", "/reg:64"]);
+    assert!(identities.iter().all(|identity| {
+        identity.role == DefinitionRole::Option && identity.case == DefinitionCase::Insensitive
+    }));
+
+    let query = QueryBundle {
+        schema: QuerySchema::V4,
+        label: "tool".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    let explanation = select_explanation(&query, "/QUERY").expect("case-insensitive option");
+    assert!(matches!(
+        explanation.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| identity.names == ["/query"])
+    ));
+    let command = select_explanation(&query, "QUERY").expect("command beats same-named section");
+    assert!(matches!(
+        command.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::Command)
+    ));
+    let environment = select_explanation(&query, "path").expect("environment alias");
+    assert!(matches!(
+        environment.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+    ));
+}
+
+#[test]
+fn duplicate_entry_aliases_require_a_stable_path_or_id() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Query\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force query.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force deletion.\n",
+        None,
+    )
+    .expect("duplicate entries remain valid input");
+    let query = QueryBundle {
+        schema: QuerySchema::V4,
+        label: "tool".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+
+    let error = select_explanation(&query, "/F").expect_err("bare alias must be ambiguous");
+    let ProjectionError::AmbiguousSelector { candidates, .. } = error else {
+        panic!("expected a structured ambiguity");
+    };
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|candidate| candidate.path.as_str())
+            .collect::<Vec<_>>(),
+        ["1/o1", "2/o1"]
+    );
+    assert_eq!(
+        select_explanation(&query, "2/o1")
+            .expect("qualified path")
+            .selections
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn malformed_declared_entry_lists_remain_visible_and_report_the_list_location() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `--good`: Valid.\n- ordinary prose\n",
+        None,
+    )
+    .expect("rejected declarations are recoverable");
+
+    assert!(matches!(
+        parsed.document.sections[0].blocks[0],
+        Block::List { .. }
+    ));
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry-list")
+            && diagnostic.source.is_some_and(|source| source.line == 6)
+    }));
 }

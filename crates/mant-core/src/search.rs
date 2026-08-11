@@ -493,9 +493,9 @@ impl<'a> VisibleBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        Block, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSchema,
-        DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle, QuerySchema,
-        SearchCase, SearchQuery, SearchScope, SearchSyntax, Section, SourceFormat,
+        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
+        DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle,
+        QuerySchema, SearchCase, SearchQuery, SearchScope, SearchSyntax, Section, SourceFormat,
     };
 
     use super::search_query;
@@ -531,6 +531,7 @@ mod tests {
                             identity: Some(DefinitionIdentity {
                                 id: "option-acls".to_owned(),
                                 role: DefinitionRole::Option,
+                                case: DefinitionCase::Sensitive,
                                 names: vec!["--acls".to_owned()],
                             }),
                             terms: vec![vec![

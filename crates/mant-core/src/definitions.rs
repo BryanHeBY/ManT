@@ -10,7 +10,8 @@ use std::{
 };
 
 use mant_ast::{
-    Block, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline, LayoutHint, Section,
+    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline, LayoutHint,
+    Section,
 };
 
 use crate::inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline};
@@ -18,12 +19,14 @@ use crate::inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline}
 /// Annotate reliably recognizable command-line options and return every
 /// inline anchor that the navigation resolver must retain.
 pub(crate) fn identify_definitions(
+    blocks: &mut Vec<Block>,
     sections: &mut [Section],
     reserved_targets: &HashSet<String>,
 ) -> HashSet<String> {
     let mut used = HashSet::new();
     collect_section_ids(sections, &mut used);
     let mut retained = HashSet::new();
+    identify_blocks(blocks, &mut used, reserved_targets, &mut retained);
     for section in sections {
         identify_blocks(
             &mut section.blocks,
@@ -217,7 +220,16 @@ fn identify_item(
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
 ) {
-    let names = option_names(item);
+    let (role, case, names) = item.identity.as_ref().map_or_else(
+        || {
+            (
+                DefinitionRole::Option,
+                DefinitionCase::Sensitive,
+                option_names(item),
+            )
+        },
+        |identity| (identity.role, identity.case, identity.names.clone()),
+    );
     if names.is_empty() {
         return;
     }
@@ -231,7 +243,7 @@ fn identify_item(
     let existing = anchors.first().cloned();
     let preferred = existing
         .clone()
-        .unwrap_or_else(|| format!("option-{}", slug(&names[0])));
+        .unwrap_or_else(|| format!("{}-{}", role_id_prefix(role), slug(&names[0])));
     // A copied libmandoc anchor may itself be an explicit `.Tg` destination,
     // so it is allowed to match the reserved set. Generated IDs are not.
     let id = if existing.is_some() && !used.contains(&preferred) {
@@ -248,9 +260,18 @@ fn identify_item(
     retained.insert(id.clone());
     item.identity = Some(DefinitionIdentity {
         id,
-        role: DefinitionRole::Option,
+        role,
+        case,
         names,
     });
+}
+
+const fn role_id_prefix(role: DefinitionRole) -> &'static str {
+    match role {
+        DefinitionRole::Option => "option",
+        DefinitionRole::Command => "command",
+        DefinitionRole::EnvironmentVariable => "environment",
+    }
 }
 
 fn option_names(item: &DefinitionItem) -> Vec<String> {
@@ -281,7 +302,7 @@ pub(crate) fn option_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
     names
 }
 
-fn option_prefix(token: &str) -> Option<&str> {
+pub(crate) fn option_prefix(token: &str) -> Option<&str> {
     if !token.starts_with('-') || token == "-" {
         return None;
     }
@@ -318,8 +339,11 @@ fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
 }
 
 fn slug(value: &str) -> String {
+    if value.trim_start_matches(['-', '/']) == "?" {
+        return "help".to_owned();
+    }
     let slug = value
-        .trim_start_matches('-')
+        .trim_start_matches(['-', '/'])
         .chars()
         .flat_map(char::to_lowercase)
         .map(|character| {
@@ -407,7 +431,7 @@ mod tests {
             source: None,
         }];
 
-        identify_definitions(&mut sections, &HashSet::new());
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new());
 
         assert_eq!(sections[0].blocks.len(), 2);
         let Block::DefinitionList { items, layout, .. } = &sections[0].blocks[0] else {

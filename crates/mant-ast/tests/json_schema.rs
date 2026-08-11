@@ -75,7 +75,7 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
 
     let outline = serde_json::to_string(&query_outline_json_schema()).expect("outline schema JSON");
     assert!(outline.contains("document-entry"));
-    assert!(outline.contains("options"));
+    assert!(outline.contains("entries"));
 
     let search = serde_json::to_string(&query_search_json_schema()).expect("search schema JSON");
     assert!(search.contains("startLine"));

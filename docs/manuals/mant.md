@@ -160,19 +160,51 @@ consumers.
 
 ### ManT Extensions
 
-A complete bullet list becomes semantic command-line options when every item
-begins with one or more code spans containing option names, followed by `:`,
-`—`, or `–` and a description:
+A complete bullet list becomes semantic Unix command-line options when every
+item begins with one or more code spans containing dash-option names, followed
+by `:`, `—`, or `–` and a description:
 
 ```markdown
 - `-h`, `--help`: Show help.
 - `--color WHEN`: Select a colour mode.
 ```
 
-Aliases may be separated by commas, slashes, or vertical bars. Recognized
-entries receive stable IDs and aliases, appear beneath their owning section
-in `--outline`, and are selectable through `--node` and `--explain`. A mixed
-ordinary/option list remains an ordinary list rather than being guessed.
+This legacy shorthand is case-sensitive. Aliases may be separated by commas,
+the historical `-h/--help` notation, or vertical bars.
+
+Windows switches, commands, and environment variables use an explicit
+invisible directive immediately before one complete bullet list. Both the role
+and matching policy are required:
+
+```markdown
+<!-- mant:entries role=option case=insensitive -->
+- `/query`: Query scheduled tasks.
+- `/?`: Display help.
+- `/S COMPUTER`: Select a remote computer.
+- `/server:NAME`: Select a server.
+- `/reg:32`, `/reg:64`: Select registry views.
+
+<!-- mant:entries role=command case=insensitive -->
+- `query`: Read keys and values.
+- `winget install`: Install a package.
+
+<!-- mant:entries role=environment-variable case=insensitive -->
+- `PATH`, `$env:PATH`: Control executable discovery.
+- `$LASTEXITCODE`: Hold the last native process exit code.
+```
+
+`role` is `option`, `command`, or `environment-variable`; `case` is
+`sensitive` or `insensitive`. Value placeholders remain visible, while `/S`
+and `/server` become selectors; fixed values such as `/reg:32` remain part of
+the selector. The directive applies only to the immediately following bullet
+list. Unknown fields, missing policies, and malformed declared lists produce a
+source-located recoverable diagnostic without dropping or reordering content.
+
+Recognized entries receive role-specific stable IDs and aliases, appear
+beneath their owning section in `--outline`, and are selectable through
+`--node` and `--explain`. A mixed ordinary/option list remains an ordinary list
+rather than being guessed. When an alias occurs more than once, selection
+fails with candidate paths and IDs; use one of those stable qualifiers.
 
 An optional leading tldr preface is parsed independently with the tldr-pages
 dialect. Invisible CommonMark HTML comments delimit it, so GitHub renders the
@@ -262,7 +294,7 @@ errors, and Rust panics.
 
 ## Document Selection
 
-- `--outline [DETAIL]`: Print the addressable tree; `options` is the default and `sections` is the compact form.
+- `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and `sections` is the compact form.
 - `--node NODE`: Return a node by path or ID; repeat the option to select several nodes.
 - `--explain ENTRY`: Return exactly one semantic option, command, or environment entry.
 

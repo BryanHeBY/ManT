@@ -27,7 +27,7 @@ fuzz_target!(|data: &str| {
     let _ = render_query_text(&query);
     let _ = render_query_man(&query);
 
-    for detail in [OutlineDetail::Sections, OutlineDetail::Options] {
+    for detail in [OutlineDetail::Sections, OutlineDetail::Entries] {
         let Ok(outline) = build_outline_with_detail(&query, detail) else {
             continue;
         };

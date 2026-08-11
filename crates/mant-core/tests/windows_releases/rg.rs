@@ -31,7 +31,7 @@ fn keeps_release_metadata_sections_and_semantic_options() {
     assert_eq!(document.meta.date.as_deref(), Some("2026-07-15"));
     assert_eq!(document.meta.os.as_deref(), Some("15.2.0 (rev e89fff89ac)"));
 
-    let outline = build_outline_with_detail(&windows_release_query("rg"), OutlineDetail::Options)
+    let outline = build_outline_with_detail(&windows_release_query("rg"), OutlineDetail::Entries)
         .expect("build rg option outline");
     assert_eq!(count_outline_entries(&outline.nodes), 104);
     assert!(find_outline_entry(&outline.nodes, "--glob").is_some());

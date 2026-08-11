@@ -204,6 +204,7 @@ fn collect_section_owners(
                     id: identity.id.clone(),
                     title: identity.names.join(", "),
                     role: identity.role,
+                    case: identity.case,
                     names: identity.names.clone(),
                 },
                 section: Some(section_reference.clone()),

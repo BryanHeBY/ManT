@@ -85,7 +85,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
     assert!(ancillary_text.contains("git-config(1)"));
     assert!(ancillary_text.contains("git-fast-export(1)"));
 
-    let outline = build_outline_with_detail(&archlinux_manual_query("git"), OutlineDetail::Options)
+    let outline = build_outline_with_detail(&archlinux_manual_query("git"), OutlineDetail::Entries)
         .expect("git option outline");
     assert!(common::find_outline_entry(&outline.nodes, "--help").is_some());
     assert!(common::find_outline_entry(&outline.nodes, "-C").is_some());

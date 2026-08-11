@@ -51,14 +51,15 @@ pub(crate) enum SchemaContract {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum OutlineMode {
     Sections,
-    Options,
+    #[value(alias = "options")]
+    Entries,
 }
 
 impl From<OutlineMode> for OutlineDetail {
     fn from(value: OutlineMode) -> Self {
         match value {
             OutlineMode::Sections => Self::Sections,
-            OutlineMode::Options => Self::Options,
+            OutlineMode::Entries => Self::Entries,
         }
     }
 }
@@ -114,7 +115,6 @@ pub(crate) enum Command {
         presentation: QueryPresentation,
         pretty: bool,
         manual_only: bool,
-        explain: bool,
         preserve_anchors: bool,
     },
     UpdateTldr {
@@ -182,13 +182,13 @@ struct Cli {
     #[arg(long, requires = "name", help_heading = "Document selection")]
     manual: bool,
 
-    /// Print selectable sections and command-line options by default.
+    /// Print selectable sections and semantic entries by default.
     #[arg(
         long,
         value_name = "DETAIL",
         value_enum,
         num_args = 0..=1,
-        default_missing_value = "options",
+        default_missing_value = "entries",
         requires = "name",
         conflicts_with_all = ["node", "explain"],
         help_heading = "Document selection"
@@ -461,7 +461,7 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
         });
     }
 
-    let (view, explain) = normalize_query_view(&mut parsed);
+    let view = normalize_query_view(&mut parsed);
     validate_output_options(parsed.compact, parsed.format, parsed.preserve_anchors)?;
     let source = normalize_query_source(
         parsed.request_json,
@@ -479,14 +479,12 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
         presentation,
         pretty: !parsed.compact,
         manual_only: parsed.manual,
-        explain,
         preserve_anchors: parsed.preserve_anchors,
     })
 }
 
-fn normalize_query_view(parsed: &mut Cli) -> (QueryView, bool) {
-    let explain = parsed.explain.is_some();
-    let view = if let Some(detail) = parsed.outline.take() {
+fn normalize_query_view(parsed: &mut Cli) -> QueryView {
+    if let Some(detail) = parsed.outline.take() {
         QueryView::Outline {
             detail: detail.into(),
         }
@@ -512,17 +510,14 @@ fn normalize_query_view(parsed: &mut Cli) -> (QueryView, bool) {
             offset: parsed.offset.take().unwrap_or(0),
         }
     } else if let Some(selector) = parsed.explain.take() {
-        QueryView::Excerpt {
-            nodes: vec![selector],
-        }
+        QueryView::Explain { entry: selector }
     } else if parsed.node.is_empty() {
         QueryView::Full {}
     } else {
         QueryView::Excerpt {
             nodes: std::mem::take(&mut parsed.node),
         }
-    };
-    (view, explain)
+    }
 }
 
 fn validate_output_options(
@@ -714,7 +709,6 @@ mod tests {
                 presentation: QueryPresentation::Auto,
                 pretty: true,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
@@ -763,7 +757,7 @@ mod tests {
             Command::Query {
                 source: QuerySource::MarkdownStdin {
                     view: QueryView::Outline {
-                        detail: OutlineDetail::Options
+                        detail: OutlineDetail::Entries
                     }
                 },
                 presentation: QueryPresentation::Output(QueryFormat::Text),
@@ -815,7 +809,6 @@ mod tests {
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
@@ -845,7 +838,6 @@ mod tests {
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
@@ -875,13 +867,12 @@ mod tests {
                         section: None,
                     },
                     view: QueryView::Outline {
-                        detail: OutlineDetail::Options,
+                        detail: OutlineDetail::Entries,
                     },
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
@@ -897,13 +888,12 @@ mod tests {
                         section: None,
                     },
                     view: QueryView::Outline {
-                        detail: OutlineDetail::Options,
+                        detail: OutlineDetail::Entries,
                     },
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
@@ -927,14 +917,13 @@ mod tests {
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
     }
 
     #[test]
-    fn parses_explain_as_a_single_semantic_excerpt() {
+    fn parses_explain_as_a_first_class_semantic_view() {
         for (values, selector) in [
             (vec!["tar", "--explain=--exclude"], "--exclude"),
             (vec!["tar", "--explain", "--exclude"], "--exclude"),
@@ -950,14 +939,13 @@ mod tests {
                             source: None,
                             section: None,
                         },
-                        view: QueryView::Excerpt {
-                            nodes: vec![selector.to_owned()],
+                        view: QueryView::Explain {
+                            entry: selector.to_owned(),
                         },
                     }),
                     presentation: QueryPresentation::Output(QueryFormat::Markdown),
                     pretty: true,
                     manual_only: false,
-                    explain: true,
                     preserve_anchors: false,
                 }
             );
@@ -990,7 +978,6 @@ mod tests {
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
@@ -1037,7 +1024,6 @@ mod tests {
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );
@@ -1136,7 +1122,6 @@ mod tests {
                 presentation: QueryPresentation::Auto,
                 pretty: true,
                 manual_only: false,
-                explain: false,
                 preserve_anchors: false,
             }
         );

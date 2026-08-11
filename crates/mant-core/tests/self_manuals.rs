@@ -86,7 +86,7 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
     let query = query_markdown_text(MANT_MANUAL, Some("docs/manuals/mant.md".to_owned()))
         .expect("self manual query");
     let outline =
-        build_outline_with_detail(&query, OutlineDetail::Options).expect("manual outline");
+        build_outline_with_detail(&query, OutlineDetail::Entries).expect("manual outline");
 
     for expected in ["--manual", "--search", "--ui", "--help"] {
         assert!(

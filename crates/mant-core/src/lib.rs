@@ -33,7 +33,10 @@ pub use output::{
     render_outline_text, render_query_json, render_query_man, render_query_text,
     render_search_json, render_search_markdown, render_search_text, render_update_json,
 };
-pub use projection::{ProjectionError, build_outline, build_outline_with_detail, select_excerpt};
+pub use projection::{
+    ProjectionError, SelectorCandidate, build_outline, build_outline_with_detail, select_excerpt,
+    select_explanation,
+};
 pub use query::{
     MAX_MARKDOWN_BYTES, QueryError, QueryPolicy, query, query_markdown_text, query_with_policy,
 };

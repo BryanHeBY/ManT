@@ -204,6 +204,7 @@ mod tests {
                     id: "acls-option".to_owned(),
                     title: "--acls".to_owned(),
                     role: mant_ast::DefinitionRole::Option,
+                    case: mant_ast::DefinitionCase::Sensitive,
                     names: vec!["--acls".to_owned()],
                 },
                 section: None,

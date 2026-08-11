@@ -32,7 +32,7 @@ fn keeps_commands_options_files_and_examples() {
 
     let outline = build_outline_with_detail(
         &cross_platform_release_query("cargo"),
-        OutlineDetail::Options,
+        OutlineDetail::Entries,
     )
     .expect("build Cargo option outline");
     assert_eq!(count_outline_entries(&outline.nodes), 13);

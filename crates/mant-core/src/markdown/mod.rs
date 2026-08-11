@@ -16,7 +16,7 @@ mod tests;
 pub use container::TldrDirectiveError;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     error::Error,
     fmt,
     ops::Range,
@@ -33,7 +33,7 @@ use self::{
     container::split_markdown,
     inline::{inline_text, parse_inlines},
     layout::normalize_markdown_layout,
-    options::normalize_option_lists,
+    options::{extract_entry_directives, normalize_entry_lists},
     source::MarkdownSource,
 };
 use crate::{
@@ -106,7 +106,22 @@ pub fn parse_markdown(
             .map_err(MarkdownParseError::TldrPage)
         })
         .transpose()?;
-    let mut document = parse_document(parts.document.as_ref(), source_path);
+    let mut entry_diagnostics = Vec::new();
+    let (masked_document, declarations) =
+        extract_entry_directives(parts.document.as_ref(), &mut entry_diagnostics);
+    let document_source = masked_document
+        .as_deref()
+        .unwrap_or_else(|| parts.document.as_ref());
+    let mut document = parse_document_with_entries(
+        document_source,
+        source_path,
+        declarations,
+        &mut entry_diagnostics,
+    );
+    if !entry_diagnostics.is_empty() {
+        entry_diagnostics.extend(std::mem::take(&mut document.diagnostics));
+        document.diagnostics = entry_diagnostics;
+    }
     if !sanitize_diagnostics.is_empty() {
         sanitize_diagnostics.extend(std::mem::take(&mut document.diagnostics));
         document.diagnostics = sanitize_diagnostics;
@@ -164,7 +179,18 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
 }
 
 /// Lower the ordinary document portion after extension extraction.
+#[cfg(test)]
 fn parse_document(source_text: &str, source_path: Option<String>) -> MantDocument {
+    let mut diagnostics = Vec::new();
+    parse_document_with_entries(source_text, source_path, BTreeMap::new(), &mut diagnostics)
+}
+
+fn parse_document_with_entries(
+    source_text: &str,
+    source_path: Option<String>,
+    mut declarations: BTreeMap<u32, options::EntryDeclaration>,
+    entry_diagnostics: &mut Vec<Diagnostic>,
+) -> MantDocument {
     let source = MarkdownSource::new(source_text);
     let ParsedDocumentStructure {
         mut diagnostics,
@@ -189,9 +215,19 @@ fn parse_document(source_text: &str, source_path: Option<String>) -> MantDocumen
         ids.remap_target(document_title_id.as_deref(), replacement);
     }
     normalize_markdown_layout(&source, &mut root_blocks, &mut sections);
-    normalize_option_lists(&mut root_blocks);
-    normalize_section_options(&mut sections);
+    normalize_entry_lists(&mut root_blocks, &mut declarations, entry_diagnostics);
+    normalize_section_entries(&mut sections, &mut declarations, entry_diagnostics);
+    for declaration in declarations.into_values() {
+        entry_diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("markdown.semantic-entry-list".to_owned()),
+            message: "semantic-entry directive did not resolve to a Markdown bullet list"
+                .to_owned(),
+            source: Some(declaration.source),
+        });
+    }
     let retained_targets = crate::definitions::identify_definitions(
+        &mut root_blocks,
         &mut sections,
         &ids.targets.keys().cloned().collect(),
     );
@@ -325,10 +361,14 @@ fn markdown_producer() -> Producer {
     }
 }
 
-fn normalize_section_options(sections: &mut [Section]) {
+fn normalize_section_entries(
+    sections: &mut [Section],
+    declarations: &mut BTreeMap<u32, options::EntryDeclaration>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     for section in sections {
-        normalize_option_lists(&mut section.blocks);
-        normalize_section_options(&mut section.children);
+        normalize_entry_lists(&mut section.blocks, declarations, diagnostics);
+        normalize_section_entries(&mut section.children, declarations, diagnostics);
     }
 }
 

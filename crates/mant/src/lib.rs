@@ -10,8 +10,7 @@ mod mcp;
 use std::io::{self, IsTerminal, Read, Write};
 
 use mant_ast::{
-    ExcerptSelection, QueryBundle, QueryInput, QueryRequest, QueryView, SearchQuery, SourceFormat,
-    TldrCacheUpdate,
+    QueryBundle, QueryInput, QueryRequest, QueryView, SearchQuery, SourceFormat, TldrCacheUpdate,
 };
 use mant_core::{ProjectionError, QueryError, QueryPolicy, SearchError};
 use mant_sources::DocumentSourcesUpdate;
@@ -46,7 +45,6 @@ struct QueryExecution {
     presentation: QueryPresentation,
     pretty: bool,
     manual_only: bool,
-    explain: bool,
     preserve_anchors: bool,
 }
 
@@ -285,7 +283,6 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             presentation,
             pretty,
             manual_only,
-            explain,
             preserve_anchors,
         } => execute_query(
             QueryExecution {
@@ -293,7 +290,6 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
                 presentation,
                 pretty,
                 manual_only,
-                explain,
                 preserve_anchors,
             },
             input,
@@ -341,7 +337,6 @@ fn execute_query(
         view,
         format,
         command.pretty,
-        command.explain,
         command.preserve_anchors,
     )
 }
@@ -394,7 +389,6 @@ fn render_query_view(
     view: QueryView,
     format: QueryFormat,
     pretty: bool,
-    explain: bool,
     preserve_anchors: bool,
 ) -> Result<String, Failure> {
     match view {
@@ -414,21 +408,12 @@ fn render_query_view(
         }
         QueryView::Excerpt { nodes } => {
             let excerpt = mant_core::select_excerpt(query, &nodes).map_err(projection_failure)?;
-            if explain {
-                validate_explanation(&excerpt)?;
-            }
-            match format {
-                QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown_with_options(
-                    &excerpt,
-                    mant_core::MarkdownOptions { preserve_anchors },
-                )),
-                QueryFormat::Text | QueryFormat::Man => {
-                    Ok(mant_core::render_excerpt_text(&excerpt))
-                }
-                QueryFormat::Json => {
-                    mant_core::render_excerpt_json(&excerpt, pretty).map_err(Failure::operational)
-                }
-            }
+            render_excerpt(&excerpt, format, pretty, preserve_anchors)
+        }
+        QueryView::Explain { entry } => {
+            let excerpt =
+                mant_core::select_explanation(query, &entry).map_err(projection_failure)?;
+            render_excerpt(&excerpt, format, pretty, preserve_anchors)
         }
         QueryView::Search {
             pattern,
@@ -465,18 +450,22 @@ fn render_query_view(
     }
 }
 
-/// Keep `--explain` focused on one semantic definition while reusing the
-/// versioned excerpt response used by `--node` and stdin requests.
-fn validate_explanation(excerpt: &mant_ast::QueryExcerpt) -> Result<(), Failure> {
-    if matches!(
-        excerpt.selections.as_slice(),
-        [ExcerptSelection::DocumentEntry { .. }]
-    ) {
-        return Ok(());
+fn render_excerpt(
+    excerpt: &mant_ast::QueryExcerpt,
+    format: QueryFormat,
+    pretty: bool,
+    preserve_anchors: bool,
+) -> Result<String, Failure> {
+    match format {
+        QueryFormat::Markdown => Ok(mant_core::render_excerpt_markdown_with_options(
+            excerpt,
+            mant_core::MarkdownOptions { preserve_anchors },
+        )),
+        QueryFormat::Text | QueryFormat::Man => Ok(mant_core::render_excerpt_text(excerpt)),
+        QueryFormat::Json => {
+            mant_core::render_excerpt_json(excerpt, pretty).map_err(Failure::operational)
+        }
     }
-    Err(Failure::usage(
-        "--explain requires one option, command, or environment variable; use --node for sections",
-    ))
 }
 
 fn render_full_query(
@@ -515,7 +504,9 @@ fn projection_failure(error: ProjectionError) -> Failure {
         ProjectionError::MissingContent { .. } => Failure::operational(error),
         ProjectionError::EmptySelection
         | ProjectionError::EmptySelector
-        | ProjectionError::UnknownSelector { .. } => Failure::usage(error),
+        | ProjectionError::UnknownSelector { .. }
+        | ProjectionError::AmbiguousSelector { .. }
+        | ProjectionError::ExplanationRequiresEntry { .. } => Failure::usage(error),
     }
 }
 
@@ -601,6 +592,11 @@ fn validate_query_request(request: &QueryRequest) -> Result<(), Failure> {
         if nodes.iter().any(|node| node.trim().is_empty()) {
             return Err(Failure::usage("outline node must not be empty"));
         }
+    }
+    if let QueryView::Explain { entry } = &request.view
+        && entry.trim().is_empty()
+    {
+        return Err(Failure::usage("semantic entry must not be empty"));
     }
     if let QueryView::Search {
         pattern,
@@ -701,10 +697,10 @@ mod tests {
     use mant_sources::{DocumentSourcesUpdate, DocumentSourcesUpdateSchema};
 
     use mant_ast::{
-        Block, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta, DocumentSchema,
-        DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle, QueryInput,
-        QueryRequest, QuerySchema, Section, SourceFormat, TldrCacheAction, TldrCacheUpdate,
-        TldrDocument, TldrOrigin,
+        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
+        DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle,
+        QueryInput, QueryRequest, QuerySchema, Section, SourceFormat, TldrCacheAction,
+        TldrCacheUpdate, TldrDocument, TldrOrigin,
     };
 
     use super::{
@@ -951,6 +947,7 @@ mod tests {
                 identity: Some(DefinitionIdentity {
                     id: "exclude".to_owned(),
                     role: DefinitionRole::Option,
+                    case: DefinitionCase::Sensitive,
                     names: vec!["--exclude".to_owned()],
                 }),
                 terms: vec![vec![Inline::Text {
@@ -1136,7 +1133,7 @@ mod tests {
     }
 
     #[test]
-    fn explains_one_semantic_entry_without_changing_the_excerpt_contract() {
+    fn explains_one_semantic_entry_through_the_excerpt_response() {
         let host = FakeHost::with_explainable_manual();
         let (status, output, diagnostics) = invoke(&["demo", "--explain", "--exclude"], b"", &host);
 
@@ -1167,7 +1164,7 @@ mod tests {
         let (status, output, diagnostics) = invoke(&["demo", "--explain=2"], b"", &host);
         assert_eq!(status, 2);
         assert!(output.is_empty());
-        assert!(diagnostics.contains("--explain requires one option"));
+        assert!(diagnostics.contains("is not a semantic entry; use --node for sections"));
     }
 
     #[test]

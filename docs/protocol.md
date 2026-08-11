@@ -166,7 +166,7 @@ Every request has three required fields:
 | --- | --- | --- |
 | `schema` | Exact string | Must be `mant.request/v5` |
 | `input` | `QueryInput` union | Resolvable document name or local Markdown path |
-| `view` | `QueryView` union | Full, outline, excerpt, or search projection |
+| `view` | `QueryView` union | Full, outline, excerpt, explain, or search projection |
 
 ### Input Variants
 
@@ -228,8 +228,9 @@ mode does not change the versioned request schema.
 | `kind` | Additional fields | Defaults and bounds | Response |
 | --- | --- | --- | --- |
 | `full` | None | None | `mant.query/v4` |
-| `outline` | `detail` | Required: `sections` or `options` | `mant.outline/v4` |
+| `outline` | `detail` | Required: `sections` or `entries` | `mant.outline/v4` |
 | `excerpt` | `nodes` | Non-empty string array | `mant.excerpt/v4` |
+| `explain` | `entry` | One non-empty semantic path, ID, or alias | `mant.excerpt/v4` |
 | `search` | Search fields below | Defaults are applied while decoding | `mant.search/v4` |
 
 Search view fields are:
@@ -279,7 +280,23 @@ Discover all sections and semantic entries:
   },
   "view": {
     "kind": "outline",
-    "detail": "options"
+    "detail": "entries"
+  }
+}
+```
+
+Explain one semantic entry directly (sections with the same name are ignored):
+
+```json
+{
+  "schema": "mant.request/v5",
+  "input": {
+    "kind": "document",
+    "name": "tar"
+  },
+  "view": {
+    "kind": "explain",
+    "entry": "--exclude"
   }
 }
 ```
@@ -330,7 +347,7 @@ A shell client can send a request without a temporary file:
 
 ```sh
 printf '%s\n' \
-  '{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"options"}}' \
+  '{"schema":"mant.request/v5","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"entries"}}' \
   | mant --request-json --format json --compact
 ```
 
@@ -476,13 +493,16 @@ An identity makes one definition addressable:
 {
   "id": "option-exclude",
   "role": "option",
+  "case": "sensitive",
   "names": [
     "--exclude"
   ]
 }
 ```
 
-Roles are `option`, `command`, and `environment-variable`. `names` contains
+Roles are `option`, `command`, and `environment-variable`. `case` is
+`sensitive` or `insensitive` and controls alias matching without changing
+canonical spelling. `names` contains
 normalized aliases suitable for `--node`, `--explain`, outline navigation,
 and MCP tools. The complete styled term remains in `terms`; consumers should
 not rebuild visible text from `names`.
@@ -541,7 +561,7 @@ before an agent requests content:
 | Field | Meaning |
 | --- | --- |
 | `schema` | `mant.outline/v4` |
-| `detail` | Echoed `sections` or `options` mode |
+| `detail` | Echoed `sections` or `entries` mode |
 | `label` | Query label |
 | `source`, `meta` | Optional document identity |
 | `nodes` | Recursive addressable tree |
@@ -553,10 +573,10 @@ Node kinds are:
 | `tldr` | `0` | Reserved quick reference |
 | `document-root` | `root` | Content before the first heading |
 | `document-section` | `1`, `1.2`, `1.2.1` | Recursive `children` |
-| `document-entry` | `1.2/o3` | `role` and normalized `names` |
+| `document-entry` | `1.2/o3` | `role`, `case`, and normalized `names` |
 
-`detail = "sections"` omits semantic entries. `detail = "options"` includes
-all recognized entry roles despite the historical option-oriented name.
+`detail = "sections"` omits semantic entries. `detail = "entries"` includes
+all recognized entry roles.
 
 Paths are convenient human locations. IDs and aliases are better selectors
 when nearby section numbering changes. Neither is globally unique across
@@ -567,7 +587,7 @@ An illustrative response is:
 ```json
 {
   "schema": "mant.outline/v4",
-  "detail": "options",
+  "detail": "entries",
   "label": "tool.md",
   "source": {
     "format": "markdown",
@@ -595,6 +615,7 @@ An illustrative response is:
           "id": "option-help",
           "title": "-h, --help",
           "role": "option",
+          "case": "sensitive",
           "names": [
             "-h",
             "--help"
@@ -630,6 +651,12 @@ Selectors may be outline paths, document IDs, or semantic aliases. Overlapping
 selections are deduplicated, and source order is preserved. Selecting a
 section includes its descendants. Breadcrumbs identify ancestors without
 copying their blocks.
+
+Paths and IDs are resolved before aliases. A repeated alias is an error rather
+than a first-match selection; the diagnostic returns every candidate path and
+ID in source order. The `explain` view searches semantic entries only, so a
+same-named section cannot shadow an option, command, or environment variable.
+Sections remain available through the `excerpt` view and `--node`.
 
 Direct `mant --explain=--exclude` and MCP `mant_document_explain` reuse this
 contract, then require the result to contain exactly one `document-entry`.
@@ -773,7 +800,7 @@ read-only tools:
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
 | `mant_documents_list` | None | `query`, `kind`, `source`, `section`, `limit`, `offset` | Paginated document catalog |
-| `mant_document_outline` | `name` | `source` or `section`; `detail`, default `options` | `mant.outline/v4` |
+| `mant_document_outline` | `name` | `source` or `section`; `detail`, default `entries` | `mant.outline/v4` |
 | `mant_document_get` | `name`, non-empty `nodes` | `source` or `section` | `mant.excerpt/v4` |
 | `mant_document_explain` | `name`, `entry` | `source` or `section` | `mant.excerpt/v4` |
 | `mant_document_search` | `name`, `pattern` | `source` or `section`, plus search settings | `mant.search/v4` |
@@ -823,7 +850,7 @@ An outline tool call is:
     "name": "mant_document_outline",
     "arguments": {
       "name": "tar",
-      "detail": "options"
+      "detail": "entries"
     }
   }
 }
