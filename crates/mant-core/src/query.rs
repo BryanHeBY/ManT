@@ -178,20 +178,7 @@ fn read_capped_utf8(reader: impl Read, limit: u64) -> Result<String, String> {
 
 /// Read bounded UTF-8 while preserving failures from the underlying reader.
 pub(crate) fn read_capped_utf8_io(reader: impl Read, limit: u64) -> io::Result<String> {
-    let mut bytes = Vec::new();
-    reader.take(limit + 1).read_to_end(&mut bytes)?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Markdown document exceeds the {limit}-byte limit"),
-        ));
-    }
-    String::from_utf8(bytes).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Markdown document must be UTF-8",
-        )
-    })
+    crate::bounded::read_utf8(reader, limit, "Markdown document")
 }
 
 fn query_with(
@@ -204,7 +191,7 @@ fn query_with(
             name,
             source,
             section,
-        } => query_manual(name, source.as_deref(), section.as_deref(), policy, host),
+        } => query_named_document(name, source.as_deref(), section.as_deref(), policy, host),
         QueryInput::MarkdownFile { path } => query_markdown_file(path, policy, host),
     }
 }
@@ -276,7 +263,7 @@ pub fn query_markdown_text(
     })
 }
 
-fn query_manual(
+fn query_named_document(
     name: &str,
     requested_source: Option<&str>,
     requested_section: Option<&str>,
@@ -408,7 +395,7 @@ fn load_manual(
 
     let document = direct.map_err(|error| {
         format!(
-            "could not load manual '{}': source/libmandoc: {error}",
+            "could not load manual '{}': manual source: {error}",
             request.name
         )
     })?;
@@ -767,7 +754,7 @@ mod tests {
             .expect_err("empty query must fail");
         assert_eq!(
             error.to_string(),
-            "could not load manual 'tool': source/libmandoc: source not found"
+            "could not load manual 'tool': manual source: source not found"
         );
     }
 

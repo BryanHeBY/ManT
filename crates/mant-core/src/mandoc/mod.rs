@@ -2,6 +2,7 @@
 
 mod blocks;
 mod diagnostics;
+mod error;
 pub(crate) mod inline;
 mod layout;
 mod navigation;
@@ -24,7 +25,7 @@ use self::{
 };
 use crate::ManualPage;
 
-pub use libmandoc_rs::ParseError;
+pub use error::{ManualError, ManualErrorKind};
 pub use source::MAX_MANUAL_BYTES;
 
 /// Parse and normalize one standalone man or mdoc source file.
@@ -35,8 +36,8 @@ pub use source::MAX_MANUAL_BYTES;
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] when the source cannot be opened, decoded, or parsed.
-pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ParseError> {
+/// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
+pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ManualError> {
     let loaded = load_manual_source(path)?;
     parse_plain_manual(path, &loaded.source, None)
 }
@@ -46,8 +47,8 @@ pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ParseError> {
 ///
 /// # Errors
 ///
-/// Returns [`ParseError`] when the source cannot be opened, decoded, or parsed.
-pub fn parse_manual_page(page: &ManualPage) -> Result<MantDocument, ParseError> {
+/// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
+pub fn parse_manual_page(page: &ManualPage) -> Result<MantDocument, ManualError> {
     let resolved = resolve_manual_redirects(page)?;
     parse_plain_manual(
         &page.path,
@@ -60,12 +61,13 @@ fn parse_plain_manual(
     path: &Path,
     source: &[u8],
     alias_target: Option<&str>,
-) -> Result<MantDocument, ParseError> {
+) -> Result<MantDocument, ManualError> {
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
         compression: Compression::Plain,
     })
-    .parse_bytes(path, source)?;
+    .parse_bytes(path, source)
+    .map_err(ManualError::from)?;
     let mut document = lower_mandoc_document(path, &report);
     if let Some(alias_target) = alias_target {
         document.meta.alias_target = Some(alias_target.to_owned());

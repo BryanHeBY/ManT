@@ -338,7 +338,7 @@ impl TldrFileReader for SystemFileReader {
         // other markdown source. Reading unbounded here lets a corrupt cache
         // entry or a device file streamed in its place exhaust memory.
         let file = fs::File::open(path)?;
-        crate::query::read_capped_utf8_io(file, crate::query::MAX_MARKDOWN_BYTES)
+        crate::bounded::read_utf8(file, crate::query::MAX_MARKDOWN_BYTES, "Markdown document")
     }
 }
 

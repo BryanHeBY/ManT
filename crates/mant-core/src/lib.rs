@@ -1,8 +1,8 @@
 //! Manual source, query, and output engine independent from its process hosts.
 
+mod bounded;
 mod catalog;
 mod definitions;
-mod documents;
 mod executable;
 mod inline;
 #[cfg(unix)]
@@ -19,12 +19,11 @@ mod tldr;
 pub use catalog::{
     AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, list_available_documents,
 };
-pub use documents::{
-    RegisteredDocument, RegisteredDocumentOrigin, find_registered_document,
-    list_registered_documents,
-};
 #[cfg(unix)]
-pub use mandoc::{MAX_MANUAL_BYTES, lower_mandoc_document, parse_manual_page, parse_manual_source};
+pub use mandoc::{
+    MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_page,
+    parse_manual_source,
+};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
     MarkdownOptions, render_excerpt_json, render_excerpt_markdown,
@@ -43,9 +42,10 @@ pub use source::{
     locate_manual_source, locate_manual_source_in, system_manual_index,
 };
 pub use sources::{
-    DocumentPaths, DocumentSourcesUpdate, DocumentSourcesUpdateSchema, RepositorySource,
-    SourceConfig, SourceConfigError, SourceUpdateAction, SourceUpdateResult, document_paths,
-    load_source_config, update_document_sources,
+    DocumentPaths, DocumentSourcesUpdate, DocumentSourcesUpdateSchema, RegisteredDocument,
+    RegisteredDocumentOrigin, RepositorySource, SourceConfig, SourceConfigError,
+    SourceUpdateAction, SourceUpdateResult, document_paths, find_registered_document,
+    list_registered_documents, load_source_config, update_document_sources,
 };
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, TldrUpdateError,

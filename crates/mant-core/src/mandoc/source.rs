@@ -10,9 +10,10 @@ use std::{
 };
 
 use flate2::read::MultiGzDecoder;
-use libmandoc_rs::{ParseError, ParseErrorKind};
 
 use crate::ManualPage;
+
+use super::error::ManualError;
 
 /// Upper bound on both the stored and decoded form of one manual source chain.
 ///
@@ -23,71 +24,101 @@ const MAX_SO_REDIRECTS: usize = 16;
 
 pub(super) struct LoadedManualSource {
     pub(super) source: Vec<u8>,
-    stored_bytes: usize,
 }
 
+#[derive(Debug)]
 pub(super) struct ResolvedManualSource {
     pub(super) source: Vec<u8>,
     pub(super) alias_target: Option<String>,
 }
 
-pub(super) fn load_manual_source(path: &Path) -> Result<LoadedManualSource, ParseError> {
-    let file =
-        File::open(path).map_err(|error| source_error(path, ParseErrorKind::Read, &error))?;
-    let stored = read_capped(file, MAX_MANUAL_BYTES)
-        .map_err(|error| source_error(path, ParseErrorKind::Read, &error))?;
-    let stored_bytes = stored.len();
+#[derive(Clone, Copy)]
+struct ManualBudget {
+    stored_remaining: u64,
+    decoded_remaining: u64,
+}
+
+impl ManualBudget {
+    const fn new(limit: u64) -> Self {
+        Self {
+            stored_remaining: limit,
+            decoded_remaining: limit,
+        }
+    }
+
+    fn charge_stored(&mut self, path: &Path, amount: usize) -> Result<(), ManualError> {
+        self.stored_remaining = remaining_budget(path, self.stored_remaining, amount, "stored")?;
+        Ok(())
+    }
+
+    fn charge_decoded(&mut self, path: &Path, amount: usize) -> Result<(), ManualError> {
+        self.decoded_remaining = remaining_budget(path, self.decoded_remaining, amount, "decoded")?;
+        Ok(())
+    }
+}
+
+pub(super) fn load_manual_source(path: &Path) -> Result<LoadedManualSource, ManualError> {
+    load_manual_source_with_budget(path, &mut ManualBudget::new(MAX_MANUAL_BYTES))
+}
+
+fn load_manual_source_with_budget(
+    path: &Path,
+    budget: &mut ManualBudget,
+) -> Result<LoadedManualSource, ManualError> {
+    let file = File::open(path).map_err(|error| source_error(path, &error))?;
+    let stored =
+        read_capped(file, budget.stored_remaining).map_err(|error| source_error(path, &error))?;
+    budget.charge_stored(path, stored.len())?;
 
     if stored.starts_with(&[0x1f, 0x8b]) || path.extension().is_some_and(|value| value == "gz") {
-        let source = read_capped(MultiGzDecoder::new(Cursor::new(stored)), MAX_MANUAL_BYTES)
-            .map_err(|error| decompression_error(path, "gzip", &error))?;
-        return Ok(LoadedManualSource {
-            source,
-            stored_bytes,
-        });
+        let source = read_capped(
+            MultiGzDecoder::new(Cursor::new(stored)),
+            budget.decoded_remaining,
+        )
+        .map_err(|error| decompression_error(path, "gzip", &error))?;
+        budget.charge_decoded(path, source.len())?;
+        return Ok(LoadedManualSource { source });
     }
     if stored.starts_with(&[0x28, 0xb5, 0x2f, 0xfd])
         || path.extension().is_some_and(|value| value == "zst")
     {
         let decoder = zstd::stream::read::Decoder::new(Cursor::new(stored))
             .map_err(|error| decompression_error(path, "zstd", &error))?;
-        let source = read_capped(decoder, MAX_MANUAL_BYTES)
+        let source = read_capped(decoder, budget.decoded_remaining)
             .map_err(|error| decompression_error(path, "zstd", &error))?;
-        return Ok(LoadedManualSource {
-            source,
-            stored_bytes,
-        });
+        budget.charge_decoded(path, source.len())?;
+        return Ok(LoadedManualSource { source });
     }
-    Ok(LoadedManualSource {
-        source: stored,
-        stored_bytes,
-    })
+    budget.charge_decoded(path, stored.len())?;
+    Ok(LoadedManualSource { source: stored })
 }
 
 pub(super) fn resolve_manual_redirects(
     page: &ManualPage,
-) -> Result<ResolvedManualSource, ParseError> {
+) -> Result<ResolvedManualSource, ManualError> {
+    resolve_manual_redirects_with_budget(page, ManualBudget::new(MAX_MANUAL_BYTES))
+}
+
+fn resolve_manual_redirects_with_budget(
+    page: &ManualPage,
+    mut budget: ManualBudget,
+) -> Result<ResolvedManualSource, ManualError> {
     let manual_root = fs::canonicalize(&page.manual_root)
-        .map_err(|error| source_error(&page.manual_root, ParseErrorKind::Read, &error))?;
+        .map_err(|error| source_error(&page.manual_root, &error))?;
     let mut current = canonical_manual_path(&page.path, &manual_root)?;
     let mut visited = HashSet::new();
     let mut redirects = 0_usize;
-    let mut stored_total = 0_u64;
-    let mut decoded_total = 0_u64;
     let mut alias_target = None;
 
     loop {
         if !visited.insert(current.clone()) {
-            return Err(manual_error(
+            return Err(ManualError::redirect(
                 &current,
-                ParseErrorKind::Parse,
                 "manual .so redirect cycle detected",
             ));
         }
 
-        let loaded = load_manual_source(&current)?;
-        charge_chain_budget(&current, &mut stored_total, loaded.stored_bytes, "stored")?;
-        charge_chain_budget(&current, &mut decoded_total, loaded.source.len(), "decoded")?;
+        let loaded = load_manual_source_with_budget(&current, &mut budget)?;
 
         let Some(target) = redirect_target(&current, &loaded.source)? else {
             return Ok(ResolvedManualSource {
@@ -96,9 +127,8 @@ pub(super) fn resolve_manual_redirects(
             });
         };
         if redirects == MAX_SO_REDIRECTS {
-            return Err(manual_error(
+            return Err(ManualError::redirect(
                 &current,
-                ParseErrorKind::Parse,
                 format!("manual .so redirect depth exceeds {MAX_SO_REDIRECTS}"),
             ));
         }
@@ -108,13 +138,11 @@ pub(super) fn resolve_manual_redirects(
     }
 }
 
-fn canonical_manual_path(path: &Path, manual_root: &Path) -> Result<PathBuf, ParseError> {
-    let canonical =
-        fs::canonicalize(path).map_err(|error| source_error(path, ParseErrorKind::Read, &error))?;
+fn canonical_manual_path(path: &Path, manual_root: &Path) -> Result<PathBuf, ManualError> {
+    let canonical = fs::canonicalize(path).map_err(|error| source_error(path, &error))?;
     if !canonical.starts_with(manual_root) {
-        return Err(manual_error(
+        return Err(ManualError::unsafe_path(
             path,
-            ParseErrorKind::InvalidPath,
             format!(
                 "manual source resolves outside manual root '{}'",
                 manual_root.display()
@@ -124,28 +152,23 @@ fn canonical_manual_path(path: &Path, manual_root: &Path) -> Result<PathBuf, Par
     Ok(canonical)
 }
 
-fn charge_chain_budget(
+fn remaining_budget(
     path: &Path,
-    total: &mut u64,
+    remaining: u64,
     amount: usize,
     form: &str,
-) -> Result<(), ParseError> {
+) -> Result<u64, ManualError> {
     let amount = u64::try_from(amount)
-        .map_err(|_| manual_error(path, ParseErrorKind::Read, "manual byte budget overflow"))?;
-    *total = total
-        .checked_add(amount)
-        .ok_or_else(|| manual_error(path, ParseErrorKind::Read, "manual byte budget overflow"))?;
-    if *total > MAX_MANUAL_BYTES {
-        return Err(manual_error(
+        .map_err(|_| ManualError::limit(path, "manual byte budget overflow"))?;
+    remaining.checked_sub(amount).ok_or_else(|| {
+        ManualError::limit(
             path,
-            ParseErrorKind::Read,
             format!("manual .so chain exceeds the {MAX_MANUAL_BYTES}-byte {form} input limit"),
-        ));
-    }
-    Ok(())
+        )
+    })
 }
 
-fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u8>>, ParseError> {
+fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u8>>, ManualError> {
     let mut target = None;
     let mut has_other_content = false;
 
@@ -178,7 +201,7 @@ fn so_request_payload(line: &[u8]) -> Option<&[u8]> {
     (payload.is_empty() || payload[0].is_ascii_whitespace()).then_some(payload)
 }
 
-fn parse_so_target(path: &Path, payload: &[u8]) -> Result<Vec<u8>, ParseError> {
+fn parse_so_target(path: &Path, payload: &[u8]) -> Result<Vec<u8>, ManualError> {
     let payload = trim_ascii(payload);
     let target_end = payload
         .iter()
@@ -190,9 +213,8 @@ fn parse_so_target(path: &Path, payload: &[u8]) -> Result<Vec<u8>, ParseError> {
         || target.contains(&0)
         || (!trailing.is_empty() && !trailing.starts_with(b"\\\"") && !trailing.starts_with(b"\\#"))
     {
-        return Err(manual_error(
+        return Err(ManualError::redirect(
             path,
-            ParseErrorKind::Parse,
             "manual .so redirect must contain exactly one target path",
         ));
     }
@@ -215,27 +237,22 @@ fn trim_ascii(mut value: &[u8]) -> &[u8] {
     value
 }
 
-fn unsupported_so_error(path: &Path) -> ParseError {
-    manual_error(
-        path,
-        ParseErrorKind::Parse,
-        "only redirect-only .so manual pages are supported",
-    )
+fn unsupported_so_error(path: &Path) -> ManualError {
+    ManualError::redirect(path, "only redirect-only .so manual pages are supported")
 }
 
 fn resolve_redirect_target(
     source_path: &Path,
     manual_root: &Path,
     target: &[u8],
-) -> Result<PathBuf, ParseError> {
+) -> Result<PathBuf, ManualError> {
     let target_path = Path::new(OsStr::from_bytes(target));
     if target_path
         .components()
         .any(|component| !matches!(component, Component::Normal(_)))
     {
-        return Err(manual_error(
+        return Err(ManualError::unsafe_path(
             source_path,
-            ParseErrorKind::InvalidPath,
             format!(
                 "manual .so target '{}' is not a safe relative path",
                 target_path.to_string_lossy()
@@ -264,22 +281,20 @@ fn resolve_redirect_target(
         match fs::canonicalize(&candidate) {
             Ok(canonical) if canonical.starts_with(manual_root) => return Ok(canonical),
             Ok(_) => {
-                return Err(manual_error(
+                return Err(ManualError::unsafe_path(
                     &candidate,
-                    ParseErrorKind::InvalidPath,
                     "manual .so target resolves outside the manual root",
                 ));
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => {
-                return Err(source_error(&candidate, ParseErrorKind::Read, &error));
+                return Err(source_error(&candidate, &error));
             }
         }
     }
 
-    Err(manual_error(
+    Err(ManualError::read(
         source_path,
-        ParseErrorKind::Read,
         format!(
             "could not resolve manual .so target '{}'",
             target_path.to_string_lossy()
@@ -303,34 +318,25 @@ fn compression_candidates(path: &Path) -> Vec<PathBuf> {
 }
 
 fn read_capped(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
-    let mut source = Vec::new();
-    reader.take(limit + 1).read_to_end(&mut source)?;
-    if source.len() as u64 > limit {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("manual source exceeds the {limit}-byte limit"),
-        ));
-    }
-    Ok(source)
+    crate::bounded::read_bytes(reader, limit, "manual source")
 }
 
-fn source_error(path: &Path, kind: ParseErrorKind, error: &io::Error) -> ParseError {
-    manual_error(path, kind, error.to_string())
-}
-
-fn manual_error(path: &Path, kind: ParseErrorKind, message: impl Into<String>) -> ParseError {
-    ParseError {
-        path: path.to_path_buf(),
-        kind,
-        message: message.into(),
+fn source_error(path: &Path, error: &io::Error) -> ManualError {
+    if crate::bounded::is_limit_exceeded(error) {
+        ManualError::limit(path, error.to_string())
+    } else {
+        ManualError::read(path, error.to_string())
     }
 }
 
-fn decompression_error(path: &Path, format: &str, error: &io::Error) -> ParseError {
-    ParseError {
-        path: path.to_path_buf(),
-        kind: ParseErrorKind::Decompression,
-        message: format!("could not decompress {format} manual source: {error}"),
+fn decompression_error(path: &Path, format: &str, error: &io::Error) -> ManualError {
+    if crate::bounded::is_limit_exceeded(error) {
+        ManualError::limit(path, error.to_string())
+    } else {
+        ManualError::decompression(
+            path,
+            format!("could not decompress {format} manual source: {error}"),
+        )
     }
 }
 
@@ -343,13 +349,14 @@ mod tests {
         process,
     };
 
+    use crate::{ManualErrorKind, ManualPage};
     use flate2::{Compression as GzipCompression, write::GzEncoder};
-    use libmandoc_rs::ParseErrorKind;
-
-    use crate::ManualPage;
 
     use super::super::{parse_manual_page, parse_manual_source};
-    use super::{MAX_MANUAL_BYTES, MAX_SO_REDIRECTS, read_capped};
+    use super::{
+        MAX_MANUAL_BYTES, MAX_SO_REDIRECTS, ManualBudget, read_capped,
+        resolve_manual_redirects_with_budget,
+    };
 
     #[test]
     fn decodes_gzip_and_zstd_before_calling_libmandoc() {
@@ -468,8 +475,8 @@ mod tests {
         .expect_err("reject an embedded include");
         fs::remove_dir_all(root).expect("remove mixed source fixture");
 
-        assert_eq!(error.kind, ParseErrorKind::Parse);
-        assert!(error.message.contains("redirect-only"));
+        assert_eq!(error.kind(), ManualErrorKind::Redirect);
+        assert!(error.message().contains("redirect-only"));
     }
 
     #[test]
@@ -489,7 +496,7 @@ mod tests {
             manual_root: root.clone(),
         })
         .expect_err("reject a redirect cycle");
-        assert!(cycle.message.contains("cycle"));
+        assert!(cycle.message().contains("cycle"));
 
         let parent = man1.join("parent.1");
         fs::write(&parent, ".so ../outside.1\n").expect("write parent redirect");
@@ -500,7 +507,7 @@ mod tests {
             manual_root: root.clone(),
         })
         .expect_err("reject parent traversal");
-        assert_eq!(parent_error.kind, ParseErrorKind::InvalidPath);
+        assert_eq!(parent_error.kind(), ManualErrorKind::UnsafePath);
 
         let outside = base.join("outside.1");
         fs::write(
@@ -517,7 +524,7 @@ mod tests {
             manual_root: root.clone(),
         })
         .expect_err("reject a top-level symlink escaping the manual root");
-        assert_eq!(top_level_error.kind, ParseErrorKind::InvalidPath);
+        assert_eq!(top_level_error.kind(), ManualErrorKind::UnsafePath);
 
         symlink(&outside, man1.join("escape.1")).expect("link outside manual root");
         let alias = man1.join("alias.1");
@@ -531,8 +538,8 @@ mod tests {
         .expect_err("reject a symlink escaping the manual root");
         fs::remove_dir_all(base).expect("remove hostile redirect fixtures");
 
-        assert_eq!(symlink_error.kind, ParseErrorKind::InvalidPath);
-        assert!(symlink_error.message.contains("outside"));
+        assert_eq!(symlink_error.kind(), ManualErrorKind::UnsafePath);
+        assert!(symlink_error.message().contains("outside"));
     }
 
     #[test]
@@ -562,8 +569,34 @@ mod tests {
         .expect_err("reject an excessive redirect chain");
         fs::remove_dir_all(root).expect("remove deep redirect fixture");
 
-        assert_eq!(error.kind, ParseErrorKind::Parse);
-        assert!(error.message.contains("depth"));
+        assert_eq!(error.kind(), ManualErrorKind::Redirect);
+        assert!(error.message().contains("depth"));
+    }
+
+    #[test]
+    fn redirect_chain_reads_against_the_remaining_total_budget() {
+        let root = std::env::temp_dir().join(format!("mant-so-budget-{}", process::id()));
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("create manual section");
+        fs::write(man1.join("alias.1"), "                    \n.so target.1\n")
+            .expect("write padded redirect");
+        fs::write(
+            man1.join("target.1"),
+            ".TH BUDGET 1\n.SH NAME\nbudget \\- target\n",
+        )
+        .expect("write redirect target");
+        let page = ManualPage {
+            name: "alias".to_owned(),
+            section: "1".to_owned(),
+            path: man1.join("alias.1"),
+            manual_root: root.clone(),
+        };
+
+        let error = resolve_manual_redirects_with_budget(&page, ManualBudget::new(48))
+            .expect_err("combined redirect inputs must fit the total budget");
+        assert_eq!(error.kind(), ManualErrorKind::Limit);
+        assert!(error.message().contains("14-byte limit"), "{error}");
+        fs::remove_dir_all(root).expect("remove budget fixture");
     }
 
     #[test]

@@ -60,7 +60,7 @@ Fields are:
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `repo` | Yes | Git URL or local repository path |
+| `repo` | Yes | Git URL or local repository path; relative paths use the ManT data root |
 | `branch` | Yes | Exact branch checked through `refs/heads/<branch>` |
 | `path` | No | Directory inside the checkout; defaults to `.` |
 | `include` | No | Exact relative files or directory subtrees below `path` |

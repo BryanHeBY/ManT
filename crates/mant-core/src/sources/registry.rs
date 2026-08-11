@@ -7,7 +7,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use crate::sources::{SOURCE_METADATA_FILE, SourceConfigError, is_source_name, load_source_config};
+use super::{SOURCE_METADATA_FILE, SourceConfigError, is_source_name, load_source_config};
 
 const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 
@@ -185,8 +185,8 @@ fn markdown_extension_priority(path: &Path) -> Option<u8> {
 mod tests {
     use std::{collections::BTreeMap, fs, path::PathBuf};
 
+    use super::super::{RepositorySource, SourceConfig};
     use super::{RegisteredDocumentOrigin, scan_directory};
-    use crate::sources::{RepositorySource, SourceConfig};
 
     fn temporary_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
