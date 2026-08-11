@@ -608,7 +608,7 @@ fn windows_suffix_fixture() -> PathBuf {
     fs::create_dir_all(&beta).expect("create beta source");
     fs::write(
         data_root.join("sources.toml"),
-        "[alpha]\nrepo = \"https://example.invalid/alpha.git\"\n\n[beta]\nrepo = \"https://example.invalid/beta.git\"\n",
+        "[alpha]\nrepo = \"https://example.invalid/alpha.git\"\nbranch = \"main\"\n\n[beta]\nrepo = \"https://example.invalid/beta.git\"\nbranch = \"main\"\n",
     )
     .expect("write source config");
     fs::write(alpha.join(".mant-source.toml"), "revision = \"alpha\"\n")
@@ -749,20 +749,34 @@ fn windows_frontends_follow_pathext_without_crossing_source_boundaries() {
 #[cfg(windows)]
 #[test]
 fn windows_script_host_accepts_documented_double_slash_options() {
-    let script = std::env::temp_dir().join(format!(
-        "mant-wsh-options-process-{}.vbs",
-        std::process::id()
-    ));
-    fs::write(&script, "WScript.Echo \"mant-wsh-double-slash\"\r\n").expect("write WSH fixture");
+    let fixture =
+        std::env::temp_dir().join(format!("mant-wsh-options-process-{}", std::process::id()));
+    fs::create_dir_all(&fixture).expect("create WSH fixture");
+    let script = fixture.join("check.vbs");
+    let marker = fixture.join("executed.txt");
+    fs::write(
+        &script,
+        concat!(
+            "Set output = CreateObject(\"Scripting.FileSystemObject\")",
+            ".CreateTextFile(WScript.Arguments(0), True)\r\n",
+            "output.Write \"mant-wsh-double-slash\"\r\n",
+            "output.Close\r\n",
+        ),
+    )
+    .expect("write WSH fixture");
     let output = Command::new("cscript.exe")
         .args(["//B", "//Nologo"])
         .arg(&script)
+        .arg(&marker)
         .output()
         .expect("run Windows Script Host");
-    fs::remove_file(script).expect("remove WSH fixture");
 
     assert!(output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("mant-wsh-double-slash"));
+    assert_eq!(
+        fs::read_to_string(&marker).expect("read WSH marker"),
+        "mant-wsh-double-slash"
+    );
+    fs::remove_dir_all(fixture).expect("remove WSH fixture");
 }
 
 #[test]
