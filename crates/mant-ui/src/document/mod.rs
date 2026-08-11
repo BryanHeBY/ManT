@@ -559,7 +559,12 @@ impl DocumentBuilder {
                     }
                     let marker = match kind {
                         ListKind::Bullet => "• ".to_owned(),
-                        ListKind::Ordered => format!("{}. ", start.unwrap_or(1) + index as u64),
+                        ListKind::Ordered => format!(
+                            "{}. ",
+                            start
+                                .unwrap_or(1)
+                                .saturating_add(u64::try_from(index).unwrap_or(u64::MAX))
+                        ),
                         ListKind::Plain => String::new(),
                     };
                     let has_marker = !marker.is_empty();
@@ -1576,6 +1581,53 @@ mod tests {
         assert_eq!(left_match[0].row, 1);
         assert_eq!(left_match[0].additional_fragments[0].row, 2);
         assert_eq!(rendered.search("right hand").len(), 1);
+    }
+
+    #[test]
+    fn narrow_tables_stack_cells_instead_of_dropping_content() {
+        let line = LogicalLine::table(
+            0,
+            vec![
+                vec![LogicalLine::plain(0, "a", Style::default())],
+                vec![LogicalLine::plain(0, "b", Style::default())],
+            ],
+        );
+
+        let rows = wrap_line(&line, 1);
+        assert_eq!(
+            rows.iter().map(ToString::to_string).collect::<String>(),
+            "ab"
+        );
+    }
+
+    #[test]
+    fn ordered_list_markers_saturate_instead_of_overflowing() {
+        let mut bundle = bundle();
+        let paragraph = |value: &str| Block::Paragraph {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::List {
+            kind: ListKind::Ordered,
+            start: Some(u64::MAX),
+            compact: true,
+            items: vec![
+                ListItem {
+                    blocks: vec![paragraph("first")],
+                },
+                ListItem {
+                    blocks: vec![paragraph("second")],
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let output = DocumentView::new(&bundle).render(80).text.to_string();
+        assert_eq!(output.matches("18446744073709551615. ").count(), 2);
     }
 
     #[test]

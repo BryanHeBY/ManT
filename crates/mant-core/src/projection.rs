@@ -8,6 +8,8 @@ use mant_ast::{
     QueryOutline, Section,
 };
 
+use crate::definitions::definition_entries;
+
 const TLDR_PATH: &str = "0";
 pub(crate) const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
@@ -155,13 +157,11 @@ pub fn build_outline_with_detail(
                 title: DOCUMENT_ROOT_TITLE.to_owned(),
             });
             if detail == OutlineDetail::Entries {
-                let mut entries = Vec::new();
-                collect_definition_entries(&manual.blocks, &mut entries);
                 nodes.extend(
-                    entries
+                    definition_entries(&manual.blocks)
                         .into_iter()
                         .enumerate()
-                        .filter_map(|(index, entry)| {
+                        .filter_map(|(index, (entry, _))| {
                             let identity = entry.identity.as_ref()?;
                             Some(OutlineNode::DocumentEntry {
                                 path: format!("{DOCUMENT_ROOT_PATH}/o{}", index + 1),
@@ -441,13 +441,11 @@ fn outline_nodes(
             let path = format_path(&coordinates);
             let mut children = Vec::new();
             if detail == OutlineDetail::Entries {
-                let mut entries = Vec::new();
-                collect_definition_entries(&section.blocks, &mut entries);
                 children.extend(
-                    entries
+                    definition_entries(&section.blocks)
                         .into_iter()
                         .enumerate()
-                        .filter_map(|(index, entry)| {
+                        .filter_map(|(index, (entry, _))| {
                             let identity = entry.identity.as_ref()?;
                             Some(OutlineNode::DocumentEntry {
                                 path: format!("{path}/o{}", index + 1),
@@ -623,9 +621,7 @@ fn collect_sections<'a>(
             id: section.id.clone(),
             title: section.title.clone(),
         });
-        let mut entries = Vec::new();
-        collect_definition_entries(&section.blocks, &mut entries);
-        for (index, entry) in entries.into_iter().enumerate() {
+        for (index, (entry, _)) in definition_entries(&section.blocks).into_iter().enumerate() {
             let Some(identity) = &entry.identity else {
                 continue;
             };
@@ -643,14 +639,12 @@ fn collect_sections<'a>(
 }
 
 fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a>>) {
-    let mut entries = Vec::new();
-    collect_definition_entries(blocks, &mut entries);
     let breadcrumbs = vec![OutlineReference {
         path: DOCUMENT_ROOT_PATH.to_owned(),
         id: DOCUMENT_ROOT_ID.to_owned(),
         title: DOCUMENT_ROOT_TITLE.to_owned(),
     }];
-    for (index, entry) in entries.into_iter().enumerate() {
+    for (index, (entry, _)) in definition_entries(blocks).into_iter().enumerate() {
         let Some(identity) = &entry.identity else {
             continue;
         };
@@ -662,39 +656,6 @@ fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a
             breadcrumbs: breadcrumbs.clone(),
             entry,
         });
-    }
-}
-
-fn collect_definition_entries<'a>(blocks: &'a [Block], output: &mut Vec<&'a DefinitionItem>) {
-    for block in blocks {
-        match block {
-            Block::List { items, .. } => {
-                for item in items {
-                    collect_definition_entries(&item.blocks, output);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    if item.identity.is_some() {
-                        output.push(item);
-                    }
-                    collect_definition_entries(&item.description, output);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for row in rows {
-                    for cell in &row.cells {
-                        collect_definition_entries(&cell.blocks, output);
-                    }
-                }
-            }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
     }
 }
 

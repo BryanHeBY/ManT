@@ -245,6 +245,26 @@ fn render_table_row_with_links(
     }
     let indent = indent.min(width.saturating_sub(1));
     let available = width.saturating_sub(indent).max(1);
+    if available < cells.len() {
+        let mut rows = cells
+            .iter()
+            .flat_map(|lines| lines.iter())
+            .flat_map(|line| {
+                let mut line = line.clone();
+                line.indent = line.indent.saturating_add(indent);
+                line.continuation_indent = line.continuation_indent.saturating_add(indent);
+                wrap_line_with_links(&line, width)
+            })
+            .collect::<Vec<_>>();
+        if rows.is_empty() {
+            rows.push(WrappedLine {
+                line: Line::default(),
+                links: Vec::new(),
+                search_cells: Vec::new(),
+            });
+        }
+        return rows;
+    }
     let base_width = available / cells.len();
     let remainder = available % cells.len();
     let column_widths = (0..cells.len())

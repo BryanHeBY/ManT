@@ -4,11 +4,10 @@
 //! complementary source map: it assigns each canonical Markdown offset to the
 //! most specific enclosing section or definition entry.
 
-use mant_ast::{
-    Block, DefinitionItem, QueryBundle, SearchNode, SearchSectionReference, Section, SourceSpan,
-};
+use mant_ast::{QueryBundle, SearchNode, SearchSectionReference, Section, SourceSpan};
 
 use crate::{
+    definitions::definition_entries,
     output::html_anchor,
     projection::{DOCUMENT_ROOT_ID, DOCUMENT_ROOT_PATH, DOCUMENT_ROOT_TITLE},
 };
@@ -183,9 +182,9 @@ fn collect_section_owners(
             source: section.source,
         });
 
-        let mut entries = Vec::new();
-        collect_entries(&section.blocks, &mut entries);
-        for (entry_index, (entry, source)) in entries.into_iter().enumerate() {
+        for (entry_index, (entry, source)) in
+            definition_entries(&section.blocks).into_iter().enumerate()
+        {
             let Some(identity) = &entry.identity else {
                 continue;
             };
@@ -218,42 +217,6 @@ fn collect_section_owners(
             section_owners,
             entry_owners,
         );
-    }
-}
-
-fn collect_entries<'a>(
-    blocks: &'a [Block],
-    output: &mut Vec<(&'a DefinitionItem, Option<SourceSpan>)>,
-) {
-    for block in blocks {
-        match block {
-            Block::List { items, .. } => {
-                for item in items {
-                    collect_entries(&item.blocks, output);
-                }
-            }
-            Block::DefinitionList { items, source, .. } => {
-                for item in items {
-                    if item.identity.is_some() {
-                        output.push((item, *source));
-                    }
-                    collect_entries(&item.description, output);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for row in rows {
-                    for cell in &row.cells {
-                        collect_entries(&cell.blocks, output);
-                    }
-                }
-            }
-            Block::Paragraph { .. }
-            | Block::Preformatted { .. }
-            | Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
     }
 }
 

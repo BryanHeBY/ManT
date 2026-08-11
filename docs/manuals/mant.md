@@ -392,7 +392,7 @@ mant tar --explain=--exclude
 
 - `--format FORMAT`: Select `markdown`, `text`, `man`, or `json`.
 - `--compact`: Omit JSON indentation.
-- `--preserve-anchors`: Retain addressable HTML anchors in Markdown output.
+- `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
 
 Clean Markdown output omits internal HTML anchors by default. The `man` format
 is plain manual content without an external tldr preface. Explicit output for

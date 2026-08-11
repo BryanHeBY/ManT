@@ -462,7 +462,12 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
     }
 
     let view = normalize_query_view(&mut parsed);
-    validate_output_options(parsed.compact, parsed.format, parsed.preserve_anchors)?;
+    validate_output_options(
+        parsed.compact,
+        parsed.format,
+        parsed.preserve_anchors,
+        &view,
+    )?;
     let source = normalize_query_source(
         parsed.request_json,
         parsed.name,
@@ -524,6 +529,7 @@ fn validate_output_options(
     compact: bool,
     format: Option<QueryFormat>,
     preserve_anchors: bool,
+    view: &QueryView,
 ) -> Result<(), clap::Error> {
     if compact && format != Some(QueryFormat::Json) {
         return Err(command_error(
@@ -535,6 +541,12 @@ fn validate_output_options(
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--preserve-anchors requires Markdown output",
+        ));
+    }
+    if preserve_anchors && matches!(view, QueryView::Outline { .. } | QueryView::Search { .. }) {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--preserve-anchors applies only to full documents and excerpts",
         ));
     }
     Ok(())
@@ -1059,6 +1071,8 @@ mod tests {
             vec!["git", "--format", "json", "--format", "text"],
             vec!["git", "--compact"],
             vec!["git", "--preserve-anchors", "--format", "json"],
+            vec!["git", "--outline", "--preserve-anchors"],
+            vec!["git", "--search", "branch", "--preserve-anchors"],
             vec!["--request-json", "git", "--format", "json"],
             vec!["--request-json", "--section", "1", "--format", "json"],
             vec!["--request-json", "--outline", "--format", "json"],

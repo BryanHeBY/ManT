@@ -11,7 +11,7 @@ use std::{
 
 use mant_ast::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline, LayoutHint,
-    Section,
+    Section, SourceSpan,
 };
 
 use crate::inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline};
@@ -42,6 +42,51 @@ pub(crate) fn identify_definitions(
         );
     }
     retained
+}
+
+/// Return identified definition items in the single source order shared by
+/// projection and search ownership, including the source of their containing
+/// definition list.
+pub(crate) fn definition_entries(blocks: &[Block]) -> Vec<(&DefinitionItem, Option<SourceSpan>)> {
+    let mut entries = Vec::new();
+    collect_definition_entries(blocks, &mut entries);
+    entries
+}
+
+fn collect_definition_entries<'a>(
+    blocks: &'a [Block],
+    output: &mut Vec<(&'a DefinitionItem, Option<SourceSpan>)>,
+) {
+    for block in blocks {
+        match block {
+            Block::List { items, .. } => {
+                for item in items {
+                    collect_definition_entries(&item.blocks, output);
+                }
+            }
+            Block::DefinitionList { items, source, .. } => {
+                for item in items {
+                    if item.identity.is_some() {
+                        output.push((item, *source));
+                    }
+                    collect_definition_entries(&item.description, output);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for row in rows {
+                    for cell in &row.cells {
+                        collect_definition_entries(&cell.blocks, output);
+                    }
+                }
+            }
+            Block::Paragraph { .. }
+            | Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
 }
 
 fn collect_section_ids(sections: &[Section], output: &mut HashSet<String>) {
