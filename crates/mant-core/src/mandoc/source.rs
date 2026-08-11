@@ -114,10 +114,13 @@ fn resolve_manual_redirects_with_budget(
     loop {
         let identity =
             fs::canonicalize(&current).map_err(|error| source_error(&current, &error))?;
-        if !identity.starts_with(&manual_root) {
+        // The first indexed leaf may be a file symlink to a source outside the
+        // collection. Every destination reached through `.so` remains bound
+        // to the configured manual root.
+        if redirects > 0 && !identity.starts_with(&manual_root) {
             return Err(ManualError::unsafe_path(
                 &current,
-                "indexed manual page resolves outside the manual root",
+                "manual .so target resolves outside the manual root",
             ));
         }
         if !visited.insert(identity.clone()) {
@@ -127,9 +130,7 @@ fn resolve_manual_redirects_with_budget(
             ));
         }
 
-        current = identity;
-
-        let loaded = load_manual_source_with_budget(&current, &mut budget)?;
+        let loaded = load_manual_source_with_budget(&identity, &mut budget)?;
 
         let Some(target) = redirect_target(&current, &loaded.source)? else {
             return Ok(ResolvedManualSource {
@@ -144,6 +145,8 @@ fn resolve_manual_redirects_with_budget(
             ));
         }
         alias_target.get_or_insert_with(|| String::from_utf8_lossy(&target).into_owned());
+        // Resolve a one-component target relative to the logical indexed path,
+        // rather than the external target of a leaf symlink.
         current = resolve_redirect_target(&current, &manual_root, &target)?;
         redirects += 1;
     }
@@ -355,9 +358,6 @@ mod tests {
         process,
     };
 
-    #[cfg(unix)]
-    use std::os::unix::fs::symlink;
-
     use crate::{ManualErrorKind, ManualPage};
     use flate2::{Compression as GzipCompression, write::GzEncoder};
 
@@ -366,6 +366,27 @@ mod tests {
         MAX_MANUAL_BYTES, MAX_SO_REDIRECTS, ManualBudget, read_capped,
         resolve_manual_redirects_with_budget,
     };
+
+    #[cfg(unix)]
+    fn symlink_file(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_file(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+
+    #[cfg(any(unix, windows))]
+    fn created_link(result: std::io::Result<()>) -> bool {
+        match result {
+            Ok(()) => true,
+            Err(error) if cfg!(windows) && error.kind() == std::io::ErrorKind::PermissionDenied => {
+                false
+            }
+            Err(error) => panic!("create fixture symlink: {error}"),
+        }
+    }
 
     #[test]
     fn decodes_gzip_and_zstd_before_calling_libmandoc() {
@@ -488,9 +509,8 @@ mod tests {
         assert!(error.message().contains("redirect-only"));
     }
 
-    #[cfg(unix)]
     #[test]
-    fn redirect_chains_reject_cycles_parent_paths_and_escaping_symlinks() {
+    fn redirect_chains_reject_cycles_and_parent_paths() {
         let base = std::env::temp_dir().join(format!("mant-hostile-so-{}", process::id()));
         let root = base.join("root");
         let man1 = root.join("man1");
@@ -519,24 +539,41 @@ mod tests {
         .expect_err("reject parent traversal");
         assert_eq!(parent_error.kind(), ManualErrorKind::UnsafePath);
 
+        fs::remove_dir_all(base).expect("remove hostile redirect fixtures");
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn leaf_symlinks_are_allowed_but_redirects_cannot_escape_the_manual_root() {
+        let base = std::env::temp_dir().join(format!("mant-linked-boundary-{}", process::id()));
+        let root = base.join("root");
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("create manual section");
+
         let outside = base.join("outside.1");
         fs::write(
             &outside,
-            ".TH OUTSIDE 1\n.SH NAME\noutside \\- must not be read\n",
+            ".TH OUTSIDE 1\n.SH NAME\noutside \\- explicit external leaf\n",
         )
         .expect("write outside source");
         let top_level_link = man1.join("top-level-link.1");
-        symlink(&outside, &top_level_link).expect("link top-level page outside manual root");
+        if !created_link(symlink_file(&outside, &top_level_link)) {
+            fs::remove_dir_all(base).expect("remove unsupported symlink fixture");
+            return;
+        }
         let linked = parse_manual_page(&ManualPage {
             name: "top-level-link".to_owned(),
             section: "1".to_owned(),
             path: top_level_link,
             manual_root: root.clone(),
         })
-        .expect_err("reject a top-level symlink escaping the manual root");
-        assert_eq!(linked.kind(), ManualErrorKind::UnsafePath);
+        .expect("load an explicitly indexed leaf symlink");
+        assert_eq!(linked.meta.title.as_deref(), Some("OUTSIDE"));
 
-        symlink(&outside, man1.join("escape.1")).expect("link outside manual root");
+        if !created_link(symlink_file(&outside, &man1.join("escape.1"))) {
+            fs::remove_dir_all(base).expect("remove unsupported symlink fixture");
+            return;
+        }
         let alias = man1.join("alias.1");
         fs::write(&alias, ".so man1/escape.1\n").expect("write escaping redirect");
         let symlink_error = parse_manual_page(&ManualPage {
@@ -550,6 +587,39 @@ mod tests {
 
         assert_eq!(symlink_error.kind(), ManualErrorKind::UnsafePath);
         assert!(symlink_error.message().contains("outside"));
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn external_leaf_redirects_resolve_from_the_logical_collection_path() {
+        let base = std::env::temp_dir().join(format!("mant-linked-so-{}", process::id()));
+        let root = base.join("root");
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("create manual section");
+        fs::write(
+            man1.join("target.1"),
+            ".TH LOGICAL-TARGET 1\n.SH NAME\ntarget \\- inside the collection\n",
+        )
+        .expect("write in-root target");
+        let outside = base.join("outside-alias.1");
+        fs::write(&outside, ".so target.1\n").expect("write external redirect stub");
+        let link = man1.join("linked-alias.1");
+        if !created_link(symlink_file(&outside, &link)) {
+            fs::remove_dir_all(base).expect("remove unsupported symlink fixture");
+            return;
+        }
+
+        let document = parse_manual_page(&ManualPage {
+            name: "linked-alias".to_owned(),
+            section: "1".to_owned(),
+            path: link,
+            manual_root: root.clone(),
+        })
+        .expect("resolve the redirect relative to the link in the collection");
+        fs::remove_dir_all(base).expect("remove linked redirect fixture");
+
+        assert_eq!(document.meta.title.as_deref(), Some("LOGICAL-TARGET"));
+        assert_eq!(document.meta.alias_target.as_deref(), Some("target.1"));
     }
 
     #[test]

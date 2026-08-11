@@ -41,6 +41,9 @@ pub struct ManualPage {
     pub section: String,
     pub path: PathBuf,
     /// Approved hierarchy root used to resolve this page's `.so` redirects.
+    ///
+    /// The indexed leaf itself may be a file symlink whose target is outside
+    /// this root. Redirect targets must still remain inside it.
     pub manual_root: PathBuf,
 }
 
@@ -276,8 +279,7 @@ fn normalize_locale(locale: &str) -> Option<String> {
 
 fn scan_manual_root(root: &Path, locale: Option<&str>) -> Vec<ManualPage> {
     let mut candidates = BTreeMap::<(String, String), (u8, PathBuf)>::new();
-    let canonical_root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    scan_directory(root, root, &canonical_root, locale, &mut candidates);
+    scan_directory(root, root, locale, &mut candidates);
     candidates
         .into_iter()
         .map(|((name, section), (_, path))| ManualPage {
@@ -292,7 +294,6 @@ fn scan_manual_root(root: &Path, locale: Option<&str>) -> Vec<ManualPage> {
 fn scan_directory(
     root: &Path,
     directory: &Path,
-    canonical_root: &Path,
     locale: Option<&str>,
     candidates: &mut BTreeMap<(String, String), (u8, PathBuf)>,
 ) {
@@ -307,18 +308,21 @@ fn scan_directory(
             continue;
         };
         if file_type.is_dir() {
-            scan_directory(root, &path, canonical_root, locale, candidates);
+            scan_directory(root, &path, locale, candidates);
             continue;
         }
         if !file_type.is_file() && !file_type.is_symlink() {
             continue;
         }
+        // Follow an explicit leaf link only far enough to prove it names a
+        // regular file. Directory links are never traversed, and broken links
+        // are not indexed.
+        if !fs::metadata(&path).is_ok_and(|metadata| metadata.is_file()) {
+            continue;
+        }
         let Some((name, section)) = manual_identity(root, &path) else {
             continue;
         };
-        if !fs::canonicalize(&path).is_ok_and(|path| path.starts_with(canonical_root)) {
-            continue;
-        }
         let priority = locale_priority(root, &path, locale);
         let key = (name, section);
         match candidates.get(&key) {
@@ -414,6 +418,37 @@ mod tests {
         ))
     }
 
+    #[cfg(unix)]
+    fn symlink_file(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_file(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+
+    #[cfg(unix)]
+    fn symlink_directory(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_directory(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    #[cfg(any(unix, windows))]
+    fn created_link(result: std::io::Result<()>) -> bool {
+        match result {
+            Ok(()) => true,
+            Err(error) if cfg!(windows) && error.kind() == std::io::ErrorKind::PermissionDenied => {
+                false
+            }
+            Err(error) => panic!("create fixture symlink: {error}"),
+        }
+    }
+
     #[test]
     fn indexes_supported_sources_and_resolves_sections_without_man() {
         let root = temporary_root("lookup");
@@ -454,23 +489,41 @@ mod tests {
         fs::remove_dir_all(root).expect("remove fixture");
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     #[test]
-    fn indexes_only_symlinks_that_remain_inside_the_manual_root() {
-        use std::os::unix::fs::symlink;
-
+    fn indexes_leaf_file_symlinks_without_traversing_linked_directories() {
         let base = temporary_root("symlink-boundary");
         let root = base.join("root");
         let man1 = root.join("man1");
+        let linked_tree = base.join("linked-tree/man1");
         fs::create_dir_all(&man1).expect("manual section");
+        fs::create_dir_all(&linked_tree).expect("linked manual section");
         fs::write(man1.join("target.1"), ".TH TARGET 1\n").expect("inside target");
         fs::write(base.join("outside.1"), ".TH OUTSIDE 1\n").expect("outside target");
-        symlink(man1.join("target.1"), man1.join("inside.1")).expect("inside symlink");
-        symlink(base.join("outside.1"), man1.join("outside.1")).expect("outside symlink");
+        fs::write(linked_tree.join("nested.1"), ".TH NESTED 1\n").expect("nested target");
+        if !created_link(symlink_file(&man1.join("target.1"), &man1.join("inside.1")))
+            || !created_link(symlink_file(
+                &base.join("outside.1"),
+                &man1.join("outside.1"),
+            ))
+            || !created_link(symlink_file(
+                &base.join("missing.1"),
+                &man1.join("broken.1"),
+            ))
+            || !created_link(symlink_directory(
+                &base.join("linked-tree"),
+                &root.join("linked-tree"),
+            ))
+        {
+            fs::remove_dir_all(base).expect("remove unsupported symlink fixture");
+            return;
+        }
 
         let index = ManualIndex::from_roots(vec![root]);
         assert!(index.find("inside", Some("1")).is_some());
-        assert!(index.find("outside", Some("1")).is_none());
+        assert!(index.find("outside", Some("1")).is_some());
+        assert!(index.find("broken", Some("1")).is_none());
+        assert!(index.find("nested", Some("1")).is_none());
         fs::remove_dir_all(base).expect("remove fixture");
     }
 

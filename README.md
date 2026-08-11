@@ -152,8 +152,10 @@ macOS, and Windows.
 It performs bounded reads and decompression before passing plain roff bytes to
 bundled libmandoc. Rust resolves redirect-only `.so` alias chains against the
 indexed manual root with canonical-path, cycle, depth, and total-byte checks;
-libmandoc never opens another file for ManT. Project-local pages can be exposed
-through `MANT_MANPATH` (a complete override) or `MANPATH`:
+libmandoc never opens another file for ManT. A leaf page symlink may point to a
+file outside its indexed root, but directory symlinks are not traversed and
+every `.so` target must remain inside that root. Project-local pages can be
+exposed through `MANT_MANPATH` (a complete override) or `MANPATH`:
 
 ```sh
 mkdir -p ./project-man/man1

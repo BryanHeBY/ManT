@@ -229,10 +229,12 @@ source, and lowers libmandoc's validated man(7) or mdoc(7) tree directly into
 source path and indexed manual root. Both stored and decoded bytes are capped
 across the complete input chain before plain roff bytes cross the parser
 boundary. Rust recognizes redirect-only `.so` aliases, resolves raw, gzip, or
-zstd targets under the canonical manual root, rejects escaping symlinks,
-cycles, excessive depth, and mixed-content includes, then invokes libmandoc
-with includes denied. Libmandoc therefore opens no manual source or include
-path for ManT.
+zstd targets under the canonical manual root, rejects redirect targets that
+escape through symlinks, cycles, excessive depth, and mixed-content includes,
+then invokes libmandoc with includes denied. An explicitly indexed leaf file
+symlink may resolve outside the root; directory symlinks are not traversed, and
+the first and every later `.so` target remain constrained to the root.
+Libmandoc therefore opens no manual source or include path for ManT.
 
 One immutable `ManualIndex` owns both catalog discovery and exact lookup. It
 derives roots from `MANT_MANPATH`, `MANPATH`, and platform conventions, then

@@ -150,6 +150,12 @@ colon-separated entries; Windows uses semicolon-separated entries. Its
 conventional fallback contains only `%USERPROFILE%\.local\share\man`; other
 locations remain explicit.
 
+The index accepts a leaf page symlink whose target is a regular file, including
+one outside the configured root. It does not traverse directory symlinks or
+index broken links. If that leaf is a redirect-only `.so` page, its target is
+resolved from the symlink's logical location and must remain inside the
+configured root; the same boundary applies to every later redirect.
+
 Do not pass `./widget.1` as the input operand: path-like operands are reserved
 for Markdown documents. Register local roff in a manual hierarchy and query
 it by name instead.

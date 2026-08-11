@@ -10,8 +10,9 @@ terminal or command-line process.
 - Registered Markdown lookup through the read-only `mant-sources` boundary.
 - A conservative, source-positioned Markdown parser with explicit loss
   diagnostics and optional embedded tldr content.
-- Bounded native manual loading, constrained `.so` alias resolution, and
-  `man(7)`/`mdoc(7)` lowering on every supported platform.
+- Bounded native manual loading, explicit leaf-file symlink support,
+  root-constrained `.so` alias resolution, and `man(7)`/`mdoc(7)` lowering on
+  every supported platform.
 - Semantic outlines containing addressable sections and role-aware entries.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
