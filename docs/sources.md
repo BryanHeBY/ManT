@@ -107,11 +107,13 @@ Run:
 mant --update-docs
 ```
 
-The result is stable JSON identified by `mant.sources-update/v1`. Add
+The result is stable JSON identified by `mant.sources-update/v2`. Add
 `--compact` for one-line JSON. Each source is reported as `updated`,
 `unchanged`, or `failed`; successful sources are kept even when another source
 fails, and the process exits with status `1` after printing the complete report
-if any source failed.
+if any source failed. The `orphaned` array separately reports immediate entries
+below `documents/sources/` whose names are absent from the current
+configuration. Ordinary updates never delete them.
 
 For a Git source, ManT reads the branch head with `git ls-remote`. It skips an
 unchanged source or performs a depth-one, single-branch clone without tags,
@@ -146,6 +148,43 @@ An update lock prevents two native CLI updates from writing the source store
 at once. A failed source leaves its prior installed directory untouched. If a
 process is killed and leaves `.update.lock`, verify that no update is running
 and remove only that lock file before retrying.
+
+## Removing sources
+
+First remove or rename the source table in `sources.toml`. The source becomes
+unqueryable immediately, while its updater-owned installed directory remains
+available for an explicit cleanup decision. Preview every exact target with:
+
+```sh
+mant --prune-docs --dry-run
+```
+
+The stable `mant.sources-prune/v1` JSON report uses `would-remove` for verified
+targets. Apply the same discovery and validation rules with:
+
+```sh
+mant --prune-docs
+```
+
+Successful targets are reported as `removed`. A candidate is removable only
+when it is a direct child of `documents/sources/`, has a valid source name, is
+a real directory rather than a symbolic link, and contains a regular
+`.mant-source.toml` whose recorded source matches the directory name. Invalid
+names, links, special files, missing or mismatched metadata, permission
+failures, and candidates that change during cleanup are retained and reported
+as `refused` or `failed`; either action produces exit status `1` after the
+complete JSON report is printed. Personal files directly below `documents/`
+are outside the prune boundary.
+
+If interruption leaves a `.prune-*` directory, later maintenance reports it
+as an incomplete transaction and never deletes it automatically. Inspect its
+contents and remove it manually only after confirming that the corresponding
+configured or installed source is intact.
+
+Update and prune share `.update.lock`, so they cannot mutate the source store
+concurrently. Cleanup renames a verified target inside the same source store
+before removing it, preventing a partially addressed source from remaining
+under its public name.
 
 ## Lookup
 

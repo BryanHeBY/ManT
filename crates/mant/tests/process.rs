@@ -64,6 +64,8 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("--preserve-anchors"));
     assert!(help.contains("--update-tldr"));
     assert!(help.contains("--update-docs"));
+    assert!(help.contains("--prune-docs"));
+    assert!(help.contains("--dry-run"));
     assert!(help.contains("--source <SOURCE>"));
     assert!(help.contains("--protocol-version"));
     assert!(help.contains("--schema <CONTRACT>"));
@@ -291,7 +293,8 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
     assert!(first.status.success(), "{first:?}");
     assert!(first.stderr.is_empty());
     let result: serde_json::Value = serde_json::from_slice(&first.stdout).expect("update JSON");
-    assert_eq!(result["schema"], "mant.sources-update/v1");
+    assert_eq!(result["schema"], "mant.sources-update/v2");
+    assert_eq!(result["orphaned"], serde_json::json!([]));
     assert_eq!(result["sources"][0]["source"], "team");
     assert_eq!(result["sources"][0]["action"], "updated");
     assert_eq!(result["sources"][0]["documents"], 1);
@@ -352,6 +355,59 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
     assert!(String::from_utf8_lossy(&unknown.stderr).contains("is not configured"));
 
     fs::remove_dir_all(fixture_root).expect("remove document source fixture");
+}
+
+#[test]
+fn document_source_pruning_is_explicit_and_preserves_personal_documents() {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "mant-document-source-prune-process-{}",
+        std::process::id()
+    ));
+    let documents = registered_documents_dir(&fixture_root);
+    let data_root = documents
+        .parent()
+        .expect("application data root")
+        .to_owned();
+    let installed = documents.join("sources/removed");
+    fs::create_dir_all(&installed).expect("create installed source fixture");
+    fs::write(data_root.join("sources.toml"), "").expect("write empty source config");
+    fs::write(
+        installed.join(".mant-source.toml"),
+        "version = 1\nsource = 'removed'\nrevision = 'abc123'\ndocuments = 1\n",
+    )
+    .expect("write source identity");
+    fs::write(installed.join("tool.md"), "# Removed source\n").expect("write source document");
+    fs::write(documents.join("personal.md"), "# Personal\n").expect("write personal document");
+
+    let orphan_report =
+        run_with_registered_documents(&fixture_root, &["--update-docs", "--compact"]);
+    assert!(orphan_report.status.success(), "{orphan_report:?}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&orphan_report.stdout).expect("orphan report JSON");
+    assert_eq!(report["sources"], serde_json::json!([]));
+    assert_eq!(report["orphaned"][0]["source"], "removed");
+    assert_eq!(report["orphaned"][0]["removable"], true);
+    assert!(installed.is_dir());
+
+    let dry_run =
+        run_with_registered_documents(&fixture_root, &["--prune-docs", "--dry-run", "--compact"]);
+    assert!(dry_run.status.success(), "{dry_run:?}");
+    let report: serde_json::Value =
+        serde_json::from_slice(&dry_run.stdout).expect("prune dry-run JSON");
+    assert_eq!(report["schema"], "mant.sources-prune/v1");
+    assert_eq!(report["dryRun"], true);
+    assert_eq!(report["sources"][0]["action"], "would-remove");
+    assert!(installed.is_dir());
+
+    let prune = run_with_registered_documents(&fixture_root, &["--prune-docs", "--compact"]);
+    assert!(prune.status.success(), "{prune:?}");
+    let report: serde_json::Value = serde_json::from_slice(&prune.stdout).expect("prune JSON");
+    assert_eq!(report["dryRun"], false);
+    assert_eq!(report["sources"][0]["action"], "removed");
+    assert!(!installed.exists());
+    assert!(documents.join("personal.md").is_file());
+
+    fs::remove_dir_all(fixture_root).expect("remove prune fixture");
 }
 
 #[test]

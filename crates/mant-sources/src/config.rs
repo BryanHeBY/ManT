@@ -190,7 +190,7 @@ fn absolute_environment_path(
     value.map(PathBuf::from).filter(|path| path.is_absolute())
 }
 
-fn load_source_config_from(path: &Path) -> Result<SourceConfig, SourceConfigError> {
+pub(crate) fn load_source_config_from(path: &Path) -> Result<SourceConfig, SourceConfigError> {
     let text = match read_bounded_utf8(path, MAX_CONFIG_BYTES) {
         Ok(text) => text,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(SourceConfig::default()),

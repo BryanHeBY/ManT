@@ -204,7 +204,10 @@ url = "https://example.com/cli-docs/latest/docs.zip"
 ```
 
 Run `mant --update-docs` to install selected Markdown from a one-commit Git
-checkout or a direct ZIP/tar archive URL. Root documents always win; sources
+checkout or a direct ZIP/tar archive URL. The update report identifies
+installed sources removed from the configuration without deleting them; use
+`mant --prune-docs --dry-run` and then `mant --prune-docs` for explicit
+cleanup. Root documents always win; sources
 then fall back by descending priority and source name in ascending bytewise
 order. Use `mant tool --source team` to select one source
 explicitly. See [document sources](docs/sources.md) for paths, exact selector

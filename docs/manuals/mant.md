@@ -30,6 +30,10 @@
 - Update configured document sources:
 
 `mant --update-docs`
+
+- Preview removal of sources absent from the configuration:
+
+`mant --prune-docs --dry-run`
 <!-- mant:tldr:end -->
 
 # mant
@@ -45,6 +49,7 @@ mant <NAME|MARKDOWN|-> [OPTIONS]
 mant --request-json [--format FORMAT] [--compact]
 mant --schema CONTRACT [--compact]
 mant --update-docs [--compact]
+mant --prune-docs [--dry-run] [--compact]
 mant --update-tldr [--compact]
 mant --protocol-version [--compact]
 mant --mcp
@@ -478,8 +483,9 @@ The current protocol descriptor is:
 ```
 
 Request and response contracts advanced to v6 for explicit source selection,
-the first-class explain view, and role- and case-aware semantic entries. The
-independent `mant.markdown/v1` search-coordinate contract remains unchanged.
+the first-class explain view, and role- and case-aware semantic entries,
+including a distinct general-variable role. The independent
+`mant.markdown/v1` search-coordinate contract remains unchanged.
 Future revisions may advance individual contracts only when their wire shapes
 change, so consumers must compare every exact schema identifier. Generated
 schemas use JSON Schema Draft 2020-12 and remain the authoritative field-level
@@ -501,6 +507,7 @@ local files only; it has no update tool and no cross-call snapshot guarantee.
 ## Data
 
 - `--update-docs`: Update Git or direct archive sources declared in `sources.toml` and print a complete JSON report.
+- `--prune-docs`: Explicitly remove installed source directories absent from `sources.toml`; add `--dry-run` to report exact targets without removal.
 - `--update-tldr`: Update through an installed tldr client when available, otherwise through ManT's private cache.
 
 Git-backed document sources require a `git` executable on `PATH`; direct

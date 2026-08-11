@@ -103,9 +103,11 @@ Reusable Markdown documents can be registered by filename below:
 Only immediate regular Markdown files are discovered; nested directories and
 symlinks are ignored. Git or direct archive sources configured in sibling
 `sources.toml` can be installed with `mant --update-docs` and selected with
-`--source`. An unqualified name resolves root documents, sources by descending
-priority and ascending source name, then a native manual. See the complete
-[document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
+`--source`. Removed source tables are reported as orphaned installed data;
+preview cleanup with `mant --prune-docs --dry-run` and apply it with
+`mant --prune-docs`. An unqualified name resolves root documents, sources by
+descending priority and ascending source name, then a native manual. See the
+complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 
 When compatible local tldr data exists, ManT prepends it as reserved outline
 node `0`. Reads prefer installed-client caches and then ManT's private cache;

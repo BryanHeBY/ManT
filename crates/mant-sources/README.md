@@ -17,6 +17,12 @@ directories are owned by an RAII workspace and cleaned on every exit path.
 Provider metadata is a strict tagged value, so Git-only and archive-only fields
 cannot form invalid combinations.
 
+The update report also identifies installed directories absent from the active
+configuration without deleting them. Explicit prune and dry-run operations
+share the update lock, validate each directory against its recorded source
+identity, and never cross into personal root documents. These mutating
+operations remain outside MCP.
+
 Upstream source trees may be recursive, but activation flattens selected
 Markdown into one directory and rejects public-name collisions or an empty
 selection. Platform paths, the complete `sources.toml` schema, and update

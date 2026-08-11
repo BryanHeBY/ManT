@@ -99,6 +99,7 @@ mant <name> --search <pattern>    -> matches with node and Markdown locations
 mant <name> --manual              -> bypass registered Markdown by the same name
 mant <name> --source <source>     -> select one configured Markdown source
 mant --update-docs                -> Git/archive source update report JSON
+mant --prune-docs [--dry-run]     -> explicit orphaned-source cleanup report JSON
 mant --update-tldr                 -> update result JSON
 mant --protocol-version            -> protocol description JSON
 mant --schema <contract>           -> generated JSON Schema

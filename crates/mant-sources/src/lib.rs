@@ -20,8 +20,9 @@ pub use registry::{
 };
 #[cfg(feature = "update")]
 pub use update::{
-    DocumentSourcesUpdate, DocumentSourcesUpdateSchema, SourceUpdateAction, SourceUpdateResult,
-    update_document_sources,
+    DocumentSourcesPrune, DocumentSourcesPruneSchema, DocumentSourcesUpdate,
+    DocumentSourcesUpdateSchema, OrphanedSource, SourcePruneAction, SourcePruneResult,
+    SourceUpdateAction, SourceUpdateResult, prune_document_sources, update_document_sources,
 };
 
 pub(crate) use config::{SOURCE_METADATA_FILE, is_source_name};

@@ -17,7 +17,7 @@ use error::{
 };
 use mant_ast::{QueryBundle, QueryRequest, QueryView, TldrCacheUpdate};
 use mant_core::QueryPolicy;
-use mant_sources::DocumentSourcesUpdate;
+use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
 use serde::Serialize;
 
@@ -68,6 +68,7 @@ trait CliHost {
     fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure>;
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure>;
+    fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure>;
 }
 
 struct SystemHost;
@@ -87,6 +88,10 @@ impl CliHost for SystemHost {
 
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {
         mant_sources::update_document_sources().map_err(Failure::operational)
+    }
+
+    fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure> {
+        mant_sources::prune_document_sources(dry_run).map_err(Failure::operational)
     }
 }
 
@@ -229,6 +234,18 @@ fn run_command(
             };
             (rendered, status)
         }
+        Command::PruneDocs { pretty, dry_run } => {
+            let prune = match host.prune_docs(dry_run) {
+                Ok(prune) => prune,
+                Err(error) => return report_failure(&error, diagnostics),
+            };
+            let status = u8::from(prune.has_failures());
+            let rendered = match render_json(&prune, pretty) {
+                Ok(rendered) => rendered,
+                Err(error) => return report_failure(&error, diagnostics),
+            };
+            (rendered, status)
+        }
         command => match execute(command, input, host) {
             Ok(rendered) => (rendered, 0),
             Err(error) => return report_failure(&error, diagnostics),
@@ -269,6 +286,9 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
         Command::Mcp => unreachable!("MCP mode is dispatched before normal CLI execution"),
         Command::UpdateDocs { .. } => {
             unreachable!("document updates are dispatched before normal execution")
+        }
+        Command::PruneDocs { .. } => {
+            unreachable!("document source pruning is dispatched before normal execution")
         }
         Command::UpdateTldr { pretty } => {
             let update = host.update_tldr()?;
@@ -418,7 +438,10 @@ fn write_output(output: &mut dyn Write, rendered: &str) -> io::Result<()> {
 mod tests {
     use std::cell::Cell;
 
-    use mant_sources::{DocumentSourcesUpdate, DocumentSourcesUpdateSchema};
+    use mant_sources::{
+        DocumentSourcesPrune, DocumentSourcesPruneSchema, DocumentSourcesUpdate,
+        DocumentSourcesUpdateSchema,
+    };
 
     use mant_ast::{
         Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
@@ -607,8 +630,18 @@ mod tests {
 
         fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {
             Ok(DocumentSourcesUpdate {
-                schema: DocumentSourcesUpdateSchema::V1,
+                schema: DocumentSourcesUpdateSchema::V2,
                 config: "/data/mant/sources.toml".to_owned(),
+                sources: Vec::new(),
+                orphaned: Vec::new(),
+            })
+        }
+
+        fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure> {
+            Ok(DocumentSourcesPrune {
+                schema: DocumentSourcesPruneSchema::V1,
+                config: "/data/mant/sources.toml".to_owned(),
+                dry_run,
                 sources: Vec::new(),
             })
         }
@@ -1100,6 +1133,15 @@ mod tests {
         );
         assert!(diagnostics.is_empty());
         assert_eq!(host.update_calls.get(), 1);
+
+        let (status, output, diagnostics) =
+            invoke(&["--prune-docs", "--dry-run", "--compact"], b"", &host);
+        assert_eq!(status, 0);
+        assert_eq!(
+            output,
+            "{\"schema\":\"mant.sources-prune/v1\",\"config\":\"/data/mant/sources.toml\",\"dryRun\":true,\"sources\":[]}\n"
+        );
+        assert!(diagnostics.is_empty());
 
         let (status, output, diagnostics) =
             invoke(&["--protocol-version", "--compact"], b"", &host);

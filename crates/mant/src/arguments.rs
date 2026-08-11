@@ -123,6 +123,10 @@ pub(crate) enum Command {
     UpdateDocs {
         pretty: bool,
     },
+    PruneDocs {
+        pretty: bool,
+        dry_run: bool,
+    },
     ProtocolVersion {
         pretty: bool,
     },
@@ -145,10 +149,10 @@ pub(crate) enum Command {
     about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
     version,
-    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant README.md\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --update-tldr\n  mant --mcp",
+    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant README.md\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --prune-docs --dry-run\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("action")
-        .args(["name", "request_json", "update_docs", "update_tldr", "protocol_version", "schema", "mcp"])
+        .args(["name", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
@@ -344,6 +348,18 @@ struct Cli {
     )]
     update_docs: bool,
 
+    /// Remove installed document sources absent from sources.toml.
+    #[arg(
+        long,
+        conflicts_with_all = ["section", "source", "outline", "node", "search", "format"],
+        help_heading = "Data"
+    )]
+    prune_docs: bool,
+
+    /// Report exact orphaned source targets without removing them.
+    #[arg(long, requires = "prune_docs", help_heading = "Data")]
+    dry_run: bool,
+
     /// Print the native protocol description as JSON.
     #[arg(
         long,
@@ -384,6 +400,8 @@ struct Cli {
             "manual",
             "update_tldr",
             "update_docs",
+            "prune_docs",
+            "dry_run",
             "protocol_version",
             "schema",
             "format",
@@ -405,7 +423,7 @@ struct Cli {
     /// Preserve raw HTML anchors and document-local links in Markdown output.
     #[arg(
         long,
-        conflicts_with_all = ["update_docs", "update_tldr", "protocol_version", "schema", "mcp"],
+        conflicts_with_all = ["update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"],
         help_heading = "Output"
     )]
     preserve_anchors: bool,
@@ -442,6 +460,12 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
     if parsed.update_docs {
         return Ok(Command::UpdateDocs {
             pretty: !parsed.compact,
+        });
+    }
+    if parsed.prune_docs {
+        return Ok(Command::PruneDocs {
+            pretty: !parsed.compact,
+            dry_run: parsed.dry_run,
         });
     }
     if parsed.update_tldr {
@@ -1048,6 +1072,14 @@ mod tests {
             Command::UpdateDocs { pretty: false }
         );
         assert_eq!(
+            parse(&args(&["--prune-docs", "--dry-run", "--compact"]))
+                .expect("document source prune"),
+            Command::PruneDocs {
+                pretty: false,
+                dry_run: true,
+            }
+        );
+        assert_eq!(
             parse(&args(&["--update-tldr"])).expect("update"),
             Command::UpdateTldr { pretty: true }
         );
@@ -1088,6 +1120,8 @@ mod tests {
             vec!["--section", "1"],
             vec!["--update-tldr", "--format", "json"],
             vec!["--update-docs", "--format", "json"],
+            vec!["--prune-docs", "--format", "json"],
+            vec!["--dry-run"],
             vec!["git", "--source", "team", "--section", "1"],
             vec!["git", "--source", "team", "--manual"],
             vec!["README.md", "--source", "team"],

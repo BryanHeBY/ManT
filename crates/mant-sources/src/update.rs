@@ -12,9 +12,17 @@ use serde::Serialize;
 mod archive;
 mod git;
 mod metadata;
+mod prune;
 mod workspace;
 
 use metadata::SourceMetadata;
+use prune::discover_orphaned_sources;
+#[cfg(test)]
+use prune::prune_document_sources_from;
+pub use prune::{
+    DocumentSourcesPrune, DocumentSourcesPruneSchema, OrphanedSource, SourcePruneAction,
+    SourcePruneResult, prune_document_sources,
+};
 use workspace::UpdateWorkspace;
 
 use super::config::{
@@ -52,8 +60,8 @@ pub struct SourceUpdateResult {
 /// Exact schema marker for a document-source update report.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub enum DocumentSourcesUpdateSchema {
-    #[serde(rename = "mant.sources-update/v1")]
-    V1,
+    #[serde(rename = "mant.sources-update/v2")]
+    V2,
 }
 
 /// Complete result of one `--update-docs` run.
@@ -63,6 +71,7 @@ pub struct DocumentSourcesUpdate {
     pub schema: DocumentSourcesUpdateSchema,
     pub config: String,
     pub sources: Vec<SourceUpdateResult>,
+    pub orphaned: Vec<OrphanedSource>,
 }
 
 impl DocumentSourcesUpdate {
@@ -96,10 +105,12 @@ pub fn update_document_sources() -> Result<DocumentSourcesUpdate, SourceConfigEr
         .iter()
         .map(|(name, source)| update_one_source(&paths, name, source))
         .collect();
+    let orphaned = discover_orphaned_sources(&paths, &config)?;
     Ok(DocumentSourcesUpdate {
-        schema: DocumentSourcesUpdateSchema::V1,
+        schema: DocumentSourcesUpdateSchema::V2,
         config: paths.config.to_string_lossy().into_owned(),
         sources,
+        orphaned,
     })
 }
 
@@ -507,9 +518,11 @@ mod tests {
     #[cfg(windows)]
     use super::sync_file;
     use super::{
-        ConfiguredSource, DocumentPaths, SourceLocation, SourceUpdateAction,
-        install_selected_documents, recover_directory, source_fingerprint, try_update_one_source,
+        ConfiguredSource, DocumentPaths, SourceLocation, SourcePruneAction, SourceUpdateAction,
+        UpdateLock, discover_orphaned_sources, install_selected_documents,
+        prune_document_sources_from, recover_directory, source_fingerprint, try_update_one_source,
     };
+    use crate::config::load_source_config_from;
 
     fn temp(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-sources-{label}-{}", std::process::id()))
@@ -538,6 +551,27 @@ mod tests {
         }
     }
 
+    fn paths(root: &std::path::Path) -> DocumentPaths {
+        DocumentPaths {
+            config: root.join("sources.toml"),
+            documents: root.join("documents"),
+            sources: root.join("documents/sources"),
+            root: root.to_owned(),
+        }
+    }
+
+    fn write_installed_identity(directory: &std::path::Path, source: &str, documents: u32) {
+        fs::create_dir_all(directory).expect("create installed source");
+        fs::write(
+            directory.join(".mant-source.toml"),
+            format!(
+                "version = 1\nsource = {source:?}\nrevision = \"abc123\"\ndocuments = {documents}\n"
+            ),
+        )
+        .expect("write installed identity");
+        fs::write(directory.join("tool.md"), "# tool").expect("write installed document");
+    }
+
     fn zip_document() -> Vec<u8> {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         writer
@@ -545,6 +579,108 @@ mod tests {
             .expect("start ZIP file");
         writer.write_all(b"# tool").expect("write ZIP file");
         writer.finish().expect("finish ZIP").into_inner()
+    }
+
+    #[test]
+    fn prune_reports_then_removes_only_verified_orphaned_sources() {
+        let root = temp("prune");
+        let paths = paths(&root);
+        fs::create_dir_all(&paths.sources).expect("create source store");
+        fs::write(
+            &paths.config,
+            "[active]\nurl = 'https://example.invalid/active.zip'\n",
+        )
+        .expect("write source config");
+        let config = load_source_config_from(&paths.config).expect("load source config");
+        write_installed_identity(&paths.sources.join("active"), "active", 2);
+        write_installed_identity(&paths.sources.join("removed"), "removed", 7);
+        fs::write(paths.documents.join("personal.md"), "# personal")
+            .expect("write personal document");
+
+        let update_orphans = discover_orphaned_sources(&paths, &config).expect("discover orphans");
+        assert!(matches!(
+            update_orphans.as_slice(),
+            [orphan]
+                if orphan.source == "removed"
+                    && orphan.removable
+                    && orphan.revision.as_deref() == Some("abc123")
+                    && orphan.documents == Some(7)
+        ));
+
+        let dry_run =
+            prune_document_sources_from(&paths, &config, true).expect("dry-run source prune");
+        assert!(!dry_run.has_failures());
+        assert!(dry_run.dry_run);
+        assert_eq!(dry_run.sources[0].action, SourcePruneAction::WouldRemove);
+        assert!(paths.sources.join("removed").is_dir());
+
+        let applied =
+            prune_document_sources_from(&paths, &config, false).expect("apply source prune");
+        assert!(!applied.has_failures());
+        assert_eq!(applied.sources[0].action, SourcePruneAction::Removed);
+        assert!(!paths.sources.join("removed").exists());
+        assert!(paths.sources.join("active/tool.md").is_file());
+        assert!(paths.documents.join("personal.md").is_file());
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn prune_refuses_unverified_entries_and_obeys_the_update_lock() {
+        let root = temp("prune-hostile");
+        let paths = paths(&root);
+        fs::create_dir_all(&paths.sources).expect("create source store");
+        fs::write(&paths.config, "").expect("write empty config");
+        let config = load_source_config_from(&paths.config).expect("load source config");
+        write_installed_identity(&paths.sources.join("mismatch"), "other", 1);
+        write_installed_identity(&paths.sources.join("Invalid"), "Invalid", 1);
+        write_installed_identity(&paths.sources.join(".prune-old-123"), "old", 1);
+        #[cfg(unix)]
+        let denied_metadata = {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let directory = paths.sources.join("denied");
+            write_installed_identity(&directory, "denied", 1);
+            let metadata = directory.join(".mant-source.toml");
+            fs::set_permissions(&metadata, fs::Permissions::from_mode(0o0))
+                .expect("deny source metadata access");
+            metadata
+        };
+        fs::write(paths.sources.join("ordinary-file"), "not a source")
+            .expect("write unexpected file");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&root, paths.sources.join("linked"))
+            .expect("create source symlink");
+
+        let dry_run = prune_document_sources_from(&paths, &config, true).expect("hostile dry run");
+        assert!(dry_run.has_failures());
+        for name in ["mismatch", "Invalid", ".prune-old-123", "ordinary-file"] {
+            assert!(dry_run.sources.iter().any(|source| {
+                source.source == name && source.action == SourcePruneAction::Refused
+            }));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            if fs::File::open(&denied_metadata).is_err() {
+                assert!(dry_run.sources.iter().any(|source| {
+                    source.source == "denied" && source.action == SourcePruneAction::Refused
+                }));
+            }
+            fs::set_permissions(&denied_metadata, fs::Permissions::from_mode(0o600))
+                .expect("restore source metadata access");
+        }
+        assert!(paths.sources.join("mismatch").is_dir());
+        assert!(paths.sources.join("Invalid").is_dir());
+        assert!(paths.sources.join(".prune-old-123").is_dir());
+        assert!(paths.sources.join("ordinary-file").is_file());
+
+        let lock = UpdateLock::acquire(&paths.sources).expect("hold update lock");
+        let error = prune_document_sources_from(&paths, &config, true)
+            .expect_err("concurrent prune must fail");
+        assert!(error.to_string().contains("another document source update"));
+        drop(lock);
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
