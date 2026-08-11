@@ -1,0 +1,78 @@
+# mant verified topics: cross-platform-releases
+# scanned 2026-08-11 through bundled libmandoc; no parser crash observed
+# Exact byte-identical members from official x86_64 Windows and Linux releases.
+# Every listed page also had its generated Markdown structure and bounds reviewed.
+# releases: 3; total pages: 67
+
+## Cargo 1.97.1 (37 pages)
+mant cargo --section 1
+mant cargo-add --section 1
+mant cargo-bench --section 1
+mant cargo-build --section 1
+mant cargo-check --section 1
+mant cargo-clean --section 1
+mant cargo-doc --section 1
+mant cargo-fetch --section 1
+mant cargo-fix --section 1
+mant cargo-generate-lockfile --section 1
+mant cargo-help --section 1
+mant cargo-info --section 1
+mant cargo-init --section 1
+mant cargo-install --section 1
+mant cargo-locate-project --section 1
+mant cargo-login --section 1
+mant cargo-logout --section 1
+mant cargo-metadata --section 1
+mant cargo-new --section 1
+mant cargo-owner --section 1
+mant cargo-package --section 1
+mant cargo-pkgid --section 1
+mant cargo-publish --section 1
+mant cargo-remove --section 1
+mant cargo-report --section 1
+mant cargo-report-future-incompatibilities --section 1
+mant cargo-run --section 1
+mant cargo-rustc --section 1
+mant cargo-rustdoc --section 1
+mant cargo-search --section 1
+mant cargo-test --section 1
+mant cargo-tree --section 1
+mant cargo-uninstall --section 1
+mant cargo-update --section 1
+mant cargo-vendor --section 1
+mant cargo-version --section 1
+mant cargo-yank --section 1
+
+## rustc 1.97.1 (2 pages)
+mant rustc --section 1
+mant rustdoc --section 1
+
+## CMake 4.4.2 (28 pages)
+mant ccmake --section 1
+mant cmake --section 1
+mant cmake-gui --section 1
+mant cpack --section 1
+mant ctest --section 1
+mant cmake-buildsystem --section 7
+mant cmake-commands --section 7
+mant cmake-compile-features --section 7
+mant cmake-configure-log --section 7
+mant cmake-cxxmodules --section 7
+mant cmake-developer --section 7
+mant cmake-diagnostics --section 7
+mant cmake-env-variables --section 7
+mant cmake-file-api --section 7
+mant cmake-generator-expressions --section 7
+mant cmake-generators --section 7
+mant cmake-instrumentation --section 7
+mant cmake-language --section 7
+mant cmake-modules --section 7
+mant cmake-packages --section 7
+mant cmake-policies --section 7
+mant cmake-presets --section 7
+mant cmake-properties --section 7
+mant cmake-qt --section 7
+mant cmake-server --section 7
+mant cmake-toolchains --section 7
+mant cmake-variables --section 7
+mant cpack-generators --section 7

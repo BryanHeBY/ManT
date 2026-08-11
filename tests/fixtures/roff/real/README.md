@@ -11,7 +11,8 @@ required by the third-party manuals.
 | [`archlinux/`](archlinux/README.md) | Immutable Arch Linux Archive packages | Original gzip members and two documented lossless zstd recompressions | Direct gzip input, POSIX `sh(1p)`, zstd input, and broad real-man regression coverage |
 | [`fedora44/`](fedora44/README.md) | Fedora Linux 44 Everything packages | Lossless `*.1.zst` recompressions | zstd decoding, Bash-backed `sh(1)`, and a second current generator corpus |
 | [`debian/`](debian/README.md) | Debian sid binary packages | Original gzip package members | Third-distribution gzip input, mdoc-formatted dash `sh(1)`, and section-7 macro pages |
-| [`windows-releases/`](windows-releases/README.md) | Official upstream Windows release ZIPs | Lossless `*.1.zst` recompressions of the ZIP members | CRLF input, Rust and Go release artifacts, PowerShell content, Windows paths, and a large Pandoc-generated page |
+| [`cross-platform-releases/`](cross-platform-releases/README.md) | Byte-identical members from paired official Windows and Linux toolchain releases | Lossless zstd recompressions | Platform-neutral Cargo, rustc, and CMake release evidence |
+| [`windows-releases/`](windows-releases/README.md) | Official upstream Windows release archives | Original scan members and lossless zstd recompressions | Windows release bytes, CRLF input, PowerShell content, Windows paths, and release-generator behaviour |
 
 All fixtures are parsed through ManT's bundled libmandoc. Tests never consult
 the host manual database. Fixed compressed roff sources replace the former

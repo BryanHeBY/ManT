@@ -8,5 +8,7 @@
 mod common;
 mod fixtures;
 
+mod npm;
 mod rclone;
 mod rg;
+mod scan_build;
