@@ -20,6 +20,8 @@ fn stdio_mode_lists_and_queries_registered_markdown_documents() {
     let fixture_root = registered_document_fixture();
     let mut command = Command::new(executable);
     configure_registered_documents(&mut command, &fixture_root);
+    #[cfg(windows)]
+    command.env("PATHEXT", ".EXE;.COM;.MSC;.VBS");
     let mut child = command
         .arg("--mcp")
         .env("MANT_MANPATH", fixture_root.join("manuals"))
@@ -55,11 +57,13 @@ fn stdio_mode_lists_and_queries_registered_markdown_documents() {
     request_document_explain(&mut input, 9, "path");
     request_document_explain(&mut input, 10, "/f");
     request_document_explain(&mut input, 11, "option-f-2");
+    #[cfg(windows)]
+    request_named_document_outline(&mut input, 12, "mcp-suffix");
     input.flush().expect("flush tool call");
 
     // JSON-RPC permits concurrent requests to complete out of order. Select
     // replies by ID instead of treating stdio arrival order as a contract.
-    let replies = (0..9)
+    let replies = (0..(9 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -92,24 +96,8 @@ fn assert_tool_catalog(tools: &[Value]) {
 }
 
 fn assert_tool_replies(replies: &[Value]) {
-    let catalog = replies
-        .iter()
-        .find(|reply| reply["id"] == 3)
-        .expect("document list reply");
-    let documents = catalog["result"]["structuredContent"]["documents"]
-        .as_array()
-        .expect("document catalog");
-    assert_eq!(documents.len(), 2);
-    assert!(documents.iter().any(|document| {
-        document["name"] == "mcp-registered"
-            && document["kind"] == "markdown"
-            && document["origin"] == "documents"
-    }));
-    assert!(documents.iter().any(|document| {
-        document["name"] == "mcp-manual"
-            && document["kind"] == "manual"
-            && document["section"] == "1"
-    }));
+    assert_document_catalog(replies);
+    assert_windows_suffix_reply(replies);
     let search = replies
         .iter()
         .find(|reply| reply["id"] == 4)
@@ -143,6 +131,39 @@ fn assert_tool_replies(replies: &[Value]) {
         "MCP excerpts must discard lowering diagnostics"
     );
 
+    assert_semantic_replies(replies);
+}
+
+fn assert_document_catalog(replies: &[Value]) {
+    let catalog = replies
+        .iter()
+        .find(|reply| reply["id"] == 3)
+        .expect("document list reply");
+    let documents = catalog["result"]["structuredContent"]["documents"]
+        .as_array()
+        .expect("document catalog");
+    assert_eq!(documents.len(), 3);
+    assert!(documents.iter().any(|document| {
+        document["name"] == "mcp-registered"
+            && document["kind"] == "markdown"
+            && document["origin"] == "documents"
+    }));
+    assert!(documents.iter().any(|document| {
+        document["name"] == "mcp-manual"
+            && document["kind"] == "manual"
+            && document["section"] == "1"
+    }));
+    assert_eq!(
+        documents
+            .iter()
+            .filter(|document| document["name"] == "mcp-suffix.exe")
+            .count(),
+        1,
+        "listing must expose one canonical suffixed name"
+    );
+}
+
+fn assert_semantic_replies(replies: &[Value]) {
     let outline = replies
         .iter()
         .find(|reply| reply["id"] == 6)
@@ -191,6 +212,23 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(encoded.contains("option-f"));
     assert!(encoded.contains("option-f-2"));
 }
+
+#[cfg(windows)]
+fn assert_windows_suffix_reply(replies: &[Value]) {
+    let suffix = replies
+        .iter()
+        .find(|reply| reply["id"] == 12)
+        .expect("Windows suffix outline reply");
+    assert_ne!(suffix["result"]["isError"], true);
+    assert!(
+        suffix["result"]["structuredContent"]["source"]["path"]
+            .as_str()
+            .is_some_and(|path| path.ends_with("mcp-suffix.exe.md"))
+    );
+}
+
+#[cfg(not(windows))]
+fn assert_windows_suffix_reply(_replies: &[Value]) {}
 
 fn assert_silent_shutdown(
     mut child: std::process::Child,
@@ -324,6 +362,25 @@ fn request_document_outline(input: &mut impl Write) {
     );
 }
 
+#[cfg(windows)]
+fn request_named_document_outline(input: &mut impl Write, id: u8, name: &str) {
+    write_message(
+        input,
+        &json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/call",
+            "params": {
+                "name": "mant_document_outline",
+                "arguments": {
+                    "name": name,
+                    "detail": "entries"
+                }
+            }
+        }),
+    );
+}
+
 fn request_document_explain(input: &mut impl Write, id: u8, entry: &str) {
     write_message(
         input,
@@ -358,6 +415,11 @@ fn registered_document_fixture() -> PathBuf {
         "# MCP registered\n\nRead the MCP needle.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n\n## Invalid declaration\n\n<!-- mant:entries role=option case=insensitive -->\n- `/driver..exclude`: Keep malformed entries out of the outline.\n",
     )
     .expect("write registered document");
+    fs::write(
+        documents.join("mcp-suffix.exe.md"),
+        "# MCP suffixed executable\n\nWindows suffix fallback.\n",
+    )
+    .expect("write suffixed registered document");
     let manual_section = fixture_root.join("manuals/man1");
     fs::create_dir_all(&manual_section).expect("create manual section");
     fs::write(
