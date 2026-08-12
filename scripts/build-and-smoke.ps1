@@ -38,7 +38,11 @@ if ($LASTEXITCODE -ne 0 -or $Help -notmatch "mant <NAME\|MARKDOWN\|-> \[OPTIONS\
     throw "$BuildProfile help smoke test failed"
 }
 $Query = (& $Mant README.md --format json --compact) -join "`n"
-if ($LASTEXITCODE -ne 0 -or $Query -notmatch '"schema":"mant.query/v6"') {
+if (
+    $LASTEXITCODE -ne 0 -or
+    $Query -notmatch '"schema":"mant.query/v7"' -or
+    $Query -notmatch '"schema":"mant.document/v7"'
+) {
     throw "$BuildProfile Markdown query smoke test failed"
 }
 
