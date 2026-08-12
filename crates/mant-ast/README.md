@@ -31,7 +31,7 @@ use mant_ast::{
 let request = QueryRequest {
     schema: RequestSchema::V7,
     input: QueryInput::Document {
-        name: "git".to_owned(),
+        selector: "git".to_owned(),
         source: None,
         section: None,
     },

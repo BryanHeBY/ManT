@@ -586,7 +586,7 @@ Inline nodes are tagged by `type`:
 | `code` | `value` | Inline or preformatted code fragment |
 | `external-link` | `uri`, optional `title`, `children` | External destination |
 | `email-link` | `address`, `children` | Email destination without synthetic `mailto:` |
-| `document-reference` | `name`, optional `fragment`, `children` | Flat Markdown document in the current source |
+| `document-reference` | `name`, optional `fragment`, `children` | Relative hierarchical Markdown document in the current source |
 | `manual-reference` | `name`, optional `section`, `children` | Another installed manual |
 | `section-reference` | `target`, `children` | Document-local section ID |
 | `anchor` | `id` | Zero-width document-local destination |
@@ -594,11 +594,12 @@ Inline nodes are tagged by `type`:
 
 Visible child content must be preserved even when a consumer cannot activate
 a link. `section-reference.target` is a document ID, not a generated Markdown
-slug. `document-reference` retains a relative `.md` or `.markdown` path and is
-resolved lexically only inside the current registered source; `..` cannot
-cross that source boundary.
-`manual-reference` comes directly from mdoc `Xr`, or conservatively from the
-traditional bold `name(section)` form inside a man page's `SEE ALSO` section.
+slug. `document-reference` retains the extension-free relative path derived
+from a `.md` or `.markdown` link and is resolved lexically only inside the
+current registered source; `..` cannot cross that source boundary.
+`manual-reference` comes directly from mdoc `Xr` and GNU man `MR`, or
+conservatively from an unambiguous strongly styled `name(section)` pair in a
+traditional man page.
 
 ### Quick Reference Contract
 

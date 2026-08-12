@@ -415,8 +415,9 @@ entry role: options, commands, variables, and environment variables.
 Selecting an item puts its heading at the top of the content pane. After
 content scrolling settles, the sidebar follows the first visible section.
 Underlined references can be followed directly. Markdown fragments and mdoc
-`Sx` references jump inside the current page. Flat Markdown links resolve only
-inside the current registered source. mdoc `Xr`, GNU man `MR`, and recognized
+`Sx` references jump inside the current page. Relative Markdown links preserve
+their hierarchy but resolve only inside the current registered source. mdoc
+`Xr`, GNU man `MR`, and recognized
 strong `name(section)` references resolve to an exact manual section wherever
 they occur in a page. HTTP(S) and email links open through the platform's
 default handler; local-file and executable URL schemes remain visible but
