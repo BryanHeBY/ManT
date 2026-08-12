@@ -80,15 +80,27 @@ trait CliHost {
     fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure>;
 }
 
-struct SystemHost;
+struct SystemHost {
+    resolver: mant_core::DocumentResolver,
+}
+
+impl Default for SystemHost {
+    fn default() -> Self {
+        Self {
+            resolver: mant_core::DocumentResolver::from_system(),
+        }
+    }
+}
 
 impl CliHost for SystemHost {
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
-        mant_core::discover_documents(query).map_err(Failure::operational)
+        self.resolver.discover(query).map_err(Failure::operational)
     }
 
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
-        mant_core::resolve_query_with_policy(request, policy).map_err(query_failure)
+        self.resolver
+            .resolve(request, policy)
+            .map_err(query_failure)
     }
 
     fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure> {
@@ -120,7 +132,13 @@ pub fn run(
     output: &mut dyn Write,
     diagnostics: &mut dyn Write,
 ) -> u8 {
-    run_with_host(arguments, input, output, diagnostics, &SystemHost)
+    run_with_host(
+        arguments,
+        input,
+        output,
+        diagnostics,
+        &SystemHost::default(),
+    )
 }
 
 /// Run one native-process invocation, including the long-lived MCP mode.
@@ -137,6 +155,7 @@ pub async fn run_process(arguments: &[String]) -> u8 {
     if matches!(command, Command::Mcp) {
         return mcp::run_stdio().await;
     }
+    let host = SystemHost::default();
 
     if let Err(error) = resolve_process_presentation(
         &mut command,
@@ -155,7 +174,7 @@ pub async fn run_process(arguments: &[String]) -> u8 {
             ..
         }
     ) {
-        return run_interactive(command, &mut io::stderr().lock(), &SystemHost);
+        return run_interactive(command, &mut io::stderr().lock(), &host);
     }
 
     run_command(
@@ -163,7 +182,7 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         &mut io::stdin().lock(),
         &mut io::stdout().lock(),
         &mut io::stderr().lock(),
-        &SystemHost,
+        &host,
     )
 }
 

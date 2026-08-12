@@ -255,7 +255,7 @@ fn document_summary(document: &AvailableDocument) -> DocumentSummary {
     }
 }
 
-fn list_available_documents_from(
+pub(crate) fn list_available_documents_from(
     registered: Vec<RegisteredDocument>,
     manuals: &[crate::ManualPage],
 ) -> Vec<AvailableDocument> {

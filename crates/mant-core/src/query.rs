@@ -10,8 +10,9 @@ use std::{
 };
 
 use mant_ast::{
-    DocumentAddress, MantDocument, MarkdownOrigin, QueryBundle, QueryExcerpt, QueryInput,
-    QueryOutline, QueryRequest, QuerySchema, QuerySearch, QueryView, SearchQuery, TldrDocument,
+    CatalogQuery, DocumentAddress, DocumentCatalog, MantDocument, MarkdownOrigin, QueryBundle,
+    QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySchema, QuerySearch, QueryView,
+    SearchQuery, TldrDocument,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
@@ -440,6 +441,30 @@ impl DocumentResolver {
             .resolve(request, policy)
             .map_err(QueryExecutionError::Query)?;
         project_query_view(query, &request.view)
+    }
+
+    /// Filter the same registered-document and manual snapshots used by
+    /// [`Self::resolve`].
+    ///
+    /// # Errors
+    ///
+    /// Returns source-configuration or catalog-query failures as one host
+    /// boundary diagnostic.
+    pub fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, String> {
+        let registered = self
+            .registered
+            .get_or_init(RegisteredDocumentIndex::load)
+            .as_ref()
+            .map_err(ToString::to_string)?;
+        let manuals = self
+            .manuals
+            .get_or_init(|| ManualIndex::from_roots(self.manual_roots.clone()));
+        let documents = crate::catalog::list_available_documents_from(
+            registered.documents().to_vec(),
+            manuals.pages(),
+        );
+        crate::catalog::query_available_documents(documents, query)
+            .map_err(|error| error.to_string())
     }
 }
 
