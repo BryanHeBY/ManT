@@ -421,10 +421,11 @@ fn replace_directory(staging: &Path, target: &Path) -> Result<(), String> {
 }
 
 fn sync_file(path: &Path, label: &str) -> Result<(), String> {
-    fs::OpenOptions::new()
-        .write(true)
-        .open(path)
-        .and_then(|file| file.sync_all())
+    #[cfg(windows)]
+    let file = fs::OpenOptions::new().write(true).open(path);
+    #[cfg(not(windows))]
+    let file = fs::File::open(path);
+    file.and_then(|file| file.sync_all())
         .map_err(|error| format!("could not sync {label}: {error}"))
 }
 
@@ -515,7 +516,7 @@ mod tests {
 
     use zip::{ZipWriter, write::SimpleFileOptions};
 
-    #[cfg(windows)]
+    #[cfg(any(unix, windows))]
     use super::sync_file;
     use super::{
         ConfiguredSource, DocumentPaths, SourceLocation, SourcePruneAction, SourceUpdateAction,
@@ -726,6 +727,23 @@ mod tests {
         fs::write(&path, "# tool").expect("write sync fixture");
 
         sync_file(&path, "test document").expect("sync file on Windows");
+
+        fs::remove_dir_all(root).expect("remove sync fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn syncing_an_installed_file_accepts_read_only_permissions() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let root = temp("sync-read-only-file");
+        fs::create_dir_all(&root).expect("create sync fixture");
+        let path = root.join("tool.md");
+        fs::write(&path, "# tool").expect("write sync fixture");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444))
+            .expect("make sync fixture read-only");
+
+        sync_file(&path, "test document").expect("sync read-only file on Unix");
 
         fs::remove_dir_all(root).expect("remove sync fixture");
     }
