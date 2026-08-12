@@ -6,13 +6,15 @@
 [![crates.io](https://img.shields.io/crates/v/mant.svg?logo=rust)](https://crates.io/crates/mant)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-ManT turns dense local manuals and structurally compatible Markdown into
-navigable documents for people and precise, reusable knowledge for agents.
-Linux with glibc, macOS, and Windows use the same bundled parser and normalized
-model; Windows can index user-collected roff pages without requiring a Unix
-runtime.
-One native `mant` executable provides the full-screen reader, deterministic
-Markdown/text/JSON output, generated schemas, and a read-only MCP server.
+ManT is a local-first documentation reader and query engine. It turns native
+man/mdoc pages and Markdown libraries into one navigable catalog for people,
+scripts, and agents.
+
+One native `mant` executable provides a full-screen TUI, deterministic
+Markdown/text/JSON output, generated schemas, and a read-only MCP server. Every
+interface consumes the same typed document model. Bundled libmandoc gives
+Linux with glibc, macOS, and Windows the same manual-page parser without
+requiring a system `man` or `mandoc` executable at runtime.
 
 ![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mant-reader.png)
 
@@ -44,12 +46,13 @@ recommended user-scoped method, verify the installation, and report any PATH
 change still needed.
 ```
 
-## One command, two workflows
+## One binary, one model, three interfaces
 
-| Workflow | Selection | Highlights |
+| Interface | Entry point | Designed for |
 | --- | --- | --- |
-| Interactive reading | `mant NAME` in a terminal, or `--ui` | Complete document, hierarchy-aware sidebar, scroll following, page-local links, search, mouse input, and tldr quick references |
-| Structured queries | Projection options, `--format`, redirection, or `--mcp` | Outlines, excerpts, semantic option explanations, location-aware search, Markdown/text/JSON, generated schemas, and MCP stdio |
+| Interactive TUI | `mant NAME` in a terminal, or `--ui` | Hierarchical reading, document discovery, typed links, history, search, mouse input, and tldr quick references |
+| Structured CLI | Projection options, `--format`, or redirection | Outlines, excerpts, semantic explanations, location-aware search, and stable Markdown/text/JSON |
+| Read-only MCP | `mant --mcp` | Local discovery and focused document retrieval for agents over stdio |
 
 A complete query automatically opens the reader only when both standard input
 and output are terminals. Redirection remains useful and predictable:
@@ -64,19 +67,21 @@ independent of terminal detection.
 
 ## Why ManT
 
-- **Structure instead of a flat pager.** Sections, subsections, options, and
-  page-local references remain navigable.
-- **One interpretation path.** The reader, output renderers, search, schemas,
-  and MCP tools consume the same normalized Rust document model.
-- **Options are semantic nodes.** Retrieve `--exclude` directly instead of
-  searching an entire page.
-- **Search results are reusable.** Matches include stable outline nodes and
-  generated-Markdown line and column coordinates.
-- **Local-first and self-contained.** Builds bundle their primary libmandoc
-  parser; ordinary use needs no network service or system `man`/`mandoc`
-  executable on any supported platform.
-- **Markdown uses the same model.** Project documentation gains the same
-  outline, excerpt, search, TUI, JSON, and MCP capabilities.
+- **Navigate a documentation library, not just one page.** A single catalog
+  covers personal Markdown, installed sources, and native manual sections;
+  typed links and bounded back/forward history connect them.
+- **Address structure directly.** Sections, options, commands, variables, and
+  environment variables are semantic nodes, so `--exclude` can be retrieved
+  without searching or copying the complete page.
+- **Get the same interpretation everywhere.** The TUI, CLI renderers, search,
+  generated schemas, and MCP tools consume one normalized Rust document model.
+- **Keep automation predictable.** Outlines and excerpts use explicit selectors;
+  search results include reusable nodes and generated-Markdown coordinates.
+- **Stay local-first.** Ordinary reading and querying need no network service,
+  and the bundled parser avoids a runtime dependency on host manual tools.
+- **Treat Markdown as documentation, not a second-class fallback.** It receives
+  the same hierarchy, links, semantic entries, search, output, and agent access
+  as native manuals.
 
 ## Interactive reader
 
@@ -105,7 +110,7 @@ cross-document, and web/email links, scroll both panes, drag scrollbars, and
 resize the sidebar. Markdown links stay inside their registered source; man
 and mdoc references select an exact manual section.
 
-## Agent, script, and terminal output
+## Structured discovery and queries
 
 Discover installed Markdown and native manuals without opening each document:
 
@@ -170,17 +175,26 @@ The [JSON protocol and Schema reference](docs/protocol.md) documents every
 versioned request and response projection, normalized AST node, coordinate
 rule, and MCP tool.
 
-## Local manual sources and tldr
+## Build a local documentation library
 
-ManT indexes raw, gzip, and zstd manual sources directly on Linux with glibc,
-macOS, and Windows.
-It performs bounded reads and decompression before passing plain roff bytes to
-bundled libmandoc. Rust resolves redirect-only `.so` alias chains against the
-indexed manual root with canonical-path, cycle, depth, and total-byte checks;
-libmandoc never opens another file for ManT. A leaf page symlink may point to a
-file outside its indexed root, but directory symlinks are not traversed and
-every `.so` target must remain inside that root. Project-local pages can be
-exposed through `MANT_MANPATH` (a complete override) or `MANPATH`:
+`mant --list` presents one logical tree regardless of where a document came
+from:
+
+```text
+documents/                  personal Markdown
+sources/<source>/           installed Markdown collections
+manual/<section>/           native man and mdoc pages
+```
+
+Exact catalog paths are unambiguous. Short selectors use root documents first,
+then configured sources, then native manuals; unique component suffixes make a
+deep path such as `languages/en/tool` convenient without hiding collisions.
+
+### Native manuals
+
+ManT indexes raw, gzip, and zstd pages from traditional `man<section>/`
+directories and flat roots containing files such as `widget.1`. Project-local
+collections can use `MANT_MANPATH` as a complete override:
 
 ```sh
 mkdir -p ./project-man/man1
@@ -188,40 +202,18 @@ cp ./widget.1 ./project-man/man1/widget.1
 MANT_MANPATH="$PWD/project-man" mant widget --manual
 ```
 
-Roots may also contain flat files such as `widget.1` directly. On Windows the
-fallback root is `%USERPROFILE%\.local\share\man`; `MANPATH` and
-`MANT_MANPATH` use semicolon-separated entries.
+The same index works on Linux with glibc, macOS, and Windows. Logical queries
+accept `mant 1 git`, `mant 'git(1)'`, `mant git --section 1`, and the canonical
+path `mant manual/1/git`. Manual aliases and parser I/O remain bounded to their
+indexed collection; the complete lookup and `.so` policy is documented in the
+[mant manual](docs/manuals/mant.md).
 
-When compatible local tldr data exists, an unqualified query places it before
-the full manual as reserved section `0`. Use `--tldr` for only that quick
-reference, or `--manual`/`--section` for only native manual content. Reads
-prefer installed-client caches and then fall back to ManT's private cache below
-the platform cache directory. Run `mant --update-tldr` to update through an
-installed client or that private checkout.
+### Markdown collections
 
-## Markdown through the same model
-
-Place personal documents directly in ManT's user data directory:
-
-```sh
-mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents"
-cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md"
-mant mant
-```
-
-An unqualified selector checks the user directory first, then configured
-document sources, and finally the native manual index. `.md` and `.markdown`
-files are discovered recursively and retain their extension-free relative
-paths; symbolic links are ignored. A unique component suffix such as `tool`
-can select `languages/en/tool`, while a collision is reported explicitly.
-Complete selectors such as `documents/languages/en/tool`,
-`sources/team/tool`, and `manual/1/git` are unambiguous. `--manual`
-bypasses Markdown and selects only a native manual on every supported platform.
-On Windows, packages should keep canonical executable suffixes such as
-`tool.exe.md`; `mant tool` falls back through `PATHEXT`, while `mant tool.exe`
-is exact. This behavior is independent of the calling shell.
-
-Document sources are top-level tables in `sources.toml` beside `documents/`:
+Personal `.md` and `.markdown` files below ManT's `documents/` directory keep
+their extension-free relative hierarchy. Configured Git repositories and
+direct archive URLs are installed below `documents/sources/` without mixing
+their files into the personal tree:
 
 ```toml
 [team]
@@ -229,64 +221,40 @@ repo = "https://github.com/example/cli-docs.git"
 branch = "main"
 path = "manuals"
 priority = 10
-
-[release]
-url = "https://example.com/cli-docs/latest/docs.zip"
 ```
 
-Run `mant --update-docs` to install selected Markdown from a one-commit Git
-checkout or a direct ZIP/tar archive URL. The update report identifies
-installed sources removed from the configuration without deleting them; use
-`mant --prune-docs --dry-run` and then `mant --prune-docs` for explicit
-cleanup. Root documents always win; sources
-then fall back by descending priority and source name in ascending bytewise
-order. Use `mant tool --source team` to select one source
-explicitly. See [document sources](docs/sources.md) for paths, exact selector
-rules, metadata, update safety, and complete examples.
+Run `mant --update-docs` to install or update configured sources and
+`mant --prune-docs --dry-run` before explicitly removing orphaned source data.
+Windows selectors try an exact documented executable name before following
+`PATHEXT`, so packages can retain canonical names such as `tool.exe.md` while
+`mant tool` remains convenient. The [document-source guide](docs/sources.md)
+defines platform paths, archive configuration, selection, precedence, and
+transactional update behavior.
 
-Physical files are deliberately separate from logical selectors. Use
-`--input` for one-off Markdown or roff, and specify a format for stdin:
+Markdown headings, prose, code, links, lists, tables, and selected semantic
+definition lists enter the same model as native manuals. Unsupported syntax
+remains visible with a diagnostic instead of being silently discarded. The
+shipped [mant manual](docs/manuals/mant.md) is both the complete syntax
+reference and a self-hosted ManT document.
+
+### One-off input and quick references
+
+Physical files are deliberately separate from logical catalog selectors:
 
 ```sh
 mant --input README.md
-mant --input ./widget.1
 mant --input /usr/share/man/man1/git.1.gz --outline
 cat guide.md | mant --input - --input-format markdown
 cat widget.1 | mant --input - --input-format roff
 ```
 
-`--input-format auto|markdown|roff` defaults to `auto` for files. Roff input
-accepts plain, gzip, and zstd files, but standalone redirect-only `.so` pages
-are not followed; register those through MANPATH so their target remains
-inside an indexed root. Logical manual queries also accept `mant 1 git`,
-`mant 'git(1)'`, and `mant git --section 1`.
-
-ManT structures headings, prose, emphasis, code, links, code blocks, lists,
-GFM tables, hard breaks, and thematic breaks. A complete list such as
-``- `--flag`: description`` becomes the same semantic option entry used by a
-manual page. Unsupported syntax remains visible with a diagnostic instead of
-being silently discarded.
-
-An optional tldr preface at the physical start of a Markdown file uses the
-tldr-pages dialect and becomes reserved path `0`. Invisible CommonMark HTML
-comments keep the extension markers out of GitHub's rendered page:
-
-```markdown
-<!-- mant:tldr:start -->
-# tool
-
-> One-line quick reference.
-
-- Run the tool:
-
-`tool {{path/to/input}}`
-<!-- mant:tldr:end -->
-
-# Tool
-```
-
-The shipped [mant manual](docs/manuals/mant.md) uses this constrained format
-and is consumed by ManT itself.
+When compatible local tldr data exists, an ordinary query places its quick
+reference before the full document as reserved node `0`. `mant git --tldr`
+selects only that presentation, while `--manual` and `--section` select only
+native manual content. ManT reads installed-client caches or its private cache,
+which `mant --update-tldr` can update. Markdown authors may also embed a
+document-owned quick reference using the format described in the
+[mant manual](docs/manuals/mant.md).
 
 ## MCP
 
@@ -306,21 +274,22 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 ## Architecture
 
 ```text
-mant
-├─ terminal mode ──→ mant-ui (Ratatui)
-├─ output mode ────→ Markdown / text / JSON
-├─ integration ────→ schemas / request JSON / MCP stdio
-├─ source updates ─→ mant-sources (Git / HTTP archives)
-└─ mant-core ──────→ mant-sources (local reads)
-   ├─ mant-ast
-   └─ libmandoc-rs
-      └─ vendored libmandoc + private C shim
+man/mdoc files ──→ ManualIndex ─→ libmandoc-rs ──┐
+Markdown files ─→ mant-sources ─→ Markdown parser ├─→ mant-core
+tldr caches ─────────────────────→ tldr parser ───┘      │
+                                                        ↓
+                                             QueryBundle (mant-ast)
+                                              ├─ mant-ui (Ratatui)
+                                              ├─ Markdown / text / JSON
+                                              └─ schemas / request JSON / MCP
 ```
 
 Rust owns source discovery, parsing, the stable AST, tldr integration, output,
 and terminal presentation. Interactive use passes the in-memory `QueryBundle`
 directly to `mant-ui`; external process consumers continue to use the
-versioned JSON and MCP boundaries.
+versioned JSON and MCP boundaries. Git and archive updates are an optional
+native CLI capability layered on `mant-sources`, not part of document reads or
+MCP.
 
 ## Documentation
 

@@ -1,9 +1,9 @@
 # mant
 
-`mant` is ManT's complete native document command: an interactive terminal
-reader for people, a deterministic structured CLI for scripts and agents, and
-a read-only stdio MCP server. Every surface consumes the same normalized
-document model.
+`mant` is ManT's local-first documentation command. It turns native man/mdoc
+pages and Markdown libraries into one catalog exposed as an interactive TUI,
+a deterministic structured CLI, and a read-only stdio MCP server. Every
+interface consumes the same normalized document model.
 
 ```sh
 mant git                              # interactive reader in a terminal
@@ -55,10 +55,11 @@ mant --input README.md --ui
 ```
 
 The reader provides a resizable outline, collapsible sections, semantic option
-nodes, settled-scroll following, page-local links, full-document search,
-keyboard and mouse input, and optional tldr quick references before the full
-document. Redirected output stays deterministic instead of emitting terminal
-control sequences.
+nodes, settled-scroll following, typed in-page and cross-document links,
+back/forward history, full-document search, keyboard and mouse input, and
+optional tldr quick references before the full document. `Ctrl+O` opens the
+shared Markdown and native-manual catalog. Redirected output stays
+deterministic instead of emitting terminal control sequences.
 
 ## Structured queries for agents and scripts
 
