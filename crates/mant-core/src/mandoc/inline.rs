@@ -43,6 +43,10 @@ impl InlineBuilder {
         self.suppress_space = true;
     }
 
+    pub(super) fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(super) fn hard_break(&mut self) {
@@ -184,7 +188,7 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         Some("Li") => vec![Inline::Code {
             value: plain_text(&lowered),
         }],
-        Some("Xr") => lower_manual_reference(children, default_name),
+        Some("Xr" | "MR") => lower_manual_reference(children, default_name),
         Some("Lk") => lower_link(children, default_name, false),
         Some("Mt") => lower_link(children, default_name, true),
         // Keep the heading text as a private unresolved target until the
@@ -239,23 +243,29 @@ fn inline_children(node: &Node) -> &[Node] {
 }
 
 fn lower_manual_reference(children: &[Node], default_name: Option<&str>) -> Vec<Inline> {
-    let values: Vec<String> = children
-        .iter()
-        .map(|child| plain_text(&lower_inline_node(child, default_name)))
-        .filter(|value| !value.is_empty())
-        .collect();
-    let Some(name) = values.first().cloned() else {
+    let Some(name_node) = children.first() else {
         return Vec::new();
     };
-    let section = values.get(1).cloned();
+    let name = plain_text(&lower_inline_node(name_node, default_name));
+    if name.is_empty() {
+        return Vec::new();
+    }
+    let section = children
+        .get(1)
+        .map(|child| plain_text(&lower_inline_node(child, default_name)))
+        .filter(|value| !value.is_empty());
     let display = section
         .as_ref()
         .map_or_else(|| name.clone(), |section| format!("{name}({section})"));
-    vec![Inline::ManualReference {
+    let mut output = vec![Inline::ManualReference {
         name,
         section,
         children: text_node(&display),
-    }]
+    }];
+    for child in children.iter().skip(2) {
+        output.extend(lower_inline_node(child, default_name));
+    }
+    output
 }
 
 fn lower_link(children: &[Node], default_name: Option<&str>, email: bool) -> Vec<Inline> {
@@ -337,12 +347,23 @@ fn apply_font(children: Vec<Inline>, font: Font) -> Vec<Inline> {
         Font::Regular => children,
         Font::Strong => wrap_strong(children),
         Font::Emphasis => wrap_emphasis(children),
-        Font::Code => (!children.is_empty())
-            .then(|| Inline::Code {
-                value: plain_text(&children),
-            })
-            .into_iter()
-            .collect(),
+        Font::StrongEmphasis => wrap_strong(wrap_emphasis(children)),
+        Font::Code | Font::CodeStrong | Font::CodeEmphasis => {
+            let code = (!children.is_empty())
+                .then(|| Inline::Code {
+                    value: plain_text(&children),
+                })
+                .into_iter()
+                .collect();
+            match font {
+                Font::Code => code,
+                Font::CodeStrong => wrap_strong(code),
+                Font::CodeEmphasis => wrap_emphasis(code),
+                Font::Regular | Font::Strong | Font::Emphasis | Font::StrongEmphasis => {
+                    unreachable!()
+                }
+            }
+        }
     }
 }
 
@@ -407,7 +428,10 @@ fn normalize_redundant_escaped_font(source: &str, font: Font) -> Cow<'_, str> {
     let opening = match font {
         Font::Strong => r"\fB",
         Font::Emphasis => r"\fI",
+        Font::StrongEmphasis => r"\f[BI]",
         Font::Code => r"\fC",
+        Font::CodeStrong => r"\f[CB]",
+        Font::CodeEmphasis => r"\f[CI]",
         Font::Regular => return Cow::Borrowed(source),
     };
     if !source.contains(opening) {
@@ -440,7 +464,18 @@ fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link
         Font::Emphasis => Inline::Emphasis {
             children: vec![Inline::Text { value }],
         },
+        Font::StrongEmphasis => Inline::Strong {
+            children: vec![Inline::Emphasis {
+                children: vec![Inline::Text { value }],
+            }],
+        },
         Font::Code => Inline::Code { value },
+        Font::CodeStrong => Inline::Strong {
+            children: vec![Inline::Code { value }],
+        },
+        Font::CodeEmphasis => Inline::Emphasis {
+            children: vec![Inline::Code { value }],
+        },
     };
     if let Some(target) = link {
         output.push(Inline::ExternalLink {
@@ -512,6 +547,24 @@ mod tests {
                 .iter()
                 .any(|node| matches!(node, Inline::Strong { .. }))
         );
+    }
+
+    #[test]
+    fn preserves_pandoc_verbatim_font_styles() {
+        let nodes = parse_roff_text(r"\f[V]code\f[R] \f[VB]bold\f[R] \f[VI]italic\f[R]");
+
+        assert_eq!(plain_text(&nodes), "code bold italic");
+        assert!(matches!(nodes.first(), Some(Inline::Code { value }) if value == "code"));
+        assert!(nodes.iter().any(|node| matches!(
+            node,
+            Inline::Strong { children }
+                if matches!(children.as_slice(), [Inline::Code { value }] if value == "bold")
+        )));
+        assert!(nodes.iter().any(|node| matches!(
+            node,
+            Inline::Emphasis { children }
+                if matches!(children.as_slice(), [Inline::Code { value }] if value == "italic")
+        )));
     }
 
     #[test]

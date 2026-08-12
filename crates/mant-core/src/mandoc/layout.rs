@@ -263,6 +263,8 @@ mod tests {
             flags: NodeFlags::default(),
             list_kind: None,
             display_kind: None,
+            font: None,
+            author_mode: None,
             compact: false,
             offset: offset.map(ToOwned::to_owned),
             width: None,

@@ -1,8 +1,9 @@
 //! Tests for rclone's official Go Windows release manual.
 //!
-//! The Pandoc-generated page intentionally retains diagnostics for GNU font
-//! extensions, so it is not passed through the generic zero-markup assertion.
+//! The Pandoc-generated page exercises GNU verbatim font extensions that the
+//! native parser compatibility layer must preserve without diagnostics.
 
+use mant_ast::Inline;
 use mant_core::{render_excerpt_markdown, select_excerpt};
 
 use crate::common::{self, block_slice_text, collect_sections, source_path_ends_with};
@@ -59,13 +60,45 @@ fn preserves_windows_paths_and_powershell_commands() {
 }
 
 #[test]
+fn preserves_pandoc_verbatim_font_semantics() {
+    let document = windows_release_manual("rclone");
+    let mut code_segments = 0;
+    let mut bold_code = false;
+    let mut italic_code = false;
+    for block in common::document_blocks(document) {
+        common::visit_block_inlines(block, &mut |inline| match inline {
+            Inline::Code { .. } => code_segments += 1,
+            Inline::Strong { children } => {
+                bold_code |= children
+                    .iter()
+                    .any(|child| matches!(child, Inline::Code { .. }));
+            }
+            Inline::Emphasis { children } => {
+                italic_code |= children
+                    .iter()
+                    .any(|child| matches!(child, Inline::Code { .. }));
+            }
+            _ => {}
+        });
+    }
+
+    assert!(code_segments > 1_000, "expected Pandoc verbatim code runs");
+    assert!(bold_code, "expected a Pandoc bold-verbatim run");
+    assert!(italic_code, "expected a Pandoc italic-verbatim run");
+    assert!(document.diagnostics.iter().all(|diagnostic| {
+        !diagnostic
+            .message
+            .starts_with("invalid escape sequence: \\f[")
+    }));
+}
+
+#[test]
 fn renders_the_reviewed_windows_path_section_without_losing_backslashes() {
     let query = windows_release_query("rclone");
     let excerpt = select_excerpt(&query, &["paths-on-windows-3225".to_owned()])
         .expect("select rclone Paths on Windows");
     let markdown = render_excerpt_markdown(&excerpt);
-
-    assert!(markdown.contains(r"C:\\path\\to\\wherever"));
-    assert!(markdown.contains(r"\\\\server\\share"));
-    assert!(markdown.contains(r"\\\\?\\D:\\some\\very\\long\\path"));
+    assert!(markdown.contains(r"`C:\path\to\wherever`"));
+    assert!(markdown.contains(r"`\\server\share`"));
+    assert!(markdown.contains(r"`\\?\D:\some\very\long\path`"));
 }

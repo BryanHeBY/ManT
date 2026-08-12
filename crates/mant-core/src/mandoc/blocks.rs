@@ -1,7 +1,8 @@
 //! Reconstructs sections and semantic blocks from the copied mandoc tree.
 
 use libmandoc_rs::{
-    DisplayKind, Node, NodeKind, NormalizedListKind, TableAlignment as MandocTableAlignment,
+    AuthorMode, DisplayKind, Node, NodeKind, NormalizedFont, NormalizedListKind,
+    TableAlignment as MandocTableAlignment,
 };
 use mant_ast::{
     Block, DefinitionItem, Inline, LayoutHint, ListItem, ListKind, Section,
@@ -130,11 +131,26 @@ fn lower_blocks(
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
     let mut definition_hanging_width = 7;
+    let mut split_authors = false;
 
     for node in nodes {
         if node.macro_name.as_deref() == Some("PD") {
             update_paragraph_distance(node, paragraph_distance);
             continue;
+        }
+        if node.macro_name.as_deref() == Some("An") {
+            match node.author_mode {
+                Some(AuthorMode::Split) => {
+                    split_authors = true;
+                    continue;
+                }
+                Some(AuthorMode::NoSplit) => {
+                    split_authors = false;
+                    continue;
+                }
+                None if split_authors => state.hard_break(),
+                None => {}
+            }
         }
         if node.flags.no_print
             || node.kind == NodeKind::Comment
@@ -162,6 +178,12 @@ fn lower_blocks(
             continue;
         }
         state.flush_preformatted();
+        if node.flags.delimiter_close && is_inline(node) && state.paragraph.is_empty() {
+            let tail = lower_inline_nodes(std::slice::from_ref(node), context.default_name);
+            if append_to_last_inline_block(&mut state.output, &tail) {
+                continue;
+            }
+        }
         if node.macro_name.as_deref() == Some("Pp") {
             state.flush_paragraph();
             if !state.output.is_empty() {
@@ -241,6 +263,18 @@ fn lower_structural_node(
             }
             output.push(block);
         }
+        Some("Bf") => {
+            let mut nested = lower_blocks(
+                part_children(node, NodeKind::Body),
+                context,
+                indent_columns,
+                paragraph_distance,
+            );
+            if let Some(font) = node.font {
+                apply_normalized_font(&mut nested, font);
+            }
+            extend_transparent_blocks(output, nested, *paragraph_distance);
+        }
         Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
             let spacing_before = u16::from(!output.is_empty() && !node.compact);
             let nested = lower_blocks(
@@ -268,8 +302,8 @@ fn lower_structural_node(
             );
             extend_transparent_blocks(output, nested, *paragraph_distance);
         }
-        Some("UR") => {
-            lower_uri_block(output, node, context, indent_columns, paragraph_distance);
+        Some("UR" | "MT") => {
+            lower_link_block(output, node, context, indent_columns, paragraph_distance);
         }
         _ if node.kind == NodeKind::Table => {
             append_table_row(output, node, indent_columns);
@@ -299,53 +333,64 @@ fn lower_structural_node(
     }
 }
 
-fn lower_uri_block(
+fn lower_link_block(
     output: &mut Vec<Block>,
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) {
-    let uri = plain_text(&lower_inline_nodes(
+    let target = plain_text(&lower_inline_nodes(
         part_children(node, NodeKind::Head),
         context.default_name,
     ));
+    let email = node.macro_name.as_deref() == Some("MT");
     let mut nested = lower_blocks(
         part_children(node, NodeKind::Body),
         context,
         indent_columns,
         paragraph_distance,
     );
-    if !uri.is_empty() {
-        wrap_blocks_in_external_link(&mut nested, &uri);
+    if !target.is_empty() {
+        if nested.is_empty() {
+            nested.push(Block::Paragraph {
+                children: vec![link_inline(
+                    &target,
+                    email,
+                    vec![Inline::Text {
+                        value: target.clone(),
+                    }],
+                )],
+                layout: layout(indent_columns),
+                source: source_span(node),
+            });
+        } else {
+            wrap_blocks_in_link(&mut nested, &target, email);
+        }
     }
-    extend_transparent_blocks(output, nested, *paragraph_distance);
     let tail = lower_inline_nodes(part_children(node, NodeKind::Tail), context.default_name);
-    if !tail.is_empty() {
-        output.push(Block::Paragraph {
+    if !tail.is_empty() && !append_to_last_inline_block(&mut nested, &tail) {
+        nested.push(Block::Paragraph {
             children: tail,
             layout: layout(indent_columns),
             source: source_span(node),
         });
     }
+    extend_transparent_blocks(output, nested, *paragraph_distance);
 }
 
-fn wrap_blocks_in_external_link(blocks: &mut [Block], uri: &str) {
+fn wrap_blocks_in_link(blocks: &mut [Block], target: &str, email: bool) {
     for block in blocks {
         match block {
             Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
                 let label = std::mem::take(children);
                 if !label.is_empty() {
-                    children.push(Inline::ExternalLink {
-                        uri: uri.to_owned(),
-                        title: None,
-                        children: label,
-                    });
+                    children.push(link_inline(target, email, label));
                 }
             }
             Block::List { items, .. } => {
                 for item in items {
-                    wrap_blocks_in_external_link(&mut item.blocks, uri);
+                    wrap_blocks_in_link(&mut item.blocks, target, email);
                 }
             }
             Block::DefinitionList { items, .. } => {
@@ -353,19 +398,15 @@ fn wrap_blocks_in_external_link(blocks: &mut [Block], uri: &str) {
                     for term in &mut item.terms {
                         let label = std::mem::take(term);
                         if !label.is_empty() {
-                            term.push(Inline::ExternalLink {
-                                uri: uri.to_owned(),
-                                title: None,
-                                children: label,
-                            });
+                            term.push(link_inline(target, email, label));
                         }
                     }
-                    wrap_blocks_in_external_link(&mut item.description, uri);
+                    wrap_blocks_in_link(&mut item.description, target, email);
                 }
             }
             Block::Table { rows, .. } => {
                 for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
-                    wrap_blocks_in_external_link(&mut cell.blocks, uri);
+                    wrap_blocks_in_link(&mut cell.blocks, target, email);
                 }
             }
             Block::Equation { .. }
@@ -374,6 +415,116 @@ fn wrap_blocks_in_external_link(blocks: &mut [Block], uri: &str) {
             | Block::Unsupported { .. } => {}
         }
     }
+}
+
+fn link_inline(target: &str, email: bool, children: Vec<Inline>) -> Inline {
+    if email {
+        Inline::EmailLink {
+            address: target.to_owned(),
+            children,
+        }
+    } else {
+        Inline::ExternalLink {
+            uri: target.to_owned(),
+            title: None,
+            children,
+        }
+    }
+}
+
+fn apply_normalized_font(blocks: &mut [Block], font: NormalizedFont) {
+    for block in blocks {
+        match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                let content = std::mem::take(children);
+                if content.is_empty() {
+                    continue;
+                }
+                children.push(match font {
+                    NormalizedFont::Emphasis => Inline::Emphasis { children: content },
+                    NormalizedFont::Literal => Inline::Code {
+                        value: plain_text(&content),
+                    },
+                    NormalizedFont::Symbolic => Inline::Strong { children: content },
+                });
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    apply_normalized_font(&mut item.blocks, font);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    for term in &mut item.terms {
+                        let content = std::mem::take(term);
+                        if !content.is_empty() {
+                            term.push(match font {
+                                NormalizedFont::Emphasis => Inline::Emphasis { children: content },
+                                NormalizedFont::Literal => Inline::Code {
+                                    value: plain_text(&content),
+                                },
+                                NormalizedFont::Symbolic => Inline::Strong { children: content },
+                            });
+                        }
+                    }
+                    apply_normalized_font(&mut item.description, font);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
+                    apply_normalized_font(&mut cell.blocks, font);
+                }
+            }
+            Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn append_to_last_inline_block(blocks: &mut [Block], tail: &[Inline]) -> bool {
+    for block in blocks.iter_mut().rev() {
+        match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                children.extend_from_slice(tail);
+                return true;
+            }
+            Block::List { items, .. } => {
+                if items
+                    .last_mut()
+                    .is_some_and(|item| append_to_last_inline_block(&mut item.blocks, tail))
+                {
+                    return true;
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                if items.last_mut().is_some_and(|item| {
+                    append_to_last_inline_block(&mut item.description, tail)
+                        || item.terms.last_mut().is_some_and(|term| {
+                            term.extend_from_slice(tail);
+                            true
+                        })
+                }) {
+                    return true;
+                }
+            }
+            Block::Table { rows, .. } => {
+                if rows
+                    .last_mut()
+                    .and_then(|row| row.cells.last_mut())
+                    .is_some_and(|cell| append_to_last_inline_block(&mut cell.blocks, tail))
+                {
+                    return true;
+                }
+            }
+            Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
+    false
 }
 
 fn lower_man_definition(

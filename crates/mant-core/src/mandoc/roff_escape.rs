@@ -16,7 +16,10 @@ pub(super) enum RoffFont {
     Regular,
     Strong,
     Emphasis,
+    StrongEmphasis,
     Code,
+    CodeStrong,
+    CodeEmphasis,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -335,7 +338,10 @@ fn font(name: &str) -> RoffFont {
     match name {
         "B" | "3" => RoffFont::Strong,
         "I" | "2" => RoffFont::Emphasis,
-        "CW" | "C" => RoffFont::Code,
+        "BI" | "4" => RoffFont::StrongEmphasis,
+        "C" | "CR" | "CW" | "V" => RoffFont::Code,
+        "CB" | "VB" => RoffFont::CodeStrong,
+        "CI" | "VI" => RoffFont::CodeEmphasis,
         _ => RoffFont::Regular,
     }
 }
@@ -375,6 +381,24 @@ mod tests {
                 RoffInlineEvent::Font(RoffFont::Regular),
                 RoffInlineEvent::Link(None),
                 RoffInlineEvent::Text(" FILE".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn recognizes_constant_width_and_pandoc_verbatim_font_families() {
+        assert_eq!(
+            decode(r"\f[C]code\f[V]verbatim\f[VB]bold\f[VI]italic\f[R]"),
+            vec![
+                RoffInlineEvent::Font(RoffFont::Code),
+                RoffInlineEvent::Text("code".to_owned()),
+                RoffInlineEvent::Font(RoffFont::Code),
+                RoffInlineEvent::Text("verbatim".to_owned()),
+                RoffInlineEvent::Font(RoffFont::CodeStrong),
+                RoffInlineEvent::Text("bold".to_owned()),
+                RoffInlineEvent::Font(RoffFont::CodeEmphasis),
+                RoffInlineEvent::Text("italic".to_owned()),
+                RoffInlineEvent::Font(RoffFont::Regular),
             ]
         );
     }

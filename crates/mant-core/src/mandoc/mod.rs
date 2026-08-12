@@ -1,7 +1,6 @@
 //! Lowers the owned libmandoc syntax tree into `ManT`'s stable document model.
 
 mod blocks;
-mod compat;
 mod diagnostics;
 mod error;
 pub(crate) mod inline;
@@ -89,7 +88,6 @@ fn parse_plain_manual(
     alias_target: Option<&str>,
 ) -> Result<MantDocument, ManualError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
-    let source = compat::normalize_groff_navigation_macros(source.as_ref());
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
         compression: Compression::Plain,
@@ -810,7 +808,7 @@ mod tests {
                     Inline::ExternalLink { uri, .. } if uri == "https://example.test/docs" => {
                         web = true;
                     }
-                    Inline::ExternalLink { uri, .. } if uri == "mailto:docs@example.test" => {
+                    Inline::EmailLink { address, .. } if address == "docs@example.test" => {
                         mail = true;
                     }
                     _ => {}
@@ -819,6 +817,28 @@ mod tests {
         }
 
         assert!(manual && web && mail);
+        assert!(section.blocks.iter().any(|block| match block {
+            Block::Paragraph { children, .. } => inline_text(children).contains("git-add(1),"),
+            _ => false,
+        }));
+        let linked_paragraphs = section
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Paragraph { children, .. }
+                    if children.iter().any(|inline| {
+                        matches!(
+                            inline,
+                            Inline::ExternalLink { .. } | Inline::EmailLink { .. }
+                        )
+                    }) =>
+                {
+                    Some(inline_text(children))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(linked_paragraphs, ["Documentation.", "Mail us."]);
     }
 
     #[test]
@@ -935,6 +955,48 @@ mod tests {
         assert!(matches!(
             document.sections[0].blocks[1],
             Block::Preformatted { layout, .. } if layout.indent_columns == 6
+        ));
+    }
+
+    #[test]
+    fn lowers_normalized_mdoc_font_and_author_layout() {
+        let path = temporary_source(
+            "normalized-mdoc-modes",
+            ".Dd July 19, 2026\n\
+             .Dt NORMALIZED-MODES 1\n\
+             .Os\n\
+             .Sh AUTHORS\n\
+             .An -split\n\
+             .An Alice Example\n\
+             .An Bob Example\n\
+             .An -nosplit\n\
+             .An Carol Example\n\
+             .An Dave Example\n\
+             .Sh DESCRIPTION\n\
+             .Bf -literal\n\
+             literal text\n\
+             .Ef\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower normalized mdoc modes");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let authors = &document.sections[0];
+        let Block::Paragraph { children, .. } = &authors.blocks[0] else {
+            panic!("authors are one paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "Alice Example\nBob Example Carol Example Dave Example"
+        );
+
+        let description = &document.sections[1];
+        let Block::Paragraph { children, .. } = &description.blocks[0] else {
+            panic!("font block is a paragraph");
+        };
+        assert!(matches!(
+            children.as_slice(),
+            [Inline::Code { value }] if value == "literal text"
         ));
     }
 
