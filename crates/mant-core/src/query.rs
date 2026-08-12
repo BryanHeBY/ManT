@@ -613,9 +613,15 @@ fn query_named_document(
         }
     }
 
-    // A malformed or unreadable community cache must never hide a valid man
-    // page. It is an optional augmentation and is never updated during query.
-    let tldr = host.read_tldr(name).ok().flatten();
+    // Explicit manual selection is exclusive: --manual and --section must not
+    // appear to resolve to tldr just because the quick reference is rendered
+    // before the requested page. Unqualified queries retain tldr as an
+    // optional augmentation and never update it during a read.
+    let tldr = if require_manual {
+        None
+    } else {
+        host.read_tldr(name).ok().flatten()
+    };
     let mut manual = load_manual(name, &candidates, section.as_deref(), host);
 
     // A malformed page may omit its own section metadata. Preserve the
@@ -626,8 +632,8 @@ fn query_named_document(
         document.meta.section = Some(section.to_owned());
     }
 
-    // An explicit manual request may include tldr beside a successful manual,
-    // but must not degrade into an apparently successful tldr-only response.
+    // An explicit manual request must not degrade into an apparently
+    // successful tldr-only response.
     if require_manual {
         return match manual {
             Ok(manual) => Ok(QueryBundle {
@@ -918,7 +924,8 @@ mod tests {
 
     #[test]
     fn requested_section_backfills_metadata_the_parser_left_empty() {
-        let host = host(Ok(document(SourceFormat::Man, false, true)));
+        let mut host = host(Ok(document(SourceFormat::Man, false, true)));
+        host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
             schema: RequestSchema::V6,
             input: QueryInput::Document {
@@ -931,14 +938,21 @@ mod tests {
 
         let result = query_with(&request, QueryPolicy::default(), &host).expect("query");
         assert_eq!(
-            result.document.expect("manual").meta.section.as_deref(),
+            result
+                .document
+                .as_ref()
+                .expect("manual")
+                .meta
+                .section
+                .as_deref(),
             Some("3"),
             "requested section must label output when the parser omits it"
         );
+        assert!(result.tldr.is_none(), "an explicit section is manual-only");
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "parse"],
-            "an explicit manual section bypasses registered Markdown"
+            ["locate", "parse"],
+            "an explicit manual section bypasses Markdown and tldr"
         );
     }
 
@@ -987,17 +1001,19 @@ mod tests {
         let mut host = host(Ok(document(SourceFormat::Man, true, true)));
         host.registered_document = Some(PathBuf::from("/data/mant/tool.md"));
         host.markdown = Ok("# Registered".to_owned());
+        host.tldr = Ok(Some(tldr()));
         let result = query_with(&request(), QueryPolicy { manual_only: true }, &host)
             .expect("manual-only query");
 
         assert_eq!(
-            result.document.expect("manual").source.format,
+            result.document.as_ref().expect("manual").source.format,
             SourceFormat::Man
         );
+        assert!(result.tldr.is_none(), "manual-only must not attach tldr");
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "parse"],
-            "manual-only lookup must not inspect the registered-document namespace"
+            ["locate", "parse"],
+            "manual-only lookup must not inspect Markdown or tldr namespaces"
         );
     }
 
@@ -1018,10 +1034,7 @@ mod tests {
                 .to_string()
                 .contains("Unsupported: unsupported request")
         );
-        assert_eq!(
-            *host.calls.lock().expect("calls lock"),
-            ["tldr", "locate", "parse"]
-        );
+        assert_eq!(*host.calls.lock().expect("calls lock"), ["locate", "parse"]);
     }
 
     #[test]
@@ -1044,7 +1057,7 @@ mod tests {
 
         assert!(matches!(&error, QueryError::Manual(_)));
         assert!(error.to_string().contains("section not found"));
-        assert_eq!(*host.calls.lock().expect("calls lock"), ["tldr", "locate"]);
+        assert_eq!(*host.calls.lock().expect("calls lock"), ["locate"]);
     }
 
     #[test]

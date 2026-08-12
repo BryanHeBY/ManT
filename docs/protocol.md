@@ -158,10 +158,12 @@ deliberately absent from `mant.request/v6`. This native-manual source family is
 available on Linux, macOS, and Windows through the same owned AST boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
-with the same name and requires readable native manual content. A request JSON
-client can select the same source unambiguously by supplying its discovered
-manual `section`; sections apply only to native manuals and therefore bypass
-registered Markdown.
+with the same name and requires only readable native manual content, without an
+attached tldr quick reference. `--section` has the same exclusivity, while
+`--tldr` is CLI shorthand for the existing reserved `tldr` node projection. A
+request JSON client can select the same manual source unambiguously by supplying
+its discovered `section`; sections apply only to native manuals and therefore
+bypass registered Markdown.
 
 ## Request Contract
 

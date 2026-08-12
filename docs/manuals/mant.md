@@ -86,8 +86,8 @@ registered directory are visible. Nested directories and symbolic links are
 ignored. Root documents always win; source priority and name resolve remaining
 duplicates in the order above; `.md` wins over `.markdown` within one
 directory. `--source NAME` selects exactly one configured Git or archive
-source. `--manual` or `--section` selects a native manual and cannot be combined
-with `--source`.
+source. `--manual` or `--section` selects only native manual content and cannot
+be combined with `--source`.
 
 Windows document packages should retain executable suffixes in canonical
 filenames, such as `cargo.exe.md`. An extensionless query such as `mant cargo`
@@ -110,9 +110,11 @@ a system `mandoc` executable is required for ordinary use.
 Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
 and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 
-- `--section SECTION`: Select a manual section such as `1` or `3p`.
-- `--manual`: Require a native manual instead of registered Markdown with the
-  same name.
+- `--section SECTION`: Select only a manual section such as `1` or `3p`.
+- `--manual`: Require only a native manual instead of registered Markdown with
+  the same name or an attached quick reference.
+- `--tldr`: Print only the available quick reference; equivalent to
+  `--node tldr`.
 - `--source SOURCE`: Require one configured installed Markdown source.
 
 Recoverable parser findings remain structured in JSON output. ManT does not
@@ -413,6 +415,7 @@ errors, and Rust panics.
 Path `0` and ID alias `tldr` are reserved for either an external tldr page or a
 Markdown document's explicitly marked tldr preface. Remaining headings use
 one-based paths such as `2.3`, and semantic entries use paths such as `2.3/o4`.
+`--tldr` is a shortcut for selecting that reserved node alone.
 
 `--node` first recognizes the reserved tldr and document-root selectors, then
 resolves exact paths or IDs across sections and entries, and finally resolves

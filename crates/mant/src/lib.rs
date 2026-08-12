@@ -517,6 +517,24 @@ mod tests {
                 ..
             }
         ));
+
+        let mut tldr =
+            arguments::parse(&["git".to_owned(), "--tldr".to_owned()]).expect("tldr query");
+        resolve_process_presentation(
+            &mut tldr,
+            TerminalCapabilities {
+                input: true,
+                output: true,
+            },
+        )
+        .expect("tldr remains non-interactive");
+        assert!(matches!(
+            tldr,
+            Command::Query {
+                presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -874,6 +892,12 @@ mod tests {
         assert_eq!(value["selections"][0]["document"]["title"], "demo");
         assert!(value.get("producer").is_none());
         assert!(value.get("diagnostics").is_none());
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(&["demo", "--tldr"], b"", &host);
+        assert_eq!(status, 0);
+        assert!(output.contains("A small demonstration."));
+        assert!(!output.contains("## NAME"));
         assert!(diagnostics.is_empty());
     }
 

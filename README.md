@@ -107,13 +107,15 @@ Start with an outline and retrieve only the section or option that matters:
 
 ```sh
 mant gcc --outline
+mant git --tldr
 mant gcc --node 4.2 --format markdown
 mant tar --node acls --format json
 mant tar --explain=--exclude
 ```
 
 Heading paths are one-based. Path `0` and selector `tldr` are reserved for an
-available quick reference.
+available quick reference; `--tldr` is the concise equivalent of
+`--node tldr`.
 
 Search returns the nearest reusable outline node and exact generated-Markdown
 coordinates:
@@ -168,11 +170,12 @@ Roots may also contain flat files such as `widget.1` directly. On Windows the
 fallback root is `%USERPROFILE%\.local\share\man`; `MANPATH` and
 `MANT_MANPATH` use semicolon-separated entries.
 
-When compatible local tldr data exists, the reader places it before the full
-manual as reserved section `0`. Reads prefer installed-client caches and then
-fall back to ManT's private cache below the platform cache directory. Run
-`mant --update-tldr` to update through an installed client or that private
-checkout.
+When compatible local tldr data exists, an unqualified query places it before
+the full manual as reserved section `0`. Use `--tldr` for only that quick
+reference, or `--manual`/`--section` for only native manual content. Reads
+prefer installed-client caches and then fall back to ManT's private cache below
+the platform cache directory. Run `mant --update-tldr` to update through an
+installed client or that private checkout.
 
 ## Markdown through the same model
 
@@ -188,7 +191,7 @@ An unqualified name checks the user directory first, then configured document
 sources, and finally the native manual index. Only
 `.md` and `.markdown` files directly inside each installed directory are
 discoverable; nested directories and symbolic links are ignored. `--manual`
-bypasses Markdown and selects a native manual on every supported platform.
+bypasses Markdown and selects only a native manual on every supported platform.
 On Windows, packages should keep canonical executable suffixes such as
 `tool.exe.md`; `mant tool` falls back through `PATHEXT`, while `mant tool.exe`
 is exact. This behavior is independent of the calling shell.

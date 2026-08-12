@@ -73,6 +73,7 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("--explain <ENTRY>"));
     assert!(help.contains("--search <PATTERN>"));
     assert!(help.contains("--manual"));
+    assert!(help.contains("--tldr"));
     assert!(!help.contains("--force-libmandoc"));
     assert!(!help.contains("--force-groff"));
     assert!(!help.contains("--json"));
@@ -842,9 +843,11 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
         std::process::id()
     ));
     let manual_root = root.join("manuals");
+    let tldr_root = root.join("tldr");
     let documents = registered_documents_dir(&root);
     fs::create_dir_all(&documents).expect("create registration root");
     fs::create_dir_all(manual_root.join("man1")).expect("create manual root");
+    fs::create_dir_all(tldr_root.join("pages/common")).expect("create tldr root");
     fs::write(
         documents.join("source-policy.md"),
         "# Registered document\n\nRegistered body.\n",
@@ -855,6 +858,11 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
         ".TH SOURCE-POLICY 1\n.SH NAME\nsource-policy \\- native manual\n",
     )
     .expect("write native manual");
+    fs::write(
+        tldr_root.join("pages/common/source-policy.md"),
+        "# source-policy\n\n> Cached quick reference.\n\n- Show the quick reference:\n\n`source-policy --quick`\n",
+    )
+    .expect("write tldr page");
 
     let run = |manual: bool| {
         let mut command = Command::new(executable());
@@ -863,7 +871,8 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
             .arg("source-policy")
             .args(manual.then_some("--manual"))
             .args(["--format", "json", "--compact"])
-            .env("MANT_MANPATH", &manual_root);
+            .env("MANT_MANPATH", &manual_root)
+            .env("MANT_TLDR_DIR", &tldr_root);
         command.output().expect("query source policy")
     };
 
@@ -879,8 +888,72 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
     let manual: serde_json::Value = serde_json::from_slice(&manual.stdout).expect("manual JSON");
     assert_eq!(manual["document"]["source"]["format"], "man");
     assert_eq!(manual["document"]["meta"]["section"], "1");
+    assert!(manual["tldr"].is_null());
 
     fs::remove_dir_all(root).expect("remove source-policy fixture");
+}
+
+#[test]
+fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
+    let root = std::env::temp_dir().join(format!(
+        "mant-explicit-content-process-{}",
+        std::process::id()
+    ));
+    let manual_root = root.join("manuals");
+    let tldr_root = root.join("tldr");
+    fs::create_dir_all(manual_root.join("man1")).expect("create manual root");
+    fs::create_dir_all(tldr_root.join("pages/common")).expect("create tldr root");
+    fs::write(
+        manual_root.join("man1/content-policy.1"),
+        ".TH CONTENT-POLICY 1\n.SH NAME\ncontent-policy \\- native manual body\n",
+    )
+    .expect("write native manual");
+    fs::write(
+        tldr_root.join("pages/common/content-policy.md"),
+        "# content-policy\n\n> Cached quick reference.\n\n- Show the quick reference:\n\n`content-policy --quick`\n",
+    )
+    .expect("write tldr page");
+
+    let run = |arguments: &[&str]| {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        command
+            .arg("content-policy")
+            .args(arguments)
+            .env("MANT_MANPATH", &manual_root)
+            .env("MANT_TLDR_DIR", &tldr_root);
+        command.output().expect("query explicit content")
+    };
+
+    let combined = run(&["--format", "json", "--compact"]);
+    assert!(combined.status.success(), "{combined:?}");
+    let combined: serde_json::Value =
+        serde_json::from_slice(&combined.stdout).expect("combined JSON");
+    assert_eq!(combined["document"]["source"]["format"], "man");
+    assert!(!combined["tldr"].is_null());
+
+    for selector in ["--manual", "--section"] {
+        let arguments = if selector == "--section" {
+            vec![selector, "1", "--format", "json", "--compact"]
+        } else {
+            vec![selector, "--format", "json", "--compact"]
+        };
+        let manual = run(&arguments);
+        assert!(manual.status.success(), "{manual:?}");
+        let manual: serde_json::Value =
+            serde_json::from_slice(&manual.stdout).expect("manual-only JSON");
+        assert_eq!(manual["document"]["source"]["format"], "man");
+        assert!(manual["tldr"].is_null());
+    }
+
+    let tldr = run(&["--tldr"]);
+    assert!(tldr.status.success(), "{tldr:?}");
+    assert!(tldr.stderr.is_empty());
+    let tldr = String::from_utf8(tldr.stdout).expect("tldr Markdown");
+    assert!(tldr.contains("Cached quick reference."));
+    assert!(!tldr.contains("native manual body"));
+
+    fs::remove_dir_all(root).expect("remove explicit-content fixture");
 }
 
 #[cfg(unix)]

@@ -66,6 +66,7 @@ Discover the document before selecting only the content that matters:
 
 ```sh
 mant gcc --outline
+mant git --tldr
 mant gcc --node 4.2 --format markdown
 mant tar --explain=--exclude
 mant tar --search=--acls --context 1
@@ -111,10 +112,11 @@ preview cleanup with `mant --prune-docs --dry-run` and apply it with
 descending priority and ascending source name, then a native manual. See the
 complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 
-When compatible local tldr data exists, ManT prepends it as reserved outline
-node `0`. Reads prefer installed-client caches and then ManT's private cache;
-`mant --update-tldr` updates through an installed client or the private
-checkout.
+When compatible local tldr data exists, an unqualified query prepends it as
+reserved outline node `0`. `--tldr` selects only that node, while `--manual`
+and `--section` select only native manual content. Reads prefer installed-client
+caches and then ManT's private cache; `mant --update-tldr` updates through an
+installed client or the private checkout.
 
 ## Crate architecture
 

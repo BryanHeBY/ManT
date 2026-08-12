@@ -250,9 +250,11 @@ the document contract. ManT never invokes a host renderer or chooses between
 renderer outputs.
 
 `--manual` is an input-resolution policy outside `mant.request/v6`. It bypasses
-registered Markdown with the same filename stem and requires a readable native
-manual instead of accepting a tldr-only result. An explicit `--section` also
-bypasses registered Markdown because sections belong only to native manuals.
+registered Markdown with the same filename stem, requires a readable native
+manual, and omits any attached tldr quick reference. An explicit `--section`
+has the same exclusivity because sections belong only to native manuals.
+`--tldr` remains a CLI convenience for the existing reserved `tldr` node
+projection, so this policy change does not alter the protocol schema.
 
 Direct lowering is covered by deterministic native fixtures from multiple
 distributions, including large git, gcc, clang, tar, and shell pages.

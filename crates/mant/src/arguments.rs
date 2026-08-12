@@ -150,7 +150,7 @@ pub(crate) enum Command {
     disable_help_flag = true,
     version,
     override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant README.md\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --prune-docs --dry-run\n  mant --update-tldr\n  mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant README.md\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --tldr\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --prune-docs --dry-run\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("action")
         .args(["name", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
@@ -161,7 +161,7 @@ struct Cli {
     #[arg(value_name = "NAME|MARKDOWN|-", value_parser = non_empty)]
     name: Option<String>,
 
-    /// Select a manual section such as 1 or 3p.
+    /// Print only a manual section such as 1 or 3p.
     #[arg(
         long,
         value_name = "SECTION",
@@ -182,9 +182,23 @@ struct Cli {
     )]
     source: Option<String>,
 
-    /// Bypass registered Markdown and require a native manual page.
-    #[arg(long, requires = "name", help_heading = "Document selection")]
+    /// Print only a native manual, bypassing Markdown and tldr content.
+    #[arg(
+        long,
+        requires = "name",
+        conflicts_with = "tldr",
+        help_heading = "Document selection"
+    )]
     manual: bool,
+
+    /// Print only the available tldr quick reference.
+    #[arg(
+        long,
+        requires = "name",
+        conflicts_with_all = ["section", "manual", "outline", "node", "explain", "search", "ui"],
+        help_heading = "Document selection"
+    )]
+    tldr: bool,
 
     /// Print selectable sections and semantic entries by default.
     #[arg(
@@ -294,6 +308,7 @@ struct Cli {
         long,
         conflicts_with_all = [
             "section",
+            "tldr",
             "outline",
             "node",
             "explain",
@@ -316,6 +331,7 @@ struct Cli {
         requires = "name",
         conflicts_with_all = [
             "outline",
+            "tldr",
             "node",
             "explain",
             "search",
@@ -398,6 +414,7 @@ struct Cli {
             "offset",
             "request_json",
             "manual",
+            "tldr",
             "update_tldr",
             "update_docs",
             "prune_docs",
@@ -513,7 +530,11 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
 }
 
 fn normalize_query_view(parsed: &mut Cli) -> QueryView {
-    if let Some(detail) = parsed.outline.take() {
+    if parsed.tldr {
+        QueryView::Excerpt {
+            nodes: vec!["tldr".to_owned()],
+        }
+    } else if let Some(detail) = parsed.outline.take() {
         QueryView::Outline {
             detail: detail.into(),
         }
@@ -880,13 +901,25 @@ mod tests {
     }
 
     #[test]
-    fn parses_the_explicit_manual_source_policy() {
+    fn parses_explicit_manual_and_tldr_selections() {
         assert!(matches!(
             parse(&args(&["tar", "--manual", "--format", "json"])).expect("manual-only query"),
             Command::Query {
                 manual_only: true,
                 ..
             }
+        ));
+        assert!(matches!(
+            parse(&args(&["tar", "--tldr"])).expect("tldr-only query"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    view: QueryView::Excerpt { ref nodes },
+                    ..
+                }),
+                presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                manual_only: false,
+                ..
+            } if nodes == &["tldr"]
         ));
     }
 
@@ -1124,11 +1157,16 @@ mod tests {
             vec!["--dry-run"],
             vec!["git", "--source", "team", "--section", "1"],
             vec!["git", "--source", "team", "--manual"],
+            vec!["git", "--manual", "--tldr"],
+            vec!["git", "--section", "1", "--tldr"],
+            vec!["git", "--tldr", "--node", "0"],
+            vec!["git", "--tldr", "--ui"],
             vec!["README.md", "--source", "team"],
             vec!["--schema", "request", "--format", "json"],
             vec!["--mcp", "git"],
             vec!["--mcp", "--format", "json"],
             vec!["--mcp", "--manual"],
+            vec!["--mcp", "--tldr"],
             vec!["--mcp", "--update-tldr"],
             vec!["--update-tldr", "--preserve-anchors"],
             vec!["README.md", "--manual"],
