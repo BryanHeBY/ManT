@@ -88,7 +88,15 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     assert!(workflow.contains("--target-in-filename"));
     assert!(workflow.contains("SOURCE_DATE_EPOCH=0"));
     assert!(workflow.contains("dist/mant-*.cdx.json"));
-    assert!(workflow.contains("sbom-path: dist/mant-*.cdx.json"));
+    assert!(workflow.contains(r#"echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV""#));
+    assert!(workflow.contains(r#""MANT_SBOM_PATH=$Sbom" | Out-File"#));
+    assert_eq!(
+        workflow
+            .matches("sbom-path: ${{ env.MANT_SBOM_PATH }}")
+            .count(),
+        2
+    );
+    assert!(!workflow.contains("sbom-path: dist/mant-*.cdx.json"));
     assert!(workflow.contains("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6"));
 }
 

@@ -102,6 +102,7 @@ jobs:
           sbom="mant-${RELEASE_TAG#v}-${{ matrix.target }}.cdx.json"
           mv "crates/mant/mant_bin_${{ matrix.rust_target }}.cdx.json" "dist/$sbom"
           (cd dist && sha256sum "$sbom" > "$sbom.sha256")
+          echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV"
 
       - name: Generate Windows CycloneDX SBOM
         if: runner.os == 'Windows'
@@ -127,6 +128,7 @@ jobs:
             "$Hash  $SbomName`n",
             [Text.UTF8Encoding]::new($false)
           )
+          "MANT_SBOM_PATH=$Sbom" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Package Unix release archive
         if: runner.os != 'Windows'
@@ -176,14 +178,14 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/mant-*.tar.gz
-          sbom-path: dist/mant-*.cdx.json
+          sbom-path: ${{ env.MANT_SBOM_PATH }}
 
       - name: Bind SBOM to Windows archive
         if: runner.os == 'Windows'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/mant-*.zip
-          sbom-path: dist/mant-*.cdx.json
+          sbom-path: ${{ env.MANT_SBOM_PATH }}
 
       - name: Upload packaged distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
