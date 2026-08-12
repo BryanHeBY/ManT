@@ -111,9 +111,13 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     );
     assert!(workflow.contains("ref: ${{ github.sha }}"));
     assert!(workflow.contains("path: .release-automation"));
-    assert!(workflow.contains("scripts/build-and-smoke.sh\n"));
-    assert!(workflow.contains("scripts/build-and-smoke.ps1\n"));
-    assert!(workflow.contains("scripts/finalize-cyclonedx.mjs\n"));
+    for helper in [
+        "scripts/build-and-smoke.sh",
+        "scripts/build-and-smoke.ps1",
+        "scripts/finalize-cyclonedx.mjs",
+    ] {
+        assert!(workflow.lines().any(|line| line.trim() == helper));
+    }
     assert!(workflow.contains("dist/mant-*.cdx.json"));
     assert!(workflow.contains(r#"echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV""#));
     assert!(workflow.contains(r#""MANT_SBOM_PATH=$Sbom" | Out-File"#));
