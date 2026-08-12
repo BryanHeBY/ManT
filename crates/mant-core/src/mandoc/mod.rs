@@ -1,6 +1,7 @@
 //! Lowers the owned libmandoc syntax tree into `ManT`'s stable document model.
 
 mod blocks;
+mod compat;
 mod diagnostics;
 mod error;
 pub(crate) mod inline;
@@ -64,6 +65,7 @@ fn parse_plain_manual(
     alias_target: Option<&str>,
 ) -> Result<MantDocument, ManualError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
+    let source = compat::normalize_groff_navigation_macros(source.as_ref());
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
         compression: Compression::Plain,
@@ -699,12 +701,12 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_traditional_man_references_inside_see_also() {
+    fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
         let path = temporary_source(
             "man-see-also",
             ".TH TOOL 1\n\
              .SH DESCRIPTION\n\
-             The word \\fBprintf\\fP(3) is prose here.\n\
+             The styled reference \\fBprintf\\fP(3) is usable here.\n\
              .SH SEE ALSO\n\
              .BR printf (3),\n\
              .BR man (1)\n",
@@ -735,11 +737,57 @@ mod tests {
         let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
             panic!("description is a paragraph");
         };
-        assert!(
-            children
-                .iter()
-                .all(|inline| !matches!(inline, Inline::ManualReference { .. }))
+        assert!(children.iter().any(|inline| matches!(
+            inline,
+            Inline::ManualReference { name, section: Some(section), .. }
+                if name == "printf" && section == "3"
+        )));
+    }
+
+    #[test]
+    fn lowers_modern_groff_manual_uri_and_mail_macros() {
+        let path = temporary_source(
+            "man-modern-links",
+            ".TH TOOL 1\n\
+             .SH DESCRIPTION\n\
+             .MR git-add 1 ,\n\
+             .UR https://example.test/docs\n\
+             Documentation\n\
+             .UE .\n\
+             .MT docs@example.test\n\
+             Mail us\n\
+             .ME .\n",
         );
+
+        let document = parse_manual_source(&path).expect("lower modern man links");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let section = &document.sections[0];
+        let mut manual = false;
+        let mut web = false;
+        let mut mail = false;
+        for children in section.blocks.iter().filter_map(|block| match block {
+            Block::Paragraph { children, .. } => Some(children),
+            _ => None,
+        }) {
+            for inline in children {
+                match inline {
+                    Inline::ManualReference {
+                        name,
+                        section: Some(section),
+                        ..
+                    } if name == "git-add" && section == "1" => manual = true,
+                    Inline::ExternalLink { uri, .. } if uri == "https://example.test/docs" => {
+                        web = true;
+                    }
+                    Inline::ExternalLink { uri, .. } if uri == "mailto:docs@example.test" => {
+                        mail = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        assert!(manual && web && mail);
     }
 
     #[test]

@@ -94,9 +94,7 @@ fn resolve_section(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     resolve_blocks(&mut section.blocks, targets, explicit_targets, diagnostics);
-    if section.title.eq_ignore_ascii_case("SEE ALSO") {
-        promote_manual_references(&mut section.blocks);
-    }
+    promote_manual_references(&mut section.blocks);
     for child in &mut section.children {
         resolve_section(child, targets, explicit_targets, diagnostics);
     }
@@ -343,6 +341,30 @@ mod tests {
                 if name == "printf" && section == "3"
         ));
         assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+    }
+
+    #[test]
+    fn promotes_manual_pairs_outside_see_also_sections() {
+        let mut nodes = vec![
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "git-add".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: "(1)".to_owned(),
+            },
+        ];
+
+        promote_manual_reference_inlines(&mut nodes);
+
+        assert!(matches!(
+            &nodes[0],
+            Inline::ManualReference { name, section: Some(section), children }
+                if name == "git-add"
+                    && section == "1"
+                    && crate::inline::plain_text(children) == "git-add(1)"
+        ));
     }
 
     #[test]

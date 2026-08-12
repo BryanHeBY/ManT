@@ -2,7 +2,7 @@
 
 use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_ast::{Block, ExcerptSelection, OutlineDetail};
+use mant_ast::{Block, ExcerptSelection, Inline, OutlineDetail};
 use mant_core::{build_outline, build_outline_with_detail, select_excerpt};
 
 /// Section topology (24 sections), nested children in ENVIRONMENT VARIABLES,
@@ -84,6 +84,23 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
     let ancillary_text = common::block_slice_text(&ancillary.blocks);
     assert!(ancillary_text.contains("git-config(1)"));
     assert!(ancillary_text.contains("git-fast-export(1)"));
+    let mut linked_git_add = false;
+    for block in common::document_blocks(document) {
+        common::visit_block_inlines(block, &mut |inline| {
+            linked_git_add |= matches!(
+                inline,
+                Inline::ManualReference {
+                    name,
+                    section: Some(section),
+                    ..
+                } if name == "git-add" && section == "1"
+            );
+        });
+    }
+    assert!(
+        linked_git_add,
+        "git-add(1) in the command index must remain a typed manual reference"
+    );
 
     let outline = build_outline_with_detail(&archlinux_manual_query("git"), OutlineDetail::Entries)
         .expect("git option outline");

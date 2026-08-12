@@ -268,6 +268,9 @@ fn lower_structural_node(
             );
             extend_transparent_blocks(output, nested, *paragraph_distance);
         }
+        Some("UR") => {
+            lower_uri_block(output, node, context, indent_columns, paragraph_distance);
+        }
         _ if node.kind == NodeKind::Table => {
             append_table_row(output, node, indent_columns);
         }
@@ -292,6 +295,83 @@ fn lower_structural_node(
                 indent_columns,
                 paragraph_distance,
             ));
+        }
+    }
+}
+
+fn lower_uri_block(
+    output: &mut Vec<Block>,
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+) {
+    let uri = plain_text(&lower_inline_nodes(
+        part_children(node, NodeKind::Head),
+        context.default_name,
+    ));
+    let mut nested = lower_blocks(
+        part_children(node, NodeKind::Body),
+        context,
+        indent_columns,
+        paragraph_distance,
+    );
+    if !uri.is_empty() {
+        wrap_blocks_in_external_link(&mut nested, &uri);
+    }
+    extend_transparent_blocks(output, nested, *paragraph_distance);
+    let tail = lower_inline_nodes(part_children(node, NodeKind::Tail), context.default_name);
+    if !tail.is_empty() {
+        output.push(Block::Paragraph {
+            children: tail,
+            layout: layout(indent_columns),
+            source: source_span(node),
+        });
+    }
+}
+
+fn wrap_blocks_in_external_link(blocks: &mut [Block], uri: &str) {
+    for block in blocks {
+        match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                let label = std::mem::take(children);
+                if !label.is_empty() {
+                    children.push(Inline::ExternalLink {
+                        uri: uri.to_owned(),
+                        title: None,
+                        children: label,
+                    });
+                }
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    wrap_blocks_in_external_link(&mut item.blocks, uri);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    for term in &mut item.terms {
+                        let label = std::mem::take(term);
+                        if !label.is_empty() {
+                            term.push(Inline::ExternalLink {
+                                uri: uri.to_owned(),
+                                title: None,
+                                children: label,
+                            });
+                        }
+                    }
+                    wrap_blocks_in_external_link(&mut item.description, uri);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
+                    wrap_blocks_in_external_link(&mut cell.blocks, uri);
+                }
+            }
+            Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
         }
     }
 }
