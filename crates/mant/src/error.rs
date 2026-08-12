@@ -31,6 +31,10 @@ impl Failure {
         }
     }
 
+    pub(super) fn into_message(self) -> String {
+        self.message
+    }
+
     #[cfg(test)]
     pub(super) fn message(&self) -> &str {
         &self.message

@@ -10,6 +10,7 @@ presentation.
 - A hierarchy-aware, collapsible sidebar for sections and every semantic entry
   role: options, commands, variables, and environment variables.
 - Settled-scroll navigation following and selectable page-local references.
+- A live catalog finder that delegates document loading back to the host.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.

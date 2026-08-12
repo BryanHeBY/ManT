@@ -15,4 +15,4 @@ mod theme;
 
 pub use app::{App, UpdateOutcome};
 pub use document::{DocumentView, NavItem, NavKind, RenderedDocument, RenderedSearchMatch};
-pub use terminal::run;
+pub use terminal::{run, run_with_catalog};

@@ -20,8 +20,8 @@ use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
 };
 use mant_ast::{
-    CatalogQuery, DocumentAddress, DocumentCatalog, MarkdownOrigin, QueryBundle, QueryRequest,
-    QueryView, TldrCacheUpdate,
+    CatalogQuery, DocumentAddress, DocumentCatalog, MarkdownOrigin, QueryBundle, QueryInput,
+    QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
 };
 use mant_core::QueryPolicy;
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
@@ -464,10 +464,49 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
         Ok(query) => query,
         Err(error) => return report_failure(&error, diagnostics),
     };
-    match mant_ui::run(&query) {
+    let catalog = match host.discover(&CatalogQuery {
+        limit: 10_000,
+        ..CatalogQuery::default()
+    }) {
+        Ok(catalog) => catalog,
+        Err(error) => return report_failure(&error, diagnostics),
+    };
+    match mant_ui::run_with_catalog(&query, catalog, |address| {
+        let (request, policy) = request_for_address(address);
+        host.query(&request, policy).map_err(Failure::into_message)
+    }) {
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics),
     }
+}
+
+fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {
+    let (name, source, section, manual_only) = match address {
+        DocumentAddress::Markdown { name, origin } => (
+            name.clone(),
+            match origin {
+                MarkdownOrigin::Documents => None,
+                MarkdownOrigin::Source { name } => Some(name.clone()),
+            },
+            None,
+            false,
+        ),
+        DocumentAddress::Manual { name, section } => {
+            (name.clone(), None, Some(section.clone()), true)
+        }
+    };
+    (
+        QueryRequest {
+            schema: RequestSchema::V7,
+            input: QueryInput::Document {
+                name,
+                source,
+                section,
+            },
+            view: QueryView::Full {},
+        },
+        QueryPolicy { manual_only },
+    )
 }
 
 fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<QueryRequest, Failure> {
@@ -535,7 +574,7 @@ mod tests {
         CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
         MarkdownOrigin, QueryPolicy, TerminalCapabilities,
         arguments::{self, Command, QueryFormat, QueryPresentation},
-        resolve_process_presentation, run_with_host,
+        request_for_address, resolve_process_presentation, run_with_host,
     };
 
     struct FakeHost {
@@ -544,6 +583,39 @@ mod tests {
         last_policy: Cell<QueryPolicy>,
         document: Option<MantDocument>,
         tldr: Option<TldrDocument>,
+    }
+
+    #[test]
+    fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
+        let (request, policy) = request_for_address(&DocumentAddress::Markdown {
+            name: "Start-Process".to_owned(),
+            origin: MarkdownOrigin::Source {
+                name: "pwsh7".to_owned(),
+            },
+        });
+        assert_eq!(
+            request.input,
+            QueryInput::Document {
+                name: "Start-Process".to_owned(),
+                source: Some("pwsh7".to_owned()),
+                section: None,
+            }
+        );
+        assert!(!policy.manual_only);
+
+        let (request, policy) = request_for_address(&DocumentAddress::Manual {
+            name: "printf".to_owned(),
+            section: "3".to_owned(),
+        });
+        assert_eq!(
+            request.input,
+            QueryInput::Document {
+                name: "printf".to_owned(),
+                source: None,
+                section: Some("3".to_owned()),
+            }
+        );
+        assert!(policy.manual_only);
     }
 
     #[test]

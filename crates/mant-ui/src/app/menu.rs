@@ -62,6 +62,7 @@ pub(super) struct MenuEntry {
 #[derive(Debug, Clone, Copy)]
 pub(super) enum MenuAction {
     Quit,
+    OpenDocument,
     ToggleSidebar,
     ResetSidebar,
     ExpandAll,
@@ -108,6 +109,11 @@ const VIEW_MENU: &[MenuEntry] = &[
 ];
 
 const NAVIGATE_MENU: &[MenuEntry] = &[
+    MenuEntry {
+        label: "Open Document…",
+        shortcut: "Ctrl+P",
+        action: MenuAction::OpenDocument,
+    },
     MenuEntry {
         label: "Previous Section",
         shortcut: "↑ / k",
@@ -187,6 +193,7 @@ impl App {
                     self.overlay = Overlay::None;
                 }
             }
+            Overlay::DocumentFinder => self.handle_finder_key(key),
             Overlay::Menu { id, cursor } => match key.code {
                 KeyCode::Esc | KeyCode::F(10) => self.overlay = Overlay::None,
                 KeyCode::Left | KeyCode::Right => {
@@ -299,6 +306,9 @@ impl App {
         if self.overlay == Overlay::Help {
             return Some(UpdateOutcome::Unchanged);
         }
+        if self.overlay == Overlay::DocumentFinder {
+            return Some(UpdateOutcome::Unchanged);
+        }
 
         None
     }
@@ -307,6 +317,7 @@ impl App {
         self.overlay = Overlay::None;
         match action {
             MenuAction::Quit => self.quit = true,
+            MenuAction::OpenDocument => self.open_document_finder(),
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
             MenuAction::ResetSidebar => self.sidebar_width = DEFAULT_SIDEBAR_WIDTH,
             MenuAction::ExpandAll => {
@@ -358,7 +369,7 @@ impl App {
         frame.render_widget(Block::default().style(style), area);
         let open_menu = match self.overlay {
             Overlay::Menu { id, .. } => Some(id),
-            Overlay::None | Overlay::Help => None,
+            Overlay::None | Overlay::DocumentFinder | Overlay::Help => None,
         };
         let mut spans = MenuId::ALL
             .into_iter()
@@ -388,6 +399,7 @@ impl App {
         match self.overlay {
             Overlay::None => {}
             Overlay::Menu { id, cursor } => self.draw_menu_overlay(frame, id, cursor),
+            Overlay::DocumentFinder => self.draw_document_finder(frame),
             Overlay::Help => Self::draw_help(frame),
         }
     }
@@ -446,7 +458,7 @@ impl App {
 
     fn draw_help(frame: &mut Frame<'_>) {
         let width = 58.min(frame.area().width.saturating_sub(2));
-        let height = 13.min(frame.area().height);
+        let height = 14.min(frame.area().height);
         if width < 4 || height < 3 {
             return;
         }
@@ -477,6 +489,7 @@ impl App {
                 Line::raw("↑/↓ or j/k  select section"),
                 Line::raw("←/→ or h/l  move through the section tree"),
                 Line::raw("Enter        fold or unfold selected section"),
+                Line::raw("Ctrl+P       find and open a document"),
                 Line::raw("Ctrl+F or /  find in current page"),
                 Line::raw("n / N        next / previous search match"),
                 Line::raw("d/u          scroll content by ten rows"),

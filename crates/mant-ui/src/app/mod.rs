@@ -1,5 +1,6 @@
 //! Interactive state machine and Ratatui widget composition.
 
+mod finder;
 mod input;
 mod menu;
 mod navigation;
@@ -11,11 +12,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use mant_ast::QueryBundle;
+use mant_ast::{DocumentAddress, DocumentCatalog, DocumentSummary, QueryBundle};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
-use self::{menu::MenuId, search::SearchState};
+use self::{finder::FinderState, menu::MenuId, search::SearchState};
 
 use crate::{
     DocumentView, NavKind, RenderedDocument,
@@ -52,6 +53,7 @@ impl UpdateOutcome {
 enum Overlay {
     None,
     Menu { id: MenuId, cursor: usize },
+    DocumentFinder,
     Help,
 }
 
@@ -151,6 +153,10 @@ pub struct App {
     show_sidebar: bool,
     quit: bool,
     search: SearchState,
+    catalog: Vec<DocumentSummary>,
+    finder: FinderState,
+    pending_open: Option<DocumentAddress>,
+    notice: Option<String>,
     overlay: Overlay,
     pointer_drag: PointerDrag,
     geometry: FrameGeometry,
@@ -163,6 +169,22 @@ pub struct App {
 impl App {
     #[must_use]
     pub fn new(bundle: &QueryBundle) -> Self {
+        Self::with_catalog(
+            bundle,
+            DocumentCatalog {
+                schema: mant_ast::CatalogSchema::V7,
+                total: 0,
+                returned: 0,
+                offset: 0,
+                truncated: false,
+                next_offset: None,
+                documents: Vec::new(),
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn with_catalog(bundle: &QueryBundle, catalog: DocumentCatalog) -> Self {
         let document = DocumentView::new(bundle);
         let expanded = document
             .navigation()
@@ -181,6 +203,10 @@ impl App {
             show_sidebar: true,
             quit: false,
             search: SearchState::default(),
+            catalog: catalog.documents,
+            finder: FinderState::default(),
+            pending_open: None,
+            notice: None,
             overlay: Overlay::None,
             pointer_drag: PointerDrag::None,
             geometry: FrameGeometry::default(),
@@ -189,6 +215,36 @@ impl App {
             content_render_width: 0,
             rendered_cache: HashMap::new(),
         }
+    }
+
+    pub(crate) fn take_open_request(&mut self) -> Option<DocumentAddress> {
+        self.pending_open.take()
+    }
+
+    pub(crate) fn open_document(&mut self, bundle: &QueryBundle) {
+        self.document = DocumentView::new(bundle);
+        self.selected = 0;
+        self.expanded = self
+            .document
+            .navigation()
+            .iter()
+            .filter(|item| item.kind == NavKind::Section && item.depth == 0)
+            .map(|item| item.id.clone())
+            .collect();
+        self.content_scroll = 0;
+        self.navigation_scroll = 0;
+        self.navigation_visibility_target = Some(0);
+        self.search = SearchState::default();
+        self.overlay = Overlay::None;
+        self.pointer_drag = PointerDrag::None;
+        self.navigation_sync_deadline = None;
+        self.rendered_cache.clear();
+        self.content_render_width = 0;
+        self.notice = None;
+    }
+
+    pub(crate) fn report_open_error(&mut self, message: String) {
+        self.notice = Some(message);
     }
 
     #[must_use]

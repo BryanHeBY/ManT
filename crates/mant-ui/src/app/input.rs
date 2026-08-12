@@ -17,6 +17,10 @@ impl App {
             self.handle_overlay_key(key);
             return UpdateOutcome::Redraw;
         }
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('p') {
+            self.open_document_finder();
+            return UpdateOutcome::Redraw;
+        }
         if self.search.is_open() && key.code == KeyCode::F(10) {
             self.open_menu(MenuId::File);
             return UpdateOutcome::Redraw;

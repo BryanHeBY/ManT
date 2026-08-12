@@ -2,14 +2,14 @@
 
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::{App, PointerDrag, fit_to_width};
+use super::{App, PointerDrag, finder::document_category, fit_to_width};
 use crate::{
     layout::{
         CONTENT_MARGIN, CONTENT_SCROLLBAR_GAP, MIN_CONTENT_WIDTH, MIN_SIDEBAR_WIDTH,
@@ -289,7 +289,9 @@ impl App {
             .style(style.fg(theme::TEXT)),
             area,
         );
-        let suffix = if !self.search.query.is_empty() && !self.search.matches.is_empty() {
+        let suffix = if let Some(notice) = &self.notice {
+            format!("{} ", notice.lines().next().unwrap_or_default())
+        } else if !self.search.query.is_empty() && !self.search.matches.is_empty() {
             format!(
                 "Find “{}” · {} matches ",
                 self.search.query,
@@ -303,7 +305,11 @@ impl App {
         frame.render_widget(
             Paragraph::new(suffix)
                 .alignment(Alignment::Right)
-                .style(style.fg(theme::SUBTEXT)),
+                .style(style.fg(if self.notice.is_some() {
+                    theme::PEACH
+                } else {
+                    theme::SUBTEXT
+                })),
             area,
         );
     }
@@ -364,6 +370,108 @@ impl App {
                 Paragraph::new(Span::styled(suffix, suffix_style)).alignment(Alignment::Right),
                 area,
             );
+        }
+    }
+
+    pub(super) fn draw_document_finder(&self, frame: &mut Frame<'_>) {
+        let width = 76.min(frame.area().width.saturating_sub(2));
+        let height = 18.min(frame.area().height.saturating_sub(2));
+        if width < 24 || height < 7 {
+            return;
+        }
+        let area = Rect::new(
+            frame.area().x + frame.area().width.saturating_sub(width) / 2,
+            frame.area().y + frame.area().height.saturating_sub(height) / 2,
+            width,
+            height,
+        );
+        frame.render_widget(Clear, area);
+        let block = Block::default()
+            .title(" Open Document ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::BLUE))
+            .style(Style::default().bg(theme::BASE));
+        let inner = block.inner(area).inner(Margin {
+            horizontal: 1,
+            vertical: 0,
+        });
+        frame.render_widget(block, area);
+        let [query_area, hint_area, results_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Min(1),
+        ])
+        .areas(inner);
+
+        let (before_cursor, after_cursor) = self.finder.draft.split_at(self.finder.cursor);
+        let cursor_character = after_cursor.chars().next();
+        let cursor_bytes = cursor_character.map_or(0, char::len_utf8);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled("Search: ", Style::default().fg(theme::YELLOW)),
+                Span::styled(before_cursor.to_owned(), Style::default().fg(theme::TEXT)),
+                Span::styled(
+                    cursor_character.map_or_else(|| " ".to_owned(), |value| value.to_string()),
+                    Style::default().fg(theme::BASE).bg(theme::TEXT),
+                ),
+                Span::styled(
+                    after_cursor[cursor_bytes..].to_owned(),
+                    Style::default().fg(theme::TEXT),
+                ),
+            ]))
+            .style(Style::default().bg(theme::BASE)),
+            query_area,
+        );
+        let result_count = self.finder.matches.len();
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{result_count} matches · ↑/↓ select · Enter open · Esc close"
+            ))
+            .style(Style::default().fg(theme::SUBTEXT)),
+            hint_area,
+        );
+
+        let visible_height = usize::from(results_area.height);
+        let scroll = self
+            .finder
+            .selected
+            .saturating_sub(visible_height.saturating_sub(1));
+        for (visual_row, match_index) in self
+            .finder
+            .matches
+            .iter()
+            .skip(scroll)
+            .take(visible_height)
+            .enumerate()
+        {
+            let Some(document) = self.catalog.get(*match_index) else {
+                continue;
+            };
+            let row = Rect::new(
+                results_area.x,
+                results_area.y + u16::try_from(visual_row).unwrap_or_default(),
+                results_area.width,
+                1,
+            );
+            let selected = scroll + visual_row == self.finder.selected;
+            let category = document_category(&document.address);
+            let name = document.address.name();
+            let gap = usize::from(row.width)
+                .saturating_sub(name.width())
+                .saturating_sub(category.width())
+                .max(1);
+            let value = fit_to_width(
+                &format!("{name}{}{category}", " ".repeat(gap)),
+                usize::from(row.width),
+            );
+            let style = if selected {
+                Style::default()
+                    .fg(theme::SELECTED_TEXT)
+                    .bg(theme::SELECTED)
+            } else {
+                Style::default().fg(theme::TEXT).bg(theme::BASE)
+            };
+            frame.render_widget(Paragraph::new(Span::styled(value, style)), row);
         }
     }
 }

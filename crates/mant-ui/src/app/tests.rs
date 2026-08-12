@@ -7,9 +7,10 @@ use std::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_ast::{
-    Block as AstBlock, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole,
-    DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer,
-    QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument, TldrOrigin,
+    Block as AstBlock, CatalogSchema, DefinitionCase, DefinitionIdentity, DefinitionItem,
+    DefinitionRole, DocumentAddress, DocumentCatalog, DocumentMeta, DocumentSchema, DocumentSource,
+    DocumentSummary, Inline, LayoutHint, MantDocument, MarkdownOrigin, Producer, QueryBundle,
+    QuerySchema, Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
@@ -116,6 +117,73 @@ fn navigation_bundle() -> QueryBundle {
         }),
         tldr: None,
     }
+}
+
+fn document_catalog() -> DocumentCatalog {
+    let documents = vec![
+        DocumentSummary {
+            address: DocumentAddress::Markdown {
+                name: "Start-Process".to_owned(),
+                origin: MarkdownOrigin::Source {
+                    name: "pwsh7".to_owned(),
+                },
+            },
+            path: "/docs/Start-Process.md".to_owned(),
+        },
+        DocumentSummary {
+            address: DocumentAddress::Manual {
+                name: "printf".to_owned(),
+                section: "3".to_owned(),
+            },
+            path: "/man/man3/printf.3".to_owned(),
+        },
+    ];
+    DocumentCatalog {
+        schema: CatalogSchema::V7,
+        total: 2,
+        returned: 2,
+        offset: 0,
+        truncated: false,
+        next_offset: None,
+        documents,
+    }
+}
+
+#[test]
+fn document_finder_filters_live_and_emits_an_exact_address() {
+    let mut app = App::with_catalog(&navigation_bundle(), document_catalog());
+    app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+    assert_eq!(app.overlay, Overlay::DocumentFinder);
+
+    for character in "print".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+    assert_eq!(app.finder.matches.len(), 1);
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(
+        app.take_open_request(),
+        Some(DocumentAddress::Manual {
+            name: "printf".to_owned(),
+            section: "3".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn document_finder_is_available_from_the_navigate_menu() {
+    let backend = TestBackend::new(90, 24);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::with_catalog(&navigation_bundle(), document_catalog());
+    app.activate_menu_action(MenuAction::OpenDocument);
+
+    terminal.draw(|frame| app.draw(frame)).expect("draw finder");
+    let screen = terminal.backend().to_string();
+    assert!(screen.contains("Open Document"));
+    assert!(screen.contains("Start-Process"));
+    assert!(screen.contains("pwsh7"));
+    assert!(screen.contains("printf"));
+    assert!(screen.contains("manual/3"));
 }
 
 #[test]
