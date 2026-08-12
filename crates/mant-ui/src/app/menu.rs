@@ -15,7 +15,7 @@ use crate::{layout::DEFAULT_SIDEBAR_WIDTH, theme};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MenuId {
-    File,
+    Manual,
     View,
     Navigate,
     Search,
@@ -24,7 +24,7 @@ pub(super) enum MenuId {
 
 impl MenuId {
     pub(super) const ALL: [Self; 5] = [
-        Self::File,
+        Self::Manual,
         Self::View,
         Self::Navigate,
         Self::Search,
@@ -33,7 +33,7 @@ impl MenuId {
 
     pub(super) const fn label(self) -> &'static str {
         match self {
-            Self::File => "File",
+            Self::Manual => "Manual",
             Self::View => "View",
             Self::Navigate => "Navigate",
             Self::Search => "Search",
@@ -43,11 +43,11 @@ impl MenuId {
 
     pub(super) const fn left(self) -> u16 {
         match self {
-            Self::File => 0,
-            Self::View => 6,
-            Self::Navigate => 12,
-            Self::Search => 22,
-            Self::Help => 30,
+            Self::Manual => 0,
+            Self::View => 8,
+            Self::Navigate => 14,
+            Self::Search => 24,
+            Self::Help => 32,
         }
     }
 }
@@ -81,11 +81,18 @@ pub(super) enum MenuAction {
     Help,
 }
 
-const FILE_MENU: &[MenuEntry] = &[MenuEntry {
-    label: "Quit",
-    shortcut: "q",
-    action: MenuAction::Quit,
-}];
+const MANUAL_MENU: &[MenuEntry] = &[
+    MenuEntry {
+        label: "Open Document…",
+        shortcut: "Ctrl+P",
+        action: MenuAction::OpenDocument,
+    },
+    MenuEntry {
+        label: "Quit",
+        shortcut: "q",
+        action: MenuAction::Quit,
+    },
+];
 
 const VIEW_MENU: &[MenuEntry] = &[
     MenuEntry {
@@ -111,11 +118,6 @@ const VIEW_MENU: &[MenuEntry] = &[
 ];
 
 const NAVIGATE_MENU: &[MenuEntry] = &[
-    MenuEntry {
-        label: "Open Document…",
-        shortcut: "Ctrl+P",
-        action: MenuAction::OpenDocument,
-    },
     MenuEntry {
         label: "Back",
         shortcut: "Alt+←",
@@ -184,7 +186,7 @@ const HELP_MENU: &[MenuEntry] = &[MenuEntry {
 
 pub(super) const fn menu_entries(id: MenuId) -> &'static [MenuEntry] {
     match id {
-        MenuId::File => FILE_MENU,
+        MenuId::Manual => MANUAL_MENU,
         MenuId::View => VIEW_MENU,
         MenuId::Navigate => NAVIGATE_MENU,
         MenuId::Search => SEARCH_MENU,
@@ -378,7 +380,7 @@ impl App {
 
     pub(super) fn draw_menu(&self, frame: &mut Frame<'_>, area: Rect) {
         let style = Style::default().bg(theme::MENU);
-        let menu_width = 36;
+        let menu_width = 38;
         let rule = "─".repeat(usize::from(area.width).saturating_sub(menu_width));
         frame.render_widget(Block::default().style(style), area);
         let open_menu = match self.overlay {

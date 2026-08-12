@@ -120,6 +120,44 @@ pub struct DocumentCatalog {
     pub documents: Vec<DocumentSummary>,
 }
 
+/// Stable relevance tier for literal catalog matching.
+///
+/// Frontends may add deterministic tie-breakers inside one tier, but must not
+/// place a prefix after a mere substring or an exact name after either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CatalogMatchRank {
+    Exact,
+    Prefix,
+    Substring,
+    Unranked,
+}
+
+/// Rank one document name using the catalog's literal-search case policy.
+#[must_use]
+pub fn catalog_literal_match_rank(
+    name: &str,
+    pattern: Option<&str>,
+    case: SearchCase,
+) -> CatalogMatchRank {
+    let Some(pattern) = pattern else {
+        return CatalogMatchRank::Unranked;
+    };
+    let insensitive = case == SearchCase::Insensitive
+        || case == SearchCase::Smart && !pattern.chars().any(char::is_uppercase);
+    let (name, pattern) = if insensitive {
+        (name.to_lowercase(), pattern.to_lowercase())
+    } else {
+        (name.to_owned(), pattern.to_owned())
+    };
+    if name == pattern {
+        CatalogMatchRank::Exact
+    } else if name.starts_with(&pattern) {
+        CatalogMatchRank::Prefix
+    } else {
+        CatalogMatchRank::Substring
+    }
+}
+
 #[must_use]
 pub const fn default_catalog_limit() -> u32 {
     100

@@ -30,7 +30,7 @@ impl App {
             return UpdateOutcome::Redraw;
         }
         if self.search.is_open() && key.code == KeyCode::F(10) {
-            self.open_menu(MenuId::File);
+            self.open_menu(MenuId::Manual);
             return UpdateOutcome::Redraw;
         }
         if self.search.is_open() {
@@ -38,7 +38,7 @@ impl App {
             return UpdateOutcome::Redraw;
         }
         if key.code == KeyCode::F(10) {
-            self.open_menu(MenuId::File);
+            self.open_menu(MenuId::Manual);
             return UpdateOutcome::Redraw;
         }
         if (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('f'))

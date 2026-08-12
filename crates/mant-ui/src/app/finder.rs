@@ -1,7 +1,9 @@
 //! Live document-catalog filtering for the modal document finder.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mant_ast::{DocumentAddress, DocumentSummary, MarkdownOrigin};
+use mant_ast::{
+    DocumentAddress, DocumentSummary, MarkdownOrigin, SearchCase, catalog_literal_match_rank,
+};
 
 use super::{App, Overlay};
 
@@ -91,18 +93,21 @@ impl FinderState {
             })
             .map(|(index, _)| index)
             .collect();
-        self.matches.sort_by_key(|index| {
-            let name = catalog[*index].address.name().to_lowercase();
-            let rank = if needle.is_empty() {
-                3
-            } else if name == needle {
-                0
-            } else if name.starts_with(&needle) {
-                1
-            } else {
-                2
-            };
-            (rank, name)
+        self.matches.sort_by(|left, right| {
+            let left = &catalog[*left].address;
+            let right = &catalog[*right].address;
+            catalog_literal_match_rank(
+                left.name(),
+                (!self.draft.is_empty()).then_some(self.draft.as_str()),
+                SearchCase::Insensitive,
+            )
+            .cmp(&catalog_literal_match_rank(
+                right.name(),
+                (!self.draft.is_empty()).then_some(self.draft.as_str()),
+                SearchCase::Insensitive,
+            ))
+            .then_with(|| left.name().to_lowercase().cmp(&right.name().to_lowercase()))
+            .then_with(|| left.cmp(right))
         });
         self.selected = 0;
     }

@@ -117,7 +117,8 @@ mant --find '^git' --regex --kind manual --format json
 
 `--list` groups documents by source or manual section. `--find` emits stable
 tab-separated records by default, making it suitable for filtering and shell
-pipelines.
+pipelines. Literal discovery ranks an exact name first, then name prefixes,
+then other substring matches; stable name and source/section order break ties.
 
 Start with an outline and retrieve only the section or option that matters:
 

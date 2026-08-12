@@ -183,7 +183,7 @@ fn document_finder_filters_live_and_emits_an_exact_address() {
 }
 
 #[test]
-fn document_finder_is_available_from_the_navigate_menu() {
+fn document_finder_is_available_from_the_manual_menu() {
     let backend = TestBackend::new(90, 24);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::with_catalog(&navigation_bundle(), document_catalog());
@@ -196,6 +196,43 @@ fn document_finder_is_available_from_the_navigate_menu() {
     assert!(screen.contains("pwsh7"));
     assert!(screen.contains("printf"));
     assert!(screen.contains("manual/3"));
+}
+
+#[test]
+fn document_finder_orders_exact_then_prefix_then_substring_matches() {
+    let names = ["woman", "manpath", "man", "man.conf"];
+    let documents = names
+        .into_iter()
+        .map(|name| DocumentSummary {
+            address: DocumentAddress::Manual {
+                name: name.to_owned(),
+                section: "1".to_owned(),
+            },
+            path: format!("/man/{name}.1"),
+        })
+        .collect::<Vec<_>>();
+    let catalog = DocumentCatalog {
+        schema: CatalogSchema::V7,
+        total: 4,
+        returned: 4,
+        offset: 0,
+        truncated: false,
+        next_offset: None,
+        documents,
+    };
+    let mut app = App::with_catalog(&navigation_bundle(), catalog);
+    app.open_document_finder();
+    for character in "man".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+
+    let ordered = app
+        .finder
+        .matches
+        .iter()
+        .map(|index| app.catalog[*index].address.name())
+        .collect::<Vec<_>>();
+    assert_eq!(ordered, ["man", "man.conf", "manpath", "woman"]);
 }
 
 #[test]
@@ -268,7 +305,7 @@ fn renders_the_application_chrome_in_a_test_backend() {
     terminal.draw(|frame| app.draw(frame)).expect("draw app");
     let screen = terminal.backend().to_string();
 
-    assert!(screen.contains("File"));
+    assert!(screen.contains("Manual"));
     assert!(screen.contains("SECTIONS"));
     assert!(screen.contains("MANUAL · demo"));
     assert!(screen.contains("0 visible sections"));

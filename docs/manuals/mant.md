@@ -437,9 +437,11 @@ active match uses a stronger background and moves into view.
 ### Document Finder
 
 The `Ctrl+P` window searches the catalog while text is entered. Each match
-shows its configured Markdown source or exact native manual section. `Up` and
-`Down` select a result, `Enter` opens it, and `Escape` closes the window. The
-Navigate menu exposes the finder and both history directions.
+shows its configured Markdown source or exact native manual section. Exact
+names precede prefixes, which precede other substring matches. `Up` and `Down`
+select a result, `Enter` opens it, and `Escape` closes the window. The Manual
+menu exposes the finder; Navigate contains backward/forward history and
+current-document movement.
 
 ### Interface
 

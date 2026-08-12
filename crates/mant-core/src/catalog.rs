@@ -5,8 +5,9 @@ use std::{error::Error, fmt, path::PathBuf};
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_ast::{
-    CatalogDocumentKind, CatalogQuery, CatalogSchema, DocumentAddress, DocumentCatalog,
-    DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
+    CatalogDocumentKind, CatalogMatchRank, CatalogQuery, CatalogSchema, DocumentAddress,
+    DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
+    catalog_literal_match_rank,
 };
 
 use mant_sources::{
@@ -208,27 +209,11 @@ fn build_matcher(
         .map_err(|error| CatalogError::InvalidPattern(error.to_string()))
 }
 
-fn match_rank(name: &str, query: &CatalogQuery) -> u8 {
-    let Some(pattern) = query
-        .pattern
-        .as_deref()
-        .filter(|_| query.syntax == SearchSyntax::Literal)
-    else {
-        return 3;
-    };
-    let insensitive = query.case == SearchCase::Insensitive
-        || query.case == SearchCase::Smart && !pattern.chars().any(char::is_uppercase);
-    let (name, pattern) = if insensitive {
-        (name.to_lowercase(), pattern.to_lowercase())
+fn match_rank(name: &str, query: &CatalogQuery) -> CatalogMatchRank {
+    if query.syntax == SearchSyntax::Literal {
+        catalog_literal_match_rank(name, query.pattern.as_deref(), query.case)
     } else {
-        (name.to_owned(), pattern.to_owned())
-    };
-    if name == pattern {
-        0
-    } else if name.starts_with(&pattern) {
-        1
-    } else {
-        2
+        CatalogMatchRank::Unranked
     }
 }
 
@@ -382,6 +367,36 @@ mod tests {
         assert_eq!(catalog.documents[0].address.name(), "process");
         assert_eq!(catalog.documents[1].address.name(), "process-tree");
         assert_eq!(catalog.documents[2].address.name(), "Start-Process");
+    }
+
+    #[test]
+    fn catalog_puts_an_exact_manual_before_every_prefix_and_substring() {
+        let documents = ["woman", "manpath", "man", "man.conf"]
+            .into_iter()
+            .map(|name| AvailableDocument {
+                name: name.to_owned(),
+                kind: AvailableDocumentKind::Manual,
+                section: Some("1".to_owned()),
+                path: PathBuf::from(format!("/man/{name}.1")),
+                origin: AvailableDocumentOrigin::ManualPath,
+            })
+            .collect();
+        let catalog = query_available_documents(
+            documents,
+            &CatalogQuery {
+                pattern: Some("man".to_owned()),
+                limit: 10,
+                ..CatalogQuery::default()
+            },
+        )
+        .expect("catalog");
+        let names = catalog
+            .documents
+            .iter()
+            .map(|document| document.address.name())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, ["man", "man.conf", "manpath", "woman"]);
     }
 
     #[test]
