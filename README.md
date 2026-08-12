@@ -274,14 +274,22 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 ## Architecture
 
 ```text
-man/mdoc files ──→ ManualIndex ─→ libmandoc-rs ──┐
-Markdown files ─→ mant-sources ─→ Markdown parser ├─→ mant-core
-tldr caches ─────────────────────→ tldr parser ───┘      │
-                                                        ↓
-                                             QueryBundle (mant-ast)
-                                              ├─ mant-ui (Ratatui)
-                                              ├─ Markdown / text / JSON
-                                              └─ schemas / request JSON / MCP
+    man/mdoc              Markdown              tldr caches
+        │                     │                     │
+        ↓                     ↓                     ↓
+   ManualIndex          mant-sources          tldr parser
+        │                     │                     │
+        ↓                     ↓                     │
+  libmandoc-rs        Markdown parser               │
+        └─────────────────────┼─────────────────────┘
+                              ↓
+                          mant-core
+                              ↓
+                     QueryBundle (mant-ast)
+        ┌─────────────────────┼─────────────────────┐
+        ↓                     ↓                     ↓
+     mant-ui               renderers           schemas / MCP
+    (Ratatui)            md/text/JSON           request JSON
 ```
 
 Rust owns source discovery, parsing, the stable AST, tldr integration, output,
