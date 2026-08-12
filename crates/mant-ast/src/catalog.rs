@@ -33,7 +33,8 @@ pub enum MarkdownOrigin {
 )]
 pub enum DocumentAddress {
     Markdown {
-        name: String,
+        /// Extension-free path relative to the selected Markdown origin.
+        path: String,
         origin: MarkdownOrigin,
     },
     Manual {
@@ -46,7 +47,33 @@ impl DocumentAddress {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::Markdown { name, .. } | Self::Manual { name, .. } => name,
+            Self::Markdown { path, .. } => path.rsplit('/').next().unwrap_or(path),
+            Self::Manual { name, .. } => name,
+        }
+    }
+
+    /// Stable path relative to its storage namespace.
+    #[must_use]
+    pub fn relative_path(&self) -> String {
+        match self {
+            Self::Markdown { path, .. } => path.clone(),
+            Self::Manual { name, section } => format!("{section}/{name}"),
+        }
+    }
+
+    /// Complete, unambiguous path in `ManT`'s unified document tree.
+    #[must_use]
+    pub fn catalog_path(&self) -> String {
+        match self {
+            Self::Markdown {
+                path,
+                origin: MarkdownOrigin::Documents,
+            } => format!("documents/{path}"),
+            Self::Markdown {
+                path,
+                origin: MarkdownOrigin::Source { name },
+            } => format!("sources/{name}/{path}"),
+            Self::Manual { name, section } => format!("manual/{section}/{name}"),
         }
     }
 }
@@ -102,7 +129,10 @@ impl Default for CatalogQuery {
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSummary {
     pub address: DocumentAddress,
-    pub path: String,
+    /// Stable logical path used by tree and discovery frontends.
+    pub catalog_path: String,
+    /// Local file provenance; never a document identifier.
+    pub source_path: String,
 }
 
 /// Deterministically ordered page of discoverable local documents.
@@ -127,12 +157,14 @@ pub struct DocumentCatalog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CatalogMatchRank {
     Exact,
+    ComponentSuffix,
     Prefix,
     Substring,
     Unranked,
 }
 
-/// Rank one document name using the catalog's literal-search case policy.
+/// Rank one document name or slash-delimited path using the catalog's
+/// literal-search case policy.
 #[must_use]
 pub fn catalog_literal_match_rank(
     name: &str,
@@ -151,6 +183,8 @@ pub fn catalog_literal_match_rank(
     };
     if name == pattern {
         CatalogMatchRank::Exact
+    } else if name.ends_with(&format!("/{pattern}")) {
+        CatalogMatchRank::ComponentSuffix
     } else if name.starts_with(&pattern) {
         CatalogMatchRank::Prefix
     } else {

@@ -22,7 +22,7 @@ use mant_ast::{
 
 use self::{
     roff_escape::visible_text,
-    source::{load_manual_source, resolve_manual_redirects},
+    source::{load_manual_source, redirect_target, resolve_manual_redirects},
 };
 use crate::ManualPage;
 use crate::text_safety::mask_terminal_control_bytes;
@@ -41,7 +41,31 @@ pub use source::MAX_MANUAL_BYTES;
 /// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
 pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ManualError> {
     let loaded = load_manual_source(path)?;
+    reject_standalone_redirect(path, &loaded.source)?;
     parse_plain_manual(path, &loaded.source, None)
+}
+
+/// Parse one already bounded, uncompressed standalone roff input.
+///
+/// This is the standard-input counterpart of [`parse_manual_source`]. It does
+/// not expand `.so` redirects and never reads another file.
+///
+/// # Errors
+///
+/// Returns [`ManualError`] when libmandoc rejects the input.
+pub fn parse_manual_bytes(path: &Path, source: &[u8]) -> Result<MantDocument, ManualError> {
+    reject_standalone_redirect(path, source)?;
+    parse_plain_manual(path, source, None)
+}
+
+fn reject_standalone_redirect(path: &Path, source: &[u8]) -> Result<(), ManualError> {
+    if redirect_target(path, source)?.is_some() {
+        return Err(ManualError::redirect(
+            path,
+            "standalone .so redirects require MANPATH discovery and cannot be followed by --input",
+        ));
+    }
+    Ok(())
 }
 
 /// Parse an indexed manual, resolving `.so` redirects against its discovered
@@ -210,12 +234,19 @@ mod tests {
 
     use mant_ast::{Block, DiagnosticLevel, Inline, SourceFormat};
 
-    use super::parse_manual_source;
+    use super::{parse_manual_bytes, parse_manual_source};
 
     fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
         fs::write(&path, source).expect("write temporary roff fixture");
         path
+    }
+
+    #[test]
+    fn standalone_inputs_reject_redirect_only_so_pages() {
+        let error = parse_manual_bytes(std::path::Path::new("stdin"), b".so man1/target.1\n")
+            .expect_err("standalone input must not follow another file");
+        assert!(error.to_string().contains("require MANPATH discovery"));
     }
 
     #[test]

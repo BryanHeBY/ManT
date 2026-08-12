@@ -35,16 +35,26 @@ pub enum RequestSchema {
 pub enum QueryInput {
     /// Resolve a registered Markdown document first, then a local manual page.
     Document {
-        /// Lookup name shared by registered documents and manual pages.
-        name: String,
+        /// Hierarchical catalog path or unqualified component-suffix selector.
+        selector: String,
         /// Optional configured Markdown source. It bypasses root documents and manuals.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         section: Option<String>,
     },
-    /// Read and parse one local Markdown file.
-    MarkdownFile { path: String },
+    /// Read and parse one explicit local Markdown or roff file.
+    File { path: String, format: InputFormat },
+}
+
+/// Parser selected for an explicit physical input.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum InputFormat {
+    #[default]
+    Auto,
+    Markdown,
+    Roff,
 }
 
 /// Projection requested after loading one complete structured document.
@@ -108,7 +118,7 @@ pub struct QueryRequest {
 pub struct QueryBundle {
     pub schema: QuerySchema,
     pub label: String,
-    /// Exact registered address selected for this query. Direct Markdown paths
+    /// Exact registered address selected for this query. Direct input paths
     /// and standard input do not belong to the registered catalog.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<DocumentAddress>,

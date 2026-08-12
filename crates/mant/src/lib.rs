@@ -15,13 +15,13 @@ use std::{
     io::{self, IsTerminal, Read, Write},
 };
 
-use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
+use arguments::{ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
 };
 use mant_ast::{
-    CatalogQuery, DocumentAddress, DocumentCatalog, MarkdownOrigin, QueryBundle, QueryInput,
-    QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
+    CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin, QueryBundle,
+    QueryInput, QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
 };
 use mant_core::QueryPolicy;
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
@@ -67,6 +67,7 @@ struct QueryExecution {
 struct TerminalCapabilities {
     input: bool,
     output: bool,
+    color: bool,
 }
 
 // ── Host boundary ─────────────────────────────────────────────────────────
@@ -162,6 +163,8 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         TerminalCapabilities {
             input: io::stdin().is_terminal(),
             output: io::stdout().is_terminal(),
+            color: std::env::var_os("NO_COLOR").is_none()
+                && std::env::var("TERM").ok().as_deref() != Some("dumb"),
         },
     ) {
         return report_failure(&error, &mut io::stderr().lock());
@@ -207,7 +210,16 @@ fn resolve_process_presentation(
                 "interactive view requires an input and output terminal; omit --ui or select --format",
             ));
         }
-        QueryPresentation::Interactive | QueryPresentation::Output(_) => {}
+        QueryPresentation::Tldr(ColorMode::Auto) => {
+            *presentation = QueryPresentation::Tldr(if terminal.output && terminal.color {
+                ColorMode::Always
+            } else {
+                ColorMode::Never
+            });
+        }
+        QueryPresentation::Interactive
+        | QueryPresentation::Output(_)
+        | QueryPresentation::Tldr(ColorMode::Always | ColorMode::Never) => {}
     }
     Ok(())
 }
@@ -369,8 +381,8 @@ fn render_catalog_text(catalog: &DocumentCatalog, grouped: bool) -> String {
     if !grouped {
         let mut output = String::new();
         for document in &catalog.documents {
-            let (category, kind) = catalog_category(&document.address);
-            writeln!(output, "{category}\t{}\t{kind}", document.address.name())
+            let (_, kind) = catalog_category(&document.address);
+            writeln!(output, "{}\t{kind}", document.catalog_path)
                 .expect("writing to String cannot fail");
         }
         return output;
@@ -382,7 +394,10 @@ fn render_catalog_text(catalog: &DocumentCatalog, grouped: bool) -> String {
         categories
             .entry(category)
             .or_default()
-            .push(document.address.name());
+            .push(match &document.address {
+                DocumentAddress::Markdown { path, .. } => path,
+                DocumentAddress::Manual { name, .. } => name,
+            });
     }
     let mut output = String::new();
     for (index, (category, names)) in categories.into_iter().enumerate() {
@@ -409,7 +424,7 @@ fn catalog_category(address: &DocumentAddress) -> (String, &'static str) {
         DocumentAddress::Markdown {
             origin: MarkdownOrigin::Source { name },
             ..
-        } => (name.clone(), "markdown"),
+        } => (format!("sources/{name}"), "markdown"),
         DocumentAddress::Manual { section, .. } => (format!("manual/{section}"), "manual"),
     }
 }
@@ -424,11 +439,22 @@ fn execute_query(
         manual_only: command.manual_only,
     };
     let result = match command.source {
-        QuerySource::MarkdownStdin { view } => {
+        QuerySource::InputStdin { format, view } => {
             validate_markdown_policy(policy)?;
-            let source = read_utf8_input(input, mant_core::MAX_MARKDOWN_BYTES, "Markdown input")?;
-            mant_core::project_query_view(host.query_markdown(&source)?, &view)
-                .map_err(query_execution_failure)?
+            let query = match format {
+                InputFormat::Markdown => {
+                    let source =
+                        read_utf8_input(input, mant_core::MAX_MARKDOWN_BYTES, "Markdown input")?;
+                    host.query_markdown(&source)?
+                }
+                InputFormat::Roff => {
+                    let source =
+                        read_input_bytes(input, mant_core::MAX_MANUAL_BYTES, "roff input")?;
+                    mant_core::query_roff_bytes(&source).map_err(query_failure)?
+                }
+                InputFormat::Auto => unreachable!("stdin input format is validated by clap"),
+            };
+            mant_core::project_query_view(query, &view).map_err(query_execution_failure)?
         }
         source => {
             let request = read_query_request(source, input)?;
@@ -437,6 +463,28 @@ fn execute_query(
             mant_core::project_query_view(query, &request.view).map_err(query_execution_failure)?
         }
     };
+    if let QueryPresentation::Tldr(color) = command.presentation {
+        let mant_core::QueryViewResult::Excerpt(mant_ast::QueryExcerpt { selections, .. }) =
+            &result
+        else {
+            return Err(Failure::operational(
+                "the tldr terminal presentation requires a tldr excerpt",
+            ));
+        };
+        let document = selections.iter().find_map(|selection| match selection {
+            mant_ast::ExcerptSelection::Tldr { document, .. } => Some(document),
+            _ => None,
+        });
+        return document.map_or_else(
+            || Err(Failure::operational("no tldr quick reference is available")),
+            |document| {
+                Ok(mant_ui::render_tldr_terminal(
+                    document,
+                    color == ColorMode::Always,
+                ))
+            },
+        );
+    }
     let format = match command.presentation {
         QueryPresentation::Auto => QueryFormat::Markdown,
         QueryPresentation::Output(format) => format,
@@ -445,6 +493,7 @@ fn execute_query(
                 "interactive mode requires the native terminal process boundary",
             ));
         }
+        QueryPresentation::Tldr(_) => unreachable!("tldr presentation returned above"),
     };
     render_query_result(&result, format, command.pretty, command.preserve_anchors)
 }
@@ -465,7 +514,7 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
     };
     let QuerySource::Arguments(request) = source else {
         return report_failure(
-            &Failure::usage("interactive mode requires a document name or Markdown path"),
+            &Failure::usage("interactive mode requires a document selector or explicit input"),
             diagnostics,
         );
     };
@@ -530,8 +579,8 @@ fn open_external_uri(uri: &str) -> Result<(), String> {
 
 fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {
     let (name, source, section, manual_only) = match address {
-        DocumentAddress::Markdown { name, origin } => (
-            name.clone(),
+        DocumentAddress::Markdown { path, origin } => (
+            path.clone(),
             match origin {
                 MarkdownOrigin::Documents => None,
                 MarkdownOrigin::Source { name } => Some(name.clone()),
@@ -547,7 +596,7 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
         QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
-                name,
+                selector: name,
                 source,
                 section,
             },
@@ -561,8 +610,8 @@ fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<Query
     match source {
         QuerySource::Arguments(request) => return Ok(request),
         QuerySource::StdinJson => {}
-        QuerySource::MarkdownStdin { .. } => {
-            unreachable!("Markdown stdin is consumed before protocol request decoding");
+        QuerySource::InputStdin { .. } => {
+            unreachable!("direct stdin input is consumed before protocol request decoding");
         }
     }
 
@@ -572,6 +621,11 @@ fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<Query
 }
 
 fn read_utf8_input(input: &mut dyn Read, limit: u64, label: &str) -> Result<String, Failure> {
+    let bytes = read_input_bytes(input, limit, label)?;
+    String::from_utf8(bytes).map_err(|_| Failure::usage(format!("{label} must be UTF-8")))
+}
+
+fn read_input_bytes(input: &mut dyn Read, limit: u64, label: &str) -> Result<Vec<u8>, Failure> {
     let mut bytes = Vec::new();
     input
         .take(limit + 1)
@@ -582,7 +636,7 @@ fn read_utf8_input(input: &mut dyn Read, limit: u64, label: &str) -> Result<Stri
             "{label} exceeds the {limit}-byte limit"
         )));
     }
-    String::from_utf8(bytes).map_err(|_| Failure::usage(format!("{label} must be UTF-8")))
+    Ok(bytes)
 }
 
 fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
@@ -621,7 +675,7 @@ mod tests {
     use super::{
         CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
         MarkdownOrigin, QueryPolicy, TerminalCapabilities,
-        arguments::{self, Command, QueryFormat, QueryPresentation},
+        arguments::{self, ColorMode, Command, QueryFormat, QueryPresentation},
         request_for_address, resolve_process_presentation, run_with_host,
     };
 
@@ -636,7 +690,7 @@ mod tests {
     #[test]
     fn catalog_addresses_reopen_the_exact_source_or_manual_section() {
         let (request, policy) = request_for_address(&DocumentAddress::Markdown {
-            name: "Start-Process".to_owned(),
+            path: "Start-Process".to_owned(),
             origin: MarkdownOrigin::Source {
                 name: "pwsh7".to_owned(),
             },
@@ -644,7 +698,7 @@ mod tests {
         assert_eq!(
             request.input,
             QueryInput::Document {
-                name: "Start-Process".to_owned(),
+                selector: "Start-Process".to_owned(),
                 source: Some("pwsh7".to_owned()),
                 section: None,
             }
@@ -658,7 +712,7 @@ mod tests {
         assert_eq!(
             request.input,
             QueryInput::Document {
-                name: "printf".to_owned(),
+                selector: "printf".to_owned(),
                 source: None,
                 section: Some("3".to_owned()),
             }
@@ -674,6 +728,7 @@ mod tests {
             TerminalCapabilities {
                 input: true,
                 output: true,
+                color: true,
             },
         )
         .expect("terminal query");
@@ -691,6 +746,7 @@ mod tests {
             TerminalCapabilities {
                 input: true,
                 output: false,
+                color: true,
             },
         )
         .expect("redirected query");
@@ -709,6 +765,7 @@ mod tests {
             TerminalCapabilities {
                 input: true,
                 output: true,
+                color: true,
             },
         )
         .expect("outline remains non-interactive");
@@ -727,13 +784,14 @@ mod tests {
             TerminalCapabilities {
                 input: true,
                 output: true,
+                color: true,
             },
         )
         .expect("tldr remains non-interactive");
         assert!(matches!(
             tldr,
             Command::Query {
-                presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                presentation: QueryPresentation::Tldr(ColorMode::Always),
                 ..
             }
         ));
@@ -745,10 +803,12 @@ mod tests {
             TerminalCapabilities {
                 input: false,
                 output: true,
+                color: true,
             },
             TerminalCapabilities {
                 input: true,
                 output: false,
+                color: true,
             },
         ] {
             let mut command =
@@ -819,19 +879,21 @@ mod tests {
                 documents: vec![
                     DocumentSummary {
                         address: DocumentAddress::Markdown {
-                            name: "guide".to_owned(),
+                            path: "guide".to_owned(),
                             origin: MarkdownOrigin::Source {
                                 name: "team".to_owned(),
                             },
                         },
-                        path: "/data/team/guide.md".to_owned(),
+                        catalog_path: "sources/team/guide".to_owned(),
+                        source_path: "/data/team/guide.md".to_owned(),
                     },
                     DocumentSummary {
                         address: DocumentAddress::Manual {
                             name: "printf".to_owned(),
                             section: "3".to_owned(),
                         },
-                        path: "/usr/share/man/man3/printf.3".to_owned(),
+                        catalog_path: "manual/3/printf".to_owned(),
+                        source_path: "/usr/share/man/man3/printf.3".to_owned(),
                     },
                 ],
             })
@@ -845,8 +907,8 @@ mod tests {
             self.query_calls.set(self.query_calls.get() + 1);
             self.last_policy.set(policy);
             let label = match &request.input {
-                QueryInput::Document { name, .. } => name.trim().to_owned(),
-                QueryInput::MarkdownFile { path } => path.clone(),
+                QueryInput::Document { selector, .. } => selector.trim().to_owned(),
+                QueryInput::File { path, .. } => path.clone(),
             };
             Ok(QueryBundle {
                 schema: QuerySchema::V7,
@@ -1028,7 +1090,7 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git","section":"1"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git","section":"1"},"view":{"kind":"full"}}"#,
             &host,
         );
 
@@ -1042,13 +1104,13 @@ mod tests {
     fn malformed_or_extended_requests_fail_before_querying_the_host() {
         for input in [
             br"not-json".as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"   "},"view":{"kind":"full"}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"   "},"view":{"kind":"full"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -1068,7 +1130,7 @@ mod tests {
         let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1079,7 +1141,7 @@ mod tests {
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1265,7 +1327,7 @@ mod tests {
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"demo"},"view":{"kind":"explain","entry":"query"}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"explain","entry":"query"}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1350,7 +1412,7 @@ mod tests {
         let host = FakeHost::with_manual();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
             &host,
         );
 
@@ -1419,12 +1481,15 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(&["--list"], b"", &host);
         assert_eq!(status, 0);
-        assert_eq!(output, "manual/3\n  printf\n\nteam\n  guide\n");
+        assert_eq!(output, "manual/3\n  printf\n\nsources/team\n  guide\n");
         assert!(diagnostics.is_empty());
 
         let (status, output, diagnostics) = invoke(&["--find", "guide"], b"", &host);
         assert_eq!(status, 0);
-        assert_eq!(output, "team\tguide\tmarkdown\nmanual/3\tprintf\tmanual\n");
+        assert_eq!(
+            output,
+            "sources/team/guide\tmarkdown\nmanual/3/printf\tmanual\n"
+        );
         assert!(diagnostics.is_empty());
 
         let (status, output, diagnostics) = invoke(
@@ -1435,7 +1500,7 @@ mod tests {
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("catalog JSON");
         assert_eq!(value["schema"], "mant.catalog/v7");
-        assert_eq!(value["documents"][0]["address"]["name"], "guide");
+        assert_eq!(value["documents"][0]["address"]["path"], "guide");
         assert!(diagnostics.is_empty());
     }
 

@@ -7,7 +7,6 @@ use grep_regex::RegexMatcherBuilder;
 use mant_ast::{
     CatalogDocumentKind, CatalogMatchRank, CatalogQuery, CatalogSchema, DocumentAddress,
     DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
-    catalog_literal_match_rank,
 };
 
 use mant_sources::{
@@ -35,6 +34,8 @@ pub enum AvailableDocumentOrigin {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AvailableDocument {
     pub name: String,
+    /// Extension-free path relative to this document's origin.
+    pub logical_path: String,
     pub kind: AvailableDocumentKind,
     pub section: Option<String>,
     pub path: PathBuf,
@@ -113,15 +114,42 @@ pub fn query_available_documents(
             })
         })
         .filter_map(|document| {
-            let matched = compiled_pattern
-                .as_ref()
-                .map_or(Ok(true), |matcher| matcher.is_match(document.name.as_bytes()));
+            let match_catalog_path = query
+                .pattern
+                .as_deref()
+                .is_some_and(|pattern| pattern.contains('/'));
+            let matched = compiled_pattern.as_ref().map_or(Ok(true), |matcher| {
+                matcher
+                    .is_match(document.name.as_bytes())
+                    .and_then(|matched| {
+                        if matched {
+                            Ok(true)
+                        } else {
+                            matcher.is_match(document.logical_path.as_bytes())
+                        }
+                    })
+                    .and_then(|matched| {
+                        if matched {
+                            Ok(true)
+                        } else if !match_catalog_path {
+                            Ok(false)
+                        } else {
+                            matcher.is_match(available_catalog_path(document).as_bytes())
+                        }
+                    })
+            });
             matched.ok().filter(|matched| *matched).map(|_| document)
         })
         .collect::<Vec<_>>();
     filtered.sort_by(|left, right| {
-        match_rank(left.name.as_str(), query)
-            .cmp(&match_rank(right.name.as_str(), query))
+        match_rank(left, query)
+            .cmp(&match_rank(right, query))
+            .then_with(|| {
+                left.logical_path
+                    .to_lowercase()
+                    .cmp(&right.logical_path.to_lowercase())
+            })
+            .then_with(|| left.logical_path.cmp(&right.logical_path))
             .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
             .then_with(|| left.name.cmp(&right.name))
             .then_with(|| left.kind.cmp(&right.kind))
@@ -210,22 +238,34 @@ fn build_matcher(
         .map_err(|error| CatalogError::InvalidPattern(error.to_string()))
 }
 
-fn match_rank(name: &str, query: &CatalogQuery) -> CatalogMatchRank {
-    if query.syntax == SearchSyntax::Literal {
-        catalog_literal_match_rank(name, query.pattern.as_deref(), query.case)
-    } else {
-        CatalogMatchRank::Unranked
+fn match_rank(document: &AvailableDocument, query: &CatalogQuery) -> CatalogMatchRank {
+    if query.syntax != SearchSyntax::Literal {
+        return CatalogMatchRank::Unranked;
     }
+    let Some(pattern) = query.pattern.as_deref() else {
+        return CatalogMatchRank::Unranked;
+    };
+    let catalog_path = available_catalog_path(document);
+    [
+        Some(document.name.as_str()),
+        Some(document.logical_path.as_str()),
+        pattern.contains('/').then_some(catalog_path.as_str()),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|candidate| mant_ast::catalog_literal_match_rank(candidate, Some(pattern), query.case))
+    .min()
+    .unwrap_or(CatalogMatchRank::Unranked)
 }
 
 fn document_summary(document: &AvailableDocument) -> DocumentSummary {
     let address = match &document.origin {
         AvailableDocumentOrigin::Documents => DocumentAddress::Markdown {
-            name: document.name.clone(),
+            path: document.logical_path.clone(),
             origin: MarkdownOrigin::Documents,
         },
         AvailableDocumentOrigin::Source(source) => DocumentAddress::Markdown {
-            name: document.name.clone(),
+            path: document.logical_path.clone(),
             origin: MarkdownOrigin::Source {
                 name: source.clone(),
             },
@@ -236,8 +276,23 @@ fn document_summary(document: &AvailableDocument) -> DocumentSummary {
         },
     };
     DocumentSummary {
+        catalog_path: address.catalog_path(),
         address,
-        path: document.path.to_string_lossy().into_owned(),
+        source_path: document.path.to_string_lossy().into_owned(),
+    }
+}
+
+fn available_catalog_path(document: &AvailableDocument) -> String {
+    match &document.origin {
+        AvailableDocumentOrigin::Documents => format!("documents/{}", document.logical_path),
+        AvailableDocumentOrigin::Source(source) => {
+            format!("sources/{source}/{}", document.logical_path)
+        }
+        AvailableDocumentOrigin::ManualPath => format!(
+            "manual/{}/{}",
+            document.section.as_deref().unwrap_or_default(),
+            document.name
+        ),
     }
 }
 
@@ -248,7 +303,13 @@ pub(crate) fn list_available_documents_from(
     let mut documents = registered
         .into_iter()
         .map(|document| AvailableDocument {
-            name: document.name,
+            name: document
+                .logical_path
+                .rsplit('/')
+                .next()
+                .unwrap_or(&document.logical_path)
+                .to_owned(),
+            logical_path: document.logical_path,
             kind: AvailableDocumentKind::Markdown,
             section: None,
             path: document.path,
@@ -259,6 +320,7 @@ pub(crate) fn list_available_documents_from(
         })
         .chain(manuals.iter().map(|page| AvailableDocument {
             name: page.name.clone(),
+            logical_path: page.name.clone(),
             kind: AvailableDocumentKind::Manual,
             section: Some(page.section.clone()),
             path: page.path.clone(),
@@ -266,7 +328,11 @@ pub(crate) fn list_available_documents_from(
         }))
         .collect::<Vec<_>>();
     documents.sort_by(|left, right| {
-        (&left.name, left.kind, &left.section).cmp(&(&right.name, right.kind, &right.section))
+        (&left.logical_path, left.kind, &left.section).cmp(&(
+            &right.logical_path,
+            right.kind,
+            &right.section,
+        ))
     });
     documents
 }
@@ -290,7 +356,7 @@ mod tests {
     fn merges_both_namespaces_without_hiding_manual_sections() {
         let documents = list_available_documents_from(
             vec![RegisteredDocument {
-                name: "printf".to_owned(),
+                logical_path: "printf".to_owned(),
                 path: PathBuf::from("/home/demo/.local/share/mant/documents/printf.md"),
                 origin: RegisteredDocumentOrigin::Documents,
             }],
@@ -322,12 +388,12 @@ mod tests {
         let documents = list_available_documents_from(
             vec![
                 RegisteredDocument {
-                    name: "tool".to_owned(),
+                    logical_path: "tool".to_owned(),
                     path: PathBuf::from("/data/mant/documents/tool.md"),
                     origin: RegisteredDocumentOrigin::Documents,
                 },
                 RegisteredDocument {
-                    name: "tool".to_owned(),
+                    logical_path: "tool".to_owned(),
                     path: PathBuf::from("/data/mant/documents/sources/alpha/tool.md"),
                     origin: RegisteredDocumentOrigin::Source("alpha".to_owned()),
                 },
@@ -348,6 +414,7 @@ mod tests {
             .into_iter()
             .map(|name| AvailableDocument {
                 name: name.to_owned(),
+                logical_path: name.to_owned(),
                 kind: AvailableDocumentKind::Markdown,
                 section: None,
                 path: PathBuf::from(format!("/data/{name}.md")),
@@ -372,10 +439,11 @@ mod tests {
 
     #[test]
     fn catalog_puts_an_exact_manual_before_every_prefix_and_substring() {
-        let documents = ["woman", "manpath", "man", "man.conf"]
+        let documents = ["woman", "manpath", "man", "man.conf", "printf"]
             .into_iter()
             .map(|name| AvailableDocument {
                 name: name.to_owned(),
+                logical_path: name.to_owned(),
                 kind: AvailableDocumentKind::Manual,
                 section: Some("1".to_owned()),
                 path: PathBuf::from(format!("/man/{name}.1")),
@@ -401,10 +469,74 @@ mod tests {
     }
 
     #[test]
+    fn catalog_ranks_hierarchical_exact_suffix_prefix_and_substring_matches() {
+        let documents = ["tool", "languages/en/tool", "toolbox", "guides/mytool"]
+            .into_iter()
+            .map(|logical_path| AvailableDocument {
+                name: logical_path.rsplit('/').next().expect("leaf").to_owned(),
+                logical_path: logical_path.to_owned(),
+                kind: AvailableDocumentKind::Markdown,
+                section: None,
+                path: PathBuf::from(format!("/documents/{logical_path}.md")),
+                origin: AvailableDocumentOrigin::Documents,
+            })
+            .collect::<Vec<_>>();
+        let catalog = query_available_documents(
+            &documents,
+            &CatalogQuery {
+                pattern: Some("tool".to_owned()),
+                limit: 10,
+                ..CatalogQuery::default()
+            },
+        )
+        .expect("hierarchical catalog");
+        assert_eq!(
+            catalog
+                .documents
+                .iter()
+                .map(|document| document.catalog_path.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "documents/languages/en/tool",
+                "documents/tool",
+                "documents/toolbox",
+                "documents/guides/mytool",
+            ]
+        );
+
+        let exact = AvailableDocument {
+            name: "tool".to_owned(),
+            logical_path: "en/tool".to_owned(),
+            kind: AvailableDocumentKind::Markdown,
+            section: None,
+            path: PathBuf::from("/documents/en/tool.md"),
+            origin: AvailableDocumentOrigin::Documents,
+        };
+        let catalog = query_available_documents(
+            &[exact, documents[1].clone()],
+            &CatalogQuery {
+                pattern: Some("en/tool".to_owned()),
+                limit: 10,
+                ..CatalogQuery::default()
+            },
+        )
+        .expect("component suffix catalog");
+        assert_eq!(
+            catalog
+                .documents
+                .iter()
+                .map(|document| document.catalog_path.as_str())
+                .collect::<Vec<_>>(),
+            ["documents/en/tool", "documents/languages/en/tool"]
+        );
+    }
+
+    #[test]
     fn catalog_filters_keep_manual_sections_and_exact_addresses() {
         let documents = vec![
             AvailableDocument {
                 name: "printf".to_owned(),
+                logical_path: "printf".to_owned(),
                 kind: AvailableDocumentKind::Manual,
                 section: Some("1".to_owned()),
                 path: PathBuf::from("/man/printf.1"),
@@ -412,6 +544,7 @@ mod tests {
             },
             AvailableDocument {
                 name: "printf".to_owned(),
+                logical_path: "printf".to_owned(),
                 kind: AvailableDocumentKind::Manual,
                 section: Some("3".to_owned()),
                 path: PathBuf::from("/man/printf.3"),

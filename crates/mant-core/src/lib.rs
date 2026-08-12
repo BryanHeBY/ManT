@@ -20,8 +20,8 @@ pub use catalog::{
     discover_documents, list_available_documents, query_available_documents,
 };
 pub use mandoc::{
-    MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_page,
-    parse_manual_source,
+    MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_bytes,
+    parse_manual_page, parse_manual_source,
 };
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
@@ -38,7 +38,7 @@ pub use projection::{
 pub use query::{
     DocumentResolver, MAX_MARKDOWN_BYTES, ManualLoadError, QueryError, QueryExecutionError,
     QueryPolicy, QueryViewResult, execute_query, project_query_view, query_markdown_text,
-    resolve_query, resolve_query_with_policy, validate_query_request,
+    query_roff_bytes, resolve_query, resolve_query_with_policy, validate_query_request,
 };
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{

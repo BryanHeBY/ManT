@@ -1,5 +1,7 @@
 //! Live document-catalog filtering for the modal document finder.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mant_ast::{
     CatalogQuery, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase,
@@ -15,10 +17,30 @@ pub(super) struct FinderState {
     pub(super) catalog: Vec<DocumentSummary>,
     pub(super) total: u32,
     pub(super) matches: Vec<usize>,
+    pub(super) tree: Vec<FinderTreeRow>,
     pub(super) selected: usize,
+    expanded: BTreeSet<String>,
+    tree_initialized: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum FinderTreeRow {
+    Folder {
+        path: String,
+        name: String,
+        depth: usize,
+    },
+    Document {
+        index: usize,
+        depth: usize,
+    },
 }
 
 impl FinderState {
+    pub(super) fn expanded(&self, path: &str) -> bool {
+        self.expanded.contains(path)
+    }
+
     pub(super) fn replace_catalog(&mut self, catalog: DocumentCatalog) {
         self.total = catalog.total;
         self.catalog = catalog.documents;
@@ -33,12 +55,32 @@ impl FinderState {
         match key.code {
             KeyCode::Esc => return None,
             KeyCode::Enter => {
-                return self
-                    .matches
-                    .get(self.selected)
-                    .and_then(|index| self.catalog.get(*index))
-                    .map(|document| document.address.clone());
+                if self.draft.is_empty() {
+                    match self.tree.get(self.selected).cloned() {
+                        Some(FinderTreeRow::Folder { path, .. }) => {
+                            if !self.expanded.remove(&path) {
+                                self.expanded.insert(path);
+                            }
+                            self.rebuild_tree();
+                        }
+                        Some(FinderTreeRow::Document { index, .. }) => {
+                            return self
+                                .catalog
+                                .get(index)
+                                .map(|document| document.address.clone());
+                        }
+                        None => {}
+                    }
+                } else {
+                    return self
+                        .matches
+                        .get(self.selected)
+                        .and_then(|index| self.catalog.get(*index))
+                        .map(|document| document.address.clone());
+                }
             }
+            KeyCode::Left if self.draft.is_empty() => self.collapse_selected(),
+            KeyCode::Right if self.draft.is_empty() => self.expand_selected(),
             KeyCode::Up => self.select_relative(-1),
             KeyCode::Down => self.select_relative(1),
             KeyCode::PageUp => self.select_relative(-10),
@@ -95,37 +137,164 @@ impl FinderState {
             .iter()
             .enumerate()
             .filter(|(_, document)| {
-                needle.is_empty() || document.address.name().to_lowercase().contains(&needle)
+                needle.is_empty()
+                    || document.address.name().to_lowercase().contains(&needle)
+                    || document
+                        .address
+                        .relative_path()
+                        .to_lowercase()
+                        .contains(&needle)
+                    || needle.contains('/')
+                        && document.catalog_path.to_lowercase().contains(&needle)
             })
             .map(|(index, _)| index)
             .collect();
         self.matches.sort_by(|left, right| {
-            let left = &self.catalog[*left].address;
-            let right = &self.catalog[*right].address;
-            catalog_literal_match_rank(
-                left.name(),
-                (!self.draft.is_empty()).then_some(self.draft.as_str()),
-                SearchCase::Insensitive,
-            )
-            .cmp(&catalog_literal_match_rank(
-                right.name(),
-                (!self.draft.is_empty()).then_some(self.draft.as_str()),
-                SearchCase::Insensitive,
-            ))
-            .then_with(|| left.name().to_lowercase().cmp(&right.name().to_lowercase()))
-            .then_with(|| left.cmp(right))
+            let left_document = &self.catalog[*left];
+            let right_document = &self.catalog[*right];
+            let left = &left_document.address;
+            let right = &right_document.address;
+            finder_match_rank(left, &left_document.catalog_path, &self.draft)
+                .cmp(&finder_match_rank(
+                    right,
+                    &right_document.catalog_path,
+                    &self.draft,
+                ))
+                .then_with(|| left.name().to_lowercase().cmp(&right.name().to_lowercase()))
+                .then_with(|| left.cmp(right))
         });
+        self.rebuild_tree();
         self.selected = 0;
     }
 
     fn select_relative(&mut self, delta: isize) {
-        if self.matches.is_empty() {
+        let length = if self.draft.is_empty() {
+            self.tree.len()
+        } else {
+            self.matches.len()
+        };
+        if length == 0 {
             return;
         }
-        self.selected = self
-            .selected
-            .saturating_add_signed(delta)
-            .min(self.matches.len() - 1);
+        self.selected = self.selected.saturating_add_signed(delta).min(length - 1);
+    }
+
+    fn rebuild_tree(&mut self) {
+        let mut folders = BTreeSet::new();
+        let mut documents = BTreeMap::<String, Vec<(String, usize)>>::new();
+        for (index, document) in self.catalog.iter().enumerate() {
+            let mut components = document.catalog_path.split('/').collect::<Vec<_>>();
+            let Some(name) = components.pop() else {
+                continue;
+            };
+            let parent = components.join("/");
+            documents
+                .entry(parent)
+                .or_default()
+                .push((name.to_owned(), index));
+            for depth in 1..=components.len() {
+                folders.insert(components[..depth].join("/"));
+            }
+        }
+        if !self.tree_initialized {
+            self.expanded.extend(folders.iter().cloned());
+            self.tree_initialized = true;
+        }
+        self.tree.clear();
+        append_tree_rows("", 0, &folders, &documents, &self.expanded, &mut self.tree);
+    }
+
+    fn collapse_selected(&mut self) {
+        let Some(FinderTreeRow::Folder { path, .. }) = self.tree.get(self.selected) else {
+            return;
+        };
+        if self.expanded.remove(path) {
+            self.rebuild_tree();
+        }
+    }
+
+    fn expand_selected(&mut self) {
+        let Some(FinderTreeRow::Folder { path, .. }) = self.tree.get(self.selected) else {
+            return;
+        };
+        if self.expanded.insert(path.clone()) {
+            self.rebuild_tree();
+        }
+    }
+}
+
+fn finder_match_rank(
+    address: &DocumentAddress,
+    catalog_path: &str,
+    pattern: &str,
+) -> mant_ast::CatalogMatchRank {
+    let pattern = (!pattern.is_empty()).then_some(pattern);
+    let relative_path = address.relative_path();
+    [
+        Some(address.name()),
+        Some(relative_path.as_str()),
+        pattern
+            .is_some_and(|pattern| pattern.contains('/'))
+            .then_some(catalog_path),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|candidate| catalog_literal_match_rank(candidate, pattern, SearchCase::Insensitive))
+    .min()
+    .unwrap_or(mant_ast::CatalogMatchRank::Unranked)
+}
+
+fn append_tree_rows(
+    parent: &str,
+    depth: usize,
+    folders: &BTreeSet<String>,
+    documents: &BTreeMap<String, Vec<(String, usize)>>,
+    expanded: &BTreeSet<String>,
+    output: &mut Vec<FinderTreeRow>,
+) {
+    let prefix = if parent.is_empty() {
+        String::new()
+    } else {
+        format!("{parent}/")
+    };
+    let child_folders = folders
+        .iter()
+        .filter(|path| path.starts_with(&prefix))
+        .filter(|path| !path[prefix.len()..].contains('/'))
+        .cloned()
+        .collect::<Vec<_>>();
+    let child_documents = documents.get(parent).cloned().unwrap_or_default();
+    let mut entries = child_folders
+        .into_iter()
+        .map(|path| {
+            let name = path.rsplit('/').next().unwrap_or(&path).to_owned();
+            (name, true, path, 0)
+        })
+        .chain(
+            child_documents
+                .into_iter()
+                .map(|(name, index)| (name, false, String::new(), index)),
+        )
+        .collect::<Vec<_>>();
+    entries.sort_by(|left, right| {
+        left.0
+            .to_lowercase()
+            .cmp(&right.0.to_lowercase())
+            .then_with(|| right.1.cmp(&left.1))
+    });
+    for (name, folder, path, index) in entries {
+        if folder {
+            output.push(FinderTreeRow::Folder {
+                path: path.clone(),
+                name,
+                depth,
+            });
+            if expanded.contains(&path) {
+                append_tree_rows(&path, depth + 1, folders, documents, expanded, output);
+            }
+        } else {
+            output.push(FinderTreeRow::Document { index, depth });
+        }
     }
 }
 
@@ -156,7 +325,7 @@ impl App {
 fn finder_query(draft: &str) -> CatalogQuery {
     CatalogQuery {
         pattern: (!draft.is_empty()).then(|| draft.to_owned()),
-        limit: 250,
+        limit: if draft.is_empty() { 10_000 } else { 250 },
         ..CatalogQuery::default()
     }
 }
@@ -170,7 +339,7 @@ pub(super) fn document_category(address: &DocumentAddress) -> String {
         DocumentAddress::Markdown {
             origin: MarkdownOrigin::Source { name },
             ..
-        } => name.clone(),
+        } => format!("sources/{name}"),
         DocumentAddress::Manual { section, .. } => format!("manual/{section}"),
     }
 }

@@ -48,6 +48,7 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::InvalidSource
         | QueryError::ConflictingSourceSelectors
         | QueryError::EmptyMarkdownPath
+        | QueryError::UnsupportedInputFormat { .. }
         | QueryError::EmptySelection
         | QueryError::EmptySelector
         | QueryError::EmptyEntry

@@ -168,7 +168,7 @@ fn remaining_budget(
     })
 }
 
-fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u8>>, ManualError> {
+pub(super) fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u8>>, ManualError> {
     let mut target = None;
     let mut has_other_content = false;
 

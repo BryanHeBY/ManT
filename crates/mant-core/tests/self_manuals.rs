@@ -106,7 +106,7 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
         "%USERPROFILE%\\.local\\share\\man",
         "pages can live directly below it as `widget.1`",
         "without invoking `man`",
-        "Do not pass `./widget.1`",
+        "mant --input ./widget.1",
     ] {
         assert!(
             MANT_MANUAL.contains(required),
@@ -120,10 +120,10 @@ fn shipped_manuals_explain_project_local_roff_lookup() {
 }
 
 #[test]
-fn shipped_manual_explains_flat_registered_documents_and_sources() {
+fn shipped_manual_explains_hierarchical_registered_documents_and_sources() {
     for required in [
         "$HOME/.local/share/mant/documents",
-        "Nested directories and symbolic links are",
+        "Registered `.md` and `.markdown` files retain their extension-free relative",
         "--source NAME",
         "--update-docs",
         "no cross-call snapshot guarantee",

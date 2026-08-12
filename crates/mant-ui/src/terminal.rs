@@ -129,11 +129,45 @@ where
     let Some(query) = app.take_discovery_request() else {
         return false;
     };
-    match discover_documents(&query) {
+    match discover_catalog_pages(&query, discover_documents) {
         Ok(catalog) => app.complete_discovery(catalog),
         Err(message) => app.report_discovery_error(message),
     }
     true
+}
+
+fn discover_catalog_pages<D>(
+    query: &CatalogQuery,
+    discover_documents: &mut D,
+) -> Result<DocumentCatalog, String>
+where
+    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
+{
+    let mut catalog = discover_documents(query)?;
+    if query.pattern.is_some() {
+        return Ok(catalog);
+    }
+    let mut previous_offset = query.offset;
+    while let Some(next_offset) = catalog.next_offset {
+        if next_offset <= previous_offset {
+            return Err("document discovery returned a non-advancing page".to_owned());
+        }
+        let mut next_query = query.clone();
+        next_query.offset = next_offset;
+        let page = discover_documents(&next_query)?;
+        if page.offset != next_offset
+            || page.schema != catalog.schema
+            || page.total != catalog.total
+        {
+            return Err("document discovery returned inconsistent catalog pages".to_owned());
+        }
+        catalog.documents.extend(page.documents);
+        catalog.returned = u32::try_from(catalog.documents.len()).unwrap_or(u32::MAX);
+        catalog.truncated = page.truncated;
+        catalog.next_offset = page.next_offset;
+        previous_offset = next_offset;
+    }
+    Ok(catalog)
 }
 
 fn service_open_request<F>(app: &mut App, open_document: &mut F) -> bool
@@ -179,6 +213,85 @@ impl Drop for TerminalGuard {
         if self.active {
             let _ = disable_raw_mode();
             let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mant_ast::{CatalogSchema, DocumentSummary};
+
+    use super::*;
+
+    #[test]
+    fn empty_finder_queries_collect_every_catalog_page() {
+        let mut offsets = Vec::new();
+        let catalog = discover_catalog_pages(&CatalogQuery::default(), &mut |query| {
+            offsets.push(query.offset);
+            let next_offset = (query.offset == 0).then_some(1);
+            Ok(DocumentCatalog {
+                schema: CatalogSchema::V7,
+                total: 2,
+                returned: 1,
+                offset: query.offset,
+                truncated: next_offset.is_some(),
+                next_offset,
+                documents: vec![manual_summary(if query.offset == 0 {
+                    "git"
+                } else {
+                    "man"
+                })],
+            })
+        })
+        .expect("collect catalog");
+
+        assert_eq!(offsets, [0, 1]);
+        assert_eq!(catalog.returned, 2);
+        assert!(!catalog.truncated);
+        assert_eq!(
+            catalog
+                .documents
+                .iter()
+                .map(|document| document.address.name())
+                .collect::<Vec<_>>(),
+            ["git", "man"]
+        );
+    }
+
+    #[test]
+    fn live_finder_queries_keep_the_bounded_ranked_page() {
+        let mut calls = 0;
+        let query = CatalogQuery {
+            pattern: Some("man".to_owned()),
+            ..CatalogQuery::default()
+        };
+        let catalog = discover_catalog_pages(&query, &mut |_| {
+            calls += 1;
+            Ok(DocumentCatalog {
+                schema: CatalogSchema::V7,
+                total: 20_000,
+                returned: 1,
+                offset: 0,
+                truncated: true,
+                next_offset: Some(1),
+                documents: vec![manual_summary("man")],
+            })
+        })
+        .expect("load ranked page");
+
+        assert_eq!(calls, 1);
+        assert_eq!(catalog.returned, 1);
+        assert!(catalog.truncated);
+    }
+
+    fn manual_summary(name: &str) -> DocumentSummary {
+        DocumentSummary {
+            address: DocumentAddress::Manual {
+                name: name.to_owned(),
+                section: "1".to_owned(),
+            },
+            catalog_path: format!("manual/1/{name}"),
+            source_path: format!("/usr/share/man/man1/{name}.1"),
         }
     }
 }

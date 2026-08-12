@@ -516,7 +516,7 @@ fn discard_outline_diagnostics(outline: &mut QueryOutline) {
 
 fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
     let input = QueryInput::Document {
-        name: selector.name,
+        selector: selector.name,
         source: selector.source,
         section: selector.section,
     };
@@ -660,6 +660,7 @@ mod tests {
             &[
                 AvailableDocument {
                     name: "printf".to_owned(),
+                    logical_path: "printf".to_owned(),
                     kind: AvailableDocumentKind::Markdown,
                     section: None,
                     path: PathBuf::from("/data/mant/printf.md"),
@@ -667,6 +668,7 @@ mod tests {
                 },
                 AvailableDocument {
                     name: "printf".to_owned(),
+                    logical_path: "printf".to_owned(),
                     kind: AvailableDocumentKind::Manual,
                     section: Some("1".to_owned()),
                     path: PathBuf::from("/usr/share/man/man1/printf.1.gz"),
@@ -674,6 +676,7 @@ mod tests {
                 },
                 AvailableDocument {
                     name: "printf".to_owned(),
+                    logical_path: "printf".to_owned(),
                     kind: AvailableDocumentKind::Manual,
                     section: Some("3".to_owned()),
                     path: PathBuf::from("/usr/share/man/man3/printf.3.gz"),

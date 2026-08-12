@@ -9,7 +9,11 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::{App, PointerDrag, finder::document_category, fit_to_width};
+use super::{
+    App, PointerDrag,
+    finder::{FinderTreeRow, document_category},
+    fit_to_width,
+};
 use crate::{
     layout::{
         CONTENT_MARGIN, CONTENT_SCROLLBAR_GAP, MIN_CONTENT_WIDTH, MIN_SIDEBAR_WIDTH,
@@ -423,30 +427,33 @@ impl App {
             query_area,
         );
         let result_count = self.finder.total;
+        let hint = if self.finder.draft.is_empty() {
+            format!(
+                "{result_count} documents · ←/→ collapse/expand · Enter open/toggle · Esc close"
+            )
+        } else {
+            format!("{result_count} matches · ↑/↓ select · Enter open · Esc close")
+        };
         frame.render_widget(
-            Paragraph::new(format!(
-                "{result_count} matches · ↑/↓ select · Enter open · Esc close"
-            ))
-            .style(Style::default().fg(theme::SUBTEXT)),
+            Paragraph::new(hint).style(Style::default().fg(theme::SUBTEXT)),
             hint_area,
         );
 
+        self.draw_finder_results(frame, results_area);
+    }
+
+    fn draw_finder_results(&self, frame: &mut Frame<'_>, results_area: Rect) {
         let visible_height = usize::from(results_area.height);
         let scroll = self
             .finder
             .selected
             .saturating_sub(visible_height.saturating_sub(1));
-        for (visual_row, match_index) in self
-            .finder
-            .matches
-            .iter()
-            .skip(scroll)
-            .take(visible_height)
-            .enumerate()
-        {
-            let Some(document) = self.finder.catalog.get(*match_index) else {
-                continue;
-            };
+        let row_count = if self.finder.draft.is_empty() {
+            self.finder.tree.len()
+        } else {
+            self.finder.matches.len()
+        };
+        for visual_row in 0..visible_height.min(row_count.saturating_sub(scroll)) {
             let row = Rect::new(
                 results_area.x,
                 results_area.y + u16::try_from(visual_row).unwrap_or_default(),
@@ -454,16 +461,45 @@ impl App {
                 1,
             );
             let selected = scroll + visual_row == self.finder.selected;
-            let category = document_category(&document.address);
-            let name = document.address.name();
-            let gap = usize::from(row.width)
-                .saturating_sub(name.width())
-                .saturating_sub(category.width())
-                .max(1);
-            let value = fit_to_width(
-                &format!("{name}{}{category}", " ".repeat(gap)),
-                usize::from(row.width),
-            );
+            let value = if self.finder.draft.is_empty() {
+                match &self.finder.tree[scroll + visual_row] {
+                    FinderTreeRow::Folder { path, name, depth } => {
+                        let marker = if self.finder.expanded(path) {
+                            "▾"
+                        } else {
+                            "▸"
+                        };
+                        fit_to_width(
+                            &format!("{}{marker} {name}/", "  ".repeat(*depth)),
+                            usize::from(row.width),
+                        )
+                    }
+                    FinderTreeRow::Document { index, depth } => {
+                        let Some(document) = self.finder.catalog.get(*index) else {
+                            continue;
+                        };
+                        fit_to_width(
+                            &format!("{}  {}", "  ".repeat(*depth), document.address.name()),
+                            usize::from(row.width),
+                        )
+                    }
+                }
+            } else {
+                let match_index = self.finder.matches[scroll + visual_row];
+                let Some(document) = self.finder.catalog.get(match_index) else {
+                    continue;
+                };
+                let category = document_category(&document.address);
+                let name = &document.catalog_path;
+                let gap = usize::from(row.width)
+                    .saturating_sub(name.width())
+                    .saturating_sub(category.width())
+                    .max(1);
+                fit_to_width(
+                    &format!("{name}{}{category}", " ".repeat(gap)),
+                    usize::from(row.width),
+                )
+            };
             let style = if selected {
                 Style::default()
                     .fg(theme::SELECTED_TEXT)

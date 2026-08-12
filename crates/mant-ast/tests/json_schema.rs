@@ -37,10 +37,11 @@ fn request_schema_is_closed_versioned_and_deserialization_oriented() {
     assert!(required(&schema).contains(&"view"));
     assert!(encoded.contains("mant.request/v7"));
     assert!(encoded.contains("\"document\""));
-    assert!(encoded.contains("\"name\""));
+    assert!(encoded.contains("\"selector\""));
     assert!(encoded.contains("\"source\""));
     assert!(!encoded.contains("\"topic\""));
-    assert!(encoded.contains("markdown-file"));
+    assert!(encoded.contains("\"file\""));
+    assert!(encoded.contains("\"format\""));
     assert!(encoded.contains("outline"));
     assert!(encoded.contains("excerpt"));
     assert!(encoded.contains("search"));

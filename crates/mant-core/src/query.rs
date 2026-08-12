@@ -10,17 +10,18 @@ use std::{
 };
 
 use mant_ast::{
-    CatalogQuery, DocumentAddress, DocumentCatalog, MantDocument, MarkdownOrigin, QueryBundle,
-    QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySchema, QuerySearch, QueryView,
-    SearchQuery, TldrDocument,
+    CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MantDocument, MarkdownOrigin,
+    QueryBundle, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySchema, QuerySearch,
+    QueryView, SearchQuery, TldrDocument,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
 use crate::{
     ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError,
     build_outline_with_detail, discover_manual_roots, executable::query_name_candidates,
-    locate_manual_source_in, parse_manual_page, parse_markdown, read_cached_tldr_page,
-    search_query, select_excerpt, select_explanation, validate_search_query,
+    locate_manual_source_in, parse_manual_bytes, parse_manual_page, parse_manual_source,
+    parse_markdown, read_cached_tldr_page, search_query, select_excerpt, select_explanation,
+    validate_search_query,
 };
 
 /// Upper bound on a single Markdown source, shared by every input path.
@@ -39,6 +40,7 @@ pub enum QueryError {
     InvalidSource,
     ConflictingSourceSelectors,
     EmptyMarkdownPath,
+    UnsupportedInputFormat { path: String },
     EmptySelection,
     EmptySelector,
     EmptyEntry,
@@ -102,6 +104,10 @@ impl fmt::Display for QueryError {
                 "document source cannot be combined with a manual section or manual-only policy",
             ),
             Self::EmptyMarkdownPath => formatter.write_str("Markdown path must not be empty"),
+            Self::UnsupportedInputFormat { path } => write!(
+                formatter,
+                "could not infer the input format for '{path}'; use --input-format markdown or roff"
+            ),
             Self::EmptySelection => formatter.write_str("at least one outline node is required"),
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::EmptyEntry => formatter.write_str("semantic entry must not be empty"),
@@ -140,6 +146,7 @@ impl Error for QueryError {
             | Self::InvalidSource
             | Self::ConflictingSourceSelectors
             | Self::EmptyMarkdownPath
+            | Self::UnsupportedInputFormat { .. }
             | Self::EmptySelection
             | Self::EmptySelector
             | Self::EmptyEntry
@@ -295,11 +302,11 @@ pub fn validate_query_request(
 ) -> Result<(), QueryError> {
     match &request.input {
         QueryInput::Document {
-            name,
+            selector,
             source,
             section,
         } => {
-            if name.trim().is_empty() {
+            if selector.trim().is_empty() {
                 return Err(QueryError::EmptyName);
             }
             if source
@@ -318,7 +325,7 @@ pub fn validate_query_request(
                 return Err(QueryError::ConflictingSourceSelectors);
             }
         }
-        QueryInput::MarkdownFile { path } => {
+        QueryInput::File { path, .. } => {
             if path.trim().is_empty() {
                 return Err(QueryError::EmptyMarkdownPath);
             }
@@ -374,8 +381,13 @@ trait QueryHost {
         candidates: &[String],
         source: Option<&str>,
     ) -> Result<Option<RegisteredSelection>, String>;
+    fn locate_registered_address(
+        &self,
+        address: &DocumentAddress,
+    ) -> Result<Option<RegisteredSelection>, String>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String>;
     fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String>;
+    fn parse_manual_input(&self, path: &Path) -> Result<MantDocument, String>;
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }
@@ -493,7 +505,7 @@ impl QueryHost for DocumentResolver {
                 registered.map(|registered| RegisteredSelection {
                     path: registered.path.clone(),
                     address: DocumentAddress::Markdown {
-                        name: registered.name.clone(),
+                        path: registered.logical_path.clone(),
                         origin: match &registered.origin {
                             RegisteredDocumentOrigin::Documents => MarkdownOrigin::Documents,
                             RegisteredDocumentOrigin::Source(name) => {
@@ -501,6 +513,33 @@ impl QueryHost for DocumentResolver {
                             }
                         },
                     },
+                })
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    fn locate_registered_address(
+        &self,
+        address: &DocumentAddress,
+    ) -> Result<Option<RegisteredSelection>, String> {
+        let DocumentAddress::Markdown { path, origin } = address else {
+            return Ok(None);
+        };
+        let origin = match origin {
+            MarkdownOrigin::Documents => RegisteredDocumentOrigin::Documents,
+            MarkdownOrigin::Source { name } => RegisteredDocumentOrigin::Source(name.clone()),
+        };
+        let index = self
+            .registered
+            .get_or_init(RegisteredDocumentIndex::load)
+            .as_ref()
+            .map_err(ToString::to_string)?;
+        index
+            .find_address(path, &origin)
+            .map(|document| {
+                document.map(|document| RegisteredSelection {
+                    path: document.path.clone(),
+                    address: address.clone(),
                 })
             })
             .map_err(|error| error.to_string())
@@ -515,6 +554,10 @@ impl QueryHost for DocumentResolver {
 
     fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String> {
         parse_manual_page(page).map_err(|error| error.to_string())
+    }
+
+    fn parse_manual_input(&self, path: &Path) -> Result<MantDocument, String> {
+        parse_manual_source(path).map_err(|error| error.to_string())
     }
 
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String> {
@@ -548,12 +591,110 @@ fn query_with(
 ) -> Result<QueryBundle, QueryError> {
     match &request.input {
         QueryInput::Document {
-            name,
+            selector,
             source,
             section,
-        } => query_named_document(name, source.as_deref(), section.as_deref(), policy, host),
-        QueryInput::MarkdownFile { path } => query_markdown_file(path, policy, host),
+        } => query_named_document(
+            selector,
+            source.as_deref(),
+            section.as_deref(),
+            policy,
+            host,
+        ),
+        QueryInput::File { path, format } => query_input_file(path, *format, policy, host),
     }
+}
+
+fn query_input_file(
+    requested_path: &str,
+    format: InputFormat,
+    policy: QueryPolicy,
+    host: &dyn QueryHost,
+) -> Result<QueryBundle, QueryError> {
+    let path = requested_path.trim();
+    if path.is_empty() {
+        return Err(QueryError::EmptyMarkdownPath);
+    }
+    let format = match format {
+        InputFormat::Auto => {
+            detect_input_format(path).ok_or_else(|| QueryError::UnsupportedInputFormat {
+                path: path.to_owned(),
+            })?
+        }
+        format => format,
+    };
+    match format {
+        InputFormat::Markdown => query_markdown_file(path, policy, host),
+        InputFormat::Roff => {
+            if policy.manual_only {
+                return Err(QueryError::ConflictingSourceSelectors);
+            }
+            let document = host.parse_manual_input(Path::new(path)).map_err(|detail| {
+                QueryError::Manual(ManualLoadError::Parse {
+                    name: path.to_owned(),
+                    detail,
+                })
+            })?;
+            if document.sections.is_empty() && document.blocks.is_empty() {
+                return Err(QueryError::NoReadableContent {
+                    name: path.to_owned(),
+                });
+            }
+            let label = document
+                .meta
+                .names
+                .first()
+                .cloned()
+                .or_else(|| document.meta.title.clone())
+                .unwrap_or_else(|| input_file_label(path));
+            Ok(QueryBundle {
+                schema: QuerySchema::V7,
+                label,
+                address: None,
+                document: Some(document),
+                tldr: None,
+            })
+        }
+        InputFormat::Auto => unreachable!("auto input was resolved above"),
+    }
+}
+
+fn detect_input_format(path: &str) -> Option<InputFormat> {
+    let mut name = Path::new(path).file_name()?.to_str()?.to_ascii_lowercase();
+    let mut compressed = false;
+    if Path::new(&name)
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| matches!(extension, "gz" | "zst"))
+    {
+        name = Path::new(&name).file_stem()?.to_str()?.to_owned();
+        compressed = true;
+    }
+    let extension = Path::new(&name).extension()?.to_str()?;
+    if matches!(extension, "md" | "markdown") {
+        return (!compressed).then_some(InputFormat::Markdown);
+    }
+    if matches!(extension, "roff" | "man" | "mdoc") {
+        return Some(InputFormat::Roff);
+    }
+    let section = extension;
+    let valid_section = matches!(section, "l" | "n")
+        || section
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_digit())
+            && section
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric());
+    valid_section.then_some(InputFormat::Roff)
+}
+
+fn input_file_label(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .and_then(OsStr::to_str)
+        .unwrap_or(path)
+        .to_owned()
 }
 
 fn query_markdown_file(
@@ -624,6 +765,48 @@ pub fn query_markdown_text(
     })
 }
 
+/// Parse one bounded roff stream without consulting MANPATH or following `.so`.
+///
+/// # Errors
+///
+/// Returns a native parse error or an empty-document error.
+pub fn query_roff_bytes(source: &[u8]) -> Result<QueryBundle, QueryError> {
+    if u64::try_from(source.len()).unwrap_or(u64::MAX) > crate::MAX_MANUAL_BYTES {
+        return Err(QueryError::Manual(ManualLoadError::Parse {
+            name: "stdin".to_owned(),
+            detail: format!(
+                "roff input exceeds the {}-byte limit",
+                crate::MAX_MANUAL_BYTES
+            ),
+        }));
+    }
+    let document = parse_manual_bytes(Path::new("stdin"), source).map_err(|error| {
+        QueryError::Manual(ManualLoadError::Parse {
+            name: "stdin".to_owned(),
+            detail: error.to_string(),
+        })
+    })?;
+    if document.sections.is_empty() && document.blocks.is_empty() {
+        return Err(QueryError::NoReadableContent {
+            name: "stdin".to_owned(),
+        });
+    }
+    let label = document
+        .meta
+        .names
+        .first()
+        .cloned()
+        .or_else(|| document.meta.title.clone())
+        .unwrap_or_else(|| "stdin".to_owned());
+    Ok(QueryBundle {
+        schema: QuerySchema::V7,
+        address: None,
+        label,
+        document: Some(document),
+        tldr: None,
+    })
+}
+
 fn query_named_document(
     name: &str,
     requested_source: Option<&str>,
@@ -634,6 +817,32 @@ fn query_named_document(
     let name = name.trim();
     if name.is_empty() {
         return Err(QueryError::EmptyName);
+    }
+    if let Some(address) = parse_catalog_address(name) {
+        if requested_source.is_some() || requested_section.is_some() || policy.manual_only {
+            return Err(QueryError::ConflictingSourceSelectors);
+        }
+        return match address {
+            DocumentAddress::Markdown { .. } => {
+                let registered = host
+                    .locate_registered_address(&address)
+                    .map_err(|detail| QueryError::Registry { detail })?
+                    .ok_or_else(|| QueryError::NoReadableContent {
+                        name: name.to_owned(),
+                    })?;
+                query_registered_document(name, &registered, host)
+            }
+            DocumentAddress::Manual {
+                name: manual_name,
+                section,
+            } => query_named_document(
+                &manual_name,
+                None,
+                Some(&section),
+                QueryPolicy { manual_only: true },
+                host,
+            ),
+        };
     }
     let section = requested_section.map(str::trim);
     if section.is_some_and(str::is_empty) {
@@ -718,6 +927,38 @@ fn query_named_document(
         }),
         Err(error) => Err(QueryError::Manual(error)),
     }
+}
+
+fn parse_catalog_address(selector: &str) -> Option<DocumentAddress> {
+    if let Some(path) = selector.strip_prefix("documents/")
+        && !path.is_empty()
+    {
+        return Some(DocumentAddress::Markdown {
+            path: path.to_owned(),
+            origin: MarkdownOrigin::Documents,
+        });
+    }
+    if let Some(rest) = selector.strip_prefix("sources/") {
+        let (source, path) = rest.split_once('/')?;
+        if !source.is_empty() && !path.is_empty() {
+            return Some(DocumentAddress::Markdown {
+                path: path.to_owned(),
+                origin: MarkdownOrigin::Source {
+                    name: source.to_owned(),
+                },
+            });
+        }
+    }
+    if let Some(rest) = selector.strip_prefix("manual/") {
+        let (section, name) = rest.split_once('/')?;
+        if !section.is_empty() && !name.is_empty() && !name.contains('/') {
+            return Some(DocumentAddress::Manual {
+                name: name.to_owned(),
+                section: section.to_owned(),
+            });
+        }
+    }
+    None
 }
 
 fn query_registered_document(
@@ -809,8 +1050,8 @@ mod tests {
 
     use mant_ast::{
         Diagnostic, DiagnosticLevel, DocumentAddress, DocumentMeta, DocumentSchema, DocumentSource,
-        MantDocument, MarkdownOrigin, Producer, QueryInput, QueryRequest, QueryView, RequestSchema,
-        Section, SourceFormat, TldrDocument, TldrOrigin,
+        InputFormat, MantDocument, MarkdownOrigin, Producer, QueryInput, QueryRequest, QueryView,
+        RequestSchema, Section, SourceFormat, TldrDocument, TldrOrigin,
     };
 
     use crate::{ManualPage, ManualRequest};
@@ -866,7 +1107,7 @@ mod tests {
                 .map(|path| RegisteredSelection {
                     path,
                     address: DocumentAddress::Markdown {
-                        name: self
+                        path: self
                             .registered_name
                             .clone()
                             .unwrap_or_else(|| candidates[0].clone()),
@@ -876,6 +1117,20 @@ mod tests {
                             }
                         }),
                     },
+                }))
+        }
+
+        fn locate_registered_address(
+            &self,
+            address: &DocumentAddress,
+        ) -> Result<Option<RegisteredSelection>, String> {
+            self.calls.lock().expect("calls lock").push("address");
+            Ok(self
+                .registered_document
+                .clone()
+                .map(|path| RegisteredSelection {
+                    path,
+                    address: address.clone(),
                 }))
         }
 
@@ -893,6 +1148,11 @@ mod tests {
 
         fn parse_manual(&self, _page: &ManualPage) -> Result<MantDocument, String> {
             self.calls.lock().expect("calls lock").push("parse");
+            self.direct.clone()
+        }
+
+        fn parse_manual_input(&self, _path: &Path) -> Result<MantDocument, String> {
+            self.calls.lock().expect("calls lock").push("manual-input");
             self.direct.clone()
         }
 
@@ -977,7 +1237,7 @@ mod tests {
         QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
-                name: " tool ".to_owned(),
+                selector: " tool ".to_owned(),
                 source: None,
                 section: None,
             },
@@ -1009,7 +1269,7 @@ mod tests {
         let request = QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
-                name: "tool".to_owned(),
+                selector: "tool".to_owned(),
                 source: None,
                 section: Some("3".to_owned()),
             },
@@ -1051,7 +1311,7 @@ mod tests {
         let request = QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
-                name: "tool".to_owned(),
+                selector: "tool".to_owned(),
                 source: Some("team".to_owned()),
                 section: None,
             },
@@ -1061,7 +1321,7 @@ mod tests {
         assert_eq!(
             result.address,
             Some(DocumentAddress::Markdown {
-                name: "tool".to_owned(),
+                path: "tool".to_owned(),
                 origin: MarkdownOrigin::Source {
                     name: "team".to_owned(),
                 },
@@ -1075,6 +1335,54 @@ mod tests {
             *host.calls.lock().expect("calls lock"),
             ["source", "markdown"]
         );
+    }
+
+    #[test]
+    fn canonical_catalog_paths_resolve_exact_addresses() {
+        let mut markdown = host(Err("manual must not be read".to_owned()));
+        markdown.registered_document = Some(PathBuf::from("/documents/en/tool.md"));
+        markdown.markdown = Ok("# Tool\n\nBody.\n".to_owned());
+        let request = QueryRequest {
+            schema: RequestSchema::V7,
+            input: QueryInput::Document {
+                selector: "documents/en/tool".to_owned(),
+                source: None,
+                section: None,
+            },
+            view: QueryView::Full {},
+        };
+        let result = query_with(&request, QueryPolicy::default(), &markdown).expect("canonical");
+        assert_eq!(
+            result.address,
+            Some(DocumentAddress::Markdown {
+                path: "en/tool".to_owned(),
+                origin: MarkdownOrigin::Documents,
+            })
+        );
+        assert_eq!(
+            *markdown.calls.lock().expect("calls"),
+            ["address", "markdown"]
+        );
+
+        let manual = host(Ok(document(SourceFormat::Man, false, true)));
+        let request = QueryRequest {
+            schema: RequestSchema::V7,
+            input: QueryInput::Document {
+                selector: "manual/1/tool".to_owned(),
+                source: None,
+                section: None,
+            },
+            view: QueryView::Full {},
+        };
+        let result = query_with(&request, QueryPolicy::default(), &manual).expect("manual path");
+        assert_eq!(
+            result.address,
+            Some(DocumentAddress::Manual {
+                name: "tool".to_owned(),
+                section: "1".to_owned(),
+            })
+        );
+        assert_eq!(*manual.calls.lock().expect("calls"), ["locate", "parse"]);
     }
 
     #[test]
@@ -1141,7 +1449,7 @@ mod tests {
         let request = QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
-                name: "tool".to_owned(),
+                selector: "tool".to_owned(),
                 source: None,
                 section: Some("7".to_owned()),
             },
@@ -1210,7 +1518,7 @@ mod tests {
                 &QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: " ".to_owned(),
+                        selector: " ".to_owned(),
                         source: None,
                         section: None,
                     },
@@ -1320,8 +1628,9 @@ mod tests {
         let result = query_with(
             &QueryRequest {
                 schema: RequestSchema::V7,
-                input: QueryInput::MarkdownFile {
+                input: QueryInput::File {
                     path: "docs/tool.md".to_owned(),
+                    format: InputFormat::Markdown,
                 },
                 view: QueryView::Full {},
             },

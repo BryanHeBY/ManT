@@ -12,8 +12,10 @@ use std::collections::HashMap;
 
 use mant_ast::{
     Block, DefinitionIdentity, DefinitionRole, DocumentAddress, Inline, ListKind, QueryBundle,
-    Section, SourceFormat, TldrCommandPart, TldrDocument, TldrOrigin,
+    Section, SourceFormat, TldrDocument,
 };
+#[cfg(test)]
+use mant_ast::{TldrCommandPart, TldrOrigin};
 #[cfg(test)]
 use ratatui::text::Line;
 use ratatui::{
@@ -335,53 +337,41 @@ impl DocumentBuilder {
         for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
             self.push(LogicalLine::empty().surface(LineSurface::Tldr));
         }
-        self.push(
-            LogicalLine::plain(
-                0,
-                format!("TLDR QUICK REFERENCE · {}", tldr.title),
-                Style::default()
-                    .fg(theme::MAUVE)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .surface(LineSurface::Tldr),
-        );
-        for (index, description) in tldr.description.iter().enumerate() {
-            if index > 0 {
-                self.push(LogicalLine::empty().surface(LineSurface::Tldr));
-            }
-            self.push(
-                LogicalLine::plain(0, description.clone(), Style::default().fg(theme::TEXT))
-                    .surface(LineSurface::Tldr),
-            );
-        }
-        for example in &tldr.examples {
-            self.tldr_example(example);
-        }
-        if let Some(link) = &tldr.more_information {
-            self.push(LogicalLine::empty().surface(LineSurface::Tldr));
-            self.push(
-                LogicalLine::plain(
-                    0,
-                    format!("More information: {link}"),
-                    Style::default()
-                        .fg(theme::BLUE)
-                        .add_modifier(Modifier::UNDERLINED),
+        for line in crate::tldr::layout_tldr(tldr) {
+            let command = line.spans.iter().any(|span| {
+                matches!(
+                    span.role,
+                    crate::tldr::TldrRole::Command | crate::tldr::TldrRole::Placeholder
                 )
-                .surface(LineSurface::Tldr),
-            );
-        }
-        if tldr.origin == TldrOrigin::TldrPages {
-            self.push(
-                LogicalLine::plain(
-                    0,
-                    format!(
-                        "tldr-pages · CC BY 4.0 · {} · {}",
-                        tldr.platform, tldr.language
-                    ),
-                    Style::default().fg(theme::SUBTEXT),
-                )
-                .surface(LineSurface::Tldr),
-            );
+            });
+            let links = line
+                .spans
+                .iter()
+                .filter(|span| span.role == crate::tldr::TldrRole::Link)
+                .filter_map(|span| tldr.more_information.as_ref().map(|uri| (span, uri)))
+                .map(|(span, uri)| LogicalLinkRange {
+                    target: LinkTarget::External(uri.clone()),
+                    start_column: 0,
+                    end_column: UnicodeWidthStr::width(span.text.as_str()),
+                })
+                .collect();
+            self.push(LogicalLine {
+                indent: line.indent,
+                continuation_indent: line.indent,
+                spans: line
+                    .spans
+                    .into_iter()
+                    .map(|span| Span::styled(span.text, tldr_style(span.role)))
+                    .collect(),
+                surface: LineSurface::Tldr,
+                wrap_mode: if command {
+                    WrapMode::Character
+                } else {
+                    WrapMode::Word
+                },
+                table_cells: None,
+                links,
+            });
         }
         for _ in 0..TLDR_VERTICAL_PADDING_ROWS {
             self.push(LogicalLine::empty().surface(LineSurface::Tldr));
@@ -404,41 +394,6 @@ impl DocumentBuilder {
                 Style::default().fg(theme::YELLOW),
             ));
         }
-    }
-
-    fn tldr_example(&mut self, example: &mant_ast::TldrExample) {
-        self.push(LogicalLine::empty().surface(LineSurface::Tldr));
-        self.push(
-            LogicalLine::plain(
-                0,
-                example.description.clone(),
-                Style::default().fg(theme::GREEN),
-            )
-            .surface(LineSurface::Tldr),
-        );
-        let spans = example
-            .command_parts
-            .iter()
-            .flat_map(|part| match part {
-                TldrCommandPart::Text { value } => crate::code::highlight(vec![Span::styled(
-                    value.clone(),
-                    Style::default().fg(theme::TEXT),
-                )]),
-                TldrCommandPart::Placeholder { value } => vec![Span::styled(
-                    value.clone(),
-                    Style::default().fg(theme::YELLOW),
-                )],
-            })
-            .collect();
-        self.push(LogicalLine {
-            indent: 2,
-            continuation_indent: 2,
-            spans,
-            surface: LineSurface::Tldr,
-            wrap_mode: WrapMode::Character,
-            table_cells: None,
-            links: Vec::new(),
-        });
     }
 
     fn anchor(&mut self, item: NavItem) {
@@ -794,6 +749,23 @@ impl DocumentBuilder {
     }
 }
 
+fn tldr_style(role: crate::tldr::TldrRole) -> Style {
+    use crate::tldr::TldrRole;
+
+    match role {
+        TldrRole::Title => Style::default()
+            .fg(theme::MAUVE)
+            .add_modifier(Modifier::BOLD),
+        TldrRole::Body | TldrRole::Command => Style::default().fg(theme::TEXT),
+        TldrRole::Example => Style::default().fg(theme::GREEN),
+        TldrRole::Placeholder => Style::default().fg(theme::YELLOW),
+        TldrRole::Link => Style::default()
+            .fg(theme::BLUE)
+            .add_modifier(Modifier::UNDERLINED),
+        TldrRole::Attribution => Style::default().fg(theme::SUBTEXT),
+    }
+}
+
 fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
     let mut ids = Vec::new();
     for node in nodes {
@@ -1020,11 +992,26 @@ fn markdown_reference_address(
     current: Option<&DocumentAddress>,
     name: &str,
 ) -> Option<DocumentAddress> {
-    let DocumentAddress::Markdown { origin, .. } = current? else {
+    let DocumentAddress::Markdown { path, origin } = current? else {
         return None;
     };
+    let mut components = path.split('/').collect::<Vec<_>>();
+    components.pop();
+    for component in name.split('/') {
+        match component {
+            "." => {}
+            ".." => {
+                components.pop()?;
+            }
+            value if !value.is_empty() => components.push(value),
+            _ => return None,
+        }
+    }
+    if components.is_empty() {
+        return None;
+    }
     Some(DocumentAddress::Markdown {
-        name: name.to_owned(),
+        path: components.join("/"),
         origin: origin.clone(),
     })
 }
@@ -1244,7 +1231,7 @@ mod tests {
     #[test]
     fn markdown_references_keep_the_current_source_and_fragment() {
         let current = DocumentAddress::Markdown {
-            name: "about_Profiles".to_owned(),
+            path: "about_Profiles".to_owned(),
             origin: mant_ast::MarkdownOrigin::Source {
                 name: "pwsh7".to_owned(),
             },
@@ -1265,7 +1252,7 @@ mod tests {
             lines[0].links[0].target,
             LinkTarget::Document {
                 address: DocumentAddress::Markdown {
-                    name: "Start-Process".to_owned(),
+                    path: "Start-Process".to_owned(),
                     origin: mant_ast::MarkdownOrigin::Source {
                         name: "pwsh7".to_owned(),
                     },
@@ -1501,11 +1488,9 @@ mod tests {
             .iter()
             .find(|line| line.to_string().contains("demo --output file"))
             .expect("tldr command");
-        assert!(
-            command.spans.iter().any(|span| {
-                span.content == "--output" && span.style.fg == Some(theme::HEADING)
-            })
-        );
+        assert!(command.spans.iter().any(|span| {
+            span.content.contains("--output") && span.style.fg == Some(theme::TEXT)
+        }));
         assert!(
             command
                 .spans

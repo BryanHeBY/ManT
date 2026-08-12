@@ -50,9 +50,9 @@ fn help_groups_the_public_query_surface() {
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let help = String::from_utf8(output.stdout).expect("UTF-8 help");
-    assert!(help.contains("mant <NAME|MARKDOWN|-> [OPTIONS]"));
-    assert!(help.contains("mant README.md"));
-    assert!(help.contains("cat guide.md | mant -"));
+    assert!(help.contains("mant <SELECTOR> [OPTIONS]"));
+    assert!(help.contains("mant --input README.md"));
+    assert!(help.contains("cat guide.md | mant --input - --input-format markdown"));
     assert!(help.contains("Document selection:"));
     assert!(help.contains("Search:"));
     assert!(help.contains("Integration:"));
@@ -204,7 +204,7 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"git"},"view":{"kind":"full"},"futureField":true}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#,
         )
         .expect("write request");
     let output = child.wait_with_output().expect("wait for mant");
@@ -220,7 +220,15 @@ fn invalid_stdin_request_uses_status_two_without_runtime_noise() {
 #[test]
 fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
     let mut child = Command::new(executable())
-        .args(["-", "--format", "json", "--compact"])
+        .args([
+            "--input",
+            "-",
+            "--input-format",
+            "markdown",
+            "--format",
+            "json",
+            "--compact",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -245,6 +253,59 @@ fn direct_stdin_reads_markdown_without_extending_the_request_schema() {
         value["document"]["sections"][0]["blocks"][0]["items"][0]["identity"]["names"][0],
         "--help"
     );
+}
+
+#[test]
+fn explicit_roff_files_and_stdin_use_the_native_parser() {
+    let path =
+        std::env::temp_dir().join(format!("mant-direct-roff-process-{}.1", std::process::id()));
+    let source = b".TH DIRECT-ROFF 1\n.SH NAME\ndirect-roff \\- standalone input\n";
+    fs::write(&path, source).expect("write roff input");
+
+    let file = Command::new(executable())
+        .args([
+            "--input",
+            path.to_str().expect("UTF-8 path"),
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .output()
+        .expect("query roff file");
+    fs::remove_file(path).expect("remove roff input");
+    assert!(file.status.success(), "{file:?}");
+    assert!(file.stderr.is_empty());
+    let file: serde_json::Value = serde_json::from_slice(&file.stdout).expect("roff file JSON");
+    assert_eq!(file["document"]["source"]["format"], "man");
+    assert_eq!(file["document"]["meta"]["section"], "1");
+
+    let mut child = Command::new(executable())
+        .args([
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start roff stdin query");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(source)
+        .expect("write roff stdin");
+    let stdin = child.wait_with_output().expect("wait for roff stdin query");
+    assert!(stdin.status.success(), "{stdin:?}");
+    assert!(stdin.stderr.is_empty());
+    let stdin: serde_json::Value = serde_json::from_slice(&stdin.stdout).expect("roff stdin JSON");
+    assert_eq!(stdin["label"], "DIRECT-ROFF");
+    assert_eq!(stdin["document"]["source"]["format"], "man");
 }
 
 #[test]
@@ -300,7 +361,7 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
     assert_eq!(result["sources"][0]["action"], "updated");
     assert_eq!(result["sources"][0]["documents"], 1);
     let installed = data_root.join("documents/sources/team");
-    assert!(installed.join("source-tool.md").is_file());
+    assert!(installed.join("reference/source-tool.md").is_file());
     assert!(installed.join(".mant-source.toml").is_file());
     assert!(!installed.join("README.md").exists());
 
@@ -456,6 +517,7 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
 
     let direct = Command::new(executable())
         .args([
+            "--input",
             path.to_str().expect("UTF-8 path"),
             "--format",
             "json",
@@ -483,8 +545,9 @@ fn direct_and_protocol_queries_read_local_markdown_files_by_path() {
     let request = serde_json::json!({
         "schema": "mant.request/v7",
         "input": {
-            "kind": "markdown-file",
+            "kind": "file",
             "path": path.to_str().expect("UTF-8 path"),
+            "format": "markdown",
         },
         "view": { "kind": "full" },
     });
@@ -526,6 +589,7 @@ fn cli_json_remains_the_lowering_diagnostic_surface() {
 
     let output = Command::new(executable())
         .args([
+            "--input",
             path.to_str().expect("UTF-8 path"),
             "--format",
             "json",
@@ -558,6 +622,7 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
 
     let direct = Command::new(executable())
         .args([
+            "--input",
             path.to_str().expect("UTF-8 path"),
             "--outline=entries",
             "--format",
@@ -586,8 +651,9 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
     let request = serde_json::json!({
         "schema": "mant.request/v7",
         "input": {
-            "kind": "markdown-file",
+            "kind": "file",
             "path": path.to_str().expect("UTF-8 path"),
+            "format": "markdown",
         },
         "view": { "kind": "outline", "detail": "entries" },
     });
@@ -622,15 +688,36 @@ fn exact_semantic_option_spellings_survive_the_cli_boundary() {
     let path = path.to_str().expect("UTF-8 path");
 
     let outline = Command::new(executable())
-        .args([path, "--outline=entries", "--format", "json", "--compact"])
+        .args([
+            "--input",
+            path,
+            "--outline=entries",
+            "--format",
+            "json",
+            "--compact",
+        ])
         .output()
         .expect("query exact-selector outline");
     let dotted = Command::new(executable())
-        .args([path, "--explain=-ca.cert", "--format", "json", "--compact"])
+        .args([
+            "--input",
+            path,
+            "--explain=-ca.cert",
+            "--format",
+            "json",
+            "--compact",
+        ])
         .output()
         .expect("explain dotted option");
     let positional_help = Command::new(executable())
-        .args([path, "--explain=?", "--format", "json", "--compact"])
+        .args([
+            "--input",
+            path,
+            "--explain=?",
+            "--format",
+            "json",
+            "--compact",
+        ])
         .output()
         .expect("explain exact help command");
     fs::remove_file(path).expect("remove exact-selector fixture");
@@ -802,7 +889,7 @@ fn request_windows_suffix(fixture_root: &std::path::Path) -> std::process::Outpu
         .take()
         .expect("stdin")
         .write_all(
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","name":"ordered"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"ordered"},"view":{"kind":"full"}}"#,
         )
         .expect("write Windows suffix request");
     child.wait_with_output().expect("wait for suffix request")
@@ -1002,16 +1089,46 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
     let tldr = run(&["--tldr"]);
     assert!(tldr.status.success(), "{tldr:?}");
     assert!(tldr.stderr.is_empty());
-    let tldr = String::from_utf8(tldr.stdout).expect("tldr Markdown");
+    let tldr = String::from_utf8(tldr.stdout).expect("plain tldr output");
     assert!(tldr.contains("Cached quick reference."));
     assert!(!tldr.contains("native manual body"));
+    assert!(!tldr.contains("\u{1b}["));
+
+    let colored = run(&["--tldr", "--color", "always"]);
+    assert!(colored.status.success(), "{colored:?}");
+    assert!(colored.stderr.is_empty());
+    assert!(
+        String::from_utf8(colored.stdout)
+            .expect("colored tldr output")
+            .contains("\u{1b}[")
+    );
+
+    for selectors in [
+        vec!["1", "content-policy"],
+        vec!["content-policy(1)"],
+        vec!["manual/1/content-policy"],
+    ] {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        let output = command
+            .args(selectors)
+            .args(["--format", "json", "--compact"])
+            .env("MANT_MANPATH", &manual_root)
+            .env("MANT_TLDR_DIR", &tldr_root)
+            .output()
+            .expect("query man-style selector");
+        assert!(output.status.success(), "{output:?}");
+        let value: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("man-style selector JSON");
+        assert_eq!(value["document"]["meta"]["section"], "1");
+    }
 
     fs::remove_dir_all(root).expect("remove explicit-content fixture");
 }
 
 #[cfg(unix)]
 #[test]
-fn registered_names_ignore_nested_directories_and_symlinks() {
+fn registered_names_ignore_directory_symlinks() {
     use std::os::unix::fs::symlink;
 
     let root = std::env::temp_dir().join(format!(
@@ -1096,6 +1213,38 @@ fn manual_queries_accept_flat_user_man_roots() {
     assert_eq!(value["document"]["meta"]["section"], "1");
     assert_eq!(value["document"]["source"]["format"], "man");
 
+    let canonical = Command::new(executable())
+        .args(["manual/1/flat-native", "--format", "json", "--compact"])
+        .env("MANT_MANPATH", &root)
+        .output()
+        .expect("query canonical flat native manual");
+    assert!(canonical.status.success(), "{canonical:?}");
+    let canonical: serde_json::Value =
+        serde_json::from_slice(&canonical.stdout).expect("canonical manual JSON");
+    assert_eq!(canonical["address"]["kind"], "manual");
+    assert_eq!(canonical["address"]["section"], "1");
+
+    let catalog = Command::new(executable())
+        .args([
+            "--find",
+            "flat-native",
+            "--kind",
+            "manual",
+            "--format",
+            "json",
+            "--compact",
+        ])
+        .env("MANT_MANPATH", &root)
+        .output()
+        .expect("discover flat native manual");
+    assert!(catalog.status.success(), "{catalog:?}");
+    let catalog: serde_json::Value =
+        serde_json::from_slice(&catalog.stdout).expect("manual catalog JSON");
+    assert_eq!(
+        catalog["documents"][0]["catalogPath"],
+        "manual/1/flat-native"
+    );
+
     fs::remove_dir_all(root).expect("remove flat manual fixture");
 }
 
@@ -1123,19 +1272,19 @@ fn markdown_root_content_is_discoverable_selectable_and_searchable() {
         serde_json::from_slice::<serde_json::Value>(&output.stdout).expect("projection JSON")
     };
 
-    let outline = run_json(&[path, "--outline=sections"]);
+    let outline = run_json(&["--input", path, "--outline=sections"]);
     assert_eq!(outline["nodes"][0]["kind"], "document-root");
     assert_eq!(outline["nodes"][0]["path"], "root");
     assert_eq!(outline["nodes"].as_array().map(Vec::len), Some(1));
 
-    let excerpt = run_json(&[path, "--node", "root"]);
+    let excerpt = run_json(&["--input", path, "--node", "root"]);
     assert_eq!(excerpt["selections"][0]["kind"], "document-root");
     assert_eq!(
         excerpt["selections"][0]["blocks"][0]["children"][0]["value"],
         "Read the preface needle first."
     );
 
-    let search = run_json(&[path, "--search", "preface needle"]);
+    let search = run_json(&["--input", path, "--search", "preface needle"]);
     assert_eq!(search["total"], 1);
     assert_eq!(search["matches"][0]["node"]["kind"], "document-root");
     assert_eq!(search["matches"][0]["node"]["path"], "root");

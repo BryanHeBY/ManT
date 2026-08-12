@@ -144,7 +144,7 @@ fn assert_document_catalog(replies: &[Value]) {
         .expect("document catalog");
     assert_eq!(documents.len(), 3);
     assert!(documents.iter().any(|document| {
-        document["address"]["name"] == "mcp-registered"
+        document["address"]["path"] == "mcp-registered"
             && document["address"]["kind"] == "markdown"
             && document["address"]["origin"]["kind"] == "documents"
     }));
@@ -156,7 +156,7 @@ fn assert_document_catalog(replies: &[Value]) {
     assert_eq!(
         documents
             .iter()
-            .filter(|document| document["address"]["name"] == "mcp-suffix.exe")
+            .filter(|document| document["address"]["path"] == "mcp-suffix.exe")
             .count(),
         1,
         "listing must expose one canonical suffixed name"

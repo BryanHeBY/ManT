@@ -249,8 +249,9 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
         let path = project_file(relative);
         let bundle = mant_core::resolve_query(&QueryRequest {
             schema: RequestSchema::V7,
-            input: QueryInput::MarkdownFile {
+            input: QueryInput::File {
                 path: path.to_string_lossy().into_owned(),
+                format: mant_ast::InputFormat::Markdown,
             },
             view: QueryView::Full {},
         })

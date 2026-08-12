@@ -121,7 +121,7 @@ fn main() {}
 }
 
 #[test]
-fn lowers_flat_markdown_links_into_same_source_document_references() {
+fn lowers_hierarchical_markdown_links_into_same_source_document_references() {
     let document = parse_document(
         "[Start](Start-Process.md) [Guide](about_Profiles.markdown#examples) [Nested](../other.md)\n",
         Some("/docs/current.md".to_owned()),
@@ -141,7 +141,7 @@ fn lowers_flat_markdown_links_into_same_source_document_references() {
     )));
     assert!(children.iter().any(|inline| matches!(
         inline,
-        Inline::ExternalLink { uri, .. } if uri == "../other.md"
+        Inline::DocumentReference { name, fragment: None, .. } if name == "../other"
     )));
 }
 

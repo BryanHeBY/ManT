@@ -1,7 +1,7 @@
 //! Updates configured sources and atomically installs selected Markdown.
 
 use std::{
-    collections::BTreeSet,
+    collections::BTreeMap,
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
@@ -311,27 +311,57 @@ pub(in crate::update) fn install_selected_documents(
         ));
     }
 
-    let mut names = BTreeSet::new();
+    let mut selected = BTreeMap::<String, (String, u8, &PathBuf, &PathBuf)>::new();
     for (relative, path) in &candidates {
-        let public_name = path
-            .file_stem()
-            .and_then(OsStr::to_str)
-            .ok_or_else(|| format!("Markdown filename is not UTF-8: {}", relative.display()))?
-            .to_ascii_lowercase();
-        if !names.insert(public_name.clone()) {
-            return Err(format!(
-                "multiple selected files use the document name '{public_name}'; adjust include/exclude"
-            ));
-        }
-        let filename = path
-            .file_name()
+        let logical = markdown_logical_path(relative)?;
+        let key = logical.to_ascii_lowercase();
+        let priority = markdown_extension_priority(path)
             .ok_or_else(|| format!("invalid Markdown path: {}", relative.display()))?;
-        let installed = staging.join(filename);
+        match selected.get(&key) {
+            Some((existing, _, _, _)) if existing != &logical => {
+                return Err(format!(
+                    "selected Markdown paths '{existing}' and '{logical}' differ only by case"
+                ));
+            }
+            Some((_, existing_priority, _, _)) if *existing_priority <= priority => {}
+            _ => {
+                selected.insert(key, (logical, priority, relative, path));
+            }
+        }
+    }
+    for (_, _, relative, path) in selected.values() {
+        let installed = staging.join(relative);
+        let parent = installed
+            .parent()
+            .ok_or_else(|| format!("invalid Markdown path: {}", relative.display()))?;
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "could not create installed directory '{}': {error}",
+                parent.display()
+            )
+        })?;
         fs::copy(path, &installed)
             .map_err(|error| format!("could not install '{}': {error}", relative.display()))?;
         sync_file(&installed, "installed document")?;
+        #[cfg(unix)]
+        sync_directory(parent)?;
     }
-    Ok(candidates.len())
+    Ok(selected.len())
+}
+
+fn markdown_logical_path(relative: &Path) -> Result<String, String> {
+    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+    let stem = relative
+        .file_stem()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| format!("Markdown filename is not UTF-8: {}", relative.display()))?;
+    let path = parent.join(stem);
+    let components = path
+        .components()
+        .map(|component| component.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| format!("Markdown path is not UTF-8: {}", relative.display()))?;
+    Ok(components.join("/"))
 }
 
 fn collect_markdown(
@@ -379,11 +409,15 @@ fn collect_markdown(
 }
 
 fn is_markdown_file(path: &Path) -> bool {
-    path.extension()
-        .and_then(OsStr::to_str)
-        .is_some_and(|extension| {
-            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
-        })
+    markdown_extension_priority(path).is_some()
+}
+
+fn markdown_extension_priority(path: &Path) -> Option<u8> {
+    let extension = path.extension()?.to_str()?;
+    ["md", "markdown"]
+        .iter()
+        .position(|candidate| extension.eq_ignore_ascii_case(candidate))
+        .and_then(|index| u8::try_from(index).ok())
 }
 
 fn selector_matches(relative: &Path, selector: &str) -> bool {
@@ -685,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn install_is_flat_and_rejects_public_name_collisions() {
+    fn install_preserves_hierarchy_and_allows_repeated_leaf_names() {
         let root = temp("collision");
         let checkout = root.join("checkout");
         let staging = root.join("staging");
@@ -694,11 +728,13 @@ mod tests {
         fs::create_dir_all(&staging).expect("create staging");
         fs::write(checkout.join("one/tool.md"), "# one").expect("write first");
         fs::write(checkout.join("two/tool.markdown"), "# two").expect("write second");
-        assert!(
+        assert_eq!(
             install_selected_documents(&checkout, &staging, &source("."))
-                .expect_err("reject duplicate public name")
-                .contains("document name 'tool'")
+                .expect("install hierarchical documents"),
+            2
         );
+        assert!(staging.join("one/tool.md").is_file());
+        assert!(staging.join("two/tool.markdown").is_file());
         fs::remove_dir_all(root).expect("remove fixture");
     }
 

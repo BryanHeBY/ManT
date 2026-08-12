@@ -159,16 +159,27 @@ fn markdown_document_reference(destination: &str) -> Option<(String, Option<Stri
         .map_or((destination, None), |(path, fragment)| {
             (path, (!fragment.is_empty()).then(|| fragment.to_owned()))
         });
-    if path.contains(['/', '\\', '?']) {
+    if path.contains(['\\', '?']) || path.starts_with('/') || path.chars().any(char::is_control) {
         return None;
     }
-    let path = std::path::Path::new(path);
-    let extension = path.extension()?.to_str()?;
+    let physical = std::path::Path::new(path);
+    let extension = physical.extension()?.to_str()?;
     if !extension.eq_ignore_ascii_case("md") && !extension.eq_ignore_ascii_case("markdown") {
         return None;
     }
-    let name = path.file_stem()?.to_str()?;
-    (!name.is_empty()).then(|| (name.to_owned(), fragment))
+    let filename = physical.file_stem()?.to_str()?;
+    if filename.is_empty() {
+        return None;
+    }
+    let parent = physical
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new(""));
+    let logical = parent.join(filename).to_str()?.replace('\\', "/");
+    let valid = logical.split('/').all(|component| {
+        !component.is_empty()
+            && (matches!(component, "." | "..") || !component.chars().any(char::is_control))
+    });
+    valid.then_some((logical, fragment))
 }
 
 fn supported_link(link_type: LinkType) -> bool {

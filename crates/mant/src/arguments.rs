@@ -4,12 +4,12 @@
 //! Every action, projection, input mode, and output choice is a long option so
 //! humans and agents do not have to distinguish ad-hoc subcommand grammars.
 
-use std::{iter, path::Path};
+use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
 use mant_ast::{
-    CatalogDocumentKind, CatalogQuery, OutlineDetail, QueryInput, QueryRequest, QueryView,
-    RequestSchema, SearchCase, SearchScope, SearchSyntax, default_search_limit,
+    CatalogDocumentKind, CatalogQuery, InputFormat, OutlineDetail, QueryInput, QueryRequest,
+    QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
 // ── Public command model ───────────────────────────────────────────────────
@@ -50,6 +50,16 @@ pub(crate) enum QueryPresentation {
     Interactive,
     /// Render a deterministic representation to standard output.
     Output(QueryFormat),
+    /// Render the tldr semantic layout directly to a terminal.
+    Tldr(ColorMode),
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+pub(crate) enum ColorMode {
+    #[default]
+    Auto,
+    Always,
+    Never,
 }
 
 /// A discoverable JSON Schema exposed by the native process boundary.
@@ -106,6 +116,23 @@ enum SearchScopeMode {
     Markdown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum InputFormatMode {
+    Auto,
+    Markdown,
+    Roff,
+}
+
+impl From<InputFormatMode> for InputFormat {
+    fn from(value: InputFormatMode) -> Self {
+        match value {
+            InputFormatMode::Auto => Self::Auto,
+            InputFormatMode::Markdown => Self::Markdown,
+            InputFormatMode::Roff => Self::Roff,
+        }
+    }
+}
+
 impl From<SearchScopeMode> for SearchScope {
     fn from(value: SearchScopeMode) -> Self {
         match value {
@@ -120,7 +147,10 @@ impl From<SearchScopeMode> for SearchScope {
 pub(crate) enum QuerySource {
     Arguments(QueryRequest),
     StdinJson,
-    MarkdownStdin { view: QueryView },
+    InputStdin {
+        format: InputFormat,
+        view: QueryView,
+    },
 }
 
 /// One validated invocation of the native CLI.
@@ -172,17 +202,31 @@ pub(crate) enum Command {
     about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
     version,
-    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant README.md\n  mant --list\n  mant --find process --source pwsh7\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --tldr\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --prune-docs --dry-run\n  mant --update-tldr\n  mant --mcp",
+    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --update-docs\n  mant --mcp",
     group = ArgGroup::new("action")
-        .args(["name", "list", "find", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
+        .args(["selector", "input", "list", "find", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
 struct Cli {
-    /// Document name, local Markdown path, or `-` for standard input.
-    #[arg(value_name = "NAME|MARKDOWN|-", value_parser = non_empty)]
-    name: Option<String>,
+    /// Document selector, or a man-style SECTION NAME pair.
+    #[arg(value_name = "SELECTOR", value_parser = non_empty, num_args = 0..)]
+    selector: Vec<String>,
+
+    /// Read one explicit Markdown or roff file; use `-` for standard input.
+    #[arg(long, value_name = "PATH|-", value_parser = non_empty, help_heading = "Input")]
+    input: Option<String>,
+
+    /// Select the parser for `--input`; auto uses the filename suffix.
+    #[arg(
+        long,
+        value_name = "FORMAT",
+        value_enum,
+        requires = "input",
+        help_heading = "Input"
+    )]
+    input_format: Option<InputFormatMode>,
 
     /// List locally available documents grouped by source and manual section.
     #[arg(long, help_heading = "Discovery")]
@@ -201,6 +245,7 @@ struct Cli {
         long,
         value_name = "SECTION",
         value_parser = non_empty,
+        conflicts_with = "input",
         help_heading = "Document selection"
     )]
     section: Option<String>,
@@ -210,7 +255,7 @@ struct Cli {
         long,
         value_name = "SOURCE",
         value_parser = non_empty,
-        conflicts_with_all = ["section", "manual"],
+        conflicts_with_all = ["section", "manual", "input"],
         help_heading = "Document selection"
     )]
     source: Option<String>,
@@ -218,8 +263,8 @@ struct Cli {
     /// Print only a native manual, bypassing Markdown and tldr content.
     #[arg(
         long,
-        requires = "name",
-        conflicts_with = "tldr",
+        requires = "selector",
+        conflicts_with_all = ["tldr", "input"],
         help_heading = "Document selection"
     )]
     manual: bool,
@@ -227,8 +272,8 @@ struct Cli {
     /// Print only the available tldr quick reference.
     #[arg(
         long,
-        requires = "name",
-        conflicts_with_all = ["section", "manual", "outline", "node", "explain", "search", "ui"],
+        requires = "selector",
+        conflicts_with_all = ["section", "manual", "outline", "node", "explain", "search", "ui", "input"],
         help_heading = "Document selection"
     )]
     tldr: bool,
@@ -240,7 +285,6 @@ struct Cli {
         value_enum,
         num_args = 0..=1,
         default_missing_value = "entries",
-        requires = "name",
         conflicts_with_all = ["node", "explain"],
         help_heading = "Document selection"
     )]
@@ -251,7 +295,6 @@ struct Cli {
         long,
         value_name = "NODE",
         value_parser = non_empty,
-        requires = "name",
         conflicts_with = "explain",
         help_heading = "Document selection"
     )]
@@ -263,7 +306,6 @@ struct Cli {
         value_name = "ENTRY",
         value_parser = non_empty,
         allow_hyphen_values = true,
-        requires = "name",
         conflicts_with_all = ["outline", "node", "search"],
         help_heading = "Document selection"
     )]
@@ -275,7 +317,6 @@ struct Cli {
         visible_alias = "grep",
         value_name = "PATTERN",
         value_parser = non_empty,
-        requires = "name",
         conflicts_with_all = ["outline", "node", "explain"],
         help_heading = "Search"
     )]
@@ -350,7 +391,6 @@ struct Cli {
     /// Open the interactive terminal reader explicitly.
     #[arg(
         long,
-        requires = "name",
         conflicts_with_all = [
             "outline",
             "tldr",
@@ -420,7 +460,9 @@ struct Cli {
     #[arg(
         long,
         conflicts_with_all = [
-            "name",
+            "selector",
+            "input",
+            "input_format",
             "section",
             "source",
             "outline",
@@ -454,6 +496,16 @@ struct Cli {
     /// Output format. Full content defaults to markdown; outlines and search default to text.
     #[arg(long, value_name = "FORMAT", value_enum, help_heading = "Output")]
     format: Option<QueryFormat>,
+
+    /// Control ANSI colors for the default `--tldr` terminal presentation.
+    #[arg(
+        long,
+        value_enum,
+        requires = "tldr",
+        conflicts_with = "format",
+        help_heading = "Output"
+    )]
+    color: Option<ColorMode>,
 
     /// Omit JSON indentation. Query output also requires `--format json`.
     #[arg(long, help_heading = "Output")]
@@ -536,15 +588,26 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
         &view,
     )?;
     let source = normalize_query_source(
-        parsed.request_json,
-        parsed.name,
-        parsed.source,
-        parsed.section,
+        QuerySourceOptions {
+            request_json: parsed.request_json,
+            selectors: parsed.selector,
+            input_path: parsed.input,
+            input_format: parsed.input_format,
+            configured_source: parsed.source,
+            section: parsed.section,
+            tldr: parsed.tldr,
+        },
         view,
     )?;
     validate_manual_source(parsed.manual, &source)?;
-    let presentation =
-        normalize_presentation(parsed.ui, parsed.format, parsed.preserve_anchors, &source);
+    let presentation = normalize_presentation(
+        parsed.ui,
+        parsed.format,
+        parsed.preserve_anchors,
+        &source,
+        parsed.tldr,
+        parsed.color,
+    );
 
     Ok(Command::Query {
         source,
@@ -730,10 +793,12 @@ fn normalize_presentation(
     format: Option<QueryFormat>,
     preserve_anchors: bool,
     source: &QuerySource,
+    tldr: bool,
+    color: Option<ColorMode>,
 ) -> QueryPresentation {
     let view = match source {
         QuerySource::Arguments(request) => Some(&request.view),
-        QuerySource::MarkdownStdin { view } => Some(view),
+        QuerySource::InputStdin { view, .. } => Some(view),
         QuerySource::StdinJson => None,
     };
     let default_format = if view
@@ -747,6 +812,8 @@ fn normalize_presentation(
         QueryPresentation::Interactive
     } else if let Some(format) = format {
         QueryPresentation::Output(format)
+    } else if tldr {
+        QueryPresentation::Tldr(color.unwrap_or_default())
     } else if preserve_anchors {
         QueryPresentation::Output(QueryFormat::Markdown)
     } else if matches!(
@@ -762,75 +829,129 @@ fn normalize_presentation(
     }
 }
 
-fn normalize_query_source(
+struct QuerySourceOptions {
     request_json: bool,
-    name: Option<String>,
+    selectors: Vec<String>,
+    input_path: Option<String>,
+    input_format: Option<InputFormatMode>,
     configured_source: Option<String>,
     section: Option<String>,
+    tldr: bool,
+}
+
+fn normalize_query_source(
+    options: QuerySourceOptions,
     view: QueryView,
 ) -> Result<QuerySource, clap::Error> {
-    let source = if request_json {
+    let source = if options.request_json {
         QuerySource::StdinJson
-    } else {
-        let value = name.expect("clap requires one input source");
-        if value == "-" {
-            if section.is_some() {
+    } else if let Some(path) = options.input_path {
+        let format = options.input_format.map_or(InputFormat::Auto, Into::into);
+        if path == "-" {
+            if format == InputFormat::Auto {
                 return Err(command_error(
-                    ErrorKind::ArgumentConflict,
-                    "--section applies only to document names",
+                    ErrorKind::MissingRequiredArgument,
+                    "--input - requires --input-format markdown or roff",
                 ));
             }
-            if configured_source.is_some() {
-                return Err(command_error(
-                    ErrorKind::ArgumentConflict,
-                    "--source applies only to document names",
-                ));
-            }
-            QuerySource::MarkdownStdin { view }
+            QuerySource::InputStdin { format, view }
         } else {
-            let input = if is_markdown_path(&value) {
-                if section.is_some() {
-                    return Err(command_error(
-                        ErrorKind::ArgumentConflict,
-                        "--section applies only to document names",
-                    ));
-                }
-                if configured_source.is_some() {
-                    return Err(command_error(
-                        ErrorKind::ArgumentConflict,
-                        "--source applies only to document names",
-                    ));
-                }
-                QueryInput::MarkdownFile { path: value }
-            } else {
-                QueryInput::Document {
-                    name: value,
-                    source: configured_source,
-                    section,
-                }
-            };
             QuerySource::Arguments(QueryRequest {
                 schema: RequestSchema::V7,
-                input,
+                input: QueryInput::File { path, format },
                 view,
             })
         }
+    } else {
+        let (selector, section) =
+            normalize_document_operands(&options.selectors, options.section, options.tldr)?;
+        QuerySource::Arguments(QueryRequest {
+            schema: RequestSchema::V7,
+            input: QueryInput::Document {
+                selector,
+                source: options.configured_source,
+                section,
+            },
+            view,
+        })
     };
     Ok(source)
 }
 
-fn is_markdown_path(value: &str) -> bool {
-    let markdown_extension = Path::new(value)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
-        });
-    markdown_extension
-        || value.starts_with('.')
-        || value.contains('/')
-        || value.contains('\\')
-        || Path::new(value).is_absolute()
+fn normalize_document_operands(
+    operands: &[String],
+    explicit_section: Option<String>,
+    tldr: bool,
+) -> Result<(String, Option<String>), clap::Error> {
+    if tldr {
+        if operands.is_empty() {
+            return Err(command_error(
+                ErrorKind::MissingRequiredArgument,
+                "--tldr requires a page name",
+            ));
+        }
+        return Ok((operands.join("-").to_lowercase(), None));
+    }
+    match operands {
+        [selector] => {
+            if let Some((name, section)) = manual_reference(selector) {
+                if explicit_section.is_some() {
+                    return Err(command_error(
+                        ErrorKind::ArgumentConflict,
+                        "a name(section) selector cannot be combined with --section",
+                    ));
+                }
+                Ok((name, Some(section)))
+            } else {
+                Ok((selector.clone(), explicit_section))
+            }
+        }
+        [section, name] if likely_manual_section(section) => {
+            if explicit_section.is_some() {
+                return Err(command_error(
+                    ErrorKind::ArgumentConflict,
+                    "SECTION NAME cannot be combined with --section",
+                ));
+            }
+            Ok((name.clone(), Some(section.clone())))
+        }
+        [] => Err(command_error(
+            ErrorKind::MissingRequiredArgument,
+            "a document selector or --input is required",
+        )),
+        _ => Err(command_error(
+            ErrorKind::TooManyValues,
+            "use one document selector, or SECTION NAME for a native manual",
+        )),
+    }
+}
+
+fn manual_reference(selector: &str) -> Option<(String, String)> {
+    if selector.contains('/') || !selector.ends_with(')') {
+        return None;
+    }
+    let open = selector.rfind('(')?;
+    let name = &selector[..open];
+    let section = &selector[open + 1..selector.len() - 1];
+    (!name.is_empty()
+        && !section.is_empty()
+        && section.len() <= 16
+        && section
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric()))
+    .then(|| (name.to_owned(), section.to_owned()))
+}
+
+fn likely_manual_section(value: &str) -> bool {
+    value.len() <= 16
+        && (value
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_digit())
+            && value
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric())
+            || matches!(value, "l" | "n"))
 }
 
 fn non_empty(value: &str) -> Result<String, String> {
@@ -849,11 +970,13 @@ fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Erro
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        CatalogDocumentKind, CatalogQuery, OutlineDetail, QueryInput, QueryRequest, QueryView,
-        RequestSchema, SearchCase, SearchScope, SearchSyntax,
+        CatalogDocumentKind, CatalogQuery, InputFormat, OutlineDetail, QueryInput, QueryRequest,
+        QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
     };
 
-    use super::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract, parse};
+    use super::{
+        ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract, parse,
+    };
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(ToString::to_string).collect()
@@ -867,7 +990,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "git".to_owned(),
+                        selector: "git".to_owned(),
                         source: None,
                         section: None,
                     },
@@ -948,13 +1071,13 @@ mod tests {
             parse(&args(&["git", "--ui"])).expect("interactive query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    input: QueryInput::Document { ref name, .. },
+                    input: QueryInput::Document { ref selector, .. },
                     view: QueryView::Full {},
                     ..
                 }),
                 presentation: QueryPresentation::Interactive,
                 ..
-            } if name == "git"
+            } if selector == "git"
         ));
 
         for conflicting in ["--outline", "--search=git", "--format=json"] {
@@ -966,13 +1089,16 @@ mod tests {
     }
 
     #[test]
-    fn dispatches_markdown_files_and_direct_stdin_without_embedding_content() {
+    fn dispatches_explicit_files_and_direct_stdin_without_embedding_content() {
         for path in ["README.md", "docs/guide", "./notes"] {
             assert!(matches!(
-                parse(&args(&[path])).expect("Markdown file query"),
+                parse(&args(&["--input", path])).expect("input file query"),
                 Command::Query {
                     source: QuerySource::Arguments(QueryRequest {
-                        input: QueryInput::MarkdownFile { path: parsed },
+                        input: QueryInput::File {
+                            path: parsed,
+                            format: InputFormat::Auto,
+                        },
                         ..
                     }),
                     ..
@@ -981,9 +1107,17 @@ mod tests {
         }
 
         assert!(matches!(
-            parse(&args(&["-", "--outline"])).expect("piped Markdown outline"),
+            parse(&args(&[
+                "--input",
+                "-",
+                "--input-format",
+                "markdown",
+                "--outline"
+            ]))
+            .expect("piped Markdown outline"),
             Command::Query {
-                source: QuerySource::MarkdownStdin {
+                source: QuerySource::InputStdin {
+                    format: InputFormat::Markdown,
                     view: QueryView::Outline {
                         detail: OutlineDetail::Entries
                     }
@@ -993,10 +1127,10 @@ mod tests {
             }
         ));
         assert!(
-            parse(&args(&["README.md", "--section", "1"]))
-                .expect_err("Markdown has no man section selector")
+            parse(&args(&["--input", "README.md", "--section", "1"]))
+                .expect_err("input has no man section selector")
                 .to_string()
-                .contains("--section applies only to document names")
+                .contains("cannot be used with")
         );
     }
 
@@ -1028,7 +1162,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "printf".to_owned(),
+                        selector: "printf".to_owned(),
                         source: None,
                         section: Some("3".to_owned()),
                     },
@@ -1053,6 +1187,58 @@ mod tests {
                 }),
                 ..
             } if source.as_deref() == Some("team")
+        ));
+    }
+
+    #[test]
+    fn normalizes_man_style_and_hierarchical_selectors() {
+        for values in [vec!["1", "git"], vec!["git(1)"]] {
+            assert!(matches!(
+                parse(&args(&values)).expect("man-style selector"),
+                Command::Query {
+                    source: QuerySource::Arguments(QueryRequest {
+                        input: QueryInput::Document {
+                            ref selector,
+                            section: Some(ref section),
+                            ..
+                        },
+                        ..
+                    }),
+                    ..
+                } if selector == "git" && section == "1"
+            ));
+        }
+        assert!(matches!(
+            parse(&args(&["manual/1/git"])).expect("canonical selector"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    input: QueryInput::Document { ref selector, section: None, .. },
+                    ..
+                }),
+                ..
+            } if selector == "manual/1/git"
+        ));
+    }
+
+    #[test]
+    fn tldr_joins_multiword_topics_and_keeps_explicit_formats() {
+        assert!(matches!(
+            parse(&args(&["git", "checkout", "--tldr"])).expect("multiword tldr topic"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    input: QueryInput::Document { ref selector, .. },
+                    ..
+                }),
+                presentation: QueryPresentation::Tldr(ColorMode::Auto),
+                ..
+            } if selector == "git-checkout"
+        ));
+        assert!(matches!(
+            parse(&args(&["git", "--tldr", "--format", "json"])).expect("structured tldr output"),
+            Command::Query {
+                presentation: QueryPresentation::Output(QueryFormat::Json),
+                ..
+            }
         ));
     }
 
@@ -1087,7 +1273,7 @@ mod tests {
                     view: QueryView::Excerpt { ref nodes },
                     ..
                 }),
-                presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                presentation: QueryPresentation::Tldr(ColorMode::Auto),
                 manual_only: false,
                 ..
             } if nodes == &["tldr"]
@@ -1102,7 +1288,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "gcc".to_owned(),
+                        selector: "gcc".to_owned(),
                         source: None,
                         section: None,
                     },
@@ -1123,7 +1309,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "tar".to_owned(),
+                        selector: "tar".to_owned(),
                         source: None,
                         section: None,
                     },
@@ -1146,7 +1332,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "gcc".to_owned(),
+                        selector: "gcc".to_owned(),
                         source: None,
                         section: None,
                     },
@@ -1175,7 +1361,7 @@ mod tests {
                     source: QuerySource::Arguments(QueryRequest {
                         schema: RequestSchema::V7,
                         input: QueryInput::Document {
-                            name: "tar".to_owned(),
+                            selector: "tar".to_owned(),
                             source: None,
                             section: None,
                         },
@@ -1200,7 +1386,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "tar".to_owned(),
+                        selector: "tar".to_owned(),
                         source: None,
                         section: None,
                     },
@@ -1246,7 +1432,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "git".to_owned(),
+                        selector: "git".to_owned(),
                         source: None,
                         section: None,
                     },
@@ -1330,9 +1516,10 @@ mod tests {
             vec!["git", "--source", "team", "--manual"],
             vec!["git", "--manual", "--tldr"],
             vec!["git", "--section", "1", "--tldr"],
+            vec!["git", "--tldr", "--color", "always", "--format", "json"],
             vec!["git", "--tldr", "--node", "0"],
             vec!["git", "--tldr", "--ui"],
-            vec!["README.md", "--source", "team"],
+            vec!["--input", "README.md", "--source", "team"],
             vec!["--schema", "request", "--format", "json"],
             vec!["--mcp", "git"],
             vec!["--mcp", "--format", "json"],
@@ -1340,8 +1527,8 @@ mod tests {
             vec!["--mcp", "--tldr"],
             vec!["--mcp", "--update-tldr"],
             vec!["--update-tldr", "--preserve-anchors"],
-            vec!["README.md", "--manual"],
-            vec!["-", "--manual"],
+            vec!["--input", "README.md", "--manual"],
+            vec!["--input", "-", "--input-format", "markdown", "--manual"],
             vec!["--request-json", "--manual", "--format", "json"],
             vec!["--schema", "unknown"],
             vec!["update", "tldr"],
@@ -1370,7 +1557,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     schema: RequestSchema::V7,
                     input: QueryInput::Document {
-                        name: "--help".to_owned(),
+                        selector: "--help".to_owned(),
                         source: None,
                         section: None,
                     },
