@@ -9,13 +9,20 @@ mod error;
 mod mcp;
 mod presentation;
 
-use std::io::{self, IsTerminal, Read, Write};
+use std::{
+    collections::BTreeMap,
+    fmt::Write as _,
+    io::{self, IsTerminal, Read, Write},
+};
 
 use arguments::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
 };
-use mant_ast::{QueryBundle, QueryRequest, QueryView, TldrCacheUpdate};
+use mant_ast::{
+    CatalogQuery, DocumentAddress, DocumentCatalog, MarkdownOrigin, QueryBundle, QueryRequest,
+    QueryView, TldrCacheUpdate,
+};
 use mant_core::QueryPolicy;
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
@@ -65,6 +72,7 @@ struct TerminalCapabilities {
 // ── Host boundary ─────────────────────────────────────────────────────────
 
 trait CliHost {
+    fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure>;
     fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure>;
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
@@ -75,6 +83,10 @@ trait CliHost {
 struct SystemHost;
 
 impl CliHost for SystemHost {
+    fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
+        mant_core::discover_documents(query).map_err(Failure::operational)
+    }
+
     fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
         mant_core::resolve_query_with_policy(request, policy).map_err(query_failure)
     }
@@ -288,6 +300,21 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             }
             SchemaContract::All => render_json(&mant_ast::query_json_schema_catalog(), pretty),
         },
+        Command::Catalog {
+            query,
+            grouped,
+            format,
+            pretty,
+        } => {
+            let catalog = host.discover(&query)?;
+            match format {
+                QueryFormat::Json => render_json(&catalog, pretty),
+                QueryFormat::Text => Ok(render_catalog_text(&catalog, grouped)),
+                QueryFormat::Markdown | QueryFormat::Man => {
+                    unreachable!("argument validation limits catalog formats")
+                }
+            }
+        }
         Command::Mcp => unreachable!("MCP mode is dispatched before normal CLI execution"),
         Command::UpdateDocs { .. } => {
             unreachable!("document updates are dispatched before normal execution")
@@ -316,6 +343,55 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             input,
             host,
         ),
+    }
+}
+
+fn render_catalog_text(catalog: &DocumentCatalog, grouped: bool) -> String {
+    if !grouped {
+        let mut output = String::new();
+        for document in &catalog.documents {
+            let (category, kind) = catalog_category(&document.address);
+            writeln!(output, "{category}\t{}\t{kind}", document.address.name())
+                .expect("writing to String cannot fail");
+        }
+        return output;
+    }
+
+    let mut categories = BTreeMap::<String, Vec<&str>>::new();
+    for document in &catalog.documents {
+        let (category, _) = catalog_category(&document.address);
+        categories
+            .entry(category)
+            .or_default()
+            .push(document.address.name());
+    }
+    let mut output = String::new();
+    for (index, (category, names)) in categories.into_iter().enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+        output.push_str(&category);
+        output.push('\n');
+        for name in names {
+            output.push_str("  ");
+            output.push_str(name);
+            output.push('\n');
+        }
+    }
+    output
+}
+
+fn catalog_category(address: &DocumentAddress) -> (String, &'static str) {
+    match address {
+        DocumentAddress::Markdown {
+            origin: MarkdownOrigin::Documents,
+            ..
+        } => ("documents".to_owned(), "markdown"),
+        DocumentAddress::Markdown {
+            origin: MarkdownOrigin::Source { name },
+            ..
+        } => (name.clone(), "markdown"),
+        DocumentAddress::Manual { section, .. } => (format!("manual/{section}"), "manual"),
     }
 }
 
@@ -449,14 +525,15 @@ mod tests {
     };
 
     use mant_ast::{
-        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-        DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle,
-        QueryInput, QueryRequest, QuerySchema, Section, SourceFormat, TldrCacheAction,
-        TldrCacheUpdate, TldrDocument, TldrOrigin,
+        Block, CatalogSchema, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole,
+        DocumentMeta, DocumentSchema, DocumentSource, DocumentSummary, Inline, LayoutHint,
+        MantDocument, Producer, QueryBundle, QueryInput, QueryRequest, QuerySchema, Section,
+        SourceFormat, TldrCacheAction, TldrCacheUpdate, TldrDocument, TldrOrigin,
     };
 
     use super::{
-        CLI_PROTOCOL_VERSION, CliHost, Failure, QueryPolicy, TerminalCapabilities,
+        CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
+        MarkdownOrigin, QueryPolicy, TerminalCapabilities,
         arguments::{self, Command, QueryFormat, QueryPresentation},
         resolve_process_presentation, run_with_host,
     };
@@ -611,6 +688,35 @@ mod tests {
     }
 
     impl CliHost for FakeHost {
+        fn discover(&self, _query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
+            Ok(DocumentCatalog {
+                schema: CatalogSchema::V7,
+                total: 2,
+                returned: 2,
+                offset: 0,
+                truncated: false,
+                next_offset: None,
+                documents: vec![
+                    DocumentSummary {
+                        address: DocumentAddress::Markdown {
+                            name: "guide".to_owned(),
+                            origin: MarkdownOrigin::Source {
+                                name: "team".to_owned(),
+                            },
+                        },
+                        path: "/data/team/guide.md".to_owned(),
+                    },
+                    DocumentSummary {
+                        address: DocumentAddress::Manual {
+                            name: "printf".to_owned(),
+                            section: "3".to_owned(),
+                        },
+                        path: "/usr/share/man/man3/printf.3".to_owned(),
+                    },
+                ],
+            })
+        }
+
         fn query(
             &self,
             request: &QueryRequest,
@@ -1183,6 +1289,31 @@ mod tests {
         assert_eq!(value["excerptSchema"], "mant.excerpt/v7");
         assert_eq!(value["searchSchema"], "mant.search/v7");
         assert_eq!(value["catalogSchema"], "mant.catalog/v7");
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn catalog_lists_grouped_documents_and_emits_flat_find_records() {
+        let host = FakeHost::new();
+        let (status, output, diagnostics) = invoke(&["--list"], b"", &host);
+        assert_eq!(status, 0);
+        assert_eq!(output, "manual/3\n  printf\n\nteam\n  guide\n");
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(&["--find", "guide"], b"", &host);
+        assert_eq!(status, 0);
+        assert_eq!(output, "team\tguide\tmarkdown\nmanual/3\tprintf\tmanual\n");
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["--find", "guide", "--format", "json", "--compact"],
+            b"",
+            &host,
+        );
+        assert_eq!(status, 0);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("catalog JSON");
+        assert_eq!(value["schema"], "mant.catalog/v7");
+        assert_eq!(value["documents"][0]["address"]["name"], "guide");
         assert!(diagnostics.is_empty());
     }
 

@@ -8,8 +8,8 @@ use std::{iter, path::Path};
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
 use mant_ast::{
-    OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope,
-    SearchSyntax, default_search_limit,
+    CatalogDocumentKind, CatalogQuery, OutlineDetail, QueryInput, QueryRequest, QueryView,
+    RequestSchema, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
 // ── Public command model ───────────────────────────────────────────────────
@@ -22,6 +22,22 @@ pub(crate) enum QueryFormat {
     // `man(1)`-faithful plain text of the full page (no tldr, no page noise).
     Man,
     Json,
+}
+
+/// Source family selected by document-catalog commands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum CatalogKindMode {
+    Markdown,
+    Manual,
+}
+
+impl From<CatalogKindMode> for CatalogDocumentKind {
+    fn from(value: CatalogKindMode) -> Self {
+        match value {
+            CatalogKindMode::Markdown => Self::Markdown,
+            CatalogKindMode::Manual => Self::Manual,
+        }
+    }
 }
 
 /// How a complete native query is presented to its caller.
@@ -118,6 +134,12 @@ pub(crate) enum Command {
         manual_only: bool,
         preserve_anchors: bool,
     },
+    Catalog {
+        query: CatalogQuery,
+        grouped: bool,
+        format: QueryFormat,
+        pretty: bool,
+    },
     UpdateTldr {
         pretty: bool,
     },
@@ -150,10 +172,10 @@ pub(crate) enum Command {
     about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
     version,
-    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant README.md\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --tldr\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --prune-docs --dry-run\n  mant --update-tldr\n  mant --mcp",
+    override_usage = "mant <NAME|MARKDOWN|-> [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant README.md\n  mant --list\n  mant --find process --source pwsh7\n  mant tool --source team\n  mant printf --manual\n  mant printf --section 3\n  mant git --tldr\n  mant git --format markdown\n  cat guide.md | mant -\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant tar --node acls --format markdown\n  mant tar --search=--acls --context 1\n  mant git --format json --compact\n  mant --schema request\n  mant --update-docs\n  mant --prune-docs --dry-run\n  mant --update-tldr\n  mant --mcp",
     group = ArgGroup::new("action")
-        .args(["name", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
+        .args(["name", "list", "find", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
@@ -162,12 +184,23 @@ struct Cli {
     #[arg(value_name = "NAME|MARKDOWN|-", value_parser = non_empty)]
     name: Option<String>,
 
+    /// List locally available documents grouped by source and manual section.
+    #[arg(long, help_heading = "Discovery")]
+    list: bool,
+
+    /// Find document names using a literal substring or regular expression.
+    #[arg(long, value_name = "PATTERN", value_parser = non_empty, help_heading = "Discovery")]
+    find: Option<String>,
+
+    /// Restrict document discovery to Markdown or native manuals.
+    #[arg(long, value_name = "KIND", value_enum, help_heading = "Discovery")]
+    kind: Option<CatalogKindMode>,
+
     /// Print only a manual section such as 1 or 3p.
     #[arg(
         long,
         value_name = "SECTION",
         value_parser = non_empty,
-        requires = "name",
         help_heading = "Document selection"
     )]
     section: Option<String>,
@@ -177,7 +210,6 @@ struct Cli {
         long,
         value_name = "SOURCE",
         value_parser = non_empty,
-        requires = "name",
         conflicts_with_all = ["section", "manual"],
         help_heading = "Document selection"
     )]
@@ -250,7 +282,7 @@ struct Cli {
     search: Option<String>,
 
     /// Interpret the search pattern as a regular expression instead of a literal.
-    #[arg(long, requires = "search", help_heading = "Search")]
+    #[arg(long, help_heading = "Search")]
     regex: bool,
 
     /// Select case handling for search matches.
@@ -258,7 +290,6 @@ struct Cli {
         long = "case",
         value_name = "POLICY",
         value_enum,
-        requires = "search",
         help_heading = "Search"
     )]
     search_case: Option<SearchCaseMode>,
@@ -287,21 +318,11 @@ struct Cli {
     context: Option<u16>,
 
     /// Return at most this many matches.
-    #[arg(
-        long,
-        value_name = "COUNT",
-        requires = "search",
-        help_heading = "Search"
-    )]
+    #[arg(long, value_name = "COUNT", help_heading = "Search")]
     limit: Option<u32>,
 
     /// Skip this many matches for deterministic pagination.
-    #[arg(
-        long,
-        value_name = "COUNT",
-        requires = "search",
-        help_heading = "Search"
-    )]
+    #[arg(long, value_name = "COUNT", help_heading = "Search")]
     offset: Option<u32>,
 
     /// Read a versioned `QueryRequest` JSON object from standard input.
@@ -385,7 +406,7 @@ struct Cli {
     )]
     protocol_version: bool,
 
-    /// Print a generated JSON Schema contract (`request`, `query`, `outline`, `excerpt`, `search`, or `all`).
+    /// Print a generated JSON Schema contract (`request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`).
     #[arg(
         long,
         value_name = "CONTRACT",
@@ -502,6 +523,10 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
             pretty: !parsed.compact,
         });
     }
+    if parsed.list || parsed.find.is_some() {
+        return normalize_catalog(parsed);
+    }
+    validate_query_search_options(&parsed)?;
 
     let view = normalize_query_view(&mut parsed);
     validate_output_options(
@@ -528,6 +553,90 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
         manual_only: parsed.manual,
         preserve_anchors: parsed.preserve_anchors,
     })
+}
+
+fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
+    if parsed.list && (parsed.regex || parsed.search_case.is_some()) {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--regex and --case require --find",
+        ));
+    }
+    if parsed.word || parsed.search_scope.is_some() || parsed.context.is_some() {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--word, --scope, and --context apply only to document-content search",
+        ));
+    }
+    if parsed.preserve_anchors {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--preserve-anchors does not apply to document discovery",
+        ));
+    }
+    if parsed.source.is_some() && parsed.kind == Some(CatalogKindMode::Manual)
+        || parsed.section.is_some() && parsed.kind == Some(CatalogKindMode::Markdown)
+    {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--source selects Markdown while --section selects native manuals",
+        ));
+    }
+    let format = parsed.format.unwrap_or(QueryFormat::Text);
+    if !matches!(format, QueryFormat::Text | QueryFormat::Json) {
+        return Err(command_error(
+            ErrorKind::InvalidValue,
+            "document discovery supports only text and json formats",
+        ));
+    }
+    if parsed.compact && format != QueryFormat::Json {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--compact requires --format json",
+        ));
+    }
+    Ok(Command::Catalog {
+        query: CatalogQuery {
+            pattern: parsed.find,
+            syntax: if parsed.regex {
+                SearchSyntax::Regex
+            } else {
+                SearchSyntax::Literal
+            },
+            case: parsed
+                .search_case
+                .map_or(SearchCase::Insensitive, Into::into),
+            kind: parsed.kind.map(Into::into),
+            source: parsed.source,
+            section: parsed.section,
+            limit: parsed.limit.unwrap_or(10_000),
+            offset: parsed.offset.unwrap_or(0),
+        },
+        grouped: parsed.list,
+        format,
+        pretty: !parsed.compact,
+    })
+}
+
+fn validate_query_search_options(parsed: &Cli) -> Result<(), clap::Error> {
+    if parsed.search.is_none()
+        && (parsed.regex
+            || parsed.search_case.is_some()
+            || parsed.limit.is_some()
+            || parsed.offset.is_some())
+    {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--regex, --case, --limit, and --offset require --search or --find",
+        ));
+    }
+    if parsed.kind.is_some() {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--kind requires --list or --find",
+        ));
+    }
+    Ok(())
 }
 
 fn normalize_query_view(parsed: &mut Cli) -> QueryView {
@@ -740,8 +849,8 @@ fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Erro
 #[cfg(test)]
 mod tests {
     use mant_ast::{
-        OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope,
-        SearchSyntax,
+        CatalogDocumentKind, CatalogQuery, OutlineDetail, QueryInput, QueryRequest, QueryView,
+        RequestSchema, SearchCase, SearchScope, SearchSyntax,
     };
 
     use super::{Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract, parse};
@@ -770,6 +879,67 @@ mod tests {
                 preserve_anchors: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_grouped_lists_and_grep_like_catalog_searches() {
+        assert_eq!(
+            parse(&args(&["--list", "--source", "pwsh7"])).expect("catalog list"),
+            Command::Catalog {
+                query: CatalogQuery {
+                    pattern: None,
+                    source: Some("pwsh7".to_owned()),
+                    limit: 10_000,
+                    ..CatalogQuery::default()
+                },
+                grouped: true,
+                format: QueryFormat::Text,
+                pretty: true,
+            }
+        );
+        assert_eq!(
+            parse(&args(&[
+                "--find",
+                "^PRINT",
+                "--regex",
+                "--case",
+                "sensitive",
+                "--kind",
+                "manual",
+                "--section",
+                "3",
+                "--limit",
+                "20",
+                "--format",
+                "json",
+                "--compact",
+            ]))
+            .expect("catalog search"),
+            Command::Catalog {
+                query: CatalogQuery {
+                    pattern: Some("^PRINT".to_owned()),
+                    syntax: SearchSyntax::Regex,
+                    case: SearchCase::Sensitive,
+                    kind: Some(CatalogDocumentKind::Manual),
+                    source: None,
+                    section: Some("3".to_owned()),
+                    limit: 20,
+                    offset: 0,
+                },
+                grouped: false,
+                format: QueryFormat::Json,
+                pretty: false,
+            }
+        );
+
+        for invalid in [
+            vec!["--list", "--regex"],
+            vec!["--list", "--format", "markdown"],
+            vec!["git", "--limit", "2"],
+            vec!["git", "--kind", "manual"],
+        ] {
+            assert!(parse(&args(&invalid)).is_err(), "accepted {invalid:?}");
+        }
     }
 
     #[test]

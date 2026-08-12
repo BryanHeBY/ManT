@@ -46,6 +46,8 @@
 
 ```text
 mant <NAME|MARKDOWN|-> [OPTIONS]
+mant --list [FILTERS]
+mant --find PATTERN [FILTERS]
 mant --request-json [--format FORMAT] [--compact]
 mant --schema CONTRACT [--compact]
 mant --update-docs [--compact]
@@ -68,6 +70,28 @@ excerpts, search, Markdown/text/JSON output, and MCP tools behave consistently
 across both sources. A full query opens the interactive reader when stdin and
 stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 `--format` make either behavior explicit.
+
+## Document Discovery
+
+- `--list`: List documents grouped by configured source or native manual section.
+- `--find PATTERN`: Filter document names and emit one stable record per match.
+- `--kind KIND`: Restrict discovery to `markdown` or `manual`.
+- `--source SOURCE`: Restrict Markdown discovery to one configured source.
+- `--section SECTION`: Restrict manual discovery to one exact section.
+
+Discovery uses a case-insensitive literal substring by default. `--find` also
+accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
+pagination. Plain `--find` output is tab-separated as
+`category`, `name`, and `kind`, while `--format json` returns
+`mant.catalog/v7`. `--list` groups the same catalog by `documents`, configured
+source name, or `manual/SECTION`.
+
+```sh
+mant --list
+mant --find process --source pwsh7
+mant --find '^git' --regex --kind manual
+mant --list --section 3 --format json
+```
 
 ## Input
 
@@ -476,7 +500,7 @@ JSON queries, schemas, protocol descriptions, and update reports.
 ## Integration
 
 - `--request-json`: Read one closed `mant.request/v7` object from standard input.
-- `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
+- `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
   diagnostics are omitted; an incomplete entry outline retains only

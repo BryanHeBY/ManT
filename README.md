@@ -103,6 +103,18 @@ scroll both panes, drag scrollbars, and resize the sidebar.
 
 ## Agent, script, and terminal output
 
+Discover installed Markdown and native manuals without opening each document:
+
+```sh
+mant --list
+mant --find process
+mant --find '^git' --regex --kind manual --format json
+```
+
+`--list` groups documents by source or manual section. `--find` emits stable
+tab-separated records by default, making it suitable for filtering and shell
+pipelines.
+
 Start with an outline and retrieve only the section or option that matters:
 
 ```sh

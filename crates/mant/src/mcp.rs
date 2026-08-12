@@ -327,8 +327,7 @@ impl MantMcpServer {
             mant_core::discover_documents(&query)
         })
         .await
-        .map_err(|error| format!("MCP document discovery worker failed: {error}"))?
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| format!("MCP document discovery worker failed: {error}"))??;
         Ok(Json(catalog))
     }
 

@@ -94,7 +94,7 @@ pub fn query_available_documents(
     query: &CatalogQuery,
 ) -> Result<DocumentCatalog, CatalogError> {
     validate_catalog_query(query)?;
-    let matcher = query
+    let compiled_pattern = query
         .pattern
         .as_deref()
         .map(|pattern| build_matcher(pattern, query.syntax, query.case))
@@ -112,10 +112,10 @@ pub fn query_available_documents(
             })
         })
         .filter_map(|document| {
-            let matches = matcher
+            let matched = compiled_pattern
                 .as_ref()
                 .map_or(Ok(true), |matcher| matcher.is_match(document.name.as_bytes()));
-            matches.ok().filter(|matches| *matches).map(|_| document)
+            matched.ok().filter(|matched| *matched).map(|_| document)
         })
         .collect::<Vec<_>>();
     filtered.sort_by(|left, right| {
@@ -175,6 +175,11 @@ fn validate_catalog_query(query: &CatalogQuery) -> Result<(), CatalogError> {
         return Err(CatalogError::InvalidLimit);
     }
     if query.source.is_some() && query.section.is_some() {
+        return Err(CatalogError::ConflictingSelectors);
+    }
+    if query.source.is_some() && query.kind == Some(CatalogDocumentKind::Manual)
+        || query.section.is_some() && query.kind == Some(CatalogDocumentKind::Markdown)
+    {
         return Err(CatalogError::ConflictingSelectors);
     }
     Ok(())

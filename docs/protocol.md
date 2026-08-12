@@ -122,6 +122,29 @@ mant --schema request > mant-request.schema.json
 mant --schema all --compact > mant-schemas.json
 ```
 
+## Document Catalog
+
+The native CLI and MCP server use one `mant.catalog/v7` discovery contract:
+
+```sh
+mant --list
+mant --find process
+mant --find '^git' --regex --kind manual --format json
+```
+
+`--list` groups human-readable text by configured Markdown source or native
+manual section. `--find` emits tab-separated `category`, `name`, and `kind`
+records by default. JSON output contains a flat, paginatable `documents` array;
+each row has an exact `address` and a provenance `path`. Paths are descriptive
+local state and must not be used as document identifiers.
+
+Markdown addresses distinguish the root `documents` directory from every
+configured source. Manual addresses contain both name and exact section, so
+shadowed Markdown candidates and multiple manual sections remain independently
+selectable. Literal matching is case-insensitive by default; exact names rank
+before prefixes and other substrings. Regex and case policies use the same
+values as document-content search.
+
 ## One-Shot Process Transport
 
 The stable machine invocation is:
