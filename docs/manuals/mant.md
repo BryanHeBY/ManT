@@ -432,7 +432,7 @@ document and history unchanged.
 - `l`, `Right`: Expand the current branch or select its first child.
 - `d`, `PageDown`: Scroll the content down.
 - `u`, `PageUp`: Scroll the content up.
-- `Ctrl+P`: Open the document finder.
+- `Ctrl+O`: Open the document finder.
 - `Alt+Left`: Return to the previous document or in-page jump.
 - `Alt+Right`: Move forward after returning.
 
@@ -453,7 +453,7 @@ active match uses a stronger background and moves into view.
 
 ### Document Finder
 
-The `Ctrl+P` window searches the complete local catalog while text is entered
+The `Ctrl+O` window searches the complete local catalog while text is entered
 and keeps the displayed result page bounded. Each match shows its configured
 Markdown source or exact native manual section. Exact names precede prefixes,
 which precede other substring matches. `Up` and `Down` select a result, `Enter`

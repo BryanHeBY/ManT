@@ -17,7 +17,7 @@ impl App {
             self.handle_overlay_key(key);
             return UpdateOutcome::Redraw;
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('p') {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('o') {
             self.open_document_finder();
             return UpdateOutcome::Redraw;
         }

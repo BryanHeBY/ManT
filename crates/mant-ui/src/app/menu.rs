@@ -84,7 +84,7 @@ pub(super) enum MenuAction {
 const MANUAL_MENU: &[MenuEntry] = &[
     MenuEntry {
         label: "Open Document…",
-        shortcut: "Ctrl+P",
+        shortcut: "Ctrl+O",
         action: MenuAction::OpenDocument,
     },
     MenuEntry {
@@ -505,7 +505,7 @@ impl App {
                 Line::raw("↑/↓ or j/k  select section"),
                 Line::raw("←/→ or h/l  move through the section tree"),
                 Line::raw("Enter        fold or unfold selected section"),
-                Line::raw("Ctrl+P       find and open a document"),
+                Line::raw("Ctrl+O       find and open a document"),
                 Line::raw("Alt+←/→      back / forward"),
                 Line::raw("Ctrl+F or /  find in current page"),
                 Line::raw("n / N        next / previous search match"),
