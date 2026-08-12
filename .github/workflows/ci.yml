@@ -131,18 +131,17 @@ jobs:
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
 
-      - name: Cache Cargo dependencies and build output
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Cache only third-party build products. Workspace and incremental
+      # artifacts are cheap to rebuild and made the old cache exceed 1 GiB.
+      - name: Cache compiled Cargo dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-            fuzz/target
-          key: cargo-v1-linux-x64-stable-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock') }}
-          restore-keys: |
-            cargo-v1-linux-x64-stable-
+          shared-key: linux-x64-stable
+          workspaces: |
+            . -> target
+            fuzz -> target
+          cache-bin: false
+          save-if: ${{ github.event_name == 'push' }}
 
       # The local script is the canonical verification boundary: formatting,
       # workspace tests, clippy, fuzz compilation, and executable smoke tests.
@@ -176,17 +175,12 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
-      - name: Cache Cargo dependencies and build output
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache compiled Cargo dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: cargo-v1-macos-arm64-stable-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            cargo-v1-macos-arm64-stable-
+          shared-key: macos-arm64-stable
+          cache-bin: false
+          save-if: ${{ github.event_name == 'push' }}
 
       # Compile and test the native workspace so the macOS target family is
       # exercised on every change, not only at release time. clang ships with
@@ -215,17 +209,12 @@ jobs:
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
 
-      - name: Cache Cargo dependencies and build output
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache compiled Cargo dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~\.cargo\registry\index
-            ~\.cargo\registry\cache
-            ~\.cargo\git\db
-            target
-          key: cargo-v1-windows-x64-stable-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            cargo-v1-windows-x64-stable-
+          shared-key: windows-x64-stable
+          cache-bin: false
+          save-if: ${{ github.event_name == 'push' }}
 
       - name: Build and test portable Windows product
         shell: pwsh
@@ -254,17 +243,12 @@ jobs:
       - name: Install minimum supported Rust toolchain
         run: rustup toolchain install "$RUST_MSRV" --profile minimal
 
-      - name: Cache Cargo dependencies and MSRV build output
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache compiled Cargo dependencies for MSRV
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_MSRV }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_MSRV }}-
+          shared-key: linux-x64-msrv
+          cache-bin: false
+          save-if: ${{ github.event_name == 'push' }}
 
       # Stable CI executes every test. The MSRV boundary only needs to prove
       # that every product target and feature still compiles on Rust 1.88.
@@ -300,17 +284,12 @@ jobs:
           rustup toolchain install stable --profile minimal --component llvm-tools-preview
           rustup default stable
 
-      - name: Cache Cargo dependencies and build output
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache compiled Cargo dependencies for coverage
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: cargo-v1-linux-x64-coverage-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            cargo-v1-linux-x64-coverage-
+          shared-key: linux-x64-coverage
+          cache-bin: false
+          save-if: ${{ github.event_name == 'push' }}
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@91ddec75689c4c78665b598d188dc821c5a43e5c # v2.85.9

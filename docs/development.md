@@ -58,6 +58,12 @@ macOS adds native compile and test coverage without repeating the Linux lint
 pass. Windows retains its full native verification boundary for Windows-only
 path, shell, packaging, and parser behavior.
 
+Each native job caches downloaded crates and compiled third-party dependencies
+using a key derived from its Rust compiler, Cargo manifests, lockfiles, and
+compiler environment. Workspace crates and incremental artifacts are excluded
+to keep restore time and repository cache use bounded. Pull requests may
+restore an existing cache but only branch pushes persist new entries.
+
 Focused commands are useful while iterating:
 
 ```sh

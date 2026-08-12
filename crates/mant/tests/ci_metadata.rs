@@ -17,6 +17,15 @@ fn ci_reuses_only_complete_exact_sha_runs_and_avoids_release_rebuilds() {
     assert!(workflow.contains("./scripts/check-windows.ps1 -BuildProfile debug"));
     assert!(workflow.contains("cargo +\"$RUST_MSRV\" check --locked --workspace"));
     assert!(!workflow.contains("name: Compile fuzz targets"));
+    assert_eq!(workflow.matches("uses: Swatinem/rust-cache@").count(), 5);
+    assert_eq!(workflow.matches("cache-bin: false").count(), 5);
+    assert_eq!(
+        workflow
+            .matches("save-if: ${{ github.event_name == 'push' }}")
+            .count(),
+        5
+    );
+    assert!(!workflow.contains("uses: actions/cache@"));
 
     let unix = include_str!("../../../scripts/check.sh");
     assert!(unix.contains("bash scripts/build-and-smoke.sh \"$profile\""));
