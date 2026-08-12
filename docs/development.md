@@ -47,6 +47,17 @@ runs clippy with all targets and features, builds the optimized executable,
 and smoke-tests its human and JSON surfaces. The result is
 `target/release/mant`.
 
+CI uses `--build-profile debug` for the final smoke test because its test and
+Clippy steps have already populated that profile. Local checks keep `release`
+as the default, and tagged publication performs a separate optimized build.
+When an exact commit has already completed every full CI job on `dev`, a
+fast-forward push of that commit to `main` verifies and reuses the recorded
+check suite instead of executing it twice. Direct pushes to `main`, pull
+requests, and manual runs still execute the full suite.
+macOS adds native compile and test coverage without repeating the Linux lint
+pass. Windows retains its full native verification boundary for Windows-only
+path, shell, packaging, and parser behavior.
+
 Focused commands are useful while iterating:
 
 ```sh
@@ -101,6 +112,9 @@ fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
+scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
+scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
+scripts/find-successful-ci.sh  Exact-commit full CI verification for automation
 scripts/generate-rust-licenses.sh  Rebuild the locked Rust license report
 scripts/install.sh           Latest-release installer for Linux and macOS
 scripts/install.ps1          Latest-release installer for Windows x64

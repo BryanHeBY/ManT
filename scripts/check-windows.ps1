@@ -1,5 +1,10 @@
 # Run the complete verification boundary for ManT's native Windows build.
 
+param(
+    [ValidateSet("debug", "release")]
+    [string]$BuildProfile = "release"
+)
+
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $true
 
@@ -89,23 +94,6 @@ Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
 Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
     -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--", "-D", "warnings"))
-Invoke-Native -Label "build release executable" -Program "cargo" `
-    -Arguments @("build", "--locked", "--release", "--package", "mant")
-
-$Mant = Join-Path $Root "target/release/mant.exe"
-if (-not (Test-Path -PathType Leaf $Mant)) {
-    throw "Cargo did not produce $Mant"
-}
-
-Write-Host "`n==> smoke-test release executable"
-$Help = (& $Mant --help) -join "`n"
-if ($LASTEXITCODE -ne 0 -or $Help -notmatch "mant <NAME\|MARKDOWN\|-> \[OPTIONS\]") {
-    throw "release help smoke test failed"
-}
-$Query = (& $Mant README.md --format json --compact) -join "`n"
-if ($LASTEXITCODE -ne 0 -or $Query -notmatch '"schema":"mant.query/v6"') {
-    throw "release Markdown query smoke test failed"
-}
+& (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile
 
 Write-Host "`nWindows verification succeeded"
-Write-Host "  executable: $Mant"

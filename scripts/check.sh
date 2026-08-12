@@ -6,6 +6,19 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
+profile=release
+if (( $# > 0 )); then
+  if [[ ${1:-} != --build-profile || $# != 2 ]]; then
+    echo "usage: check.sh [--build-profile debug|release]" >&2
+    exit 2
+  fi
+  profile=$2
+fi
+if [[ "$profile" != debug && "$profile" != release ]]; then
+  echo "usage: check.sh [--build-profile debug|release]" >&2
+  exit 2
+fi
+
 run() {
   local label=$1
   shift
@@ -19,28 +32,14 @@ run() {
 run "check Rust formatting" cargo fmt --all --check
 run "check Unix installer syntax" sh -n scripts/install.sh
 run "check screenshot script syntax" bash -n scripts/update-reader-screenshot.sh
+run "check product build script syntax" bash -n scripts/build-and-smoke.sh
+run "check CI verification script syntax" bash -n scripts/find-successful-ci.sh
 run "test Rust workspace" cargo test --locked --workspace
 run "lint Rust workspace" \
   cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run "compile fuzz targets" \
   cargo check --locked --manifest-path fuzz/Cargo.toml --bins
-run "build release executable" cargo build --locked --release --package mant
 
-MANT="$ROOT/target/release/mant"
-if [[ ! -x "$MANT" ]]; then
-  printf 'error: Cargo did not produce %s\n' "$MANT" >&2
-  exit 1
-fi
-
-printf '\n==> smoke-test release executable\n'
-help=$("$MANT" --help)
-grep -Fq 'mant <NAME|MARKDOWN|-> [OPTIONS]' <<<"$help"
-grep -Fq 'mant README.md' <<<"$help"
-grep -Fq -- '--ui' <<<"$help"
-
-query=$("$MANT" README.md --format json --compact)
-grep -Fq '"schema":"mant.query/v6"' <<<"$query"
-grep -Fq '"schema":"mant.document/v6"' <<<"$query"
+bash scripts/build-and-smoke.sh "$profile"
 
 printf '\nlocal verification succeeded\n'
-printf '  executable: %s\n' "$MANT"

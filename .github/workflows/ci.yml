@@ -12,6 +12,7 @@ on:
 # A pull request only needs to read the checked-out repository. Keep release
 # permissions out of this workflow so untrusted changes cannot publish data.
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -22,8 +23,41 @@ env:
   RUST_MSRV: 1.88.0
 
 jobs:
+  scope:
+    name: Plan CI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_full: ${{ steps.plan.outputs.run_full }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A fast-forward from dev to main carries the exact same tree and check
+      # suite. Reuse it only after the API confirms every full CI job passed
+      # for this SHA; direct main pushes and all other events still run fully.
+      - name: Decide whether this commit needs full CI
+        id: plan
+        shell: bash
+        run: |
+          run_full=true
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/main ]]; then
+            if ci_url=$(bash scripts/find-successful-ci.sh "$GITHUB_SHA" dev); then
+              run_full=false
+              echo "reusing complete dev CI: $ci_url"
+            fi
+          fi
+          echo "run_full=$run_full" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   supply-chain:
     name: Supply chain
+    needs: scope
+    if: needs.scope.outputs.run_full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
@@ -74,6 +108,8 @@ jobs:
 
   build:
     name: Build (Linux x64)
+    needs: scope
+    if: needs.scope.outputs.run_full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -109,14 +145,11 @@ jobs:
             cargo-v1-linux-x64-stable-
 
       # The local script is the canonical verification boundary: formatting,
-      # workspace tests, clippy, a release build, and executable smoke tests.
+      # workspace tests, clippy, fuzz compilation, and executable smoke tests.
+      # CI uses the already-warm debug profile; tagged releases independently
+      # build the optimized binary after proving this exact SHA passed CI.
       - name: Build and test
-        run: bash scripts/check.sh
-
-      # Keep the standalone libFuzzer harnesses compiling without adding
-      # instrumented fuzz execution to the normal CI runtime.
-      - name: Compile fuzz targets
-        run: cargo check --locked --manifest-path fuzz/Cargo.toml --bins
+        run: bash scripts/check.sh --build-profile debug
 
       - name: Verify vendored libmandoc matches upstream
         run: bash crates/libmandoc-rs/scripts/sync-vendor --verify
@@ -127,6 +160,8 @@ jobs:
     # certificates and are intentionally out of scope; this only compiles and
     # tests the native crates on macOS/arm64, which needs no secrets.
     name: Native (macOS arm64)
+    needs: scope
+    if: needs.scope.outputs.run_full == 'true'
     runs-on: macos-14
     timeout-minutes: 30
 
@@ -138,7 +173,7 @@ jobs:
 
       - name: Install stable Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup toolchain install stable --profile minimal
           rustup default stable
 
       - name: Cache Cargo dependencies and build output
@@ -159,13 +194,12 @@ jobs:
       - name: Test Rust workspace on macOS
         run: cargo test --locked --workspace
 
-      - name: Lint Rust workspace on macOS
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
-
   windows-native:
     # Windows builds the same memory-only libmandoc parser and manual fixtures
     # as Unix while Rust owns source I/O, decompression, and .so redirects.
     name: Native (Windows x64)
+    needs: scope
+    if: needs.scope.outputs.run_full == 'true'
     runs-on: windows-2025
     timeout-minutes: 30
 
@@ -195,10 +229,12 @@ jobs:
 
       - name: Build and test portable Windows product
         shell: pwsh
-        run: ./scripts/check-windows.ps1
+        run: ./scripts/check-windows.ps1 -BuildProfile debug
 
   rust-msrv:
     name: Rust MSRV (1.88.0)
+    needs: scope
+    if: needs.scope.outputs.run_full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -230,13 +266,19 @@ jobs:
           restore-keys: |
             cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_MSRV }}-
 
-      - name: Test Rust workspace on MSRV
-        run: cargo +"$RUST_MSRV" test --locked --workspace
+      # Stable CI executes every test. The MSRV boundary only needs to prove
+      # that every product target and feature still compiles on Rust 1.88.
+      - name: Check workspace on MSRV
+        run: >-
+          cargo +"$RUST_MSRV" check --locked --workspace
+          --all-targets --all-features
 
   coverage:
     # Coverage runs beside the canonical build so instrumentation never slows
     # or gates the primary verification path.
     name: Coverage
+    needs: scope
+    if: needs.scope.outputs.run_full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -290,3 +332,45 @@ jobs:
           disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  complete:
+    name: CI verified
+    if: always()
+    needs:
+      - scope
+      - supply-chain
+      - build
+      - macos-native
+      - windows-native
+      - rust-msrv
+      - coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Require a reused or newly completed full suite
+        shell: bash
+        run: |
+          [[ "$SCOPE_RESULT" == success ]]
+          if [[ "$RUN_FULL" == false ]]; then
+            echo "exact-SHA full CI was already completed on dev"
+            exit 0
+          fi
+          for result in \
+            "$SUPPLY_CHAIN_RESULT" \
+            "$BUILD_RESULT" \
+            "$MACOS_RESULT" \
+            "$WINDOWS_RESULT" \
+            "$MSRV_RESULT" \
+            "$COVERAGE_RESULT"; do
+            [[ "$result" == success ]]
+          done
+        env:
+          RUN_FULL: ${{ needs.scope.outputs.run_full }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          SUPPLY_CHAIN_RESULT: ${{ needs.supply-chain.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          MACOS_RESULT: ${{ needs.macos-native.result }}
+          WINDOWS_RESULT: ${{ needs.windows-native.result }}
+          MSRV_RESULT: ${{ needs.rust-msrv.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
