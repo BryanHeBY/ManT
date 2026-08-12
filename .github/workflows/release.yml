@@ -25,15 +25,23 @@ env:
 jobs:
   build:
     name: Package (${{ matrix.target }})
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: linux-x64
+            rust_target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
           - target: linux-arm64
+            rust_target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
           - target: windows-x64
+            rust_target: x86_64-pc-windows-msvc
             os: windows-2025
           # macOS remains available as a local source build. Public macOS
           # archives and hosted CI stay disabled until releases can be
@@ -61,6 +69,12 @@ jobs:
           rustup toolchain install stable --profile minimal --component clippy,rustfmt
           rustup default stable
 
+      - name: Install cargo-cyclonedx
+        uses: taiki-e/install-action@91ddec75689c4c78665b598d188dc821c5a43e5c # v2.85.9
+        with:
+          tool: cargo-cyclonedx@0.5.9
+          fallback: none
+
       # Rebuild and test natively on every release target. The checked
       # libmandoc configurations run on both Unix and Windows.
       - name: Build and test Unix release binaries
@@ -71,6 +85,48 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/check-windows.ps1
+
+      - name: Generate Unix CycloneDX SBOM
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          SOURCE_DATE_EPOCH=0 cargo cyclonedx \
+            --manifest-path crates/mant/Cargo.toml \
+            --format json \
+            --spec-version 1.5 \
+            --describe binaries \
+            --all-features \
+            --target '${{ matrix.rust_target }}' \
+            --target-in-filename
+          mkdir -p dist
+          sbom="mant-${RELEASE_TAG#v}-${{ matrix.target }}.cdx.json"
+          mv "crates/mant/mant_bin_${{ matrix.rust_target }}.cdx.json" "dist/$sbom"
+          (cd dist && sha256sum "$sbom" > "$sbom.sha256")
+
+      - name: Generate Windows CycloneDX SBOM
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SOURCE_DATE_EPOCH = "0"
+          cargo cyclonedx `
+            --manifest-path crates/mant/Cargo.toml `
+            --format json `
+            --spec-version 1.5 `
+            --describe binaries `
+            --all-features `
+            --target '${{ matrix.rust_target }}' `
+            --target-in-filename
+          New-Item dist -ItemType Directory -Force | Out-Null
+          $Version = $env:RELEASE_TAG.Substring(1)
+          $SbomName = "mant-$Version-${{ matrix.target }}.cdx.json"
+          $Sbom = Join-Path "dist" $SbomName
+          Move-Item "crates/mant/mant_bin_${{ matrix.rust_target }}.cdx.json" $Sbom
+          $Hash = (Get-FileHash $Sbom -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText(
+            "$Sbom.sha256",
+            "$Hash  $SbomName`n",
+            [Text.UTF8Encoding]::new($false)
+          )
 
       - name: Package Unix release archive
         if: runner.os != 'Windows'
@@ -87,6 +143,25 @@ jobs:
           MANT_RELEASE_TAG: ${{ env.RELEASE_TAG }}
           MANT_RELEASE_TARGET: ${{ matrix.target }}
 
+      - name: Attest release archive and checksum
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/mant-*.*
+
+      - name: Bind SBOM to Unix archive
+        if: runner.os != 'Windows'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/mant-*.tar.gz
+          sbom-path: dist/mant-*.cdx.json
+
+      - name: Bind SBOM to Windows archive
+        if: runner.os == 'Windows'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/mant-*.zip
+          sbom-path: dist/mant-*.cdx.json
+
       - name: Upload packaged distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -96,6 +171,8 @@ jobs:
             dist/mant-*.tar.gz.sha256
             dist/mant-*.zip
             dist/mant-*.zip.sha256
+            dist/mant-*.cdx.json
+            dist/mant-*.cdx.json.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -147,6 +224,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Download every platform archive
@@ -159,6 +239,11 @@ jobs:
       - name: Assemble checksum manifest
         shell: bash
         run: cat release/*.sha256 > release/SHA256SUMS
+
+      - name: Attest checksum manifest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: release/SHA256SUMS
 
       # Keep the release private until its generated notes and complete asset
       # set have been reviewed in the GitHub UI. Publishing is a deliberate
@@ -173,6 +258,7 @@ jobs:
           gh release create "$RELEASE_TAG" \
             release/*.tar.gz \
             release/*.zip \
+            release/*.cdx.json \
             release/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \

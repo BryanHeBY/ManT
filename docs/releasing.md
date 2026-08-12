@@ -24,9 +24,20 @@ releases; publishing remains a deliberate human action.
 
    ```sh
    bash scripts/check.sh
+   cargo deny check
    ```
 
-4. Commit every release change, sync that exact commit to `main`, and ensure
+4. Inspect the publishable file list for all six crates. Each package must
+   contain its applicable complete license texts and no unexpected fixture or
+   documentation assets:
+
+   ```sh
+   for package in mant-ast libmandoc-rs mant-sources mant-core mant-ui mant; do
+     cargo package --locked --list -p "$package"
+   done
+   ```
+
+5. Commit every release change, sync that exact commit to `main`, and ensure
    the main branch CI is green. The recommended installers and agent prompt
    read their scripts and documentation from `main`, so do not publish a tag
    that is ahead of the default branch.
@@ -175,8 +186,11 @@ $env:MANT_RELEASE_TAG = "vMAJOR.MINOR.PATCH"
 .\scripts\package-release.ps1
 ```
 
-Before publishing, inspect that the executable, self-hosted document, project
-license, and bundled libmandoc license are present:
+Before publishing, regenerate `THIRD_PARTY_LICENSES.html` with cargo-about
+0.9.1 and confirm there is no diff. Then inspect that the executable,
+self-hosted document, project license, generated Rust dependency report,
+parser third-party notice, upstream inventory, and complete reusable license
+texts are present:
 
 ```sh
 tar -tzf dist/mant-MAJOR.MINOR.PATCH-linux-ARCH.tar.gz
@@ -189,4 +203,21 @@ tar.exe -tf dist\mant-MAJOR.MINOR.PATCH-windows-x64.zip
 ```
 
 The tagged GitHub workflow remains the public-release source of truth because
-it rebuilds on every target runner.
+it rebuilds on every target runner. It generates a target-specific CycloneDX
+SBOM, publishes it beside the archives, creates provenance attestations for
+the release files, and cryptographically binds each archive to its SBOM. After
+downloading a release asset, verify that it was produced by this repository:
+
+```sh
+gh attestation verify mant-MAJOR.MINOR.PATCH-PLATFORM.EXT \
+  --repo BryanHeBY/ManT
+```
+
+To inspect the SBOM attestation as well as the default provenance statement,
+select the CycloneDX predicate:
+
+```sh
+gh attestation verify mant-MAJOR.MINOR.PATCH-PLATFORM.EXT \
+  --repo BryanHeBY/ManT \
+  --predicate-type https://cyclonedx.org/bom
+```

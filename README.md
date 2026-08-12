@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml/badge.svg)](https://github.com/BryanHeBY/ManT/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/BryanHeBY/ManT/branch/main/graph/badge.svg)](https://codecov.io/gh/BryanHeBY/ManT)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BryanHeBY/ManT/badge)](https://scorecard.dev/viewer/?uri=github.com/BryanHeBY/ManT)
 [![crates.io](https://img.shields.io/crates/v/mant.svg?logo=rust)](https://crates.io/crates/mant)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
@@ -297,5 +298,10 @@ versioned JSON and MCP boundaries.
 
 ## License
 
-ManT is licensed under the [Apache License 2.0](LICENSE). The bundled mandoc
-source retains its upstream license.
+ManT-authored work is licensed under the [Apache License 2.0](LICENSE).
+Rust dependencies, bundled parser sources, real-world test fixtures, and
+screenshot fonts retain their upstream terms; see the
+[third-party notice map](THIRD_PARTY_NOTICES.md). Native releases include a
+CycloneDX SBOM and signed GitHub provenance/SBOM attestations.
+Please report vulnerabilities through the private process in the
+[security policy](SECURITY.md).

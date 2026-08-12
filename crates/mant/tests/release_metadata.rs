@@ -80,6 +80,19 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
 }
 
 #[test]
+fn release_workflow_publishes_and_attests_target_specific_sboms() {
+    let workflow = include_str!("../../../.github/workflows/release.yml");
+    assert!(workflow.contains("tool: cargo-cyclonedx@0.5.9"));
+    assert!(workflow.contains("--spec-version 1.5"));
+    assert!(workflow.contains("--describe binaries"));
+    assert!(workflow.contains("--target-in-filename"));
+    assert!(workflow.contains("SOURCE_DATE_EPOCH=0"));
+    assert!(workflow.contains("dist/mant-*.cdx.json"));
+    assert!(workflow.contains("sbom-path: dist/mant-*.cdx.json"));
+    assert!(workflow.contains("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6"));
+}
+
+#[test]
 fn one_line_installers_follow_the_published_release_contract() {
     let readme = include_str!("../../../README.md");
     let unix = include_str!("../../../scripts/install.sh");

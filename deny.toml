@@ -1,0 +1,49 @@
+# Keep the complete supported target graph and every feature in the audit.
+[graph]
+all-features = true
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+]
+
+[advisories]
+# Vulnerability advisories fail by default. Treat abandoned direct
+# dependencies as actionable without making all transitive maintenance
+# notices release blockers.
+unmaintained = "workspace"
+unsound = "workspace"
+yanked = "deny"
+
+[licenses]
+include-dev = true
+include-build = true
+confidence-threshold = 0.8
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "Unicode-3.0",
+  "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+skip = [
+  { crate = "getrandom@0.2.17", reason = "ring still uses the 0.2 API while current build tooling and rmcp use 0.4" },
+  { crate = "hashbrown@0.16.1", reason = "ratatui's kasuari stack has not converged with zip and lru on 0.17" },
+  { crate = "syn@2.0.119", reason = "crossterm and futures macros still use syn 2 while current proc macros use syn 3" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

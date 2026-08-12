@@ -57,10 +57,40 @@ cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo build --locked --release -p mant
 ```
 
+Dependency policy is declared in `deny.toml`. CI runs cargo-deny across all
+features and every supported target family to reject known vulnerabilities,
+yanked packages, unapproved licenses, wildcard requirements, and dependencies
+from untrusted registries or Git repositories. With cargo-deny 0.20.2
+installed, run the same audit locally:
+
+```sh
+cargo deny check
+```
+
+Native distribution notices are generated from the same locked, multi-target
+graph with cargo-about 0.9.1. After changing dependencies, regenerate the
+checked-in report and review its package and license mapping:
+
+```sh
+scripts/generate-rust-licenses.sh
+```
+
+Pull requests also use GitHub dependency review. Dependabot supplies weekly
+version updates, while security updates, secret scanning with push protection,
+and private vulnerability reporting are repository settings rather than files
+in the checkout. OpenSSF Scorecard publishes a weekly, externally visible
+assessment and uploads its findings to GitHub code scanning.
+
 ## Repository map
 
 ```text
 Cargo.toml                    Root Rust workspace and shared dependency policy
+deny.toml                     Dependency license, advisory, source, and ban policy
+about.toml                    Distributable Rust dependency notice policy
+LICENSE                       Apache-2.0 terms for ManT-authored work
+THIRD_PARTY_NOTICES.md        Repository-wide third-party distribution map
+THIRD_PARTY_LICENSES.html     Generated Rust dependency license report
+SECURITY.md                   Supported versions and private reporting policy
 crates/mant-ast/             Versioned document, query, outline, and schema types
 crates/mant-sources/         Local Markdown registry and transactional source updates
 crates/mant-core/            Document loading, libmandoc lowering, projections, output
@@ -71,6 +101,7 @@ fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
+scripts/generate-rust-licenses.sh  Rebuild the locked Rust license report
 scripts/install.sh           Latest-release installer for Linux and macOS
 scripts/install.ps1          Latest-release installer for Windows x64
 scripts/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
