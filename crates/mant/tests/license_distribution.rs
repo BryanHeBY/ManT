@@ -8,6 +8,10 @@ use std::{
 
 const APACHE_CRATES: &[&str] = &["mant-ast", "mant-core", "mant-sources", "mant-ui", "mant"];
 
+fn portable_package_path(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -36,8 +40,16 @@ fn package_files(package: &str) -> Vec<String> {
     String::from_utf8(output.stdout)
         .expect("UTF-8 package listing")
         .lines()
-        .map(str::to_owned)
+        .map(portable_package_path)
         .collect()
+}
+
+#[test]
+fn cargo_package_paths_use_one_manifest_style_on_every_host() {
+    assert_eq!(
+        portable_package_path(r"LICENSES\Apache-2.0.txt"),
+        "LICENSES/Apache-2.0.txt"
+    );
 }
 
 #[test]
