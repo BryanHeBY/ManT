@@ -87,6 +87,15 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     assert!(workflow.contains("--describe binaries"));
     assert!(workflow.contains("--target-in-filename"));
     assert!(workflow.contains("SOURCE_DATE_EPOCH=0"));
+    assert_eq!(
+        workflow
+            .matches("node .release-automation/scripts/finalize-cyclonedx.mjs")
+            .count(),
+        2
+    );
+    assert!(workflow.contains("ref: ${{ github.sha }}"));
+    assert!(workflow.contains("path: .release-automation"));
+    assert!(workflow.contains("sparse-checkout: scripts/finalize-cyclonedx.mjs"));
     assert!(workflow.contains("dist/mant-*.cdx.json"));
     assert!(workflow.contains(r#"echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV""#));
     assert!(workflow.contains(r#""MANT_SBOM_PATH=$Sbom" | Out-File"#));
@@ -98,6 +107,22 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     );
     assert!(!workflow.contains("sbom-path: dist/mant-*.cdx.json"));
     assert!(workflow.contains("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6"));
+
+    let finalizer = include_str!("../../../scripts/finalize-cyclonedx.mjs");
+    assert!(finalizer.contains(r#"bom.bomFormat !== "CycloneDX""#));
+    assert!(finalizer.contains("bom.serialNumber = `urn:uuid:"));
+    assert!(finalizer.contains("delete bom.serialNumber"));
+    assert!(finalizer.contains(r#"createHash("sha256").update(normalized)"#));
+}
+
+#[test]
+fn manual_release_retries_require_an_explicit_crates_publish_choice() {
+    let workflow = include_str!("../../../.github/workflows/release.yml");
+    assert!(workflow.contains("publish_crates:"));
+    assert!(workflow.contains("default: false"));
+    assert!(
+        workflow.contains("(github.event_name == 'workflow_dispatch' && inputs.publish_crates)")
+    );
 }
 
 #[test]

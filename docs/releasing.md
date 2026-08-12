@@ -131,9 +131,14 @@ replace the generated notes with a curated user-facing summary, then approve
 that deployment. Wait for all six crates to become visible before making the
 GitHub Release public; the macOS installer depends on the published `mant`
 crate. A manually dispatched release rebuilds a named tag and draft but
-deliberately does not publish crates and can create the draft only when that
-tag has no existing GitHub Release. Rerun the failed job in the original tag
-workflow if crates.io publication needs retrying.
+publishes no crates by default and can create the draft only when that tag has
+no existing GitHub Release. For a failed tag workflow that published no crate,
+enable its explicit `publish_crates` input; the protected `crates-io`
+Environment still requires approval. Leave that input disabled for artifact-only
+rebuilds. If publication partially succeeded, rerun the original failed job
+so the release script can detect and skip crates already present on crates.io.
+Manual retries always build the immutable tag's product tree while taking only
+the release helper from the trusted workflow revision on `main`.
 
 The archive keeps `mant.md` beside the executable so installation remains
 transparent. User-facing release notes should lead with the one-line

@@ -11,6 +11,11 @@ on:
         description: Existing vMAJOR.MINOR.PATCH tag to release
         required: true
         type: string
+      publish_crates:
+        description: Publish the tag's crates after environment approval
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -54,6 +59,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      # A manual retry may repair release automation after the immutable source
+      # tag was created. Keep the helper from the trusted workflow revision
+      # separate from the product tree checked out above.
+      - name: Check out release automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .release-automation
+          sparse-checkout: scripts/finalize-cyclonedx.mjs
+          sparse-checkout-cone-mode: false
           persist-credentials: false
 
       - name: Install Linux native dependencies
@@ -101,6 +118,7 @@ jobs:
           mkdir -p dist
           sbom="mant-${RELEASE_TAG#v}-${{ matrix.target }}.cdx.json"
           mv "crates/mant/mant_bin_${{ matrix.rust_target }}.cdx.json" "dist/$sbom"
+          node .release-automation/scripts/finalize-cyclonedx.mjs "dist/$sbom"
           (cd dist && sha256sum "$sbom" > "$sbom.sha256")
           echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV"
 
@@ -122,6 +140,7 @@ jobs:
           $SbomName = "mant-$Version-${{ matrix.target }}.cdx.json"
           $Sbom = Join-Path "dist" $SbomName
           Move-Item "crates/mant/mant_bin_${{ matrix.rust_target }}.cdx.json" $Sbom
+          node .release-automation/scripts/finalize-cyclonedx.mjs $Sbom
           $Hash = (Get-FileHash $Sbom -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::WriteAllText(
             "$Sbom.sha256",
@@ -205,7 +224,9 @@ jobs:
 
   publish-crates:
     name: Publish crates.io packages
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_crates)
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 30
