@@ -28,8 +28,47 @@ env:
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
+  verify:
+    name: Verify release commit
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Check out release verification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .release-verification
+          sparse-checkout: scripts/find-successful-ci.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Require matching version and successful full CI
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          if [[ "$RELEASE_TAG" != "v$version" ]]; then
+            echo "release tag $RELEASE_TAG does not match workspace version $version" >&2
+            exit 1
+          fi
+          source_sha=$(git rev-parse HEAD)
+          ci_url=$(bash .release-verification/scripts/find-successful-ci.sh "$source_sha")
+          echo "verified full CI for $source_sha: $ci_url"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build:
     name: Package (${{ matrix.target }})
+    needs: verify
     permissions:
       contents: read
       id-token: write
@@ -69,7 +108,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           path: .release-automation
-          sparse-checkout: scripts/finalize-cyclonedx.mjs
+          sparse-checkout: |
+            scripts/build-and-smoke.sh
+            scripts/build-and-smoke.ps1
+            scripts/finalize-cyclonedx.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -83,7 +125,7 @@ jobs:
 
       - name: Install stable Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup toolchain install stable --profile minimal
           rustup default stable
 
       - name: Install cargo-cyclonedx
@@ -92,16 +134,21 @@ jobs:
           tool: cargo-cyclonedx@0.5.9
           fallback: none
 
-      # Rebuild and test natively on every release target. The checked
-      # libmandoc configurations run on both Unix and Windows.
-      - name: Build and test Unix release binaries
+      # Full tests, Clippy, MSRV, coverage, and supply-chain checks were
+      # required above for this exact source SHA. Build each optimized native
+      # artifact here from a clean target directory and smoke-test the product.
+      - name: Build and smoke-test Unix release binary
         if: runner.os != 'Windows'
-        run: bash scripts/check.sh
+        run: bash .release-automation/scripts/build-and-smoke.sh release
+        env:
+          MANT_WORKSPACE: ${{ github.workspace }}
 
-      - name: Build and test Windows release binary
+      - name: Build and smoke-test Windows release binary
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/check-windows.ps1
+        run: ./.release-automation/scripts/build-and-smoke.ps1 -BuildProfile release
+        env:
+          MANT_WORKSPACE: ${{ github.workspace }}
 
       - name: Generate Unix CycloneDX SBOM
         if: runner.os != 'Windows'

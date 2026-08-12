@@ -82,6 +82,22 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
 #[test]
 fn release_workflow_publishes_and_attests_target_specific_sboms() {
     let workflow = include_str!("../../../.github/workflows/release.yml");
+    assert!(workflow.contains("name: Verify release commit"));
+    assert!(workflow.contains("scripts/find-successful-ci.sh \"$source_sha\""));
+    assert!(workflow.contains("needs: verify"));
+    assert!(workflow.contains("bash .release-automation/scripts/build-and-smoke.sh release"));
+    assert!(
+        workflow
+            .contains("./.release-automation/scripts/build-and-smoke.ps1 -BuildProfile release")
+    );
+    assert_eq!(
+        workflow
+            .matches("MANT_WORKSPACE: ${{ github.workspace }}")
+            .count(),
+        2
+    );
+    assert!(!workflow.contains("run: bash scripts/check.sh"));
+    assert!(!workflow.contains("run: ./scripts/check-windows.ps1"));
     assert!(workflow.contains("tool: cargo-cyclonedx@0.5.9"));
     assert!(workflow.contains("--spec-version 1.5"));
     assert!(workflow.contains("--describe binaries"));
@@ -95,7 +111,9 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
     );
     assert!(workflow.contains("ref: ${{ github.sha }}"));
     assert!(workflow.contains("path: .release-automation"));
-    assert!(workflow.contains("sparse-checkout: scripts/finalize-cyclonedx.mjs"));
+    assert!(workflow.contains("scripts/build-and-smoke.sh\n"));
+    assert!(workflow.contains("scripts/build-and-smoke.ps1\n"));
+    assert!(workflow.contains("scripts/finalize-cyclonedx.mjs\n"));
     assert!(workflow.contains("dist/mant-*.cdx.json"));
     assert!(workflow.contains(r#"echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV""#));
     assert!(workflow.contains(r#""MANT_SBOM_PATH=$Sbom" | Out-File"#));

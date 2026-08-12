@@ -123,22 +123,25 @@ git tag vMAJOR.MINOR.PATCH
 git push origin vMAJOR.MINOR.PATCH
 ```
 
-The release workflow rebuilds and tests each supported Linux and Windows target
-on its native GitHub runner. After all targets pass, it creates a **draft**
-GitHub Release and independently pauses at the protected `crates-io`
-Environment before publishing crates. Review the tag and draft artifacts,
-replace the generated notes with a curated user-facing summary, then approve
-that deployment. Wait for all six crates to become visible before making the
-GitHub Release public; the macOS installer depends on the published `mant`
-crate. A manually dispatched release rebuilds a named tag and draft but
+The release workflow first requires a completed full CI suite for the exact
+tagged commit. It then builds and smoke-tests each optimized Linux and Windows
+binary on its native GitHub runner without repeating the already recorded test,
+Clippy, MSRV, coverage, and supply-chain jobs. After all targets pass, it
+creates a **draft** GitHub Release and independently pauses at the protected
+`crates-io` Environment before publishing crates. Review the tag and draft
+artifacts, replace the generated notes with a curated user-facing summary,
+then approve that deployment. Wait for all six crates to become visible before
+making the GitHub Release public; the macOS installer depends on the published
+`mant` crate. A manually dispatched release rebuilds a named tag and draft but
 publishes no crates by default and can create the draft only when that tag has
 no existing GitHub Release. For a failed tag workflow that published no crate,
 enable its explicit `publish_crates` input; the protected `crates-io`
 Environment still requires approval. Leave that input disabled for artifact-only
 rebuilds. If publication partially succeeded, rerun the original failed job
 so the release script can detect and skip crates already present on crates.io.
-Manual retries always build the immutable tag's product tree while taking only
-the release helper from the trusted workflow revision on `main`.
+Manual retries always build the immutable tag's product tree while taking the
+release helpers from the trusted workflow revision on `main`. Automation fixes
+can therefore recover older tags without changing their product input.
 
 The archive keeps `mant.md` beside the executable so installation remains
 transparent. User-facing release notes should lead with the one-line
@@ -208,9 +211,10 @@ tar.exe -tf dist\mant-MAJOR.MINOR.PATCH-windows-x64.zip
 ```
 
 The tagged GitHub workflow remains the public-release source of truth because
-it rebuilds on every target runner. It generates a target-specific CycloneDX
-SBOM, publishes it beside the archives, creates provenance attestations for
-the release files, publishes their Sigstore bundles beside the archives, and
+it performs a clean optimized build on every target runner after verifying the
+tagged source passed full CI. It generates a target-specific CycloneDX SBOM,
+publishes it beside the archives, creates provenance attestations for the
+release files, publishes their Sigstore bundles beside the archives, and
 cryptographically binds each archive to its SBOM. GitHub stores the same
 attestations in its attestations API; the attached `*.sigstore.json` copies
 also make the signatures portable and discoverable by release scanners. After
