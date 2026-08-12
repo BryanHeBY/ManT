@@ -144,9 +144,32 @@ jobs:
           MANT_RELEASE_TARGET: ${{ matrix.target }}
 
       - name: Attest release archive and checksum
+        id: attest-release
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/mant-*.*
+
+      - name: Stage Unix Sigstore bundle
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          version="${RELEASE_TAG#v}"
+          cp "$ATTESTATION_BUNDLE" \
+            "dist/mant-${version}-${MANT_RELEASE_TARGET}.sigstore.json"
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest-release.outputs.bundle-path }}
+          MANT_RELEASE_TARGET: ${{ matrix.target }}
+
+      - name: Stage Windows Sigstore bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $Version = $env:RELEASE_TAG -replace '^v', ''
+          $Destination = Join-Path dist "mant-$Version-$env:MANT_RELEASE_TARGET.sigstore.json"
+          Copy-Item -LiteralPath $env:ATTESTATION_BUNDLE -Destination $Destination
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest-release.outputs.bundle-path }}
+          MANT_RELEASE_TARGET: ${{ matrix.target }}
 
       - name: Bind SBOM to Unix archive
         if: runner.os != 'Windows'
@@ -173,6 +196,7 @@ jobs:
             dist/mant-*.zip.sha256
             dist/mant-*.cdx.json
             dist/mant-*.cdx.json.sha256
+            dist/mant-*.sigstore.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
@@ -259,6 +283,7 @@ jobs:
             release/*.tar.gz \
             release/*.zip \
             release/*.cdx.json \
+            release/*.sigstore.json \
             release/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \

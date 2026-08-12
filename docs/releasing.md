@@ -205,7 +205,10 @@ tar.exe -tf dist\mant-MAJOR.MINOR.PATCH-windows-x64.zip
 The tagged GitHub workflow remains the public-release source of truth because
 it rebuilds on every target runner. It generates a target-specific CycloneDX
 SBOM, publishes it beside the archives, creates provenance attestations for
-the release files, and cryptographically binds each archive to its SBOM. After
+the release files, publishes their Sigstore bundles beside the archives, and
+cryptographically binds each archive to its SBOM. GitHub stores the same
+attestations in its attestations API; the attached `*.sigstore.json` copies
+also make the signatures portable and discoverable by release scanners. After
 downloading a release asset, verify that it was produced by this repository:
 
 ```sh
@@ -221,3 +224,11 @@ gh attestation verify mant-MAJOR.MINOR.PATCH-PLATFORM.EXT \
   --repo BryanHeBY/ManT \
   --predicate-type https://cyclonedx.org/bom
 ```
+
+Releases created before tagged build attestations were enabled can be signed
+with the manually dispatched `Attest Existing Release` workflow. That workflow
+downloads the existing archives, signs a custom maintainer-endorsement
+statement with GitHub OIDC, records it in the attestations API, and attaches a
+portable `*.sigstore.json` bundle to the release. It deliberately states that
+the endorsement is not provenance from the original build; never represent a
+retrospective signature as historical build provenance.
