@@ -68,6 +68,12 @@ install -m 0644 docs/manuals/mant.md "$package/mant.md"
 install -m 0644 README.md "$package/README.md"
 install -m 0644 LICENSE "$package/LICENSE"
 install -m 0644 \
+  LICENSES/CC-BY-4.0.txt \
+  "$package/LICENSES/CC-BY-4.0.txt"
+install -m 0644 \
+  THIRD_PARTY_NOTICES.md \
+  "$package/LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md"
+install -m 0644 \
   THIRD_PARTY_LICENSES.html \
   "$package/LICENSES/RUST_DEPENDENCIES.html"
 install -m 0644 \

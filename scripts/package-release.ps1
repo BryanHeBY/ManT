@@ -55,6 +55,12 @@ Copy-Item (Join-Path $Root "docs/manuals/mant.md") (Join-Path $Package "mant.md"
 Copy-Item (Join-Path $Root "README.md") (Join-Path $Package "README.md")
 Copy-Item (Join-Path $Root "LICENSE") (Join-Path $Package "LICENSE")
 Copy-Item `
+    (Join-Path $Root "LICENSES/CC-BY-4.0.txt") `
+    (Join-Path $Package "LICENSES/CC-BY-4.0.txt")
+Copy-Item `
+    (Join-Path $Root "THIRD_PARTY_NOTICES.md") `
+    (Join-Path $Package "LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md")
+Copy-Item `
     (Join-Path $Root "THIRD_PARTY_LICENSES.html") `
     (Join-Path $Package "LICENSES/RUST_DEPENDENCIES.html")
 Copy-Item `

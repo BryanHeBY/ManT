@@ -132,12 +132,16 @@ fn native_archives_copy_the_complete_parser_notice_set() {
     assert!(unix.contains("LICENSES/RUST_DEPENDENCIES.html"));
     assert!(unix.contains("crates/libmandoc-rs/LICENSES/*"));
     assert!(unix.contains("crates/libmandoc-rs/THIRD_PARTY_NOTICES.md"));
+    assert!(unix.contains("LICENSES/CC-BY-4.0.txt"));
+    assert!(unix.contains("LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md"));
 
     let windows = include_str!("../../../scripts/package-release.ps1");
     assert!(windows.contains("THIRD_PARTY_LICENSES.html"));
     assert!(windows.contains("LICENSES/RUST_DEPENDENCIES.html"));
     assert!(windows.contains("crates/libmandoc-rs/LICENSES/*"));
     assert!(windows.contains("crates/libmandoc-rs/THIRD_PARTY_NOTICES.md"));
+    assert!(windows.contains("LICENSES/CC-BY-4.0.txt"));
+    assert!(windows.contains("LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md"));
 }
 
 #[test]
@@ -175,4 +179,7 @@ fn repository_notice_names_every_non_product_distribution_boundary() {
     assert!(notice.contains("docs/assets/fonts/"));
     assert!(notice.contains("crates/libmandoc-rs/THIRD_PARTY_NOTICES.md"));
     assert!(notice.contains("THIRD_PARTY_LICENSES.html"));
+    assert!(notice.contains("tldr-pages/tldr"));
+    assert!(notice.contains("LICENSES/CC-BY-4.0.txt"));
+    assert!(workspace_root().join("LICENSES/CC-BY-4.0.txt").is_file());
 }

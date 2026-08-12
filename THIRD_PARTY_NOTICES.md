@@ -22,6 +22,21 @@ and [`crates/libmandoc-rs/LICENSES/`](crates/libmandoc-rs/LICENSES/).
 Original source headers remain intact. Native release archives carry the
 notices required by the parser sources compiled into their executable.
 
+## tldr-pages content
+
+When `mant --update-tldr` downloads pages from the
+[`tldr-pages/tldr`](https://github.com/tldr-pages/tldr) project, those page
+contents remain third-party material licensed under Creative Commons
+Attribution 4.0 International (CC BY 4.0). ManT preserves the upstream source
+path and renders `tldr-pages · CC BY 4.0 · <platform> · <language>` with every
+upstream quick reference. The complete license is in
+[`LICENSES/CC-BY-4.0.txt`](LICENSES/CC-BY-4.0.txt).
+
+The ManT executable and its embedded quick references are not relicensed by
+this notice. The CC BY 4.0 boundary applies only to content whose recorded
+origin is `tldr-pages`; embedded project-authored content remains covered by
+the containing project's license.
+
 ## Test fixtures
 
 Fixed real-world roff fixtures under `tests/fixtures/roff/real/` are used only
