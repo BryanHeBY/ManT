@@ -273,22 +273,7 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    man["man / mdoc"] --> index["ManualIndex"] --> libmandoc["libmandoc-rs"]
-    markdown["Markdown"] --> sources["mant-sources"] --> markdown_parser["Markdown parser"]
-    tldr["tldr caches"] --> tldr_parser["tldr parser"]
-
-    libmandoc --> core["mant-core"]
-    markdown_parser --> core
-    tldr_parser --> core
-
-    core --> bundle["QueryBundle (mant-ast)"]
-
-    bundle --> ui["mant-ui<br/>(Ratatui)"]
-    bundle --> renderers["renderers<br/>md / text / JSON"]
-    bundle --> protocols["schemas / MCP<br/>request JSON"]
-```
+![ManT architecture: three source pipelines converge on mant-core and one shared QueryBundle](docs/assets/architecture.svg)
 
 Rust owns source discovery, parsing, the stable AST, tldr integration, output,
 and terminal presentation. Interactive use passes the in-memory `QueryBundle`

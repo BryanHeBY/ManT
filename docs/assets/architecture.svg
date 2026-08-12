@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="520" viewBox="0 0 840 520" role="img" aria-labelledby="title description">
+  <title id="title">ManT architecture</title>
+  <desc id="description">Native manuals, Markdown, and tldr caches converge on mant-core and its shared QueryBundle, which serves the TUI, renderers, schemas, and MCP.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .card { fill: #ffffff; stroke: #d0d7de; stroke-width: 1.5; }
+      .core { fill: #ddf4ff; stroke: #54aeff; stroke-width: 1.5; }
+      .bundle { fill: #dafbe1; stroke: #4ac26b; stroke-width: 1.5; }
+      .connector { fill: none; stroke: #8c959f; stroke-width: 2; marker-end: url(#arrow); }
+      .arrow-head { fill: #8c959f; }
+      .label { fill: #57606a; font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1.4px; }
+      .title { fill: #1f2328; font: 600 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .detail { fill: #57606a; font: 13px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+      .core-title { fill: #0969da; font: 650 20px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+      .bundle-title { fill: #1a7f37; font: 650 18px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+      @media (prefers-color-scheme: dark) {
+        .card { fill: #161b22; stroke: #30363d; }
+        .core { fill: #0c2d48; stroke: #1f6feb; }
+        .bundle { fill: #173b24; stroke: #238636; }
+        .connector { stroke: #6e7681; }
+        .arrow-head { fill: #6e7681; }
+        .label, .detail { fill: #8b949e; }
+        .title { fill: #f0f6fc; }
+        .core-title { fill: #58a6ff; }
+        .bundle-title { fill: #56d364; }
+      }
+    </style>
+  </defs>
+
+  <text x="18" y="28" class="label">SOURCES &amp; PARSERS</text>
+
+  <path d="M 136 130 C 136 178, 320 168, 365 206" class="connector"/>
+  <path d="M 420 130 L 420 198" class="connector"/>
+  <path d="M 704 130 C 704 178, 520 168, 475 206" class="connector"/>
+
+  <g filter="url(#shadow)">
+    <rect x="18" y="46" width="236" height="84" rx="12" class="card"/>
+    <rect x="302" y="46" width="236" height="84" rx="12" class="card"/>
+    <rect x="586" y="46" width="236" height="84" rx="12" class="card"/>
+  </g>
+  <text x="136" y="78" text-anchor="middle" class="title">Native manuals</text>
+  <text x="136" y="106" text-anchor="middle" class="detail">ManualIndex → libmandoc-rs</text>
+  <text x="420" y="78" text-anchor="middle" class="title">Markdown</text>
+  <text x="420" y="106" text-anchor="middle" class="detail">mant-sources → parser</text>
+  <text x="704" y="78" text-anchor="middle" class="title">tldr</text>
+  <text x="704" y="106" text-anchor="middle" class="detail">caches → tldr parser</text>
+
+  <g filter="url(#shadow)">
+    <rect x="300" y="206" width="240" height="72" rx="14" class="core"/>
+  </g>
+  <text x="420" y="238" text-anchor="middle" class="core-title">mant-core</text>
+  <text x="420" y="260" text-anchor="middle" class="detail">normalize · navigate · query</text>
+
+  <path d="M 420 278 L 420 326" class="connector"/>
+  <g filter="url(#shadow)">
+    <rect x="270" y="326" width="300" height="62" rx="14" class="bundle"/>
+  </g>
+  <text x="420" y="363" text-anchor="middle" class="bundle-title">QueryBundle (mant-ast)</text>
+
+  <text x="18" y="431" class="label">CONSUMERS</text>
+  <path d="M 370 388 C 350 414, 136 404, 136 448" class="connector"/>
+  <path d="M 420 388 L 420 440" class="connector"/>
+  <path d="M 470 388 C 490 414, 704 404, 704 448" class="connector"/>
+
+  <g filter="url(#shadow)">
+    <rect x="18" y="448" width="236" height="62" rx="12" class="card"/>
+    <rect x="302" y="448" width="236" height="62" rx="12" class="card"/>
+    <rect x="586" y="448" width="236" height="62" rx="12" class="card"/>
+  </g>
+  <text x="136" y="476" text-anchor="middle" class="title">Interactive TUI</text>
+  <text x="136" y="497" text-anchor="middle" class="detail">mant-ui · Ratatui</text>
+  <text x="420" y="476" text-anchor="middle" class="title">Renderers</text>
+  <text x="420" y="497" text-anchor="middle" class="detail">Markdown · text · JSON</text>
+  <text x="704" y="476" text-anchor="middle" class="title">Integrations</text>
+  <text x="704" y="497" text-anchor="middle" class="detail">schemas · MCP · request JSON</text>
+</svg>
