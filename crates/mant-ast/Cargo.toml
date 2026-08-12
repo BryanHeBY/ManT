@@ -11,7 +11,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "markdown", "ast", "schema", "protocol"]
 categories = ["data-structures", "text-processing"]
-include = ["/Cargo.toml", "/README.md", "/src/**"]
+include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
 schemars.workspace = true

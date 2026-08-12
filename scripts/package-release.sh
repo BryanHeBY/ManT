@@ -68,8 +68,14 @@ install -m 0644 docs/manuals/mant.md "$package/mant.md"
 install -m 0644 README.md "$package/README.md"
 install -m 0644 LICENSE "$package/LICENSE"
 install -m 0644 \
-  crates/libmandoc-rs/vendor/mandoc-1.14.6/LICENSE \
-  "$package/LICENSES/mandoc.txt"
+  THIRD_PARTY_LICENSES.html \
+  "$package/LICENSES/RUST_DEPENDENCIES.html"
+install -m 0644 \
+  crates/libmandoc-rs/LICENSES/* \
+  "$package/LICENSES/"
+install -m 0644 \
+  crates/libmandoc-rs/THIRD_PARTY_NOTICES.md \
+  "$package/LICENSES/THIRD_PARTY_NOTICES.md"
 
 # GNU tar pins path order, timestamps, and ownership. `gzip -n` removes the
 # final timestamp/name fields so identical commits produce identical archives.

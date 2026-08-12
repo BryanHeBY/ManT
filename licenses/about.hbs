@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ManT Rust dependency licenses</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.45; margin: 2rem auto; max-width: 60rem; padding: 0 1rem; }
+    pre { border: 1px solid #ccc; overflow: auto; padding: 1rem; white-space: pre-wrap; }
+    .used-by { margin-top: -.5rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ManT Rust dependency licenses</h1>
+    <p>This file is generated from the locked dependency graph by cargo-about. It lists the license texts and Rust packages included in ManT native distributions.</p>
+    <h2>Licenses</h2>
+    <ul>
+      {{#each overview}}
+      <li><a href="#{{id}}">{{name}}</a> ({{count}} packages)</li>
+      {{/each}}
+    </ul>
+    {{#each licenses}}
+    <section>
+      <h2 id="{{id}}">{{name}}</h2>
+      <p>Used by:</p>
+      <ul class="used-by">
+        {{#each used_by}}
+        <li><a href="{{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}}">{{crate.name}} {{crate.version}}</a></li>
+        {{/each}}
+      </ul>
+      <pre>{{text}}</pre>
+    </section>
+    {{/each}}
+  </main>
+</body>
+</html>

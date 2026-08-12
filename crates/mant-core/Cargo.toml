@@ -11,7 +11,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "mdoc", "roff", "markdown", "parser"]
 categories = ["parser-implementations", "text-processing"]
-include = ["/Cargo.toml", "/README.md", "/src/**"]
+include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
 grep-matcher.workspace = true

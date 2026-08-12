@@ -74,7 +74,9 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
     let windows = include_str!("../../../scripts/package-release.ps1");
     assert!(windows.contains(r#"$ArchiveRoot = "mant-$Version-$Target""#));
     assert!(windows.contains(r#"Copy-Item $Binary (Join-Path $Package "mant.exe")"#));
-    assert!(windows.contains(r#"(Join-Path $Package "LICENSES/mandoc.txt")"#));
+    assert!(windows.contains(r"crates/libmandoc-rs/LICENSES/*"));
+    assert!(windows.contains(r"LICENSES/THIRD_PARTY_NOTICES.md"));
+    assert!(windows.contains(r"LICENSES/RUST_DEPENDENCIES.html"));
 }
 
 #[test]

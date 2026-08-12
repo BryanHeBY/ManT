@@ -12,7 +12,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "markdown", "tui", "ratatui", "documentation"]
 categories = ["command-line-utilities", "text-processing"]
-include = ["/Cargo.toml", "/README.md", "/src/**"]
+include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
 crossterm.workspace = true

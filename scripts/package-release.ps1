@@ -55,8 +55,14 @@ Copy-Item (Join-Path $Root "docs/manuals/mant.md") (Join-Path $Package "mant.md"
 Copy-Item (Join-Path $Root "README.md") (Join-Path $Package "README.md")
 Copy-Item (Join-Path $Root "LICENSE") (Join-Path $Package "LICENSE")
 Copy-Item `
-    (Join-Path $Root "crates/libmandoc-rs/vendor/mandoc-1.14.6/LICENSE") `
-    (Join-Path $Package "LICENSES/mandoc.txt")
+    (Join-Path $Root "THIRD_PARTY_LICENSES.html") `
+    (Join-Path $Package "LICENSES/RUST_DEPENDENCIES.html")
+Copy-Item `
+    (Join-Path $Root "crates/libmandoc-rs/LICENSES/*") `
+    (Join-Path $Package "LICENSES")
+Copy-Item `
+    (Join-Path $Root "crates/libmandoc-rs/THIRD_PARTY_NOTICES.md") `
+    (Join-Path $Package "LICENSES/THIRD_PARTY_NOTICES.md")
 
 Remove-Item $Archive -Force -ErrorAction SilentlyContinue
 Compress-Archive -Path $Package -DestinationPath $Archive -CompressionLevel Optimal
