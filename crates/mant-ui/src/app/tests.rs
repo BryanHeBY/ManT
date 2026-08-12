@@ -2,6 +2,7 @@
 
 use std::{
     collections::HashSet,
+    path::Path,
     time::{Duration, Instant},
 };
 
@@ -16,6 +17,7 @@ use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
 use super::{
     App, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag, SIDEBAR_RESIZE_FRAME_INTERVAL, UpdateOutcome,
+    finder::FinderTreeRow,
     menu::{MenuAction, MenuId},
     render::sidebar_metadata,
     search::SearchMode,
@@ -166,6 +168,8 @@ fn manual_bundle(name: &str, section: &str) -> QueryBundle {
 fn document_finder_filters_live_and_emits_an_exact_address() {
     let mut app = App::with_catalog(&navigation_bundle(), document_catalog());
     app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+    assert_eq!(app.overlay, Overlay::None);
+    app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
     assert_eq!(app.overlay, Overlay::DocumentFinder);
 
     for character in "print".chars() {
@@ -181,6 +185,67 @@ fn document_finder_filters_live_and_emits_an_exact_address() {
             name: "printf".to_owned(),
             section: "3".to_owned(),
         })
+    );
+}
+
+#[test]
+fn document_finder_tree_collapses_expands_and_opens_a_nested_document() {
+    let address = DocumentAddress::Markdown {
+        path: "languages/zh-CN/tool".to_owned(),
+        origin: MarkdownOrigin::Documents,
+    };
+    let catalog = DocumentCatalog {
+        schema: CatalogSchema::V7,
+        total: 1,
+        returned: 1,
+        offset: 0,
+        truncated: false,
+        next_offset: None,
+        documents: vec![DocumentSummary {
+            address: address.clone(),
+            catalog_path: "documents/languages/zh-CN/tool".to_owned(),
+            source_path: "/documents/languages/zh-CN/tool.md".to_owned(),
+        }],
+    };
+    let mut app = App::with_catalog(&navigation_bundle(), catalog);
+    app.open_document_finder();
+
+    let languages = app
+        .finder
+        .tree
+        .iter()
+        .position(|row| {
+            matches!(row, FinderTreeRow::Folder { path, .. } if path == "documents/languages")
+        })
+        .expect("languages folder");
+    app.finder.selected = languages;
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    assert!(!app.finder.expanded("documents/languages"));
+    assert!(!app.finder.tree.iter().any(|row| {
+        matches!(row, FinderTreeRow::Folder { path, .. } if path == "documents/languages/zh-CN")
+    }));
+
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert!(app.finder.expanded("documents/languages"));
+    let document = app
+        .finder
+        .tree
+        .iter()
+        .position(|row| {
+            matches!(
+                row,
+                FinderTreeRow::Document { index, .. }
+                    if app.finder.catalog[*index].address == address
+            )
+        })
+        .expect("nested document row");
+    app.finder.selected = document;
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(
+        app.take_open_request()
+            .map(|request| request.address().clone()),
+        Some(address)
     );
 }
 
@@ -1387,6 +1452,97 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
             section: "1".to_owned(),
         }
     );
+}
+
+#[test]
+fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/roff/real/archlinux/git.1.gz");
+    let document = mant_core::parse_manual_source(&fixture).expect("parse real git manual");
+    let bundle = QueryBundle {
+        schema: QuerySchema::V7,
+        address: Some(DocumentAddress::Manual {
+            name: "git".to_owned(),
+            section: "1".to_owned(),
+        }),
+        label: "git".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+    let backend = TestBackend::new(132, 24);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal.draw(|frame| app.draw(frame)).expect("draw git");
+    let width = app.geometry.content.width;
+    let matches = app.rendered_cache[&width].search("git-add(1)");
+
+    let mut opened = None;
+    for region in matches {
+        app.content_scroll = region.row;
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: app.geometry.content.x
+                + u16::try_from(region.start_column).expect("link column"),
+            row: app.geometry.content.y,
+            modifiers: KeyModifiers::NONE,
+        });
+        if let Some(request) = app.take_open_request() {
+            opened = Some(request.address().clone());
+            break;
+        }
+    }
+
+    assert_eq!(
+        opened,
+        Some(DocumentAddress::Manual {
+            name: "git-add".to_owned(),
+            section: "1".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn clicking_a_relative_markdown_link_preserves_its_source_and_fragment() {
+    let mut bundle = mant_core::query_markdown_text(
+        "# Index\n\nContinue with [Build](../commands/build.md#usage).\n",
+        Some("/documents/guides/index.md".to_owned()),
+    )
+    .expect("parse relative Markdown link");
+    bundle.address = Some(DocumentAddress::Markdown {
+        path: "guides/index".to_owned(),
+        origin: MarkdownOrigin::Source {
+            name: "team".to_owned(),
+        },
+    });
+    let backend = TestBackend::new(72, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("Build")
+        .into_iter()
+        .next()
+        .expect("visible Markdown link");
+
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
+        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    let request = app.take_open_request().expect("Markdown request");
+    assert_eq!(
+        request.address(),
+        &DocumentAddress::Markdown {
+            path: "commands/build".to_owned(),
+            origin: MarkdownOrigin::Source {
+                name: "team".to_owned(),
+            },
+        }
+    );
+    assert_eq!(request.target.as_deref(), Some("usage"));
 }
 
 #[test]
