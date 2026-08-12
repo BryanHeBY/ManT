@@ -279,7 +279,7 @@ Gamma.
     assert_eq!(ids, ["foo-2", "foo-2-2"]);
 
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "collision".to_owned(),
         document: Some(document),
         tldr: None,
@@ -446,7 +446,7 @@ Root body.
     );
 
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "demo.md".to_owned(),
         document: Some(document),
         tldr: None,
@@ -496,7 +496,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
 
     let outline = build_outline_with_detail(
         &QueryBundle {
-            schema: QuerySchema::V6,
+            schema: QuerySchema::V7,
             label: "tool.md".to_owned(),
             document: Some(document),
             tldr: None,
@@ -543,7 +543,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     }));
 
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -610,7 +610,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
     );
 
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "dot-option.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -641,7 +641,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
     assert!(parsed.document.diagnostics.is_empty());
 
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "shell".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -718,7 +718,7 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
             && diagnostic.message.contains("2/o1 (option-f-2)")
     }));
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -753,7 +753,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
     .expect("help spelling fixture");
     assert!(parsed.document.diagnostics.is_empty());
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "help-spellings.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -803,7 +803,7 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
             && diagnostic.message.contains("1/o2 (option-help-2)")
     }));
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "shorthand-collision.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -825,7 +825,7 @@ fn the_same_alias_in_different_roles_is_ambiguous() {
     )
     .expect("cross-role alias fixture");
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -852,7 +852,7 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
     )
     .expect("entry ID precedence fixture");
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -876,7 +876,7 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
     )
     .expect("case-sensitive entries");
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -950,7 +950,7 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     .expect("fixed attached option values");
     assert!(parsed.document.diagnostics.is_empty());
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "tool.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -1005,7 +1005,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
     assert!(parsed.document.diagnostics.is_empty());
 
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "native.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -1085,7 +1085,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
 
     let outline = build_outline_with_detail(
         &QueryBundle {
-            schema: QuerySchema::V6,
+            schema: QuerySchema::V7,
             label: "tool.md".to_owned(),
             document: Some(parsed.document),
             tldr: None,

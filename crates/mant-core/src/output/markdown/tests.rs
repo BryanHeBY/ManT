@@ -23,7 +23,7 @@ fn paragraph(children: Vec<Inline>) -> Block {
 
 fn manual(sections: Vec<Section>) -> MantDocument {
     MantDocument {
-        schema: DocumentSchema::V6,
+        schema: DocumentSchema::V7,
         producer: Producer {
             name: "test".to_owned(),
             version: "1".to_owned(),
@@ -54,7 +54,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 #[test]
 fn renders_tldr_before_manual_and_resolves_placeholders() {
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "ls".to_owned(),
         document: Some(manual(vec![section("NAME", Vec::new(), Vec::new())])),
         tldr: Some(TldrDocument {
@@ -106,7 +106,7 @@ fn renders_and_selects_content_before_the_first_heading() {
         value: "Document preface.".to_owned(),
     }])];
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "guide.md".to_owned(),
         document: Some(document),
         tldr: None,
@@ -195,7 +195,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         source: None,
     };
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "demo * command".to_owned(),
         document: Some(manual(vec![section(
             "OPTIONS",
@@ -257,7 +257,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
         source: None,
     };
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "man".to_owned(),
         document: Some(manual(vec![section(
             "OPTIONS",
@@ -299,7 +299,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
 #[test]
 fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "demo".to_owned(),
         document: Some(manual(vec![section(
             "DATA",
@@ -367,7 +367,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
 fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("tests/contracts/minimal-query-v6.json");
+        .join("tests/contracts/minimal-query-v7.json");
     let query: QueryBundle =
         serde_json::from_str(&std::fs::read_to_string(fixture).expect("shared query fixture"))
             .expect("query contract");
@@ -384,7 +384,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     assert!(markdown.contains(", or read OPTIONS"));
     assert!(!markdown.contains("[OPTIONS](#options-1)"));
     assert!(!markdown.contains("<a "));
-    assert!(!markdown.contains("mant.query/v6"));
+    assert!(!markdown.contains("mant.query/v7"));
 
     let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
     assert!(addressable.contains("[OPTIONS](#options-1)"));
@@ -395,7 +395,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
 #[test]
 fn protects_paragraph_lines_from_accidental_block_syntax() {
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "syntax".to_owned(),
         document: Some(manual(vec![section(
             "TEXT",
@@ -427,7 +427,7 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 #[test]
 fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "demo".to_owned(),
         document: Some({
             let mut document = manual(vec![section(
@@ -473,7 +473,7 @@ fn serializes_a_large_source_lowered_document() {
         .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
     let document = crate::parse_manual_source(&source).expect("large native document");
     let query = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "mandoc".to_owned(),
         document: Some(document),
         tldr: None,

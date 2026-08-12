@@ -11,17 +11,17 @@ use crate::{
 /// Exact schema marker for a complete `ManT` query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum QuerySchema {
-    /// Query envelope built around `mant.document/v6`.
-    #[serde(rename = "mant.query/v6")]
-    V6,
+    /// Query envelope built around `mant.document/v7`.
+    #[serde(rename = "mant.query/v7")]
+    V7,
 }
 
 /// Exact schema marker for a native query request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum RequestSchema {
     /// Query and projection request accepted through `--request-json`.
-    #[serde(rename = "mant.request/v6")]
-    V6,
+    #[serde(rename = "mant.request/v7")]
+    V7,
 }
 
 /// Source selected by one public query request.
@@ -94,7 +94,7 @@ pub enum QueryView {
 /// Native use-case input. The engine validates semantic constraints before I/O.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[schemars(extend("$id" = "urn:mant:request:v6"))]
+#[schemars(extend("$id" = "urn:mant:request:v7"))]
 pub struct QueryRequest {
     pub schema: RequestSchema,
     pub input: QueryInput,
@@ -104,7 +104,7 @@ pub struct QueryRequest {
 /// Native result consumed by JSON, Markdown, and interactive frontends.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:query:v6"))]
+#[schemars(extend("$id" = "urn:mant:query:v7"))]
 pub struct QueryBundle {
     pub schema: QuerySchema,
     pub label: String,

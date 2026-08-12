@@ -37,8 +37,8 @@ Rust supplies bytes without exposing POSIX file transport to the C layer.
 
 ## Stable and unstable models
 
-`mant.document/v6` is the stable structured-document contract consumed by the
-UI and output renderers. `mant.query/v6` combines an optional document with an
+`mant.document/v7` is the stable structured-document contract consumed by the
+UI and output renderers. `mant.query/v7` combines an optional document with an
 optional tldr document while preserving their different sources and licences.
 The document source is man, mdoc, or Markdown. Blocks before the first heading
 live in the document's root `blocks`; heading content remains in the recursive
@@ -108,8 +108,8 @@ mant --mcp                         -> read-only MCP tools over stdio
 
 For process integrations, `mant --request-json --format json --compact` reads
 one closed, versioned `QueryRequest` object from standard input and emits
-exactly one versioned projection on standard output: `mant.query/v6`,
-`mant.outline/v6`, `mant.excerpt/v6`, or `mant.search/v6`, according to the
+exactly one versioned projection on standard output: `mant.query/v7`,
+`mant.outline/v7`, `mant.excerpt/v7`, or `mant.search/v7`, according to the
 requested view. Standard error contains concise diagnostics only. Status 0
 means success, 2 means invalid invocation or request, and 1 means an
 operational failure. Interactive search and navigation operate on the already
@@ -132,16 +132,16 @@ declarations make semantic discovery incomplete. MCP is an alternate process
 protocol; it does not add another executable or a second document
 interpretation path.
 
-`mant.request/v6` requires a `schema` marker, one closed `input`, and one
+`mant.request/v7` requires a `schema` marker, one closed `input`, and one
 closed `view`. The input is either a document name with an optional source or manual section or a
 local Markdown path; raw document content is deliberately not part of the
 process contract. Direct `mant -` reads bounded UTF-8 input before constructing
 an in-memory query and does not add a third public input variant. Unknown
-fields are rejected at every level. `full` returns `mant.query/v6`, `outline`
+fields are rejected at every level. `full` returns `mant.query/v7`, `outline`
 selects either section-only or entry-aware structure, `excerpt` selects one or
 more node paths, IDs, or aliases, `explain` resolves exactly one semantic
-entry, and `search` returns `mant.search/v6`. Both `--explain` and the request
-view use the same entry-only projection and return `mant.excerpt/v6`, avoiding
+entry, and `search` returns `mant.search/v7`. Both `--explain` and the request
+view use the same entry-only projection and return `mant.excerpt/v7`, avoiding
 a separate explanation response shape.
 `mant --schema request` exposes that exact input contract; `query`,
 `outline`, `excerpt`, and `search` expose the output contracts, while `all`
@@ -171,8 +171,8 @@ Markdown content before the first heading is exposed as path `root` with ID
 `document-overview`; it does not consume or renumber ordinary heading paths.
 Excerpt selection accepts a section path, entry path, document ID, or entry
 alias; it includes complete selected content, deduplicates overlaps, and
-preserves source order. Their JSON contracts are `mant.outline/v6` and
-`mant.excerpt/v6`; plain text and CommonMark are also available. The TUI
+preserves source order. Their JSON contracts are `mant.outline/v7` and
+`mant.excerpt/v7`; plain text and CommonMark are also available. The TUI
 constructs the same full query in memory; agents can select outline and excerpt
 projections directly through `--request-json`.
 
@@ -225,7 +225,7 @@ layout conventions out of the general Markdown AST and renderers.
 
 The primary path discovers manual hierarchies in Rust, reads the located
 source, and lowers libmandoc's validated man(7) or mdoc(7) tree directly into
-`mant.document/v6`. Rust owns compression handling and preserves the original
+`mant.document/v7`. Rust owns compression handling and preserves the original
 source path and indexed manual root. Both stored and decoded bytes are capped
 across the complete input chain before plain roff bytes cross the parser
 boundary. Rust recognizes redirect-only `.so` aliases, resolves raw, gzip, or
@@ -249,7 +249,7 @@ an otherwise complete document, and recoverable findings remain structured in
 the document contract. ManT never invokes a host renderer or chooses between
 renderer outputs.
 
-`--manual` is an input-resolution policy outside `mant.request/v6`. It bypasses
+`--manual` is an input-resolution policy outside `mant.request/v7`. It bypasses
 registered Markdown with the same filename stem, requires a readable native
 manual, and omits any attached tldr quick reference. An explicit `--section`
 has the same exclusivity because sections belong only to native manuals.

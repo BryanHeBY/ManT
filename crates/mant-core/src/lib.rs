@@ -16,7 +16,8 @@ mod text_safety;
 mod tldr;
 
 pub use catalog::{
-    AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, list_available_documents,
+    AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, CatalogError,
+    discover_documents, list_available_documents, query_available_documents,
 };
 pub use mandoc::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_page,
@@ -63,6 +64,6 @@ mod tests {
 
     #[test]
     fn exposes_the_ast_contract_version() {
-        assert_eq!(native_api_version(), "6");
+        assert_eq!(native_api_version(), "7");
     }
 }

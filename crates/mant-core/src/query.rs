@@ -563,7 +563,7 @@ pub fn query_markdown_text(
         });
     }
     Ok(QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label,
         document: (!document_is_empty).then_some(parsed.document),
         tldr: parsed.tldr,
@@ -637,7 +637,7 @@ fn query_named_document(
     if require_manual {
         return match manual {
             Ok(manual) => Ok(QueryBundle {
-                schema: QuerySchema::V6,
+                schema: QuerySchema::V7,
                 label: name.to_owned(),
                 document: Some(manual),
                 tldr,
@@ -648,13 +648,13 @@ fn query_named_document(
 
     match manual {
         Ok(manual) => Ok(QueryBundle {
-            schema: QuerySchema::V6,
+            schema: QuerySchema::V7,
             label: name.to_owned(),
             document: Some(manual),
             tldr,
         }),
         Err(_) if tldr.is_some() => Ok(QueryBundle {
-            schema: QuerySchema::V6,
+            schema: QuerySchema::V7,
             label: name.to_owned(),
             document: None,
             tldr,
@@ -830,7 +830,7 @@ mod tests {
 
     fn document(format: SourceFormat, unsupported: bool, readable: bool) -> MantDocument {
         MantDocument {
-            schema: DocumentSchema::V6,
+            schema: DocumentSchema::V7,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),
@@ -896,7 +896,7 @@ mod tests {
 
     fn request() -> QueryRequest {
         QueryRequest {
-            schema: RequestSchema::V6,
+            schema: RequestSchema::V7,
             input: QueryInput::Document {
                 name: " tool ".to_owned(),
                 source: None,
@@ -927,7 +927,7 @@ mod tests {
         let mut host = host(Ok(document(SourceFormat::Man, false, true)));
         host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
-            schema: RequestSchema::V6,
+            schema: RequestSchema::V7,
             input: QueryInput::Document {
                 name: "tool".to_owned(),
                 source: None,
@@ -962,7 +962,7 @@ mod tests {
         host.registered_document = Some(PathBuf::from("/documents/tool.md"));
         host.markdown = Ok("# Tool\n\nSource body.\n".to_owned());
         let request = QueryRequest {
-            schema: RequestSchema::V6,
+            schema: RequestSchema::V7,
             input: QueryInput::Document {
                 name: "tool".to_owned(),
                 source: Some("team".to_owned()),
@@ -1043,7 +1043,7 @@ mod tests {
         host.locate = Err("section not found".to_owned());
         host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
-            schema: RequestSchema::V6,
+            schema: RequestSchema::V7,
             input: QueryInput::Document {
                 name: "tool".to_owned(),
                 source: None,
@@ -1112,7 +1112,7 @@ mod tests {
         assert_eq!(
             query_with(
                 &QueryRequest {
-                    schema: RequestSchema::V6,
+                    schema: RequestSchema::V7,
                     input: QueryInput::Document {
                         name: " ".to_owned(),
                         source: None,
@@ -1223,7 +1223,7 @@ mod tests {
         host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
         let result = query_with(
             &QueryRequest {
-                schema: RequestSchema::V6,
+                schema: RequestSchema::V7,
                 input: QueryInput::MarkdownFile {
                     path: "docs/tool.md".to_owned(),
                 },

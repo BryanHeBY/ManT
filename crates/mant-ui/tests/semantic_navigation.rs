@@ -29,11 +29,11 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     })
     .collect();
     let bundle = QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: "tool".to_owned(),
         tldr: None,
         document: Some(MantDocument {
-            schema: DocumentSchema::V6,
+            schema: DocumentSchema::V7,
             producer: Producer {
                 name: "test".to_owned(),
                 version: "1".to_owned(),

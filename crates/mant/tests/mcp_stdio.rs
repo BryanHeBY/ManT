@@ -144,19 +144,19 @@ fn assert_document_catalog(replies: &[Value]) {
         .expect("document catalog");
     assert_eq!(documents.len(), 3);
     assert!(documents.iter().any(|document| {
-        document["name"] == "mcp-registered"
-            && document["kind"] == "markdown"
-            && document["origin"] == "documents"
+        document["address"]["name"] == "mcp-registered"
+            && document["address"]["kind"] == "markdown"
+            && document["address"]["origin"]["kind"] == "documents"
     }));
     assert!(documents.iter().any(|document| {
-        document["name"] == "mcp-manual"
-            && document["kind"] == "manual"
-            && document["section"] == "1"
+        document["address"]["name"] == "mcp-manual"
+            && document["address"]["kind"] == "manual"
+            && document["address"]["section"] == "1"
     }));
     assert_eq!(
         documents
             .iter()
-            .filter(|document| document["name"] == "mcp-suffix.exe")
+            .filter(|document| document["address"]["name"] == "mcp-suffix.exe")
             .count(),
         1,
         "listing must expose one canonical suffixed name"
@@ -170,7 +170,7 @@ fn assert_semantic_replies(replies: &[Value]) {
         .expect("semantic outline reply");
     assert_eq!(
         outline["result"]["structuredContent"]["schema"],
-        "mant.outline/v6"
+        "mant.outline/v7"
     );
     let encoded = outline["result"]["structuredContent"].to_string();
     for role in ["option", "command", "environment-variable"] {

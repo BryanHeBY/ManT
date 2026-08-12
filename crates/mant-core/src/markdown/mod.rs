@@ -240,7 +240,7 @@ fn parse_document_with_entries(
     );
 
     MantDocument {
-        schema: DocumentSchema::V6,
+        schema: DocumentSchema::V7,
         producer: markdown_producer(),
         source: DocumentSource {
             format: SourceFormat::Markdown,

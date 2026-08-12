@@ -475,7 +475,7 @@ JSON queries, schemas, protocol descriptions, and update reports.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v6` object from standard input.
+- `--request-json`: Read one closed `mant.request/v7` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
@@ -488,20 +488,20 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v6",
-  "nativeApiVersion": "6",
-  "requestSchema": "mant.request/v6",
-  "querySchema": "mant.query/v6",
-  "documentSchema": "mant.document/v6",
-  "outlineSchema": "mant.outline/v6",
-  "excerptSchema": "mant.excerpt/v6",
-  "searchSchema": "mant.search/v6"
+  "protocol": "mant.cli/v7",
+  "nativeApiVersion": "7",
+  "requestSchema": "mant.request/v7",
+  "querySchema": "mant.query/v7",
+  "documentSchema": "mant.document/v7",
+  "outlineSchema": "mant.outline/v7",
+  "excerptSchema": "mant.excerpt/v7",
+  "searchSchema": "mant.search/v7",
+  "catalogSchema": "mant.catalog/v7"
 }
 ```
 
-Request and response contracts advanced to v6 for explicit source selection,
-the first-class explain view, and role- and case-aware semantic entries,
-including a distinct general-variable role. The independent
+Request and response contracts advanced to v7 for shared document discovery
+and exact catalog addresses. The independent
 `mant.markdown/v1` search-coordinate contract remains unchanged.
 Future revisions may advance individual contracts only when their wire shapes
 change, so consumers must compare every exact schema identifier. Generated

@@ -12,8 +12,9 @@ use std::{
 };
 
 use mant_ast::{
-    OutlineDetail, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QueryView, SearchCase,
-    SearchScope, SearchSyntax, default_search_limit,
+    CatalogDocumentKind, CatalogQuery, DocumentCatalog, OutlineDetail, QueryExcerpt, QueryInput,
+    QueryOutline, QueryRequest, QueryView, SearchCase, SearchScope, SearchSyntax,
+    default_search_limit,
 };
 use mant_core::{QueryPolicy, QueryViewResult};
 use rmcp::{
@@ -23,7 +24,7 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::{
     io::{AsyncRead, ReadBuf},
     sync::Semaphore,
@@ -200,53 +201,22 @@ struct DocumentListParams {
     /// Case-insensitive substring applied to document names.
     query: Option<String>,
     /// Restrict discovery to registered Markdown or manual pages.
-    kind: Option<DocumentKindFilter>,
+    kind: Option<CatalogDocumentKind>,
+    /// Interpret `query` literally (the default) or as a regular expression.
+    syntax: Option<SearchSyntax>,
+    /// Case-folding policy. The default is `insensitive`.
+    case: Option<SearchCase>,
     /// Restrict manual pages to one exact section; excludes Markdown entries.
     section: Option<String>,
     /// Restrict Markdown discovery to one configured source.
     source: Option<String>,
-    /// Maximum entries returned from 1 through 1,000. The default is 100.
-    #[schemars(range(min = 1, max = 1000))]
+    /// Maximum entries returned from 1 through 10,000. The default is 100.
+    #[schemars(range(min = 1, max = 10000))]
     #[serde(default, deserialize_with = "lenient_scalar")]
     limit: Option<u32>,
     /// Number of matching entries to skip for deterministic pagination.
     #[serde(default, deserialize_with = "lenient_scalar")]
     offset: Option<u32>,
-}
-
-/// Optional catalog source-family filter.
-#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
-enum DocumentKindFilter {
-    Markdown,
-    Manual,
-}
-
-/// Discoverable local-document catalog returned to MCP clients.
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct DocumentCatalog {
-    total: u32,
-    returned: u32,
-    offset: u32,
-    truncated: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    next_offset: Option<u32>,
-    documents: Vec<DocumentSummary>,
-}
-
-/// One effective document after directory and locale precedence is applied.
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct DocumentSummary {
-    name: String,
-    kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    section: Option<String>,
-    path: String,
-    origin: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    source: Option<String>,
 }
 
 /// Accepts a native scalar or its stringified spelling such as `"10"` or `"True"`.
@@ -351,14 +321,15 @@ impl MantMcpServer {
             .acquire_owned()
             .await
             .map_err(|_| "MCP query service is shutting down".to_owned())?;
-        let documents = task::spawn_blocking(move || {
+        let query = catalog_query(&parameters);
+        let catalog = task::spawn_blocking(move || {
             let _permit = permit;
-            mant_core::list_available_documents()
+            mant_core::discover_documents(&query)
         })
         .await
         .map_err(|error| format!("MCP document discovery worker failed: {error}"))?
         .map_err(|error| error.to_string())?;
-        Ok(Json(build_document_catalog(documents, &parameters)))
+        Ok(Json(catalog))
     }
 
     /// Return a hierarchical tree of sections and optional addressable entries.
@@ -509,84 +480,24 @@ fn validate_document_list(
         return Err("source and section cannot be combined".to_owned());
     }
     let limit = parameters.limit.unwrap_or(100);
-    if !(1..=1000).contains(&limit) {
-        return Err("limit must be between 1 and 1000".to_owned());
+    if !(1..=10_000).contains(&limit) {
+        return Err("limit must be between 1 and 10000".to_owned());
     }
     parameters.limit = Some(limit);
     parameters.offset = Some(parameters.offset.unwrap_or(0));
     Ok(parameters)
 }
 
-fn build_document_catalog(
-    documents: Vec<mant_core::AvailableDocument>,
-    parameters: &DocumentListParams,
-) -> DocumentCatalog {
-    let query = parameters.query.as_ref().map(|query| query.to_lowercase());
-    let filtered = documents
-        .into_iter()
-        .filter(|document| {
-            query
-                .as_ref()
-                .is_none_or(|query| document.name.to_lowercase().contains(query))
-                && parameters.kind.is_none_or(|kind| match kind {
-                    DocumentKindFilter::Markdown => {
-                        document.kind == mant_core::AvailableDocumentKind::Markdown
-                    }
-                    DocumentKindFilter::Manual => {
-                        document.kind == mant_core::AvailableDocumentKind::Manual
-                    }
-                })
-                && parameters.section.as_ref().is_none_or(|section| {
-                    document
-                        .section
-                        .as_ref()
-                        .is_some_and(|value| value == section)
-                })
-                && parameters.source.as_ref().is_none_or(|source| {
-                    matches!(
-                        &document.origin,
-                        mant_core::AvailableDocumentOrigin::Source(candidate)
-                            if candidate == source
-                    )
-                })
-        })
-        .collect::<Vec<_>>();
-    let total = filtered.len();
-    let offset = usize::try_from(parameters.offset.unwrap_or(0)).unwrap_or(usize::MAX);
-    let limit = usize::try_from(parameters.limit.unwrap_or(100)).unwrap_or(100);
-    let start = offset.min(total);
-    let end = start.saturating_add(limit).min(total);
-    let documents = filtered[start..end]
-        .iter()
-        .map(|document| DocumentSummary {
-            name: document.name.clone(),
-            kind: match document.kind {
-                mant_core::AvailableDocumentKind::Markdown => "markdown",
-                mant_core::AvailableDocumentKind::Manual => "manual",
-            }
-            .to_owned(),
-            section: document.section.clone(),
-            path: document.path.to_string_lossy().into_owned(),
-            origin: match &document.origin {
-                mant_core::AvailableDocumentOrigin::Documents => "documents",
-                mant_core::AvailableDocumentOrigin::Source(_) => "source",
-                mant_core::AvailableDocumentOrigin::ManualPath => "manual-path",
-            }
-            .to_owned(),
-            source: match &document.origin {
-                mant_core::AvailableDocumentOrigin::Source(source) => Some(source.clone()),
-                mant_core::AvailableDocumentOrigin::Documents
-                | mant_core::AvailableDocumentOrigin::ManualPath => None,
-            },
-        })
-        .collect::<Vec<_>>();
-    DocumentCatalog {
-        total: u32::try_from(total).unwrap_or(u32::MAX),
-        returned: u32::try_from(documents.len()).unwrap_or(u32::MAX),
-        offset: u32::try_from(start).unwrap_or(u32::MAX),
-        truncated: end < total,
-        next_offset: (end < total).then(|| u32::try_from(end).unwrap_or(u32::MAX)),
-        documents,
+fn catalog_query(parameters: &DocumentListParams) -> CatalogQuery {
+    CatalogQuery {
+        pattern: parameters.query.clone(),
+        syntax: parameters.syntax.unwrap_or_default(),
+        case: parameters.case.unwrap_or_default(),
+        kind: parameters.kind,
+        source: parameters.source.clone(),
+        section: parameters.section.clone(),
+        limit: parameters.limit.unwrap_or(100),
+        offset: parameters.offset.unwrap_or(0),
     }
 }
 
@@ -611,7 +522,7 @@ fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
         section: selector.section,
     };
     QueryRequest {
-        schema: mant_ast::RequestSchema::V6,
+        schema: mant_ast::RequestSchema::V7,
         input,
         view,
     }
@@ -630,12 +541,13 @@ fn non_empty(value: &str, field: &str) -> Result<String, String> {
 mod tests {
     use std::{io, path::PathBuf};
 
+    use mant_ast::{CatalogDocumentKind, DocumentAddress};
     use mant_core::{AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin};
     use serde_json::json;
 
     use super::{
-        DocumentKindFilter, DocumentListParams, GetParams, MantMcpServer, OutlineParams,
-        SearchParams, build_document_catalog, validate_document_list,
+        DocumentListParams, GetParams, MantMcpServer, OutlineParams, SearchParams, catalog_query,
+        validate_document_list,
     };
 
     #[test]
@@ -736,14 +648,16 @@ mod tests {
     fn document_catalog_filters_and_paginates_both_source_families() {
         let parameters = validate_document_list(DocumentListParams {
             query: Some("PRINT".to_owned()),
-            kind: Some(DocumentKindFilter::Manual),
+            kind: Some(CatalogDocumentKind::Manual),
+            syntax: None,
+            case: None,
             section: None,
             source: None,
             limit: Some(1),
             offset: Some(1),
         })
         .expect("catalog parameters");
-        let catalog = build_document_catalog(
+        let catalog = mant_core::query_available_documents(
             vec![
                 AvailableDocument {
                     name: "printf".to_owned(),
@@ -767,15 +681,21 @@ mod tests {
                     origin: AvailableDocumentOrigin::ManualPath,
                 },
             ],
-            &parameters,
-        );
+            &catalog_query(&parameters),
+        )
+        .expect("catalog");
 
         assert_eq!(catalog.total, 2);
         assert_eq!(catalog.returned, 1);
         assert_eq!(catalog.offset, 1);
         assert!(!catalog.truncated);
-        assert_eq!(catalog.documents[0].section.as_deref(), Some("3"));
-        assert_eq!(catalog.documents[0].origin, "manual-path");
+        assert_eq!(
+            catalog.documents[0].address,
+            DocumentAddress::Manual {
+                name: "printf".to_owned(),
+                section: "3".to_owned(),
+            }
+        );
     }
 
     #[test]
@@ -846,7 +766,7 @@ mod tests {
             source: None,
         };
         let mut excerpt = QueryExcerpt {
-            schema: ExcerptSchema::V6,
+            schema: ExcerptSchema::V7,
             label: "demo".to_owned(),
             producer: None,
             source: None,
@@ -869,7 +789,7 @@ mod tests {
         use mant_ast::{Diagnostic, DiagnosticLevel, OutlineDetail, OutlineSchema, QueryOutline};
 
         let mut outline = QueryOutline {
-            schema: OutlineSchema::V6,
+            schema: OutlineSchema::V7,
             detail: OutlineDetail::Entries,
             label: "demo".to_owned(),
             source: None,

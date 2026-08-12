@@ -11,8 +11,8 @@ use crate::{
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum OutlineSchema {
-    #[serde(rename = "mant.outline/v6")]
-    V6,
+    #[serde(rename = "mant.outline/v7")]
+    V7,
 }
 
 /// Amount of semantic detail included in an outline projection.
@@ -26,7 +26,7 @@ pub enum OutlineDetail {
 /// A block-free tree used to discover selectable query content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:outline:v6"))]
+#[schemars(extend("$id" = "urn:mant:outline:v7"))]
 pub struct QueryOutline {
     pub schema: OutlineSchema,
     pub detail: OutlineDetail,
@@ -135,14 +135,14 @@ impl OutlineNode {
 /// Exact schema marker for selected query content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExcerptSchema {
-    #[serde(rename = "mant.excerpt/v6")]
-    V6,
+    #[serde(rename = "mant.excerpt/v7")]
+    V7,
 }
 
 /// One or more independently selected nodes from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:excerpt:v6"))]
+#[schemars(extend("$id" = "urn:mant:excerpt:v7"))]
 pub struct QueryExcerpt {
     pub schema: ExcerptSchema,
     pub label: String,

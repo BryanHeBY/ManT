@@ -4,7 +4,13 @@ use std::collections::BTreeMap;
 
 use schemars::{JsonSchema, Schema, generate::SchemaSettings};
 
-use crate::{QueryBundle, QueryExcerpt, QueryOutline, QueryRequest, QuerySearch};
+use crate::{DocumentCatalog, QueryBundle, QueryExcerpt, QueryOutline, QueryRequest, QuerySearch};
+
+/// Generate the local document-catalog JSON representation.
+#[must_use]
+pub fn document_catalog_json_schema() -> Schema {
+    serialize_schema::<DocumentCatalog>()
+}
 
 /// Generate the JSON representation accepted when deserializing a request.
 #[must_use]
@@ -40,6 +46,7 @@ pub fn query_search_json_schema() -> Schema {
 #[must_use]
 pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
     BTreeMap::from([
+        ("catalog", document_catalog_json_schema()),
         ("excerpt", query_excerpt_json_schema()),
         ("outline", query_outline_json_schema()),
         ("query", query_bundle_json_schema()),

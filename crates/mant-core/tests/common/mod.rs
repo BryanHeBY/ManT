@@ -163,7 +163,7 @@ pub const DEBIAN_GROFF_MAN_STYLE_SECTIONS: &[&str] = &[
 
 pub fn query_for_document(name: &str, document: &MantDocument) -> QueryBundle {
     QueryBundle {
-        schema: QuerySchema::V6,
+        schema: QuerySchema::V7,
         label: name.to_owned(),
         document: Some(document.clone()),
         tldr: None,
