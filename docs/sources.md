@@ -4,8 +4,8 @@ ManT can update small collections of Markdown documentation from an ordinary
 Git repository or a directly downloadable archive. This is deliberately a
 narrow document installer, not a general package manager: a source has either
 one Git branch or one archive URL, and only Markdown files are installed.
-Upstream inputs may use nested directories; every installed source is flattened
-into one private directory for lookup.
+Upstream inputs may use nested directories. Every installed source preserves
+that relative hierarchy in its private lookup directory.
 
 ## Layout
 
@@ -24,20 +24,28 @@ mant/
 ├── sources.toml
 └── documents/
     ├── personal.md
+    ├── languages/
+    │   └── zh-CN/
+    │       └── tool.md
     └── sources/
         └── team/
             ├── .mant-source.toml
-            └── tool.md
+            └── guides/
+                └── tool.md
 ```
 
-Files directly inside `documents/` are managed by the user. Each immediate
+Files and directories outside the reserved `documents/sources/` subtree are
+managed by the user. Each immediate
 directory below `documents/sources/` is managed by `mant --update-docs`; do not
 edit it by hand because a later update replaces the complete directory.
 
-Every discoverable Markdown document remains below `documents/`. Only `.md`
-and `.markdown` files directly inside that root or one installed source
-directory are discoverable. Lookup uses the filename stem. Other directories,
-extensions, and symbolic links are ignored.
+Every discoverable Markdown document remains below `documents/`. Regular `.md`
+and `.markdown` files are discovered recursively and addressed by their
+extension-free path relative to `documents/` or one installed source. Other
+extensions, directory symlinks, and file symlinks are ignored. A registry
+snapshot is bounded to 32 directory levels and 10,000 logical documents per
+origin; exceeding either limit fails discovery instead of returning a partial
+tree.
 
 ## Configuration
 
@@ -92,10 +100,11 @@ is eligible; `exclude` always wins.
 
 The source scan is recursive because upstream inputs may organize their files
 in subdirectories. `path = "."` selects the root of either a checkout or an
-extracted archive. Installation is flat. If two selected files
-would have the same public filename stem (compared case-insensitively for
-cross-platform safety), the source update fails and the
-previous installation remains in place.
+extracted archive. Installation preserves each selected file's path below that
+root. Two files may share a leaf name in different directories. If `.md` and
+`.markdown` would produce the same logical path, `.md` wins; paths that differ
+only by ASCII case are rejected for cross-platform safety. A failed source
+leaves the previous installation in place.
 Selecting no Markdown files is also an error, which protects an existing source
 from being replaced after a mistyped `path`, `include`, or `exclude` value.
 
@@ -131,8 +140,8 @@ on HTTPS and are limited to five hops. Archive downloads and ZIP, tar,
 tar+gzip, and tar+zstd extraction are built in and do not require Git or
 external archive commands.
 
-Both paths then select only regular `.md` and `.markdown` files, flatten them,
-check public-name collisions, and write `.mant-source.toml`. The normalized
+Both paths then select only regular `.md` and `.markdown` files, preserve their
+relative paths, check logical-path collisions, and write `.mant-source.toml`. The normalized
 configuration fingerprint excludes `priority`, so a priority-only change
 takes effect immediately without reinstalling identical files. The installed
 directory is replaced only after staging succeeds.
@@ -173,8 +182,8 @@ a real directory rather than a symbolic link, and contains a regular
 names, links, special files, missing or mismatched metadata, permission
 failures, and candidates that change during cleanup are retained and reported
 as `refused` or `failed`; either action produces exit status `1` after the
-complete JSON report is printed. Personal files directly below `documents/`
-are outside the prune boundary.
+complete JSON report is printed. Personal files and directories outside the
+reserved `documents/sources/` subtree are outside the prune boundary.
 
 If interruption leaves a `.prune-*` directory, later maintenance reports it
 as an incomplete transaction and never deletes it automatically. Inspect its
@@ -190,14 +199,18 @@ under its public name.
 
 For `mant tool`, Markdown lookup is:
 
-1. `documents/tool.md` or `documents/tool.markdown`;
+1. an exact or unique component-suffix path below personal `documents/`;
 2. configured sources by descending `priority`, then source name in ascending
    bytewise order;
 3. the native manual index.
 
-Within one directory, `.md` wins over `.markdown` for the same stem. Shadowed
-source candidates remain discoverable. Select exactly one configured source
-with:
+Exact relative paths win before component suffixes. If one origin contains
+both `languages/en/tool.md` and `languages/zh/tool.md`, the selector `tool` is
+ambiguous and ManT lists both paths instead of guessing. Complete catalog
+selectors (`documents/languages/en/tool`, `sources/team/guides/tool`, and
+`manual/1/tool`) address one candidate directly. Within one logical path,
+`.md` wins over `.markdown`. Shadowed source candidates remain discoverable.
+Select exactly one configured source with:
 
 ```sh
 mant tool --source team

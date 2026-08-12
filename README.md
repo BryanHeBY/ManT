@@ -82,7 +82,7 @@ independent of terminal detection.
 
 ```sh
 mant git
-mant README.md
+mant --input README.md
 mant tar --ui
 ```
 
@@ -115,10 +115,12 @@ mant --find process
 mant --find '^git' --regex --kind manual --format json
 ```
 
-`--list` groups documents by source or manual section. `--find` emits stable
-tab-separated records by default, making it suitable for filtering and shell
-pipelines. Literal discovery ranks an exact name first, then name prefixes,
-then other substring matches; stable name and source/section order break ties.
+`--list` exposes one tree rooted at `documents/`, `sources/<source>/`, and
+`manual/<section>/`. `--find` emits stable tab-separated canonical paths by
+default, making it suitable for filtering and shell pipelines. Literal
+discovery ranks exact paths or leaf names first, then component suffixes,
+prefixes, and other substring matches; stable path order breaks ties. A query
+containing `/` also matches the complete canonical path.
 
 Start with an outline and retrieve only the section or option that matters:
 
@@ -132,7 +134,10 @@ mant tar --explain=--exclude
 
 Heading paths are one-based. Path `0` and selector `tldr` are reserved for an
 available quick reference; `--tldr` is the concise equivalent of
-`--node tldr`.
+`--node tldr`. On a color terminal its default output uses the same semantic
+styles as the TUI; pipes, `NO_COLOR`, and `TERM=dumb` receive plain text.
+`--color always|never` overrides detection, while an explicit `--format`
+continues to select Markdown, text, or JSON.
 
 Search returns the nearest reusable outline node and exact generated-Markdown
 coordinates:
@@ -147,7 +152,7 @@ support `--format man`, which emits manual-only plain text without tldr content:
 
 ```sh
 mant git --format markdown
-mant README.md --format text
+mant --input README.md --format text
 mant git --format json --compact
 ```
 
@@ -204,10 +209,13 @@ cp docs/manuals/mant.md "${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/man
 mant mant
 ```
 
-An unqualified name checks the user directory first, then configured document
-sources, and finally the native manual index. Only
-`.md` and `.markdown` files directly inside each installed directory are
-discoverable; nested directories and symbolic links are ignored. `--manual`
+An unqualified selector checks the user directory first, then configured
+document sources, and finally the native manual index. `.md` and `.markdown`
+files are discovered recursively and retain their extension-free relative
+paths; symbolic links are ignored. A unique component suffix such as `tool`
+can select `languages/en/tool`, while a collision is reported explicitly.
+Complete selectors such as `documents/languages/en/tool`,
+`sources/team/tool`, and `manual/1/git` are unambiguous. `--manual`
 bypasses Markdown and selects only a native manual on every supported platform.
 On Windows, packages should keep canonical executable suffixes such as
 `tool.exe.md`; `mant tool` falls back through `PATHEXT`, while `mant tool.exe`
@@ -236,14 +244,22 @@ order. Use `mant tool --source team` to select one source
 explicitly. See [document sources](docs/sources.md) for paths, exact selector
 rules, metadata, update safety, and complete examples.
 
-Use a path for one-off local files or `-` for non-interactive standard input:
+Physical files are deliberately separate from logical selectors. Use
+`--input` for one-off Markdown or roff, and specify a format for stdin:
 
 ```sh
-mant README.md
-mant README.md --outline
-mant README.md --node 1 --format markdown
-cat guide.md | mant -
+mant --input README.md
+mant --input ./widget.1
+mant --input /usr/share/man/man1/git.1.gz --outline
+cat guide.md | mant --input - --input-format markdown
+cat widget.1 | mant --input - --input-format roff
 ```
+
+`--input-format auto|markdown|roff` defaults to `auto` for files. Roff input
+accepts plain, gzip, and zstd files, but standalone redirect-only `.so` pages
+are not followed; register those through MANPATH so their target remains
+inside an indexed root. Logical manual queries also accept `mant 1 git`,
+`mant 'git(1)'`, and `mant git --section 1`.
 
 ManT structures headings, prose, emphasis, code, links, code blocks, lists,
 GFM tables, hard breaks, and thematic breaks. A complete list such as
@@ -319,8 +335,9 @@ versioned JSON and MCP boundaries.
 ## License
 
 ManT-authored work is licensed under the [Apache License 2.0](LICENSE).
-Rust dependencies, bundled parser sources, real-world test fixtures, and
-screenshot fonts retain their upstream terms; see the
+Rust dependencies, bundled parser sources, cached tldr-pages content,
+real-world test fixtures, and screenshot fonts retain their upstream terms;
+upstream tldr pages are CC BY 4.0 and are attributed at render time. See the
 [third-party notice map](THIRD_PARTY_NOTICES.md). Native releases include a
 CycloneDX SBOM and signed GitHub provenance/SBOM attestations.
 Please report vulnerabilities through the private process in the

@@ -132,17 +132,19 @@ mant --find process
 mant --find '^git' --regex --kind manual --format json
 ```
 
-`--list` groups human-readable text by configured Markdown source or native
-manual section. `--find` emits tab-separated `category`, `name`, and `kind`
-records by default. JSON output contains a flat, paginatable `documents` array;
-each row has an exact `address` and a provenance `path`. Paths are descriptive
-local state and must not be used as document identifiers.
+`--list` renders the hierarchy rooted at `documents`, `sources/<source>`, and
+`manual/<section>`. `--find` emits tab-separated canonical catalog paths and
+document kinds by default. JSON output contains a flat, paginatable `documents`
+array; each row has an exact `address`, stable `catalogPath`, and descriptive
+local `sourcePath`.
 
 Markdown addresses distinguish the root `documents` directory from every
 configured source. Manual addresses contain both name and exact section, so
 shadowed Markdown candidates and multiple manual sections remain independently
-selectable. Literal matching is case-insensitive by default; exact names rank
-before prefixes and other substrings. Regex and case policies use the same
+selectable. Literal matching is case-insensitive by default; exact paths or
+leaf names rank before component suffixes, prefixes, and other substrings. A
+pattern containing `/` additionally matches the complete canonical path.
+Regex and case policies use the same
 values as document-content search.
 
 ## One-Shot Process Transport
@@ -198,25 +200,25 @@ Every request has three required fields:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `schema` | Exact string | Must be `mant.request/v7` |
-| `input` | `QueryInput` union | Resolvable document name or local Markdown path |
+| `input` | `QueryInput` union | Logical document selector or explicit local input file |
 | `view` | `QueryView` union | Full, outline, excerpt, explain, or search projection |
 
 ### Input Variants
 
-An unqualified name first checks the singular per-user `documents` directory,
+An unqualified selector first checks the singular per-user `documents` tree,
 then installed sources configured by `sources.toml` in descending
 `priority` and ascending bytewise source-name order, then the native manual
 index. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as the
-data root. Only regular `.md` and `.markdown` files immediately inside each
-document directory are registered; nested directories and symbolic links are
-ignored:
+data root. Regular `.md` and `.markdown` files are registered recursively by
+extension-free relative path; symbolic links are ignored. Exact paths precede
+unique component suffixes, and collisions are reported explicitly:
 
 ```json
 {
   "kind": "document",
-  "name": "printf",
+  "selector": "printf",
   "section": "3"
 }
 ```
@@ -227,7 +229,7 @@ one configured source and bypasses root Markdown and manuals:
 ```json
 {
   "kind": "document",
-  "name": "printf",
+  "selector": "printf",
   "source": "team"
 }
 ```
@@ -249,9 +251,10 @@ the defaults except where an empty component inserts them; an unset `MANPATH`
 uses platform conventions. Unix derives user/XDG, PATH, and system roots;
 Windows defaults only to `%USERPROFILE%\.local\share\man`.
 A root may contain `tool.1` directly or a hierarchy such as
-`project-man/man1/tool.1`. A raw `.1` path is not a request input variant. Only
-raw, gzip, and zstd sources are indexed because those are the formats ManT's
-bounded input layer decodes before parsing.
+`project-man/man1/tool.1`; both become the logical catalog address
+`manual/1/tool`. Raw, gzip, and zstd sources are indexed because those are the
+formats ManT's bounded input layer decodes before parsing. A standalone `.1`
+path belongs to the explicit `file` input variant rather than manual discovery.
 
 The native index accepts a leaf page symlink when its target is a regular file,
 including a target outside the indexed root. It does not traverse directory
@@ -259,18 +262,22 @@ symlinks or register broken links. Redirect-only `.so` targets are resolved
 from the leaf's logical indexed location and must remain inside the canonical
 manual root throughout the redirect chain.
 
-A local Markdown file is selected by path:
+A local Markdown or roff file is selected explicitly by path and parser:
 
 ```json
 {
-  "kind": "markdown-file",
-  "path": "docs/manuals/mant.md"
+  "kind": "file",
+  "path": "docs/manuals/mant.md",
+  "format": "markdown"
 }
 ```
 
 The process request intentionally has no raw `content` variant. Direct
-`mant -` accepts up to 16 MiB of UTF-8 Markdown from stdin, but that convenience
-mode does not change the versioned request schema.
+`format` is `auto`, `markdown`, or `roff`; auto uses a file suffix and supports
+plain, gzip, and zstd roff. Direct standard input uses
+`mant --input - --input-format markdown|roff`, accepts up to 16 MiB, and does
+not add embedded raw content to the versioned request schema. Standalone roff
+does not follow redirect-only `.so` pages.
 
 ### View Variants
 
@@ -314,7 +321,7 @@ Request a full manual:
   "schema": "mant.request/v7",
   "input": {
     "kind": "document",
-    "name": "printf",
+    "selector": "printf",
     "section": "3"
   },
   "view": {
@@ -330,7 +337,7 @@ Discover all sections and semantic entries:
   "schema": "mant.request/v7",
   "input": {
     "kind": "document",
-    "name": "tar"
+    "selector": "tar"
   },
   "view": {
     "kind": "outline",
@@ -346,7 +353,7 @@ Explain one semantic entry directly (sections with the same name are ignored):
   "schema": "mant.request/v7",
   "input": {
     "kind": "document",
-    "name": "tar"
+    "selector": "tar"
   },
   "view": {
     "kind": "explain",
@@ -362,7 +369,7 @@ Retrieve a section and one option by selectors returned from an outline:
   "schema": "mant.request/v7",
   "input": {
     "kind": "document",
-    "name": "tar"
+    "selector": "tar"
   },
   "view": {
     "kind": "excerpt",
@@ -380,8 +387,9 @@ Search a Markdown document:
 {
   "schema": "mant.request/v7",
   "input": {
-    "kind": "markdown-file",
-    "path": "README.md"
+    "kind": "file",
+    "path": "README.md",
+    "format": "markdown"
   },
   "view": {
     "kind": "search",
@@ -401,7 +409,7 @@ A shell client can send a request without a temporary file:
 
 ```sh
 printf '%s\n' \
-  '{"schema":"mant.request/v7","input":{"kind":"document","name":"tar"},"view":{"kind":"outline","detail":"entries"}}' \
+  '{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"entries"}}' \
   | mant --request-json --format json --compact
 ```
 
@@ -438,7 +446,7 @@ An abbreviated but structurally valid Markdown result is:
     "schema": "mant.document/v7",
     "producer": {
       "name": "mant",
-      "version": "0.6.4",
+      "version": "0.7.0",
       "engine": {
         "name": "pulldown-cmark",
         "version": "0.13"
@@ -586,8 +594,9 @@ Inline nodes are tagged by `type`:
 
 Visible child content must be preserved even when a consumer cannot activate
 a link. `section-reference.target` is a document ID, not a generated Markdown
-slug. `document-reference` is produced only for basename-only `.md` and
-`.markdown` destinations; it never grants access to a relative directory.
+slug. `document-reference` retains a relative `.md` or `.markdown` path and is
+resolved lexically only inside the current registered source; `..` cannot
+cross that source boundary.
 `manual-reference` comes directly from mdoc `Xr`, or conservatively from the
 traditional bold `name(section)` form inside a man page's `SEE ALSO` section.
 
@@ -850,7 +859,7 @@ With the current runtime, a client requesting `2025-11-25` receives:
   },
   "serverInfo": {
     "name": "mant",
-    "version": "0.6.4"
+    "version": "0.7.0"
   },
   "instructions": "Read locally installed Markdown documents and manual pages by name. Use mant_documents_list for discovery, optionally select a configured source, then call mant_document_outline before retrieving IDs, paths, or aliases. Files may change between calls; this server does not update sources."
 }
@@ -899,13 +908,13 @@ Discover both registered Markdown and section-qualified manual pages with:
 ```
 
 The catalog response reports `total`, `returned`, `offset`, `truncated`, an
-optional `nextOffset`, and `documents`. Each document has `name`, `kind`,
-optional `source`, optional `section`, `path`, and `origin`. `kind` accepts
-`markdown` or `manual`; `section` excludes Markdown entries. `query` is a
-case-insensitive name substring. `origin` is `documents`, `source`, or
-`manual-path`; source-backed entries also carry their source name. Shadowed
-Markdown candidates remain in the catalog. `limit` defaults to 100 and is
-capped at 1,000.
+optional `nextOffset`, and `documents`. Each row has an exact tagged `address`,
+a stable canonical `catalogPath`, and a descriptive local `sourcePath`.
+Markdown addresses carry their relative path plus a `documents` or named
+`source` origin; manual addresses carry the exact name and section. `query`
+matches leaf names and relative paths case-insensitively by default; a query
+containing `/` also matches canonical paths. Shadowed Markdown candidates
+remain in the catalog. `limit` defaults to 100 and is capped at 10,000.
 
 An outline tool call is:
 

@@ -17,9 +17,9 @@ include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 grep-matcher.workspace = true
 grep-regex.workspace = true
 flate2.workspace = true
-libmandoc-rs = { path = "../libmandoc-rs", version = "=0.6.4" }
-mant-ast = { path = "../mant-ast", version = "=0.6.4" }
-mant-sources = { path = "../mant-sources", version = "=0.6.4" }
+libmandoc-rs = { path = "../libmandoc-rs", version = "=0.7.0" }
+mant-ast = { path = "../mant-ast", version = "=0.7.0" }
+mant-sources = { path = "../mant-sources", version = "=0.7.0" }
 pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -9,7 +9,7 @@ document model.
 mant git                              # interactive reader in a terminal
 mant gcc --outline                    # semantic hierarchy for an agent
 mant tar --explain=--exclude          # retrieve one option directly
-mant README.md --node 1               # select one Markdown section
+mant --input README.md --node 1       # select one Markdown section
 mant git --format json --compact      # deterministic machine output
 mant --mcp                            # read-only MCP over stdio
 ```
@@ -51,7 +51,7 @@ terminals. Use `--ui` to require it explicitly:
 
 ```sh
 mant git
-mant README.md --ui
+mant --input README.md --ui
 ```
 
 The reader provides a resizable outline, collapsible sections, semantic option
@@ -97,18 +97,19 @@ outside its indexed root, but directory symlinks are not traversed and every
 `.so` target must remain inside that root. Windows defaults to
 `%USERPROFILE%\.local\share\man` and also honors configured manual paths.
 
-Reusable Markdown documents can be registered by filename below:
+Reusable Markdown documents can be registered by relative path below:
 
 - Linux: `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`
 - macOS: `~/Library/Application Support/ManT/documents`
 - Windows: `%APPDATA%\ManT\documents`
 
-Only immediate regular Markdown files are discovered; nested directories and
+Regular Markdown files are discovered recursively with their hierarchy;
 symlinks are ignored. Git or direct archive sources configured in sibling
 `sources.toml` can be installed with `mant --update-docs` and selected with
 `--source`. Removed source tables are reported as orphaned installed data;
 preview cleanup with `mant --prune-docs --dry-run` and apply it with
-`mant --prune-docs`. An unqualified name resolves root documents, sources by
+`mant --prune-docs`. An unqualified path or unique component suffix resolves
+root documents, sources by
 descending priority and ascending source name, then a native manual. See the
 complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 
@@ -117,6 +118,11 @@ reserved outline node `0`. `--tldr` selects only that node, while `--manual`
 and `--section` select only native manual content. Reads prefer installed-client
 caches and then ManT's private cache; `mant --update-tldr` updates through an
 installed client or the private checkout.
+
+One-off physical input uses `mant --input PATH`; Markdown and plain/gzip/zstd
+roff files are supported. Standard input additionally requires
+`--input-format markdown|roff`. Manual selectors accept `mant 1 git`,
+`mant 'git(1)'`, and `mant manual/1/git`.
 
 ## Crate architecture
 
@@ -135,4 +141,5 @@ ManT repository.
 ## License
 
 Apache-2.0. Native builds also contain the separately attributed upstream
-mandoc sources distributed by `libmandoc-rs`.
+mandoc sources distributed by `libmandoc-rs`; downloaded tldr-pages content
+is CC BY 4.0 and is attributed when rendered.

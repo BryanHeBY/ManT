@@ -20,7 +20,7 @@ Build and run the unified command directly through Cargo:
 
 ```sh
 cargo run --locked -p mant -- git
-cargo run --locked -p mant -- README.md
+cargo run --locked -p mant -- --input README.md
 ```
 
 Run the complete local verification boundary before handing off a change:

@@ -36,11 +36,11 @@ fi
 
 printf '\n==> smoke-test %s executable\n' "$profile"
 help=$("$mant" --help)
-grep -Fq 'mant <NAME|MARKDOWN|-> [OPTIONS]' <<<"$help"
-grep -Fq 'mant README.md' <<<"$help"
+grep -Fq 'mant <SELECTOR> [OPTIONS]' <<<"$help"
+grep -Fq 'mant --input README.md' <<<"$help"
 grep -Fq -- '--ui' <<<"$help"
 
-query=$("$mant" README.md --format json --compact)
+query=$("$mant" --input README.md --format json --compact)
 grep -Fq '"schema":"mant.query/v7"' <<<"$query"
 grep -Fq '"schema":"mant.document/v7"' <<<"$query"
 

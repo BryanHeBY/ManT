@@ -156,8 +156,9 @@ mant mant
 For a system-wide executable installation, use `/usr/local/bin/mant`; reusable
 Markdown still belongs in each user's data directory. The archive also
 contains the project README, the Apache-2.0 license, and a `LICENSES/` bundle
-with the generated Rust dependency report, libmandoc notices, upstream
-inventory, and complete reusable terms.
+with the generated Rust dependency report, product third-party notice,
+libmandoc notices, CC BY 4.0 text, upstream inventory, and complete reusable
+terms.
 
 ### Windows
 
@@ -174,8 +175,8 @@ mant mant
 ```
 
 The ZIP has the same documentation and complete `LICENSES\` bundle as the
-Linux archives, including `RUST_DEPENDENCIES.html` and
-`THIRD_PARTY_NOTICES.md`.
+Linux archives, including `RUST_DEPENDENCIES.html`,
+`PRODUCT_THIRD_PARTY_NOTICES.md`, `CC-BY-4.0.txt`, and the libmandoc notices.
 
 ## Build from a repository checkout
 

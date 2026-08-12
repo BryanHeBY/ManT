@@ -55,7 +55,7 @@ every destination as an untyped URI:
 
 - `external-link` stores an external `uri` and its rendered label;
 - `email-link` stores an address without a synthetic `mailto:` prefix;
-- `document-reference` identifies a flat Markdown document in the current source;
+- `document-reference` identifies a hierarchical Markdown path in the current source;
 - `manual-reference` identifies another manual by name and optional section;
 - `section-reference` targets a document-local section ID;
 - `anchor` marks a zero-width document-local destination such as mdoc `Tg`.
@@ -90,9 +90,10 @@ The public surface is use-case oriented rather than a mirror of parser
 internals:
 
 ```text
-mant <name> [--format <format>]   -> query Markdown, text, or JSON
-mant <path.md> [--format <format>] -> query one local Markdown file
-mant -                             -> read Markdown directly from stdin
+mant <selector> [--format <format>] -> query Markdown, text, or JSON
+mant <section> <name>               -> query an exact manual section
+mant --input <path>                 -> query one local Markdown or roff file
+mant --input - --input-format <format> -> read Markdown or roff from stdin
 mant <name> --outline [sections|entries] -> selectable section and semantic-entry tree
 mant <name> --node <path-or-id>   -> selected section subtrees
 mant <name> --explain <alias-or-id> -> one option, command, variable, or environment entry
@@ -122,7 +123,7 @@ read-only tools: local-document discovery, outline, selected content,
 semantic explanation, and search. Document tools accept a name plus an
 optional configured source or manual section. That narrower boundary prevents
 agents from opening arbitrary host paths: Markdown must first be placed in the
-flat root directory or installed by the native CLI. MCP only reads current
+registered document tree or installed by the native CLI. MCP only reads current
 local state through `mant-sources` without its update feature and never invokes
 Git or HTTP. Ordinary names continue to fall back to the
 native manual index. Input and output schemas derive directly from Rust types.
@@ -134,9 +135,10 @@ protocol; it does not add another executable or a second document
 interpretation path.
 
 `mant.request/v7` requires a `schema` marker, one closed `input`, and one
-closed `view`. The input is either a document name with an optional source or manual section or a
-local Markdown path; raw document content is deliberately not part of the
-process contract. Direct `mant -` reads bounded UTF-8 input before constructing
+closed `view`. The input is either a logical document selector with an optional
+source or manual section, or an explicit Markdown/roff file plus parser format;
+raw document content is deliberately not part of the process contract. Direct
+`mant --input -` reads bounded input before constructing
 an in-memory query and does not add a third public input variant. Unknown
 fields are rejected at every level. `full` returns `mant.query/v7`, `outline`
 selects either section-only or entry-aware structure, `excerpt` selects one or
@@ -188,12 +190,13 @@ The TUI keeps its interaction loop in memory and never spawns a process while
 typing in either search field. Its document finder sends bounded literal,
 case-insensitive queries through the native host boundary to the complete
 resolver snapshot, so a catalog page cannot hide later exact matches. The same
-snapshot ranks exact names before prefixes and other substrings. Loading a
+snapshot ranks exact paths and leaf names before component suffixes, prefixes,
+and other substrings. Loading a
 selected address returns through the host boundary, and successful jumps
 update a bounded semantic back/forward history.
 
 Navigation stays typed through rendering and hit testing. Markdown fragments
-and mdoc `Sx` target an anchor in the current document; flat Markdown document
+and mdoc `Sx` target an anchor in the current document; hierarchical Markdown document
 references retain their source boundary; mdoc `Xr`, GNU man `MR`, and
 conservative strongly styled `name(section)` pairs carry an exact manual
 address. GNU man `UR`/`UE` and `MT`/`ME` lower to external URI nodes even with
@@ -264,7 +267,7 @@ the document contract. ManT never invokes a host renderer or chooses between
 renderer outputs.
 
 `--manual` is an input-resolution policy outside `mant.request/v7`. It bypasses
-registered Markdown with the same filename stem, requires a readable native
+registered Markdown with the same selector, requires a readable native
 manual, and omits any attached tldr quick reference. An explicit `--section`
 has the same exclusivity because sections belong only to native manuals.
 `--tldr` remains a CLI convenience for the existing reserved `tldr` node
@@ -277,8 +280,9 @@ being silently replaced by another renderer.
 
 Registered documents and caches have distinct lifecycles. Each platform has
 one user data root containing `sources.toml` and a `documents/` tree. Personal
-documents are flat at that tree's root; installed source directories and their
-revision metadata live below `documents/sources/`. The native CLI alone updates
+documents retain relative directories throughout that tree; installed source
+directories and their revision metadata live below `documents/sources/`. The
+native CLI alone updates
 Git repositories or direct archives with transactional directory replacement.
 The private tldr checkout remains below the platform cache root.
 Installed-client tldr roots

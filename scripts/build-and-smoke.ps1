@@ -34,10 +34,10 @@ if (-not (Test-Path -PathType Leaf $Mant)) {
 
 Write-Host "`n==> smoke-test $BuildProfile executable"
 $Help = (& $Mant --help) -join "`n"
-if ($LASTEXITCODE -ne 0 -or $Help -notmatch "mant <NAME\|MARKDOWN\|-> \[OPTIONS\]") {
+if ($LASTEXITCODE -ne 0 -or $Help -notmatch "mant <SELECTOR> \[OPTIONS\]") {
     throw "$BuildProfile help smoke test failed"
 }
-$Query = (& $Mant README.md --format json --compact) -join "`n"
+$Query = (& $Mant --input README.md --format json --compact) -join "`n"
 if (
     $LASTEXITCODE -ne 0 -or
     $Query -notmatch '"schema":"mant.query/v7"' -or

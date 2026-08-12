@@ -21,11 +21,11 @@
 
 - Read a local Markdown file:
 
-`mant {{path/to/document.md}}`
+`mant --input {{path/to/document.md}}`
 
 - Read Markdown from standard input:
 
-`cat {{path/to/document.md}} | mant -`
+`cat {{path/to/document.md}} | mant --input - --input-format markdown`
 
 - Update configured document sources:
 
@@ -45,7 +45,9 @@
 ## Synopsis
 
 ```text
-mant <NAME|MARKDOWN|-> [OPTIONS]
+mant <SELECTOR> [OPTIONS]
+mant <SECTION> <NAME> [OPTIONS]
+mant --input <PATH|-> [--input-format FORMAT] [OPTIONS]
 mant --list [FILTERS]
 mant --find PATTERN [FILTERS]
 mant --request-json [--format FORMAT] [--compact]
@@ -84,9 +86,9 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
 pagination. Plain `--find` output is tab-separated as
-`category`, `name`, and `kind`, while `--format json` returns
-`mant.catalog/v7`. `--list` groups the same catalog by `documents`, configured
-source name, or `manual/SECTION`.
+the canonical catalog path and `kind`, while `--format json` returns
+`mant.catalog/v7`. `--list` groups the same hierarchy beneath `documents`,
+`sources/SOURCE`, or `manual/SECTION`.
 
 ```sh
 mant --list
@@ -97,23 +99,30 @@ mant --list --section 3 --format json
 
 ## Input
 
-Input is resolved before parsing. An ordinary value first checks the user's
-flat `documents` directory, then configured installed sources by descending
+Input is resolved before parsing. An ordinary selector first checks the user's
+hierarchical `documents` tree, then configured installed sources by descending
 priority and source name in ascending bytewise order, and finally the native
 manual index. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as its
-data root. Values ending in `.md` or `.markdown`, other path-like values, and
-the exact value `-` select Markdown directly instead.
+data root. Physical filesystem paths are never inferred from positional
+selectors; use `--input PATH` explicitly.
 
-The filename supplies a registered document name: `mant.md` is queried as
-`mant mant`. Only regular `.md` and `.markdown` files immediately inside a
-registered directory are visible. Nested directories and symbolic links are
-ignored. Root documents always win; source priority and name resolve remaining
-duplicates in the order above; `.md` wins over `.markdown` within one
-directory. `--source NAME` selects exactly one configured Git or archive
-source. `--manual` or `--section` selects only native manual content and cannot
-be combined with `--source`.
+Registered `.md` and `.markdown` files retain their extension-free relative
+paths. Exact paths win before unique component suffixes; ambiguous suffixes are
+reported with their candidates. Complete selectors use
+`documents/PATH`, `sources/SOURCE/PATH`, or `manual/SECTION/NAME`. Root
+documents always win; source priority and name resolve remaining duplicates in
+the order above; `.md` wins over `.markdown` for one logical path.
+`--source NAME` selects exactly one configured Git or archive source.
+`--manual` or `--section` selects only native manual content and cannot be
+combined with `--source`.
+
+`--input-format auto|markdown|roff` defaults to `auto` for files and infers the
+parser from the filename suffix. The roff loader accepts plain, gzip, and zstd
+sources and detects their compression safely. Stdin requires `markdown` or
+`roff` explicitly. Direct input may use any OS path but does not follow
+redirect-only `.so` pages; those require an indexed MANPATH root.
 
 Windows document packages should retain executable suffixes in canonical
 filenames, such as `cargo.exe.md`. An extensionless query such as `mant cargo`
@@ -140,7 +149,9 @@ and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 - `--manual`: Require only a native manual instead of registered Markdown with
   the same name or an attached quick reference.
 - `--tldr`: Print only the available quick reference; equivalent to
-  `--node tldr`.
+  `--node tldr`. The default is styled terminal text on a color TTY and plain
+  text through a pipe; use `--color always|never` or an explicit `--format` to
+  override it.
 - `--source SOURCE`: Require one configured installed Markdown source.
 
 Recoverable parser findings remain structured in JSON output. ManT does not
@@ -184,9 +195,10 @@ index broken links. If that leaf is a redirect-only `.so` page, its target is
 resolved from the symlink's logical location and must remain inside the
 configured root; the same boundary applies to every later redirect.
 
-Do not pass `./widget.1` as the input operand: path-like operands are reserved
-for Markdown documents. Register local roff in a manual hierarchy and query
-it by name instead.
+Logical queries accept `mant widget --section 1`, `mant 1 widget`,
+`mant 'widget(1)'`, and the canonical `mant manual/1/widget`. For isolated
+files, `mant --input ./widget.1` is also valid; only MANPATH queries may resolve
+redirect-only `.so` aliases.
 
 ## Markdown Documents
 
@@ -212,10 +224,10 @@ implementation.
 ### Supported Inline Syntax
 
 Plain text, strong and emphasized text, inline code, explicit hard line
-breaks, standard links, email links, document-local fragments, and flat
+breaks, standard links, email links, document-local fragments, and hierarchical
 relative `.md` or `.markdown` links remain semantic inline nodes. Relative
-document links resolve only inside the current registered source; paths with
-directories or `..` remain ordinary external destinations. Soft source line
+document links resolve lexically inside the current registered source;
+`..` is accepted only while it remains within that source. Soft source line
 breaks become spaces, while hard breaks remain visible.
 
 ### ManT Extensions
@@ -394,7 +406,7 @@ embedded tldr preface does not shift those coordinates.
 
 ## Interactive Reader
 
-With a complete document name or Markdown path and a terminal on stdin and stdout,
+With a complete logical selector or `--input` file and a terminal on stdin and stdout,
 `mant` opens its Ratatui reader. `--ui` requires this mode explicitly. A
 projection option or `--format` selects deterministic output instead.
 
