@@ -1,0 +1,24 @@
+diff --git a/man_macro.c b/man_macro.c
+--- a/man_macro.c
++++ b/man_macro.c
+@@ -81,0 +82 @@ static const struct man_macro man_macros[MAN_MAX - MAN_TH] = {
++	{ in_line_eoln, 0 }, /* MR */
+diff --git a/man_validate.c b/man_validate.c
+--- a/man_validate.c
++++ b/man_validate.c
+@@ -103,0 +104 @@ static	const v_check man_valids[MAN_MAX - MAN_TH] = {
++	NULL,       /* MR */
+diff --git a/roff.c b/roff.c
+--- a/roff.c
++++ b/roff.c
+@@ -372 +372,2 @@ const char *__roff_name[MAN_MAX + 1] = {
+-	"UE",		"MT",		"ME",		NULL
++	"UE",		"MT",		"ME",		"MR",
++	NULL
+diff --git a/roff.h b/roff.h
+--- a/roff.h
++++ b/roff.h
+@@ -478 +478,2 @@ enum	roff_tok {
+-	MAN_ME,
++	MAN_ME,
++	MAN_MR,

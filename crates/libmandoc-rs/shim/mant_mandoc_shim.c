@@ -46,6 +46,8 @@ struct mant_mandoc_node {
 	unsigned int		 flags;
 	int			 list_kind;
 	int			 display_kind;
+	int			 font_kind;
+	int			 author_mode;
 	int			 compact;
 	char			*offset;
 	char			*width;
@@ -743,6 +745,31 @@ copy_normalized_data(struct mant_mandoc_node *node,
 		case DISP__NONE:
 			break;
 		}
+	} else if (source->tok == MDOC_Bf) {
+		switch (source->norm->Bf.font) {
+		case FONT_Em:
+			node->font_kind = MANT_MANDOC_FONT_EMPHASIS;
+			break;
+		case FONT_Li:
+			node->font_kind = MANT_MANDOC_FONT_LITERAL;
+			break;
+		case FONT_Sy:
+			node->font_kind = MANT_MANDOC_FONT_SYMBOLIC;
+			break;
+		case FONT__NONE:
+			break;
+		}
+	} else if (source->tok == MDOC_An) {
+		switch (source->norm->An.auth) {
+		case AUTH_split:
+			node->author_mode = MANT_MANDOC_AUTHOR_SPLIT;
+			break;
+		case AUTH_nosplit:
+			node->author_mode = MANT_MANDOC_AUTHOR_NOSPLIT;
+			break;
+		case AUTH__NONE:
+			break;
+		}
 	}
 }
 
@@ -839,6 +866,18 @@ int
 mant_mandoc_node_display_kind(const struct mant_mandoc_node *node)
 {
 	return node == NULL ? MANT_MANDOC_DISPLAY_NONE : node->display_kind;
+}
+
+int
+mant_mandoc_node_font_kind(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? MANT_MANDOC_FONT_NONE : node->font_kind;
+}
+
+int
+mant_mandoc_node_author_mode(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? MANT_MANDOC_AUTHOR_NONE : node->author_mode;
 }
 
 int

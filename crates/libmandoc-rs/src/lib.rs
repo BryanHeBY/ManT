@@ -14,8 +14,8 @@ mod ffi;
 mod parser;
 
 pub use ast::{
-    DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind, NormalizedListKind,
-    TableAlignment, TableCell,
+    AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
+    NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
 };
 pub use diagnostics::{Diagnostic, DiagnosticLevel, SourceLocation};
 pub use parser::{
@@ -39,8 +39,8 @@ mod tests {
     use std::io::Write;
 
     use super::{
-        Compression, DisplayKind, Document, IncludePolicy, MacroSet, Node, NodeKind,
-        NormalizedListKind, ParseError, ParseOptions, Parser, TableAlignment,
+        AuthorMode, Compression, DisplayKind, Document, IncludePolicy, MacroSet, Node, NodeKind,
+        NormalizedFont, NormalizedListKind, ParseError, ParseOptions, Parser, TableAlignment,
     };
 
     #[cfg(windows)]
@@ -116,6 +116,56 @@ mod tests {
         assert!(document.metadata.has_body);
         assert_eq!(document.root.kind, NodeKind::Root);
         assert!(!document.root.children.is_empty());
+    }
+
+    #[test]
+    fn parser_recognizes_the_modern_man_reference_macro() {
+        let report = Parser::default()
+            .parse_bytes(
+                "modern-reference.1",
+                b".TH MODERN-REFERENCE 1\n.SH NAME\nmodern-reference \\- fixture\n\
+.SH SEE ALSO\n.MR git-add 1 ,\n",
+            )
+            .expect("parse modern man reference");
+
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.message.contains("unknown macro")),
+            "MR must be a native parser node: {:?}",
+            report.diagnostics
+        );
+        let reference = find_macro(&report.document.root, "MR").expect("MR node");
+        assert_eq!(reference.kind, NodeKind::Element);
+        assert_eq!(
+            reference
+                .children
+                .iter()
+                .filter_map(|child| child.text.as_deref())
+                .collect::<Vec<_>>(),
+            ["git-add", "1", ","]
+        );
+    }
+
+    #[test]
+    fn parser_accepts_pandoc_verbatim_font_aliases() {
+        let report = Parser::default()
+            .parse_bytes(
+                "pandoc-fonts.1",
+                b".TH PANDOC-FONTS 1\n.SH NAME\npandoc-fonts \\- fixture\n\
+.SH DESCRIPTION\n\\f[C]code\\f[R] \\f[V]verbatim\\f[R] \\f[VB]bold\\f[R] \\f[VI]italic\\f[R]\n",
+            )
+            .expect("parse Pandoc font aliases");
+
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.message.contains("invalid escape sequence")),
+            "supported font aliases must not emit invalid-escape diagnostics: {:?}",
+            report.diagnostics
+        );
     }
 
     #[test]
@@ -570,6 +620,31 @@ mod tests {
         let display = find_macro(&document.root, "Bd").expect("normalized display node");
         assert_eq!(display.display_kind, Some(DisplayKind::Literal));
         assert_eq!(display.offset.as_deref(), Some("indent"));
+    }
+
+    #[test]
+    fn parser_copies_normalized_font_and_author_modes() {
+        let report = Parser::default()
+            .parse_bytes(
+                "normalized-modes.1",
+                b".Dd July 19, 2026\n.Dt NORMALIZED-MODES 1\n.Os\n.Sh AUTHORS\n\
+.An -split\n.An Alice Example\n.An -nosplit\n.An Bob Example\n\
+.Sh DESCRIPTION\n.Bf -literal\nliteral text\n.Ef\n",
+            )
+            .expect("parse normalized mdoc modes");
+
+        let split = find_node(&report.document.root, &|node| {
+            node.macro_name.as_deref() == Some("An") && node.author_mode == Some(AuthorMode::Split)
+        });
+        let no_split = find_node(&report.document.root, &|node| {
+            node.macro_name.as_deref() == Some("An")
+                && node.author_mode == Some(AuthorMode::NoSplit)
+        });
+        let font = find_macro(&report.document.root, "Bf").expect("Bf node");
+
+        assert!(split.is_some());
+        assert!(no_split.is_some());
+        assert_eq!(font.font, Some(NormalizedFont::Literal));
     }
 
     #[test]

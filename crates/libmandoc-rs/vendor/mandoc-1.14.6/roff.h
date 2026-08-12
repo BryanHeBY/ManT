@@ -476,6 +476,7 @@ enum	roff_tok {
 	MAN_UE,
 	MAN_MT,
 	MAN_ME,
+	MAN_MR,
 	MAN_MAX
 };
 

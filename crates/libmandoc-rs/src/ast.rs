@@ -48,6 +48,23 @@ pub enum DisplayKind {
     Filled,
 }
 
+/// Normalized font selected by an mdoc `Bf` block.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NormalizedFont {
+    Emphasis,
+    Literal,
+    Symbolic,
+}
+
+/// Explicit author layout mode selected by an mdoc `An` control macro.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthorMode {
+    Split,
+    NoSplit,
+}
+
 /// Horizontal alignment retained for one parsed tbl(7) cell.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -105,6 +122,8 @@ pub struct Node {
     pub flags: NodeFlags,
     pub list_kind: Option<NormalizedListKind>,
     pub display_kind: Option<DisplayKind>,
+    pub font: Option<NormalizedFont>,
+    pub author_mode: Option<AuthorMode>,
     pub compact: bool,
     pub offset: Option<String>,
     /// Normalized mdoc(7) list width, including its roff scale suffix.

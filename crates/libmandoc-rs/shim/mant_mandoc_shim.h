@@ -46,6 +46,19 @@ enum mant_mandoc_display_kind {
 	MANT_MANDOC_DISPLAY_FILLED = 2
 };
 
+enum mant_mandoc_font_kind {
+	MANT_MANDOC_FONT_NONE = 0,
+	MANT_MANDOC_FONT_EMPHASIS = 1,
+	MANT_MANDOC_FONT_LITERAL = 2,
+	MANT_MANDOC_FONT_SYMBOLIC = 3
+};
+
+enum mant_mandoc_author_mode {
+	MANT_MANDOC_AUTHOR_NONE = 0,
+	MANT_MANDOC_AUTHOR_SPLIT = 1,
+	MANT_MANDOC_AUTHOR_NOSPLIT = 2
+};
+
 #define MANT_MANDOC_NODE_GENERATED (1U << 0)
 #define MANT_MANDOC_NODE_SENTENCE_END (1U << 1)
 #define MANT_MANDOC_NODE_NO_PRINT (1U << 2)
@@ -90,6 +103,8 @@ int mant_mandoc_node_column(const struct mant_mandoc_node *);
 unsigned int mant_mandoc_node_flags(const struct mant_mandoc_node *);
 int mant_mandoc_node_list_kind(const struct mant_mandoc_node *);
 int mant_mandoc_node_display_kind(const struct mant_mandoc_node *);
+int mant_mandoc_node_font_kind(const struct mant_mandoc_node *);
+int mant_mandoc_node_author_mode(const struct mant_mandoc_node *);
 int mant_mandoc_node_compact(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_offset(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_width(const struct mant_mandoc_node *);

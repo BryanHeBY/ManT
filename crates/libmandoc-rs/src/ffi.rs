@@ -3,8 +3,8 @@
 use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
 
 use super::{
-    DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind, NormalizedListKind,
-    RawDocument, TableAlignment, TableCell,
+    AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
+    NormalizedFont, NormalizedListKind, RawDocument, TableAlignment, TableCell,
 };
 
 #[repr(C)]
@@ -60,6 +60,8 @@ unsafe extern "C" {
     fn mant_mandoc_node_flags(node: *const CNode) -> u32;
     fn mant_mandoc_node_list_kind(node: *const CNode) -> i32;
     fn mant_mandoc_node_display_kind(node: *const CNode) -> i32;
+    fn mant_mandoc_node_font_kind(node: *const CNode) -> i32;
+    fn mant_mandoc_node_author_mode(node: *const CNode) -> i32;
     fn mant_mandoc_node_compact(node: *const CNode) -> i32;
     fn mant_mandoc_node_offset(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_width(node: *const CNode) -> *const c_char;
@@ -226,6 +228,25 @@ fn display_kind(value: i32) -> Result<Option<DisplayKind>, String> {
     }
 }
 
+fn font_kind(value: i32) -> Result<Option<NormalizedFont>, String> {
+    match value {
+        0 => Ok(None),
+        1 => Ok(Some(NormalizedFont::Emphasis)),
+        2 => Ok(Some(NormalizedFont::Literal)),
+        3 => Ok(Some(NormalizedFont::Symbolic)),
+        _ => Err("libmandoc returned an unknown normalized font".to_owned()),
+    }
+}
+
+fn author_mode(value: i32) -> Result<Option<AuthorMode>, String> {
+    match value {
+        0 => Ok(None),
+        1 => Ok(Some(AuthorMode::Split)),
+        2 => Ok(Some(AuthorMode::NoSplit)),
+        _ => Err("libmandoc returned an unknown author mode".to_owned()),
+    }
+}
+
 unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
     let raw_flags = unsafe { mant_mandoc_node_flags(pointer) };
     let mut children = Vec::new();
@@ -259,6 +280,8 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
         },
         list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,
         display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,
+        font: font_kind(unsafe { mant_mandoc_node_font_kind(pointer) })?,
+        author_mode: author_mode(unsafe { mant_mandoc_node_author_mode(pointer) })?,
         compact: unsafe { mant_mandoc_node_compact(pointer) } != 0,
         offset: unsafe { optional_string(mant_mandoc_node_offset(pointer)) },
         width: unsafe { optional_string(mant_mandoc_node_width(pointer)) },

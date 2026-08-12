@@ -46,6 +46,9 @@ mandoc_font(const char *cp, int sz)
 		return ESCAPE_FONTPREV;
 	case 1:
 		switch (cp[0]) {
+		case 'C':
+		case 'V':
+			return ESCAPE_FONTCR;
 		case 'B':
 		case '3':
 			return ESCAPE_FONTBOLD;
@@ -80,6 +83,15 @@ mandoc_font(const char *cp, int sz)
 			case 'R':
 			case 'W':
 				return ESCAPE_FONTCR;
+			default:
+				return ESCAPE_ERROR;
+			}
+		case 'V':
+			switch (cp[1]) {
+			case 'B':
+				return ESCAPE_FONTCB;
+			case 'I':
+				return ESCAPE_FONTCI;
 			default:
 				return ESCAPE_ERROR;
 			}
