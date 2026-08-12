@@ -91,7 +91,7 @@ pub fn list_available_documents() -> Result<Vec<AvailableDocument>, SourceConfig
 ///
 /// Returns a validation or regular-expression error without reading documents.
 pub fn query_available_documents(
-    documents: Vec<AvailableDocument>,
+    documents: &[AvailableDocument],
     query: &CatalogQuery,
 ) -> Result<DocumentCatalog, CatalogError> {
     validate_catalog_query(query)?;
@@ -101,7 +101,7 @@ pub fn query_available_documents(
         .map(|pattern| build_matcher(pattern, query.syntax, query.case))
         .transpose()?;
     let mut filtered = documents
-        .into_iter()
+        .iter()
         .filter(|document| {
             query.kind.is_none_or(|kind| match kind {
                 CatalogDocumentKind::Markdown => document.kind == AvailableDocumentKind::Markdown,
@@ -137,6 +137,7 @@ pub fn query_available_documents(
     let end = offset.saturating_add(limit).min(total);
     let documents = filtered[offset..end]
         .iter()
+        .copied()
         .map(document_summary)
         .collect::<Vec<_>>();
     Ok(DocumentCatalog {
@@ -158,7 +159,7 @@ pub fn query_available_documents(
 /// both are operational boundaries for every frontend.
 pub fn discover_documents(query: &CatalogQuery) -> Result<DocumentCatalog, String> {
     let documents = list_available_documents().map_err(|error| error.to_string())?;
-    query_available_documents(documents, query).map_err(|error| error.to_string())
+    query_available_documents(&documents, query).map_err(|error| error.to_string())
 }
 
 fn validate_catalog_query(query: &CatalogQuery) -> Result<(), CatalogError> {
@@ -352,9 +353,9 @@ mod tests {
                 path: PathBuf::from(format!("/data/{name}.md")),
                 origin: AvailableDocumentOrigin::Source("pwsh7".to_owned()),
             })
-            .collect();
+            .collect::<Vec<_>>();
         let catalog = query_available_documents(
-            documents,
+            &documents,
             &CatalogQuery {
                 pattern: Some("process".to_owned()),
                 limit: 10,
@@ -380,9 +381,9 @@ mod tests {
                 path: PathBuf::from(format!("/man/{name}.1")),
                 origin: AvailableDocumentOrigin::ManualPath,
             })
-            .collect();
+            .collect::<Vec<_>>();
         let catalog = query_available_documents(
-            documents,
+            &documents,
             &CatalogQuery {
                 pattern: Some("man".to_owned()),
                 limit: 10,
@@ -418,7 +419,7 @@ mod tests {
             },
         ];
         let catalog = query_available_documents(
-            documents,
+            &documents,
             &CatalogQuery {
                 pattern: Some("^PRINT".to_owned()),
                 syntax: SearchSyntax::Regex,

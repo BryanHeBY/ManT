@@ -657,7 +657,7 @@ mod tests {
         })
         .expect("catalog parameters");
         let catalog = mant_core::query_available_documents(
-            vec![
+            &[
                 AvailableDocument {
                     name: "printf".to_owned(),
                     kind: AvailableDocumentKind::Markdown,

@@ -483,17 +483,19 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
         Ok(query) => query,
         Err(error) => return report_failure(&error, diagnostics),
     };
-    let catalog = match host.discover(&CatalogQuery {
-        limit: 10_000,
-        ..CatalogQuery::default()
-    }) {
+    let catalog = match host.discover(&CatalogQuery::default()) {
         Ok(catalog) => catalog,
         Err(error) => return report_failure(&error, diagnostics),
     };
-    match mant_ui::run_with_catalog(&query, catalog, |address| {
-        let (request, policy) = request_for_address(address);
-        host.query(&request, policy).map_err(Failure::into_message)
-    }) {
+    match mant_ui::run_with_catalog(
+        &query,
+        catalog,
+        |catalog_query| host.discover(catalog_query).map_err(Failure::into_message),
+        |address| {
+            let (request, policy) = request_for_address(address);
+            host.query(&request, policy).map_err(Failure::into_message)
+        },
+    ) {
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics),
     }

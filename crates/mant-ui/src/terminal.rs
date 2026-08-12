@@ -7,7 +7,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use mant_ast::{DocumentAddress, DocumentCatalog, QueryBundle};
+use mant_ast::{CatalogQuery, DocumentAddress, DocumentCatalog, QueryBundle};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{App, UpdateOutcome};
@@ -30,24 +30,29 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
             documents: Vec::new(),
         },
         |_| Err("document discovery is unavailable in this host".to_owned()),
+        |_| Err("document discovery is unavailable in this host".to_owned()),
     )
 }
 
-/// Run the frontend with a catalog and a host-owned document loader.
+/// Run the frontend with an initial catalog page and host-owned discovery and
+/// document loading.
 ///
 /// The UI never reads source configuration, manual paths, or Markdown files;
-/// it sends stable catalog addresses back through `open_document`.
+/// it sends bounded catalog queries through `discover_documents` and stable
+/// catalog addresses through `open_document`.
 ///
 /// # Errors
 ///
 /// Returns terminal setup, event, drawing, or restoration errors. Document
 /// loading failures are shown inside the UI and leave the current page open.
-pub fn run_with_catalog<F>(
+pub fn run_with_catalog<D, F>(
     bundle: &QueryBundle,
     catalog: DocumentCatalog,
+    mut discover_documents: D,
     mut open_document: F,
 ) -> io::Result<()>
 where
+    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentAddress) -> Result<QueryBundle, String>,
 {
     let mut stdout = io::stdout();
@@ -72,6 +77,7 @@ where
             }
             let Some(timeout) = app.next_wakeup(Instant::now()) else {
                 redraw |= route_event(&mut app, &event::read()?).needs_redraw();
+                redraw |= service_discovery_request(&mut app, &mut discover_documents);
                 redraw |= service_open_request(&mut app, &mut open_document);
                 continue;
             };
@@ -79,6 +85,7 @@ where
                 continue;
             }
             redraw |= route_event(&mut app, &event::read()?).needs_redraw();
+            redraw |= service_discovery_request(&mut app, &mut discover_documents);
             redraw |= service_open_request(&mut app, &mut open_document);
         }
         Ok(())
@@ -92,6 +99,20 @@ where
             panic::resume_unwind(payload);
         }
     }
+}
+
+fn service_discovery_request<D>(app: &mut App, discover_documents: &mut D) -> bool
+where
+    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
+{
+    let Some(query) = app.take_discovery_request() else {
+        return false;
+    };
+    match discover_documents(&query) {
+        Ok(catalog) => app.complete_discovery(catalog),
+        Err(message) => app.report_discovery_error(message),
+    }
+    true
 }
 
 fn service_open_request<F>(app: &mut App, open_document: &mut F) -> bool

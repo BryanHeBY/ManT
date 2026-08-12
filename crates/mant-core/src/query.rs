@@ -396,6 +396,7 @@ pub struct DocumentResolver {
     registered: OnceLock<Result<RegisteredDocumentIndex, SourceConfigError>>,
     manual_roots: Vec<PathBuf>,
     manuals: OnceLock<ManualIndex>,
+    available: OnceLock<Vec<crate::catalog::AvailableDocument>>,
 }
 
 impl DocumentResolver {
@@ -406,6 +407,7 @@ impl DocumentResolver {
             registered: OnceLock::new(),
             manual_roots: discover_manual_roots(),
             manuals: OnceLock::new(),
+            available: OnceLock::new(),
         }
     }
 
@@ -459,10 +461,12 @@ impl DocumentResolver {
         let manuals = self
             .manuals
             .get_or_init(|| ManualIndex::from_roots(self.manual_roots.clone()));
-        let documents = crate::catalog::list_available_documents_from(
-            registered.documents().to_vec(),
-            manuals.pages(),
-        );
+        let documents = self.available.get_or_init(|| {
+            crate::catalog::list_available_documents_from(
+                registered.documents().to_vec(),
+                manuals.pages(),
+            )
+        });
         crate::catalog::query_available_documents(documents, query)
             .map_err(|error| error.to_string())
     }

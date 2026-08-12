@@ -422,7 +422,7 @@ impl App {
             .style(Style::default().bg(theme::BASE)),
             query_area,
         );
-        let result_count = self.finder.matches.len();
+        let result_count = self.finder.total;
         frame.render_widget(
             Paragraph::new(format!(
                 "{result_count} matches · ↑/↓ select · Enter open · Esc close"
@@ -444,7 +444,7 @@ impl App {
             .take(visible_height)
             .enumerate()
         {
-            let Some(document) = self.catalog.get(*match_index) else {
+            let Some(document) = self.finder.catalog.get(*match_index) else {
                 continue;
             };
             let row = Rect::new(

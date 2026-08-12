@@ -184,11 +184,13 @@ matcher regardless of output format. Anchors already emitted for sections and
 semantic definitions act as a source map. An internal root anchor covers
 Markdown content before the first heading, so every occurrence reports both a
 stable Markdown range and the nearest path accepted by excerpt selection.
-The TUI keeps its catalog and interaction loop in memory and never spawns a
-process while typing in either search field. Its document finder applies the
-default literal, case-insensitive catalog ranking to that snapshot. Loading a
-selected address returns through the native host boundary, and successful
-jumps update a bounded semantic back/forward history.
+The TUI keeps its interaction loop in memory and never spawns a process while
+typing in either search field. Its document finder sends bounded literal,
+case-insensitive queries through the native host boundary to the complete
+resolver snapshot, so a catalog page cannot hide later exact matches. The same
+snapshot ranks exact names before prefixes and other substrings. Loading a
+selected address returns through the host boundary, and successful jumps
+update a bounded semantic back/forward history.
 
 ## Parsing and source policy
 

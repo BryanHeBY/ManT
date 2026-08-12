@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use mant_ast::{DocumentAddress, DocumentCatalog, DocumentSummary, QueryBundle};
+use mant_ast::{CatalogQuery, DocumentAddress, DocumentCatalog, QueryBundle};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
@@ -182,8 +182,8 @@ pub struct App {
     show_sidebar: bool,
     quit: bool,
     search: SearchState,
-    catalog: Vec<DocumentSummary>,
     finder: FinderState,
+    pending_discovery: Option<CatalogQuery>,
     pending_open: Option<NavigationRequest>,
     current_address: Option<DocumentAddress>,
     fallback_bundle: Option<Arc<QueryBundle>>,
@@ -219,6 +219,8 @@ impl App {
     #[must_use]
     pub fn with_catalog(bundle: &QueryBundle, catalog: DocumentCatalog) -> Self {
         let document = DocumentView::new(bundle);
+        let mut finder = FinderState::default();
+        finder.replace_catalog(catalog);
         let expanded = document
             .navigation()
             .iter()
@@ -236,8 +238,8 @@ impl App {
             show_sidebar: true,
             quit: false,
             search: SearchState::default(),
-            catalog: catalog.documents,
-            finder: FinderState::default(),
+            finder,
+            pending_discovery: None,
             pending_open: None,
             current_address: bundle.address.clone(),
             fallback_bundle: bundle.address.is_none().then(|| Arc::new(bundle.clone())),
@@ -256,6 +258,19 @@ impl App {
 
     pub(crate) fn take_open_request(&mut self) -> Option<NavigationRequest> {
         self.pending_open.take()
+    }
+
+    pub(crate) fn take_discovery_request(&mut self) -> Option<CatalogQuery> {
+        self.pending_discovery.take()
+    }
+
+    pub(crate) fn complete_discovery(&mut self, catalog: DocumentCatalog) {
+        self.finder.replace_catalog(catalog);
+        self.notice = None;
+    }
+
+    pub(crate) fn report_discovery_error(&mut self, message: String) {
+        self.notice = Some(message);
     }
 
     pub(crate) fn complete_open(&mut self, bundle: &QueryBundle, request: NavigationRequest) {

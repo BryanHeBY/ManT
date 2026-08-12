@@ -230,9 +230,71 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
         .finder
         .matches
         .iter()
-        .map(|index| app.catalog[*index].address.name())
+        .map(|index| app.finder.catalog[*index].address.name())
         .collect::<Vec<_>>();
     assert_eq!(ordered, ["man", "man.conf", "manpath", "woman"]);
+}
+
+#[test]
+fn document_finder_queries_beyond_the_initial_catalog_page() {
+    let initial = DocumentCatalog {
+        schema: CatalogSchema::V7,
+        total: 20_000,
+        returned: 1,
+        offset: 0,
+        truncated: true,
+        next_offset: Some(1),
+        documents: vec![DocumentSummary {
+            address: DocumentAddress::Manual {
+                name: ".k5identity".to_owned(),
+                section: "5".to_owned(),
+            },
+            path: "/man/.k5identity.5".to_owned(),
+        }],
+    };
+    let mut app = App::with_catalog(&navigation_bundle(), initial);
+    app.open_document_finder();
+    assert_eq!(
+        app.take_discovery_request().expect("initial query").pattern,
+        None
+    );
+
+    for character in "man".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+    assert_eq!(
+        app.take_discovery_request().expect("live query").pattern,
+        Some("man".to_owned())
+    );
+
+    app.complete_discovery(DocumentCatalog {
+        schema: CatalogSchema::V7,
+        total: 2,
+        returned: 2,
+        offset: 0,
+        truncated: false,
+        next_offset: None,
+        documents: vec![
+            DocumentSummary {
+                address: DocumentAddress::Manual {
+                    name: "woman".to_owned(),
+                    section: "1".to_owned(),
+                },
+                path: "/man/woman.1".to_owned(),
+            },
+            DocumentSummary {
+                address: DocumentAddress::Manual {
+                    name: "man".to_owned(),
+                    section: "1".to_owned(),
+                },
+                path: "/man/man.1".to_owned(),
+            },
+        ],
+    });
+
+    let first = app.finder.matches[0];
+    assert_eq!(app.finder.catalog[first].address.name(), "man");
+    assert_eq!(app.finder.total, 2);
 }
 
 #[test]
@@ -997,7 +1059,7 @@ fn view_menu_is_clickable_and_toggles_the_sidebar() {
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: 7,
+        column: MenuId::View.left() + 1,
         row: 0,
         modifiers: KeyModifiers::NONE,
     });
