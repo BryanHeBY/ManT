@@ -356,6 +356,7 @@ fn inline_text(children: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}
@@ -429,6 +430,7 @@ mod tests {
     fn query() -> QueryBundle {
         QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "demo".to_owned(),
             document: Some(MantDocument {
                 schema: DocumentSchema::V7,
@@ -586,6 +588,7 @@ mod tests {
         fn document_with(blocks: Vec<Block>) -> QueryBundle {
             QueryBundle {
                 schema: QuerySchema::V7,
+                address: None,
                 label: "demo".to_owned(),
                 document: Some(MantDocument {
                     schema: DocumentSchema::V7,
@@ -657,6 +660,7 @@ mod tests {
     fn inline_definition_descriptions_are_tight_against_their_terms() {
         let bundle = QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "demo".to_owned(),
             document: Some(MantDocument {
                 schema: DocumentSchema::V7,
@@ -742,6 +746,7 @@ mod tests {
     fn man_format_keeps_inline_definitions_tight() {
         let bundle = QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "demo".to_owned(),
             document: Some(MantDocument {
                 schema: DocumentSchema::V7,

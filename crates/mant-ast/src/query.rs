@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    MantDocument, OutlineDetail, SearchCase, SearchScope, SearchSyntax, TldrDocument,
-    default_search_limit,
+    DocumentAddress, MantDocument, OutlineDetail, SearchCase, SearchScope, SearchSyntax,
+    TldrDocument, default_search_limit,
 };
 
 /// Exact schema marker for a complete `ManT` query result.
@@ -108,6 +108,10 @@ pub struct QueryRequest {
 pub struct QueryBundle {
     pub schema: QuerySchema,
     pub label: String,
+    /// Exact registered address selected for this query. Direct Markdown paths
+    /// and standard input do not belong to the registered catalog.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<DocumentAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document: Option<MantDocument>,
     #[serde(skip_serializing_if = "Option::is_none")]

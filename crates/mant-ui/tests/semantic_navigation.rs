@@ -30,6 +30,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     .collect();
     let bundle = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "tool".to_owned(),
         tldr: None,
         document: Some(MantDocument {

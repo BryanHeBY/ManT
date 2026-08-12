@@ -55,6 +55,7 @@ every destination as an untyped URI:
 
 - `external-link` stores an external `uri` and its rendered label;
 - `email-link` stores an address without a synthetic `mailto:` prefix;
+- `document-reference` identifies a flat Markdown document in the current source;
 - `manual-reference` identifies another manual by name and optional section;
 - `section-reference` targets a document-local section ID;
 - `anchor` marks a zero-width document-local destination such as mdoc `Tg`.
@@ -70,11 +71,9 @@ Section IDs and explicit anchor IDs occupy the same namespace within one
 document. Renderers may style or activate these nodes differently, but must
 preserve their visible children in non-interactive output.
 
-The TUI activates resolved `section-reference` nodes directly: clicking one
-places the target heading at the top of the content viewport, selects it in
-the sidebar, and expands hidden ancestors. This is deliberately a stateless
-page-local jump; navigation history is not part of the current interaction
-contract.
+The TUI activates resolved `section-reference` nodes directly. Cross-document
+references remain typed through lowering so the interactive host can resolve
+them without parsing rendered labels or arbitrary filesystem paths.
 
 ## Native process boundary
 

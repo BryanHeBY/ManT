@@ -89,6 +89,7 @@ fn trim_code_framing_newline(children: &mut Vec<Inline>) {
         | Inline::Emphasis { .. }
         | Inline::ExternalLink { .. }
         | Inline::EmailLink { .. }
+        | Inline::DocumentReference { .. }
         | Inline::ManualReference { .. }
         | Inline::SectionReference { .. }
         | Inline::Anchor { .. } => {}

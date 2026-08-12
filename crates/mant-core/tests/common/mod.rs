@@ -164,6 +164,7 @@ pub const DEBIAN_GROFF_MAN_STYLE_SECTIONS: &[&str] = &[
 pub fn query_for_document(name: &str, document: &MantDocument) -> QueryBundle {
     QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: name.to_owned(),
         document: Some(document.clone()),
         tldr: None,
@@ -409,6 +410,7 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &MantDocument)
                 | Inline::ExternalLink { .. }
                 | Inline::EmailLink { .. }
                 | Inline::ManualReference { .. }
+                | Inline::DocumentReference { .. }
                 | Inline::SectionReference { .. }
                 | Inline::Anchor { .. }
                 | Inline::LineBreak => return,
@@ -555,6 +557,7 @@ pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
         Inline::Emphasis { children }
         | Inline::ExternalLink { children, .. }
         | Inline::EmailLink { children, .. }
+        | Inline::DocumentReference { children, .. }
         | Inline::ManualReference { children, .. }
         | Inline::SectionReference { children, .. } => contains_strong(children, expected),
         Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
@@ -569,6 +572,7 @@ pub fn contains_emphasis(children: &[Inline], expected: &str) -> bool {
         Inline::Strong { children }
         | Inline::ExternalLink { children, .. }
         | Inline::EmailLink { children, .. }
+        | Inline::DocumentReference { children, .. }
         | Inline::ManualReference { children, .. }
         | Inline::SectionReference { children, .. } => contains_emphasis(children, expected),
         Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
@@ -586,6 +590,7 @@ pub fn count_line_breaks(children: &[Inline]) -> usize {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => count_line_breaks(children),
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
@@ -606,6 +611,7 @@ pub fn inline_text(children: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
@@ -704,6 +710,7 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => visit_inlines(children, visitor),
             Inline::Text { .. }

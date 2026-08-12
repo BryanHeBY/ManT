@@ -12,6 +12,7 @@ pub(crate) fn plain_text(nodes: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => output.push_str(&plain_text(children)),
             Inline::Anchor { .. } => {}

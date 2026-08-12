@@ -699,6 +699,50 @@ mod tests {
     }
 
     #[test]
+    fn recognizes_traditional_man_references_inside_see_also() {
+        let path = temporary_source(
+            "man-see-also",
+            ".TH TOOL 1\n\
+             .SH DESCRIPTION\n\
+             The word \\fBprintf\\fP(3) is prose here.\n\
+             .SH SEE ALSO\n\
+             .BR printf (3),\n\
+             .BR man (1)\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower man references");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let see_also = document
+            .sections
+            .iter()
+            .find(|section| section.title == "SEE ALSO")
+            .expect("SEE ALSO");
+        let Block::Paragraph { children, .. } = &see_also.blocks[0] else {
+            panic!("references are a paragraph");
+        };
+        assert!(children.iter().any(|inline| matches!(
+            inline,
+            Inline::ManualReference { name, section: Some(section), .. }
+                if name == "printf" && section == "3"
+        )));
+        assert!(children.iter().any(|inline| matches!(
+            inline,
+            Inline::ManualReference { name, section: Some(section), .. }
+                if name == "man" && section == "1"
+        )));
+
+        let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("description is a paragraph");
+        };
+        assert!(
+            children
+                .iter()
+                .all(|inline| !matches!(inline, Inline::ManualReference { .. }))
+        );
+    }
+
+    #[test]
     fn resolves_mdoc_section_references_and_explicit_targets() {
         let path = temporary_source(
             "mdoc-navigation",
@@ -892,6 +936,7 @@ mod tests {
                 | Inline::Emphasis { children }
                 | Inline::ExternalLink { children, .. }
                 | Inline::EmailLink { children, .. }
+                | Inline::DocumentReference { children, .. }
                 | Inline::ManualReference { children, .. }
                 | Inline::SectionReference { children, .. } => inline_text(children),
                 Inline::Anchor { .. } => String::new(),

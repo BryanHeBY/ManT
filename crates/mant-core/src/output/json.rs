@@ -74,6 +74,7 @@ mod tests {
     fn compact_and_pretty_query_output_share_the_same_contract() {
         let query = QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "ls".to_owned(),
             document: None,
             tldr: None,

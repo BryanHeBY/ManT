@@ -94,9 +94,104 @@ fn resolve_section(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     resolve_blocks(&mut section.blocks, targets, explicit_targets, diagnostics);
+    if section.title.eq_ignore_ascii_case("SEE ALSO") {
+        promote_manual_references(&mut section.blocks);
+    }
     for child in &mut section.children {
         resolve_section(child, targets, explicit_targets, diagnostics);
     }
+}
+
+fn promote_manual_references(blocks: &mut [Block]) {
+    for block in blocks {
+        match block {
+            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
+                promote_manual_reference_inlines(children);
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    promote_manual_references(&mut item.blocks);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    for term in &mut item.terms {
+                        promote_manual_reference_inlines(term);
+                    }
+                    promote_manual_references(&mut item.description);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
+                    promote_manual_references(&mut cell.blocks);
+                }
+            }
+            Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
+    let mut promoted = Vec::with_capacity(nodes.len());
+    let mut source = std::mem::take(nodes).into_iter().peekable();
+    while let Some(node) = source.next() {
+        let Inline::Strong { children } = &node else {
+            promoted.push(node);
+            continue;
+        };
+        let name = crate::inline::plain_text(children);
+        let Some(Inline::Text { value }) = source.peek() else {
+            promoted.push(node);
+            continue;
+        };
+        let Some((section, remainder)) = manual_section_suffix(value) else {
+            promoted.push(node);
+            continue;
+        };
+        if !is_manual_reference_name(&name) {
+            promoted.push(node);
+            continue;
+        }
+
+        source.next();
+        promoted.push(Inline::ManualReference {
+            name: name.clone(),
+            section: Some(section.clone()),
+            children: vec![Inline::Text {
+                value: format!("{name}({section})"),
+            }],
+        });
+        if !remainder.is_empty() {
+            promoted.push(Inline::Text { value: remainder });
+        }
+    }
+    *nodes = promoted;
+}
+
+fn manual_section_suffix(value: &str) -> Option<(String, String)> {
+    let value = value.strip_prefix('(')?;
+    let closing = value.find(')')?;
+    let section = &value[..closing];
+    if section.is_empty()
+        || section.len() > 16
+        || !section
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
+    {
+        return None;
+    }
+    Some((section.to_owned(), value[closing + 1..].to_owned()))
+}
+
+fn is_manual_reference_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 256
+        && name.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '+' | ':' | '-')
+        })
 }
 
 fn resolve_blocks(
@@ -219,4 +314,52 @@ fn resolve_inlines(
         }
     }
     *nodes = resolved;
+}
+
+#[cfg(test)]
+mod tests {
+    use mant_ast::Inline;
+
+    use super::promote_manual_reference_inlines;
+
+    #[test]
+    fn promotes_traditional_see_also_pairs_without_consuming_punctuation() {
+        let mut nodes = vec![
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "printf".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: "(3), next".to_owned(),
+            },
+        ];
+
+        promote_manual_reference_inlines(&mut nodes);
+
+        assert!(matches!(
+            &nodes[0],
+            Inline::ManualReference { name, section: Some(section), .. }
+                if name == "printf" && section == "3"
+        ));
+        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+    }
+
+    #[test]
+    fn leaves_prose_and_malformed_sections_unchanged() {
+        for suffix in [" documentation", "()", "(section one)"] {
+            let mut nodes = vec![
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "tool".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: suffix.to_owned(),
+                },
+            ];
+            promote_manual_reference_inlines(&mut nodes);
+            assert!(matches!(nodes[0], Inline::Strong { .. }));
+        }
+    }
 }

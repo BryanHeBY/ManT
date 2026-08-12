@@ -73,11 +73,13 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 
 ## Document Discovery
 
-- `--list`: List documents grouped by configured source or native manual section.
-- `--find PATTERN`: Filter document names and emit one stable record per match.
-- `--kind KIND`: Restrict discovery to `markdown` or `manual`.
-- `--source SOURCE`: Restrict Markdown discovery to one configured source.
-- `--section SECTION`: Restrict manual discovery to one exact section.
+| Invocation | Behavior |
+| --- | --- |
+| `--list` | List documents grouped by configured source or native manual section. |
+| `--find PATTERN` | Filter document names and emit one stable record per match. |
+| `--kind KIND` | Restrict discovery to `markdown` or `manual`. |
+| `--source SOURCE` | Restrict Markdown discovery to one configured source. |
+| `--section SECTION` | Restrict manual discovery to one exact section. |
 
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
@@ -210,11 +212,11 @@ implementation.
 ### Supported Inline Syntax
 
 Plain text, strong and emphasized text, inline code, explicit hard line
-breaks, standard links, email links, and document-local fragment links remain
-semantic inline nodes. Soft source line breaks become spaces, while hard
-breaks remain visible. A resolved fragment link can be followed directly in
-the reader; external and email destinations remain available to other
-consumers.
+breaks, standard links, email links, document-local fragments, and flat
+relative `.md` or `.markdown` links remain semantic inline nodes. Relative
+document links resolve only inside the current registered source; paths with
+directories or `..` remain ordinary external destinations. Soft source line
+breaks become spaces, while hard breaks remain visible.
 
 ### ManT Extensions
 

@@ -359,6 +359,13 @@ pub enum Inline {
         address: String,
         children: Vec<Inline>,
     },
+    /// A relative Markdown link to another document in the current source.
+    DocumentReference {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fragment: Option<String>,
+        children: Vec<Inline>,
+    },
     /// A typed reference to another installed manual page.
     ManualReference {
         name: String,

@@ -55,6 +55,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 fn renders_tldr_before_manual_and_resolves_placeholders() {
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "ls".to_owned(),
         document: Some(manual(vec![section("NAME", Vec::new(), Vec::new())])),
         tldr: Some(TldrDocument {
@@ -107,6 +108,7 @@ fn renders_and_selects_content_before_the_first_heading() {
     }])];
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "guide.md".to_owned(),
         document: Some(document),
         tldr: None,
@@ -196,6 +198,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
     };
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "demo * command".to_owned(),
         document: Some(manual(vec![section(
             "OPTIONS",
@@ -258,6 +261,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
     };
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "man".to_owned(),
         document: Some(manual(vec![section(
             "OPTIONS",
@@ -300,6 +304,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
 fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "demo".to_owned(),
         document: Some(manual(vec![section(
             "DATA",
@@ -396,6 +401,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
 fn protects_paragraph_lines_from_accidental_block_syntax() {
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "syntax".to_owned(),
         document: Some(manual(vec![section(
             "TEXT",
@@ -428,6 +434,7 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "demo".to_owned(),
         document: Some({
             let mut document = manual(vec![section(
@@ -474,6 +481,7 @@ fn serializes_a_large_source_lowered_document() {
     let document = crate::parse_manual_source(&source).expect("large native document");
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "mandoc".to_owned(),
         document: Some(document),
         tldr: None,

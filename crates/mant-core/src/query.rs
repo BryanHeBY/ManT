@@ -10,10 +10,10 @@ use std::{
 };
 
 use mant_ast::{
-    MantDocument, QueryBundle, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySchema,
-    QuerySearch, QueryView, SearchQuery, TldrDocument,
+    DocumentAddress, MantDocument, MarkdownOrigin, QueryBundle, QueryExcerpt, QueryInput,
+    QueryOutline, QueryRequest, QuerySchema, QuerySearch, QueryView, SearchQuery, TldrDocument,
 };
-use mant_sources::{RegisteredDocumentIndex, SourceConfigError};
+use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
 use crate::{
     ManualIndex, ManualPage, ManualRequest, ProjectionError, SearchError,
@@ -70,7 +70,7 @@ pub enum ManualLoadError {
 /// Materialized result of the view carried by a [`QueryRequest`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryViewResult {
-    Full(QueryBundle),
+    Full(Box<QueryBundle>),
     Outline(QueryOutline),
     Excerpt(QueryExcerpt),
     Search(QuerySearch),
@@ -246,7 +246,7 @@ pub fn project_query_view(
     view: &QueryView,
 ) -> Result<QueryViewResult, QueryExecutionError> {
     match view {
-        QueryView::Full {} => Ok(QueryViewResult::Full(query)),
+        QueryView::Full {} => Ok(QueryViewResult::Full(Box::new(query))),
         QueryView::Outline { detail } => build_outline_with_detail(&query, *detail)
             .map(QueryViewResult::Outline)
             .map_err(QueryExecutionError::Projection),
@@ -372,11 +372,22 @@ trait QueryHost {
         &self,
         candidates: &[String],
         source: Option<&str>,
-    ) -> Result<Option<PathBuf>, String>;
+    ) -> Result<Option<RegisteredSelection>, String>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String>;
     fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String>;
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
+}
+
+#[derive(Clone)]
+struct RegisteredSelection {
+    path: PathBuf,
+    address: DocumentAddress,
+}
+
+struct LoadedManual {
+    document: MantDocument,
+    address: DocumentAddress,
 }
 
 /// One explicit local document-environment snapshot.
@@ -441,7 +452,7 @@ impl QueryHost for DocumentResolver {
         &self,
         candidates: &[String],
         source: Option<&str>,
-    ) -> Result<Option<PathBuf>, String> {
+    ) -> Result<Option<RegisteredSelection>, String> {
         let index = self
             .registered
             .get_or_init(RegisteredDocumentIndex::load)
@@ -449,7 +460,20 @@ impl QueryHost for DocumentResolver {
             .map_err(ToString::to_string)?;
         index
             .find(candidates, source)
-            .map(|registered| registered.map(|registered| registered.path.clone()))
+            .map(|registered| {
+                registered.map(|registered| RegisteredSelection {
+                    path: registered.path.clone(),
+                    address: DocumentAddress::Markdown {
+                        name: registered.name.clone(),
+                        origin: match &registered.origin {
+                            RegisteredDocumentOrigin::Documents => MarkdownOrigin::Documents,
+                            RegisteredDocumentOrigin::Source(name) => {
+                                MarkdownOrigin::Source { name: name.clone() }
+                            }
+                        },
+                    },
+                })
+            })
             .map_err(|error| error.to_string())
     }
 
@@ -564,6 +588,7 @@ pub fn query_markdown_text(
     }
     Ok(QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label,
         document: (!document_is_empty).then_some(parsed.document),
         tldr: parsed.tldr,
@@ -603,8 +628,8 @@ fn query_named_document(
         let registered = host
             .locate_registered_document(&candidates, source)
             .map_err(|detail| QueryError::Registry { detail })?;
-        if let Some(path) = registered {
-            return query_registered_document(name, &path, host);
+        if let Some(registered) = registered {
+            return query_registered_document(name, &registered, host);
         }
         if source.is_some() {
             return Err(QueryError::NoReadableContent {
@@ -626,10 +651,10 @@ fn query_named_document(
 
     // A malformed page may omit its own section metadata. Preserve the
     // requested section so labels stay `name(N)`.
-    if let (Ok(document), Some(section)) = (&mut manual, section.as_deref())
-        && document.meta.section.is_none()
+    if let (Ok(manual), Some(section)) = (&mut manual, section.as_deref())
+        && manual.document.meta.section.is_none()
     {
-        document.meta.section = Some(section.to_owned());
+        manual.document.meta.section = Some(section.to_owned());
     }
 
     // An explicit manual request must not degrade into an apparently
@@ -638,8 +663,9 @@ fn query_named_document(
         return match manual {
             Ok(manual) => Ok(QueryBundle {
                 schema: QuerySchema::V7,
+                address: Some(manual.address),
                 label: name.to_owned(),
-                document: Some(manual),
+                document: Some(manual.document),
                 tldr,
             }),
             Err(error) => Err(QueryError::Manual(error)),
@@ -649,12 +675,14 @@ fn query_named_document(
     match manual {
         Ok(manual) => Ok(QueryBundle {
             schema: QuerySchema::V7,
+            address: Some(manual.address),
             label: name.to_owned(),
-            document: Some(manual),
+            document: Some(manual.document),
             tldr,
         }),
         Err(_) if tldr.is_some() => Ok(QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: name.to_owned(),
             document: None,
             tldr,
@@ -665,9 +693,10 @@ fn query_named_document(
 
 fn query_registered_document(
     name: &str,
-    path: &Path,
+    registered: &RegisteredSelection,
     host: &dyn QueryHost,
 ) -> Result<QueryBundle, QueryError> {
+    let path = &registered.path;
     let source_path = path.to_string_lossy().into_owned();
     let source = host
         .read_markdown(path)
@@ -677,6 +706,7 @@ fn query_registered_document(
         })?;
     let mut query = query_markdown_text(&source, Some(source_path))?;
     name.clone_into(&mut query.label);
+    query.address = Some(registered.address.clone());
     Ok(query)
 }
 
@@ -685,7 +715,7 @@ fn load_manual(
     candidates: &[String],
     section: Option<&str>,
     host: &dyn QueryHost,
-) -> Result<MantDocument, ManualLoadError> {
+) -> Result<LoadedManual, ManualLoadError> {
     let mut first_locate_error = None;
     let mut located = None;
     for candidate in candidates {
@@ -710,6 +740,10 @@ fn load_manual(
     };
 
     let source_path = page.path.clone();
+    let address = DocumentAddress::Manual {
+        name: page.name.clone(),
+        section: page.section.clone(),
+    };
     let document = host
         .parse_manual(&page)
         .map_err(|detail| ManualLoadError::Parse {
@@ -733,7 +767,7 @@ fn load_manual(
             diagnostics,
         });
     }
-    Ok(document)
+    Ok(LoadedManual { document, address })
 }
 
 #[cfg(test)]
@@ -745,16 +779,16 @@ mod tests {
     };
 
     use mant_ast::{
-        Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, MantDocument,
-        Producer, QueryInput, QueryRequest, QueryView, RequestSchema, Section, SourceFormat,
-        TldrDocument, TldrOrigin,
+        Diagnostic, DiagnosticLevel, DocumentAddress, DocumentMeta, DocumentSchema, DocumentSource,
+        MantDocument, MarkdownOrigin, Producer, QueryInput, QueryRequest, QueryView, RequestSchema,
+        Section, SourceFormat, TldrDocument, TldrOrigin,
     };
 
     use crate::{ManualPage, ManualRequest};
 
     use super::{
-        MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, query_markdown_text, query_with,
-        read_capped_utf8, read_capped_utf8_io,
+        MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, RegisteredSelection,
+        query_markdown_text, query_with, read_capped_utf8, read_capped_utf8_io,
     };
 
     #[derive(Clone)]
@@ -781,7 +815,7 @@ mod tests {
             &self,
             candidates: &[String],
             source: Option<&str>,
-        ) -> Result<Option<PathBuf>, String> {
+        ) -> Result<Option<RegisteredSelection>, String> {
             self.calls
                 .lock()
                 .expect("calls lock")
@@ -797,7 +831,23 @@ mod tests {
             {
                 return Ok(None);
             }
-            Ok(self.registered_document.clone())
+            Ok(self
+                .registered_document
+                .clone()
+                .map(|path| RegisteredSelection {
+                    path,
+                    address: DocumentAddress::Markdown {
+                        name: self
+                            .registered_name
+                            .clone()
+                            .unwrap_or_else(|| candidates[0].clone()),
+                        origin: source.map_or(MarkdownOrigin::Documents, |name| {
+                            MarkdownOrigin::Source {
+                                name: name.to_owned(),
+                            }
+                        }),
+                    },
+                }))
         }
 
         fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String> {
@@ -925,6 +975,7 @@ mod tests {
     #[test]
     fn requested_section_backfills_metadata_the_parser_left_empty() {
         let mut host = host(Ok(document(SourceFormat::Man, false, true)));
+        host.locate.as_mut().expect("manual page").section = "3".to_owned();
         host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
             schema: RequestSchema::V7,
@@ -937,6 +988,13 @@ mod tests {
         };
 
         let result = query_with(&request, QueryPolicy::default(), &host).expect("query");
+        assert_eq!(
+            result.address,
+            Some(DocumentAddress::Manual {
+                name: "tool".to_owned(),
+                section: "3".to_owned(),
+            })
+        );
         assert_eq!(
             result
                 .document
@@ -971,6 +1029,15 @@ mod tests {
             view: QueryView::Full {},
         };
         let result = query_with(&request, QueryPolicy::default(), &host).expect("source query");
+        assert_eq!(
+            result.address,
+            Some(DocumentAddress::Markdown {
+                name: "tool".to_owned(),
+                origin: MarkdownOrigin::Source {
+                    name: "team".to_owned(),
+                },
+            })
+        );
         assert_eq!(
             result.document.expect("Markdown").meta.title.as_deref(),
             Some("Tool")

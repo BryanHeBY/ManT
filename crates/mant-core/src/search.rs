@@ -503,6 +503,7 @@ mod tests {
     fn query() -> QueryBundle {
         QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "demo".to_owned(),
             document: Some(MantDocument {
                 schema: DocumentSchema::V7,

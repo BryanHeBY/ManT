@@ -402,6 +402,7 @@ fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => collect_anchor_ids(children, output),
             Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}

@@ -28,6 +28,7 @@ use crate::{
 fn empty_bundle() -> QueryBundle {
     QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "demo".to_owned(),
         document: None,
         tldr: None,
@@ -37,6 +38,7 @@ fn empty_bundle() -> QueryBundle {
 fn tldr_bundle() -> QueryBundle {
     QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "demo".to_owned(),
         document: None,
         tldr: Some(TldrDocument {
@@ -62,6 +64,7 @@ fn navigation_bundle() -> QueryBundle {
     };
     QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "demo".to_owned(),
         document: Some(MantDocument {
             schema: DocumentSchema::V7,

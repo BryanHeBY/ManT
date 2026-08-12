@@ -730,6 +730,7 @@ mod tests {
             };
             Ok(QueryBundle {
                 schema: QuerySchema::V7,
+                address: None,
                 label,
                 document: self.document.clone(),
                 tldr: self.tldr.clone(),
@@ -740,6 +741,7 @@ mod tests {
             self.query_calls.set(self.query_calls.get() + 1);
             Ok(QueryBundle {
                 schema: QuerySchema::V7,
+                address: None,
                 label: "stdin".to_owned(),
                 document: self.document.clone(),
                 tldr: None,

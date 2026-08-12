@@ -121,6 +121,31 @@ fn main() {}
 }
 
 #[test]
+fn lowers_flat_markdown_links_into_same_source_document_references() {
+    let document = parse_document(
+        "[Start](Start-Process.md) [Guide](about_Profiles.markdown#examples) [Nested](../other.md)\n",
+        Some("/docs/current.md".to_owned()),
+    );
+    let Block::Paragraph { children, .. } = &document.blocks[0] else {
+        panic!("links are a paragraph");
+    };
+
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::DocumentReference { name, fragment: None, .. } if name == "Start-Process"
+    )));
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::DocumentReference { name, fragment: Some(fragment), .. }
+            if name == "about_Profiles" && fragment == "examples"
+    )));
+    assert!(children.iter().any(|inline| matches!(
+        inline,
+        Inline::ExternalLink { uri, .. } if uri == "../other.md"
+    )));
+}
+
+#[test]
 fn preserves_unsupported_constructs_as_exact_source_with_diagnostics() {
     let markdown = "\
 # Unsupported
@@ -280,6 +305,7 @@ Gamma.
 
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "collision".to_owned(),
         document: Some(document),
         tldr: None,
@@ -447,6 +473,7 @@ Root body.
 
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "demo.md".to_owned(),
         document: Some(document),
         tldr: None,
@@ -497,6 +524,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
     let outline = build_outline_with_detail(
         &QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "tool.md".to_owned(),
             document: Some(document),
             tldr: None,
@@ -544,6 +572,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
 
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -611,6 +640,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
 
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "dot-option.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -642,6 +672,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
 
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "shell".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -719,6 +750,7 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
     }));
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -754,6 +786,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
     assert!(parsed.document.diagnostics.is_empty());
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "help-spellings.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -804,6 +837,7 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
     }));
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "shorthand-collision.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -826,6 +860,7 @@ fn the_same_alias_in_different_roles_is_ambiguous() {
     .expect("cross-role alias fixture");
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -853,6 +888,7 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
     .expect("entry ID precedence fixture");
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -877,6 +913,7 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
     .expect("case-sensitive entries");
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -951,6 +988,7 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     assert!(parsed.document.diagnostics.is_empty());
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "tool.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -1006,6 +1044,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
 
     let query = QueryBundle {
         schema: QuerySchema::V7,
+        address: None,
         label: "native.md".to_owned(),
         document: Some(parsed.document),
         tldr: None,
@@ -1086,6 +1125,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
     let outline = build_outline_with_detail(
         &QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "tool.md".to_owned(),
             document: Some(parsed.document),
             tldr: None,

@@ -616,6 +616,7 @@ fn resolve_inlines(
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. } => {
                 resolve_inlines(children, targets, diagnostics);
             }

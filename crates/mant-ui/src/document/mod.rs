@@ -790,6 +790,7 @@ fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => ids.extend(inline_anchor_ids(children)),
             Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
@@ -896,6 +897,15 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLin
                     lines,
                 );
             }
+            Inline::DocumentReference { children, .. } => {
+                append_inline(
+                    children,
+                    Style::default()
+                        .fg(theme::LINK)
+                        .add_modifier(Modifier::UNDERLINED),
+                    lines,
+                );
+            }
             Inline::ManualReference { children, .. } => {
                 append_inline(children, Style::default().fg(theme::LINK), lines);
             }
@@ -966,6 +976,7 @@ mod tests {
     fn bundle() -> QueryBundle {
         QueryBundle {
             schema: QuerySchema::V7,
+            address: None,
             label: "demo".to_owned(),
             document: Some(MantDocument {
                 schema: DocumentSchema::V7,

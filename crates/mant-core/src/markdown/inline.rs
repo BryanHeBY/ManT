@@ -115,6 +115,12 @@ fn parse_inline_sequence(
                         address: address.to_owned(),
                         children,
                     });
+                } else if let Some((name, fragment)) = markdown_document_reference(&destination) {
+                    output.push(Inline::DocumentReference {
+                        name,
+                        fragment,
+                        children,
+                    });
                 } else {
                     output.push(Inline::ExternalLink {
                         uri: destination,
@@ -145,6 +151,24 @@ fn parse_inline_sequence(
     }
 
     (output, end_offset)
+}
+
+fn markdown_document_reference(destination: &str) -> Option<(String, Option<String>)> {
+    let (path, fragment) = destination
+        .split_once('#')
+        .map_or((destination, None), |(path, fragment)| {
+            (path, (!fragment.is_empty()).then(|| fragment.to_owned()))
+        });
+    if path.contains(['/', '\\', '?']) {
+        return None;
+    }
+    let path = std::path::Path::new(path);
+    let extension = path.extension()?.to_str()?;
+    if !extension.eq_ignore_ascii_case("md") && !extension.eq_ignore_ascii_case("markdown") {
+        return None;
+    }
+    let name = path.file_stem()?.to_str()?;
+    (!name.is_empty()).then(|| (name.to_owned(), fragment))
 }
 
 fn supported_link(link_type: LinkType) -> bool {
@@ -193,6 +217,7 @@ pub(super) fn inline_text(inlines: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}

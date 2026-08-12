@@ -23,6 +23,7 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
             | Inline::Emphasis { children }
             | Inline::ExternalLink { children, .. }
             | Inline::EmailLink { children, .. }
+            | Inline::DocumentReference { children, .. }
             | Inline::ManualReference { children, .. }
             | Inline::SectionReference { children, .. } => {
                 output.push_str(&flatten_inline(children));
@@ -113,6 +114,18 @@ fn render_inline_raw(children: &[Inline], options: MarkdownOptions) -> String {
                     children,
                     options,
                 ));
+            }
+            Inline::DocumentReference {
+                name,
+                fragment,
+                children,
+            } => {
+                let mut destination = format!("{name}.md");
+                if let Some(fragment) = fragment {
+                    destination.push('#');
+                    destination.push_str(fragment);
+                }
+                output.push_str(&render_link(&destination, None, children, options));
             }
             Inline::ManualReference { children, .. } => {
                 output.push_str(&render_inline_raw(children, options));
