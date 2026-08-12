@@ -1264,6 +1264,141 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
 }
 
 #[test]
+fn clicking_a_parsed_markdown_fragment_jumps_and_participates_in_history() {
+    let bundle = mant_core::query_markdown_text(
+        "# Demo\n\nContinue with [the detailed section](#details).\n\n## Details\n\nDone.\n",
+        Some("demo.md".to_owned()),
+    )
+    .expect("parse Markdown fragment link");
+    let backend = TestBackend::new(72, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("detailed")
+        .into_iter()
+        .next()
+        .expect("visible parsed fragment link");
+
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
+        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    assert_eq!(app.document.navigation()[app.selected].id, "details");
+    assert_eq!(app.back_history.len(), 1);
+    app.navigate_history(true);
+    assert_ne!(app.document.navigation()[app.selected].id, "details");
+    app.navigate_history(false);
+    assert_eq!(app.document.navigation()[app.selected].id, "details");
+}
+
+#[test]
+fn missing_page_fragment_does_not_modify_history() {
+    let bundle = manual_bundle("demo", "1");
+    let address = bundle.address.clone().expect("address");
+    let mut app = App::new(&bundle);
+
+    app.request_open(address, Some("missing".to_owned()));
+
+    assert!(app.back_history.is_empty());
+    assert!(app.forward_history.is_empty());
+    assert_eq!(app.notice.as_deref(), Some("No section #missing"));
+}
+
+#[test]
+fn clicking_a_manual_reference_requests_the_exact_page() {
+    let mut bundle = navigation_bundle();
+    bundle.document.as_mut().expect("manual").sections[0]
+        .blocks
+        .insert(
+            0,
+            AstBlock::Paragraph {
+                children: vec![Inline::ManualReference {
+                    name: "git-add".to_owned(),
+                    section: Some("1".to_owned()),
+                    children: vec![Inline::Text {
+                        value: "git-add(1)".to_owned(),
+                    }],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            },
+        );
+    let backend = TestBackend::new(72, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("git-add")
+        .into_iter()
+        .next()
+        .expect("visible manual reference");
+
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
+        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    assert_eq!(
+        app.take_open_request().expect("manual request").address(),
+        &DocumentAddress::Manual {
+            name: "git-add".to_owned(),
+            section: "1".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn clicking_an_external_link_returns_the_uri_to_the_host() {
+    let mut bundle = navigation_bundle();
+    bundle.document.as_mut().expect("manual").sections[0]
+        .blocks
+        .insert(
+            0,
+            AstBlock::Paragraph {
+                children: vec![Inline::ExternalLink {
+                    uri: "https://example.test/docs".to_owned(),
+                    title: None,
+                    children: vec![Inline::Text {
+                        value: "external docs".to_owned(),
+                    }],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            },
+        );
+    let backend = TestBackend::new(72, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("external docs")
+        .into_iter()
+        .next()
+        .expect("visible external link");
+
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
+        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
+        modifiers: KeyModifiers::NONE,
+    });
+
+    assert_eq!(
+        app.take_external_request().as_deref(),
+        Some("https://example.test/docs")
+    );
+}
+
+#[test]
 fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections() {
     let mut with_tldr = navigation_bundle();
     with_tldr.tldr = tldr_bundle().tldr;

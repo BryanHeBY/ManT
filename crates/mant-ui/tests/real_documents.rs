@@ -11,6 +11,7 @@ use mant_ast::{
     RequestSchema, Section,
 };
 use mant_ui::DocumentView;
+use ratatui::style::Modifier;
 
 const REAL_MANUALS: &[&str] = &[
     "archlinux/clang.1.gz",
@@ -163,6 +164,22 @@ fn generated_git_presentation_requests_never_reach_terminal_text() {
         assert!(!output.contains("m[blue]"), "{relative}: {output}");
         assert!(!output.contains("s-2[1]s+2"), "{relative}: {output}");
     }
+}
+
+#[test]
+fn real_git_command_references_are_visibly_clickable() {
+    let rendered = view("archlinux/git.1.gz").render(132);
+
+    assert!(
+        rendered
+            .text
+            .lines
+            .iter()
+            .flat_map(|line| &line.spans)
+            .any(|span| span.content.contains("git-add(1)")
+                && span.style.add_modifier.contains(Modifier::UNDERLINED)),
+        "git-add(1) must retain a visible link affordance in the real manual"
+    );
 }
 
 #[test]

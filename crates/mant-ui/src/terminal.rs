@@ -31,6 +31,7 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
         },
         |_| Err("document discovery is unavailable in this host".to_owned()),
         |_| Err("document discovery is unavailable in this host".to_owned()),
+        |_| Err("external links are unavailable in this host".to_owned()),
     )
 }
 
@@ -39,21 +40,25 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
 ///
 /// The UI never reads source configuration, manual paths, or Markdown files;
 /// it sends bounded catalog queries through `discover_documents` and stable
-/// catalog addresses through `open_document`.
+/// catalog addresses through `open_document`. Safe external URI activation is
+/// delegated through `open_external`, so the embedding host retains control of
+/// platform integration and policy.
 ///
 /// # Errors
 ///
 /// Returns terminal setup, event, drawing, or restoration errors. Document
 /// loading failures are shown inside the UI and leave the current page open.
-pub fn run_with_catalog<D, F>(
+pub fn run_with_catalog<D, F, E>(
     bundle: &QueryBundle,
     catalog: DocumentCatalog,
     mut discover_documents: D,
     mut open_document: F,
+    mut open_external: E,
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentAddress) -> Result<QueryBundle, String>,
+    E: FnMut(&str) -> Result<(), String>,
 {
     let mut stdout = io::stdout();
     enable_raw_mode()?;
@@ -79,6 +84,7 @@ where
                 redraw |= route_event(&mut app, &event::read()?).needs_redraw();
                 redraw |= service_discovery_request(&mut app, &mut discover_documents);
                 redraw |= service_open_request(&mut app, &mut open_document);
+                redraw |= service_external_request(&mut app, &mut open_external);
                 continue;
             };
             if !event::poll(timeout)? {
@@ -87,6 +93,7 @@ where
             redraw |= route_event(&mut app, &event::read()?).needs_redraw();
             redraw |= service_discovery_request(&mut app, &mut discover_documents);
             redraw |= service_open_request(&mut app, &mut open_document);
+            redraw |= service_external_request(&mut app, &mut open_external);
         }
         Ok(())
     }));
@@ -99,6 +106,20 @@ where
             panic::resume_unwind(payload);
         }
     }
+}
+
+fn service_external_request<E>(app: &mut App, open_external: &mut E) -> bool
+where
+    E: FnMut(&str) -> Result<(), String>,
+{
+    let Some(uri) = app.take_external_request() else {
+        return false;
+    };
+    match open_external(&uri) {
+        Ok(()) => app.report_notice(format!("Opened {uri}")),
+        Err(message) => app.report_open_error(message),
+    }
+    true
 }
 
 fn service_discovery_request<D>(app: &mut App, discover_documents: &mut D) -> bool

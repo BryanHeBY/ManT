@@ -495,10 +495,37 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
             let (request, policy) = request_for_address(address);
             host.query(&request, policy).map_err(Failure::into_message)
         },
+        open_external_uri,
     ) {
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics),
     }
+}
+
+fn open_external_uri(uri: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = std::process::Command::new("rundll32.exe");
+        command.args(["url.dll,FileProtocolHandler", uri]);
+        command
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = std::process::Command::new("open");
+        command.arg(uri);
+        command
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(uri);
+        command
+    };
+
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("could not open external link: {error}"))
 }
 
 fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {

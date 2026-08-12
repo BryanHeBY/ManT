@@ -192,6 +192,15 @@ snapshot ranks exact names before prefixes and other substrings. Loading a
 selected address returns through the host boundary, and successful jumps
 update a bounded semantic back/forward history.
 
+Navigation stays typed through rendering and hit testing. Markdown fragments
+and mdoc `Sx` target an anchor in the current document; flat Markdown document
+references retain their source boundary; mdoc `Xr`, GNU man `MR`, and
+conservative strongly styled `name(section)` pairs carry an exact manual
+address. GNU man `UR`/`UE` and `MT`/`ME` lower to external URI nodes even with
+the pinned mandoc parser. The terminal host delegates only HTTP(S) and `mailto`
+URIs to the platform handler, without invoking a shell; other schemes remain
+renderable but cannot be activated.
+
 ## Parsing and source policy
 
 Local Markdown uses `pulldown-cmark` as a source-positioned parser and lowers a

@@ -100,10 +100,10 @@ visible section.
 - `n` and `Shift+N` select the next and previous matches.
 - `F10` opens the menu, `?` opens help, and `q` quits.
 
-The mouse can select and fold navigation entries, follow page-local and
-cross-document links, scroll both panes, drag scrollbars, and resize the
-sidebar. Markdown links stay inside their registered source; man and mdoc
-references select an exact manual section.
+The mouse can select and fold navigation entries, follow underlined in-page,
+cross-document, and web/email links, scroll both panes, drag scrollbars, and
+resize the sidebar. Markdown links stay inside their registered source; man
+and mdoc references select an exact manual section.
 
 ## Agent, script, and terminal output
 

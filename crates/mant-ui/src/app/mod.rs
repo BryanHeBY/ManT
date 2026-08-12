@@ -185,6 +185,7 @@ pub struct App {
     finder: FinderState,
     pending_discovery: Option<CatalogQuery>,
     pending_open: Option<NavigationRequest>,
+    pending_external: Option<String>,
     current_address: Option<DocumentAddress>,
     fallback_bundle: Option<Arc<QueryBundle>>,
     back_history: Vec<HistoryLocation>,
@@ -241,6 +242,7 @@ impl App {
             finder,
             pending_discovery: None,
             pending_open: None,
+            pending_external: None,
             current_address: bundle.address.clone(),
             fallback_bundle: bundle.address.is_none().then(|| Arc::new(bundle.clone())),
             back_history: Vec::new(),
@@ -258,6 +260,10 @@ impl App {
 
     pub(crate) fn take_open_request(&mut self) -> Option<NavigationRequest> {
         self.pending_open.take()
+    }
+
+    pub(crate) fn take_external_request(&mut self) -> Option<String> {
+        self.pending_external.take()
     }
 
     pub(crate) fn take_discovery_request(&mut self) -> Option<CatalogQuery> {
@@ -309,6 +315,10 @@ impl App {
         self.notice = Some(message);
     }
 
+    pub(crate) fn report_notice(&mut self, message: String) {
+        self.notice = Some(message);
+    }
+
     fn current_location(&self) -> HistoryLocation {
         HistoryLocation {
             address: self.current_address.clone(),
@@ -324,12 +334,15 @@ impl App {
     pub(super) fn request_open(&mut self, address: DocumentAddress, target: Option<String>) {
         if self.current_address.as_ref() == Some(&address) {
             let current = self.current_location();
-            push_history(&mut self.back_history, current);
-            self.forward_history.clear();
-            if let Some(target) = target {
-                self.jump_to_anchor(&target);
+            let moved = if let Some(target) = target {
+                self.jump_to_anchor(&target)
             } else {
                 self.jump_content(false);
+                true
+            };
+            if moved {
+                push_history(&mut self.back_history, current);
+                self.forward_history.clear();
             }
             return;
         }

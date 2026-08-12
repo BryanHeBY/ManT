@@ -402,10 +402,14 @@ The resizable sidebar mirrors the section hierarchy and groups every semantic
 entry role: options, commands, variables, and environment variables.
 Selecting an item puts its heading at the top of the content pane. After
 content scrolling settles, the sidebar follows the first visible section.
-Page-local references can be followed directly. Flat Markdown links resolve
-inside the current registered source, while mdoc and recognized traditional
-`SEE ALSO` references resolve to an exact manual section. Successful jumps are
-recorded in a bounded backward/forward history; failed loads leave the current
+Underlined references can be followed directly. Markdown fragments and mdoc
+`Sx` references jump inside the current page. Flat Markdown links resolve only
+inside the current registered source. mdoc `Xr`, GNU man `MR`, and recognized
+strong `name(section)` references resolve to an exact manual section wherever
+they occur in a page. HTTP(S) and email links open through the platform's
+default handler; local-file and executable URL schemes remain visible but
+inert. Successful document and in-page jumps are recorded in a bounded
+backward/forward history; missing targets and failed loads leave the current
 document and history unchanged.
 
 ### Navigation
@@ -420,8 +424,9 @@ document and history unchanged.
 - `Alt+Left`: Return to the previous document or in-page jump.
 - `Alt+Right`: Move forward after returning.
 
-Mouse input selects and folds navigation entries, follows page-local links,
-scrolls either pane, drags scrollbars, and resizes the sidebar boundary.
+Mouse input selects and folds navigation entries, follows in-page,
+cross-document, and safe external links, scrolls either pane, drags
+scrollbars, and resizes the sidebar boundary.
 
 ### Page Search
 

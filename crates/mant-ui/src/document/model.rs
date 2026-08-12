@@ -10,6 +10,7 @@ pub(crate) enum LinkTarget {
         address: DocumentAddress,
         fragment: Option<String>,
     },
+    External(String),
 }
 
 #[derive(Debug, Clone)]

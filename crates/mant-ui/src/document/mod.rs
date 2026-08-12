@@ -912,12 +912,13 @@ fn append_inline(
             Inline::Code { value } => {
                 append_text(value, Style::default().fg(theme::HEADING), lines);
             }
-            Inline::ExternalLink { children, .. } | Inline::EmailLink { children, .. } => {
-                append_inline(
+            Inline::ExternalLink { uri, children, .. } => {
+                append_external_link(uri, children, current_address, lines);
+            }
+            Inline::EmailLink { address, children } => {
+                append_external_link(
+                    &format!("mailto:{address}"),
                     children,
-                    Style::default()
-                        .fg(theme::BLUE)
-                        .add_modifier(Modifier::UNDERLINED),
                     current_address,
                     lines,
                 );
@@ -982,6 +983,24 @@ fn append_inline(
     }
 }
 
+fn append_external_link(
+    uri: &str,
+    children: &[Inline],
+    current_address: Option<&DocumentAddress>,
+    lines: &mut Vec<StyledInlineLine>,
+) {
+    let target = safe_external_uri(uri).map(LinkTarget::External);
+    append_addressable_inline(
+        children,
+        Style::default()
+            .fg(theme::BLUE)
+            .add_modifier(Modifier::UNDERLINED),
+        current_address,
+        lines,
+        target.as_ref(),
+    );
+}
+
 fn append_addressable_inline(
     children: &[Inline],
     style: Style,
@@ -1008,6 +1027,20 @@ fn markdown_reference_address(
         name: name.to_owned(),
         origin: origin.clone(),
     })
+}
+
+fn safe_external_uri(uri: &str) -> Option<String> {
+    if uri.is_empty() || uri.len() > 4096 || uri.chars().any(char::is_control) {
+        return None;
+    }
+    let (scheme, target) = uri.split_once(':')?;
+    if !["https", "http", "mailto"]
+        .iter()
+        .any(|allowed| scheme.eq_ignore_ascii_case(allowed))
+    {
+        return None;
+    }
+    (!target.trim_start_matches('/').is_empty()).then(|| uri.to_owned())
 }
 
 fn record_link(
@@ -1288,6 +1321,40 @@ mod tests {
         assert_eq!(spans[4].style.fg, Some(theme::HEADING));
         assert_eq!(spans[6].style.fg, Some(theme::BLUE));
         assert!(spans[6].style.add_modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(
+            lines[0].links[0].target,
+            LinkTarget::External("https://example.test".to_owned())
+        );
+    }
+
+    #[test]
+    fn unsafe_external_schemes_remain_visible_but_inert() {
+        let lines = styled_inline_lines(
+            &[Inline::ExternalLink {
+                uri: "file:///etc/passwd".to_owned(),
+                title: None,
+                children: vec![Inline::Text {
+                    value: "local file".to_owned(),
+                }],
+            }],
+            Style::default(),
+            None,
+        );
+
+        assert_eq!(lines[0].spans[0].content, "local file");
+        assert!(lines[0].links.is_empty());
+    }
+
+    #[test]
+    fn external_uri_schemes_are_matched_case_insensitively() {
+        assert_eq!(
+            safe_external_uri("HTTPS://example.test"),
+            Some("HTTPS://example.test".to_owned())
+        );
+        assert_eq!(
+            safe_external_uri("MAILTO:docs@example.test"),
+            Some("MAILTO:docs@example.test".to_owned())
+        );
     }
 
     #[test]

@@ -9,10 +9,12 @@ presentation.
 
 - A hierarchy-aware, collapsible sidebar for sections and every semantic entry
   role: options, commands, variables, and environment variables.
-- Settled-scroll navigation following and selectable page-local references.
+- Settled-scroll navigation following and selectable Markdown/mdoc page-local
+  references.
 - A live, bounded catalog finder that delegates complete-snapshot discovery
   and document loading back to the host.
-- Typed Markdown/man reference activation with bounded back/forward history.
+- Typed Markdown/man reference activation, safe external-link delegation, and
+  bounded back/forward history.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.

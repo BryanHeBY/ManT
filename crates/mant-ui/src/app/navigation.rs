@@ -83,17 +83,19 @@ impl App {
         match target {
             LinkTarget::Section(target) => {
                 let current = self.current_location();
-                super::push_history(&mut self.back_history, current);
-                self.forward_history.clear();
-                self.jump_to_anchor(&target);
+                if self.jump_to_anchor(&target) {
+                    super::push_history(&mut self.back_history, current);
+                    self.forward_history.clear();
+                }
             }
             LinkTarget::Document { address, fragment } => {
                 self.request_open(address, fragment);
             }
+            LinkTarget::External(uri) => self.pending_external = Some(uri),
         }
     }
 
-    pub(super) fn jump_to_anchor(&mut self, target: &str) {
+    pub(super) fn jump_to_anchor(&mut self, target: &str) -> bool {
         let width = self.geometry.content.width.max(1);
         let rendered = self
             .rendered_cache
@@ -101,7 +103,7 @@ impl App {
             .or_insert_with(|| self.document.render(width));
         let Some(target_row) = rendered.anchor_row(target) else {
             self.notice = Some(format!("No section #{target}"));
-            return;
+            return false;
         };
         self.notice = None;
         self.content_scroll = target_row;
@@ -116,6 +118,7 @@ impl App {
         } else {
             self.select_section_at_row(target_row);
         }
+        true
     }
 
     fn expand_navigation_ancestors(&mut self, index: usize) {
