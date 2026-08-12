@@ -4,6 +4,9 @@ use libfuzzer_sys::fuzz_target;
 use mant_core::TldrPageLocation;
 
 fuzz_target!(|data: &str| {
+    if data.len() > 64 * 1024 {
+        return;
+    }
     let location = TldrPageLocation {
         platform: "common".to_owned(),
         language: "en".to_owned(),

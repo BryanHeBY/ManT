@@ -1,0 +1,7 @@
+ABBBBBCAman
+man
+manual/man
+guides/man
+man-pages
+human
+工具/man

@@ -35,6 +35,20 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "roff_pipeline"
+path = "fuzz_targets/roff_pipeline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "catalog_query"
+path = "fuzz_targets/catalog_query.rs"
+test = false
+doc = false
+bench = false
+
 # Standalone root: the main workspace pins release settings that do not
 # apply to libFuzzer instrumentation builds.
 [workspace]

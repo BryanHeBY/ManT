@@ -153,6 +153,48 @@ The file `docs/manuals/mant.md` is executable documentation. Tests parse it
 through the supported Markdown subset, require its embedded quick reference
 and semantic entries, and reject lossy fallback diagnostics.
 
+### Fuzzing
+
+The standalone `fuzz/` workspace keeps fuzz-only dependencies out of the
+shipped crates. CI compiles every target on stable Rust; randomized execution
+is a local or scheduled activity because a short nondeterministic CI run is not
+a reliable security boundary.
+
+The maintained targets follow externally supplied data rather than crate
+boundaries:
+
+- `markdown_parse` is the high-throughput Markdown parser target.
+- `markdown_pipeline` exercises Markdown parsing, semantic selectors, search,
+  outlines, excerpts, and every output renderer.
+- `tldr_page` covers the TLDR subset and command-token parser independently.
+- `roff_pipeline` crosses the native libmandoc boundary and then exercises the
+  same projections and renderers as Markdown.
+- `catalog_query` covers bounded literal/regex discovery, hierarchical paths,
+  relevance ordering, filters, and pagination without touching the host file
+  system.
+
+Curated seeds under `fuzz/corpus/` reach semantic comments, links, TLDR
+placeholders, man and mdoc macros, and hierarchical catalog names quickly.
+All targets cap individual inputs at 64 KiB so time is spent exploring syntax
+rather than repeatedly rendering oversized documents. File discovery, archive
+transactions, network downloads, and terminal event handling remain in
+deterministic unit and integration tests because byte mutation cannot model
+their state transitions faithfully.
+
+Install `cargo-fuzz` and a nightly toolchain, then run every target serially.
+The first argument is the number of seconds per target; additional arguments
+select individual targets:
+
+```sh
+cargo install cargo-fuzz --locked
+rustup toolchain install nightly --profile minimal
+scripts/fuzz.sh 60
+scripts/fuzz.sh 300 roff_pipeline markdown_pipeline
+```
+
+Minimize any artifact with `cargo fuzz tmin`, turn the minimized input into a
+named regression test, and only then discard or archive the generated corpus.
+
 On Linux, regenerate the README reader image with:
 
 ```sh

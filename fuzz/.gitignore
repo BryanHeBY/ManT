@@ -1,4 +1,9 @@
 target/
-corpus/
+# Keep compact, named seed inputs reviewable while ignoring libFuzzer's
+# content-addressed corpus growth inside each target directory.
+corpus/*/*
+!corpus/**/*.md
+!corpus/**/*.roff
+!corpus/**/*.txt
 artifacts/
 coverage/
