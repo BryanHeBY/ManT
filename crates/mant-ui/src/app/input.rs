@@ -21,6 +21,14 @@ impl App {
             self.open_document_finder();
             return UpdateOutcome::Redraw;
         }
+        if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Left {
+            self.navigate_history(true);
+            return UpdateOutcome::Redraw;
+        }
+        if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Right {
+            self.navigate_history(false);
+            return UpdateOutcome::Redraw;
+        }
         if self.search.is_open() && key.code == KeyCode::F(10) {
             self.open_menu(MenuId::File);
             return UpdateOutcome::Redraw;

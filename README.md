@@ -94,12 +94,16 @@ visible section.
 - `j` / `k` or arrow keys move through visible nodes.
 - `h` / `l` collapse and expand branches.
 - `d` / `u` or page keys scroll the document.
+- `Ctrl+P` opens a live finder for registered Markdown and native manuals.
+- `Alt+Left` / `Alt+Right` move backward and forward through document jumps.
 - `Ctrl+F` or `/` opens confirmed full-page search.
 - `n` and `Shift+N` select the next and previous matches.
 - `F10` opens the menu, `?` opens help, and `q` quits.
 
-The mouse can select and fold navigation entries, follow page-local links,
-scroll both panes, drag scrollbars, and resize the sidebar.
+The mouse can select and fold navigation entries, follow page-local and
+cross-document links, scroll both panes, drag scrollbars, and resize the
+sidebar. Markdown links stay inside their registered source; man and mdoc
+references select an exact manual section.
 
 ## Agent, script, and terminal output
 

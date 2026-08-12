@@ -1,6 +1,16 @@
 //! Width-independent logical rows produced from the document AST.
 
+use mant_ast::DocumentAddress;
 use ratatui::{style::Style, text::Span};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LinkTarget {
+    Section(String),
+    Document {
+        address: DocumentAddress,
+        fragment: Option<String>,
+    },
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct LogicalLine {
@@ -15,7 +25,7 @@ pub(super) struct LogicalLine {
 
 #[derive(Debug, Clone)]
 pub(super) struct LogicalLinkRange {
-    pub(super) target: String,
+    pub(super) target: LinkTarget,
     pub(super) start_column: usize,
     pub(super) end_column: usize,
 }

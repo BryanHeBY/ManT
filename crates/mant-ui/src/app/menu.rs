@@ -63,6 +63,8 @@ pub(super) struct MenuEntry {
 pub(super) enum MenuAction {
     Quit,
     OpenDocument,
+    Back,
+    Forward,
     ToggleSidebar,
     ResetSidebar,
     ExpandAll,
@@ -113,6 +115,16 @@ const NAVIGATE_MENU: &[MenuEntry] = &[
         label: "Open Document…",
         shortcut: "Ctrl+P",
         action: MenuAction::OpenDocument,
+    },
+    MenuEntry {
+        label: "Back",
+        shortcut: "Alt+←",
+        action: MenuAction::Back,
+    },
+    MenuEntry {
+        label: "Forward",
+        shortcut: "Alt+→",
+        action: MenuAction::Forward,
     },
     MenuEntry {
         label: "Previous Section",
@@ -318,6 +330,8 @@ impl App {
         match action {
             MenuAction::Quit => self.quit = true,
             MenuAction::OpenDocument => self.open_document_finder(),
+            MenuAction::Back => self.navigate_history(true),
+            MenuAction::Forward => self.navigate_history(false),
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
             MenuAction::ResetSidebar => self.sidebar_width = DEFAULT_SIDEBAR_WIDTH,
             MenuAction::ExpandAll => {
@@ -458,7 +472,7 @@ impl App {
 
     fn draw_help(frame: &mut Frame<'_>) {
         let width = 58.min(frame.area().width.saturating_sub(2));
-        let height = 14.min(frame.area().height);
+        let height = 18.min(frame.area().height);
         if width < 4 || height < 3 {
             return;
         }
@@ -490,6 +504,7 @@ impl App {
                 Line::raw("←/→ or h/l  move through the section tree"),
                 Line::raw("Enter        fold or unfold selected section"),
                 Line::raw("Ctrl+P       find and open a document"),
+                Line::raw("Alt+←/→      back / forward"),
                 Line::raw("Ctrl+F or /  find in current page"),
                 Line::raw("n / N        next / previous search match"),
                 Line::raw("d/u          scroll content by ten rows"),

@@ -11,6 +11,7 @@ presentation.
   role: options, commands, variables, and environment variables.
 - Settled-scroll navigation following and selectable page-local references.
 - A live catalog finder that delegates document loading back to the host.
+- Typed Markdown/man reference activation with bounded back/forward history.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.

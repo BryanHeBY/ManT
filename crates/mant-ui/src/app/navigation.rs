@@ -3,7 +3,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use super::{App, NAVIGATION_SYNC_IDLE};
-use crate::{NavKind, scrollbar::ScrollbarDrag};
+use crate::{NavKind, document::LinkTarget, scrollbar::ScrollbarDrag};
 
 impl App {
     pub(super) fn select_relative(&mut self, delta: isize) {
@@ -76,13 +76,34 @@ impl App {
         let document_column = usize::from(column - self.geometry.content.x);
         let Some(target) = rendered
             .link_target_at(document_row, document_column)
-            .map(str::to_owned)
+            .cloned()
         else {
             return;
         };
-        let Some(target_row) = rendered.anchor_row(&target) else {
+        match target {
+            LinkTarget::Section(target) => {
+                let current = self.current_location();
+                super::push_history(&mut self.back_history, current);
+                self.forward_history.clear();
+                self.jump_to_anchor(&target);
+            }
+            LinkTarget::Document { address, fragment } => {
+                self.request_open(address, fragment);
+            }
+        }
+    }
+
+    pub(super) fn jump_to_anchor(&mut self, target: &str) {
+        let width = self.geometry.content.width.max(1);
+        let rendered = self
+            .rendered_cache
+            .entry(width)
+            .or_insert_with(|| self.document.render(width));
+        let Some(target_row) = rendered.anchor_row(target) else {
+            self.notice = Some(format!("No section #{target}"));
             return;
         };
+        self.notice = None;
         self.content_scroll = target_row;
         if let Some(index) = self
             .document

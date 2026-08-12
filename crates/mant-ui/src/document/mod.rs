@@ -11,8 +11,8 @@ mod wrap;
 use std::collections::HashMap;
 
 use mant_ast::{
-    Block, DefinitionIdentity, DefinitionRole, Inline, ListKind, QueryBundle, Section,
-    SourceFormat, TldrCommandPart, TldrDocument, TldrOrigin,
+    Block, DefinitionIdentity, DefinitionRole, DocumentAddress, Inline, ListKind, QueryBundle,
+    Section, SourceFormat, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 #[cfg(test)]
 use ratatui::text::Line;
@@ -25,6 +25,7 @@ use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 use crate::theme;
+pub(crate) use model::LinkTarget;
 use model::{LineSurface, LogicalLine, LogicalLinkRange, StyledInlineLine, WrapMode};
 
 pub use self::search::RenderedSearchMatch;
@@ -90,7 +91,7 @@ pub struct RenderedDocument {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RenderedLinkRegion {
-    target: String,
+    target: LinkTarget,
     row: usize,
     start_column: usize,
     end_column: usize,
@@ -100,7 +101,7 @@ impl DocumentView {
     /// Build one immutable view from the normalized query contract.
     #[must_use]
     pub fn new(bundle: &QueryBundle) -> Self {
-        let mut builder = DocumentBuilder::new(bundle.label.clone());
+        let mut builder = DocumentBuilder::new(bundle.label.clone(), bundle.address.clone());
         let source_label = bundle.document.as_ref().map_or("MANUAL", |document| {
             if document.source.format == SourceFormat::Markdown {
                 "MARKDOWN"
@@ -282,25 +283,27 @@ impl RenderedDocument {
     }
 
     #[must_use]
-    pub fn link_target_at(&self, row: usize, column: usize) -> Option<&str> {
+    pub(super) fn link_target_at(&self, row: usize, column: usize) -> Option<&LinkTarget> {
         self.links
             .iter()
             .find(|link| link.row == row && link.start_column <= column && column < link.end_column)
-            .map(|link| link.target.as_str())
+            .map(|link| &link.target)
     }
 }
 
 struct DocumentBuilder {
     label: String,
+    address: Option<DocumentAddress>,
     lines: Vec<LogicalLine>,
     navigation: Vec<NavItem>,
     anchors: HashMap<String, usize>,
 }
 
 impl DocumentBuilder {
-    fn new(label: String) -> Self {
+    fn new(label: String, address: Option<DocumentAddress>) -> Self {
         Self {
             label,
+            address,
             lines: Vec::new(),
             navigation: Vec::new(),
             anchors: HashMap::new(),
@@ -577,8 +580,11 @@ impl DocumentBuilder {
                         let marker_width = UnicodeWidthStr::width(marker.as_str());
                         let content_indent =
                             indent + marker_width + usize::from(layout.indent_columns);
-                        let mut inline_lines =
-                            styled_inline_lines(children, Style::default().fg(theme::TEXT));
+                        let mut inline_lines = styled_inline_lines(
+                            children,
+                            Style::default().fg(theme::TEXT),
+                            self.address.as_ref(),
+                        );
                         let first = inline_lines
                             .first_mut()
                             .map_or_else(StyledInlineLine::default, std::mem::take);
@@ -648,7 +654,7 @@ impl DocumentBuilder {
                         .cells
                         .iter()
                         .map(|cell| {
-                            let mut builder = Self::new(String::new());
+                            let mut builder = Self::new(String::new(), self.address.clone());
                             builder.blocks(&cell.blocks, 0);
                             builder.lines
                         })
@@ -690,7 +696,11 @@ impl DocumentBuilder {
         let mut term_spans = Vec::new();
         let mut term_links = Vec::new();
         for (index, term) in item.terms.iter().enumerate() {
-            for line in styled_inline_lines(term, Style::default().fg(theme::SUBTEXT_BRIGHT)) {
+            for line in styled_inline_lines(
+                term,
+                Style::default().fg(theme::SUBTEXT_BRIGHT),
+                self.address.as_ref(),
+            ) {
                 let offset = spans_width(&term_spans);
                 term_links.extend(shifted_links(line.links, offset));
                 term_spans.extend(line.spans);
@@ -713,8 +723,11 @@ impl DocumentBuilder {
         {
             let description_indent = indent + term_width + usize::from(layout.indent_columns);
             term_spans.push(Span::raw(" ".repeat(usize::from(layout.indent_columns))));
-            let mut description_lines =
-                styled_inline_lines(children, Style::default().fg(theme::TEXT));
+            let mut description_lines = styled_inline_lines(
+                children,
+                Style::default().fg(theme::TEXT),
+                self.address.as_ref(),
+            );
             let first = description_lines
                 .first_mut()
                 .map_or_else(StyledInlineLine::default, std::mem::take);
@@ -751,7 +764,7 @@ impl DocumentBuilder {
         for id in inline_anchor_ids(nodes) {
             self.anchors.entry(id).or_insert(self.lines.len());
         }
-        let lines = styled_inline_lines(nodes, base_style)
+        let lines = styled_inline_lines(nodes, base_style, self.address.as_ref())
             .into_iter()
             .map(|line| {
                 let spans = if surface == LineSurface::Code {
@@ -799,9 +812,13 @@ fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
     ids
 }
 
-fn styled_inline_lines(nodes: &[Inline], style: Style) -> Vec<StyledInlineLine> {
+fn styled_inline_lines(
+    nodes: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
-    append_inline(nodes, style, &mut lines);
+    append_inline(nodes, style, current_address, &mut lines);
     lines
 }
 
@@ -867,7 +884,12 @@ fn collect_semantic_entries<'a>(blocks: &'a [Block], entries: &mut Vec<&'a Defin
     }
 }
 
-fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLine>) {
+fn append_inline(
+    nodes: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    lines: &mut Vec<StyledInlineLine>,
+) {
     for node in nodes {
         match node {
             Inline::Text { value } => append_text(value, style, lines),
@@ -875,6 +897,7 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLin
                 append_inline(
                     children,
                     style.fg(theme::STRONG).add_modifier(Modifier::BOLD),
+                    current_address,
                     lines,
                 );
             }
@@ -882,6 +905,7 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLin
                 append_inline(
                     children,
                     style.fg(theme::SUBTEXT).add_modifier(Modifier::ITALIC),
+                    current_address,
                     lines,
                 );
             }
@@ -894,55 +918,123 @@ fn append_inline(nodes: &[Inline], style: Style, lines: &mut Vec<StyledInlineLin
                     Style::default()
                         .fg(theme::BLUE)
                         .add_modifier(Modifier::UNDERLINED),
+                    current_address,
                     lines,
                 );
             }
-            Inline::DocumentReference { children, .. } => {
-                append_inline(
+            Inline::DocumentReference {
+                name,
+                fragment,
+                children,
+            } => {
+                let target = markdown_reference_address(current_address, name).map(|address| {
+                    LinkTarget::Document {
+                        address,
+                        fragment: fragment.clone(),
+                    }
+                });
+                append_addressable_inline(
                     children,
                     Style::default()
                         .fg(theme::LINK)
                         .add_modifier(Modifier::UNDERLINED),
+                    current_address,
                     lines,
+                    target.as_ref(),
                 );
             }
-            Inline::ManualReference { children, .. } => {
-                append_inline(children, Style::default().fg(theme::LINK), lines);
+            Inline::ManualReference {
+                name,
+                section,
+                children,
+            } => {
+                let target = section.as_ref().map(|section| LinkTarget::Document {
+                    address: DocumentAddress::Manual {
+                        name: name.clone(),
+                        section: section.clone(),
+                    },
+                    fragment: None,
+                });
+                append_addressable_inline(
+                    children,
+                    Style::default()
+                        .fg(theme::LINK)
+                        .add_modifier(Modifier::UNDERLINED),
+                    current_address,
+                    lines,
+                    target.as_ref(),
+                );
             }
             Inline::SectionReference { target, children } => {
-                let first_line = lines.len() - 1;
-                let first_column = spans_width(&lines[first_line].spans);
-                append_inline(
+                append_addressable_inline(
                     children,
                     Style::default()
                         .fg(theme::LINK)
                         .add_modifier(Modifier::UNDERLINED),
+                    current_address,
                     lines,
+                    Some(&LinkTarget::Section(target.clone())),
                 );
-                let last_line = lines.len() - 1;
-                for (line_index, line) in lines
-                    .iter_mut()
-                    .enumerate()
-                    .take(last_line + 1)
-                    .skip(first_line)
-                {
-                    let start_column = if line_index == first_line {
-                        first_column
-                    } else {
-                        0
-                    };
-                    let end_column = spans_width(&line.spans);
-                    if end_column > start_column {
-                        line.links.push(LogicalLinkRange {
-                            target: target.clone(),
-                            start_column,
-                            end_column,
-                        });
-                    }
-                }
             }
             Inline::Anchor { .. } => {}
             Inline::LineBreak => lines.push(StyledInlineLine::default()),
+        }
+    }
+}
+
+fn append_addressable_inline(
+    children: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    lines: &mut Vec<StyledInlineLine>,
+    target: Option<&LinkTarget>,
+) {
+    let first_line = lines.len() - 1;
+    let first_column = spans_width(&lines[first_line].spans);
+    append_inline(children, style, current_address, lines);
+    if let Some(target) = target {
+        record_link(lines, first_line, first_column, target);
+    }
+}
+
+fn markdown_reference_address(
+    current: Option<&DocumentAddress>,
+    name: &str,
+) -> Option<DocumentAddress> {
+    let DocumentAddress::Markdown { origin, .. } = current? else {
+        return None;
+    };
+    Some(DocumentAddress::Markdown {
+        name: name.to_owned(),
+        origin: origin.clone(),
+    })
+}
+
+fn record_link(
+    lines: &mut [StyledInlineLine],
+    first_line: usize,
+    first_column: usize,
+    target: &LinkTarget,
+) {
+    let last_line = lines.len() - 1;
+    for (line_index, line) in lines
+        .iter_mut()
+        .enumerate()
+        .take(last_line + 1)
+        .skip(first_line)
+    {
+        let start_column = if line_index == first_line {
+            first_column
+        } else {
+            0
+        };
+        let end_column = spans_width(&line.spans);
+        if end_column > start_column {
+            line.links.push(LogicalLinkRange {
+                target: target.clone(),
+                start_column,
+                end_column,
+            });
         }
     }
 }
@@ -1084,7 +1176,7 @@ mod tests {
     }
 
     #[test]
-    fn manual_references_are_distinct_without_implying_page_local_clickability() {
+    fn manual_references_are_typed_clickable_links_when_the_section_is_known() {
         let lines = styled_inline_lines(
             &[Inline::ManualReference {
                 name: "printf".to_owned(),
@@ -1094,14 +1186,59 @@ mod tests {
                 }],
             }],
             Style::default(),
+            None,
         );
 
         assert_eq!(lines[0].spans[0].style.fg, Some(theme::LINK));
         assert!(
-            !lines[0].spans[0]
+            lines[0].spans[0]
                 .style
                 .add_modifier
                 .contains(Modifier::UNDERLINED)
+        );
+        assert_eq!(
+            lines[0].links[0].target,
+            LinkTarget::Document {
+                address: DocumentAddress::Manual {
+                    name: "printf".to_owned(),
+                    section: "3".to_owned(),
+                },
+                fragment: None,
+            }
+        );
+    }
+
+    #[test]
+    fn markdown_references_keep_the_current_source_and_fragment() {
+        let current = DocumentAddress::Markdown {
+            name: "about_Profiles".to_owned(),
+            origin: mant_ast::MarkdownOrigin::Source {
+                name: "pwsh7".to_owned(),
+            },
+        };
+        let lines = styled_inline_lines(
+            &[Inline::DocumentReference {
+                name: "Start-Process".to_owned(),
+                fragment: Some("examples".to_owned()),
+                children: vec![Inline::Text {
+                    value: "Start-Process".to_owned(),
+                }],
+            }],
+            Style::default(),
+            Some(&current),
+        );
+
+        assert_eq!(
+            lines[0].links[0].target,
+            LinkTarget::Document {
+                address: DocumentAddress::Markdown {
+                    name: "Start-Process".to_owned(),
+                    origin: mant_ast::MarkdownOrigin::Source {
+                        name: "pwsh7".to_owned(),
+                    },
+                },
+                fragment: Some("examples".to_owned()),
+            }
         );
     }
 
@@ -1140,6 +1277,7 @@ mod tests {
                 },
             ],
             Style::default().fg(theme::TEXT),
+            None,
         );
         let spans = &lines[0].spans;
 
@@ -1185,7 +1323,7 @@ mod tests {
 
     #[test]
     fn preformatted_rows_share_one_full_width_surface() {
-        let mut builder = DocumentBuilder::new("demo".to_owned());
+        let mut builder = DocumentBuilder::new("demo".to_owned(), None);
         builder.inline_lines_with_surface(
             &[
                 Inline::Text {
@@ -1766,14 +1904,14 @@ mod tests {
         let regions = rendered
             .links
             .iter()
-            .filter(|link| link.target == "details")
+            .filter(|link| link.target == LinkTarget::Section("details".to_owned()))
             .collect::<Vec<_>>();
 
         assert!(regions.len() >= 2, "reference should wrap across rows");
         for region in regions {
             assert_eq!(
                 rendered.link_target_at(region.row, region.start_column),
-                Some("details")
+                Some(&LinkTarget::Section("details".to_owned()))
             );
         }
     }

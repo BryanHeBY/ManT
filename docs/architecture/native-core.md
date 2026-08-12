@@ -71,9 +71,11 @@ Section IDs and explicit anchor IDs occupy the same namespace within one
 document. Renderers may style or activate these nodes differently, but must
 preserve their visible children in non-interactive output.
 
-The TUI activates resolved `section-reference` nodes directly. Cross-document
-references remain typed through lowering so the interactive host can resolve
-them without parsing rendered labels or arbitrary filesystem paths.
+The TUI activates resolved `section-reference` nodes directly. It returns
+typed cross-document addresses to the `mant` host, which alone may resolve
+registered Markdown or native manual files. Flat Markdown references retain
+their current source identity, while manual references retain their section;
+the UI never reconstructs either from rendered labels or arbitrary paths.
 
 ## Native process boundary
 
@@ -182,9 +184,11 @@ matcher regardless of output format. Anchors already emitted for sections and
 semantic definitions act as a source map. An internal root anchor covers
 Markdown content before the first heading, so every occurrence reports both a
 stable Markdown range and the nearest path accepted by excerpt selection.
-The TUI keeps its in-memory interaction loop and never spawns a process while
-typing; this result model is the shared semantic basis for future UI indexing,
-not a second parser or a dependency on the system `grep` executable.
+The TUI keeps its catalog and interaction loop in memory and never spawns a
+process while typing in either search field. Its document finder applies the
+default literal, case-insensitive catalog ranking to that snapshot. Loading a
+selected address returns through the native host boundary, and successful
+jumps update a bounded semantic back/forward history.
 
 ## Parsing and source policy
 

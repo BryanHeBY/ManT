@@ -131,8 +131,8 @@ impl App {
             return;
         }
         if let Some(address) = self.finder.handle_key(key, &self.catalog) {
-            self.pending_open = Some(address);
             self.overlay = Overlay::None;
+            self.request_open(address, None);
         }
     }
 }

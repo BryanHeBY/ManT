@@ -402,7 +402,11 @@ The resizable sidebar mirrors the section hierarchy and groups every semantic
 entry role: options, commands, variables, and environment variables.
 Selecting an item puts its heading at the top of the content pane. After
 content scrolling settles, the sidebar follows the first visible section.
-Page-local references can be followed directly.
+Page-local references can be followed directly. Flat Markdown links resolve
+inside the current registered source, while mdoc and recognized traditional
+`SEE ALSO` references resolve to an exact manual section. Successful jumps are
+recorded in a bounded backward/forward history; failed loads leave the current
+document and history unchanged.
 
 ### Navigation
 
@@ -412,6 +416,9 @@ Page-local references can be followed directly.
 - `l`, `Right`: Expand the current branch or select its first child.
 - `d`, `PageDown`: Scroll the content down.
 - `u`, `PageUp`: Scroll the content up.
+- `Ctrl+P`: Open the document finder.
+- `Alt+Left`: Return to the previous document or in-page jump.
+- `Alt+Right`: Move forward after returning.
 
 Mouse input selects and folds navigation entries, follows page-local links,
 scrolls either pane, drags scrollbars, and resizes the sidebar boundary.
@@ -427,14 +434,22 @@ scrolls either pane, drags scrollbars, and resizes the sidebar boundary.
 Search runs only after confirmation. Every match stays highlighted while the
 active match uses a stronger background and moves into view.
 
+### Document Finder
+
+The `Ctrl+P` window searches the catalog while text is entered. Each match
+shows its configured Markdown source or exact native manual section. `Up` and
+`Down` select a result, `Enter` opens it, and `Escape` closes the window. The
+Navigate menu exposes the finder and both history directions.
+
 ### Interface
 
 - `F10`: Open the menu bar.
 - `?`: Show keyboard shortcuts.
 - `q`: Quit.
 
-The View menu can hide the sidebar. Terminal setup is restored on normal exit,
-errors, and Rust panics.
+The View menu can hide the sidebar. The Navigate and Search menus expose the
+same operations as their shortcuts. Terminal setup is restored on normal
+exit, errors, and Rust panics.
 
 ## Document Selection
 

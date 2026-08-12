@@ -9,6 +9,7 @@ mod search;
 
 use std::{
     collections::{HashMap, HashSet},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -25,6 +26,7 @@ use crate::{
 };
 
 const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
+const HISTORY_LIMIT: usize = 64;
 /// Caps expensive width-dependent document reflow while the splitter moves.
 ///
 /// The first effective movement is rendered immediately. Further pointer
@@ -40,6 +42,33 @@ const SIDEBAR_RESIZE_FRAME_INTERVAL: Duration = Duration::from_millis(50);
 pub enum UpdateOutcome {
     Unchanged,
     Redraw,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HistoryDirection {
+    New,
+    Back,
+    Forward,
+}
+
+#[derive(Debug, Clone)]
+struct HistoryLocation {
+    address: Option<DocumentAddress>,
+    fallback: Option<Arc<QueryBundle>>,
+    target: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NavigationRequest {
+    address: DocumentAddress,
+    target: Option<String>,
+    direction: HistoryDirection,
+}
+
+impl NavigationRequest {
+    pub(crate) const fn address(&self) -> &DocumentAddress {
+        &self.address
+    }
 }
 
 impl UpdateOutcome {
@@ -155,7 +184,11 @@ pub struct App {
     search: SearchState,
     catalog: Vec<DocumentSummary>,
     finder: FinderState,
-    pending_open: Option<DocumentAddress>,
+    pending_open: Option<NavigationRequest>,
+    current_address: Option<DocumentAddress>,
+    fallback_bundle: Option<Arc<QueryBundle>>,
+    back_history: Vec<HistoryLocation>,
+    forward_history: Vec<HistoryLocation>,
     notice: Option<String>,
     overlay: Overlay,
     pointer_drag: PointerDrag,
@@ -206,6 +239,10 @@ impl App {
             catalog: catalog.documents,
             finder: FinderState::default(),
             pending_open: None,
+            current_address: bundle.address.clone(),
+            fallback_bundle: bundle.address.is_none().then(|| Arc::new(bundle.clone())),
+            back_history: Vec::new(),
+            forward_history: Vec::new(),
             notice: None,
             overlay: Overlay::None,
             pointer_drag: PointerDrag::None,
@@ -217,12 +254,22 @@ impl App {
         }
     }
 
-    pub(crate) fn take_open_request(&mut self) -> Option<DocumentAddress> {
+    pub(crate) fn take_open_request(&mut self) -> Option<NavigationRequest> {
         self.pending_open.take()
     }
 
-    pub(crate) fn open_document(&mut self, bundle: &QueryBundle) {
+    pub(crate) fn complete_open(&mut self, bundle: &QueryBundle, request: NavigationRequest) {
+        self.commit_history(request.direction);
+        self.replace_document(bundle);
+        if let Some(target) = request.target {
+            self.jump_to_anchor(&target);
+        }
+    }
+
+    fn replace_document(&mut self, bundle: &QueryBundle) {
         self.document = DocumentView::new(bundle);
+        self.current_address.clone_from(&bundle.address);
+        self.fallback_bundle = bundle.address.is_none().then(|| Arc::new(bundle.clone()));
         self.selected = 0;
         self.expanded = self
             .document
@@ -245,6 +292,104 @@ impl App {
 
     pub(crate) fn report_open_error(&mut self, message: String) {
         self.notice = Some(message);
+    }
+
+    fn current_location(&self) -> HistoryLocation {
+        HistoryLocation {
+            address: self.current_address.clone(),
+            fallback: self.fallback_bundle.clone(),
+            target: self
+                .document
+                .navigation()
+                .get(self.selected)
+                .map(|item| item.target_id.clone()),
+        }
+    }
+
+    pub(super) fn request_open(&mut self, address: DocumentAddress, target: Option<String>) {
+        if self.current_address.as_ref() == Some(&address) {
+            let current = self.current_location();
+            push_history(&mut self.back_history, current);
+            self.forward_history.clear();
+            if let Some(target) = target {
+                self.jump_to_anchor(&target);
+            } else {
+                self.jump_content(false);
+            }
+            return;
+        }
+        self.pending_open = Some(NavigationRequest {
+            address,
+            target,
+            direction: HistoryDirection::New,
+        });
+    }
+
+    pub(super) fn navigate_history(&mut self, back: bool) {
+        let location = if back {
+            self.back_history.last()
+        } else {
+            self.forward_history.last()
+        }
+        .cloned();
+        let Some(location) = location else {
+            return;
+        };
+        let direction = if back {
+            HistoryDirection::Back
+        } else {
+            HistoryDirection::Forward
+        };
+        if location.address == self.current_address {
+            self.complete_local_history(location, direction);
+        } else if let Some(address) = location.address.clone() {
+            self.pending_open = Some(NavigationRequest {
+                address,
+                target: location.target,
+                direction,
+            });
+        } else if let Some(bundle) = location.fallback.as_deref() {
+            let bundle = bundle.clone();
+            self.complete_local_bundle(&bundle, location.target, direction);
+        }
+    }
+
+    fn complete_local_history(&mut self, location: HistoryLocation, direction: HistoryDirection) {
+        self.commit_history(direction);
+        if let Some(target) = location.target {
+            self.jump_to_anchor(&target);
+        }
+    }
+
+    fn complete_local_bundle(
+        &mut self,
+        bundle: &QueryBundle,
+        target: Option<String>,
+        direction: HistoryDirection,
+    ) {
+        self.commit_history(direction);
+        self.replace_document(bundle);
+        if let Some(target) = target {
+            self.jump_to_anchor(&target);
+        }
+    }
+
+    fn commit_history(&mut self, direction: HistoryDirection) {
+        let current = self.current_location();
+        match direction {
+            HistoryDirection::New => {
+                push_history(&mut self.back_history, current);
+                self.forward_history.clear();
+            }
+            HistoryDirection::Back => {
+                self.back_history.pop();
+                push_history(&mut self.forward_history, current);
+            }
+            HistoryDirection::Forward => {
+                self.forward_history.pop();
+                push_history(&mut self.back_history, current);
+            }
+        }
     }
 
     #[must_use]
@@ -280,6 +425,13 @@ impl App {
         .map(|deadline| deadline.saturating_duration_since(now))
         .min()
     }
+}
+
+fn push_history(history: &mut Vec<HistoryLocation>, location: HistoryLocation) {
+    if history.len() == HISTORY_LIMIT {
+        history.remove(0);
+    }
+    history.push(location);
 }
 
 fn fit_to_width(value: &str, width: usize) -> String {

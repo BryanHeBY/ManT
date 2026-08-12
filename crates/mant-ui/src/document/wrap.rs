@@ -10,7 +10,7 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use super::{LineSurface, LogicalLine, WrapMode};
+use super::{LineSurface, LinkTarget, LogicalLine, WrapMode};
 use crate::theme;
 
 #[derive(Clone, Copy)]
@@ -37,7 +37,7 @@ pub(super) struct WrappedSearchCell {
 }
 
 pub(super) struct WrappedLink {
-    pub(super) target: String,
+    pub(super) target: LinkTarget,
     pub(super) start_column: usize,
     pub(super) end_column: usize,
 }

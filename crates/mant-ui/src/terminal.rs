@@ -101,8 +101,8 @@ where
     let Some(address) = app.take_open_request() else {
         return false;
     };
-    match open_document(&address) {
-        Ok(bundle) => app.open_document(&bundle),
+    match open_document(address.address()) {
+        Ok(bundle) => app.complete_open(&bundle, address),
         Err(message) => app.report_open_error(message),
     }
     true

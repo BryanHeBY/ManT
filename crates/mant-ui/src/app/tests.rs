@@ -149,6 +149,17 @@ fn document_catalog() -> DocumentCatalog {
     }
 }
 
+fn manual_bundle(name: &str, section: &str) -> QueryBundle {
+    let mut bundle = navigation_bundle();
+    bundle.label = name.to_owned();
+    bundle.address = Some(DocumentAddress::Manual {
+        name: name.to_owned(),
+        section: section.to_owned(),
+    });
+    bundle.document.as_mut().expect("manual").meta.section = Some(section.to_owned());
+    bundle
+}
+
 #[test]
 fn document_finder_filters_live_and_emits_an_exact_address() {
     let mut app = App::with_catalog(&navigation_bundle(), document_catalog());
@@ -162,7 +173,8 @@ fn document_finder_filters_live_and_emits_an_exact_address() {
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(
-        app.take_open_request(),
+        app.take_open_request()
+            .map(|request| request.address().clone()),
         Some(DocumentAddress::Manual {
             name: "printf".to_owned(),
             section: "3".to_owned(),
@@ -184,6 +196,67 @@ fn document_finder_is_available_from_the_navigate_menu() {
     assert!(screen.contains("pwsh7"));
     assert!(screen.contains("printf"));
     assert!(screen.contains("manual/3"));
+}
+
+#[test]
+fn cross_document_history_moves_back_and_forward_transactionally() {
+    let first = manual_bundle("first", "1");
+    let second = manual_bundle("second", "5");
+    let mut app = App::new(&first);
+
+    app.request_open(second.address.clone().expect("second address"), None);
+    let request = app.take_open_request().expect("open second");
+    app.complete_open(&second, request);
+    assert_eq!(app.document.label(), "second");
+
+    app.navigate_history(true);
+    let request = app.take_open_request().expect("back to first");
+    assert_eq!(
+        request.address(),
+        first.address.as_ref().expect("first address")
+    );
+    app.complete_open(&first, request);
+    assert_eq!(app.document.label(), "first");
+
+    app.navigate_history(false);
+    let request = app.take_open_request().expect("forward to second");
+    assert_eq!(
+        request.address(),
+        second.address.as_ref().expect("second address")
+    );
+    app.complete_open(&second, request);
+    assert_eq!(app.document.label(), "second");
+}
+
+#[test]
+fn history_restores_an_initial_direct_markdown_without_a_host_request() {
+    let direct = navigation_bundle();
+    let manual = manual_bundle("manual", "1");
+    let mut app = App::new(&direct);
+
+    app.request_open(manual.address.clone().expect("manual address"), None);
+    let request = app.take_open_request().expect("open manual");
+    app.complete_open(&manual, request);
+    app.navigate_history(true);
+
+    assert!(app.take_open_request().is_none());
+    assert_eq!(app.document.label(), "demo");
+    assert!(app.current_address.is_none());
+}
+
+#[test]
+fn same_document_fragment_jumps_participate_in_history() {
+    let bundle = manual_bundle("demo", "1");
+    let address = bundle.address.clone().expect("address");
+    let mut app = App::new(&bundle);
+    app.geometry.content.width = 60;
+
+    app.request_open(address, Some("details".to_owned()));
+    assert_eq!(app.document.navigation()[app.selected].target_id, "details");
+    app.navigate_history(true);
+    assert_eq!(app.document.navigation()[app.selected].target_id, "options");
+    app.navigate_history(false);
+    assert_eq!(app.document.navigation()[app.selected].target_id, "details");
 }
 
 #[test]
