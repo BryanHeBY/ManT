@@ -162,8 +162,8 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
     let licenses = include_str!("../../../THIRD_PARTY_LICENSES.html");
     assert!(licenses.contains("ManT Rust dependency licenses"));
     assert!(licenses.contains("cargo-about"));
-    assert!(licenses.contains("mant 0.6.3"));
-    assert!(licenses.contains("libmandoc-rs 0.6.3"));
+    assert!(licenses.contains("mant 0.6.4"));
+    assert!(licenses.contains("libmandoc-rs 0.6.4"));
     assert!(licenses.contains("ratatui 0.30.2"));
     assert!(licenses.contains("rustls 0.23.43"));
 }
