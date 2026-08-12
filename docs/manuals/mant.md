@@ -222,6 +222,8 @@ complete bullet list. Both the role and matching policy are required:
 - `+r`: Set an attribute.
 - `/+N`: Select a character offset.
 - `/driver.exclude`: Select Driver Verifier exclusions.
+- `-ca.cert`, `-ca.chain`: Preserve exact dotted dash-option names.
+- `--config.file=FILE`: Omit a placeholder while preserving the dotted name.
 
 <!-- mant:entries role=option case=insensitive attached=fixed -->
 - `/F`: Run an extended scan.
@@ -290,8 +292,10 @@ uppercase or angle-bracket placeholder, so `type= TYPE` and `board=N` become
 `type=` and `board=`. Windows Script Host `//` names preserve both slashes and
 apply the same colon-placeholder rule. Safe leading-plus, slash-plus, and
 dotted-slash tokens such as `+r`, `/+N`, and `/driver.exclude` remain complete
-selectors. Arbitrary prose, paths, empty dotted segments, and lowercase
-equals-value placeholders are rejected.
+selectors. Dash options likewise preserve non-empty dotted segments, so
+`-ca.cert` and `--config.file=FILE` become `-ca.cert` and `--config.file`.
+Arbitrary trailing punctuation, paths, empty dotted segments, and lowercase
+equals-value placeholders are rejected instead of being silently truncated.
 
 Case policy belongs only to the declared list. It does not change section
 paths or IDs. Use `sensitive` when `-p` and `-P` differ, and `insensitive` for
@@ -305,8 +309,12 @@ source-located recoverable diagnostic without dropping or reordering content.
 Recognized entries receive role-specific stable IDs and aliases, appear
 beneath their owning section in `--outline`, and are selectable through
 `--node` and `--explain`. A mixed ordinary/option list remains an ordinary list
-rather than being guessed. When an alias occurs more than once, selection
-fails with candidate paths and IDs; use one of those stable qualifiers.
+rather than being guessed. Paths and IDs resolve first, followed by exact
+aliases and then normalized conveniences such as omitting leading dashes. This
+lets an exact command `?` coexist with option spelling `-?`. When aliases at
+the same precedence remain ambiguous, the outline carries a source diagnostic
+and `entriesComplete: false`; selection returns candidate paths and IDs for a
+stable qualification.
 
 Semantic tables are not currently inferred or declared. Convert an interface
 table to a declared bullet list when its rows must appear in outlines and work
@@ -418,13 +426,13 @@ one-based paths such as `2.3`, and semantic entries use paths such as `2.3/o4`.
 `--tldr` is a shortcut for selecting that reserved node alone.
 
 `--node` first recognizes the reserved tldr and document-root selectors, then
-resolves exact paths or IDs across sections and entries, and finally resolves
-entry aliases. `--explain` is entry-only: it resolves an exact entry path or
-ID first, then entry aliases using their declared case policy. Duplicate
-aliases return deterministic candidate paths and IDs. Only when no entry
-matches does an exact section, root, or tldr selector produce the instruction
-to use `--node`; consequently a command alias may have the same spelling as a
-section ID without being shadowed.
+resolves exact paths or IDs across sections and entries, exact aliases, and
+finally normalized entry shorthands. `--explain` uses the same precedence but
+accepts entries only. Duplicate matches at one precedence return deterministic
+candidate paths and IDs. Only when no entry matches does an exact section,
+root, or tldr selector produce the instruction to use `--node`; consequently a
+command alias may have the same spelling as a section ID without being
+shadowed.
 
 ## Search
 

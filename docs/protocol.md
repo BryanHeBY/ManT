@@ -593,7 +593,7 @@ before an agent requests content:
 | `label` | Query label |
 | `source`, `meta` | Optional document identity |
 | `diagnostics` | Optional recoverable parser findings |
-| `entriesComplete` | Present as `false` only when semantic-entry declarations were rejected |
+| `entriesComplete` | Present as `false` only when semantic-entry declarations were rejected or have ambiguous selectors |
 | `nodes` | Recursive addressable tree |
 
 Node kinds are:
@@ -686,13 +686,14 @@ copying their blocks.
 
 The `excerpt` view and `--node` first recognize reserved root and tldr
 selectors, then resolve exact paths or IDs across all sections and entries,
-and finally resolve semantic aliases. The `explain` view instead resolves an
-exact entry path or ID, then an entry alias using that entry's case policy.
+exact semantic aliases, and finally normalized shorthands. The `explain` view
+uses the same precedence but accepts entries only. Exact aliases therefore win
+over conveniences such as omitting leading option dashes or an `$env:` prefix.
 Only when no entry matches does an exact section, root, or tldr selector return
 an entry-required error. A same-named section therefore cannot shadow an
-option, command, variable, or environment variable. A repeated alias is an error rather
-than a first-match selection; the diagnostic returns every candidate path and
-ID in source order.
+option, command, variable, or environment variable. Repeated matches at one
+precedence are errors rather than first-match selections; diagnostics and
+runtime errors return candidate paths and IDs in source order.
 
 Direct `mant --explain=--exclude` and MCP `mant_document_explain` reuse this
 contract, then require the result to contain exactly one `document-entry`.

@@ -228,6 +228,10 @@ fn parse_document_with_entries(
     for target in retained_targets {
         ids.targets.insert(target.clone(), target);
     }
+    entry_diagnostics.extend(crate::projection::semantic_selector_diagnostics(
+        &root_blocks,
+        &sections,
+    ));
     resolve_local_links(
         &mut root_blocks,
         &mut sections,

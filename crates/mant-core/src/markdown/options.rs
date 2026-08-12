@@ -693,11 +693,7 @@ fn option_entry_names(
             let parts = alias.split('/').collect::<Vec<_>>();
             if parts.iter().all(|part| part.starts_with('-')) {
                 for part in parts {
-                    names.push(
-                        dash_option_name(part)
-                            .ok_or(EntryRejectionReason::InvalidOptionName)?
-                            .to_owned(),
-                    );
+                    names.push(dash_option_name(part, attached)?);
                 }
                 continue;
             }
@@ -715,9 +711,7 @@ fn option_entry_name(
 ) -> Result<String, EntryRejectionReason> {
     let value = value.trim();
     if value.starts_with('-') {
-        return dash_option_name(value)
-            .map(ToOwned::to_owned)
-            .ok_or(EntryRejectionReason::InvalidOptionName);
+        return dash_option_name(value, attached);
     }
     if value.starts_with('+') {
         return fixed_prefixed_name(value, "+");
@@ -856,10 +850,45 @@ fn block_source(block: &Block) -> Option<SourceSpan> {
     }
 }
 
-fn dash_option_name(value: &str) -> Option<&str> {
+fn dash_option_name(
+    value: &str,
+    attached: AttachedValuePolicy,
+) -> Result<String, EntryRejectionReason> {
     let value = value.trim();
-    let name = option_prefix(value)?;
-    (name.starts_with('-')).then_some(name)
+    let mut parts = value.split_whitespace();
+    let token = parts
+        .next()
+        .ok_or(EntryRejectionReason::InvalidOptionName)?;
+    let trailing = parts.next();
+    if parts.next().is_some() {
+        return Err(EntryRejectionReason::InvalidPlaceholder);
+    }
+    let (head, suffix) = token.split_once('=').unwrap_or((token, ""));
+    let name = option_prefix(head).ok_or(EntryRejectionReason::InvalidOptionName)?;
+    if name != head || !name.starts_with('-') {
+        return Err(EntryRejectionReason::InvalidOptionName);
+    }
+    if let Some(placeholder) = trailing
+        && (!suffix.is_empty() || !is_placeholder(placeholder))
+    {
+        return Err(EntryRejectionReason::InvalidPlaceholder);
+    }
+    if suffix.is_empty() {
+        return Ok(name.to_owned());
+    }
+    if is_explicit_placeholder(suffix)
+        || matches!(attached, AttachedValuePolicy::Infer) && is_placeholder(suffix)
+    {
+        return Ok(name.to_owned());
+    }
+    if matches!(attached, AttachedValuePolicy::Fixed) && is_safe_segment(suffix) {
+        return Ok(token.to_owned());
+    }
+    Err(if matches!(attached, AttachedValuePolicy::Infer) {
+        EntryRejectionReason::InvalidPlaceholder
+    } else {
+        EntryRejectionReason::InvalidOptionName
+    })
 }
 
 fn extend_unique(output: &mut Vec<String>, values: Vec<String>) {

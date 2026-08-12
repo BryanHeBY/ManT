@@ -1,11 +1,15 @@
 //! Projects complete structured documents into outlines and selectable excerpts.
 
-use std::{collections::HashSet, error::Error, fmt};
+use std::{
+    collections::{BTreeSet, HashSet},
+    error::Error,
+    fmt,
+};
 
 use mant_ast::{
-    Block, DefinitionCase, DefinitionItem, DefinitionRole, ExcerptSchema, ExcerptSelection,
-    OutlineDetail, OutlineNode, OutlineReference, OutlineSchema, QueryBundle, QueryExcerpt,
-    QueryOutline, Section,
+    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
+    DiagnosticLevel, ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference,
+    OutlineSchema, QueryBundle, QueryExcerpt, QueryOutline, Section, SourceSpan,
 };
 
 use crate::definitions::definition_entries;
@@ -359,10 +363,7 @@ fn resolve_explanation_candidate<'a>(
         return Ok(candidate);
     }
 
-    let matches = located
-        .iter()
-        .filter(|candidate| candidate.matches_alias(selector))
-        .collect::<Vec<_>>();
+    let matches = matching_aliases(located, selector).1;
     match matches.as_slice() {
         [candidate] => return Ok(candidate),
         [] => {}
@@ -415,10 +416,7 @@ fn resolve_candidate<'a>(
         return Ok(candidate);
     }
 
-    let matches = located
-        .iter()
-        .filter(|candidate| candidate.matches_alias(selector))
-        .collect::<Vec<_>>();
+    let matches = matching_aliases(located, selector).1;
     match matches.as_slice() {
         [] => Err(ProjectionError::UnknownSelector {
             document: query.label.clone(),
@@ -496,6 +494,7 @@ enum LocatedNode<'a> {
         title: String,
         breadcrumbs: Vec<OutlineReference>,
         entry: &'a DefinitionItem,
+        source: Option<SourceSpan>,
     },
 }
 
@@ -531,15 +530,42 @@ impl LocatedNode<'_> {
         }
     }
 
-    fn matches_alias(&self, selector: &str) -> bool {
+    fn matches_exact_alias(&self, selector: &str) -> bool {
         match self {
             Self::Entry { entry, .. } => entry.identity.as_ref().is_some_and(|identity| {
                 identity
                     .names
                     .iter()
-                    .any(|name| semantic_name_matches(identity.role, identity.case, name, selector))
+                    .any(|name| semantic_name_equivalent(identity.case, name, selector))
             }),
             Self::Section { .. } => false,
+        }
+    }
+
+    fn matches_shorthand_alias(&self, selector: &str) -> bool {
+        match self {
+            Self::Entry { entry, .. } => entry.identity.as_ref().is_some_and(|identity| {
+                identity.names.iter().any(|name| {
+                    semantic_name_shorthand(identity.role, name).is_some_and(|shorthand| {
+                        semantic_name_equivalent(identity.case, shorthand, selector)
+                    })
+                })
+            }),
+            Self::Section { .. } => false,
+        }
+    }
+
+    fn identity(&self) -> Option<&DefinitionIdentity> {
+        match self {
+            Self::Entry { entry, .. } => entry.identity.as_ref(),
+            Self::Section { .. } => None,
+        }
+    }
+
+    fn source(&self) -> Option<SourceSpan> {
+        match self {
+            Self::Entry { source, .. } => *source,
+            Self::Section { section, .. } => section.source,
         }
     }
 
@@ -583,30 +609,117 @@ impl LocatedNode<'_> {
     }
 }
 
-fn semantic_name_matches(
-    role: DefinitionRole,
-    case: DefinitionCase,
-    name: &str,
-    selector: &str,
-) -> bool {
-    let equivalent = |left: &str, right: &str| match case {
+fn semantic_name_equivalent(case: DefinitionCase, left: &str, right: &str) -> bool {
+    match case {
         DefinitionCase::Sensitive => left == right,
         DefinitionCase::Insensitive => left.eq_ignore_ascii_case(right),
-    };
-    if equivalent(name, selector) {
-        return true;
     }
+}
+
+fn semantic_name_shorthand(role: DefinitionRole, name: &str) -> Option<&str> {
     match role {
-        DefinitionRole::Option => equivalent(name.trim_start_matches('-'), selector),
-        DefinitionRole::EnvironmentVariable => {
-            let normalized = name
-                .strip_prefix("$env:")
-                .or_else(|| name.strip_prefix("$ENV:"))
-                .unwrap_or(name);
-            equivalent(normalized, selector)
+        DefinitionRole::Option => {
+            let shorthand = name.trim_start_matches('-');
+            (shorthand != name && !shorthand.is_empty()).then_some(shorthand)
         }
-        DefinitionRole::Command | DefinitionRole::Variable => false,
+        DefinitionRole::EnvironmentVariable => name
+            .strip_prefix("$env:")
+            .or_else(|| name.strip_prefix("$ENV:")),
+        DefinitionRole::Command | DefinitionRole::Variable => None,
     }
+}
+
+#[derive(Clone, Copy)]
+enum AliasMatchKind {
+    Exact,
+    Shorthand,
+}
+
+impl AliasMatchKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Exact => "exact alias",
+            Self::Shorthand => "normalized shorthand",
+        }
+    }
+}
+
+fn matching_aliases<'a>(
+    located: &'a [LocatedNode<'a>],
+    selector: &str,
+) -> (AliasMatchKind, Vec<&'a LocatedNode<'a>>) {
+    let exact = located
+        .iter()
+        .filter(|candidate| candidate.matches_exact_alias(selector))
+        .collect::<Vec<_>>();
+    if !exact.is_empty() {
+        return (AliasMatchKind::Exact, exact);
+    }
+    (
+        AliasMatchKind::Shorthand,
+        located
+            .iter()
+            .filter(|candidate| candidate.matches_shorthand_alias(selector))
+            .collect(),
+    )
+}
+
+/// Report selectors that cannot address exactly one semantic entry.
+///
+/// The lookup policy itself remains usable through stable paths and IDs, but
+/// Markdown authors receive a source diagnostic before an agent discovers the
+/// ambiguity at query time.
+pub(crate) fn semantic_selector_diagnostics(
+    blocks: &[Block],
+    sections: &[Section],
+) -> Vec<Diagnostic> {
+    let mut located = Vec::new();
+    collect_root_entries(blocks, &mut located);
+    collect_sections(sections, &[], &[], &mut located);
+    let mut selectors = BTreeSet::new();
+    for candidate in &located {
+        let Some(identity) = candidate.identity() else {
+            continue;
+        };
+        for name in &identity.names {
+            selectors.insert(name.clone());
+            if let Some(shorthand) = semantic_name_shorthand(identity.role, name) {
+                selectors.insert(shorthand.to_owned());
+            }
+        }
+    }
+
+    let mut reported = HashSet::new();
+    let mut diagnostics = Vec::new();
+    for selector in selectors {
+        let (kind, matches) = matching_aliases(&located, &selector);
+        if matches.len() < 2 {
+            continue;
+        }
+        let key = matches
+            .iter()
+            .map(|candidate| candidate.id())
+            .collect::<Vec<_>>()
+            .join("\u{1f}");
+        if !reported.insert(key) {
+            continue;
+        }
+        let candidates = matches
+            .iter()
+            .map(|candidate| format!("{} ({})", candidate.path(), candidate.id()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("markdown.semantic-entry.ambiguous-selector".to_owned()),
+            message: format!(
+                "semantic selector '{selector}' has multiple {} matches: {candidates}; select by path or ID",
+                kind.label()
+            ),
+            source: matches.first().and_then(|candidate| candidate.source()),
+        });
+    }
+    diagnostics
 }
 
 fn collect_sections<'a>(
@@ -633,7 +746,8 @@ fn collect_sections<'a>(
             id: section.id.clone(),
             title: section.title.clone(),
         });
-        for (index, (entry, _)) in definition_entries(&section.blocks).into_iter().enumerate() {
+        for (index, (entry, source)) in definition_entries(&section.blocks).into_iter().enumerate()
+        {
             let Some(identity) = &entry.identity else {
                 continue;
             };
@@ -644,6 +758,7 @@ fn collect_sections<'a>(
                 title: identity.names.join(", "),
                 breadcrumbs: child_breadcrumbs.clone(),
                 entry,
+                source,
             });
         }
         collect_sections(&section.children, &coordinates, &child_breadcrumbs, output);
@@ -656,7 +771,7 @@ fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a
         id: DOCUMENT_ROOT_ID.to_owned(),
         title: DOCUMENT_ROOT_TITLE.to_owned(),
     }];
-    for (index, (entry, _)) in definition_entries(blocks).into_iter().enumerate() {
+    for (index, (entry, source)) in definition_entries(blocks).into_iter().enumerate() {
         let Some(identity) = &entry.identity else {
             continue;
         };
@@ -667,6 +782,7 @@ fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a
             title: identity.names.join(", "),
             breadcrumbs: breadcrumbs.clone(),
             entry,
+            source,
         });
     }
 }

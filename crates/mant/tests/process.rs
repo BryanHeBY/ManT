@@ -609,6 +609,59 @@ fn cli_and_request_outlines_report_rejected_semantic_entries() {
 }
 
 #[test]
+fn exact_semantic_option_spellings_survive_the_cli_boundary() {
+    let path = std::env::temp_dir().join(format!(
+        "mant-exact-semantic-selector-process-{}.md",
+        std::process::id()
+    ));
+    fs::write(
+        &path,
+        "# Exact selectors\n\n## Certificate options\n\n<!-- mant:entries role=option case=insensitive -->\n- `-ca.cert`: Retrieve a CA certificate.\n- `-ca.chain`: Retrieve a CA chain.\n- `--foo.bar=VALUE`: Select a dotted value.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `?`: Display positional help.\n\n## Help options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/?`, `-?`: Display option help.\n",
+    )
+    .expect("write exact-selector fixture");
+    let path = path.to_str().expect("UTF-8 path");
+
+    let outline = Command::new(executable())
+        .args([path, "--outline=entries", "--format", "json", "--compact"])
+        .output()
+        .expect("query exact-selector outline");
+    let dotted = Command::new(executable())
+        .args([path, "--explain=-ca.cert", "--format", "json", "--compact"])
+        .output()
+        .expect("explain dotted option");
+    let positional_help = Command::new(executable())
+        .args([path, "--explain=?", "--format", "json", "--compact"])
+        .output()
+        .expect("explain exact help command");
+    fs::remove_file(path).expect("remove exact-selector fixture");
+
+    assert!(outline.status.success(), "{outline:?}");
+    assert!(outline.stderr.is_empty());
+    let outline: serde_json::Value = serde_json::from_slice(&outline.stdout).expect("outline JSON");
+    assert!(outline.get("entriesComplete").is_none());
+    assert_eq!(outline["nodes"][0]["children"][0]["names"][0], "-ca.cert");
+    assert_eq!(outline["nodes"][0]["children"][1]["names"][0], "-ca.chain");
+    assert_eq!(outline["nodes"][0]["children"][2]["names"][0], "--foo.bar");
+
+    assert!(dotted.status.success(), "{dotted:?}");
+    assert!(dotted.stderr.is_empty());
+    let dotted: serde_json::Value = serde_json::from_slice(&dotted.stdout).expect("dotted JSON");
+    assert_eq!(
+        dotted["selections"][0]["entry"]["identity"]["names"][0],
+        "-ca.cert"
+    );
+
+    assert!(positional_help.status.success(), "{positional_help:?}");
+    assert!(positional_help.stderr.is_empty());
+    let positional_help: serde_json::Value =
+        serde_json::from_slice(&positional_help.stdout).expect("help JSON");
+    assert_eq!(
+        positional_help["selections"][0]["entry"]["identity"]["role"],
+        "command"
+    );
+}
+
+#[test]
 fn unqualified_names_prefer_registered_markdown() {
     let fixture_root = std::env::temp_dir().join(format!(
         "mant-registered-document-process-{}",

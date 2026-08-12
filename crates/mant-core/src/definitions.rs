@@ -373,17 +373,25 @@ pub(crate) fn option_prefix(token: &str) -> Option<&str> {
         .char_indices()
         .skip(1)
         .take_while(|(_, character)| {
-            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?')
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?' | '.')
         })
         .map(|(index, character)| index + character.len_utf8())
         .last()?;
     let candidate = &token[..end];
     let body = candidate.trim_start_matches('-');
-    (!body.is_empty()
-        && body
-            .chars()
-            .any(|character| character.is_ascii_alphanumeric() || character == '?'))
-    .then_some(candidate)
+    is_option_name_body(body).then_some(candidate)
+}
+
+fn is_option_name_body(value: &str) -> bool {
+    value.split('.').all(|segment| {
+        !segment.is_empty()
+            && segment.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '?')
+            })
+            && segment
+                .chars()
+                .any(|character| character.is_ascii_alphanumeric() || character == '?')
+    })
 }
 
 fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
@@ -445,7 +453,7 @@ mod tests {
 
     use mant_ast::{Block, DefinitionItem, Inline, LayoutHint, Section};
 
-    use super::{identify_definitions, option_names};
+    use super::{identify_definitions, option_names, option_prefix};
 
     fn item(value: &str) -> DefinitionItem {
         DefinitionItem {
@@ -466,6 +474,9 @@ mod tests {
             ["-g", "--listed-incremental"]
         );
         assert_eq!(option_names(&item("ordinary term")), Vec::<String>::new());
+        assert_eq!(option_prefix("-ca.cert"), Some("-ca.cert"));
+        assert_eq!(option_prefix("--foo.bar=VALUE"), Some("--foo.bar"));
+        assert_eq!(option_prefix("--foo..bar"), None);
     }
 
     #[test]

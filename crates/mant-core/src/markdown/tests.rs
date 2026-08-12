@@ -578,6 +578,60 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
 }
 
 #[test]
+fn declared_dotted_dash_options_preserve_their_exact_names() {
+    let parsed = parse_markdown(
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `-ca.cert`: Retrieve a CA certificate.\n- `-ca.chain`: Retrieve a CA chain.\n- `--foo.bar`: Use a dotted long option.\n- `--config.file=FILE`: Read a configuration file.\n- `--output.name <PATH>`: Write to a path.\n",
+        Some("dot-option.md".to_owned()),
+    )
+    .expect("dotted semantic options");
+    assert!(parsed.document.diagnostics.is_empty());
+
+    let Block::DefinitionList { items, .. } = &parsed.document.sections[0].blocks[0] else {
+        panic!("declared options should become definitions");
+    };
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| {
+                item.identity
+                    .as_ref()
+                    .expect("semantic identity")
+                    .names
+                    .clone()
+            })
+            .collect::<Vec<_>>(),
+        [
+            vec!["-ca.cert".to_owned()],
+            vec!["-ca.chain".to_owned()],
+            vec!["--foo.bar".to_owned()],
+            vec!["--config.file".to_owned()],
+            vec!["--output.name".to_owned()],
+        ]
+    );
+
+    let query = QueryBundle {
+        schema: QuerySchema::V6,
+        label: "dot-option.md".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    for selector in [
+        "-ca.cert",
+        "-ca.chain",
+        "--foo.bar",
+        "--config.file",
+        "--output.name",
+    ] {
+        let explanation = select_explanation(&query, selector).expect("exact dotted selector");
+        assert!(matches!(
+            explanation.selections.as_slice(),
+            [ExcerptSelection::DocumentEntry { entry, .. }]
+                if entry.identity.as_ref().is_some_and(|identity| identity.names == [selector])
+        ));
+    }
+}
+
+#[test]
 fn declared_variables_keep_shell_and_powershell_automatic_names() {
     let parsed = parse_markdown(
         "# Shell\n\n## Variables\n\n<!-- mant:entries role=variable case=insensitive -->\n- `$?`: Last success state.\n- `$$`: Current process identifier.\n- `$^`: First pipeline input.\n- `$_`: Current pipeline item.\n- `$null`: Null value.\n- `$LASTEXITCODE`: Native exit status.\n- `$PSVersionTable`: PowerShell version data.\n- `$PROFILE`: Profile paths.\n- `$PATH`: Ordinary shell variable.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `$env:PATH`: Process executable path.\n",
@@ -658,6 +712,11 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
         None,
     )
     .expect("duplicate entries remain valid input");
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
+            && diagnostic.message.contains("1/o1 (option-f)")
+            && diagnostic.message.contains("2/o1 (option-f-2)")
+    }));
     let query = QueryBundle {
         schema: QuerySchema::V6,
         label: "tool".to_owned(),
@@ -683,6 +742,79 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
             .len(),
         1
     );
+}
+
+#[test]
+fn exact_aliases_win_before_normalized_option_shorthands() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `?`: Display positional help.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/?`, `-?`: Display option help.\n",
+        Some("help-spellings.md".to_owned()),
+    )
+    .expect("help spelling fixture");
+    assert!(parsed.document.diagnostics.is_empty());
+    let query = QueryBundle {
+        schema: QuerySchema::V6,
+        label: "help-spellings.md".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+
+    let command = select_explanation(&query, "?").expect("exact command spelling");
+    assert!(matches!(
+        command.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| {
+                identity.role == DefinitionRole::Command && identity.names == ["?"]
+            })
+    ));
+    let command_node = select_excerpt(&query, &["?".to_owned()]).expect("exact command node");
+    assert!(matches!(
+        command_node.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { entry, .. }]
+            if entry.identity.as_ref().is_some_and(|identity| {
+                identity.role == DefinitionRole::Command && identity.names == ["?"]
+            })
+    ));
+    for selector in ["/?", "-?"] {
+        let option = select_explanation(&query, selector).expect("exact option spelling");
+        assert!(matches!(
+            option.selections.as_slice(),
+            [ExcerptSelection::DocumentEntry { entry, .. }]
+                if entry.identity.as_ref().is_some_and(|identity| {
+                    identity.role == DefinitionRole::Option
+                        && identity.names == ["/?", "-?"]
+                })
+        ));
+    }
+}
+
+#[test]
+fn normalized_shorthand_collisions_are_reported_before_selection() {
+    let parsed = parse_markdown(
+        "# Tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `-help`: Short help spelling.\n- `--help`: Long help spelling.\n",
+        Some("shorthand-collision.md".to_owned()),
+    )
+    .expect("shorthand collision fixture");
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
+            && diagnostic.message.contains("semantic selector 'help'")
+            && diagnostic.message.contains("normalized shorthand")
+            && diagnostic.message.contains("1/o1 (option-help)")
+            && diagnostic.message.contains("1/o2 (option-help-2)")
+    }));
+    let query = QueryBundle {
+        schema: QuerySchema::V6,
+        label: "shorthand-collision.md".to_owned(),
+        document: Some(parsed.document),
+        tldr: None,
+    };
+    for selector in ["-help", "--help"] {
+        assert!(select_explanation(&query, selector).is_ok());
+    }
+    assert!(matches!(
+        select_explanation(&query, "help"),
+        Err(ProjectionError::AmbiguousSelector { .. })
+    ));
 }
 
 #[test]
@@ -925,7 +1057,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
 #[test]
 fn rejected_declared_entries_report_each_term_reason_and_item_location() {
     let parsed = parse_markdown(
-        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `--good`: Valid.\n- `/driver..exclude`: Empty dotted segment.\n- `type= lowercase`: Lowercase placeholder.\n",
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=sensitive -->\n- `--good`: Valid.\n- `/driver..exclude`: Empty dotted segment.\n- `type= lowercase`: Lowercase placeholder.\n- `--bad@name`: Unsupported punctuation.\n",
         None,
     )
     .expect("rejected declaration diagnostics");
@@ -934,7 +1066,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
         parsed.document.sections[0].blocks[0],
         Block::List { .. }
     ));
-    assert_eq!(parsed.document.diagnostics.len(), 2);
+    assert_eq!(parsed.document.diagnostics.len(), 3);
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.invalid-option-name")
             && diagnostic.message.contains("/driver..exclude")
@@ -944,6 +1076,11 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.invalid-placeholder")
             && diagnostic.message.contains("type= lowercase")
             && diagnostic.source.is_some_and(|source| source.line == 8)
+    }));
+    assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.semantic-entry.invalid-option-name")
+            && diagnostic.message.contains("--bad@name")
+            && diagnostic.source.is_some_and(|source| source.line == 9)
     }));
 
     let outline = build_outline_with_detail(
@@ -957,7 +1094,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
     )
     .expect("incomplete semantic outline");
     assert!(!outline.entries_complete);
-    assert_eq!(outline.diagnostics.len(), 2);
+    assert_eq!(outline.diagnostics.len(), 3);
 }
 
 #[test]
