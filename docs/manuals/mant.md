@@ -412,10 +412,11 @@ With a complete logical selector or `--input` file and a terminal on stdin and s
 `mant` opens its Ratatui reader. `--ui` requires this mode explicitly. A
 projection option or `--format` selects deterministic output instead.
 
-The resizable sidebar mirrors the section hierarchy and groups every semantic
-entry role: options, commands, variables, and environment variables.
-Selecting an item puts its heading at the top of the content pane. After
-content scrolling settles, the sidebar follows the first visible section.
+The resizable Outline sidebar forms one tree of addressable nodes: document
+sections, options, commands, variables, environment variables, and optional
+tldr content. Selecting a node puts its target at the top of the content pane.
+After content scrolling settles, the outline follows the first visible
+document node.
 Underlined references can be followed directly. Markdown fragments and mdoc
 `Sx` references jump inside the current page. Relative Markdown links preserve
 their hierarchy but resolve only inside the current registered source. mdoc
@@ -439,9 +440,9 @@ document and history unchanged.
 - `Alt+Left`: Return to the previous document or in-page jump.
 - `Alt+Right`: Move forward after returning.
 
-Mouse input selects and folds navigation entries, follows in-page,
+Mouse input selects and folds outline nodes, follows in-page,
 cross-document, and safe external links, scrolls either pane, drags
-scrollbars, and resizes the sidebar boundary.
+scrollbars, and resizes the Outline boundary.
 
 ### Page Search
 
@@ -469,7 +470,7 @@ Navigate contains backward/forward history and current-document movement.
 - `?`: Show keyboard shortcuts.
 - `q`: Quit.
 
-The View menu can hide the sidebar. The Navigate and Search menus expose the
+The View menu can hide the Outline sidebar. The Navigate and Search menus expose the
 same operations as their shortcuts. Terminal setup is restored on normal
 exit, errors, and Rust panics.
 

@@ -102,7 +102,7 @@ impl App {
             .entry(width)
             .or_insert_with(|| self.document.render(width));
         let Some(target_row) = rendered.anchor_row(target) else {
-            self.notice = Some(format!("No section #{target}"));
+            self.notice = Some(format!("No outline node matches #{target}"));
             return false;
         };
         self.notice = None;
@@ -193,11 +193,8 @@ impl App {
         indices
     }
 
-    pub(super) fn visible_section_count(&self) -> usize {
-        self.visible_navigation_indices()
-            .into_iter()
-            .filter(|index| self.document.navigation()[*index].kind == NavKind::Section)
-            .count()
+    pub(super) fn visible_node_count(&self) -> usize {
+        self.visible_navigation_indices().len()
     }
 
     pub(super) fn select_nearest_visible_ancestor(&mut self) {

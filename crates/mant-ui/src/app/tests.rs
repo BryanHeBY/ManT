@@ -458,13 +458,13 @@ fn renders_the_application_chrome_in_a_test_backend() {
     let screen = terminal.backend().to_string();
 
     assert!(screen.contains("Manual"));
-    assert!(screen.contains("SECTIONS"));
+    assert!(screen.contains("OUTLINE"));
     assert!(screen.contains("MANUAL · demo"));
-    assert!(screen.contains("0 visible sections"));
+    assert!(screen.contains("0 visible nodes"));
 }
 
 #[test]
-fn status_counts_only_sections_visible_in_the_folded_tree() {
+fn status_counts_nodes_visible_in_the_folded_outline() {
     let backend = TestBackend::new(80, 14);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&navigation_bundle());
@@ -472,18 +472,13 @@ fn status_counts_only_sections_visible_in_the_folded_tree() {
     terminal
         .draw(|frame| app.draw(frame))
         .expect("initial draw");
-    assert!(
-        terminal
-            .backend()
-            .to_string()
-            .contains("2 visible sections")
-    );
+    assert!(terminal.backend().to_string().contains("3 visible nodes"));
 
     app.set_selected_index(1);
     app.activate_menu_action(MenuAction::CollapseAll);
     terminal.draw(|frame| app.draw(frame)).expect("folded draw");
     let screen = terminal.backend().to_string();
-    assert!(screen.contains("1 visible sections"));
+    assert!(screen.contains("1 visible nodes"));
     assert_eq!(app.selected, 0, "hidden child selects its visible parent");
 }
 
@@ -1061,10 +1056,10 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
 #[test]
 fn sidebar_metadata_never_clips_the_tldr_label_mid_word() {
     assert_eq!(
-        sidebar_metadata(10, 93, true, DEFAULT_SIDEBAR_WIDTH),
-        " 10 top · 93 sections · TLDR"
+        sidebar_metadata(93, true, DEFAULT_SIDEBAR_WIDTH),
+        " 93 outline nodes · TLDR"
     );
-    assert_eq!(sidebar_metadata(10, 93, true, 8), " TLDR");
+    assert_eq!(sidebar_metadata(93, true, 8), " TLDR");
 }
 
 #[test]
@@ -1163,7 +1158,7 @@ fn view_menu_is_clickable_and_toggles_the_sidebar() {
         terminal
             .backend()
             .to_string()
-            .contains("Reset Sidebar Width")
+            .contains("Reset Outline Width")
     );
     let buffer = terminal.backend().buffer();
     let menu_left = MenuId::View.left();
@@ -1264,7 +1259,7 @@ fn open_menus_follow_pointer_hover_across_entries_and_menu_buttons() {
     terminal
         .draw(|frame| app.draw(frame))
         .expect("draw hovered menu button");
-    assert!(terminal.backend().to_string().contains("Previous Section"));
+    assert!(terminal.backend().to_string().contains("Previous Node"));
 }
 
 #[test]
@@ -1404,7 +1399,10 @@ fn missing_page_fragment_does_not_modify_history() {
 
     assert!(app.back_history.is_empty());
     assert!(app.forward_history.is_empty());
-    assert_eq!(app.notice.as_deref(), Some("No section #missing"));
+    assert_eq!(
+        app.notice.as_deref(),
+        Some("No outline node matches #missing")
+    );
 }
 
 #[test]

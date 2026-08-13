@@ -201,7 +201,7 @@ without renumbering ordinary document sections.
 
 `mant-ui` receives a complete typed bundle plus host callbacks for catalog
 discovery, document loading, and safe external URI handling. The state machine
-owns a hierarchical sidebar, a complete-catalog finder, page search, typed link
+owns a hierarchical Outline tree, a complete-catalog finder, page search, typed link
 hit regions, and bounded back/forward history. Successful local jumps stay in
 memory; cross-document requests return exact `DocumentAddress` values to the
 host. Only HTTP(S) and `mailto` URIs may be delegated to the platform handler,

@@ -43,9 +43,9 @@ const TLDR_ID: &str = "tldr";
 const ROOT_ID: &str = "document-root";
 const TLDR_VERTICAL_PADDING_ROWS: u16 = 1;
 
-/// One addressable entry displayed in the navigation sidebar.
+/// One addressable node displayed in the outline sidebar.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NavItem {
+pub struct NavNode {
     /// Stable sidebar identity.
     pub id: String,
     /// Document anchor selected when the item is activated.
@@ -89,7 +89,7 @@ pub struct DocumentView {
     section_count: usize,
     has_tldr: bool,
     lines: Vec<LogicalLine>,
-    navigation: Vec<NavItem>,
+    navigation: Vec<NavNode>,
     anchors: HashMap<String, usize>,
 }
 
@@ -157,7 +157,7 @@ impl DocumentView {
 
         if let Some(document) = &bundle.document {
             if !document.blocks.is_empty() {
-                builder.anchor(NavItem {
+                builder.anchor(NavNode {
                     id: ROOT_ID.to_owned(),
                     target_id: ROOT_ID.to_owned(),
                     title: "OVERVIEW".to_owned(),
@@ -202,7 +202,7 @@ impl DocumentView {
 
     /// Return the immutable navigation tree in source order.
     #[must_use]
-    pub fn navigation(&self) -> &[NavItem] {
+    pub fn navigation(&self) -> &[NavNode] {
         &self.navigation
     }
 
@@ -320,7 +320,7 @@ struct DocumentBuilder {
     label: String,
     address: Option<DocumentAddress>,
     lines: Vec<LogicalLine>,
-    navigation: Vec<NavItem>,
+    navigation: Vec<NavNode>,
     anchors: HashMap<String, usize>,
 }
 
@@ -346,7 +346,7 @@ impl DocumentBuilder {
         source_label: &'static str,
         document_gap: u16,
     ) {
-        self.anchor(NavItem {
+        self.anchor(NavNode {
             id: TLDR_ID.to_owned(),
             target_id: TLDR_ID.to_owned(),
             title: "TLDR QUICK REFERENCE".to_owned(),
@@ -419,14 +419,14 @@ impl DocumentBuilder {
         }
     }
 
-    fn anchor(&mut self, item: NavItem) {
+    fn anchor(&mut self, node: NavNode) {
         self.anchors
-            .insert(item.target_id.clone(), self.lines.len());
-        self.navigation(item);
+            .insert(node.target_id.clone(), self.lines.len());
+        self.navigation(node);
     }
 
-    fn navigation(&mut self, item: NavItem) {
-        self.navigation.push(item);
+    fn navigation(&mut self, node: NavNode) {
+        self.navigation.push(node);
     }
 
     fn section_with_position(
@@ -439,7 +439,7 @@ impl DocumentBuilder {
         self.spacing(section.spacing_before_lines);
         let entries = section_semantic_entries(&section.blocks);
         let has_children = !entries.is_empty() || !section.children.is_empty();
-        self.anchor(NavItem {
+        self.anchor(NavNode {
             id: section.id.to_string(),
             target_id: section.id.to_string(),
             title: section.title.clone(),
@@ -451,7 +451,7 @@ impl DocumentBuilder {
         });
         if !entries.is_empty() {
             let group_id = format!("__mant-entries__{}", section.id);
-            self.navigation(NavItem {
+            self.navigation(NavNode {
                 id: group_id.clone(),
                 target_id: section.id.to_string(),
                 title: format!("ENTRIES ({})", entries.len()),
@@ -463,7 +463,7 @@ impl DocumentBuilder {
             });
             let entry_count = entries.len();
             for (index, identity) in entries.into_iter().enumerate() {
-                self.navigation(NavItem {
+                self.navigation(NavNode {
                     id: identity.id.to_string(),
                     target_id: identity.id.to_string(),
                     title: identity.names.join(", "),

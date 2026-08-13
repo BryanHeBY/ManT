@@ -91,10 +91,10 @@ mant --input README.md
 mant tar --ui
 ```
 
-The sidebar mirrors nested sections and reveals normalized options, commands,
-variables, and environment variables on demand. Selecting an entry places it at the top
-of the content pane; after scrolling settles, the sidebar follows the first
-visible section.
+The Outline sidebar mirrors nested document sections and reveals normalized
+options, commands, variables, and environment variables on demand. Selecting
+a node places its target at the top of the content pane; after scrolling
+settles, the outline follows the first visible document node.
 
 - `j` / `k` or arrow keys move through visible nodes.
 - `h` / `l` collapse and expand branches.
@@ -105,9 +105,9 @@ visible section.
 - `n` and `Shift+N` select the next and previous matches.
 - `F10` opens the menu, `?` opens help, and `q` quits.
 
-The mouse can select and fold navigation entries, follow underlined in-page,
+The mouse can select and fold outline nodes, follow underlined in-page,
 cross-document, and web/email links, scroll both panes, drag scrollbars, and
-resize the sidebar. Markdown links stay inside their registered source; man
+resize the Outline sidebar. Markdown links stay inside their registered source; man
 and mdoc references select an exact manual section.
 
 ## Structured discovery and queries

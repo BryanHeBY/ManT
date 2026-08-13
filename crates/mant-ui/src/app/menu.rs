@@ -96,12 +96,12 @@ const MANUAL_MENU: &[MenuEntry] = &[
 
 const VIEW_MENU: &[MenuEntry] = &[
     MenuEntry {
-        label: "Sidebar",
+        label: "Outline Sidebar",
         shortcut: "",
         action: MenuAction::ToggleSidebar,
     },
     MenuEntry {
-        label: "Reset Sidebar Width",
+        label: "Reset Outline Width",
         shortcut: "",
         action: MenuAction::ResetSidebar,
     },
@@ -129,32 +129,32 @@ const NAVIGATE_MENU: &[MenuEntry] = &[
         action: MenuAction::Forward,
     },
     MenuEntry {
-        label: "Previous Section",
+        label: "Previous Node",
         shortcut: "↑ / k",
         action: MenuAction::Previous,
     },
     MenuEntry {
-        label: "Next Section",
+        label: "Next Node",
         shortcut: "↓ / j",
         action: MenuAction::Next,
     },
     MenuEntry {
-        label: "Parent Section",
+        label: "Parent Node",
         shortcut: "← / h",
         action: MenuAction::Parent,
     },
     MenuEntry {
-        label: "First Child",
+        label: "First Child Node",
         shortcut: "→ / l",
         action: MenuAction::FirstChild,
     },
     MenuEntry {
-        label: "First Section",
+        label: "First Node",
         shortcut: "",
         action: MenuAction::First,
     },
     MenuEntry {
-        label: "Last Section",
+        label: "Last Node",
         shortcut: "",
         action: MenuAction::Last,
     },
@@ -502,9 +502,9 @@ impl App {
                         .fg(theme::BLUE)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Line::raw("↑/↓ or j/k  select section"),
-                Line::raw("←/→ or h/l  move through the section tree"),
-                Line::raw("Enter        fold or unfold selected section"),
+                Line::raw("↑/↓ or j/k  select outline node"),
+                Line::raw("←/→ or h/l  move through the outline tree"),
+                Line::raw("Enter        fold or unfold selected node"),
                 Line::raw("Ctrl+O       find and open a document"),
                 Line::raw("Alt+←/→      back / forward"),
                 Line::raw("Ctrl+F or /  find in current page"),

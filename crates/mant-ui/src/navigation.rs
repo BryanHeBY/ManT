@@ -15,18 +15,18 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use mant_ir::DefinitionRole;
 
-use crate::{NavItem, NavKind, theme};
+use crate::{NavKind, NavNode, theme};
 
-const ITEM_LEFT_PADDING: &str = " ";
+const NODE_LEFT_PADDING: &str = " ";
 const TRUNCATION_MARKER: &str = "...";
 
 pub(crate) struct NavigationRow {
-    pub(crate) item_index: usize,
+    pub(crate) node_index: usize,
     pub(crate) line: Line<'static>,
 }
 
 pub(crate) fn rows(
-    items: &[NavItem],
+    nodes: &[NavNode],
     visible: &[usize],
     selected: usize,
     expanded: &HashSet<String>,
@@ -35,53 +35,53 @@ pub(crate) fn rows(
     visible
         .iter()
         .flat_map(|index| {
-            item_lines(
-                &items[*index],
+            node_lines(
+                &nodes[*index],
                 *index,
                 *index == selected,
-                expanded.contains(&items[*index].id),
+                expanded.contains(&nodes[*index].id),
                 width,
             )
         })
         .collect()
 }
 
-/// Returns the complete half-open row range occupied by one navigation item.
-pub(crate) fn item_row_range(rows: &[NavigationRow], item_index: usize) -> Option<Range<usize>> {
-    let start = rows.iter().position(|row| row.item_index == item_index)?;
+/// Returns the complete half-open row range occupied by one outline node.
+pub(crate) fn node_row_range(rows: &[NavigationRow], node_index: usize) -> Option<Range<usize>> {
+    let start = rows.iter().position(|row| row.node_index == node_index)?;
     let end = rows
         .iter()
-        .rposition(|row| row.item_index == item_index)?
+        .rposition(|row| row.node_index == node_index)?
         .saturating_add(1);
     Some(start..end)
 }
 
-fn item_lines(
-    item: &NavItem,
-    item_index: usize,
+fn node_lines(
+    node: &NavNode,
+    node_index: usize,
     selected: bool,
     expanded: bool,
     width: usize,
 ) -> Vec<NavigationRow> {
     let selection = if selected { "› " } else { "  " };
     let prefix = format!(
-        "{ITEM_LEFT_PADDING}{selection}{}",
-        tree_prefix(item, expanded)
+        "{NODE_LEFT_PADDING}{selection}{}",
+        tree_prefix(node, expanded)
     );
     let continuation_prefix = format!(
-        "{ITEM_LEFT_PADDING}  {}",
-        continuation_prefix(item, expanded)
+        "{NODE_LEFT_PADDING}  {}",
+        continuation_prefix(node, expanded)
     );
     let foreground = if selected {
-        if item.kind == NavKind::Tldr {
+        if node.kind == NavKind::Tldr {
             theme::MAUVE
         } else {
             theme::SELECTED_TEXT
         }
     } else {
-        match item.kind {
+        match node.kind {
             NavKind::Tldr => theme::MAUVE,
-            NavKind::Root | NavKind::Section if item.depth == 0 => theme::SUBTEXT_BRIGHT,
+            NavKind::Root | NavKind::Section if node.depth == 0 => theme::SUBTEXT_BRIGHT,
             NavKind::Root | NavKind::Section => theme::BLUE,
             NavKind::EntryGroup => theme::YELLOW,
             NavKind::Entry(DefinitionRole::Option) => theme::GREEN,
@@ -91,12 +91,12 @@ fn item_lines(
         }
     };
     let background = if selected {
-        if item.kind == NavKind::Tldr {
+        if node.kind == NavKind::Tldr {
             theme::TLDR_SELECTED
         } else {
             theme::SELECTED
         }
-    } else if item.kind == NavKind::Tldr {
+    } else if node.kind == NavKind::Tldr {
         theme::TLDR_NAV
     } else {
         theme::SIDEBAR
@@ -111,9 +111,9 @@ fn item_lines(
         .saturating_sub(prefix.width().max(continuation_prefix.width()))
         .max(1);
     let titles = if selected {
-        wrap_to_width(&item.title, wrapped_title_width)
+        wrap_to_width(&node.title, wrapped_title_width)
     } else {
-        vec![truncate_middle(&item.title, first_title_width)]
+        vec![truncate_middle(&node.title, first_title_width)]
     };
 
     titles
@@ -136,7 +136,7 @@ fn item_lines(
                 theme::OVERLAY
             };
             NavigationRow {
-                item_index,
+                node_index,
                 line: Line::from(vec![
                     Span::styled(
                         line_prefix,
@@ -153,25 +153,25 @@ fn item_lines(
         .collect()
 }
 
-fn tree_prefix(item: &NavItem, expanded: bool) -> String {
-    if item.kind == NavKind::Tldr {
+fn tree_prefix(node: &NavNode, expanded: bool) -> String {
+    if node.kind == NavKind::Tldr {
         return "◆ ".to_owned();
     }
-    let mut prefix = "│ ".repeat(item.depth);
-    if item.depth == 0 {
-        if item.has_children {
+    let mut prefix = "│ ".repeat(node.depth);
+    if node.depth == 0 {
+        if node.has_children {
             prefix.push_str("│ ");
         }
     } else {
-        prefix.push_str(if item.is_last && !expanded {
+        prefix.push_str(if node.is_last && !expanded {
             "╰─"
         } else {
             "├─"
         });
     }
-    prefix.push_str(if item.has_children {
+    prefix.push_str(if node.has_children {
         if expanded { "▾ " } else { "▸ " }
-    } else if matches!(item.kind, NavKind::Entry(_)) {
+    } else if matches!(node.kind, NavKind::Entry(_)) {
         "◇ "
     } else {
         "· "
@@ -179,15 +179,15 @@ fn tree_prefix(item: &NavItem, expanded: bool) -> String {
     prefix
 }
 
-fn continuation_prefix(item: &NavItem, expanded: bool) -> String {
-    if item.kind == NavKind::Tldr {
+fn continuation_prefix(node: &NavNode, expanded: bool) -> String {
+    if node.kind == NavKind::Tldr {
         return "  ".to_owned();
     }
-    let mut prefix = "│ ".repeat(item.depth);
-    if item.depth > 0 || item.has_children {
+    let mut prefix = "│ ".repeat(node.depth);
+    if node.depth > 0 || node.has_children {
         prefix.push_str("│ ");
     }
-    if item.has_children && expanded {
+    if node.has_children && expanded {
         prefix.push_str("│ ");
     }
     prefix.push_str("  ");
@@ -295,11 +295,11 @@ mod tests {
 
     use unicode_width::UnicodeWidthStr;
 
-    use super::{item_lines, item_row_range, truncate_middle};
-    use crate::{NavItem, NavKind, theme};
+    use super::{node_lines, node_row_range, truncate_middle};
+    use crate::{NavKind, NavNode, theme};
 
-    fn item(title: &str) -> NavItem {
-        NavItem {
+    fn node(title: &str) -> NavNode {
+        NavNode {
             id: "node".to_owned(),
             target_id: "node".to_owned(),
             title: title.to_owned(),
@@ -313,8 +313,8 @@ mod tests {
 
     #[test]
     fn inactive_long_titles_keep_both_identifying_ends_on_one_row() {
-        let rows = item_lines(
-            &item("Options Controlling the Kind of Output"),
+        let rows = node_lines(
+            &node("Options Controlling the Kind of Output"),
             0,
             false,
             false,
@@ -328,8 +328,8 @@ mod tests {
 
     #[test]
     fn selected_long_titles_expand_without_losing_text_or_background() {
-        let rows = item_lines(
-            &item("Options Controlling the Kind of Output"),
+        let rows = node_lines(
+            &node("Options Controlling the Kind of Output"),
             0,
             true,
             false,
@@ -355,21 +355,21 @@ mod tests {
 
     #[test]
     fn row_ranges_include_every_continuation_line() {
-        let items = vec![item("Options Controlling the Kind of Output")];
-        let rows = super::rows(&items, &[0], 0, &HashSet::new(), 18);
+        let nodes = vec![node("Options Controlling the Kind of Output")];
+        let rows = super::rows(&nodes, &[0], 0, &HashSet::new(), 18);
 
-        assert_eq!(item_row_range(&rows, 0), Some(0..rows.len()));
+        assert_eq!(node_row_range(&rows, 0), Some(0..rows.len()));
         assert!(rows.len() > 1);
     }
 
     #[test]
     fn expanded_selected_parents_keep_guides_through_continuation_rows() {
-        let mut parent = item("A deliberately long expanded parent title");
+        let mut parent = node("A deliberately long expanded parent title");
         parent.depth = 0;
         parent.has_children = true;
         parent.parent_id = None;
 
-        let rows = item_lines(&parent, 0, true, true, 23);
+        let rows = node_lines(&parent, 0, true, true, 23);
         let text = rows
             .iter()
             .map(|row| row.line.to_string())
@@ -389,10 +389,10 @@ mod tests {
 
     #[test]
     fn nested_rows_keep_two_column_tree_guides() {
-        let mut leaf = item("Leaf");
+        let mut leaf = node("Leaf");
         leaf.is_last = false;
 
-        let row = item_lines(&leaf, 0, false, false, 24)
+        let row = node_lines(&leaf, 0, false, false, 24)
             .remove(0)
             .line
             .to_string();

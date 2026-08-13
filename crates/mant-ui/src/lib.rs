@@ -12,6 +12,6 @@ mod theme;
 mod tldr;
 
 pub use app::{App, UpdateOutcome};
-pub use document::{DocumentView, NavItem, NavKind, RenderedDocument, RenderedSearchMatch};
+pub use document::{DocumentView, NavKind, NavNode, RenderedDocument, RenderedSearchMatch};
 pub use terminal::{run, run_with_catalog};
 pub use tldr::{TldrLine, TldrRole, TldrSpan, layout_tldr, render_tldr_terminal};

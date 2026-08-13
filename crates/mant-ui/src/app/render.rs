@@ -90,7 +90,7 @@ impl App {
             Block::default().style(Style::default().bg(theme::SIDEBAR)),
             area,
         );
-        let [header_area, section_label_area, navigation_area] = Layout::vertical([
+        let [header_area, outline_label_area, navigation_area] = Layout::vertical([
             Constraint::Length(3),
             Constraint::Length(1),
             Constraint::Min(1),
@@ -98,8 +98,7 @@ impl App {
         .areas(area);
 
         let metadata = sidebar_metadata(
-            self.document.top_level_count(),
-            self.document.section_count(),
+            self.document.navigation().len(),
             self.document.has_tldr(),
             navigation_area.width,
         );
@@ -124,9 +123,9 @@ impl App {
             header_area,
         );
         frame.render_widget(
-            Paragraph::new(" SECTIONS")
+            Paragraph::new(" OUTLINE")
                 .style(Style::default().fg(theme::SUBTEXT).bg(theme::SIDEBAR)),
-            section_label_area,
+            outline_label_area,
         );
 
         self.geometry.navigation = navigation_area;
@@ -144,7 +143,7 @@ impl App {
         let maximum = row_count.saturating_sub(height);
         self.navigation_scroll = self.navigation_scroll.min(maximum);
         let selected_range = (self.navigation_visibility_target.take() == Some(self.selected))
-            .then(|| navigation::item_row_range(&rows, self.selected))
+            .then(|| navigation::node_row_range(&rows, self.selected))
             .flatten();
         if let Some(range) = selected_range {
             self.keep_selected_navigation_visible(range, height);
@@ -154,7 +153,7 @@ impl App {
             .skip(self.navigation_scroll)
             .take(height)
             .collect::<Vec<_>>();
-        self.geometry.navigation_rows = visible_rows.iter().map(|row| row.item_index).collect();
+        self.geometry.navigation_rows = visible_rows.iter().map(|row| row.node_index).collect();
         let lines = visible_rows
             .into_iter()
             .map(|row| row.line)
@@ -303,9 +302,9 @@ impl App {
                 self.search.matches.len()
             )
         } else if self.document.has_tldr() {
-            format!("{} visible sections · TLDR ", self.visible_section_count())
+            format!("{} visible nodes · TLDR ", self.visible_node_count())
         } else {
-            format!("{} visible sections ", self.visible_section_count())
+            format!("{} visible nodes ", self.visible_node_count())
         };
         frame.render_widget(
             Paragraph::new(suffix)
@@ -513,18 +512,12 @@ impl App {
     }
 }
 
-pub(super) fn sidebar_metadata(
-    top_level_count: usize,
-    section_count: usize,
-    has_tldr: bool,
-    width: u16,
-) -> String {
+pub(super) fn sidebar_metadata(node_count: usize, has_tldr: bool, width: u16) -> String {
     let suffix = if has_tldr { " · TLDR" } else { "" };
     let candidates = [
-        format!(" {top_level_count} top-level · {section_count} sections{suffix}"),
-        format!(" {top_level_count} top · {section_count} sections{suffix}"),
-        format!(" {top_level_count} · {section_count} sections{suffix}"),
-        format!(" {top_level_count} · {section_count}{suffix}"),
+        format!(" {node_count} outline nodes{suffix}"),
+        format!(" {node_count} nodes{suffix}"),
+        format!(" {node_count}{suffix}"),
     ];
     let available = usize::from(width);
     candidates
@@ -534,7 +527,7 @@ pub(super) fn sidebar_metadata(
             if has_tldr && available >= " TLDR".width() {
                 " TLDR".to_owned()
             } else {
-                fit_to_width(&format!(" {top_level_count} · {section_count}"), available)
+                fit_to_width(&format!(" {node_count}"), available)
             }
         })
 }

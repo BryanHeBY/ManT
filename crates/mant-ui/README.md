@@ -8,8 +8,9 @@ catalog, search, and cross-document interactions without serializing the IR.
 
 ## What this crate provides
 
-- A hierarchy-aware, collapsible sidebar for sections and every semantic entry
-  role: options, commands, variables, and environment variables.
+- A hierarchy-aware, collapsible Outline tree whose nodes include document
+  sections and every semantic entry role: options, commands, variables, and
+  environment variables.
 - Settled-scroll navigation following and selectable Markdown/mdoc page-local
   references.
 - A live, bounded catalog finder that delegates complete-snapshot discovery
