@@ -49,14 +49,22 @@ crates.io as the `0.4.1` bootstrap release against the existing `0.4.0`
 contracts. Starting with `0.5.0`, the original five packages use one lockstep
 version; `mant-sources` joined the same graph in `0.6.0`. Version `0.7.0`
 replaces the mixed `mant-ast` package with separate `mant-ir` and
-`mant-protocol` packages under the same lockstep policy:
+`mant-protocol` packages under the same lockstep policy. Publication follows
+this dependency order:
 
 ```text
 mant-ir ─> mant-protocol
-mant-ir + mant-protocol ─> mant-ui
 mant-ir + mant-protocol + mant-sources + libmandoc-rs ─> mant-engine
+mant-ir + mant-protocol + mant-engine (dev) ─> mant-ui
 mant-ir + mant-protocol + mant-sources + mant-engine + mant-ui ─> mant
 ```
+
+Here an arrow means the package on the left must be visible in crates.io before
+the package on the right is validated. The `mant-engine` edge into `mant-ui` is
+a development dependency used by doctests and integration tests, not a runtime
+frontend dependency. `scripts/publish-crates.sh` encodes the complete linear
+order: `mant-ir`, `mant-protocol`, `libmandoc-rs`, `mant-sources`,
+`mant-engine`, `mant-ui`, then `mant`.
 
 Each previously published package must configure the same crates.io Trusted
 Publisher:
@@ -77,8 +85,8 @@ exchanges that identity for a short-lived credential.
 On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ir`,
 `mant-protocol`, `libmandoc-rs`, `mant-sources`, `mant-engine`, `mant-ui`, and
 `mant` in dependency order. Exact internal dependencies require each
-predecessor to become visible
-in the registry before its dependent can be packaged, so the script validates
+predecessor to become visible in the registry before its dependent can be
+packaged, so the script validates
 each package immediately before uploading it and then waits for the index
 before continuing. It skips versions already present, making a partially
 completed job safe to rerun. Installing `mant` installs the reader, structured
@@ -86,34 +94,6 @@ CLI, and MCP server as one executable. `mant-ui` is a reusable library crate
 and does not install a second command.
 
 Never move a tag after crates.io publication. Registry versions are immutable.
-
-### One-time `mant-sources` bootstrap for `0.6.0`
-
-crates.io cannot configure a Trusted Publisher until a crate has an initial
-release. `mant-sources` therefore needs one manual publication before the
-`v0.6.0` tag workflow can own future releases.
-
-This bootstrap is complete. Do not repeat it for `0.6.1` or later releases;
-their tags use the normal trusted-publisher workflow below.
-
-Do this only after the release commit is frozen on `main`, its CI is green,
-and the worktree is clean:
-
-```sh
-git tag v0.6.0
-cargo login
-cargo publish --locked -p mant-sources
-cargo info mant-sources@0.6.0
-cargo logout
-```
-
-Paste a temporary, narrowly scoped crates.io token only at Cargo's prompt and
-revoke it afterward; do not add it to GitHub. Once `0.6.0` is visible,
-configure the `mant-sources` Trusted Publisher with the same repository,
-workflow, and environment values shown above. Do not change or move the local
-tag after the upload. The release script detects that `mant-sources 0.6.0`
-already exists, skips re-uploading it, and continues with the remaining
-dependency graph when that tag is pushed.
 
 ### One-time `mant-ir` and `mant-protocol` bootstrap for `0.7.0`
 
@@ -138,8 +118,7 @@ repeat this bootstrap after `0.7.0`.
 ## Tag and draft release
 
 The tag must exactly match the Cargo workspace version. Create it from the
-clean `main` release commit unless it already exists locally from the
-`mant-sources` bootstrap:
+clean `main` release commit:
 
 ```sh
 git tag vMAJOR.MINOR.PATCH

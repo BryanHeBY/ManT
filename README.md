@@ -172,8 +172,9 @@ mant --version
 ```
 
 The [JSON protocol and Schema reference](docs/manuals/mant-protocol.md) documents every
-versioned request and response projection, normalized IR node, coordinate
-rule, and MCP tool.
+versioned request and response projection, coordinate rule, and MCP tool. The
+separate [IR reference](docs/manuals/mant-ir.md) describes the richer
+in-process model from which those wire types are projected.
 
 ## Build a local documentation library
 
@@ -279,9 +280,9 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 `mant-ir` is the semantic center nested inside the `mant-engine` execution
 layer. Interactive use passes its in-memory `ResolvedContent` directly to
 `mant-ui`, and human renderers operate on the same model. External process
-consumers cross the versioned `mant-protocol` boundary instead. Git and archive
-updates are an optional native CLI capability layered on `mant-sources`, not
-part of document reads or MCP.
+consumers cross the versioned `mant-protocol` boundary hosted by the `mant`
+process instead. Git and archive updates are an optional native CLI capability
+layered on `mant-sources`, not part of document reads or MCP.
 
 ## Documentation
 

@@ -131,11 +131,36 @@ scripts/package-release.ps1 Windows x64 ZIP assembly
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/installation.md         User installation methods and platform requirements
 docs/sources.md              Markdown source configuration and update behavior
-docs/manuals/mant-protocol.md Versioned process and MCP interface manual
+docs/manuals/mant.md          User command, discovery, TUI, and MCP overview
+docs/manuals/mant-ir.md       In-process normalized model reference
+docs/manuals/mant-protocol.md Versioned process and MCP interface reference
+docs/manuals/mant-markdown.md Supported Markdown and semantic extensions
+docs/manuals/mant-roff.md     Native manual compatibility and lowering levels
 docs/releasing.md            Maintainer release procedure
-docs/manuals/                Self-hosted Markdown manual shipped in releases
+docs/manuals/manifest.txt     Exact self-hosted manual set shipped in releases
 docs/assets/                 README screenshots and documentation assets
 ```
+
+## Documentation ownership
+
+Each topic has one authoritative home so examples and compatibility promises
+do not drift between overview pages:
+
+| Question | Authoritative document |
+| --- | --- |
+| What is ManT and how do I install it? | Root `README.md` and `docs/installation.md` |
+| Which command, selector, or key should I use? | `mant(1)` in `docs/manuals/mant.md` |
+| Which Markdown or roff constructs are retained? | `mant-markdown(7)` and `mant-roff(7)` |
+| What does an in-process node mean? | `mant-ir(7)` and the `mant-ir` rustdoc |
+| What is stable across JSON or MCP? | `mant-protocol(5)` and generated schemas |
+| How are document collections configured? | `docs/sources.md` |
+| Which crate owns a behavior? | `docs/architecture/native-engine.md` and that crate's README/rustdoc |
+| How is a release produced and attested? | `docs/releasing.md` |
+
+Crate READMEs are included directly as crate-level rustdoc. Keep Rust examples
+valid doctests and use repository-absolute HTTPS links for material that is
+not packaged with the crate. User manuals remain ordinary Markdown so ManT can
+parse and ship them as its own documentation library.
 
 Generated paths are excluded from version control:
 
@@ -144,8 +169,9 @@ Generated paths are excluded from version control:
 
 ## Testing boundaries
 
-Rust is authoritative for parser correctness, IR and protocol contracts, semantic option
-extraction, terminal presentation, process behavior, and output rendering.
+Rust is authoritative for parser correctness, IR and protocol contracts,
+semantic option extraction, terminal presentation, process behavior, and
+output rendering.
 Fixed real roff sources in `tests/fixtures/roff/real/` are covered by native
 integration tests; their provenance and licenses are documented in that
 directory.

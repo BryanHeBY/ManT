@@ -56,22 +56,22 @@ On Windows, the PowerShell installer uses the x64 ZIP, installs `mant.exe`
 below `%LOCALAPPDATA%\Programs\ManT\bin`, adds that directory to the user
 `PATH`, and registers the manuals below `%APPDATA%\ManT\documents`.
 
-Set `MANT_VERSION` to a release such as `0.6.4` to install that version instead
-of the latest. `MANT_INSTALL_DIR` and `MANT_DATA_DIR` override the executable
-and document destinations. `MANT_DATA_DIR` is the directory that directly
-receives the bundled `.md` files, not the parent ManT data root.
+Set `MANT_VERSION` to a release such as `MAJOR.MINOR.PATCH` to install that
+version instead of the latest. `MANT_INSTALL_DIR` and `MANT_DATA_DIR` override
+the executable and document destinations. `MANT_DATA_DIR` is the directory
+that directly receives the bundled `.md` files, not the parent ManT data root.
 
 The scripts also accept command-line options. Pass them to the receiving shell
 on Unix:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh -s -- --version 0.6.4
+curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.sh | sh -s -- --version MAJOR.MINOR.PATCH
 ```
 
 Create and invoke a script block when passing PowerShell parameters:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1))) -Version 0.6.4
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1))) -Version MAJOR.MINOR.PATCH
 ```
 
 Use `--help` or `-Help` to list every option. Notable controls include

@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-Security fixes are released from the current `0.6.x` line. Development builds
-from `dev` are tested continuously but are not supported releases.
+Security fixes are released from the latest published minor line listed under
+[GitHub Releases][releases]. Older minor lines and development builds from
+`dev` are not supported releases, even though `dev` is tested continuously.
 
 ## Reporting a vulnerability
 
@@ -21,3 +22,4 @@ corresponding upstream project.
 
 [private-report]: https://github.com/BryanHeBY/ManT/security/advisories/new
 [advisories]: https://github.com/BryanHeBY/ManT/security/advisories
+[releases]: https://github.com/BryanHeBY/ManT/releases/latest
