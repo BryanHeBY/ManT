@@ -22,6 +22,29 @@ function Fail([string]$Message) {
     throw "mant installer: $Message"
 }
 
+function Assert-GitHubAttestation([string]$Artifact) {
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        return
+    }
+    try {
+        & gh auth status *> $null
+    } catch {
+        return
+    }
+    if ($LASTEXITCODE -ne 0) {
+        return
+    }
+    try {
+        & gh attestation verify $Artifact --repo $Repository *> $null
+    } catch {
+        Fail "GitHub attestation verification failed for $(Split-Path -Leaf $Artifact)"
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Fail "GitHub attestation verification failed for $(Split-Path -Leaf $Artifact)"
+    }
+    Write-Host "Verified GitHub provenance for $(Split-Path -Leaf $Artifact)"
+}
+
 function Show-Usage {
     Write-Host @"
 Install, update, or uninstall ManT.
@@ -326,6 +349,7 @@ try {
     if ($Actual -ine $Expected) {
         Fail "SHA-256 verification failed for $Archive"
     }
+    Assert-GitHubAttestation $ArchivePath
 
     $Expanded = Join-Path $Temporary "expanded"
     Expand-Archive -Path $ArchivePath -DestinationPath $Expanded

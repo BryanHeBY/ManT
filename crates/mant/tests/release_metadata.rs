@@ -119,6 +119,9 @@ fn release_workflow_publishes_and_attests_target_specific_sboms() {
         assert!(workflow.lines().any(|line| line.trim() == helper));
     }
     assert!(workflow.contains("dist/mant-*.cdx.json"));
+    assert!(workflow.contains("bash scripts/package-manuals.sh"));
+    assert!(workflow.contains("subject-path: dist/mant-*-manuals.tar.gz*"));
+    assert!(workflow.contains("mant-${version}-manuals.sigstore.json"));
     assert!(workflow.contains(r#"echo "MANT_SBOM_PATH=dist/$sbom" >> "$GITHUB_ENV""#));
     assert!(workflow.contains(r#""MANT_SBOM_PATH=$Sbom" | Out-File"#));
     assert_eq!(
@@ -165,6 +168,11 @@ fn one_line_installers_follow_the_published_release_contract() {
     assert!(unix.contains("$GITHUB_URL/releases/latest"));
     assert!(unix.contains(r#"archive="mant-$version-$target.tar.gz""#));
     assert!(unix.contains(r#"download "$release_url/SHA256SUMS""#));
+    assert!(unix.contains(r#"manual_archive="mant-$version-manuals.tar.gz""#));
+    assert!(unix.contains(r#"verify_github_attestation "$asset""#));
+    assert!(unix.contains(r#"gh attestation verify "$artifact" --repo "$REPOSITORY""#));
+    assert!(!unix.contains("raw.githubusercontent.com/$REPOSITORY/$tag/docs/manuals"));
+    assert!(unix.contains("predates verified manual bundles; installing the binary only"));
     assert!(unix.contains(
         "BUNDLED_MANUALS=\"mant.md mant-ir.md mant-markdown.md mant-protocol.md mant-roff.md\""
     ));
@@ -186,6 +194,8 @@ fn one_line_installers_follow_the_published_release_contract() {
     assert!(windows.contains(r#"$ReceiptSchema = "mant.install/v1""#));
     assert!(windows.contains("if ($Uninstall)"));
     assert!(windows.contains("ManT $Version is already up to date."));
+    assert!(windows.contains("Assert-GitHubAttestation $ArchivePath"));
+    assert!(windows.contains("gh attestation verify $Artifact --repo $Repository"));
 
     assert!(readme.contains("docs/installation.md"));
     let installation = include_str!("../../../docs/installation.md");
@@ -210,6 +220,18 @@ fn one_line_installers_follow_the_published_release_contract() {
     assert!(
         include_str!("../../../scripts/package-release.ps1").contains("docs/manuals/manifest.txt")
     );
+    let manual_package = include_str!("../../../scripts/package-manuals.sh");
+    assert!(manual_package.contains(r#"archive_root="mant-$version-manuals""#));
+    assert!(manual_package.contains("done < docs/manuals/manifest.txt"));
+    assert!(manual_package.contains(r#"install -m 0644 LICENSE "$package/LICENSE""#));
+    assert!(
+        manual_package.contains(
+            r#"install -m 0644 THIRD_PARTY_NOTICES.md "$package/THIRD_PARTY_NOTICES.md""#
+        )
+    );
+    assert!(manual_package.contains("LICENSES/CC-BY-4.0.txt"));
+    assert!(manual_package.contains("--mtime=@0"));
+    assert!(manual_package.contains("gzip -n"));
 }
 
 #[cfg(target_os = "linux")]

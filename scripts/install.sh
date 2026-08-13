@@ -281,6 +281,29 @@ sha256() {
   fi
 }
 
+verify_github_attestation() {
+  artifact=$1
+  if command -v gh >/dev/null 2>&1 \
+    && gh auth status >/dev/null 2>&1; then
+    gh attestation verify "$artifact" --repo "$REPOSITORY" >/dev/null \
+      || fail "GitHub attestation verification failed for ${artifact##*/}"
+    printf 'Verified GitHub provenance for %s\n' "${artifact##*/}"
+  fi
+}
+
+verify_release_asset() {
+  asset=$1
+  checksums=$2
+  asset_name=${asset##*/}
+  expected=$(awk -v asset="$asset_name" \
+    '($2 == asset || $2 == "*" asset) { print $1; exit }' "$checksums")
+  [ -n "$expected" ] || fail "SHA256SUMS does not contain $asset_name"
+  actual=$(sha256 "$asset")
+  [ "$actual" = "$expected" ] \
+    || fail "SHA-256 verification failed for $asset_name"
+  verify_github_attestation "$asset"
+}
+
 installed_version() {
   [ -x "$binary_path" ] || return 0
   current_output=$("$binary_path" --version 2>/dev/null || :)
@@ -296,7 +319,14 @@ version=${tag#v}
 current_version=$(installed_version)
 
 case "$version" in
-  0.[0-6].*) manual_names="mant.md" ;;
+  0.[0-6].*)
+    manual_names="mant.md"
+    if [ "$host" = macos ] && [ "$install_manual" = true ]; then
+      printf '%s\n' \
+        "mant installer: release $tag predates verified manual bundles; installing the binary only" >&2
+      install_manual=false
+    fi
+    ;;
   *) manual_names=$BUNDLED_MANUALS ;;
 esac
 
@@ -391,12 +421,7 @@ install_linux() {
   release_url="$GITHUB_URL/releases/download/$tag"
   download "$release_url/$archive" "$temporary/$archive"
   download "$release_url/SHA256SUMS" "$temporary/SHA256SUMS"
-
-  expected=$(awk -v archive="$archive" '$2 == archive { print $1 }' \
-    "$temporary/SHA256SUMS")
-  [ -n "$expected" ] || fail "SHA256SUMS does not contain $archive"
-  actual=$(sha256 "$temporary/$archive")
-  [ "$actual" = "$expected" ] || fail "SHA-256 verification failed for $archive"
+  verify_release_asset "$temporary/$archive" "$temporary/SHA256SUMS"
 
   require tar
   tar -xzf "$temporary/$archive" -C "$temporary"
@@ -417,10 +442,18 @@ install_macos() {
   cargo_root="$temporary/cargo-root"
   cargo install --locked --root "$cargo_root" --version "$version" mant
   manual_dir="$temporary/manuals"
-  mkdir -p "$manual_dir"
-  for manual_name in $manual_names; do
-    download "https://raw.githubusercontent.com/$REPOSITORY/$tag/docs/manuals/$manual_name" "$manual_dir/$manual_name"
-  done
+  if [ "$install_manual" = true ]; then
+    manual_archive="mant-$version-manuals.tar.gz"
+    release_url="$GITHUB_URL/releases/download/$tag"
+    download "$release_url/$manual_archive" "$temporary/$manual_archive"
+    download "$release_url/SHA256SUMS" "$temporary/SHA256SUMS"
+    verify_release_asset "$temporary/$manual_archive" "$temporary/SHA256SUMS"
+    require tar
+    tar -xzf "$temporary/$manual_archive" -C "$temporary"
+    manual_dir="$temporary/mant-$version-manuals/manuals"
+    [ -f "$manual_dir/manifest.txt" ] \
+      || fail "$manual_archive does not contain a manual manifest"
+  fi
   install_files "$cargo_root/bin/mant" "$manual_dir"
 }
 

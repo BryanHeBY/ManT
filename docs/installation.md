@@ -21,8 +21,10 @@ irm https://raw.githubusercontent.com/BryanHeBY/ManT/main/scripts/install.ps1 | 
 
 Both scripts select the latest public GitHub release by default. Running the
 same command again updates an older installation or reports that the installed
-version is current. Linux and Windows downloads are verified against that
-release's `SHA256SUMS` manifest before installation.
+version is current. Every downloaded archive is verified against that
+release's `SHA256SUMS` manifest before installation. If an authenticated
+GitHub CLI (`gh`) is available, the scripts also require its GitHub provenance
+attestation to verify before installing the archive.
 
 ## Choose an installation method
 
@@ -31,7 +33,7 @@ release's `SHA256SUMS` manifest before installation.
 | One-line installer | Prebuilt archive | Cargo source build | Prebuilt archive | Yes |
 | `cargo-binstall` | Prebuilt archive | Cargo fallback | Prebuilt archive | No |
 | `cargo install` | Source build | Source build | Source build | No |
-| Manual archive | Prebuilt archive | Not published | Prebuilt archive | Optional |
+| Manual archive | Bundled with binary | Manuals only | Bundled with binary | Optional |
 | Repository checkout | Source build | Source build | Source build | No |
 
 Linux with glibc, macOS, and Windows parse Markdown and native man/mdoc
@@ -49,8 +51,11 @@ executable to `~/.local/bin`, and installs the manuals below
 Public macOS archives remain disabled until they can be Developer ID-signed
 and notarized. The Unix installer therefore builds the selected release from
 crates.io on macOS, installs it to `~/.local/bin`, and registers its manuals
+from the checksummed, attested `mant-<version>-manuals.tar.gz` release asset
 under `~/Library/Application Support/ManT/documents`. This path requires Rust
 1.88 or newer, Clang, and zlib to be available before running the installer.
+Releases before 0.7.0 did not publish that asset, so selecting one of them on
+macOS installs only its binary instead of downloading unverified manual files.
 
 On Windows, the PowerShell installer uses the x64 ZIP, installs `mant.exe`
 below `%LOCALAPPDATA%\Programs\ManT\bin`, adds that directory to the user
@@ -138,6 +143,12 @@ C toolchain but no system zlib. Neither a `man` nor a `mandoc` executable is
 required at runtime.
 
 ## Manual release archives
+
+Every release from 0.7.0 onward also publishes
+`mant-<version>-manuals.tar.gz`, a portable archive containing the complete
+manual set, its manifest, and applicable license notices. It is useful on
+platforms installed from crates.io and is the source used by the macOS
+one-line installer.
 
 ### Linux with glibc
 

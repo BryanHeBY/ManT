@@ -145,8 +145,10 @@ Manual retries always build the immutable tag's product tree while taking the
 release helpers from the trusted workflow revision on `main`. Automation fixes
 can therefore recover older tags without changing their product input.
 
-The archive keeps the versioned `manuals/` set beside the executable so
-installation remains transparent. User-facing release notes should lead with
+Each native archive keeps the versioned `manuals/` set beside the executable,
+and the release also publishes the same documents as the platform-independent
+`mant-MAJOR.MINOR.PATCH-manuals.tar.gz` asset. Both forms are checksummed and
+attested. User-facing release notes should lead with
 the one-line installers, which register these documents automatically. Manual
 archive users can copy `manuals/*.md` into
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`; a system package may
@@ -189,7 +191,14 @@ Set `MANT_RELEASE_TARGET=linux-x64` or `linux-arm64` to assert the expected
 runner identity. `MANT_BINARY` may point at another already-built executable.
 Archives and individual SHA-256 files are written under `dist/`.
 
-The equivalent Windows commands are:
+The platform-independent manual archive can be reproduced without first
+building a binary:
+
+```sh
+MANT_RELEASE_TAG=vMAJOR.MINOR.PATCH bash scripts/package-manuals.sh
+```
+
+The equivalent Windows commands for a native package are:
 
 ```powershell
 .\scripts\check-windows.ps1
@@ -217,10 +226,11 @@ The tagged GitHub workflow remains the public-release source of truth because
 it performs a clean optimized build on every target runner after verifying the
 tagged source passed full CI. It generates a target-specific CycloneDX SBOM,
 publishes it beside the archives, creates provenance attestations for the
-release files, publishes their Sigstore bundles beside the archives, and
-cryptographically binds each archive to its SBOM. GitHub stores the same
-attestations in its attestations API; the attached `*.sigstore.json` copies
-also make the signatures portable and discoverable by release scanners. After
+native and manual release files, and publishes their Sigstore bundles beside
+the archives. It also cryptographically binds each native archive to its SBOM.
+GitHub also stores these attestations in its attestations API; the attached
+`*.sigstore.json` copies make the signatures portable and discoverable by
+release scanners. After
 downloading a release asset, verify that it was produced by this repository:
 
 ```sh

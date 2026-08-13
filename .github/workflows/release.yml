@@ -211,11 +211,17 @@ jobs:
           MANT_RELEASE_TAG: ${{ env.RELEASE_TAG }}
           MANT_RELEASE_TARGET: ${{ matrix.target }}
 
+      - name: Package portable manual archive
+        if: matrix.target == 'linux-x64'
+        run: bash scripts/package-manuals.sh
+        env:
+          MANT_RELEASE_TAG: ${{ env.RELEASE_TAG }}
+
       - name: Attest release archive and checksum
         id: attest-release
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/mant-*.*
+          subject-path: dist/mant-*-${{ matrix.target }}.*
 
       - name: Stage Unix Sigstore bundle
         if: runner.os != 'Windows'
@@ -239,11 +245,28 @@ jobs:
           ATTESTATION_BUNDLE: ${{ steps.attest-release.outputs.bundle-path }}
           MANT_RELEASE_TARGET: ${{ matrix.target }}
 
+      - name: Attest portable manual archive and checksum
+        if: matrix.target == 'linux-x64'
+        id: attest-manuals
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/mant-*-manuals.tar.gz*
+
+      - name: Stage portable manual Sigstore bundle
+        if: matrix.target == 'linux-x64'
+        shell: bash
+        run: |
+          version="${RELEASE_TAG#v}"
+          cp "$ATTESTATION_BUNDLE" \
+            "dist/mant-${version}-manuals.sigstore.json"
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest-manuals.outputs.bundle-path }}
+
       - name: Bind SBOM to Unix archive
         if: runner.os != 'Windows'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/mant-*.tar.gz
+          subject-path: dist/mant-*-${{ matrix.target }}.tar.gz
           sbom-path: ${{ env.MANT_SBOM_PATH }}
 
       - name: Bind SBOM to Windows archive
