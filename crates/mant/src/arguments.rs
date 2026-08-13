@@ -211,7 +211,7 @@ pub(crate) enum Command {
         .multiple(false)
 )]
 struct Cli {
-    /// Document selector, or a man-style MAN_SECTION NAME pair.
+    /// Document selector, or a man-style `MAN_SECTION NAME` pair.
     #[arg(value_name = "SELECTOR", value_parser = non_empty, num_args = 0..)]
     selector: Vec<String>,
 
