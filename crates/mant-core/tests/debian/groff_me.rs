@@ -2,6 +2,7 @@
 
 use crate::common::{self, DEBIAN_GROFF_ME_SECTIONS};
 use crate::fixtures::debian_manual;
+use mant_ast::Inline;
 
 /// 6-section topology (Name, Synopsis, Description, Files, Notes, See also).
 #[test]
@@ -23,4 +24,30 @@ fn does_not_have_duplicate_vertical_spacing() {
         &debian_manual("groff_me").sections,
         "debian/groff_me",
     );
+}
+
+#[test]
+fn keeps_mr_fallbacks_as_typed_manual_references() {
+    let document = debian_manual("groff_me");
+    let mut references = Vec::new();
+    common::visit_document_inlines(document, &mut |inline| {
+        if let Inline::ManualReference {
+            name,
+            section: Some(section),
+            ..
+        } = inline
+        {
+            references.push((name.clone(), section.clone()));
+        }
+    });
+
+    assert_eq!(references.len(), 11);
+    for target in [("groff", "7"), ("eqn", "1"), ("troff", "1")] {
+        assert!(
+            references
+                .iter()
+                .any(|reference| reference.0 == target.0 && reference.1 == target.1),
+            "missing .MR target {target:?}"
+        );
+    }
 }

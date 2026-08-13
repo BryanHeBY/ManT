@@ -136,7 +136,10 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
     let mut promoted = Vec::with_capacity(nodes.len());
     let mut source = std::mem::take(nodes).into_iter().peekable();
     while let Some(node) = source.next() {
-        let Inline::Strong { children } = &node else {
+        // Traditional `.BR name (section)` references use bold, while
+        // groff's portable `.MR` fallback expands to `.IR` and therefore
+        // reaches us as emphasis followed by the parenthesized section.
+        let (Inline::Strong { children } | Inline::Emphasis { children }) = &node else {
             promoted.push(node);
             continue;
         };
@@ -368,6 +371,29 @@ mod tests {
     }
 
     #[test]
+    fn promotes_groff_mr_fallback_pairs_from_emphasis() {
+        let mut nodes = vec![
+            Inline::Emphasis {
+                children: vec![Inline::Text {
+                    value: "groff_man".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: "(7), next".to_owned(),
+            },
+        ];
+
+        promote_manual_reference_inlines(&mut nodes);
+
+        assert!(matches!(
+            &nodes[0],
+            Inline::ManualReference { name, section: Some(section), .. }
+                if name == "groff_man" && section == "7"
+        ));
+        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+    }
+
+    #[test]
     fn leaves_prose_and_malformed_sections_unchanged() {
         for suffix in [" documentation", "()", "(section one)"] {
             let mut nodes = vec![
@@ -383,5 +409,18 @@ mod tests {
             promote_manual_reference_inlines(&mut nodes);
             assert!(matches!(nodes[0], Inline::Strong { .. }));
         }
+
+        let mut emphasized_prose = vec![
+            Inline::Emphasis {
+                children: vec![Inline::Text {
+                    value: "tool".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: " documentation".to_owned(),
+            },
+        ];
+        promote_manual_reference_inlines(&mut emphasized_prose);
+        assert!(matches!(emphasized_prose[0], Inline::Emphasis { .. }));
     }
 }

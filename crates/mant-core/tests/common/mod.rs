@@ -666,6 +666,19 @@ fn block_text(block: &Block) -> String {
 // Inline visitor
 // ---------------------------------------------------------------------------
 
+pub fn visit_document_inlines(document: &MantDocument, visitor: &mut impl FnMut(&Inline)) {
+    visit_section_inlines(&document.sections, visitor);
+}
+
+fn visit_section_inlines(sections: &[Section], visitor: &mut impl FnMut(&Inline)) {
+    for section in sections {
+        for block in &section.blocks {
+            visit_block_inlines(block, visitor);
+        }
+        visit_section_inlines(&section.children, visitor);
+    }
+}
+
 pub fn visit_block_inlines(block: &Block, visitor: &mut impl FnMut(&Inline)) {
     match block {
         Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
