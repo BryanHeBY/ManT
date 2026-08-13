@@ -191,11 +191,10 @@ fn document_paths_with(
         )
     })?;
 
-    let documents = root.join(DOCUMENTS_DIR);
     Ok(DocumentPaths {
         config: root.join(CONFIG_FILE),
-        sources: documents.join(SOURCES_DIR),
-        documents,
+        sources: root.join(SOURCES_DIR),
+        documents: root.join(DOCUMENTS_DIR),
         root,
     })
 }
@@ -550,9 +549,6 @@ priority = -1
         assert_eq!(paths.root, Path::new("/data/user/mant"));
         assert_eq!(paths.config, Path::new("/data/user/mant/sources.toml"));
         assert_eq!(paths.documents, Path::new("/data/user/mant/documents"));
-        assert_eq!(
-            paths.sources,
-            Path::new("/data/user/mant/documents/sources")
-        );
+        assert_eq!(paths.sources, Path::new("/data/user/mant/sources"));
     }
 }

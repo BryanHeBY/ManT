@@ -318,14 +318,7 @@ fn scan_directory(
     personal_documents: bool,
 ) -> Result<Vec<(String, PathBuf)>, SourceConfigError> {
     let mut candidates = BTreeMap::<String, (u8, PathBuf)>::new();
-    scan_directory_into(
-        directory,
-        directory,
-        personal_documents,
-        personal_documents,
-        0,
-        &mut candidates,
-    )?;
+    scan_directory_into(directory, directory, personal_documents, 0, &mut candidates)?;
     Ok(candidates
         .into_iter()
         .map(|(name, (_, path))| (name, path))
@@ -335,7 +328,6 @@ fn scan_directory(
 fn scan_directory_into(
     root: &Path,
     directory: &Path,
-    skip_managed_sources: bool,
     allow_leaf_symlinks: bool,
     depth: usize,
     candidates: &mut BTreeMap<String, (u8, PathBuf)>,
@@ -366,16 +358,13 @@ fn scan_directory_into(
             }
         }
         if file_type.is_dir() {
-            if !(skip_managed_sources && entry.path() == root.join("sources")) {
-                scan_directory_into(
-                    root,
-                    &entry.path(),
-                    false,
-                    allow_leaf_symlinks,
-                    depth + 1,
-                    candidates,
-                )?;
-            }
+            scan_directory_into(
+                root,
+                &entry.path(),
+                allow_leaf_symlinks,
+                depth + 1,
+                candidates,
+            )?;
             continue;
         }
         if !file_type.is_file() && !file_type.is_symlink() {
@@ -495,6 +484,21 @@ mod tests {
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>(),
             vec!["alpha", "beta", "nested/hidden"]
+        );
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn personal_documents_do_not_reserve_a_sources_subdirectory() {
+        let root = temporary_root("personal-sources-name");
+        fs::create_dir_all(root.join("sources")).expect("create personal directory");
+        fs::write(root.join("sources/tool.md"), "# Personal tool")
+            .expect("write personal document");
+
+        let documents = scan_directory(&root, true).expect("scan documents");
+        assert_eq!(
+            documents,
+            vec![("sources/tool".to_owned(), root.join("sources/tool.md"))]
         );
         fs::remove_dir_all(root).expect("remove fixture");
     }

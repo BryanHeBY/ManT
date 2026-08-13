@@ -380,7 +380,7 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
     assert_eq!(result["sources"][0]["source"], "team");
     assert_eq!(result["sources"][0]["action"], "updated");
     assert_eq!(result["sources"][0]["documents"], 1);
-    let installed = data_root.join("documents/sources/team");
+    let installed = data_root.join("sources/team");
     assert!(installed.join("reference/source-tool.md").is_file());
     assert!(installed.join(".mant-source.toml").is_file());
     assert!(!installed.join("README.md").exists());
@@ -450,8 +450,9 @@ fn document_source_pruning_is_explicit_and_preserves_personal_documents() {
         .parent()
         .expect("application data root")
         .to_owned();
-    let installed = documents.join("sources/removed");
+    let installed = data_root.join("sources/removed");
     fs::create_dir_all(&installed).expect("create installed source fixture");
+    fs::create_dir_all(&documents).expect("create personal documents fixture");
     fs::write(data_root.join("sources.toml"), "").expect("write empty source config");
     fs::write(
         installed.join(".mant-source.toml"),
@@ -525,7 +526,7 @@ fn document_source_failures_keep_a_complete_json_report() {
     assert_eq!(report["sources"][0]["source"], "broken");
     assert_eq!(report["sources"][0]["action"], "failed");
     assert!(report["sources"][0]["error"].as_str().is_some());
-    assert!(!data_root.join("documents/sources/broken").exists());
+    assert!(!data_root.join("sources/broken").exists());
 
     fs::remove_dir_all(fixture_root).expect("remove failure fixture");
 }
@@ -818,7 +819,7 @@ fn windows_suffix_fixture() -> PathBuf {
         .parent()
         .expect("application data root")
         .to_owned();
-    let sources = documents.join("sources");
+    let sources = data_root.join("sources");
     let alpha = sources.join("alpha");
     let beta = sources.join("beta");
     fs::create_dir_all(&alpha).expect("create alpha source");

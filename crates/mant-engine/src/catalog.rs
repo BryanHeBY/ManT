@@ -439,7 +439,7 @@ mod tests {
                 },
                 RegisteredDocument {
                     logical_path: "tool".to_owned(),
-                    path: PathBuf::from("/data/mant/documents/sources/alpha/tool.md"),
+                    path: PathBuf::from("/data/mant/sources/alpha/tool.md"),
                     origin: RegisteredDocumentOrigin::Source("alpha".to_owned()),
                     source_priority: Some(1),
                 },

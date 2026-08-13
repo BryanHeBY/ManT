@@ -613,7 +613,7 @@ mod tests {
         DocumentPaths {
             config: root.join("sources.toml"),
             documents: root.join("documents"),
-            sources: root.join("documents/sources"),
+            sources: root.join("sources"),
             root: root.to_owned(),
         }
     }
@@ -652,6 +652,7 @@ mod tests {
         let config = load_source_config_from(&paths.config).expect("load source config");
         write_installed_identity(&paths.sources.join("active"), "active", 2);
         write_installed_identity(&paths.sources.join("removed"), "removed", 7);
+        fs::create_dir_all(&paths.documents).expect("create personal documents");
         fs::write(paths.documents.join("personal.md"), "# personal")
             .expect("write personal document");
 
@@ -910,7 +911,7 @@ mod tests {
         let paths = DocumentPaths {
             config: root.join("sources.toml"),
             documents: root.join("documents"),
-            sources: root.join("documents/sources"),
+            sources: root.join("sources"),
             root: root.clone(),
         };
         fs::create_dir_all(&paths.sources).expect("create source store");
@@ -957,7 +958,7 @@ mod tests {
         let paths = DocumentPaths {
             config: root.join("sources.toml"),
             documents: root.join("documents"),
-            sources: root.join("documents/sources"),
+            sources: root.join("sources"),
             root: root.clone(),
         };
         fs::create_dir_all(paths.sources.join("release")).expect("create installed source");

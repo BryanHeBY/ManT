@@ -215,8 +215,8 @@ indexed collection; the complete lookup and `.so` policy is documented in the
 
 Personal `.md` and `.markdown` files below ManT's `documents/` directory keep
 their extension-free relative hierarchy. Configured Git repositories and
-direct archive URLs are installed below `documents/sources/` without mixing
-their files into the personal tree:
+direct archive URLs are installed in the sibling managed `sources/` directory,
+without mixing their files into the personal tree:
 
 ```toml
 [team]

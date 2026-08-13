@@ -22,26 +22,26 @@ The layout is fixed:
 ```text
 mant/
 ├── sources.toml
-└── documents/
-    ├── personal.md
-    ├── languages/
-    │   └── zh-CN/
-    │       └── tool.md
-    └── sources/
-        └── team/
-            ├── .mant-source.toml
-            └── guides/
-                └── tool.md
+├── documents/
+│   ├── personal.md
+│   └── languages/
+│       └── zh-CN/
+│           └── tool.md
+└── sources/
+    └── team/
+        ├── .mant-source.toml
+        └── guides/
+            └── tool.md
 ```
 
-Files and directories outside the reserved `documents/sources/` subtree are
-managed by the user. Each immediate
-directory below `documents/sources/` is managed by `mant --update-docs`; do not
+Everything below `documents/` is managed by the user. Each immediate directory
+below the sibling `sources/` store is managed by `mant --update-docs`; do not
 edit it by hand because a later update replaces the complete directory.
 
-Every discoverable Markdown identity remains below `documents/`. Regular `.md`
-and `.markdown` files are discovered recursively and addressed by their
-extension-free path relative to `documents/` or one installed source. The
+Every discoverable Markdown document belongs to either the personal
+`documents/` tree or one installed source below `sources/`. Regular `.md` and
+`.markdown` files are discovered recursively and addressed by their
+extension-free path relative to that origin. The
 personal tree accepts an explicitly named leaf-file symlink when its target is
 a regular file, including a target outside `documents/`; the link path supplies
 the logical identity. Broken links and directory symlinks are ignored. Managed
@@ -123,7 +123,7 @@ The result is stable JSON identified by `mant.sources-update/v2`. Add
 `unchanged`, or `failed`; successful sources are kept even when another source
 fails, and the process exits with status `1` after printing the complete report
 if any source failed. The `orphaned` array separately reports immediate entries
-below `documents/sources/` whose names are absent from the current
+below `sources/` whose names are absent from the current
 configuration. Ordinary updates never delete them.
 
 For a Git source, ManT reads the branch head with `git ls-remote`. It skips an
@@ -186,14 +186,14 @@ mant --prune-docs
 ```
 
 Successful targets are reported as `removed`. A candidate is removable only
-when it is a direct child of `documents/sources/`, has a valid source name, is
+when it is a direct child of `sources/`, has a valid source name, is
 a real directory rather than a symbolic link, and contains a regular
 `.mant-source.toml` whose recorded source matches the directory name. Invalid
 names, links, special files, missing or mismatched metadata, permission
 failures, and candidates that change during cleanup are retained and reported
 as `refused` or `failed`; either action produces exit status `1` after the
-complete JSON report is printed. Personal files and directories outside the
-reserved `documents/sources/` subtree are outside the prune boundary.
+complete JSON report is printed. The sibling `documents/` tree is entirely
+outside the prune boundary.
 
 If interruption leaves a `.prune-*` directory, later maintenance reports it
 as an incomplete transaction and never deletes it automatically. Inspect its
