@@ -35,7 +35,7 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ast`, `mant-sources`, `mant-core`, `mant-ui`, and `mant`,
+It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-core`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
@@ -108,7 +108,8 @@ LICENSE                       Apache-2.0 terms for ManT-authored work
 THIRD_PARTY_NOTICES.md        Repository-wide third-party distribution map
 THIRD_PARTY_LICENSES.html     Generated Rust dependency license report
 SECURITY.md                   Supported versions and private reporting policy
-crates/mant-ast/             Versioned document, query, outline, and schema types
+crates/mant-ir/                   Normalized document IR, visitors, identities, and indexes
+crates/mant-protocol/             Versioned request/response DTOs and JSON Schema
 crates/mant-sources/         Local Markdown registry and transactional source updates
 crates/mant-core/            Document loading, libmandoc lowering, projections, output
 crates/mant-ui/              Ratatui reader, navigation, search, and terminal styling
@@ -143,7 +144,7 @@ Generated paths are excluded from version control:
 
 ## Testing boundaries
 
-Rust is authoritative for parser correctness, AST contracts, semantic option
+Rust is authoritative for parser correctness, IR and protocol contracts, semantic option
 extraction, terminal presentation, process behavior, and output rendering.
 Fixed real roff sources in `tests/fixtures/roff/real/` are covered by native
 integration tests; their provenance and licenses are documented in that
@@ -215,7 +216,7 @@ it.
 compression, include-policy, diagnostics, and optional `serde` tests must pass
 from Cargo's staged package directory without fixtures from sibling crates.
 
-When changing a versioned AST or protocol type, update the Rust contract,
+When changing a versioned IR projection or protocol type, update the Rust contract,
 generated-schema, process, and projection tests in the same change. External
 stdio remains a closed boundary: unknown request fields and incompatible
 response shapes fail before application code receives them. The in-process UI
@@ -227,4 +228,4 @@ Do not replace a real distribution fixture with a hand-written approximation
 when fixing parser or lowering behavior. Add the smallest redistributable real
 source that reproduces the problem, record its origin and license under
 `tests/fixtures/roff/real/`, and assert the normalized structure rather than a
-terminal screenshot. Renderer tests then verify the same AST independently.
+terminal screenshot. Renderer tests then verify the same IR independently.

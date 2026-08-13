@@ -1,7 +1,7 @@
 # mant-core
 
 `mant-core` is ManT's renderer-independent document engine. It resolves local
-documents through `mant-sources` into the contracts from `mant-ast`, builds
+documents through `mant-sources` into the contracts from `mant-protocol`, builds
 semantic projections, and produces deterministic output without owning a
 terminal or command-line process.
 
@@ -16,7 +16,7 @@ terminal or command-line process.
 - Semantic outlines containing addressable sections and role-aware entries.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
-- Markdown, text, man-style text, and JSON renderers over one normalized AST.
+- Markdown, text, man-style text, and JSON renderers over one normalized IR.
 - Installed-client and private tldr cache discovery and updates.
 
 Process argument parsing, MCP transport, and interactive presentation remain
@@ -28,7 +28,7 @@ The in-memory Markdown path is deterministic and works on every supported
 platform:
 
 ```rust
-use mant_ast::OutlineDetail;
+use mant_protocol::OutlineDetail;
 use mant_core::{
     build_outline_with_detail, query_markdown_text, render_outline_text,
 };
@@ -63,7 +63,7 @@ transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
 
 ## Layering
 
-`mant-core` returns owned `mant-ast` values and does not expose libmandoc C
+`mant-core` returns owned `mant-protocol` values and does not expose libmandoc C
 structures. Applications that only need raw roff syntax should use
 [`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
 that need the complete command or reader should install

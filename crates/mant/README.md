@@ -127,7 +127,7 @@ roff files are supported. Standard input additionally requires
 
 ## Crate architecture
 
-- `mant-ast` defines the versioned document and query contracts.
+- `mant-protocol` defines the versioned document and query contracts.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
 - `mant-sources` owns local Markdown discovery and optional source updates.
 - `mant-core` performs document lookup, lowering, projections, search, and output.

@@ -172,7 +172,7 @@ mant --version
 ```
 
 The [JSON protocol and Schema reference](docs/protocol.md) documents every
-versioned request and response projection, normalized AST node, coordinate
+versioned request and response projection, normalized IR node, coordinate
 rule, and MCP tool.
 
 ## Build a local documentation library
@@ -273,14 +273,14 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
-![ManT architecture: three source pipelines converge on mant-core and one shared QueryBundle](docs/assets/architecture.svg)
+![ManT architecture: three source pipelines converge on mant-core, mant-ir, and versioned protocol boundaries](docs/assets/architecture.svg)
 
-Rust owns source discovery, parsing, the stable AST, tldr integration, output,
-and terminal presentation. Interactive use passes the in-memory `QueryBundle`
-directly to `mant-ui`; external process consumers continue to use the
-versioned JSON and MCP boundaries. Git and archive updates are an optional
-native CLI capability layered on `mant-sources`, not part of document reads or
-MCP.
+Rust owns source discovery, parsing, the normalized document IR, tldr
+integration, output, and terminal presentation. Interactive use passes an
+in-memory `ResolvedQuery` containing `mant-ir` nodes directly to `mant-ui`;
+external process consumers receive v7 DTOs from `mant-protocol`. Git and
+archive updates are an optional native CLI capability layered on
+`mant-sources`, not part of document reads or MCP.
 
 ## Documentation
 

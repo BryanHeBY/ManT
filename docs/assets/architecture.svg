@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="840" height="520" viewBox="0 0 840 520" role="img" aria-labelledby="title description">
   <title id="title">ManT architecture</title>
-  <desc id="description">Native manuals, Markdown, and tldr caches converge on mant-core and its shared QueryBundle, which serves the TUI, renderers, schemas, and MCP.</desc>
+  <desc id="description">Native manuals, Markdown, and tldr caches converge on mant-core and its normalized mant-ir ResolvedQuery, which serves the TUI and renderers directly and versioned integrations through mant-protocol.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
@@ -59,14 +59,15 @@
 
   <path d="M 420 278 L 420 326" class="connector"/>
   <g filter="url(#shadow)">
-    <rect x="270" y="326" width="300" height="62" rx="14" class="bundle"/>
+    <rect x="250" y="318" width="340" height="72" rx="14" class="bundle"/>
   </g>
-  <text x="420" y="363" text-anchor="middle" class="bundle-title">QueryBundle (mant-ast)</text>
+  <text x="420" y="347" text-anchor="middle" class="bundle-title">ResolvedQuery · mant-ir</text>
+  <text x="420" y="372" text-anchor="middle" class="detail">typed IDs · links · ranges · index</text>
 
   <text x="18" y="431" class="label">CONSUMERS</text>
-  <path d="M 370 388 C 350 414, 136 404, 136 448" class="connector"/>
-  <path d="M 420 388 L 420 440" class="connector"/>
-  <path d="M 470 388 C 490 414, 704 404, 704 448" class="connector"/>
+  <path d="M 370 390 C 350 414, 136 404, 136 448" class="connector"/>
+  <path d="M 420 390 L 420 440" class="connector"/>
+  <path d="M 470 390 C 490 414, 704 404, 704 448" class="connector"/>
 
   <g filter="url(#shadow)">
     <rect x="18" y="448" width="236" height="62" rx="12" class="card"/>
@@ -78,5 +79,5 @@
   <text x="420" y="476" text-anchor="middle" class="title">Renderers</text>
   <text x="420" y="497" text-anchor="middle" class="detail">Markdown · text · JSON</text>
   <text x="704" y="476" text-anchor="middle" class="title">Integrations</text>
-  <text x="704" y="497" text-anchor="middle" class="detail">schemas · MCP · request JSON</text>
+  <text x="704" y="497" text-anchor="middle" class="detail">mant-protocol · MCP · JSON</text>
 </svg>

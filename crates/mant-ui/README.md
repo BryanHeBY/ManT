@@ -1,7 +1,7 @@
 # mant-ui
 
 `mant-ui` is the Ratatui frontend component used by the `mant` executable. It
-renders ManT's normalized `mant-ast::QueryBundle` and owns interactive
+renders ManT's normalized `mant-protocol::QueryBundle` and owns interactive
 navigation, search, scrolling, links, menus, mouse input, and terminal
 presentation.
 
@@ -13,7 +13,7 @@ presentation.
   references.
 - A live, bounded catalog finder that delegates complete-snapshot discovery
   and document loading back to the host.
-- Typed Markdown/man reference activation, safe external-link delegation, and
+- Typed Markdown/man reference activation, safe external-URI delegation, and
   bounded back/forward history.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.

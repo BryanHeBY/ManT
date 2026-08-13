@@ -19,7 +19,8 @@ mant              CLI, mode selection, source updates, request JSON, MCP
 ├─ mant-ui         Ratatui state machine and terminal presentation
 └─ mant-core       resolution, parsing, lowering, projections, output
    ├─ mant-sources local Markdown registry and optional update machinery
-   ├─ mant-ast     versioned renderer-neutral contracts
+   ├─ mant-ir      normalized in-memory document model and traversal
+   ├─ mant-protocol versioned process DTOs and JSON Schema
    └─ libmandoc-rs
       └─ vendored libmandoc + private C shim
 ```
@@ -28,35 +29,44 @@ The crates have deliberately asymmetric responsibilities:
 
 | Crate | Owns | Does not own |
 | --- | --- | --- |
-| `mant-ast` | Document, query, catalog, outline, excerpt, search, and schema types | Parsing, files, rendering, or processes |
+| `mant-ir` | Logical document addresses; source-neutral document and quick-reference IR; typed node IDs and ranges; visitors and derived indexes | Versioned process envelopes, parsing, files, or rendering |
+| `mant-protocol` | Versioned query, document-response, catalog, outline, excerpt, search, update, and schema DTOs | Parsing, files, rendering, or processes |
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, and C build boundary | ManT types, source discovery, or output |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-core` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, discovery, links, history, search, layout, and terminal lifecycle | Filesystem lookup or source mutation |
 | `mant` | User-facing modes, terminal detection, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
-Interactive queries pass an in-memory `QueryBundle` directly from `mant-core`
-to `mant-ui`. They do not serialize through JSON or spawn a child process.
-Explicit output, redirection, one-shot request JSON, and MCP use the same core
-operations through their respective process boundaries.
+Interactive queries pass an in-memory `ResolvedQuery` directly from
+`mant-core` to `mant-ui`. They do not serialize through JSON or spawn a child
+process. Explicit output, redirection, one-shot request JSON, and MCP project
+that value into `mant-protocol` DTOs at their process boundaries.
 
 ## Shared document model
 
-`mant.document/v7` is the source-neutral document contract. It contains root
-content, recursive sections, blocks, inline nodes, layout hints, source
-locations, diagnostics, and semantic definition identities. `mant.query/v7`
-combines an optional document with an optional tldr quick reference while
-preserving their different origins and licences.
+`mant-ir::Document` is the source-neutral in-memory representation. It contains
+root content, recursive sections, blocks, inline nodes, layout hints, source
+locations, diagnostics, and semantic definition identities. Node identities
+use `NodeId`; exact Markdown coordinates use half-open UTF-8 `TextRange`
+values; `DocumentIndex` provides a derived lookup sidecar without embedding
+mutable caches in the tree. Syn-style `Visit` and `VisitMut` traits keep
+cross-cutting passes exhaustive as the IR evolves.
+
+At a machine boundary, `mant-protocol::DocumentResponse` adds the exact
+`mant.document/v7` discriminator and producer metadata. `mant.query/v7`
+combines an optional document response with an optional tldr quick reference
+while preserving their different origins and licences.
 
 The model carries intent that a renderer cannot safely recover from text:
 
 - section and anchor IDs identify page-local destinations;
 - definition identities group aliases and classify options, commands,
   variables, and environment variables;
-- `document-reference` retains a hierarchical path and current Markdown
-  source identity;
-- `manual-reference` retains a manual name and optional section;
-- external and email links remain distinct from local navigation.
+- `Inline::Link` has an explicit target kind for a hierarchical Markdown
+  document, installed manual, page-local section, external URI, or email;
+- `NodePath` distinguishes protocol selectors from filesystem paths and labels;
+- external and email links remain distinct from local navigation without
+  multiplying overlapping inline node variants.
 
 The TUI activates these typed nodes and asks the `mant` host to resolve only
 cross-document addresses. It never reconstructs a destination from a rendered
@@ -106,7 +116,7 @@ no collection root and therefore reject redirect-only aliases.
 
 `libmandoc-rs` wraps the bundled C parser behind a small private shim and
 copies every completed parse into an owned Rust tree with structured
-diagnostics. `mant-core` alone lowers that tree into `mant-ast`. Linux, macOS,
+diagnostics. `mant-core` alone lowers that tree into `mant-ir`. Linux, macOS,
 and Windows use the same parser version; Windows supplies bytes through a
 checked memory-only configuration instead of exposing POSIX file transport to
 C. ManT invokes libmandoc with native includes denied after Rust has resolved
@@ -120,7 +130,7 @@ request receives isolated diagnostic reset and capture.
 
 Local Markdown uses `pulldown-cmark` with source positions. ManT lowers a
 deliberate structural subset—headings, prose, emphasis, code, links, code
-blocks, lists, tables, hard breaks, and thematic breaks—into the shared AST.
+blocks, lists, tables, hard breaks, and thematic breaks—into the shared IR.
 Unsupported blocks retain their exact visible source with diagnostics instead
 of disappearing. Recognized definition lists receive the same semantic
 identities as native-manual definitions.
