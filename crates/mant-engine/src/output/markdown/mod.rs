@@ -3,11 +3,16 @@
 mod blocks;
 mod inline;
 
-use mant_ir::{Block, LayoutHint, Section, TldrCommandPart, TldrDocument, TldrOrigin};
+use std::ops::Range;
+
+use mant_ir::{
+    Block, DefinitionCase, DefinitionRole, LayoutHint, NodeId, OutlinePath, Section, SourceSpan,
+    TldrCommandPart, TldrDocument, TldrOrigin,
+};
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
 use self::{
-    blocks::render_blocks,
+    blocks::{RenderedBlocks, render_blocks, render_blocks_with_entries},
     inline::{code_span, escape_text},
 };
 use crate::{ResolvedContent, projection::DOCUMENT_ROOT_ID};
@@ -35,30 +40,236 @@ pub fn render_markdown(query: &ResolvedContent) -> String {
 /// Render a complete query using explicit presentation-only options.
 #[must_use]
 pub fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOptions) -> String {
-    let mut output = Vec::new();
-    output.push(heading(1, &query.label));
+    render_markdown_artifact(query, options).text
+}
+
+pub(crate) struct MarkdownArtifact {
+    pub(crate) text: String,
+    pub(crate) nodes: Vec<MarkdownNodeRange>,
+}
+
+#[derive(Clone)]
+pub(crate) struct MarkdownNodeRange {
+    pub(crate) range: Range<usize>,
+    pub(crate) node: MarkdownNode,
+}
+
+#[derive(Clone)]
+pub(crate) struct MarkdownSection {
+    pub(crate) path: OutlinePath,
+    pub(crate) id: NodeId,
+    pub(crate) title: String,
+}
+
+#[derive(Clone)]
+pub(crate) enum MarkdownNode {
+    Tldr,
+    DocumentRoot,
+    DocumentSection {
+        section: MarkdownSection,
+        source: Option<SourceSpan>,
+    },
+    DocumentEntry {
+        path: OutlinePath,
+        id: NodeId,
+        title: String,
+        role: DefinitionRole,
+        case: DefinitionCase,
+        names: Vec<String>,
+        section: Option<MarkdownSection>,
+        source: Option<SourceSpan>,
+    },
+}
+
+pub(crate) fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownArtifact {
+    render_markdown_artifact(query, MarkdownOptions::ADDRESSABLE)
+}
+
+fn render_markdown_artifact(query: &ResolvedContent, options: MarkdownOptions) -> MarkdownArtifact {
+    let mut output = ArtifactBuilder::default();
+    output.push(&heading(1, &query.label));
 
     if let Some(tldr) = &query.tldr {
-        output.extend(render_tldr(tldr));
+        for (index, block) in render_tldr(tldr).into_iter().enumerate() {
+            let range = output.push(&block);
+            if index == 0 {
+                output.begin_tldr(range.start);
+            }
+        }
         if query.document.is_some() {
-            output.push("---".to_owned());
+            output.push("---");
         }
     }
 
     if let Some(document) = &query.document {
-        if options.preserve_anchors && !document.blocks.is_empty() {
-            output.push(inline::html_anchor(DOCUMENT_ROOT_ID));
+        if !document.blocks.is_empty() {
+            let start = if options.preserve_anchors {
+                output.push(&inline::html_anchor(DOCUMENT_ROOT_ID)).start
+            } else {
+                output.text.len()
+            };
+            output.begin_root(start);
+            let rendered = render_blocks_with_entries(&document.blocks, options);
+            output.push_scope(rendered, None, None);
         }
-        output.extend(render_blocks(&document.blocks, options));
-        render_sections(&mut output, &document.sections, 2, options);
+        render_artifact_sections(&mut output, &document.sections, &[], 2, options);
     }
-    output
-        .into_iter()
-        .filter(|block| !block.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n")
-        .trim_end()
-        .to_owned()
+    output.finish()
+}
+
+#[derive(Default)]
+struct ArtifactBuilder {
+    text: String,
+    nodes: Vec<MarkdownNodeRange>,
+    tldr: Option<usize>,
+    root: Option<usize>,
+    last_section: Option<usize>,
+}
+
+impl ArtifactBuilder {
+    fn push(&mut self, block: &str) -> Range<usize> {
+        if block.is_empty() {
+            return self.text.len()..self.text.len();
+        }
+        if !self.text.is_empty() {
+            self.text.push_str("\n\n");
+        }
+        let start = self.text.len();
+        self.text.push_str(block);
+        start..self.text.len()
+    }
+
+    fn begin_tldr(&mut self, start: usize) {
+        self.tldr = Some(self.node(start, MarkdownNode::Tldr));
+    }
+
+    fn begin_root(&mut self, start: usize) {
+        self.close_tldr(start);
+        self.root = Some(self.node(start, MarkdownNode::DocumentRoot));
+    }
+
+    fn begin_section(
+        &mut self,
+        start: usize,
+        section: MarkdownSection,
+        source: Option<SourceSpan>,
+    ) {
+        self.close_tldr(start);
+        if let Some(root) = self.root.take() {
+            self.nodes[root].range.end = start;
+        }
+        if let Some(previous) = self.last_section {
+            self.nodes[previous].range.end = start;
+        }
+        self.last_section =
+            Some(self.node(start, MarkdownNode::DocumentSection { section, source }));
+    }
+
+    fn push_scope(
+        &mut self,
+        rendered: RenderedBlocks,
+        section: Option<&MarkdownSection>,
+        coordinates: Option<&[usize]>,
+    ) {
+        if rendered.text.is_empty() {
+            return;
+        }
+        let block = self.push(&rendered.text);
+        for entry in rendered.entries {
+            let path = OutlinePath::entry(coordinates, entry.index)
+                .expect("enumerated entry paths are one-based");
+            self.nodes.push(MarkdownNodeRange {
+                range: block.start + entry.start..block.start + entry.end,
+                node: MarkdownNode::DocumentEntry {
+                    path,
+                    id: entry.identity.id,
+                    title: entry.identity.names.join(", "),
+                    role: entry.identity.role,
+                    case: entry.identity.case,
+                    names: entry.identity.names,
+                    section: section.cloned(),
+                    source: entry.source,
+                },
+            });
+        }
+    }
+
+    fn node(&mut self, start: usize, node: MarkdownNode) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(MarkdownNodeRange {
+            range: start..self.text.len(),
+            node,
+        });
+        index
+    }
+
+    fn close_tldr(&mut self, end: usize) {
+        if let Some(tldr) = self.tldr.take() {
+            self.nodes[tldr].range.end = end;
+        }
+    }
+
+    fn finish(mut self) -> MarkdownArtifact {
+        let end = self.text.trim_end().len();
+        self.text.truncate(end);
+        self.close_tldr(end);
+        if let Some(root) = self.root.take() {
+            self.nodes[root].range.end = end;
+        }
+        if let Some(section) = self.last_section {
+            self.nodes[section].range.end = end;
+        }
+        for node in &mut self.nodes {
+            node.range.end = node.range.end.min(end);
+        }
+        MarkdownArtifact {
+            text: self.text,
+            nodes: self.nodes,
+        }
+    }
+}
+
+fn render_artifact_sections(
+    output: &mut ArtifactBuilder,
+    sections: &[Section],
+    parent: &[usize],
+    depth: usize,
+    options: MarkdownOptions,
+) {
+    for (index, section) in sections.iter().enumerate() {
+        let mut coordinates = parent.to_vec();
+        coordinates.push(index + 1);
+        let path =
+            OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
+        let rendered_heading = if options.preserve_anchors {
+            format!(
+                "{}\n\n{}",
+                inline::html_anchor(&section.id),
+                heading(depth, &section.title)
+            )
+        } else {
+            heading(depth, &section.title)
+        };
+        let range = output.push(&rendered_heading);
+        let reference = MarkdownSection {
+            path,
+            id: section.id.clone(),
+            title: section.title.clone(),
+        };
+        output.begin_section(range.start, reference.clone(), section.source);
+        output.push_scope(
+            render_blocks_with_entries(&section.blocks, options),
+            Some(&reference),
+            Some(&coordinates),
+        );
+        render_artifact_sections(
+            output,
+            &section.children,
+            &coordinates,
+            depth.saturating_add(1),
+            options,
+        );
+    }
 }
 
 /// Render a complete query outline as a nested `CommonMark` list.
@@ -256,8 +467,6 @@ fn render_tldr(page: &TldrDocument) -> Vec<String> {
     }
     output
 }
-
-pub(crate) use inline::html_anchor;
 
 fn render_more_information(value: &str) -> String {
     let value = value.trim();

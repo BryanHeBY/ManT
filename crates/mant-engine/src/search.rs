@@ -15,10 +15,7 @@ use mant_protocol::{
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
 
-use crate::{
-    ResolvedContent,
-    output::{MarkdownOptions, render_markdown_with_options},
-};
+use crate::{ResolvedContent, output::render_addressable_markdown};
 
 mod owners;
 
@@ -72,10 +69,11 @@ pub fn search_query(
     request: &SearchQuery,
 ) -> Result<QuerySearch, SearchError> {
     validate_request(request)?;
-    let markdown = render_markdown_with_options(query, MarkdownOptions::ADDRESSABLE);
-    let lines = LineIndex::new(&markdown);
-    let owners = OwnerIndex::new(query, &markdown);
-    let searchable = SearchableText::new(&markdown, request.scope);
+    let artifact = render_addressable_markdown(query);
+    let markdown = &artifact.text;
+    let lines = LineIndex::new(markdown);
+    let owners = OwnerIndex::new(&artifact);
+    let searchable = SearchableText::new(markdown, request.scope);
     let matcher = build_matcher(request)?;
     let mut raw_matches = Vec::new();
 
@@ -107,7 +105,7 @@ pub fn search_query(
                 index,
                 found,
                 &searchable.text,
-                &markdown,
+                markdown,
                 &lines,
                 request.context_lines,
             )

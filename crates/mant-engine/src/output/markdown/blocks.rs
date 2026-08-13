@@ -1,15 +1,103 @@
 //! Maps native block nodes to portable `CommonMark` block constructs.
 
-use mant_ir::{Block, DefinitionItem, ListItem, ListKind, TableCell, TableRow};
+use mant_ir::{
+    Block, DefinitionIdentity, DefinitionItem, ListItem, ListKind, SourceSpan, TableCell, TableRow,
+};
 
 use super::MarkdownOptions;
-use super::inline::{code_span, escape_text, fenced_code, flatten_inline, render_inline};
+use super::inline::{
+    code_span, escape_text, fenced_code, flatten_inline, html_anchor, render_inline,
+};
+use crate::definitions::definition_entries;
+
+pub(super) struct RenderedBlocks {
+    pub(super) text: String,
+    pub(super) entries: Vec<RenderedEntry>,
+}
+
+pub(super) struct RenderedEntry {
+    pub(super) index: usize,
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) identity: DefinitionIdentity,
+    pub(super) source: Option<SourceSpan>,
+}
 
 pub(super) fn render_blocks(blocks: &[Block], options: MarkdownOptions) -> Vec<String> {
     blocks
         .iter()
         .filter_map(|block| render_block(block, options))
         .collect()
+}
+
+pub(super) fn render_blocks_with_entries(
+    blocks: &[Block],
+    options: MarkdownOptions,
+) -> RenderedBlocks {
+    let text = render_blocks(blocks, options).join("\n\n");
+    let mut entries = Vec::new();
+    if options.preserve_anchors {
+        let mut cursor = 0;
+        for (index, (entry, source)) in definition_entries(blocks).into_iter().enumerate() {
+            let Some(identity) = &entry.identity else {
+                continue;
+            };
+            let anchor = html_anchor(&identity.id);
+            let Some(relative) = text[cursor..].find(&anchor) else {
+                continue;
+            };
+            let start = cursor + relative;
+            let end = definition_item_end(&text, start);
+            entries.push(RenderedEntry {
+                index: index + 1,
+                start,
+                end,
+                identity: identity.clone(),
+                source,
+            });
+            cursor = start.saturating_add(anchor.len());
+        }
+    }
+    RenderedBlocks { text, entries }
+}
+
+fn definition_item_end(markdown: &str, anchor_start: usize) -> usize {
+    let line_start = markdown[..anchor_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    let prefix = &markdown[line_start..anchor_start];
+    if prefix.is_empty() {
+        return markdown.len();
+    }
+    let content_indent = prefix.chars().count();
+    let mut cursor = markdown[anchor_start..]
+        .find('\n')
+        .map_or(markdown.len(), |relative| anchor_start + relative + 1);
+    let mut after_blank = false;
+
+    while cursor < markdown.len() {
+        let end = markdown[cursor..]
+            .find('\n')
+            .map_or(markdown.len(), |relative| cursor + relative);
+        let line = &markdown[cursor..end];
+        if line.starts_with(prefix) {
+            return cursor;
+        }
+        if line.trim().is_empty() {
+            after_blank = true;
+        } else {
+            let indent = line
+                .chars()
+                .take_while(|character| *character == ' ')
+                .count();
+            if after_blank && indent < content_indent {
+                return cursor;
+            }
+            after_blank = false;
+        }
+        cursor = end.saturating_add(1);
+    }
+    markdown.len()
 }
 
 fn render_block(block: &Block, options: MarkdownOptions) -> Option<String> {

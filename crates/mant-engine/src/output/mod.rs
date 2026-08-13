@@ -9,7 +9,9 @@ pub use json::{
     render_excerpt_json, render_outline_json, render_query_json, render_search_json,
     render_update_json,
 };
-pub(crate) use markdown::html_anchor;
+pub(crate) use markdown::{
+    MarkdownArtifact, MarkdownNode, MarkdownSection, render_addressable_markdown,
+};
 pub use markdown::{
     MarkdownOptions, render_excerpt_markdown, render_excerpt_markdown_with_options,
     render_markdown, render_markdown_with_options, render_outline_markdown,

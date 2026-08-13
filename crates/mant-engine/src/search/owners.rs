@@ -1,18 +1,9 @@
-//! Resolves canonical Markdown offsets back to semantic manual nodes.
-//!
-//! Search itself operates on a visible-text projection.  This index is the
-//! complementary source map: it assigns each canonical Markdown offset to the
-//! most specific enclosing section or definition entry.
+//! Maps canonical Markdown offsets to renderer-supplied semantic node ranges.
 
-use mant_ir::{OutlinePath, Section, SourceSpan};
+use mant_ir::SourceSpan;
 use mant_protocol::{SearchNode, SearchSectionReference};
 
-use crate::{
-    ResolvedContent,
-    definitions::definition_entries,
-    output::html_anchor,
-    projection::{DOCUMENT_ROOT_ID, DOCUMENT_ROOT_TITLE},
-};
+use crate::output::{MarkdownArtifact, MarkdownNode, MarkdownSection};
 
 #[derive(Clone)]
 pub(super) struct Owner {
@@ -33,68 +24,82 @@ pub(super) struct OwnerIndex {
 }
 
 impl OwnerIndex {
-    pub(super) fn new(query: &ResolvedContent, markdown: &str) -> Self {
+    pub(super) fn new(artifact: &MarkdownArtifact) -> Self {
         let mut sections = Vec::new();
         let mut entries = Vec::new();
         let mut root = None;
-        if let Some(manual) = &query.document {
-            collect_section_owners(&manual.sections, &[], markdown, &mut sections, &mut entries);
-            sections.sort_by_key(|owner| owner.start);
-            for index in 0..sections.len() {
-                sections[index].end = sections
-                    .get(index + 1)
-                    .map_or(markdown.len(), |next| next.start);
-            }
-            for entry in &mut entries {
-                if let Some(section_end) = entry.section.as_ref().and_then(|reference| {
-                    sections
-                        .iter()
-                        .find(|section| {
-                            section.section.as_ref().map(|value| value.id.as_str())
-                                == Some(reference.id.as_str())
-                        })
-                        .map(|section| section.end)
-                }) {
-                    entry.end = entry.end.min(section_end);
-                }
-            }
-            entries.sort_by_key(|owner| owner.start);
-            if !manual.blocks.is_empty() {
-                let anchor = html_anchor(DOCUMENT_ROOT_ID);
-                if let Some(start) = markdown.find(&anchor) {
-                    root = Some(Owner {
-                        start,
-                        end: sections
-                            .first()
-                            .map_or(markdown.len(), |section| section.start),
-                        node: SearchNode::DocumentRoot {
-                            path: OutlinePath::DocumentRoot.to_string().into(),
-                            id: DOCUMENT_ROOT_ID.into(),
-                            title: DOCUMENT_ROOT_TITLE.to_owned(),
-                        },
-                        section: None,
-                        source: None,
-                    });
-                }
+        let mut tldr = None;
+
+        for mapped in &artifact.nodes {
+            let range = mapped.range.clone();
+            let owner = match &mapped.node {
+                MarkdownNode::Tldr => Owner {
+                    start: range.start,
+                    end: range.end,
+                    node: SearchNode::Tldr {
+                        path: "0".to_owned().into(),
+                        id: "tldr".into(),
+                        title: "TLDR QUICK REFERENCE".to_owned(),
+                    },
+                    section: None,
+                    source: None,
+                },
+                MarkdownNode::DocumentRoot => Owner {
+                    start: range.start,
+                    end: range.end,
+                    node: SearchNode::DocumentRoot {
+                        path: "root".to_owned().into(),
+                        id: mant_ir::DOCUMENT_ROOT_ID.into(),
+                        title: "OVERVIEW".to_owned(),
+                    },
+                    section: None,
+                    source: None,
+                },
+                MarkdownNode::DocumentSection { section, source } => Owner {
+                    start: range.start,
+                    end: range.end,
+                    node: SearchNode::DocumentSection {
+                        path: section.path.to_string().into(),
+                        id: section.id.clone(),
+                        title: section.title.clone(),
+                    },
+                    section: Some(section_reference(section)),
+                    source: *source,
+                },
+                MarkdownNode::DocumentEntry {
+                    path,
+                    id,
+                    title,
+                    role,
+                    case,
+                    names,
+                    section,
+                    source,
+                } => Owner {
+                    start: range.start,
+                    end: range.end,
+                    node: SearchNode::DocumentEntry {
+                        path: path.to_string().into(),
+                        id: id.clone(),
+                        title: title.clone(),
+                        role: *role,
+                        case: *case,
+                        names: names.clone(),
+                    },
+                    section: section.as_ref().map(section_reference),
+                    source: *source,
+                },
+            };
+            match mapped.node {
+                MarkdownNode::Tldr => tldr = Some(owner),
+                MarkdownNode::DocumentRoot => root = Some(owner),
+                MarkdownNode::DocumentSection { .. } => sections.push(owner),
+                MarkdownNode::DocumentEntry { .. } => entries.push(owner),
             }
         }
-        let document_start = root.as_ref().map_or_else(
-            || sections.first().map_or(markdown.len(), |owner| owner.start),
-            |owner| owner.start,
-        );
-        let tldr = query.tldr.as_ref().and_then(|_| {
-            markdown.find("## TLDR").map(|start| Owner {
-                start,
-                end: document_start,
-                node: SearchNode::Tldr {
-                    path: "0".to_owned().into(),
-                    id: "tldr".into(),
-                    title: "TLDR QUICK REFERENCE".to_owned(),
-                },
-                section: None,
-                source: None,
-            })
-        });
+
+        sections.sort_by_key(|owner| owner.start);
+        entries.sort_by_key(|owner| owner.start);
         let mut maximum_end = 0;
         let entry_prefix_max_end = entries
             .iter()
@@ -152,115 +157,10 @@ impl OwnerIndex {
     }
 }
 
-fn collect_section_owners(
-    sections: &[Section],
-    parent: &[usize],
-    markdown: &str,
-    section_owners: &mut Vec<Owner>,
-    entry_owners: &mut Vec<Owner>,
-) {
-    for (index, section) in sections.iter().enumerate() {
-        let mut coordinates = parent.to_vec();
-        coordinates.push(index + 1);
-        let path =
-            OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
-        let anchor = html_anchor(&section.id);
-        let Some(start) = markdown.find(&anchor) else {
-            continue;
-        };
-        let section_reference = SearchSectionReference {
-            path: path.to_string().into(),
-            id: section.id.clone(),
-            title: section.title.clone(),
-        };
-        section_owners.push(Owner {
-            start,
-            end: markdown.len(),
-            node: SearchNode::DocumentSection {
-                path: path.to_string().into(),
-                id: section.id.clone(),
-                title: section.title.clone(),
-            },
-            section: Some(section_reference.clone()),
-            source: section.source,
-        });
-
-        for (entry_index, (entry, source)) in
-            definition_entries(&section.blocks).into_iter().enumerate()
-        {
-            let Some(identity) = &entry.identity else {
-                continue;
-            };
-            let entry_anchor = html_anchor(&identity.id);
-            let Some(entry_start) = markdown[start..]
-                .find(&entry_anchor)
-                .map(|relative| start + relative)
-            else {
-                continue;
-            };
-            entry_owners.push(Owner {
-                start: entry_start,
-                end: definition_item_end(markdown, entry_start),
-                node: SearchNode::DocumentEntry {
-                    path: OutlinePath::entry(Some(&coordinates), entry_index + 1)
-                        .expect("enumerated entry paths are one-based")
-                        .to_string()
-                        .into(),
-                    id: identity.id.clone(),
-                    title: identity.names.join(", "),
-                    role: identity.role,
-                    case: identity.case,
-                    names: identity.names.clone(),
-                },
-                section: Some(section_reference.clone()),
-                source,
-            });
-        }
-        collect_section_owners(
-            &section.children,
-            &coordinates,
-            markdown,
-            section_owners,
-            entry_owners,
-        );
+fn section_reference(section: &MarkdownSection) -> SearchSectionReference {
+    SearchSectionReference {
+        path: section.path.to_string().into(),
+        id: section.id.clone(),
+        title: section.title.clone(),
     }
-}
-
-fn definition_item_end(markdown: &str, anchor_start: usize) -> usize {
-    let line_start = markdown[..anchor_start]
-        .rfind('\n')
-        .map_or(0, |index| index + 1);
-    let prefix = &markdown[line_start..anchor_start];
-    if prefix.is_empty() {
-        return markdown.len();
-    }
-    let content_indent = prefix.chars().count();
-    let mut cursor = markdown[anchor_start..]
-        .find('\n')
-        .map_or(markdown.len(), |relative| anchor_start + relative + 1);
-    let mut after_blank = false;
-
-    while cursor < markdown.len() {
-        let end = markdown[cursor..]
-            .find('\n')
-            .map_or(markdown.len(), |relative| cursor + relative);
-        let line = &markdown[cursor..end];
-        if line.starts_with(prefix) {
-            return cursor;
-        }
-        if line.trim().is_empty() {
-            after_blank = true;
-        } else {
-            let indent = line
-                .chars()
-                .take_while(|character| *character == ' ')
-                .count();
-            if after_blank && indent < content_indent {
-                return cursor;
-            }
-            after_blank = false;
-        }
-        cursor = end.saturating_add(1);
-    }
-    markdown.len()
 }

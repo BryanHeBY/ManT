@@ -1,16 +1,16 @@
 //! Contract-oriented tests for `CommonMark` structure and escaping.
 
 use mant_ir::{
-    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, ListItem,
-    ListKind, Section, SourceFormat, TableCell, TableRow, TldrCommandPart, TldrDocument,
-    TldrExample, TldrOrigin,
+    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
+    DocumentMeta, DocumentSource, Inline, LayoutHint, ListItem, ListKind, Section, SourceFormat,
+    TableCell, TableRow, TldrCommandPart, TldrDocument, TldrExample, TldrOrigin,
 };
 use mant_protocol::QueryBundle;
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use super::{
-    MarkdownOptions, render_excerpt_markdown, render_markdown, render_markdown_with_options,
-    render_outline_markdown,
+    MarkdownNode, MarkdownOptions, render_addressable_markdown, render_excerpt_markdown,
+    render_markdown, render_markdown_with_options, render_outline_markdown,
 };
 use crate::{ResolvedContent, build_outline, select_excerpt};
 
@@ -462,6 +462,67 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
     assert!(excerpt_markdown.contains("## Common options"));
     assert!(excerpt_markdown.contains("**child details**"));
     assert!(!excerpt_markdown.contains("parent details"));
+}
+
+#[test]
+fn addressable_rendering_returns_exact_semantic_node_ranges() {
+    let entry = DefinitionItem {
+        identity: Some(DefinitionIdentity {
+            id: "help-entry".into(),
+            role: DefinitionRole::Option,
+            case: DefinitionCase::Sensitive,
+            names: vec!["--help".to_owned()],
+        }),
+        terms: vec![vec![
+            Inline::Anchor {
+                id: "help-entry".into(),
+            },
+            Inline::Code {
+                value: "--help".to_owned(),
+            },
+        ]],
+        description: vec![paragraph(vec![Inline::Text {
+            value: "Show help.".to_owned(),
+        }])],
+        inline_term: false,
+        spacing_before_lines: None,
+    };
+    let query = ResolvedContent {
+        address: None,
+        label: "demo".to_owned(),
+        document: Some(manual(vec![section(
+            "OPTIONS",
+            vec![
+                Block::DefinitionList {
+                    items: vec![entry],
+                    compact: true,
+                    layout: LayoutHint::default(),
+                    source: None,
+                },
+                paragraph(vec![Inline::Text {
+                    value: "Following section prose.".to_owned(),
+                }]),
+            ],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let artifact = render_addressable_markdown(&query);
+    let mapped = artifact
+        .nodes
+        .iter()
+        .find(|mapped| matches!(mapped.node, MarkdownNode::DocumentEntry { .. }))
+        .expect("semantic entry range");
+    let MarkdownNode::DocumentEntry { path, id, .. } = &mapped.node else {
+        unreachable!();
+    };
+    assert_eq!(path.to_string(), "1/o1");
+    assert_eq!(id, "help-entry");
+    let rendered = &artifact.text[mapped.range.clone()];
+    assert!(rendered.contains("--help"));
+    assert!(rendered.contains("Show help."));
+    assert!(!rendered.contains("Following section prose."));
 }
 
 #[cfg(unix)]
