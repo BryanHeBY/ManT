@@ -867,6 +867,7 @@ fn windows_suffix_fixture() -> PathBuf {
     let sources = data_root.join("sources");
     let alpha = sources.join("alpha");
     let beta = sources.join("beta");
+    fs::create_dir_all(&documents).expect("create personal documents");
     fs::create_dir_all(&alpha).expect("create alpha source");
     fs::create_dir_all(&beta).expect("create beta source");
     fs::write(
