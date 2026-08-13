@@ -157,21 +157,43 @@ for _ in {1..200}; do
 done
 [[ -n $window ]] || fail "timed out waiting for the xterm window"
 
-# F10 opens File; Right selects View; Down twice selects Expand All.
-sleep 0.5
+# The X window can become visible before xterm has exec'd ManT and before the
+# first TUI frame is painted. Wait for a non-trivial frame so injected keys do
+# not land in the terminal input queue and get echoed as escape sequences.
+ready_probe="$temporary/ready.png"
+ready=
+for _ in {1..100}; do
+  import -silent -window "$window" "$ready_probe"
+  colors=$(magick identify -format '%k' "$ready_probe")
+  if ((colors >= 512)); then
+    ready=1
+    break
+  fi
+  if ! kill -0 "$terminal_pid" 2>/dev/null; then
+    wait "$terminal_pid" || true
+    fail "ManT reader exited before painting its first frame"
+  fi
+  sleep 0.05
+done
+[[ -n $ready ]] || fail "timed out waiting for the first ManT reader frame"
+
+# F10 opens Manual; Right selects View; Down twice selects Expand All.
 xdotool windowfocus --sync "$window"
-xdotool key --clearmodifiers F10 Right Down Down Return
+xdotool key --clearmodifiers --delay 100 F10 Right Down Down Return
 sleep 0.5
 
 printf '==> capture expanded reader\n'
 captured="$temporary/mant-reader.png"
 import -silent -window "$window" "$captured"
 magick "$captured" -strip "PNG:$output_temporary"
+dimensions=$(magick identify -format '%wx%h' "$output_temporary")
+colors=$(magick identify -format '%k' "$output_temporary")
+((colors >= 512)) \
+  || fail "captured frame is unexpectedly blank ($colors colors)"
 chmod 0644 "$output_temporary"
 mv "$output_temporary" "$output"
 
-dimensions=$(magick identify -format '%wx%h' "$output")
-printf 'updated %s (%s)\n' "$output" "$dimensions"
+printf 'updated %s (%s, %s colors)\n' "$output" "$dimensions" "$colors"
 
 xdotool windowfocus --sync "$window" 2>/dev/null || true
 xdotool key --clearmodifiers q 2>/dev/null || true
