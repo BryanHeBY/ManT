@@ -52,11 +52,10 @@ replaces the mixed `mant-ast` package with separate `mant-ir` and
 `mant-protocol` packages under the same lockstep policy:
 
 ```text
-mant-ir ──> mant-protocol ───────────────┐
-   └─────────────────────────────────────┤
-mant-sources ────────────────────────────┤
-libmandoc-rs ────────────────────────────┴─> mant-engine ─> mant-ui ─> mant
-mant-sources ─────────────────────────────────────────────────────> mant
+mant-ir ─> mant-protocol
+mant-ir + mant-protocol ─> mant-ui
+mant-ir + mant-protocol + mant-sources + libmandoc-rs ─> mant-engine
+mant-ir + mant-protocol + mant-sources + mant-engine + mant-ui ─> mant
 ```
 
 Each previously published package must configure the same crates.io Trusted

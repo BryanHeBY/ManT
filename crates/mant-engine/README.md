@@ -1,9 +1,9 @@
 # mant-engine
 
-`mant-engine` is ManT's renderer-independent document engine. It resolves local
-documents through `mant-sources` into the contracts from `mant-protocol`, builds
-semantic projections, and produces deterministic output without owning a
-terminal or command-line process.
+`mant-engine` is ManT's document execution layer. It resolves local documents
+through `mant-sources`, lowers every source into the semantic center in
+`mant-ir`, builds in-memory and versioned protocol projections, and produces
+deterministic output without owning a terminal or command-line process.
 
 ## What this crate provides
 
@@ -63,14 +63,15 @@ transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
 
 ## Layering
 
-`mant-engine` returns owned `mant-protocol` values and does not expose libmandoc C
-structures. Applications that only need raw roff syntax should use
+`mant-engine` returns an owned `mant_ir::ResolvedContent` for in-process use and
+owned `mant-protocol` values at versioned machine boundaries. It does not expose
+libmandoc C structures. Applications that only need raw roff syntax should use
 [`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
 that need the complete command or reader should install
 [`mant`](https://crates.io/crates/mant).
 
 Architecture and source-resolution details are documented in the
-[ManT native-core reference](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/native-core.md).
+[ManT native-engine reference](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/native-engine.md).
 
 ## License
 

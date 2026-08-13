@@ -1,9 +1,10 @@
 # mant-ui
 
 `mant-ui` is the Ratatui frontend component used by the `mant` executable. It
-renders ManT's normalized `mant-protocol::QueryBundle` and owns interactive
-navigation, search, scrolling, links, menus, mouse input, and terminal
-presentation.
+renders ManT's in-memory `mant_ir::ResolvedContent` directly and owns
+interactive navigation, search, scrolling, links, menus, mouse input, and
+terminal presentation. Protocol DTOs are used only for catalog and search
+boundaries that already have versioned response shapes.
 
 ## What this crate provides
 

@@ -1,4 +1,4 @@
-# ManT architecture
+# ManT native engine and crate boundaries
 
 ManT is one native documentation engine with three presentation boundaries:
 an interactive TUI, deterministic command-line projections, and a read-only
@@ -15,14 +15,15 @@ The architecture follows four constraints:
 ## Layer model
 
 ```text
-mant              CLI, mode selection, source updates, request JSON, MCP
-├─ mant-ui         Ratatui state machine and terminal presentation
-└─ mant-engine       resolution, parsing, lowering, projections, output
-   ├─ mant-sources local Markdown registry and optional update machinery
-   ├─ mant-ir      normalized in-memory document model and traversal
-   ├─ mant-protocol versioned process DTOs and JSON Schema
-   └─ libmandoc-rs
-      └─ vendored libmandoc + private C shim
+source adapters
+└─ mant-engine          resolution, lowering, composition, query, rendering
+   ├─ mant-sources      local Markdown registry and optional updates
+   ├─ libmandoc-rs     owned native parser boundary
+   └─ mant-ir           semantic center: ResolvedContent and document IR
+      ├───────────────> mant-ui and human renderers (direct in-memory use)
+      └─ projection ──> mant-protocol ──> MCP, request JSON, and CLI JSON
+
+mant                    composes modes, policies, updates, terminal, and stdio
 ```
 
 The crates have deliberately asymmetric responsibilities:
@@ -37,10 +38,12 @@ The crates have deliberately asymmetric responsibilities:
 | `mant-ui` | Interactive navigation, discovery, links, history, search, layout, and terminal lifecycle | Filesystem lookup or source mutation |
 | `mant` | User-facing modes, terminal detection, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
-Interactive queries pass an in-memory `ResolvedContent` directly from
-`mant-engine` to `mant-ui`. They do not serialize through JSON or spawn a child
-process. Explicit output, redirection, one-shot request JSON, and MCP project
-that value into `mant-protocol` DTOs at their process boundaries.
+`mant-ir` is deliberately the semantic center, while `mant-engine` is the
+execution layer that creates and operates on it. Interactive queries pass an
+in-memory `ResolvedContent` directly to `mant-ui`; human renderers also consume
+the in-memory model. They do not serialize through JSON or spawn a child
+process. One-shot request JSON, CLI JSON, JSON Schema, and MCP cross
+`mant-protocol`, the only supported external machine boundary.
 
 ## Shared document model
 
@@ -64,7 +67,9 @@ The model carries intent that a renderer cannot safely recover from text:
   variables, and environment variables;
 - `Inline::Link` has an explicit target kind for a hierarchical Markdown
   document, installed manual, page-local section, external URI, or email;
-- `NodePath` distinguishes protocol selectors from filesystem paths and labels;
+- `OutlinePath` validates internal one-based outline addresses; its protocol
+  projection is the serialized `NodePath`, distinct from filesystem paths and
+  labels;
 - external and email links remain distinct from local navigation without
   multiplying overlapping inline node variants.
 
@@ -175,10 +180,11 @@ Complete queries, outlines, excerpts, semantic explanations, searches, and
 catalog results have independent versioned contracts. Human text and
 CommonMark are renderers over those values rather than alternate parsers.
 
-Search renders one canonical CommonMark projection, builds visible-text byte
-mappings, and reports both a reusable semantic node and exact generated
-Markdown coordinates. This keeps literal and regular-expression results
-consistent across text and JSON presentation.
+Search renders one canonical CommonMark projection together with structured
+semantic node ranges. A visible-text map then preserves exact generated
+Markdown coordinates without rediscovering owners from rendered anchors. This
+keeps literal and regular-expression results consistent across text and JSON
+presentation.
 
 ### MCP stdio
 

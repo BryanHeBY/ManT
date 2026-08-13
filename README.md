@@ -273,14 +273,14 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
-![ManT architecture: three source pipelines converge on mant-engine, mant-ir, and versioned protocol boundaries](docs/assets/architecture.svg)
+![ManT architecture: source adapters enter mant-engine, which contains the mant-ir semantic center; the TUI and human renderers consume it directly, while external consumers cross mant-protocol](docs/assets/architecture.svg)
 
-Rust owns source discovery, parsing, the normalized document IR, tldr
-integration, output, and terminal presentation. Interactive use passes an
-in-memory `ResolvedContent` containing `mant-ir` nodes directly to `mant-ui`;
-external process consumers receive v7 DTOs from `mant-protocol`. Git and
-archive updates are an optional native CLI capability layered on
-`mant-sources`, not part of document reads or MCP.
+`mant-ir` is the semantic center nested inside the `mant-engine` execution
+layer. Interactive use passes its in-memory `ResolvedContent` directly to
+`mant-ui`, and human renderers operate on the same model. External process
+consumers cross the versioned `mant-protocol` boundary instead. Git and archive
+updates are an optional native CLI capability layered on `mant-sources`, not
+part of document reads or MCP.
 
 ## Documentation
 
@@ -288,7 +288,7 @@ archive updates are an optional native CLI capability layered on
 - [mant self manual](docs/manuals/mant.md)
 - [Document source configuration and updates](docs/sources.md)
 - [JSON protocol and Schema reference](docs/protocol.md)
-- [Native architecture](docs/architecture/native-core.md)
+- [Native engine and crate boundaries](docs/architecture/native-engine.md)
 - [Development guide and repository map](docs/development.md)
 - [Maintainer release procedure](docs/releasing.md)
 

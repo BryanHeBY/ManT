@@ -108,13 +108,13 @@ LICENSE                       Apache-2.0 terms for ManT-authored work
 THIRD_PARTY_NOTICES.md        Repository-wide third-party distribution map
 THIRD_PARTY_LICENSES.html     Generated Rust dependency license report
 SECURITY.md                   Supported versions and private reporting policy
-crates/mant-ir/                   Normalized document IR, visitors, identities, and indexes
-crates/mant-protocol/             Versioned request/response DTOs and JSON Schema
-crates/mant-sources/         Local Markdown registry and transactional source updates
-crates/mant-engine/            Document loading, libmandoc lowering, projections, output
-crates/mant-ui/              Ratatui reader, navigation, search, and terminal styling
-crates/mant/                 Mode selection, CLI, request JSON, and MCP stdio boundary
-crates/libmandoc-rs/         Owned libmandoc parse API, private C shim, vendored source
+crates/mant-ir/               Semantic IR, ResolvedContent, paths, visitors, validation, indexes
+crates/mant-protocol/         Versioned request/response DTOs and JSON Schema
+crates/mant-sources/          Local Markdown registry and transactional source updates
+crates/mant-engine/           Resolution, lowering, projections, search, and rendering
+crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
+crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
+crates/libmandoc-rs/          Owned libmandoc parse API, private C shim, vendored source
 fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
@@ -220,7 +220,7 @@ When changing a versioned IR projection or protocol type, update the Rust contra
 generated-schema, process, and projection tests in the same change. External
 stdio remains a closed boundary: unknown request fields and incompatible
 response shapes fail before application code receives them. The in-process UI
-consumes the typed `QueryBundle` directly and never serializes it first.
+consumes `mant_ir::ResolvedContent` directly and never serializes it first.
 
 ## Native fixtures
 
