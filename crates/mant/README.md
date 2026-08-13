@@ -1,6 +1,6 @@
 # mant
 
-`mant` is ManT's local-first documentation command. It turns native man/mdoc
+`mant` is `ManT`'s local-first documentation command. It turns native man/mdoc
 pages and Markdown libraries into one catalog exposed as an interactive TUI,
 a deterministic structured CLI, and a read-only stdio MCP server. Every
 interface consumes the same normalized document model.
@@ -91,7 +91,7 @@ protocol messages only; use CLI JSON output to inspect lowering diagnostics.
 
 ## Document sources
 
-On Linux, macOS, and Windows, ManT indexes raw, gzip, and zstd manual sources
+On Linux, macOS, and Windows, `ManT` indexes raw, gzip, and zstd manual sources
 and parses their roff through bundled libmandoc. It does not require a system
 `man` or `mandoc` executable at runtime. A leaf manual-page symlink may point
 outside its indexed root, but directory symlinks are not traversed and every
@@ -117,7 +117,7 @@ complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/doc
 When compatible local tldr data exists, an unqualified query prepends it as
 reserved outline node `0`. `--tldr` selects only that node, while `--manual`
 and `--man-section` select only native manual content. Reads prefer installed-client
-caches and then ManT's private cache; `mant --update-tldr` updates through an
+caches and then `ManT`'s private cache; `mant --update-tldr` updates through an
 installed client or the private checkout.
 
 One-off physical input uses `mant --input PATH`; Markdown and plain/gzip/zstd
@@ -127,6 +127,7 @@ roff files are supported. Standard input additionally requires
 
 ## Crate architecture
 
+- `mant-ir` defines the source-neutral in-memory document and quick-reference model.
 - `mant-protocol` defines the versioned document and query contracts.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
 - `mant-sources` owns local Markdown discovery and optional source updates.
@@ -134,10 +135,16 @@ roff files are supported. Standard input additionally requires
 - `mant-ui` provides the source-neutral Ratatui frontend.
 - `mant` owns command-line, terminal-selection, and MCP process boundaries.
 
+The package also exposes `mant::run` for deterministic single-invocation tests
+or embedding with explicit input/output streams, and `mant::run_process` for
+the real terminal-sensitive process including MCP. Most library users should
+prefer the narrower component crate matching their boundary instead of
+embedding the complete command host.
+
 The complete [user manual](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant.md),
 [protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-protocol.md),
 and [release archives](https://github.com/BryanHeBY/ManT/releases) live in the
-ManT repository.
+`ManT` repository.
 
 ## License
 

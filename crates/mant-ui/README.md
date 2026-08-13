@@ -1,7 +1,7 @@
 # mant-ui
 
 `mant-ui` is the Ratatui frontend component used by the `mant` executable. It
-renders ManT's in-memory `mant_ir::ResolvedContent` directly and owns
+renders `ManT`'s in-memory `mant_ir::ResolvedContent` directly and owns
 interactive navigation, search, scrolling, links, menus, mouse input, and
 terminal presentation. Protocol DTOs are used only for catalog and search
 boundaries that already have versioned response shapes.
@@ -27,6 +27,21 @@ boundaries that already have versioned response shapes.
 Command-line parsing and document loading deliberately remain outside this
 crate.
 
+## Host boundary
+
+```text
+mant host
+├─ supplies ResolvedContent ───────────────> App / DocumentView
+├─ answers CatalogQuery ──────────────────> live finder
+├─ resolves an exact DocumentAddress <──── cross-document activation
+└─ decides whether to open HTTP(S)/mailto < external-link request
+```
+
+The UI never scans the filesystem, interprets a source path, downloads data,
+or opens a URI by itself. It emits typed requests to its host and keeps
+page-local jumps in memory. This makes the same component usable by the
+`mant` binary and by another Ratatui application with stricter host policy.
+
 ## Basic use
 
 The convenience boundary owns the terminal event loop:
@@ -44,6 +59,11 @@ mant_ui::run(&query)?;
 `run` requires an interactive terminal. Callers that already own a Ratatui
 event loop can construct `mant_ui::App`, route input through its handlers, and
 invoke `App::draw` from their frame callback instead.
+
+Use `run_with_catalog` when cross-document discovery and navigation are
+required. Its callbacks receive versioned catalog queries, exact logical
+document addresses, and already-classified external URIs; callback failures
+return to the UI as notices rather than giving the frontend hidden authority.
 
 ## Platform behavior
 

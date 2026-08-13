@@ -1,4 +1,4 @@
-//! Manual source, query, and output engine independent from its process hosts.
+#![doc = include_str!("../README.md")]
 
 mod bounded;
 mod catalog;

@@ -1,8 +1,4 @@
-//! Safe ownership boundary around the pinned libmandoc parser.
-//!
-//! The C shim completes and copies a parse before returning. Rust therefore
-//! never observes libmandoc's private `roff_node` layout, and the global C
-//! parser state is serialized inside this crate.
+#![doc = include_str!("../README.md")]
 
 #[cfg(test)]
 mod build_config;

@@ -1,4 +1,4 @@
-//! Local Markdown registry and transactional source acquisition for `ManT`.
+#![doc = include_str!("../README.md")]
 
 #[cfg(feature = "update")]
 mod archive;

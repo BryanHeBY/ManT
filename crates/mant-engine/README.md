@@ -1,6 +1,6 @@
 # mant-engine
 
-`mant-engine` is ManT's document execution layer. It resolves local documents
+`mant-engine` is `ManT`'s document execution layer. It resolves local documents
 through `mant-sources`, lowers every source into the semantic center in
 `mant-ir`, builds in-memory and versioned protocol projections, and produces
 deterministic output without owning a terminal or command-line process.
@@ -21,6 +21,31 @@ deterministic output without owning a terminal or command-line process.
 
 Process argument parsing, MCP transport, and interactive presentation remain
 outside this crate.
+
+## Execution pipeline
+
+```text
+logical selector / physical input
+              │
+              v
+DocumentResolver ──> Markdown parser or libmandoc lowering
+              │
+              v
+      mant_ir::ResolvedContent
+         ├─> outline / excerpt / search projections
+         ├─> Markdown / text / man-style renderers
+         └─> versioned mant-protocol responses
+```
+
+| Need | Preferred API |
+| --- | --- |
+| Reuse one stable discovery snapshot | `DocumentResolver` |
+| Resolve a complete typed request | `resolve_query_with_policy` |
+| Resolve and project its requested view | `execute_query` |
+| Parse in-memory Markdown without discovery | `parse_markdown` or `query_markdown_text` |
+| Parse in-memory roff without discovery | `parse_manual_bytes` or `query_roff_bytes` |
+| Build a focused result from existing content | `build_outline_with_detail`, `select_excerpt`, `search_query` |
+| Produce human or JSON output | The `render_*` functions |
 
 ## Basic use
 
@@ -49,6 +74,11 @@ request's `view` through one engine boundary. Use `parse_markdown` when the
 caller needs the parsed document and tldr preface without query composition.
 `DocumentResolver` can be reused when several operations must share one lazy
 filesystem snapshot; constructing a new resolver refreshes discovery.
+
+The engine returns `mant_ir::ResolvedContent` for trusted in-process callers
+and creates `mant-protocol` projections only at an external machine boundary.
+Serializing the IR directly is not a supported substitute for those versioned
+DTOs.
 
 ## Platform behavior
 

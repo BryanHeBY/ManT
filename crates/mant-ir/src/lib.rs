@@ -1,4 +1,4 @@
-//! Source-neutral document intermediate representation shared by `ManT`.
+#![doc = include_str!("../README.md")]
 
 mod address;
 mod document;

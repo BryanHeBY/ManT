@@ -1,4 +1,4 @@
-//! Versioned process contracts for `ManT`'s CLI, JSON, and MCP boundaries.
+#![doc = include_str!("../README.md")]
 
 mod catalog;
 mod document;

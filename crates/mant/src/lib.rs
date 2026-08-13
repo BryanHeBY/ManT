@@ -1,8 +1,4 @@
-//! Public process boundary for `ManT`'s native document CLI.
-//!
-//! `mant` is both an interactive reader and an agent-friendly command with a
-//! versioned stdio boundary. Standard output is reserved for the requested
-//! document; diagnostics go to standard error.
+#![doc = include_str!("../README.md")]
 
 mod arguments;
 mod error;

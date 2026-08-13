@@ -18,6 +18,25 @@ The crate is a parser layer only.  It intentionally does not render terminal
 output or HTML, locate system manual pages, interpret application-specific
 section models, or run a pager.
 
+## Boundary model
+
+```text
+plain / gzip / zstd source
+          │
+          v
+Rust transport and policy ──> private C shim ──> vendored libmandoc 1.14.6
+          ^                                          │
+          └──────── owned ParseReport <──────────────┘
+                     ├─ Document syntax tree
+                     └─ structured diagnostics
+```
+
+The returned tree describes validated roff syntax: macro names, node roles,
+fonts, lists, displays, tables, equations, locations, and tags. It is not
+`ManT`'s source-neutral document IR. Consumers that want normalized sections,
+semantic entries, typed links, or renderers should use `mant-engine` and
+`mant-ir` instead.
+
 ## Basic use
 
 ```rust,no_run
@@ -48,6 +67,10 @@ caller explicitly chooses, rejects absolute and lexical parent paths, and
 does not fall back to the process working directory. Native C file inclusion
 is currently Unix-only; Windows callers resolve sources first and use the
 default memory-only policy.
+
+Parser sessions are serialized because relevant upstream state is
+process-global. A `Parser` value is inexpensive configuration, not an
+independent parallel C parser instance.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.

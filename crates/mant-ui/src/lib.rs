@@ -1,8 +1,4 @@
-//! Ratatui frontend for the renderer-neutral `ManT` document model.
-//!
-//! The crate is intentionally independent from command-line parsing. The final
-//! `mant` process can therefore choose between interactive and structured
-//! output without making the UI another process boundary.
+#![doc = include_str!("../README.md")]
 
 mod app;
 mod code;
