@@ -35,6 +35,8 @@ run "check screenshot script syntax" bash -n scripts/update-reader-screenshot.sh
 run "check product build script syntax" bash -n scripts/build-and-smoke.sh
 run "check CI verification script syntax" bash -n scripts/find-successful-ci.sh
 run "test Rust workspace" cargo test --locked --workspace
+run "build docs.rs documentation" \
+  env RUSTDOCFLAGS=-Dwarnings cargo doc --locked --workspace --all-features --no-deps
 run "lint Rust workspace" \
   cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 run "compile fuzz targets" \

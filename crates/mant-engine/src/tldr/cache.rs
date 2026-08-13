@@ -33,8 +33,11 @@ const ALL_PLATFORMS: &[&str] = &[
 /// Native host families supported by `ManT` distributions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HostPlatform {
+    /// Linux filesystem and environment conventions.
     Linux,
+    /// macOS filesystem and environment conventions.
     Macos,
+    /// Windows filesystem and environment conventions.
     Windows,
 }
 
@@ -60,15 +63,24 @@ impl HostPlatform {
 /// Offline cache discovery or page-read failure.
 #[derive(Debug)]
 pub enum TldrCacheError {
+    /// The build target has no defined cache convention.
     UnsupportedPlatform,
+    /// A Unix-like cache path requires `HOME`, but none is available.
     MissingHomeDirectory,
+    /// A Windows cache path requires `LOCALAPPDATA`, but none is available.
     MissingLocalAppData,
+    /// A selected cache page could not be read.
     Read {
+        /// Physical cached page path.
         path: PathBuf,
+        /// Underlying filesystem failure.
         source: io::Error,
     },
+    /// A selected cache page did not satisfy the tldr dialect.
     Parse {
+        /// Physical cached page path.
         path: PathBuf,
+        /// Structured tldr parser failure.
         source: TldrParseError,
     },
 }

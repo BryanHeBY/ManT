@@ -28,7 +28,9 @@ pub enum RegisteredDocumentOrigin {
 pub struct RegisteredDocument {
     /// Extension-free path relative to this document's origin.
     pub logical_path: String,
+    /// Absolute path of the readable Markdown file.
     pub path: PathBuf,
+    /// Storage namespace used for precedence and explicit selection.
     pub origin: RegisteredDocumentOrigin,
 }
 

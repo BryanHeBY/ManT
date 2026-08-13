@@ -45,17 +45,21 @@ use crate::{
 
 type SpannedEvent<'a> = (Event<'a>, Range<usize>);
 
-/// Complete result of parsing one ManT-flavoured Markdown input.
+/// Complete result of parsing one `ManT`-flavoured Markdown input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedMarkdown {
+    /// Authoritative normalized Markdown document.
     pub document: Document,
+    /// Optional document-owned quick reference.
     pub tldr: Option<TldrDocument>,
 }
 
 /// Invalid structure in `ManT`'s optional top-level Markdown extension.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MarkdownParseError {
+    /// The top-level `ManT` tldr container is malformed.
     TldrDirective(TldrDirectiveError),
+    /// Embedded tldr Markdown is structurally invalid.
     TldrPage(TldrParseError),
 }
 

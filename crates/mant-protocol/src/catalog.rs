@@ -10,6 +10,7 @@ use crate::{SearchCase, SearchSyntax};
 /// Exact schema marker for a local document catalog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum CatalogSchema {
+    /// Version 7 of the document-catalog protocol.
     #[serde(rename = "mant.catalog/v7")]
     V7,
 }
@@ -18,7 +19,9 @@ pub enum CatalogSchema {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum CatalogDocumentKind {
+    /// Registered Markdown documents.
     Markdown,
+    /// Native manual pages.
     Manual,
 }
 
@@ -26,21 +29,29 @@ pub enum CatalogDocumentKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CatalogQuery {
+    /// Optional name or catalog-path pattern.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pattern: Option<String>,
+    /// Pattern language used by [`Self::pattern`].
     #[serde(default)]
     pub syntax: SearchSyntax,
+    /// Case-matching policy.
     #[serde(default)]
     pub case: SearchCase,
+    /// Optional document-family restriction.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<CatalogDocumentKind>,
+    /// Optional configured Markdown source name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Optional native manual category such as `1` or `3p`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manual_section: Option<String>,
+    /// Maximum rows returned after filtering.
     #[serde(default = "default_catalog_limit")]
     #[schemars(range(min = 1, max = 10000))]
     pub limit: u32,
+    /// Number of matching rows skipped before collecting results.
     #[serde(default)]
     pub offset: u32,
 }
@@ -64,6 +75,7 @@ impl Default for CatalogQuery {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSummary {
+    /// Stable logical document identity.
     pub address: DocumentAddress,
     /// Stable logical path used by tree and discovery frontends.
     pub catalog_path: String,
@@ -76,13 +88,20 @@ pub struct DocumentSummary {
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("$id" = "urn:mant:catalog:v7"))]
 pub struct DocumentCatalog {
+    /// Exact response schema discriminator.
     pub schema: CatalogSchema,
+    /// Total rows matching the filters before pagination.
     pub total: u32,
+    /// Number of rows present in [`Self::documents`].
     pub returned: u32,
+    /// Applied zero-based result offset.
     pub offset: u32,
+    /// Whether matching rows remain after this page.
     pub truncated: bool,
+    /// Offset for the next page, when one exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<u32>,
+    /// Deterministically ordered page of document summaries.
     pub documents: Vec<DocumentSummary>,
 }
 
@@ -92,10 +111,15 @@ pub struct DocumentCatalog {
 /// place a prefix after a mere substring or an exact name after either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CatalogMatchRank {
+    /// Complete name or path equality.
     Exact,
+    /// Pattern equals the final slash-delimited path component.
     ComponentSuffix,
+    /// Name or path begins with the pattern.
     Prefix,
+    /// Pattern occurs elsewhere in the name or path.
     Substring,
+    /// No literal pattern was supplied.
     Unranked,
 }
 
@@ -129,6 +153,7 @@ pub fn catalog_literal_match_rank(
 }
 
 #[must_use]
+/// Return the default maximum number of catalog rows.
 pub const fn default_catalog_limit() -> u32 {
     100
 }

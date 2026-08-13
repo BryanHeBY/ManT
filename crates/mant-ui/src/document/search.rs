@@ -14,8 +14,11 @@ use crate::theme;
 /// One exact visual-row range found in a width-dependent document rendering.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedSearchMatch {
+    /// First visual row intersecting the match.
     pub row: usize,
+    /// Inclusive terminal-cell column on the first row.
     pub start_column: usize,
+    /// Exclusive terminal-cell column on the first row.
     pub end_column: usize,
     pub(super) additional_fragments: Vec<RenderedSearchFragment>,
 }

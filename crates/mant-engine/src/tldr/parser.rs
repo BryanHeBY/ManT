@@ -9,14 +9,18 @@ use crate::text_safety::mask_terminal_controls;
 /// Source identity attached to a parsed tldr page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TldrPageLocation {
+    /// tldr platform bucket containing the page.
     pub platform: String,
+    /// tldr language directory containing the page.
     pub language: String,
+    /// Stable caller-facing source path.
     pub source_path: String,
 }
 
 /// A tldr page lacks the minimum structure required by the contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TldrParseError {
+    /// No top-level `# command` heading was present.
     MissingCommandHeading,
 }
 

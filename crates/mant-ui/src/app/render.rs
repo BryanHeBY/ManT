@@ -25,6 +25,7 @@ use crate::{
 };
 
 impl App {
+    /// Render one complete frame and retain its geometry for input hit testing.
     pub fn draw(&mut self, frame: &mut Frame<'_>) {
         let [menu_area, body_area, status_area] = Layout::vertical([
             Constraint::Length(1),

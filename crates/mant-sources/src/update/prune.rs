@@ -14,13 +14,19 @@ use crate::{
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OrphanedSource {
+    /// Installed source name derived from its directory.
     pub source: String,
+    /// Platform-native source directory path.
     pub path: String,
+    /// Whether ownership metadata makes automated removal safe.
     pub removable: bool,
+    /// Last installed revision, when trusted metadata is available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// Last installed document count, when trusted metadata is available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documents: Option<u32>,
+    /// Reason the candidate cannot be removed automatically.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -29,9 +35,13 @@ pub struct OrphanedSource {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SourcePruneAction {
+    /// A dry run found a safe candidate that would be removed.
     WouldRemove,
+    /// The updater-owned directory was removed successfully.
     Removed,
+    /// Ownership or identity checks did not permit removal.
     Refused,
+    /// Removal began or was attempted but could not complete safely.
     Failed,
 }
 
@@ -39,13 +49,19 @@ pub enum SourcePruneAction {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourcePruneResult {
+    /// Installed source name.
     pub source: String,
+    /// Platform-native source directory path.
     pub path: String,
+    /// Outcome of this cleanup candidate.
     pub action: SourcePruneAction,
+    /// Last installed revision, when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// Last installed document count, when available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documents: Option<u32>,
+    /// Refusal or failure detail.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -53,6 +69,7 @@ pub struct SourcePruneResult {
 /// Exact schema marker for an orphan cleanup report.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub enum DocumentSourcesPruneSchema {
+    /// Version 1 of the native source-prune report.
     #[serde(rename = "mant.sources-prune/v1")]
     V1,
 }
@@ -61,13 +78,18 @@ pub enum DocumentSourcesPruneSchema {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSourcesPrune {
+    /// Exact report schema discriminator.
     pub schema: DocumentSourcesPruneSchema,
+    /// Platform-native path of the configuration used by this run.
     pub config: String,
+    /// Whether no filesystem removals were attempted.
     pub dry_run: bool,
+    /// Per-candidate results in lexical source-name order.
     pub sources: Vec<SourcePruneResult>,
 }
 
 impl DocumentSourcesPrune {
+    /// Return whether any candidate was refused or failed.
     #[must_use]
     pub fn has_failures(&self) -> bool {
         self.sources.iter().any(|source| {

@@ -36,22 +36,36 @@ pub(crate) fn is_reserved_selector(value: &str) -> bool {
 /// Failure to derive an addressable view from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectionError {
+    /// Neither an authoritative document nor a quick reference is available.
     MissingContent {
+        /// Requested document label.
         document: String,
     },
+    /// Excerpt projection received no selectors.
     EmptySelection,
+    /// One selector was empty after trimming.
     EmptySelector,
+    /// No addressable node matched a selector.
     UnknownSelector {
+        /// Requested document label.
         document: String,
+        /// Unresolved selector.
         selector: String,
     },
+    /// An alias matched more than one semantic entry.
     AmbiguousSelector {
+        /// Requested document label.
         document: String,
+        /// Ambiguous selector.
         selector: String,
+        /// Stable paths and IDs that disambiguate the match.
         candidates: Vec<SelectorCandidate>,
     },
+    /// Explanation lookup selected a non-entry node.
     ExplanationRequiresEntry {
+        /// Requested document label.
         document: String,
+        /// Selector naming the non-entry node.
         selector: String,
     },
 }
@@ -59,7 +73,9 @@ pub enum ProjectionError {
 /// One stable qualification offered when a semantic alias is ambiguous.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectorCandidate {
+    /// Canonical structural outline path.
     pub path: String,
+    /// Stable document-local identity.
     pub id: String,
 }
 

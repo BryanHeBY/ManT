@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TldrCacheAction {
+    /// A cache did not exist and was cloned.
     Cloned,
+    /// An existing cache advanced or was refreshed.
     Updated,
 }
 
@@ -15,13 +17,18 @@ pub enum TldrCacheAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrCacheUpdate {
+    /// Mutation performed by the client-specific update path.
     pub action: TldrCacheAction,
+    /// Updated cache directory, when the client exposes it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<String>,
+    /// External tldr client used for the operation, when applicable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client: Option<String>,
+    /// Trimmed human-readable client output, when useful.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,
+    /// Resulting cache revision, when discoverable.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
 }

@@ -23,16 +23,19 @@ pub struct NodePath(String);
 pub struct NodeSelector(String);
 
 impl NodePath {
+    /// Wrap a canonical path produced by a trusted projection.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
+    /// Borrow the canonical path string.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Consume the path and return its owned string.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -90,16 +93,19 @@ impl PartialEq<&str> for NodePath {
 }
 
 impl NodeSelector {
+    /// Wrap a user-supplied selector without resolving it.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
+    /// Borrow the selector string.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Consume the selector and return its owned string.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0

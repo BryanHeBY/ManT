@@ -10,22 +10,59 @@ use libmandoc_rs::ParseError;
 /// Stable category for a native manual failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ManualErrorKind {
+    /// Source bytes could not be read.
     Read,
+    /// Compressed source bytes could not be decoded.
     Decompression,
+    /// A configured resource bound was exceeded.
     Limit,
+    /// A path or redirect crossed the approved manual tree.
     UnsafePath,
+    /// A native alias redirect was invalid or could not be resolved.
     Redirect,
+    /// libmandoc rejected or could not represent the source.
     Parse,
 }
 
 /// Failure produced by `ManT`'s source policy or by the underlying roff parser.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ManualError {
-    Read { path: PathBuf, message: String },
-    Decompression { path: PathBuf, message: String },
-    Limit { path: PathBuf, message: String },
-    UnsafePath { path: PathBuf, message: String },
-    Redirect { path: PathBuf, message: String },
+    /// Filesystem read failure.
+    Read {
+        /// Original source path.
+        path: PathBuf,
+        /// Stable human-readable detail.
+        message: String,
+    },
+    /// Top-level decompression failure.
+    Decompression {
+        /// Original source path.
+        path: PathBuf,
+        /// Stable human-readable detail.
+        message: String,
+    },
+    /// Input resource limit violation.
+    Limit {
+        /// Original source path.
+        path: PathBuf,
+        /// Stable human-readable detail.
+        message: String,
+    },
+    /// Manual-tree containment policy violation.
+    UnsafePath {
+        /// Rejected source or target path.
+        path: PathBuf,
+        /// Stable human-readable detail.
+        message: String,
+    },
+    /// Invalid or unresolved `.so` alias page.
+    Redirect {
+        /// Alias source path.
+        path: PathBuf,
+        /// Stable human-readable detail.
+        message: String,
+    },
+    /// Failure reported by the low-level libmandoc binding.
     Parse(ParseError),
 }
 
@@ -66,6 +103,7 @@ impl ManualError {
     }
 
     #[must_use]
+    /// Return the stable failure category.
     pub const fn kind(&self) -> ManualErrorKind {
         match self {
             Self::Read { .. } => ManualErrorKind::Read,
@@ -78,6 +116,7 @@ impl ManualError {
     }
 
     #[must_use]
+    /// Return the original caller-facing source path.
     pub fn path(&self) -> &Path {
         match self {
             Self::Read { path, .. }
@@ -90,6 +129,7 @@ impl ManualError {
     }
 
     #[must_use]
+    /// Return the stable human-readable detail.
     pub fn message(&self) -> &str {
         match self {
             Self::Read { message, .. }

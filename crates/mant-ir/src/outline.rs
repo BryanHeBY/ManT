@@ -5,21 +5,29 @@ use std::{fmt, num::NonZeroUsize, str::FromStr};
 /// A stable, one-based path in a query outline.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum OutlinePath {
+    /// The optional tldr quick-reference projection.
     Tldr,
+    /// Content preceding the document's first section.
     DocumentRoot,
+    /// A section addressed by one-based child indices.
     Section(Vec<NonZeroUsize>),
+    /// A semantic entry within the document root or a section.
     Entry {
+        /// One-based path of the containing section, or `None` for root content.
         section: Option<Vec<NonZeroUsize>>,
+        /// One-based entry position within its container.
         index: NonZeroUsize,
     },
 }
 
 impl OutlinePath {
+    /// Construct a section path, returning `None` for empty or zero coordinates.
     #[must_use]
     pub fn section(coordinates: &[usize]) -> Option<Self> {
         Some(Self::Section(non_zero_coordinates(coordinates)?))
     }
 
+    /// Construct an entry path, returning `None` for zero indices or coordinates.
     #[must_use]
     pub fn entry(section: Option<&[usize]>, index: usize) -> Option<Self> {
         Some(Self::Entry {
@@ -31,6 +39,7 @@ impl OutlinePath {
         })
     }
 
+    /// Return whether this addresses an entry before the first section.
     #[must_use]
     pub const fn is_document_root_entry(&self) -> bool {
         matches!(self, Self::Entry { section: None, .. })

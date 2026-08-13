@@ -46,23 +46,36 @@ const TLDR_VERTICAL_PADDING_ROWS: u16 = 1;
 /// One addressable entry displayed in the navigation sidebar.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavItem {
+    /// Stable sidebar identity.
     pub id: String,
+    /// Document anchor selected when the item is activated.
     pub target_id: String,
+    /// Visible sidebar label.
     pub title: String,
+    /// Zero-based tree indentation depth.
     pub depth: usize,
+    /// Semantic presentation category.
     pub kind: NavKind,
+    /// Whether collapse/expand behavior applies.
     pub has_children: bool,
+    /// Whether this is the final sibling at its depth.
     pub is_last: bool,
+    /// Parent sidebar identity, when nested.
     pub parent_id: Option<String>,
 }
 
 /// Semantic presentation class for a navigation entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NavKind {
+    /// Optional quick-reference entry.
     Tldr,
+    /// Content preceding the first document section.
     Root,
+    /// Ordinary document section.
     Section,
+    /// Synthetic grouping for semantic entries.
     EntryGroup,
+    /// Addressable semantic definition of the contained role.
     Entry(DefinitionRole),
 }
 
@@ -83,7 +96,9 @@ pub struct DocumentView {
 /// Exact terminal rows and anchor positions for one content width.
 #[derive(Debug, Clone)]
 pub struct RenderedDocument {
+    /// Fully styled terminal rows.
     pub text: Text<'static>,
+    /// Number of visual terminal rows before virtual viewport padding.
     pub row_count: usize,
     /// First visual row for each logical source row, followed by one sentinel.
     logical_rows: Vec<usize>,
@@ -173,6 +188,7 @@ impl DocumentView {
         }
     }
 
+    /// Return the original human-readable query label.
     #[must_use]
     pub fn label(&self) -> &str {
         &self.label
@@ -184,26 +200,31 @@ impl DocumentView {
         &self.terminal_label
     }
 
+    /// Return the immutable navigation tree in source order.
     #[must_use]
     pub fn navigation(&self) -> &[NavItem] {
         &self.navigation
     }
 
+    /// Return the source-family label displayed in terminal chrome.
     #[must_use]
     pub const fn source_label(&self) -> &'static str {
         self.source_label
     }
 
+    /// Return the number of top-level document sections.
     #[must_use]
     pub const fn top_level_count(&self) -> usize {
         self.top_level_count
     }
 
+    /// Return the total number of nested and top-level sections.
     #[must_use]
     pub const fn section_count(&self) -> usize {
         self.section_count
     }
 
+    /// Return whether optional quick-reference content is present.
     #[must_use]
     pub const fn has_tldr(&self) -> bool {
         self.has_tldr
@@ -258,6 +279,7 @@ impl DocumentView {
 }
 
 impl RenderedDocument {
+    /// Return the first visual row associated with a document-local anchor.
     #[must_use]
     pub fn anchor_row(&self, id: &str) -> Option<usize> {
         self.anchor_rows.get(id).copied()

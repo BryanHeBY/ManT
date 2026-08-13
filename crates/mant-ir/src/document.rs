@@ -12,13 +12,17 @@ pub struct Document {
     /// Parser provenance retained independently from process-protocol metadata.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parser: Option<ParserInfo>,
+    /// Original source format and stable path.
     pub source: DocumentSource,
+    /// Metadata normalized across all supported source formats.
     pub meta: DocumentMeta,
+    /// Recoverable findings retained for callers that need source quality data.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
     /// Content preceding the first section heading.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<Block>,
+    /// Top-level semantic sections in source order.
     pub sections: Vec<Section>,
 }
 
@@ -26,7 +30,9 @@ pub struct Document {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ParserInfo {
+    /// Stable parser implementation name.
     pub name: String,
+    /// Parser version used to produce the document.
     pub version: String,
 }
 
@@ -34,8 +40,11 @@ pub struct ParserInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum SourceFormat {
+    /// Traditional man(7) macros.
     Man,
+    /// Semantic mdoc(7) macros.
     Mdoc,
+    /// Markdown with `ManT` semantic extensions.
     Markdown,
 }
 
@@ -43,7 +52,9 @@ pub enum SourceFormat {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSource {
+    /// Syntax family consumed by the parser.
     pub format: SourceFormat,
+    /// Stable caller-facing path, when the source has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
@@ -52,21 +63,28 @@ pub struct DocumentSource {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMeta {
+    /// Canonical document title.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     /// Native manual category such as `1` or `3p`; unrelated to document headings.
     pub manual_section: Option<String>,
+    /// Normalized publication or revision date.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
+    /// Manual volume or collection label.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volume: Option<String>,
+    /// Operating-system label declared by the source.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub os: Option<String>,
+    /// Architecture qualifier declared by the source.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arch: Option<String>,
+    /// Primary name followed by any aliases from the NAME section.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub names: Vec<String>,
+    /// Logical target of a native `.so` alias page.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alias_target: Option<String>,
 }
@@ -75,10 +93,14 @@ pub struct DocumentMeta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Diagnostic {
+    /// Severity of the finding.
     pub level: DiagnosticLevel,
+    /// Stable machine-readable code, when the producer defines one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    /// Concise human-readable explanation.
     pub message: String,
+    /// Original source location associated with the finding.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceSpan>,
 }
@@ -87,9 +109,13 @@ pub struct Diagnostic {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum DiagnosticLevel {
+    /// Non-semantic source style issue.
     Style,
+    /// Recoverable source defect or portability concern.
     Warning,
+    /// Invalid source that left partial output available.
     Error,
+    /// Valid construct that the active parser cannot represent fully.
     Unsupported,
 }
 
@@ -112,16 +138,19 @@ pub enum DiagnosticLevel {
 pub struct TextSize(u32);
 
 impl TextSize {
+    /// Construct an offset from a zero-based UTF-8 byte count.
     #[must_use]
     pub const fn new(value: u32) -> Self {
         Self(value)
     }
 
+    /// Return the underlying UTF-8 byte count.
     #[must_use]
     pub const fn get(self) -> u32 {
         self.0
     }
 
+    /// Convert a platform-sized offset, clamping values above `u32::MAX`.
     #[must_use]
     pub fn from_usize_saturating(value: usize) -> Self {
         Self(u32::try_from(value).unwrap_or(u32::MAX))
@@ -132,7 +161,9 @@ impl TextSize {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TextRange {
+    /// Inclusive start offset.
     pub start: TextSize,
+    /// Exclusive end offset.
     pub end: TextSize,
 }
 
@@ -148,6 +179,7 @@ impl TextRange {
         Self { start, end }
     }
 
+    /// Return whether the range contains no source bytes.
     #[must_use]
     pub const fn is_empty(self) -> bool {
         self.start.0 == self.end.0
@@ -161,12 +193,17 @@ impl TextRange {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceSpan {
+    /// Exact half-open byte range, when supplied by the parser.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub byte_range: Option<TextRange>,
+    /// One-based starting line.
     pub line: u32,
+    /// One-based starting column.
     pub column: u32,
+    /// One-based inclusive ending line, when known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end_line: Option<u32>,
+    /// One-based exclusive ending column, when known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end_column: Option<u32>,
 }
@@ -180,12 +217,16 @@ pub struct SourceSpan {
 pub struct Section {
     /// Unique within one document; consumers must not treat it as a global ID.
     pub id: NodeId,
+    /// Visible heading text.
     pub title: String,
     /// Terminal rows requested before this heading by the source macro set.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub spacing_before_lines: u16,
+    /// Content directly owned by this section.
     pub blocks: Vec<Block>,
+    /// Nested subsections in source order.
     pub children: Vec<Section>,
+    /// Heading location in the original source.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceSpan>,
 }
@@ -194,6 +235,7 @@ pub struct Section {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LayoutHint {
+    /// Additional terminal columns requested before the block.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub indent_columns: u16,
     /// Terminal rows requested before this block.
@@ -209,74 +251,114 @@ pub struct LayoutHint {
     rename_all_fields = "camelCase"
 )]
 pub enum Block {
+    /// Reflowable prose.
     Paragraph {
+        /// Styled inline content in source order.
         children: Vec<Inline>,
+        /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Literal content that preserves line boundaries.
     Preformatted {
+        /// Styled literal runs and line breaks.
         children: Vec<Inline>,
+        /// Optional language hint, primarily from fenced Markdown.
         #[serde(skip_serializing_if = "Option::is_none")]
         language: Option<String>,
+        /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Ordered, unordered, or marker-free block list.
     List {
+        /// Marker behavior for the list.
         kind: ListKind,
+        /// First ordinal for an ordered list.
         #[serde(skip_serializing_if = "Option::is_none")]
         start: Option<u64>,
+        /// Whether renderers should suppress extra spacing between items.
         #[serde(default, skip_serializing_if = "is_false")]
         compact: bool,
+        /// List items in source order.
         items: Vec<ListItem>,
+        /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Term-and-description list.
     DefinitionList {
+        /// Definitions in source order.
         items: Vec<DefinitionItem>,
+        /// Whether renderers should suppress extra spacing between definitions.
         #[serde(default, skip_serializing_if = "is_false")]
         compact: bool,
+        /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Block-capable table.
     Table {
+        /// Logical rows in source order.
         rows: Vec<TableRow>,
+        /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Equation retained as a normalized expression.
     Equation {
+        /// Equation source after parser normalization.
         value: String,
+        /// Whether the equation occupies its own display block.
         #[serde(default, skip_serializing_if = "is_false")]
         display: bool,
+        /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Explicit vertical spacing requested by the source.
     VerticalSpace {
+        /// Number of terminal rows requested.
         lines: u16,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Horizontal thematic separator.
     ThematicBreak {
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
+    /// Source construct retained because it has no native IR representation.
     Unsupported {
+        /// Macro or construct name, when known.
         #[serde(skip_serializing_if = "Option::is_none")]
         name: Option<String>,
+        /// Best-effort visible text retained for consumers.
         text: String,
+        /// Source-derived indentation and vertical spacing.
         #[serde(default, skip_serializing_if = "LayoutHint::is_empty")]
         layout: LayoutHint,
+        /// Original source range.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<SourceSpan>,
     },
@@ -286,8 +368,11 @@ pub enum Block {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum ListKind {
+    /// Unordered list with bullets.
     Bullet,
+    /// Ordered list with ordinal markers.
     Ordered,
+    /// Marker-free list.
     Plain,
 }
 
@@ -295,6 +380,7 @@ pub enum ListKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListItem {
+    /// Arbitrary item content in source order.
     pub blocks: Vec<Block>,
 }
 
@@ -306,7 +392,9 @@ pub struct DefinitionItem {
     /// a stable semantic entry, such as a command-line option.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub identity: Option<DefinitionIdentity>,
+    /// One or more equivalent displayed terms.
     pub terms: Vec<Vec<Inline>>,
+    /// Block content describing the terms.
     pub description: Vec<Block>,
     /// Render the term on the same line as the first description line (a man(7)
     /// hanging tag that fits the indent) instead of on its own line. Decided
@@ -325,6 +413,7 @@ pub struct DefinitionItem {
 pub struct DefinitionIdentity {
     /// Unique within one document and shared with the term's inline anchor.
     pub id: NodeId,
+    /// Semantic category used by lookup and presentation.
     pub role: DefinitionRole,
     /// Matching policy used for aliases in semantic entry lookup.
     pub case: DefinitionCase,
@@ -336,7 +425,9 @@ pub struct DefinitionIdentity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum DefinitionCase {
+    /// Names must match with the same Unicode scalar values and case.
     Sensitive,
+    /// Names match without ASCII case distinctions.
     Insensitive,
 }
 
@@ -344,9 +435,13 @@ pub enum DefinitionCase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum DefinitionRole {
+    /// Command-line option or switch.
     Option,
+    /// Executable subcommand or verb.
     Command,
+    /// Process environment variable.
     EnvironmentVariable,
+    /// Other named configuration or language variable.
     Variable,
 }
 
@@ -354,6 +449,7 @@ pub enum DefinitionRole {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TableRow {
+    /// Logical cells in column order.
     pub cells: Vec<TableCell>,
 }
 
@@ -361,11 +457,15 @@ pub struct TableRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TableCell {
+    /// Block content contained in the cell.
     pub blocks: Vec<Block>,
+    /// Number of logical columns occupied by the cell.
     #[serde(default = "one_u16", skip_serializing_if = "is_one_u16")]
     pub column_span: u16,
+    /// Number of logical rows occupied by the cell.
     #[serde(default = "one_u16", skip_serializing_if = "is_one_u16")]
     pub row_span: u16,
+    /// Requested horizontal alignment, if explicitly known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alignment: Option<TableAlignment>,
 }
@@ -374,8 +474,11 @@ pub struct TableCell {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TableAlignment {
+    /// Align content to the left edge.
     Left,
+    /// Center content horizontally.
     Center,
+    /// Align content to the right edge.
     Right,
 }
 
@@ -387,31 +490,44 @@ pub enum TableAlignment {
     rename_all_fields = "camelCase"
 )]
 pub enum Inline {
+    /// Plain visible text.
     Text {
+        /// Text after source escape processing.
         value: String,
     },
+    /// Strongly emphasized content.
     Strong {
+        /// Nested inline content.
         children: Vec<Inline>,
     },
+    /// Emphasized content.
     Emphasis {
+        /// Nested inline content.
         children: Vec<Inline>,
     },
+    /// Literal code or symbolic token.
     Code {
+        /// Literal text value.
         value: String,
     },
     /// A typed link whose navigation semantics are explicit in the IR.
     Link {
+        /// Resolved navigation destination.
         target: LinkTarget,
+        /// Optional advisory title.
         #[serde(skip_serializing_if = "Option::is_none")]
         title: Option<String>,
+        /// Visible linked content.
         children: Vec<Inline>,
     },
     /// A zero-width, document-local navigation destination such as mdoc `Tg`.
     ///
     /// Anchor IDs and section IDs share one namespace within a document.
     Anchor {
+        /// Document-local destination identity.
         id: NodeId,
     },
+    /// Hard line break that renderers must preserve.
     LineBreak,
 }
 
@@ -424,18 +540,28 @@ pub enum Inline {
 )]
 pub enum LinkTarget {
     /// An external URI from mdoc `Lk`, man `UR`, or Markdown links.
-    External { uri: String },
+    External {
+        /// Absolute URI.
+        uri: String,
+    },
     /// An email address without a `mailto:` prefix.
-    Email { address: String },
+    Email {
+        /// Mailbox address without a URI scheme.
+        address: String,
+    },
     /// A relative Markdown link to another document in the current source.
     Document {
+        /// Extension-free relative document path.
         name: String,
+        /// Optional document-local destination.
         #[serde(skip_serializing_if = "Option::is_none")]
         fragment: Option<String>,
     },
     /// A typed reference to another installed manual page.
     Manual {
+        /// Manual topic without a section suffix.
         name: String,
+        /// Native manual category, when specified by the source.
         #[serde(skip_serializing_if = "Option::is_none")]
         manual_section: Option<String>,
     },
@@ -444,10 +570,14 @@ pub enum LinkTarget {
     ///
     /// `target` is the document-local [`Section::id`] rather than a rendered
     /// heading slug. This keeps navigation stable across output formats.
-    Section { id: NodeId },
+    Section {
+        /// Target section identity in the current document.
+        id: NodeId,
+    },
 }
 
 impl LayoutHint {
+    /// Return whether the hint requests no additional layout behavior.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.indent_columns == 0 && self.spacing_before_lines == 0

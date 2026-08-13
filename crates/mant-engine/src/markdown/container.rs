@@ -17,8 +17,10 @@ pub(super) struct MarkdownParts<'a> {
     pub(super) tldr: Option<&'a str>,
 }
 
+/// Invalid structure in a document-owned tldr directive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TldrDirectiveError {
+    /// A leading opening marker has no matching closing marker.
     Unterminated,
 }
 

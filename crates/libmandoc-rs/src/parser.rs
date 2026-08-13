@@ -53,7 +53,9 @@ pub enum Compression {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ParseOptions {
+    /// Policy for resolving roff `.so` include requests.
     pub includes: IncludePolicy,
+    /// Compression expected at the outermost source boundary.
     pub compression: Compression,
 }
 
@@ -61,7 +63,9 @@ pub struct ParseOptions {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ParseReport {
+    /// Fully owned syntax tree and metadata.
     pub document: Document,
+    /// Non-fatal findings emitted while validating the source.
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -69,10 +73,15 @@ pub struct ParseReport {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ParseErrorKind {
+    /// A path cannot be represented safely at the native API boundary.
     InvalidPath,
+    /// Source bytes could not be read.
     Read,
+    /// Compressed source bytes could not be decoded.
     Decompression,
+    /// The selected parsing policy is unavailable on this platform.
     Unsupported,
+    /// libmandoc rejected the source or failed to produce a document.
     Parse,
 }
 
@@ -80,8 +89,11 @@ pub enum ParseErrorKind {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ParseError {
+    /// Source path associated with the failure.
     pub path: PathBuf,
+    /// Stable category suitable for programmatic handling.
     pub kind: ParseErrorKind,
+    /// Human-readable detail without unstable native diagnostic structure.
     pub message: String,
 }
 

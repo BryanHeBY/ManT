@@ -7,17 +7,23 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TldrDocument {
+    /// Page title, normally the command name.
     pub title: String,
     /// `CommonMark` paragraphs from the page's leading block quote.
     ///
     /// Source-only soft line breaks are normalized to spaces inside each
     /// element; distinct paragraphs remain distinct elements.
     pub description: Vec<String>,
+    /// Upstream reference URL extracted from the page, when present.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub more_information: Option<String>,
+    /// Command examples in display order.
     pub examples: Vec<TldrExample>,
+    /// tldr platform bucket such as `common`, `linux`, or `windows`.
     pub platform: String,
+    /// BCP-47-like tldr language directory, such as `en` or `zh`.
     pub language: String,
+    /// Stable source path used for diagnostics and attribution.
     pub source_path: String,
     /// Distinguishes community cache data from a document-owned quick reference.
     ///
@@ -31,12 +37,15 @@ pub struct TldrDocument {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TldrOrigin {
+    /// Content obtained from the community tldr-pages cache.
     #[default]
     TldrPages,
+    /// Quick reference embedded in the authoritative Markdown document.
     Embedded,
 }
 
 impl TldrOrigin {
+    /// Return whether this origin is the community tldr-pages project.
     #[must_use]
     pub const fn is_tldr_pages(&self) -> bool {
         matches!(self, Self::TldrPages)
@@ -49,7 +58,9 @@ impl TldrOrigin {
 pub struct TldrExample {
     /// One normalized prose paragraph describing the command example.
     pub description: String,
+    /// Complete shell command with placeholders in their source spelling.
     pub command: String,
+    /// Styled fragments whose concatenation equals [`Self::command`].
     pub command_parts: Vec<TldrCommandPart>,
 }
 
@@ -61,8 +72,16 @@ pub struct TldrExample {
     rename_all_fields = "camelCase"
 )]
 pub enum TldrCommandPart {
-    Text { value: String },
-    Placeholder { value: String },
+    /// Literal command text.
+    Text {
+        /// Literal fragment value.
+        value: String,
+    },
+    /// Replaceable value marked by the tldr placeholder syntax.
+    Placeholder {
+        /// Placeholder text without presentation styling.
+        value: String,
+    },
 }
 
 #[cfg(test)]

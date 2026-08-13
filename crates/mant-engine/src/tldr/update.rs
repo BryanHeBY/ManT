@@ -26,21 +26,35 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 /// Failure to refresh an installed client or `ManT`'s private checkout.
 #[derive(Debug)]
 pub enum TldrUpdateError {
+    /// Cache path discovery failed.
     Cache(TldrCacheError),
+    /// Neither a supported tldr client nor Git was available.
     NoUpdater,
+    /// An existing private cache was not the expected Git checkout.
     InvalidCheckout(PathBuf),
+    /// A selected update executable could not be started.
     CommandUnavailable {
+        /// Executable path.
         program: PathBuf,
+        /// Underlying process-spawn failure.
         source: io::Error,
     },
+    /// An update command returned an unsuccessful exit status.
     CommandFailed {
+        /// Human-readable command label.
         command: String,
+        /// Process exit code.
         exit_code: i32,
+        /// Useful stderr/stdout detail, when available.
         detail: Option<String>,
     },
+    /// A transactional cache filesystem operation failed.
     FileOperation {
+        /// Operation being attempted.
         action: &'static str,
+        /// Path associated with the operation.
         path: PathBuf,
+        /// Underlying filesystem failure.
         source: io::Error,
     },
 }

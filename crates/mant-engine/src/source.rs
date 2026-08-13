@@ -20,11 +20,14 @@ const SUPPORTED_COMPRESSION_SUFFIXES: [&str; 2] = [".gz", ".zst"];
 /// One validated manual lookup independent from CLI token syntax.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManualRequest {
+    /// Manual topic without its category suffix.
     pub name: String,
+    /// Optional exact native category such as `1` or `3p`.
     pub manual_section: Option<String>,
 }
 
 impl ManualRequest {
+    /// Construct a normalized lookup request without performing I/O.
     #[must_use]
     pub fn new(name: impl Into<String>, manual_section: Option<String>) -> Self {
         Self {
@@ -37,8 +40,11 @@ impl ManualRequest {
 /// One effective local manual page after path and locale precedence.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManualPage {
+    /// Indexed manual topic.
     pub name: String,
+    /// Native manual category derived from the containing `man<section>` tree.
     pub section: String,
+    /// Physical source path, possibly compressed.
     pub path: PathBuf,
     /// Approved hierarchy root used to resolve this page's `.so` redirects.
     ///
@@ -146,11 +152,17 @@ pub(crate) struct CommandOutput {
 /// Expected source-discovery failures suitable for a user-facing CLI error.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LocateError {
+    /// The requested manual name was empty.
     EmptyName,
+    /// An explicitly requested manual category was empty.
     InvalidManualSection,
+    /// No indexed page satisfied the request.
     NotFound {
+        /// Requested manual topic.
         name: String,
+        /// Exact requested native category, when supplied.
         requested_manual_section: Option<String>,
+        /// Other indexed categories available for the same topic.
         available_manual_sections: Vec<String>,
     },
 }

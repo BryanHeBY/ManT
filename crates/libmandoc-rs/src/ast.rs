@@ -8,8 +8,11 @@
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MacroSet {
+    /// No supported semantic macro package was detected.
     None,
+    /// The source uses the semantic mdoc(7) macro package.
     Mdoc,
+    /// The source uses the traditional man(7) macro package.
     Man,
 }
 
@@ -17,15 +20,25 @@ pub enum MacroSet {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NodeKind {
+    /// Synthetic root containing the complete syntax tree.
     Root,
+    /// A macro block, such as a section or display.
     Block,
+    /// The heading or term portion of a block.
     Head,
+    /// The principal content portion of a block.
     Body,
+    /// The trailing portion of a block, when the macro defines one.
     Tail,
+    /// A leaf-level semantic macro invocation.
     Element,
+    /// Literal source text after roff escape processing.
     Text,
+    /// A source comment retained by libmandoc.
     Comment,
+    /// A tbl(7) table node.
     Table,
+    /// An eqn(7) equation node.
     Equation,
 }
 
@@ -33,10 +46,15 @@ pub enum NodeKind {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NormalizedListKind {
+    /// An unordered list whose items carry bullets.
     Bullet,
+    /// An ordered list whose items carry ordinal markers.
     Ordered,
+    /// A term-and-description list.
     Definition,
+    /// A list laid out as aligned columns.
     Column,
+    /// A marker-free list.
     Plain,
 }
 
@@ -44,7 +62,9 @@ pub enum NormalizedListKind {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisplayKind {
+    /// Preserve input line breaks and horizontal whitespace.
     Literal,
+    /// Reflow content as filled prose.
     Filled,
 }
 
@@ -52,8 +72,11 @@ pub enum DisplayKind {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NormalizedFont {
+    /// Typographic emphasis.
     Emphasis,
+    /// Literal or fixed-width text.
     Literal,
+    /// Symbolic text, conventionally rendered in bold.
     Symbolic,
 }
 
@@ -61,7 +84,9 @@ pub enum NormalizedFont {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AuthorMode {
+    /// Render each subsequent author separately.
     Split,
+    /// Keep subsequent authors in a continuous group.
     NoSplit,
 }
 
@@ -69,8 +94,11 @@ pub enum AuthorMode {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TableAlignment {
+    /// Align cell content to the left edge.
     Left,
+    /// Center cell content horizontally.
     Center,
+    /// Align cell content to the right edge.
     Right,
 }
 
@@ -78,9 +106,13 @@ pub enum TableAlignment {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TableCell {
+    /// Visible cell content, or `None` for a spanning/empty cell.
     pub text: Option<String>,
+    /// Number of logical columns occupied by the cell.
     pub column_span: u16,
+    /// Number of logical rows occupied by the cell.
     pub row_span: u16,
+    /// Horizontal alignment requested by tbl(7).
     pub alignment: TableAlignment,
 }
 
@@ -89,9 +121,13 @@ pub struct TableCell {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct NodeFlags {
+    /// The node was synthesized by libmandoc rather than written explicitly.
     pub generated: bool,
+    /// The node ends a sentence according to libmandoc punctuation rules.
     pub sentence_end: bool,
+    /// The node must not contribute visible output.
     pub no_print: bool,
+    /// The node belongs to a no-fill region that preserves source lines.
     pub no_fill: bool,
     /// libmandoc selected this node as a same-document destination.
     pub deep_link_target: bool,
@@ -112,24 +148,39 @@ pub struct NodeFlags {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Node {
+    /// Structural role of this node in the libmandoc tree.
     pub kind: NodeKind,
+    /// Source macro name, without the leading dot, when applicable.
     pub macro_name: Option<String>,
+    /// Visible text carried by a text node.
     pub text: Option<String>,
     /// Canonical same-document tag assigned during libmandoc validation.
     pub tag: Option<String>,
+    /// One-based source line reported by libmandoc, or zero when unavailable.
     pub line: u32,
+    /// One-based source column reported by libmandoc, or zero when unavailable.
     pub column: u32,
+    /// Source and renderer flags attached to the node.
     pub flags: NodeFlags,
+    /// Normalized list behavior for an mdoc list block.
     pub list_kind: Option<NormalizedListKind>,
+    /// Fill behavior for an mdoc display block.
     pub display_kind: Option<DisplayKind>,
+    /// Font selected by an mdoc font block.
     pub font: Option<NormalizedFont>,
+    /// Author layout mode selected by an mdoc author macro.
     pub author_mode: Option<AuthorMode>,
+    /// Whether the enclosing list requests compact vertical layout.
     pub compact: bool,
+    /// Raw normalized display/list offset, including a roff scale suffix.
     pub offset: Option<String>,
     /// Normalized mdoc(7) list width, including its roff scale suffix.
     pub width: Option<String>,
+    /// Cells copied from a tbl(7) row represented by this node.
     pub table_cells: Vec<TableCell>,
+    /// Normalized eqn(7) expression carried by this node.
     pub equation: Option<String>,
+    /// Child nodes in source order.
     pub children: Vec<Self>,
 }
 
@@ -137,14 +188,23 @@ pub struct Node {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Metadata {
+    /// Canonical manual title, normally derived from `TH` or `Dt`.
     pub title: Option<String>,
+    /// Native manual category such as `1` or `3p`.
     pub section: Option<String>,
+    /// Manual volume or collection label.
     pub volume: Option<String>,
+    /// Operating-system label declared by the page.
     pub os: Option<String>,
+    /// Architecture qualifier declared by the page.
     pub arch: Option<String>,
+    /// Primary display name extracted from the NAME section.
     pub name: Option<String>,
+    /// Normalized source date when libmandoc recognized it.
     pub date: Option<String>,
+    /// Target named by a top-level `.so` alias page.
     pub alias_target: Option<String>,
+    /// Whether the parsed source produced a document body.
     pub has_body: bool,
 }
 
@@ -152,7 +212,10 @@ pub struct Metadata {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Document {
+    /// Macro package selected for the source.
     pub macro_set: MacroSet,
+    /// Metadata validated and normalized by libmandoc.
     pub metadata: Metadata,
+    /// Root of the owned syntax tree.
     pub root: Node,
 }

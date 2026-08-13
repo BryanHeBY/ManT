@@ -41,7 +41,9 @@ const SIDEBAR_RESIZE_FRAME_INTERVAL: Duration = Duration::from_millis(50);
 /// bookkeeping-only events, notably intermediate sidebar drag coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateOutcome {
+    /// Only non-visible bookkeeping changed, if anything.
     Unchanged,
+    /// Visible state changed and the terminal should be redrawn.
     Redraw,
 }
 
@@ -73,6 +75,7 @@ impl NavigationRequest {
 }
 
 impl UpdateOutcome {
+    /// Return whether this update requires a new frame.
     #[must_use]
     pub const fn needs_redraw(self) -> bool {
         matches!(self, Self::Redraw)
@@ -202,6 +205,7 @@ pub struct App {
 }
 
 impl App {
+    /// Construct an application without preloaded discovery rows.
     #[must_use]
     pub fn new(bundle: &ResolvedContent) -> Self {
         Self::with_catalog(
@@ -218,6 +222,7 @@ impl App {
         )
     }
 
+    /// Construct an application with a snapshot for the document finder.
     #[must_use]
     pub fn with_catalog(bundle: &ResolvedContent, catalog: DocumentCatalog) -> Self {
         let document = DocumentView::new(bundle);
@@ -422,6 +427,7 @@ impl App {
     }
 
     #[must_use]
+    /// Return whether the terminal event loop should exit.
     pub const fn should_quit(&self) -> bool {
         self.quit
     }

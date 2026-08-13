@@ -10,8 +10,11 @@ use crate::{
 /// Semantic roles that can share one document-local identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IndexedRole {
+    /// A semantic document section.
     Section,
+    /// A named command, option, or variable entry.
     Entry,
+    /// An explicit inline navigation destination.
     Anchor,
 }
 
@@ -23,16 +26,19 @@ pub struct IndexedNode {
 }
 
 impl IndexedNode {
+    /// Return every semantic role registered for this identity.
     #[must_use]
     pub fn roles(&self) -> &BTreeSet<IndexedRole> {
         &self.roles
     }
 
+    /// Return the nearest containing section, if any.
     #[must_use]
     pub fn containing_section(&self) -> Option<&NodeId> {
         self.containing_section.as_ref()
     }
 
+    /// Test whether this identity carries a particular semantic role.
     #[must_use]
     pub fn has_role(&self, role: IndexedRole) -> bool {
         self.roles.contains(&role)
@@ -42,7 +48,9 @@ impl IndexedNode {
 /// A repeated identity with the same semantic role.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DuplicateIdentity {
+    /// Repeated document-local identity.
     pub id: NodeId,
+    /// Semantic role that was registered more than once.
     pub role: IndexedRole,
 }
 
@@ -54,6 +62,7 @@ pub struct DocumentIndex {
 }
 
 impl DocumentIndex {
+    /// Derive a complete immutable index in one traversal of `document`.
     #[must_use]
     pub fn build(document: &Document) -> Self {
         let mut builder = IndexBuilder::default();
@@ -64,20 +73,24 @@ impl DocumentIndex {
         builder.index
     }
 
+    /// Look up one identity by its normalized string value.
     #[must_use]
     pub fn get(&self, id: &str) -> Option<&IndexedNode> {
         self.nodes.get(id)
     }
 
+    /// Test whether any semantic node uses `id`.
     #[must_use]
     pub fn contains(&self, id: &str) -> bool {
         self.nodes.contains_key(id)
     }
 
+    /// Iterate over identities in lexical order.
     pub fn iter(&self) -> impl Iterator<Item = (&NodeId, &IndexedNode)> {
         self.nodes.iter()
     }
 
+    /// Return repeated same-role identities discovered while indexing.
     #[must_use]
     pub fn duplicates(&self) -> &[DuplicateIdentity] {
         &self.duplicates

@@ -25,11 +25,13 @@ impl NodeId {
         Self(value.into())
     }
 
+    /// Borrow the normalized identity string.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Consume the identity and return its owned string.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0

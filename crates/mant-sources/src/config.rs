@@ -21,26 +21,45 @@ const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
 /// Platform-native paths used by document discovery and repository updates.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DocumentPaths {
+    /// Platform-native application data root.
     pub root: PathBuf,
+    /// Path to `sources.toml`.
     pub config: PathBuf,
+    /// Root of user-authored and installed Markdown documents.
     pub documents: PathBuf,
+    /// Directory containing one installed cache per configured source.
     pub sources: PathBuf,
 }
 
 /// How one configured document source obtains its input tree.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SourceLocation {
-    Git { repo: String, branch: String },
-    Archive { url: String },
+    /// A shallow checkout of one Git branch.
+    Git {
+        /// Remote URL or local repository path.
+        repo: String,
+        /// Branch whose tip is installed.
+        branch: String,
+    },
+    /// An HTTPS archive downloaded as a complete snapshot.
+    Archive {
+        /// Direct URL of the supported archive file.
+        url: String,
+    },
 }
 
 /// One document source declared by a top-level table in `sources.toml`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConfiguredSource {
+    /// Transport used to obtain source content.
     pub location: SourceLocation,
+    /// Relative directory selected inside the checkout or archive.
     pub path: String,
+    /// Optional literal path-prefix allowlist, relative to [`Self::path`].
     pub include: Vec<String>,
+    /// Literal path prefixes removed after inclusion.
     pub exclude: Vec<String>,
+    /// Lookup priority; larger values are searched first.
     pub priority: i32,
 }
 
@@ -70,11 +89,13 @@ pub struct SourceConfig {
 }
 
 impl SourceConfig {
+    /// Return validated sources keyed by their configured name.
     #[must_use]
     pub fn sources(&self) -> &BTreeMap<String, ConfiguredSource> {
         &self.sources
     }
 
+    /// Look up a configured source by its exact name.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&ConfiguredSource> {
         self.sources.get(name)

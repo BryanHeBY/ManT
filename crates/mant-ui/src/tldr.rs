@@ -5,24 +5,37 @@ use mant_ir::{TldrCommandPart, TldrDocument, TldrOrigin};
 /// Presentation role independent from Ratatui and ANSI escape sequences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TldrRole {
+    /// Quick-reference heading.
     Title,
+    /// Introductory prose.
     Body,
+    /// Human explanation for a command example.
     Example,
+    /// Literal shell command text.
     Command,
+    /// Replaceable command value.
     Placeholder,
+    /// More-information link.
     Link,
+    /// Upstream source and license notice.
     Attribution,
 }
 
+/// One styled fragment in the shared tldr presentation model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TldrSpan {
+    /// Visible text.
     pub text: String,
+    /// Presentation role mapped independently by each frontend.
     pub role: TldrRole,
 }
 
+/// One logical terminal line in the shared tldr presentation model.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TldrLine {
+    /// Leading indentation in terminal cells.
     pub indent: usize,
+    /// Styled fragments in display order.
     pub spans: Vec<TldrSpan>,
 }
 

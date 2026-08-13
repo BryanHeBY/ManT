@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 /// Exact schema marker for a normalized structured document response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum DocumentSchema {
+    /// Version 7 of the structured-document protocol.
     #[serde(rename = "mant.document/v7")]
     V7,
 }
@@ -17,8 +18,11 @@ pub enum DocumentSchema {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Producer {
+    /// Process implementation name.
     pub name: String,
+    /// Process package version.
     pub version: String,
+    /// Parser implementation, when an authoritative document was parsed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub engine: Option<Engine>,
 }
@@ -27,7 +31,9 @@ pub struct Producer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Engine {
+    /// Parser implementation name.
     pub name: String,
+    /// Parser implementation version.
     pub version: String,
 }
 
@@ -35,18 +41,26 @@ pub struct Engine {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentResponse {
+    /// Exact response schema discriminator.
     pub schema: DocumentSchema,
+    /// Process and parser provenance.
     pub producer: Producer,
+    /// Original source identity.
     pub source: DocumentSource,
+    /// Source-neutral document metadata.
     pub meta: DocumentMeta,
+    /// Recoverable parsing and validation findings.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<Diagnostic>,
+    /// Content preceding the first section.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<Block>,
+    /// Top-level semantic sections in source order.
     pub sections: Vec<Section>,
 }
 
 impl Producer {
+    /// Construct process provenance for a normalized document.
     #[must_use]
     pub fn for_document(document: &IrDocument) -> Self {
         Self {

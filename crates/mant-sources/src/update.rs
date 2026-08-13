@@ -38,8 +38,11 @@ const MAX_SOURCE_DEPTH: usize = 32;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SourceUpdateAction {
+    /// New content was installed atomically.
     Updated,
+    /// The installed revision and configuration fingerprint were current.
     Unchanged,
+    /// This source failed without aborting updates for other sources.
     Failed,
 }
 
@@ -47,12 +50,17 @@ pub enum SourceUpdateAction {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceUpdateResult {
+    /// Configured source name.
     pub source: String,
+    /// Outcome of this source update.
     pub action: SourceUpdateAction,
+    /// Installed or observed source revision.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// Number of installed Markdown documents.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documents: Option<u32>,
+    /// Human-readable failure detail for [`SourceUpdateAction::Failed`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -60,6 +68,7 @@ pub struct SourceUpdateResult {
 /// Exact schema marker for a document-source update report.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub enum DocumentSourcesUpdateSchema {
+    /// Version 2 of the native source-update report.
     #[serde(rename = "mant.sources-update/v2")]
     V2,
 }
@@ -68,13 +77,18 @@ pub enum DocumentSourcesUpdateSchema {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSourcesUpdate {
+    /// Exact report schema discriminator.
     pub schema: DocumentSourcesUpdateSchema,
+    /// Platform-native path of the configuration used by this run.
     pub config: String,
+    /// Per-source results in configured precedence order.
     pub sources: Vec<SourceUpdateResult>,
+    /// Updater-owned directories no longer present in configuration.
     pub orphaned: Vec<OrphanedSource>,
 }
 
 impl DocumentSourcesUpdate {
+    /// Return whether at least one configured source failed.
     #[must_use]
     pub fn has_failures(&self) -> bool {
         self.sources

@@ -47,16 +47,24 @@ pub enum QueryInput {
         manual_section: Option<String>,
     },
     /// Read and parse one explicit local Markdown or roff file.
-    File { path: String, format: InputFormat },
+    File {
+        /// Physical path supplied by the caller.
+        path: String,
+        /// Parser-selection policy for the file.
+        format: InputFormat,
+    },
 }
 
 /// Parser selected for an explicit physical input.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum InputFormat {
+    /// Infer the parser from extension and content conventions.
     #[default]
     Auto,
+    /// Parse the input as Markdown.
     Markdown,
+    /// Parse the input as roff with libmandoc.
     Roff,
 }
 
@@ -69,36 +77,51 @@ pub enum InputFormat {
     deny_unknown_fields
 )]
 pub enum QueryView {
+    /// Return the complete structured query bundle.
     Full {},
+    /// Return a navigable structural projection.
     Outline {
+        /// Amount of semantic detail included in the outline.
         detail: OutlineDetail,
     },
+    /// Return content selected by one or more node paths, IDs, or aliases.
     Excerpt {
+        /// Ordered selectors resolved by the engine.
         #[schemars(length(min = 1))]
         selectors: Vec<NodeSelector>,
     },
     /// Resolve exactly one semantic entry and return its complete description.
     Explain {
+        /// Exact or normalized semantic entry name.
         #[schemars(length(min = 1))]
         entry: String,
     },
+    /// Search visible document content with bounded pagination.
     Search {
+        /// Literal or regular-expression search pattern.
         #[schemars(length(min = 1, max = 4096))]
         pattern: String,
+        /// Pattern language.
         #[serde(default)]
         syntax: SearchSyntax,
+        /// Case-matching policy.
         #[serde(default)]
         case: SearchCase,
+        /// Semantic content included in the search.
         #[serde(default)]
         scope: SearchScope,
+        /// Require matches to be bounded by word boundaries.
         #[serde(default)]
         word: bool,
+        /// Neighboring rendered lines included around each match.
         #[serde(default)]
         #[schemars(range(max = 100))]
         context_lines: u16,
+        /// Maximum number of matches returned.
         #[serde(default = "default_search_limit")]
         #[schemars(range(min = 1, max = 10000))]
         limit: u32,
+        /// Number of matching results skipped before collection.
         #[serde(default)]
         offset: u32,
     },
@@ -109,8 +132,11 @@ pub enum QueryView {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(extend("$id" = "urn:mant:request:v7"))]
 pub struct QueryRequest {
+    /// Exact request schema discriminator.
     pub schema: RequestSchema,
+    /// Document source to resolve.
     pub input: QueryInput,
+    /// Projection applied after the document is loaded.
     pub view: QueryView,
 }
 
@@ -119,14 +145,18 @@ pub struct QueryRequest {
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("$id" = "urn:mant:query:v7"))]
 pub struct QueryBundle {
+    /// Exact response schema discriminator.
     pub schema: QuerySchema,
+    /// Human-readable selected-document label.
     pub label: String,
     /// Exact registered address selected for this query. Direct input paths
     /// and standard input do not belong to the registered catalog.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<DocumentAddress>,
+    /// Authoritative structured document, when found.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document: Option<DocumentResponse>,
+    /// Optional quick-reference page resolved alongside the document.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tldr: Option<TldrDocument>,
 }

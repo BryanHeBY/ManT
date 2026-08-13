@@ -28,10 +28,15 @@ const MAX_SEARCH_LIMIT: u32 = 10_000;
 /// Invalid search input or matcher construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SearchError {
+    /// Search pattern contained no bytes.
     EmptyPattern,
+    /// Search pattern exceeded the request bound.
     PatternTooLong,
+    /// Result limit was zero or exceeded the protocol maximum.
     InvalidLimit,
+    /// Requested context exceeded the protocol maximum.
     ContextTooLarge,
+    /// Regular-expression compilation or execution failed.
     InvalidPattern(String),
 }
 

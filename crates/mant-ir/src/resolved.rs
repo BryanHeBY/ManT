@@ -9,9 +9,13 @@ use crate::{Document, DocumentAddress, DocumentIndex, TldrDocument};
 /// `mant-protocol` representation instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedContent {
+    /// Human-readable label suitable for terminal presentation.
     pub label: String,
+    /// Catalog identity, absent for direct file input.
     pub address: Option<DocumentAddress>,
+    /// Parsed authoritative document, when one was found.
     pub document: Option<Document>,
+    /// Optional quick reference resolved alongside the document.
     pub tldr: Option<TldrDocument>,
 }
 

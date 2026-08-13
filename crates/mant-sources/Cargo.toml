@@ -13,6 +13,9 @@ keywords = ["markdown", "documentation", "archive", "git"]
 categories = ["filesystem", "text-processing"]
 include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = []
 update = [

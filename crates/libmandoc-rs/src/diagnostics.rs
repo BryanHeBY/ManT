@@ -4,9 +4,13 @@
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiagnosticLevel {
+    /// A construct is valid roff but unsupported by libmandoc.
     Unsupported,
+    /// The source contains an error that may make output incomplete.
     Error,
+    /// The source is recoverable but suspicious or non-portable.
     Warning,
+    /// The source violates a style recommendation without changing meaning.
     Style,
 }
 
@@ -14,7 +18,9 @@ pub enum DiagnosticLevel {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SourceLocation {
+    /// One-based source line.
     pub line: u32,
+    /// One-based source column.
     pub column: u32,
 }
 
@@ -22,8 +28,11 @@ pub struct SourceLocation {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Diagnostic {
+    /// Severity classified from libmandoc's diagnostic marker.
     pub level: DiagnosticLevel,
+    /// Human-readable finding with the location prefix removed.
     pub message: String,
+    /// Source position when libmandoc supplied a parseable prefix.
     pub location: Option<SourceLocation>,
 }
 

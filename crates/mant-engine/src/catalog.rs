@@ -18,37 +18,52 @@ use crate::{ManualIndex, discover_manual_roots};
 /// Source family used to resolve one available document.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AvailableDocumentKind {
+    /// Registered Markdown document.
     Markdown,
+    /// Indexed native manual page.
     Manual,
 }
 
 /// Precedence class and storage family for one available document.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AvailableDocumentOrigin {
+    /// User-authored primary documents tree.
     Documents,
+    /// One configured source cache, named by its configuration key.
     Source(String),
+    /// A directory discovered through the native manual search path.
     ManualPath,
 }
 
 /// One document discoverable by name through the ordinary query boundary.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AvailableDocument {
+    /// Short lookup name.
     pub name: String,
     /// Extension-free path relative to this document's origin.
     pub logical_path: String,
+    /// Broad source format family.
     pub kind: AvailableDocumentKind,
+    /// Native manual category, present only for manual pages.
     pub manual_section: Option<String>,
+    /// Physical local source path.
     pub path: PathBuf,
+    /// Storage namespace and precedence class.
     pub origin: AvailableDocumentOrigin,
 }
 
 /// Invalid document-catalog filter or regular expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CatalogError {
+    /// An explicit pattern contained no text.
     EmptyPattern,
+    /// A pattern exceeded the bounded request size.
     PatternTooLong,
+    /// Pagination limit was zero or exceeded the protocol maximum.
     InvalidLimit,
+    /// Source-family filters cannot describe any valid document.
     ConflictingSelectors,
+    /// A regular expression could not be compiled.
     InvalidPattern(String),
 }
 

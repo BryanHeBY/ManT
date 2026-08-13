@@ -11,8 +11,13 @@ use serde::{Deserialize, Serialize};
     rename_all_fields = "camelCase"
 )]
 pub enum MarkdownOrigin {
+    /// The user's primary `documents` tree.
     Documents,
-    Source { name: String },
+    /// A configured source cache.
+    Source {
+        /// Configured source name.
+        name: String,
+    },
 }
 
 /// Stable selector for one discoverable document candidate.
@@ -23,18 +28,24 @@ pub enum MarkdownOrigin {
     rename_all_fields = "camelCase"
 )]
 pub enum DocumentAddress {
+    /// A Markdown document registered in the document catalog.
     Markdown {
         /// Extension-free path relative to the selected Markdown origin.
         path: String,
+        /// Storage namespace containing the relative path.
         origin: MarkdownOrigin,
     },
+    /// An installed native manual page.
     Manual {
+        /// Manual topic without its section suffix.
         name: String,
+        /// Native manual category such as `1` or `3p`.
         manual_section: String,
     },
 }
 
 impl DocumentAddress {
+    /// Return the basename used as the document's short lookup name.
     #[must_use]
     pub fn name(&self) -> &str {
         match self {

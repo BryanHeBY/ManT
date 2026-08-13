@@ -8,6 +8,7 @@ use super::{App, Overlay, PointerDrag, UpdateOutcome, menu::MenuId};
 use crate::layout::{MIN_SIDEBAR_WIDTH, maximum_sidebar_width};
 
 impl App {
+    /// Apply one keyboard event and report whether the terminal needs repainting.
     pub fn handle_key(&mut self, key: KeyEvent) -> UpdateOutcome {
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.quit = true;
@@ -77,6 +78,7 @@ impl App {
         UpdateOutcome::Redraw
     }
 
+    /// Apply one mouse event using geometry retained from the last frame.
     pub fn handle_mouse(&mut self, mouse: MouseEvent) -> UpdateOutcome {
         if let Some(outcome) = self.handle_overlay_mouse(mouse) {
             return outcome;

@@ -35,37 +35,79 @@ pub const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 /// A query cannot produce either authoritative manual content or a quick reference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryError {
+    /// A document selector was empty after trimming.
     EmptyName,
+    /// A native manual category was empty or malformed.
     InvalidManualSection,
+    /// An explicit Markdown source name was empty.
     InvalidSource,
+    /// Markdown-source and native-manual selectors were combined.
     ConflictingSourceSelectors,
+    /// A direct Markdown input path was empty.
     EmptyMarkdownPath,
-    UnsupportedInputFormat { path: String },
+    /// Automatic format inference did not recognize a direct input.
+    UnsupportedInputFormat {
+        /// Caller-facing input path.
+        path: String,
+    },
+    /// Excerpt projection was requested without selectors.
     EmptySelection,
+    /// An excerpt selector was empty.
     EmptySelector,
+    /// An explanation entry name was empty.
     EmptyEntry,
+    /// Search configuration failed validation.
     InvalidSearch(SearchError),
-    Markdown { path: String, detail: String },
-    EmptyMarkdown { label: String },
-    Registry { detail: String },
+    /// Markdown input could not be read or parsed.
+    Markdown {
+        /// Caller-facing source path.
+        path: String,
+        /// Stable failure detail.
+        detail: String,
+    },
+    /// Markdown parsing produced neither document nor tldr content.
+    EmptyMarkdown {
+        /// Selected-document label.
+        label: String,
+    },
+    /// Registered-document discovery failed.
+    Registry {
+        /// Stable source-configuration or discovery detail.
+        detail: String,
+    },
+    /// Native manual loading failed.
     Manual(ManualLoadError),
-    NoReadableContent { name: String },
+    /// No Markdown, manual, or quick-reference content could be resolved.
+    NoReadableContent {
+        /// Requested document name.
+        name: String,
+    },
 }
 
 /// Native-manual resolution or lowering failed after candidate selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManualLoadError {
+    /// No indexed native manual matched the request.
     NotFound {
+        /// Requested manual name.
         name: String,
+        /// Search-path and candidate detail.
         detail: String,
     },
+    /// A selected manual could not be parsed or lowered.
     Parse {
+        /// Requested manual name.
         name: String,
+        /// Stable parser or source-policy detail.
         detail: String,
     },
+    /// Parsing succeeded but produced no readable semantic content.
     Empty {
+        /// Requested manual name.
         name: String,
+        /// Physical selected manual path.
         path: PathBuf,
+        /// Non-fatal parser findings explaining the empty result.
         diagnostics: Vec<String>,
     },
 }
@@ -73,17 +115,24 @@ pub enum ManualLoadError {
 /// Materialized result of the view carried by a [`QueryRequest`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryViewResult {
+    /// Complete resolved content with no projection.
     Full(Box<ResolvedContent>),
+    /// Lightweight structural outline.
     Outline(QueryOutline),
+    /// One or more selected document nodes.
     Excerpt(QueryExcerpt),
+    /// Paginatable structure-aware search result.
     Search(QuerySearch),
 }
 
 /// A valid request could not be loaded or projected.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryExecutionError {
+    /// Input validation or document loading failure.
     Query(QueryError),
+    /// Outline or selection projection failure.
     Projection(ProjectionError),
+    /// Search compilation or execution failure.
     Search(SearchError),
 }
 
