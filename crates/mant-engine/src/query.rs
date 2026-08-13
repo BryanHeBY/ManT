@@ -1,4 +1,4 @@
-//! Composes local manuals and cached tldr content into one versioned query.
+//! Resolves local manuals, registered Markdown, and tldr content into one query.
 
 use std::{
     error::Error,
@@ -84,6 +84,18 @@ pub enum QueryError {
         /// Topic that can be queried explicitly with `--tldr`.
         topic: String,
     },
+    /// An explicit tldr query found no quick-reference candidate.
+    TldrNotFound {
+        /// Requested tldr topic.
+        topic: String,
+    },
+    /// An explicit tldr candidate could not be read or parsed.
+    Tldr {
+        /// Requested tldr topic.
+        topic: String,
+        /// Stable cache or Markdown failure detail.
+        detail: String,
+    },
     /// No Markdown, manual, or quick-reference content could be resolved.
     NoReadableContent {
         /// Requested document name.
@@ -143,13 +155,16 @@ pub enum QueryExecutionError {
     Search(SearchError),
 }
 
-/// Input-resolution policy kept outside the serialized request contract.
+/// Closed content-resolution policy kept outside the serialized request contract.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct QueryPolicy {
-    /// Bypass registered Markdown and require a readable native manual.
-    pub manual_only: bool,
-    /// Permit an explicit tldr query to succeed without a full document.
-    pub allow_tldr_only: bool,
+pub enum QueryPolicy {
+    /// Resolve a full document and attach a compatible quick reference.
+    #[default]
+    Combined,
+    /// Bypass registered Markdown and tldr content.
+    ManualOnly,
+    /// Resolve only embedded or cached tldr content through source precedence.
+    TldrOnly,
 }
 
 impl fmt::Display for QueryError {
@@ -191,6 +206,12 @@ impl fmt::Display for QueryError {
                     "\nhint: a tldr entry is available; run `mant {topic} --tldr`"
                 )
             }
+            Self::TldrNotFound { topic } => {
+                write!(formatter, "no tldr quick reference was found for '{topic}'")
+            }
+            Self::Tldr { topic, detail } => {
+                write!(formatter, "could not load tldr entry '{topic}': {detail}")
+            }
             Self::NoReadableContent { name } => {
                 write!(
                     formatter,
@@ -218,6 +239,8 @@ impl Error for QueryError {
             | Self::Markdown { .. }
             | Self::EmptyMarkdown { .. }
             | Self::Registry { .. }
+            | Self::TldrNotFound { .. }
+            | Self::Tldr { .. }
             | Self::NoReadableContent { .. } => None,
         }
     }
@@ -387,7 +410,7 @@ pub fn validate_query_request(
             {
                 return Err(QueryError::InvalidManualSection);
             }
-            if source.is_some() && (manual_section.is_some() || policy.manual_only) {
+            if source.is_some() && (manual_section.is_some() || policy == QueryPolicy::ManualOnly) {
                 return Err(QueryError::ConflictingSourceSelectors);
             }
         }
@@ -395,10 +418,10 @@ pub fn validate_query_request(
             if path.trim().is_empty() {
                 return Err(QueryError::EmptyMarkdownPath);
             }
-            if policy.manual_only {
+            if policy != QueryPolicy::Combined {
                 return Err(QueryError::Markdown {
                     path: path.trim().to_owned(),
-                    detail: "the manual-only policy does not apply to Markdown input".to_owned(),
+                    detail: "content-only policies do not apply to direct input".to_owned(),
                 });
             }
         }
@@ -448,6 +471,12 @@ trait QueryHost {
         source: Option<&str>,
         phase: RegisteredLookupPhase,
     ) -> Result<Option<RegisteredSelection>, String>;
+    fn locate_registered_document_groups(
+        &self,
+        candidates: &[String],
+        source: Option<&str>,
+        phase: RegisteredLookupPhase,
+    ) -> Result<Vec<RegisteredSelectionGroup>, String>;
     fn locate_registered_address(
         &self,
         address: &DocumentAddress,
@@ -461,14 +490,33 @@ trait QueryHost {
 
 #[derive(Clone, Copy)]
 enum RegisteredLookupPhase {
-    BeforeManual,
-    AfterManual,
+    BeforeBuiltin,
+    AfterBuiltin,
 }
 
 #[derive(Clone)]
 struct RegisteredSelection {
     path: PathBuf,
     address: DocumentAddress,
+}
+
+struct RegisteredSelectionGroup {
+    documents: Vec<RegisteredSelection>,
+}
+
+fn registered_selection(document: &mant_sources::RegisteredDocument) -> RegisteredSelection {
+    RegisteredSelection {
+        path: document.path.clone(),
+        address: DocumentAddress::Markdown {
+            path: document.logical_path.clone(),
+            origin: match &document.origin {
+                RegisteredDocumentOrigin::Documents => MarkdownOrigin::Documents,
+                RegisteredDocumentOrigin::Source(name) => {
+                    MarkdownOrigin::Source { name: name.clone() }
+                }
+            },
+        },
+    }
 }
 
 struct LoadedManual {
@@ -577,26 +625,41 @@ impl QueryHost for DocumentResolver {
             index.find(candidates, source)
         } else {
             match phase {
-                RegisteredLookupPhase::BeforeManual => index.find_before_manual(candidates),
-                RegisteredLookupPhase::AfterManual => index.find_after_manual(candidates),
+                RegisteredLookupPhase::BeforeBuiltin => index.find_before_builtin(candidates),
+                RegisteredLookupPhase::AfterBuiltin => index.find_after_builtin(candidates),
             }
         };
         selected
-            .map(|registered| {
-                registered.map(|registered| RegisteredSelection {
-                    path: registered.path.clone(),
-                    address: DocumentAddress::Markdown {
-                        path: registered.logical_path.clone(),
-                        origin: match &registered.origin {
-                            RegisteredDocumentOrigin::Documents => MarkdownOrigin::Documents,
-                            RegisteredDocumentOrigin::Source(name) => {
-                                MarkdownOrigin::Source { name: name.clone() }
-                            }
-                        },
-                    },
-                })
-            })
+            .map(|registered| registered.map(registered_selection))
             .map_err(|error| error.to_string())
+    }
+
+    fn locate_registered_document_groups(
+        &self,
+        candidates: &[String],
+        source: Option<&str>,
+        phase: RegisteredLookupPhase,
+    ) -> Result<Vec<RegisteredSelectionGroup>, String> {
+        let index = self
+            .registered
+            .get_or_init(RegisteredDocumentIndex::load)
+            .as_ref()
+            .map_err(ToString::to_string)?;
+        let groups = if let Some(source) = source {
+            index.matches_in_source(candidates, source)
+        } else {
+            Ok(match phase {
+                RegisteredLookupPhase::BeforeBuiltin => index.matches_before_builtin(candidates),
+                RegisteredLookupPhase::AfterBuiltin => index.matches_after_builtin(candidates),
+            })
+        }
+        .map_err(|error| error.to_string())?;
+        Ok(groups
+            .into_iter()
+            .map(|group| RegisteredSelectionGroup {
+                documents: group.documents.iter().map(registered_selection).collect(),
+            })
+            .collect())
     }
 
     fn locate_registered_address(
@@ -707,7 +770,7 @@ fn query_input_file(
     match format {
         InputFormat::Markdown => query_markdown_file(path, policy, host),
         InputFormat::Roff => {
-            if policy.manual_only {
+            if policy != QueryPolicy::Combined {
                 return Err(QueryError::ConflictingSourceSelectors);
             }
             let document = host.parse_manual_input(Path::new(path)).map_err(|detail| {
@@ -786,10 +849,10 @@ fn query_markdown_file(
     if path.is_empty() {
         return Err(QueryError::EmptyMarkdownPath);
     }
-    if policy.manual_only {
+    if policy != QueryPolicy::Combined {
         return Err(QueryError::Markdown {
             path: path.to_owned(),
-            detail: "the manual-only policy does not apply to Markdown input".to_owned(),
+            detail: "content-only policies do not apply to direct input".to_owned(),
         });
     }
     let source = host
@@ -897,33 +960,13 @@ fn query_named_document(
         return Err(QueryError::EmptyName);
     }
     if let Some(address) = parse_catalog_address(name) {
-        if requested_source.is_some() || requested_manual_section.is_some() || policy.manual_only {
+        if requested_source.is_some()
+            || requested_manual_section.is_some()
+            || policy == QueryPolicy::ManualOnly
+        {
             return Err(QueryError::ConflictingSourceSelectors);
         }
-        return match address {
-            DocumentAddress::Markdown { .. } => {
-                let registered = host
-                    .locate_registered_address(&address)
-                    .map_err(|detail| QueryError::Registry { detail })?
-                    .ok_or_else(|| QueryError::NoReadableContent {
-                        name: name.to_owned(),
-                    })?;
-                query_registered_document(name, &registered, host)
-            }
-            DocumentAddress::Manual {
-                name: manual_name,
-                manual_section,
-            } => query_named_document(
-                &manual_name,
-                None,
-                Some(&manual_section),
-                QueryPolicy {
-                    manual_only: true,
-                    allow_tldr_only: false,
-                },
-                host,
-            ),
-        };
+        return query_catalog_address(name, &address, policy, host);
     }
     let section = requested_manual_section.map(str::trim);
     if section.is_some_and(str::is_empty) {
@@ -934,19 +977,26 @@ fn query_named_document(
     if source.is_some_and(str::is_empty) {
         return Err(QueryError::InvalidSource);
     }
-    if source.is_some() && (section.is_some() || policy.manual_only) {
+    if source.is_some() && (section.is_some() || policy == QueryPolicy::ManualOnly) {
         return Err(QueryError::ConflictingSourceSelectors);
     }
-    let require_manual = policy.manual_only || section.is_some();
+    if policy == QueryPolicy::TldrOnly && section.is_some() {
+        return Err(QueryError::ConflictingSourceSelectors);
+    }
+    let require_manual = policy == QueryPolicy::ManualOnly || section.is_some();
     let candidates = host.name_candidates(name);
+
+    if policy == QueryPolicy::TldrOnly {
+        return query_tldr_only(name, &candidates, source, host);
+    }
 
     // Personal documents and positive-priority sources form the preferred
     // registration phase. Explicit source selection always wins regardless of
     // its configured rank. Non-positive sources are consulted only after the
     // priority-zero native-manual phase fails.
-    if section.is_none() && !policy.manual_only {
+    if section.is_none() && policy == QueryPolicy::Combined {
         let registered = host
-            .locate_registered_document(&candidates, source, RegisteredLookupPhase::BeforeManual)
+            .locate_registered_document(&candidates, source, RegisteredLookupPhase::BeforeBuiltin)
             .map_err(|detail| QueryError::Registry { detail })?;
         if let Some(registered) = registered {
             return query_registered_document(name, &registered, host);
@@ -991,14 +1041,140 @@ fn query_named_document(
         };
     }
 
-    finish_unqualified_manual(
-        name,
-        &candidates,
-        manual,
-        tldr,
-        policy.allow_tldr_only,
-        host,
-    )
+    finish_unqualified_manual(name, &candidates, manual, tldr, host)
+}
+
+fn query_catalog_address(
+    selector: &str,
+    address: &DocumentAddress,
+    policy: QueryPolicy,
+    host: &dyn QueryHost,
+) -> Result<ResolvedContent, QueryError> {
+    match address {
+        DocumentAddress::Markdown { .. } if policy == QueryPolicy::TldrOnly => {
+            let registered = host
+                .locate_registered_address(address)
+                .map_err(|detail| QueryError::Registry { detail })?
+                .ok_or_else(|| QueryError::TldrNotFound {
+                    topic: selector.to_owned(),
+                })?;
+            query_registered_tldr(selector, &registered, host)?.ok_or_else(|| {
+                QueryError::TldrNotFound {
+                    topic: selector.to_owned(),
+                }
+            })
+        }
+        DocumentAddress::Markdown { .. } => {
+            let registered = host
+                .locate_registered_address(address)
+                .map_err(|detail| QueryError::Registry { detail })?
+                .ok_or_else(|| QueryError::NoReadableContent {
+                    name: selector.to_owned(),
+                })?;
+            query_registered_document(selector, &registered, host)
+        }
+        DocumentAddress::Manual { .. } if policy == QueryPolicy::TldrOnly => {
+            Err(QueryError::ConflictingSourceSelectors)
+        }
+        DocumentAddress::Manual {
+            name,
+            manual_section,
+        } => query_named_document(
+            name,
+            None,
+            Some(manual_section),
+            QueryPolicy::ManualOnly,
+            host,
+        ),
+    }
+}
+
+fn query_tldr_only(
+    name: &str,
+    candidates: &[String],
+    source: Option<&str>,
+    host: &dyn QueryHost,
+) -> Result<ResolvedContent, QueryError> {
+    let before = host
+        .locate_registered_document_groups(candidates, source, RegisteredLookupPhase::BeforeBuiltin)
+        .map_err(|detail| QueryError::Registry { detail })?;
+    if let Some(tldr) = first_registered_tldr(name, before, host)? {
+        return Ok(tldr);
+    }
+    if source.is_some() {
+        return Err(QueryError::TldrNotFound {
+            topic: name.to_owned(),
+        });
+    }
+
+    if let Some(tldr) = host.read_tldr(name).map_err(|detail| QueryError::Tldr {
+        topic: name.to_owned(),
+        detail,
+    })? {
+        return Ok(ResolvedContent {
+            address: None,
+            label: name.to_owned(),
+            document: None,
+            tldr: Some(tldr),
+        });
+    }
+
+    let after = host
+        .locate_registered_document_groups(candidates, None, RegisteredLookupPhase::AfterBuiltin)
+        .map_err(|detail| QueryError::Registry { detail })?;
+    first_registered_tldr(name, after, host)?.ok_or_else(|| QueryError::TldrNotFound {
+        topic: name.to_owned(),
+    })
+}
+
+fn first_registered_tldr(
+    name: &str,
+    groups: Vec<RegisteredSelectionGroup>,
+    host: &dyn QueryHost,
+) -> Result<Option<ResolvedContent>, QueryError> {
+    for group in groups {
+        let mut matches = Vec::new();
+        for registered in group.documents {
+            if let Some(tldr) = query_registered_tldr(name, &registered, host)? {
+                matches.push(tldr);
+            }
+        }
+        match matches.len() {
+            0 => {}
+            1 => return Ok(matches.pop()),
+            _ => {
+                let choices = matches
+                    .iter()
+                    .filter_map(|candidate| candidate.address.as_ref())
+                    .map(DocumentAddress::catalog_path)
+                    .collect::<Vec<_>>()
+                    .join("', '");
+                return Err(QueryError::Registry {
+                    detail: format!(
+                        "tldr selector '{name}' is ambiguous at one document priority: '{choices}'"
+                    ),
+                });
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn query_registered_tldr(
+    name: &str,
+    registered: &RegisteredSelection,
+    host: &dyn QueryHost,
+) -> Result<Option<ResolvedContent>, QueryError> {
+    let resolved = query_registered_document(name, registered, host)?;
+    let Some(tldr) = resolved.tldr else {
+        return Ok(None);
+    };
+    Ok(Some(ResolvedContent {
+        address: resolved.address,
+        label: resolved.label,
+        document: None,
+        tldr: Some(tldr),
+    }))
 }
 
 fn finish_unqualified_manual(
@@ -1006,7 +1182,6 @@ fn finish_unqualified_manual(
     candidates: &[String],
     manual: Result<LoadedManual, ManualLoadError>,
     tldr: Option<TldrDocument>,
-    allow_tldr_only: bool,
     host: &dyn QueryHost,
 ) -> Result<ResolvedContent, QueryError> {
     match manual {
@@ -1018,17 +1193,10 @@ fn finish_unqualified_manual(
         }),
         Err(error) => {
             let registered = host
-                .locate_registered_document(candidates, None, RegisteredLookupPhase::AfterManual)
+                .locate_registered_document(candidates, None, RegisteredLookupPhase::AfterBuiltin)
                 .map_err(|detail| QueryError::Registry { detail })?;
             if let Some(registered) = registered {
                 query_registered_document(name, &registered, host)
-            } else if allow_tldr_only && tldr.is_some() {
-                Ok(ResolvedContent {
-                    address: None,
-                    label: name.to_owned(),
-                    document: None,
-                    tldr,
-                })
             } else if tldr.is_some() {
                 Err(QueryError::ManualWithTldr {
                     error,
@@ -1168,13 +1336,14 @@ mod tests {
         DocumentAddress, InputFormat, MarkdownOrigin, QueryInput, QueryRequest, QueryView,
         RequestSchema,
     };
+    use mant_sources::BUILTIN_CONTENT_PRIORITY;
 
     use crate::{ManualPage, ManualRequest};
 
     use super::{
         MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, RegisteredLookupPhase,
-        RegisteredSelection, query_markdown_text, query_with, read_capped_utf8,
-        read_capped_utf8_io,
+        RegisteredSelection, RegisteredSelectionGroup, query_markdown_text, query_with,
+        read_capped_utf8, read_capped_utf8_io,
     };
 
     #[derive(Clone)]
@@ -1211,18 +1380,18 @@ mod tests {
                     "source"
                 } else {
                     match phase {
-                        RegisteredLookupPhase::BeforeManual => "name",
-                        RegisteredLookupPhase::AfterManual => "fallback",
+                        RegisteredLookupPhase::BeforeBuiltin => "name",
+                        RegisteredLookupPhase::AfterBuiltin => "fallback",
                     }
                 });
             if source.is_none()
                 && match phase {
-                    RegisteredLookupPhase::BeforeManual => self
+                    RegisteredLookupPhase::BeforeBuiltin => self
                         .registered_source_priority
-                        .is_some_and(|priority| priority <= 0),
-                    RegisteredLookupPhase::AfterManual => self
+                        .is_some_and(|priority| priority <= BUILTIN_CONTENT_PRIORITY),
+                    RegisteredLookupPhase::AfterBuiltin => self
                         .registered_source_priority
-                        .is_none_or(|priority| priority > 0),
+                        .is_none_or(|priority| priority > BUILTIN_CONTENT_PRIORITY),
                 }
             {
                 return Ok(None);
@@ -1248,13 +1417,39 @@ mod tests {
                             .registered_name
                             .clone()
                             .unwrap_or_else(|| candidates[0].clone()),
-                        origin: source.map_or(MarkdownOrigin::Documents, |name| {
-                            MarkdownOrigin::Source {
+                        origin: source.map_or_else(
+                            || {
+                                self.registered_source_priority.map_or(
+                                    MarkdownOrigin::Documents,
+                                    |_| MarkdownOrigin::Source {
+                                        name: "team".to_owned(),
+                                    },
+                                )
+                            },
+                            |name| MarkdownOrigin::Source {
                                 name: name.to_owned(),
-                            }
-                        }),
+                            },
+                        ),
                     },
                 }))
+        }
+
+        fn locate_registered_document_groups(
+            &self,
+            candidates: &[String],
+            source: Option<&str>,
+            phase: RegisteredLookupPhase,
+        ) -> Result<Vec<RegisteredSelectionGroup>, String> {
+            self.locate_registered_document(candidates, source, phase)
+                .map(|selection| {
+                    selection
+                        .map(|value| {
+                            vec![RegisteredSelectionGroup {
+                                documents: vec![value],
+                            }]
+                        })
+                        .unwrap_or_default()
+                })
         }
 
         fn locate_registered_address(
@@ -1344,6 +1539,25 @@ mod tests {
             source_path: "/cache/pages/common/tool.md".to_owned(),
             origin: TldrOrigin::TldrPages,
         }
+    }
+
+    fn embedded_tldr_markdown() -> String {
+        "\
+<!-- mant:tldr:start -->
+# tool
+
+> Source-owned quick reference.
+
+- Run the tool:
+
+`tool`
+<!-- mant:tldr:end -->
+
+# Tool
+
+Full documentation.
+"
+        .to_owned()
     }
 
     fn host(direct: Result<Document, String>) -> StubHost {
@@ -1539,15 +1753,8 @@ mod tests {
         host.registered_document = Some(PathBuf::from("/data/mant/tool.md"));
         host.markdown = Ok("# Registered".to_owned());
         host.tldr = Ok(Some(tldr()));
-        let result = query_with(
-            &request(),
-            QueryPolicy {
-                manual_only: true,
-                allow_tldr_only: false,
-            },
-            &host,
-        )
-        .expect("manual-only query");
+        let result =
+            query_with(&request(), QueryPolicy::ManualOnly, &host).expect("manual-only query");
 
         assert_eq!(
             result.document.as_ref().expect("manual").source.format,
@@ -1566,15 +1773,8 @@ mod tests {
         let mut host = host(Ok(document(SourceFormat::Man, true, false)));
         host.tldr = Ok(Some(tldr()));
 
-        let error = query_with(
-            &request(),
-            QueryPolicy {
-                manual_only: true,
-                allow_tldr_only: false,
-            },
-            &host,
-        )
-        .expect_err("an optional tldr page must not hide native parser failure");
+        let error = query_with(&request(), QueryPolicy::ManualOnly, &host)
+            .expect_err("an optional tldr page must not hide native parser failure");
 
         let QueryError::Manual(detail) = error else {
             panic!("expected the native parser diagnostic");
@@ -1653,18 +1853,105 @@ mod tests {
         let mut host = host(Err("libmandoc failed".to_owned()));
         host.locate = Err("source not found".to_owned());
         host.tldr = Ok(Some(tldr()));
-        let result = query_with(
-            &request(),
-            QueryPolicy {
-                manual_only: false,
-                allow_tldr_only: true,
-            },
-            &host,
-        )
-        .expect("explicit tldr-only query");
+        let result =
+            query_with(&request(), QueryPolicy::TldrOnly, &host).expect("explicit tldr-only query");
 
         assert!(result.document.is_none());
         assert_eq!(result.tldr.expect("tldr").title, "tool");
+    }
+
+    #[test]
+    fn positive_source_embedded_tldr_precedes_the_builtin_cache() {
+        let mut host = host(Err("manual must not be read".to_owned()));
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(1);
+        host.markdown = Ok(embedded_tldr_markdown());
+        host.tldr = Ok(Some(tldr()));
+
+        let result = query_with(&request(), QueryPolicy::TldrOnly, &host)
+            .expect("positive-priority embedded tldr");
+
+        assert_eq!(result.tldr.expect("tldr").origin, TldrOrigin::Embedded);
+        assert_eq!(
+            result.address,
+            Some(DocumentAddress::Markdown {
+                path: "tool".to_owned(),
+                origin: MarkdownOrigin::Source {
+                    name: "team".to_owned(),
+                },
+            })
+        );
+        assert_eq!(*host.calls.lock().expect("calls"), ["name", "markdown"]);
+    }
+
+    #[test]
+    fn builtin_tldr_cache_wins_a_zero_priority_tie() {
+        let mut host = host(Err("manual must not be read".to_owned()));
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(0);
+        host.markdown = Ok(embedded_tldr_markdown());
+        host.tldr = Ok(Some(tldr()));
+
+        let result =
+            query_with(&request(), QueryPolicy::TldrOnly, &host).expect("builtin tldr cache");
+
+        assert_eq!(result.tldr.expect("tldr").origin, TldrOrigin::TldrPages);
+        assert_eq!(*host.calls.lock().expect("calls"), ["name", "tldr"]);
+    }
+
+    #[test]
+    fn tldr_lookup_skips_markdown_without_an_embedded_quick_reference() {
+        let mut host = host(Err("manual must not be read".to_owned()));
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(10);
+        host.markdown = Ok("# Tool\n\nFull documentation only.\n".to_owned());
+        host.tldr = Ok(Some(tldr()));
+
+        let result = query_with(&request(), QueryPolicy::TldrOnly, &host)
+            .expect("cached tldr after empty Markdown candidate");
+
+        assert_eq!(result.tldr.expect("tldr").origin, TldrOrigin::TldrPages);
+        assert_eq!(
+            *host.calls.lock().expect("calls"),
+            ["name", "markdown", "tldr"]
+        );
+    }
+
+    #[test]
+    fn negative_source_embedded_tldr_is_the_final_fallback() {
+        let mut host = host(Err("manual must not be read".to_owned()));
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(-1);
+        host.markdown = Ok(embedded_tldr_markdown());
+
+        let result = query_with(&request(), QueryPolicy::TldrOnly, &host)
+            .expect("negative-priority embedded tldr");
+
+        assert_eq!(result.tldr.expect("tldr").origin, TldrOrigin::Embedded);
+        assert_eq!(
+            *host.calls.lock().expect("calls"),
+            ["name", "tldr", "fallback", "markdown"]
+        );
+    }
+
+    #[test]
+    fn explicit_source_limits_tldr_lookup_to_that_source() {
+        let mut host = host(Err("manual must not be read".to_owned()));
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(-1);
+        host.markdown = Ok(embedded_tldr_markdown());
+        host.tldr = Ok(Some(tldr()));
+        let mut request = request();
+        let QueryInput::Document { source, .. } = &mut request.input else {
+            unreachable!("document request")
+        };
+        *source = Some("team".to_owned());
+
+        let result =
+            query_with(&request, QueryPolicy::TldrOnly, &host).expect("source-owned embedded tldr");
+
+        assert_eq!(result.tldr.expect("tldr").origin, TldrOrigin::Embedded);
+        assert_eq!(*host.calls.lock().expect("calls"), ["source", "markdown"]);
     }
 
     #[test]

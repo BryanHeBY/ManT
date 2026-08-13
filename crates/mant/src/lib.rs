@@ -48,12 +48,11 @@ struct ProtocolDescription<'a> {
 }
 
 /// Normalized fields of a conventional CLI document query.
-#[allow(clippy::struct_excessive_bools)]
 struct QueryExecution {
     source: QuerySource,
     presentation: QueryPresentation,
     pretty: bool,
-    manual_only: bool,
+    policy: QueryPolicy,
     preserve_anchors: bool,
 }
 
@@ -377,14 +376,14 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             source,
             presentation,
             pretty,
-            manual_only,
+            policy,
             preserve_anchors,
         } => execute_query(
             QueryExecution {
                 source,
                 presentation,
                 pretty,
-                manual_only,
+                policy,
                 preserve_anchors,
             },
             input,
@@ -453,10 +452,7 @@ fn execute_query(
     input: &mut dyn Read,
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
-    let policy = QueryPolicy {
-        manual_only: command.manual_only,
-        allow_tldr_only: matches!(command.presentation, QueryPresentation::Tldr(_)),
-    };
+    let policy = command.policy;
     let result = match command.source {
         QuerySource::InputStdin { format, view } => {
             validate_markdown_policy(policy)?;
@@ -524,7 +520,7 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
     let Command::Query {
         source,
         presentation: QueryPresentation::Interactive,
-        manual_only,
+        policy,
         ..
     } = command
     else {
@@ -545,10 +541,6 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
             diagnostics,
         );
     }
-    let policy = QueryPolicy {
-        manual_only,
-        allow_tldr_only: false,
-    };
     if let Err(error) = mant_engine::validate_query_request(&request, policy).map_err(query_failure)
     {
         return report_failure(&error, diagnostics);
@@ -603,7 +595,7 @@ fn open_external_uri(uri: &str) -> Result<(), String> {
 }
 
 fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {
-    let (name, source, manual_section, manual_only) = match address {
+    let (name, source, manual_section, policy) = match address {
         DocumentAddress::Markdown { path, origin } => (
             path.clone(),
             match origin {
@@ -611,12 +603,17 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
                 MarkdownOrigin::Source { name } => Some(name.clone()),
             },
             None,
-            false,
+            QueryPolicy::Combined,
         ),
         DocumentAddress::Manual {
             name,
             manual_section,
-        } => (name.clone(), None, Some(manual_section.clone()), true),
+        } => (
+            name.clone(),
+            None,
+            Some(manual_section.clone()),
+            QueryPolicy::ManualOnly,
+        ),
     };
     (
         QueryRequest {
@@ -628,10 +625,7 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
             },
             view: QueryView::Full {},
         },
-        QueryPolicy {
-            manual_only,
-            allow_tldr_only: false,
-        },
+        policy,
     )
 }
 
@@ -669,9 +663,9 @@ fn read_input_bytes(input: &mut dyn Read, limit: u64, label: &str) -> Result<Vec
 }
 
 fn validate_markdown_policy(policy: QueryPolicy) -> Result<(), Failure> {
-    if policy.manual_only {
+    if policy != QueryPolicy::Combined {
         return Err(Failure::usage(
-            "the manual-only policy does not apply to Markdown input",
+            "content-only policies do not apply to Markdown input",
         ));
     }
     Ok(())
@@ -736,7 +730,7 @@ mod tests {
                 manual_section: None,
             }
         );
-        assert!(!policy.manual_only);
+        assert_eq!(policy, QueryPolicy::Combined);
 
         let (request, policy) = request_for_address(&DocumentAddress::Manual {
             name: "printf".to_owned(),
@@ -750,7 +744,7 @@ mod tests {
                 manual_section: Some("3".to_owned()),
             }
         );
-        assert!(policy.manual_only);
+        assert_eq!(policy, QueryPolicy::ManualOnly);
     }
 
     #[test]
@@ -1397,13 +1391,7 @@ mod tests {
         assert_eq!(status, 0);
         assert!(output.contains("[name-1] NAME"));
         assert!(diagnostics.is_empty());
-        assert_eq!(
-            host.last_policy.get(),
-            QueryPolicy {
-                manual_only: true,
-                allow_tldr_only: false,
-            }
-        );
+        assert_eq!(host.last_policy.get(), QueryPolicy::ManualOnly);
     }
 
     #[test]

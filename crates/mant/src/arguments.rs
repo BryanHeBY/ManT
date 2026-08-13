@@ -7,6 +7,7 @@
 use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
+use mant_engine::QueryPolicy;
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, InputFormat, NodeSelector, OutlineDetail, QueryInput,
     QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
@@ -162,7 +163,7 @@ pub(crate) enum Command {
         source: QuerySource,
         presentation: QueryPresentation,
         pretty: bool,
-        manual_only: bool,
+        policy: QueryPolicy,
         preserve_anchors: bool,
     },
     Catalog {
@@ -641,7 +642,13 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
         source,
         presentation,
         pretty: !parsed.compact,
-        manual_only: parsed.manual,
+        policy: if parsed.manual {
+            QueryPolicy::ManualOnly
+        } else if parsed.tldr {
+            QueryPolicy::TldrOnly
+        } else {
+            QueryPolicy::Combined
+        },
         preserve_anchors: parsed.preserve_anchors,
     })
 }
@@ -1014,7 +1021,8 @@ mod tests {
     };
 
     use super::{
-        ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract, parse,
+        ColorMode, Command, QueryFormat, QueryPolicy, QueryPresentation, QuerySource,
+        SchemaContract, parse,
     };
 
     fn args(values: &[&str]) -> Vec<String> {
@@ -1037,7 +1045,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Auto,
                 pretty: true,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1209,7 +1217,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1326,7 +1334,7 @@ mod tests {
                 source: QuerySource::StdinJson,
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: false,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1337,7 +1345,7 @@ mod tests {
         assert!(matches!(
             parse(&args(&["tar", "--manual", "--format", "json"])).expect("manual-only query"),
             Command::Query {
-                manual_only: true,
+                policy: QueryPolicy::ManualOnly,
                 ..
             }
         ));
@@ -1349,7 +1357,7 @@ mod tests {
                     ..
                 }),
                 presentation: QueryPresentation::Tldr(ColorMode::Auto),
-                manual_only: false,
+                policy: QueryPolicy::TldrOnly,
                 ..
             } if selectors == &["tldr"]
         ));
@@ -1373,7 +1381,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1394,7 +1402,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1417,7 +1425,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1446,7 +1454,7 @@ mod tests {
                     }),
                     presentation: QueryPresentation::Output(QueryFormat::Markdown),
                     pretty: true,
-                    manual_only: false,
+                    policy: QueryPolicy::Combined,
                     preserve_anchors: false,
                 }
             );
@@ -1478,7 +1486,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
                 pretty: true,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1524,7 +1532,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Json),
                 pretty: true,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );
@@ -1640,7 +1648,7 @@ mod tests {
                 }),
                 presentation: QueryPresentation::Auto,
                 pretty: true,
-                manual_only: false,
+                policy: QueryPolicy::Combined,
                 preserve_anchors: false,
             }
         );

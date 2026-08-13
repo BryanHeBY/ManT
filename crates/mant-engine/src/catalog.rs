@@ -10,7 +10,8 @@ use mant_protocol::{
 };
 
 use mant_sources::{
-    RegisteredDocument, RegisteredDocumentOrigin, SourceConfigError, list_registered_documents,
+    BUILTIN_CONTENT_PRIORITY, RegisteredDocument, RegisteredDocumentOrigin, SourceConfigError,
+    list_registered_documents,
 };
 
 use crate::{ManualIndex, discover_manual_roots};
@@ -318,7 +319,11 @@ fn compare_precedence(left: &AvailableDocument, right: &AvailableDocument) -> st
     fn class(document: &AvailableDocument) -> u8 {
         match (&document.origin, document.source_priority) {
             (AvailableDocumentOrigin::Documents, _) => 0,
-            (AvailableDocumentOrigin::Source(_), Some(priority)) if priority > 0 => 1,
+            (AvailableDocumentOrigin::Source(_), Some(priority))
+                if priority > BUILTIN_CONTENT_PRIORITY =>
+            {
+                1
+            }
             (AvailableDocumentOrigin::ManualPath, _) => 2,
             (AvailableDocumentOrigin::Source(_), _) => 3,
         }

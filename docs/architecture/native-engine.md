@@ -198,7 +198,11 @@ Tldr content remains a distinct `QueryBundle` channel rather than a special
 document section. Cached tldr-pages data and a Markdown-owned tldr preface use
 the same parser and presentation model, with origin metadata controlling
 attribution. Projection path `0` and selector `tldr` expose this channel
-without renumbering ordinary document sections.
+without renumbering ordinary document sections. Explicit tldr resolution uses
+the registered-document precedence groups, filters each group by actual
+embedded content, and places the cache at the shared built-in priority-zero
+boundary. This keeps source ranking in `mant-sources` and content policy in the
+engine instead of duplicating either rule in the CLI.
 
 ## Presentation boundaries
 

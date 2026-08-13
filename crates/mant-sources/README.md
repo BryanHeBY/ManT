@@ -54,7 +54,9 @@ path and component-suffix candidates without repeating filesystem discovery.
 Root documents win. Configured sources use native manuals as a priority-zero
 baseline: positive sources precede manuals, while zero and negative sources
 follow them. The source default is `1`; equal-priority sources use ascending
-bytewise name order.
+bytewise name order. Explicit `mant NAME --tldr` lookup reuses this ordering for
+Markdown-owned quick references, with cached tldr sharing the built-in zero
+baseline; Markdown files without an embedded quick reference are skipped.
 
 Personal `documents/` may contain explicitly named leaf-file links to regular
 files, including external targets. Directory and broken links are ignored.

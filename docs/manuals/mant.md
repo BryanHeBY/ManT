@@ -153,9 +153,12 @@ and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
   or `3p`.
 - `--manual`: Require only a native manual instead of registered Markdown with
   the same name or an attached quick reference.
-- `--tldr`: Print only the available quick reference and explicitly permit a
-  cached entry when no full document exists. The default is styled terminal
-  text on a color TTY and plain text through a pipe; use
+- `--tldr`: Print only the highest-precedence embedded or cached quick
+  reference and permit it when no full document exists. Personal documents
+  precede positive-priority sources, the cached tldr baseline at priority `0`,
+  and then non-positive sources. Markdown without an embedded quick reference
+  does not participate. Combine `--source SOURCE` to select only that source.
+  The default is styled terminal text on a color TTY and plain text through a pipe; use
   `--color always|never` or an explicit `--format` to override it. A cached
   tldr entry alone does not satisfy an ordinary document query: ManT reports
   the missing document and suggests this explicit command.
@@ -500,7 +503,10 @@ which contains either an external tldr page or a Markdown document's explicitly
 marked tldr preface. It is not a native manual section. Remaining headings use
 one-based paths such as `2.3`, and semantic entries use paths such as `2.3/e4`.
 `--tldr` selects that reserved node alone and, unlike a general node
-projection, explicitly permits a cached tldr entry without a full document.
+projection, explicitly permits a quick reference without a full document. It
+uses the normal document priority chain, but considers only Markdown documents
+that actually contain an embedded tldr preface; cached tldr occupies the same
+priority-zero built-in position as native manuals.
 
 `--node` first recognizes the reserved tldr and document-root selectors, then
 resolves exact paths or IDs across sections and entries, exact aliases, and

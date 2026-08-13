@@ -58,6 +58,8 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::Registry { .. }
         | QueryError::Manual(_)
         | QueryError::ManualWithTldr { .. }
+        | QueryError::TldrNotFound { .. }
+        | QueryError::Tldr { .. }
         | QueryError::NoReadableContent { .. } => Failure::operational(error),
     }
 }

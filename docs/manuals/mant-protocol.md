@@ -206,9 +206,10 @@ available on Linux, macOS, and Windows through the same owned IR boundary.
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires only readable native manual content, without an
 attached tldr quick reference. `--man-section` has the same exclusivity, while
-`--tldr` selects the reserved `tldr` node and explicitly permits a cached
-tldr-only result. A request JSON client can select the same manual source
-unambiguously by supplying its discovered `manualSection`; manual sections
+`--tldr` selects the reserved `tldr` node through the document priority chain
+and explicitly permits an embedded or cached tldr-only result. A request JSON
+client can select the same manual source unambiguously by supplying its
+discovered `manualSection`; manual sections
 apply only to native manuals and therefore bypass registered Markdown.
 
 ## Request Contract
@@ -449,10 +450,13 @@ printf '%s\n' \
 | `tldr` | No | Normalized external or embedded quick reference |
 
 A successful runtime result contains useful `document`, `tldr`, or both. The
-CLI permits a cached tldr-only result only for an explicit `--tldr` invocation;
-an ordinary document query remains a failed lookup and receives a command hint.
-A Markdown file can provide an embedded quick reference and a document in the
-same bundle.
+CLI permits a tldr-only result only for an explicit `--tldr` invocation; an
+ordinary document query remains a failed lookup and receives a command hint.
+For that explicit lookup, personal embedded quick references precede positive
+source priorities, cached tldr at the built-in priority-zero baseline, and
+non-positive sources. A matching Markdown document without embedded tldr is
+skipped rather than blocking a lower quick-reference candidate. A Markdown file
+can provide an embedded quick reference and a document in the same bundle.
 
 The embedded form is an input-layer extension, not an additional wire shape.
 At the physical start of a Markdown source, invisible

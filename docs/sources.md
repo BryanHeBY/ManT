@@ -221,6 +221,12 @@ is `1`, an existing source that omits `priority` continues to override a manual
 with the same selector. Set cross-platform or fallback documentation to `0` or
 a negative value when the installed native page should win.
 
+`mant NAME --tldr` applies the same order to quick-reference content. Personal
+documents and configured sources participate only when the matching Markdown
+file contains an embedded tldr preface. Cached tldr occupies the built-in
+priority-zero position, so positive sources override it and zero or negative
+sources follow it. `--source NAME --tldr` restricts resolution to that source.
+
 Exact relative paths win before component suffixes. If one origin contains
 both `languages/en/tool.md` and `languages/zh/tool.md`, the selector `tool` is
 ambiguous and ManT lists both paths instead of guessing. Complete catalog

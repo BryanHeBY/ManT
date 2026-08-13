@@ -14,6 +14,9 @@ const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 const MAX_DOCUMENT_DEPTH: usize = 32;
 const MAX_REGISTERED_DOCUMENTS: usize = 10_000;
 
+/// Priority shared by built-in native manuals and cached tldr pages.
+pub const BUILTIN_CONTENT_PRIORITY: i32 = 0;
+
 /// Storage class for one registered Markdown document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegisteredDocumentOrigin {
@@ -34,6 +37,33 @@ pub struct RegisteredDocument {
     pub origin: RegisteredDocumentOrigin,
     /// Configured priority relative to native manuals, or `None` for `documents/`.
     pub source_priority: Option<i32>,
+}
+
+/// Same-origin documents matching one selector at one precedence position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisteredDocumentMatch {
+    /// Storage namespace shared by every candidate in this group.
+    pub origin: RegisteredDocumentOrigin,
+    /// Normalized selector whose first match produced this group.
+    pub selector: String,
+    /// Exact match or every ambiguous component-suffix match in this origin.
+    pub documents: Vec<RegisteredDocument>,
+}
+
+struct RegisteredDocumentMatchRef<'a> {
+    origin: &'a RegisteredDocumentOrigin,
+    selector: String,
+    documents: Vec<&'a RegisteredDocument>,
+}
+
+impl RegisteredDocumentMatchRef<'_> {
+    fn into_owned(self) -> RegisteredDocumentMatch {
+        RegisteredDocumentMatch {
+            origin: self.origin.clone(),
+            selector: self.selector,
+            documents: self.documents.into_iter().cloned().collect(),
+        }
+    }
 }
 
 /// Immutable snapshot of the configured Markdown document namespace.
@@ -127,37 +157,101 @@ impl RegisteredDocumentIndex {
 
     /// Resolve personal documents and positive-priority configured sources.
     ///
-    /// This is the portion of the namespace that precedes native manuals.
+    /// This is the portion of the namespace that precedes built-in content.
     /// Lower-priority ambiguities are deliberately not observed in this phase.
     ///
     /// # Errors
     ///
     /// Returns an error when a matching origin contains an ambiguous suffix.
-    pub fn find_before_manual(
-        &self,
-        candidates: &[String],
-    ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
-        self.find_matching(candidates, |document| {
-            document.source_priority.is_none_or(|priority| priority > 0)
-        })
-    }
-
-    /// Resolve configured sources at priority zero or below.
-    ///
-    /// This phase is consulted only after native manual lookup fails.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when a matching origin contains an ambiguous suffix.
-    pub fn find_after_manual(
+    pub fn find_before_builtin(
         &self,
         candidates: &[String],
     ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
         self.find_matching(candidates, |document| {
             document
                 .source_priority
-                .is_some_and(|priority| priority <= 0)
+                .is_none_or(|priority| priority > BUILTIN_CONTENT_PRIORITY)
         })
+    }
+
+    /// Resolve configured sources at priority zero or below.
+    ///
+    /// This phase is consulted only after the built-in priority-zero candidate.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a matching origin contains an ambiguous suffix.
+    pub fn find_after_builtin(
+        &self,
+        candidates: &[String],
+    ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
+        self.find_matching(candidates, |document| {
+            document
+                .source_priority
+                .is_some_and(|priority| priority <= BUILTIN_CONTENT_PRIORITY)
+        })
+    }
+
+    /// Return every matching origin before the built-in priority baseline.
+    ///
+    /// Exact paths suppress suffix matches inside the same origin. Ambiguous
+    /// suffixes remain grouped so a content-specific resolver can inspect them
+    /// before deciding whether the ambiguity is relevant.
+    #[must_use]
+    pub fn matches_before_builtin(&self, candidates: &[String]) -> Vec<RegisteredDocumentMatch> {
+        self.matching_group_refs(candidates, |document| {
+            document
+                .source_priority
+                .is_none_or(|priority| priority > BUILTIN_CONTENT_PRIORITY)
+        })
+        .into_iter()
+        .map(RegisteredDocumentMatchRef::into_owned)
+        .collect()
+    }
+
+    /// Return every matching origin at or below the built-in priority baseline.
+    #[must_use]
+    pub fn matches_after_builtin(&self, candidates: &[String]) -> Vec<RegisteredDocumentMatch> {
+        self.matching_group_refs(candidates, |document| {
+            document
+                .source_priority
+                .is_some_and(|priority| priority <= BUILTIN_CONTENT_PRIORITY)
+        })
+        .into_iter()
+        .map(RegisteredDocumentMatchRef::into_owned)
+        .collect()
+    }
+
+    /// Return matches from one explicitly selected installed source.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the source is invalid, unconfigured, or not installed.
+    pub fn matches_in_source(
+        &self,
+        candidates: &[String],
+        source: &str,
+    ) -> Result<Vec<RegisteredDocumentMatch>, SourceConfigError> {
+        if !is_source_name(source) || self.config.get(source).is_none() {
+            return Err(SourceConfigError::new(format!(
+                "document source '{source}' is not configured"
+            )));
+        }
+        if !self.ready_sources.contains(source) {
+            return Err(SourceConfigError::new(format!(
+                "document source '{source}' is not installed; run 'mant --update-docs' first"
+            )));
+        }
+        Ok(self
+            .matching_group_refs(candidates, |document| {
+                matches!(
+                    &document.origin,
+                    RegisteredDocumentOrigin::Source(candidate) if candidate == source
+                )
+            })
+            .into_iter()
+            .map(RegisteredDocumentMatchRef::into_owned)
+            .collect())
     }
 
     fn find_matching(
@@ -165,6 +259,35 @@ impl RegisteredDocumentIndex {
         candidates: &[String],
         include: impl Fn(&RegisteredDocument) -> bool,
     ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
+        let Some(group) = self
+            .matching_group_refs(candidates, include)
+            .into_iter()
+            .next()
+        else {
+            return Ok(None);
+        };
+        match group.documents.as_slice() {
+            [document] => Ok(Some(*document)),
+            documents => {
+                let choices = documents
+                    .iter()
+                    .map(|document| document.logical_path.as_str())
+                    .collect::<Vec<_>>()
+                    .join("', '");
+                Err(SourceConfigError::new(format!(
+                    "document selector '{}' is ambiguous in {}: '{choices}'",
+                    group.selector,
+                    origin_label(group.origin)
+                )))
+            }
+        }
+    }
+
+    fn matching_group_refs<'a>(
+        &'a self,
+        candidates: &[String],
+        include: impl Fn(&RegisteredDocument) -> bool,
+    ) -> Vec<RegisteredDocumentMatchRef<'a>> {
         let origins = self
             .documents
             .iter()
@@ -178,6 +301,7 @@ impl RegisteredDocumentIndex {
                     origins
                 },
             );
+        let mut groups = Vec::new();
         for origin in origins {
             for candidate in candidates
                 .iter()
@@ -191,29 +315,27 @@ impl RegisteredDocumentIndex {
                     .clone()
                     .find(|document| document_paths_equal(&document.logical_path, &candidate))
                 {
-                    return Ok(Some(exact));
+                    groups.push(RegisteredDocumentMatchRef {
+                        origin,
+                        selector: candidate,
+                        documents: vec![exact],
+                    });
+                    break;
                 }
                 let suffix = in_origin
                     .filter(|document| component_suffix_matches(&document.logical_path, &candidate))
                     .collect::<Vec<_>>();
-                match suffix.as_slice() {
-                    [] => {}
-                    [document] => return Ok(Some(*document)),
-                    _ => {
-                        let choices = suffix
-                            .iter()
-                            .map(|document| document.logical_path.as_str())
-                            .collect::<Vec<_>>()
-                            .join("', '");
-                        return Err(SourceConfigError::new(format!(
-                            "document selector '{candidate}' is ambiguous in {}: '{choices}'",
-                            origin_label(origin)
-                        )));
-                    }
+                if !suffix.is_empty() {
+                    groups.push(RegisteredDocumentMatchRef {
+                        origin,
+                        selector: candidate,
+                        documents: suffix,
+                    });
+                    break;
                 }
             }
         }
-        Ok(None)
+        groups
     }
 
     /// Resolve one complete address without component-suffix fallback.
@@ -605,16 +727,71 @@ mod tests {
 
         assert_eq!(
             index
-                .find_before_manual(&["tool".to_owned()])
+                .find_before_builtin(&["tool".to_owned()])
                 .expect("preferred phase"),
             None
         );
         assert!(
             index
-                .find_after_manual(&["tool".to_owned()])
+                .find_after_builtin(&["tool".to_owned()])
                 .expect_err("fallback remains ambiguous")
                 .to_string()
                 .contains("source 'fallback'")
+        );
+    }
+
+    #[test]
+    fn content_aware_matches_preserve_priority_groups_and_ambiguity() {
+        let document = |logical_path: &str,
+                        origin: RegisteredDocumentOrigin,
+                        source_priority: Option<i32>| RegisteredDocument {
+            logical_path: logical_path.to_owned(),
+            path: PathBuf::from(format!("/{logical_path}.md")),
+            origin,
+            source_priority,
+        };
+        let index = RegisteredDocumentIndex {
+            config: SourceConfig::default(),
+            documents: vec![
+                document("en/tool", RegisteredDocumentOrigin::Documents, None),
+                document("zh/tool", RegisteredDocumentOrigin::Documents, None),
+                document(
+                    "tool",
+                    RegisteredDocumentOrigin::Source("preferred".to_owned()),
+                    Some(2),
+                ),
+                document(
+                    "tool",
+                    RegisteredDocumentOrigin::Source("tied".to_owned()),
+                    Some(0),
+                ),
+                document(
+                    "tool",
+                    RegisteredDocumentOrigin::Source("fallback".to_owned()),
+                    Some(-1),
+                ),
+            ],
+            ready_sources: std::collections::BTreeSet::default(),
+        };
+
+        let before = index.matches_before_builtin(&["tool".to_owned()]);
+        assert_eq!(before.len(), 2);
+        assert_eq!(before[0].documents.len(), 2, "ambiguity stays inspectable");
+        assert_eq!(
+            before[1].origin,
+            RegisteredDocumentOrigin::Source("preferred".to_owned())
+        );
+
+        let after = index.matches_after_builtin(&["tool".to_owned()]);
+        assert_eq!(
+            after
+                .iter()
+                .map(|group| group.origin.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                RegisteredDocumentOrigin::Source("tied".to_owned()),
+                RegisteredDocumentOrigin::Source("fallback".to_owned()),
+            ]
         );
     }
 

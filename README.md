@@ -138,8 +138,9 @@ mant tar --explain=--exclude
 ```
 
 Heading paths are one-based. Path `0` and selector `tldr` are reserved for an
-available quick reference. `--tldr` selects that node and explicitly permits a
-cached quick reference even when no full document exists. On a color terminal
+available quick reference. `--tldr` selects that node across embedded Markdown
+and cached tldr candidates, and permits a quick reference even when no full
+document exists. On a color terminal
 its default output uses the same semantic styles as the TUI; pipes, `NO_COLOR`,
 and `TERM=dumb` receive plain text.
 `--color always|never` overrides detection, while an explicit `--format`
@@ -261,7 +262,11 @@ cat widget.1 | mant --input - --input-format roff
 When compatible local tldr data exists, an ordinary query places its quick
 reference before the full document as reserved node `0`. `mant git --tldr`
 selects only that presentation, while `--manual` and `--man-section` select only
-native manual content. A cached tldr entry does not make a missing document
+native manual content. For `--tldr`, a Markdown candidate participates only
+when it actually embeds a quick reference: personal documents win, positive
+source priorities precede the cached tldr baseline at `0`, and zero or negative
+sources follow it. `--source NAME` restricts this lookup to the selected
+Markdown source. A cached tldr entry does not make a missing ordinary document
 query succeed: ManT reports the failed lookup and suggests the explicit
 `mant NAME --tldr` command instead. ManT reads installed-client caches or its
 private cache, which `mant --update-tldr` can update. Markdown authors may also

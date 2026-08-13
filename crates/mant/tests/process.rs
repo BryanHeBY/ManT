@@ -193,6 +193,112 @@ fn cached_tldr_requires_an_explicit_tldr_query_when_the_document_is_missing() {
 }
 
 #[test]
+fn explicit_tldr_queries_follow_document_source_priority() {
+    let root =
+        std::env::temp_dir().join(format!("mant-tldr-priority-process-{}", std::process::id()));
+    let documents = registered_documents_dir(&root);
+    let data_root = documents
+        .parent()
+        .expect("application data root")
+        .to_owned();
+    let preferred = data_root.join("sources/preferred");
+    let fallback = data_root.join("sources/fallback");
+    let tldr_root = root.join("tldr");
+    let manual_root = root.join("manuals");
+    for directory in [
+        &preferred,
+        &fallback,
+        &manual_root,
+        &tldr_root.join("pages/common"),
+    ] {
+        fs::create_dir_all(directory).expect("create tldr priority fixture");
+    }
+    fs::write(
+        data_root.join("sources.toml"),
+        "[preferred]\nrepo = 'https://example.invalid/preferred.git'\nbranch = 'main'\npriority = 2\n\n[fallback]\nrepo = 'https://example.invalid/fallback.git'\nbranch = 'main'\npriority = -1\n",
+    )
+    .expect("write source configuration");
+    for (directory, source) in [(&preferred, "preferred"), (&fallback, "fallback")] {
+        fs::write(
+            directory.join(".mant-source.toml"),
+            format!("source = '{source}'\n"),
+        )
+        .expect("write installed-source marker");
+    }
+    fs::write(
+        preferred.join("tool.md"),
+        "# Preferred tool\n\nFull body only.\n",
+    )
+    .expect("write preferred document");
+    fs::write(
+        fallback.join("tool.md"),
+        embedded_tldr_fixture("Fallback quick reference."),
+    )
+    .expect("write fallback document");
+    let cached = tldr_root.join("pages/common/tool.md");
+    fs::write(
+        &cached,
+        "# tool\n\n> Cached quick reference.\n\n- Run it:\n\n`tool`\n",
+    )
+    .expect("write cached tldr page");
+
+    let run = || {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        command
+            .args(["tool", "--tldr", "--color", "never"])
+            .env("MANT_MANPATH", &manual_root)
+            .env("MANT_TLDR_DIR", &tldr_root)
+            .output()
+            .expect("query prioritized tldr")
+    };
+
+    let cached_result = run();
+    assert!(cached_result.status.success(), "{cached_result:?}");
+    assert!(String::from_utf8_lossy(&cached_result.stdout).contains("Cached quick reference."));
+
+    fs::write(
+        preferred.join("tool.md"),
+        embedded_tldr_fixture("Preferred quick reference."),
+    )
+    .expect("add preferred embedded tldr");
+    let preferred_result = run();
+    assert!(preferred_result.status.success(), "{preferred_result:?}");
+    assert!(
+        String::from_utf8_lossy(&preferred_result.stdout).contains("Preferred quick reference.")
+    );
+
+    fs::create_dir_all(&documents).expect("create personal documents");
+    fs::write(
+        documents.join("tool.md"),
+        embedded_tldr_fixture("Personal quick reference."),
+    )
+    .expect("write personal embedded tldr");
+    let personal_result = run();
+    assert!(personal_result.status.success(), "{personal_result:?}");
+    assert!(String::from_utf8_lossy(&personal_result.stdout).contains("Personal quick reference."));
+    fs::remove_file(documents.join("tool.md")).expect("remove personal embedded tldr");
+
+    fs::write(
+        preferred.join("tool.md"),
+        "# Preferred tool\n\nFull body only.\n",
+    )
+    .expect("restore preferred document");
+    fs::remove_file(cached).expect("remove cached tldr");
+    let fallback_result = run();
+    assert!(fallback_result.status.success(), "{fallback_result:?}");
+    assert!(String::from_utf8_lossy(&fallback_result.stdout).contains("Fallback quick reference."));
+
+    fs::remove_dir_all(root).expect("remove tldr priority fixture");
+}
+
+fn embedded_tldr_fixture(description: &str) -> String {
+    format!(
+        "<!-- mant:tldr:start -->\n# tool\n\n> {description}\n\n- Run it:\n\n`tool`\n<!-- mant:tldr:end -->\n\n# Tool\n\nFull body.\n"
+    )
+}
+
+#[test]
 fn request_schema_is_discoverable_without_host_state() {
     let output = Command::new(executable())
         .args(["--schema", "request", "--compact"])

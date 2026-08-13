@@ -119,11 +119,14 @@ complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/doc
 
 When compatible local tldr data exists, an unqualified query prepends it as
 reserved outline node `0`. `--tldr` selects only that node, while `--manual`
-and `--man-section` select only native manual content. Reads prefer installed-client
-caches and then `ManT`'s private cache; `mant --update-tldr` updates through an
-installed client or the private checkout. If no full document exists, an
-ordinary query fails with an explicit `mant NAME --tldr` hint instead of opening
-a tldr-only reader.
+and `--man-section` select only native manual content. Explicit tldr lookup
+compares embedded Markdown quick references using their document priority;
+cached tldr and native manuals share the built-in priority-zero baseline.
+Markdown without an embedded quick reference is skipped. Reads prefer
+installed-client caches and then `ManT`'s private cache; `mant --update-tldr`
+updates through an installed client or the private checkout. If no full
+document exists, an ordinary query fails with an explicit `mant NAME --tldr`
+hint instead of opening a tldr-only reader.
 
 One-off physical input uses `mant --input PATH`; Markdown and plain/gzip/zstd
 roff files are supported. Standard input additionally requires
