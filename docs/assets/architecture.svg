@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="840" height="520" viewBox="0 0 840 520" role="img" aria-labelledby="title description">
   <title id="title">ManT architecture</title>
-  <desc id="description">Native manuals, Markdown, and tldr caches converge on mant-core and its normalized mant-ir ResolvedContent, which serves the TUI and renderers directly and versioned integrations through mant-protocol.</desc>
+  <desc id="description">Native manuals, Markdown, and tldr caches converge on mant-engine and its normalized mant-ir ResolvedContent, which serves the TUI and renderers directly and versioned integrations through mant-protocol.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
@@ -54,7 +54,7 @@
   <g filter="url(#shadow)">
     <rect x="300" y="206" width="240" height="72" rx="14" class="core"/>
   </g>
-  <text x="420" y="238" text-anchor="middle" class="core-title">mant-core</text>
+  <text x="420" y="238" text-anchor="middle" class="core-title">mant-engine</text>
   <text x="420" y="260" text-anchor="middle" class="detail">normalize · navigate · query</text>
 
   <path d="M 420 278 L 420 326" class="connector"/>

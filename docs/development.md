@@ -35,7 +35,7 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-core`, `mant-ui`, and `mant`,
+It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-engine`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
@@ -111,7 +111,7 @@ SECURITY.md                   Supported versions and private reporting policy
 crates/mant-ir/                   Normalized document IR, visitors, identities, and indexes
 crates/mant-protocol/             Versioned request/response DTOs and JSON Schema
 crates/mant-sources/         Local Markdown registry and transactional source updates
-crates/mant-core/            Document loading, libmandoc lowering, projections, output
+crates/mant-engine/            Document loading, libmandoc lowering, projections, output
 crates/mant-ui/              Ratatui reader, navigation, search, and terminal styling
 crates/mant/                 Mode selection, CLI, request JSON, and MCP stdio boundary
 crates/libmandoc-rs/         Owned libmandoc parse API, private C shim, vendored source

@@ -22,7 +22,7 @@ ratatui.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]
-mant-core = { path = "../mant-core", version = "=0.7.0" }
+mant-engine = { path = "../mant-engine", version = "=0.7.0" }
 
 [lints]
 workspace = true

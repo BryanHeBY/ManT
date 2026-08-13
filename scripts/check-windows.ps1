@@ -30,7 +30,7 @@ $Packages = @(
     "--package", "mant-ir",
     "--package", "mant-protocol",
     "--package", "mant-sources",
-    "--package", "mant-core",
+    "--package", "mant-engine",
     "--package", "mant-ui",
     "--package", "mant"
 )

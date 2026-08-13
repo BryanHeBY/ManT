@@ -772,7 +772,7 @@ name = "mant"
 version = "0.7.0"
 dependencies = [
  "clap",
- "mant-core",
+ "mant-engine",
  "mant-ir",
  "mant-protocol",
  "mant-sources",
@@ -786,7 +786,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mant-core"
+name = "mant-engine"
 version = "0.7.0"
 dependencies = [
  "flate2",
@@ -840,7 +840,7 @@ name = "mant-ui"
 version = "0.7.0"
 dependencies = [
  "crossterm",
- "mant-core",
+ "mant-engine",
  "mant-ir",
  "mant-protocol",
  "ratatui",

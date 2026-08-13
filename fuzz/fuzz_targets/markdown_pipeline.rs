@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use mant_core::query_markdown_text;
+use mant_engine::query_markdown_text;
 
 mod query_pipeline;
 

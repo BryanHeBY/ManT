@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use libfuzzer_sys::fuzz_target;
-use mant_core::{
+use mant_engine::{
     AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, query_available_documents,
 };
 use mant_protocol::{CatalogDocumentKind, CatalogQuery, SearchCase, SearchSyntax};

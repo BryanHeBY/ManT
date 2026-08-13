@@ -1,4 +1,4 @@
-use mant_core::{
+use mant_engine::{
     build_outline_with_detail, render_excerpt_json, render_excerpt_markdown, render_excerpt_text,
     render_markdown, render_outline_json, render_outline_markdown, render_outline_text,
     render_query_json, render_query_man, render_query_text, render_search_json,
@@ -10,7 +10,7 @@ use mant_protocol::{
 
 pub const MAX_INPUT_BYTES: usize = 64 * 1024;
 
-pub fn exercise(query: &mant_core::ResolvedContent, pattern_seed: &str) {
+pub fn exercise(query: &mant_engine::ResolvedContent, pattern_seed: &str) {
     let _ = render_markdown(query);
     let _ = render_query_text(query);
     let _ = render_query_man(query);

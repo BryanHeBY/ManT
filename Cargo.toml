@@ -3,7 +3,7 @@ members = [
   "crates/mant-ir",
   "crates/mant-protocol",
   "crates/mant",
-  "crates/mant-core",
+  "crates/mant-engine",
   "crates/mant-sources",
   "crates/mant-ui",
   "crates/libmandoc-rs",
@@ -12,7 +12,7 @@ default-members = [
   "crates/mant-ir",
   "crates/mant-protocol",
   "crates/mant",
-  "crates/mant-core",
+  "crates/mant-engine",
   "crates/mant-sources",
   "crates/mant-ui",
 ]

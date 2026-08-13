@@ -1,4 +1,4 @@
-//! Exercises terminal lowering against the same real roff corpus as mant-core.
+//! Exercises terminal lowering against the same real roff corpus as mant-engine.
 //!
 //! These tests intentionally avoid distribution-specific pixel snapshots.
 //! They prove that large, structurally different manuals survive every common
@@ -44,7 +44,8 @@ fn project_file(relative: &str) -> PathBuf {
 }
 
 fn view(relative: &str) -> DocumentView {
-    let document = mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
+    let document =
+        mant_engine::parse_manual_source(&fixture(relative)).expect("parse real fixture");
     DocumentView::new(&ResolvedContent {
         address: None,
         label: relative.to_owned(),
@@ -113,7 +114,7 @@ fn real_manuals_render_at_narrow_and_wide_terminal_widths() {
 
 #[test]
 fn semantic_definition_anchors_survive_real_tar_lowering() {
-    let document = mant_core::parse_manual_source(&fixture("fedora44/tar.1.zst"))
+    let document = mant_engine::parse_manual_source(&fixture("fedora44/tar.1.zst"))
         .expect("parse Fedora tar fixture");
     let acls_id = document
         .sections
@@ -182,7 +183,7 @@ fn real_git_command_references_are_visibly_clickable() {
 fn real_manual_lowering_preserves_every_substantial_text_fragment() {
     for &relative in REAL_MANUALS {
         let document =
-            mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
+            mant_engine::parse_manual_source(&fixture(relative)).expect("parse real fixture");
         let mut fragments = Vec::new();
         collect_document_fragments(&document, &mut fragments);
         let view = DocumentView::new(&ResolvedContent {
@@ -242,7 +243,7 @@ fn real_manual_lowering_preserves_every_substantial_text_fragment() {
 fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
     for relative in ["docs/manuals/mant.md"] {
         let path = project_file(relative);
-        let bundle = mant_core::resolve_query(&QueryRequest {
+        let bundle = mant_engine::resolve_query(&QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::File {
                 path: path.to_string_lossy().into_owned(),

@@ -31,7 +31,7 @@ crate.
 The convenience boundary owns the terminal event loop:
 
 ```rust,no_run
-let query = mant_core::query_markdown_text(
+let query = mant_engine::query_markdown_text(
     "# Demo\n\n## Overview\n\nHello from ManT.\n",
     Some("demo.md".to_owned()),
 )?;

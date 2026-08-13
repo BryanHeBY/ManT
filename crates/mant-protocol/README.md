@@ -6,7 +6,7 @@ catalog, outline, excerpt, search, and JSON Schema generation.
 
 Normalized document content is defined separately by
 [`mant-ir`](https://crates.io/crates/mant-ir). Parsing, lookup, projection, and
-rendering live in [`mant-core`](https://crates.io/crates/mant-core).
+rendering live in [`mant-engine`](https://crates.io/crates/mant-engine).
 
 ## License
 

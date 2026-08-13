@@ -9,7 +9,7 @@ use std::{
 const APACHE_CRATES: &[&str] = &[
     "mant-ir",
     "mant-protocol",
-    "mant-core",
+    "mant-engine",
     "mant-sources",
     "mant-ui",
     "mant",

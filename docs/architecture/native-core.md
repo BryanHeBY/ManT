@@ -17,7 +17,7 @@ The architecture follows four constraints:
 ```text
 mant              CLI, mode selection, source updates, request JSON, MCP
 ├─ mant-ui         Ratatui state machine and terminal presentation
-└─ mant-core       resolution, parsing, lowering, projections, output
+└─ mant-engine       resolution, parsing, lowering, projections, output
    ├─ mant-sources local Markdown registry and optional update machinery
    ├─ mant-ir      normalized in-memory document model and traversal
    ├─ mant-protocol versioned process DTOs and JSON Schema
@@ -33,12 +33,12 @@ The crates have deliberately asymmetric responsibilities:
 | `mant-protocol` | Versioned query, document-response, catalog, outline, excerpt, search, update, and schema DTOs | Parsing, files, rendering, or processes |
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, and C build boundary | ManT types, source discovery, or output |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
-| `mant-core` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
+| `mant-engine` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, discovery, links, history, search, layout, and terminal lifecycle | Filesystem lookup or source mutation |
 | `mant` | User-facing modes, terminal detection, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
 Interactive queries pass an in-memory `ResolvedContent` directly from
-`mant-core` to `mant-ui`. They do not serialize through JSON or spawn a child
+`mant-engine` to `mant-ui`. They do not serialize through JSON or spawn a child
 process. Explicit output, redirection, one-shot request JSON, and MCP project
 that value into `mant-protocol` DTOs at their process boundaries.
 
@@ -116,7 +116,7 @@ no collection root and therefore reject redirect-only aliases.
 
 `libmandoc-rs` wraps the bundled C parser behind a small private shim and
 copies every completed parse into an owned Rust tree with structured
-diagnostics. `mant-core` alone lowers that tree into `mant-ir`. Linux, macOS,
+diagnostics. `mant-engine` alone lowers that tree into `mant-ir`. Linux, macOS,
 and Windows use the same parser version; Windows supplies bytes through a
 checked memory-only configuration instead of exposing POSIX file transport to
 C. ManT invokes libmandoc with native includes denied after Rust has resolved

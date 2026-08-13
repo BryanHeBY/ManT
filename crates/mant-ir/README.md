@@ -12,7 +12,7 @@ parsing, rendering, filesystem access, or process protocol handling.
 
 Versioned CLI JSON and MCP contracts live in
 [`mant-protocol`](https://crates.io/crates/mant-protocol); parsing and document
-operations live in [`mant-core`](https://crates.io/crates/mant-core).
+operations live in [`mant-engine`](https://crates.io/crates/mant-engine).
 
 ## License
 

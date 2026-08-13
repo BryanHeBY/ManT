@@ -32,7 +32,7 @@ semantics are documented in the
 [ManT document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 
 This crate performs no rendering, native-manual lookup, MCP transport, or
-terminal work. Those responsibilities belong to `mant-core`, `mant`, and
+terminal work. Those responsibilities belong to `mant-engine`, `mant`, and
 `mant-ui`.
 
 ## License

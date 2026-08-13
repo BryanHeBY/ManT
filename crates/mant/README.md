@@ -130,7 +130,7 @@ roff files are supported. Standard input additionally requires
 - `mant-protocol` defines the versioned document and query contracts.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
 - `mant-sources` owns local Markdown discovery and optional source updates.
-- `mant-core` performs document lookup, lowering, projections, search, and output.
+- `mant-engine` performs document lookup, lowering, projections, search, and output.
 - `mant-ui` provides the source-neutral Ratatui frontend.
 - `mant` owns command-line, terminal-selection, and MCP process boundaries.
 

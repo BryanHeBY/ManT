@@ -32,7 +32,7 @@ releases; publishing remains a deliberate human action.
    documentation assets:
 
    ```sh
-   for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-core mant-ui mant; do
+   for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant; do
      cargo package --locked --list -p "$package"
    done
    ```
@@ -55,7 +55,7 @@ replaces the mixed `mant-ast` package with separate `mant-ir` and
 mant-ir ──> mant-protocol ───────────────┐
    └─────────────────────────────────────┤
 mant-sources ────────────────────────────┤
-libmandoc-rs ────────────────────────────┴─> mant-core ─> mant-ui ─> mant
+libmandoc-rs ────────────────────────────┴─> mant-engine ─> mant-ui ─> mant
 mant-sources ─────────────────────────────────────────────────────> mant
 ```
 
@@ -76,7 +76,7 @@ only `contents: read` and `id-token: write`; the official crates.io action
 exchanges that identity for a short-lived credential.
 
 On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ir`,
-`mant-protocol`, `libmandoc-rs`, `mant-sources`, `mant-core`, `mant-ui`, and
+`mant-protocol`, `libmandoc-rs`, `mant-sources`, `mant-engine`, `mant-ui`, and
 `mant` in dependency order. Exact internal dependencies require each
 predecessor to become visible
 in the registry before its dependent can be packaged, so the script validates

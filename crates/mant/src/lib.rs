@@ -19,7 +19,7 @@ use arguments::{ColorMode, Command, QueryFormat, QueryPresentation, QuerySource,
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
 };
-use mant_core::QueryPolicy;
+use mant_engine::QueryPolicy;
 use mant_ir::ResolvedContent;
 use mant_protocol::{
     CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin, QueryInput,
@@ -87,13 +87,13 @@ trait CliHost {
 }
 
 struct SystemHost {
-    resolver: mant_core::DocumentResolver,
+    resolver: mant_engine::DocumentResolver,
 }
 
 impl Default for SystemHost {
     fn default() -> Self {
         Self {
-            resolver: mant_core::DocumentResolver::from_system(),
+            resolver: mant_engine::DocumentResolver::from_system(),
         }
     }
 }
@@ -114,11 +114,11 @@ impl CliHost for SystemHost {
     }
 
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure> {
-        mant_core::query_markdown_text(source, None).map_err(Failure::operational)
+        mant_engine::query_markdown_text(source, None).map_err(Failure::operational)
     }
 
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {
-        mant_core::update_tldr_cache().map_err(Failure::operational)
+        mant_engine::update_tldr_cache().map_err(Failure::operational)
     }
 
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure> {
@@ -318,7 +318,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
         Command::ProtocolVersion { pretty } => render_json(
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
-                native_api_version: mant_core::native_api_version(),
+                native_api_version: mant_engine::native_api_version(),
                 request_schema: "mant.request/v7",
                 query_schema: "mant.query/v7",
                 document_schema: "mant.document/v7",
@@ -374,7 +374,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
         }
         Command::UpdateTldr { pretty } => {
             let update = host.update_tldr()?;
-            mant_core::render_update_json(&update, pretty).map_err(Failure::operational)
+            mant_engine::render_update_json(&update, pretty).map_err(Failure::operational)
         }
         Command::Query {
             source,
@@ -463,28 +463,30 @@ fn execute_query(
             let query = match format {
                 InputFormat::Markdown => {
                     let source =
-                        read_utf8_input(input, mant_core::MAX_MARKDOWN_BYTES, "Markdown input")?;
+                        read_utf8_input(input, mant_engine::MAX_MARKDOWN_BYTES, "Markdown input")?;
                     host.query_markdown(&source)?
                 }
                 InputFormat::Roff => {
                     let source =
-                        read_input_bytes(input, mant_core::MAX_MANUAL_BYTES, "roff input")?;
-                    mant_core::query_roff_bytes(&source).map_err(query_failure)?
+                        read_input_bytes(input, mant_engine::MAX_MANUAL_BYTES, "roff input")?;
+                    mant_engine::query_roff_bytes(&source).map_err(query_failure)?
                 }
                 InputFormat::Auto => unreachable!("stdin input format is validated by clap"),
             };
-            mant_core::project_query_view(query, &view).map_err(query_execution_failure)?
+            mant_engine::project_query_view(query, &view).map_err(query_execution_failure)?
         }
         source => {
             let request = read_query_request(source, input)?;
-            mant_core::validate_query_request(&request, policy).map_err(query_failure)?;
+            mant_engine::validate_query_request(&request, policy).map_err(query_failure)?;
             let query = host.query(&request, policy)?;
-            mant_core::project_query_view(query, &request.view).map_err(query_execution_failure)?
+            mant_engine::project_query_view(query, &request.view)
+                .map_err(query_execution_failure)?
         }
     };
     if let QueryPresentation::Tldr(color) = command.presentation {
-        let mant_core::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt { selections, .. }) =
-            &result
+        let mant_engine::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt {
+            selections, ..
+        }) = &result
         else {
             return Err(Failure::operational(
                 "the tldr terminal presentation requires a tldr excerpt",
@@ -544,7 +546,8 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
         );
     }
     let policy = QueryPolicy { manual_only };
-    if let Err(error) = mant_core::validate_query_request(&request, policy).map_err(query_failure) {
+    if let Err(error) = mant_engine::validate_query_request(&request, policy).map_err(query_failure)
+    {
         return report_failure(&error, diagnostics);
     }
     let query = match host.query(&request, policy) {
@@ -1063,7 +1066,7 @@ mod tests {
     }
 
     fn semantic_markdown() -> Document {
-        mant_core::parse_markdown(
+        mant_engine::parse_markdown(
             "# Tool\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
             Some("semantic.md".to_owned()),
         )

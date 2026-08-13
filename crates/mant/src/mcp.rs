@@ -1,6 +1,6 @@
 //! Implements `ManT`'s read-only Model Context Protocol server.
 //!
-//! This module deliberately calls `mant-core` in-process instead of spawning
+//! This module deliberately calls `mant-engine` in-process instead of spawning
 //! `mant`. It exposes the same stable outline, excerpt, and search
 //! projections as the direct CLI over MCP's standard-input/output transport.
 
@@ -11,7 +11,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use mant_core::{QueryPolicy, QueryViewResult};
+use mant_engine::{QueryPolicy, QueryViewResult};
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentCatalog, OutlineDetail, QueryExcerpt, QueryInput,
     QueryOutline, QueryRequest, QueryView, SearchCase, SearchScope, SearchSyntax,
@@ -268,7 +268,7 @@ where
 
 /// A bounded, in-process MCP server for local structured documents.
 ///
-/// `mant-core` performs filesystem reads and native parser calls synchronously.
+/// `mant-engine` performs filesystem reads and native parser calls synchronously.
 /// The semaphore keeps those costly calls serialized, while `spawn_blocking`
 /// leaves the stdio JSON-RPC loop responsive to protocol traffic.
 #[derive(Debug, Clone)]
@@ -292,7 +292,7 @@ impl MantMcpServer {
             .map_err(|_| "MCP query service is shutting down".to_owned())?;
         task::spawn_blocking(move || {
             let _permit = permit;
-            mant_core::execute_query(&request, QueryPolicy::default())
+            mant_engine::execute_query(&request, QueryPolicy::default())
                 .map_err(|error| error.to_string())
         })
         .await
@@ -324,7 +324,7 @@ impl MantMcpServer {
         let query = catalog_query(&parameters);
         let catalog = task::spawn_blocking(move || {
             let _permit = permit;
-            mant_core::discover_documents(&query)
+            mant_engine::discover_documents(&query)
         })
         .await
         .map_err(|error| format!("MCP document discovery worker failed: {error}"))??;
@@ -540,7 +540,7 @@ fn non_empty(value: &str, field: &str) -> Result<String, String> {
 mod tests {
     use std::{io, path::PathBuf};
 
-    use mant_core::{AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin};
+    use mant_engine::{AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin};
     use mant_protocol::{CatalogDocumentKind, DocumentAddress};
     use serde_json::json;
 
@@ -616,7 +616,8 @@ mod tests {
         assert_eq!(parameters.selector.source.as_deref(), Some("team"));
         let request = super::request_for(parameters.selector, mant_protocol::QueryView::Full {});
         assert!(
-            mant_core::validate_query_request(&request, mant_core::QueryPolicy::default()).is_ok()
+            mant_engine::validate_query_request(&request, mant_engine::QueryPolicy::default())
+                .is_ok()
         );
 
         let parameters: OutlineParams = serde_json::from_value(json!({
@@ -627,7 +628,7 @@ mod tests {
         .expect("deserialize combined selector before semantic validation");
         let request = super::request_for(parameters.selector, mant_protocol::QueryView::Full {});
         assert!(
-            mant_core::validate_query_request(&request, mant_core::QueryPolicy::default())
+            mant_engine::validate_query_request(&request, mant_engine::QueryPolicy::default())
                 .expect_err("reject combined source and section")
                 .to_string()
                 .contains("cannot be combined")
@@ -656,7 +657,7 @@ mod tests {
             offset: Some(1),
         })
         .expect("catalog parameters");
-        let catalog = mant_core::query_available_documents(
+        let catalog = mant_engine::query_available_documents(
             &[
                 AvailableDocument {
                     name: "printf".to_owned(),

@@ -245,7 +245,7 @@ fn unix_installer_uninstalls_only_files_owned_by_its_receipt() {
 fn crates_are_packaged_only_after_their_exact_predecessors_reach_the_registry() {
     let publish = include_str!("../../../scripts/publish-crates.sh").replace("\r\n", "\n");
     assert!(publish.contains(
-        "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-core mant-ui mant)"
+        "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant)"
     ));
     let publish_loop = publish
         .split_once("# Exact internal dependencies make publication inherently sequential:")

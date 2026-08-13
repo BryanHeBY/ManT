@@ -1361,7 +1361,7 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
 
 #[test]
 fn clicking_a_parsed_markdown_fragment_jumps_and_participates_in_history() {
-    let bundle = mant_core::query_markdown_text(
+    let bundle = mant_engine::query_markdown_text(
         "# Demo\n\nContinue with [the detailed section](#details).\n\n## Details\n\nDone.\n",
         Some("demo.md".to_owned()),
     )
@@ -1458,7 +1458,7 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
 fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real/archlinux/git.1.gz");
-    let document = mant_core::parse_manual_source(&fixture).expect("parse real git manual");
+    let document = mant_engine::parse_manual_source(&fixture).expect("parse real git manual");
     let bundle = ResolvedContent {
         address: Some(DocumentAddress::Manual {
             name: "git".to_owned(),
@@ -1502,7 +1502,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
 
 #[test]
 fn clicking_a_relative_markdown_link_preserves_its_source_and_fragment() {
-    let mut bundle = mant_core::query_markdown_text(
+    let mut bundle = mant_engine::query_markdown_text(
         "# Index\n\nContinue with [Build](../commands/build.md#usage).\n",
         Some("/documents/guides/index.md".to_owned()),
     )

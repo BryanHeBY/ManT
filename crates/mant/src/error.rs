@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-use mant_core::{ProjectionError, QueryError, QueryExecutionError, SearchError};
+use mant_engine::{ProjectionError, QueryError, QueryExecutionError, SearchError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FailureKind {

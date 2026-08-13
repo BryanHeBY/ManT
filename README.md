@@ -273,7 +273,7 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
-![ManT architecture: three source pipelines converge on mant-core, mant-ir, and versioned protocol boundaries](docs/assets/architecture.svg)
+![ManT architecture: three source pipelines converge on mant-engine, mant-ir, and versioned protocol boundaries](docs/assets/architecture.svg)
 
 Rust owns source discovery, parsing, the normalized document IR, tldr
 integration, output, and terminal presentation. Interactive use passes an

@@ -839,7 +839,7 @@ A complete no-match response is:
 ## MCP Stdio Transport
 
 `mant --mcp` is a long-running Model Context Protocol server over standard
-input and output. It is an alternate transport over the same `mant-core`
+input and output. It is an alternate transport over the same `mant-engine`
 queries, not `mant.cli/v7` framing and not a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
