@@ -8,7 +8,7 @@ use std::{
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, Section, SourceSpan,
+    DiagnosticLevel, OutlinePath, Section, SourceSpan,
 };
 use mant_protocol::{
     ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference, OutlineSchema,
@@ -17,10 +17,8 @@ use mant_protocol::{
 
 use crate::{ResolvedContent, definitions::definition_entries};
 
-const TLDR_PATH: &str = "0";
 pub(crate) const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
-pub(crate) const DOCUMENT_ROOT_PATH: &str = "root";
 pub(crate) use mant_ir::DOCUMENT_ROOT_ID;
 pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 
@@ -32,26 +30,7 @@ pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 /// not only selectors present in one particular document, so source-defined
 /// IDs can never make excerpt lookup ambiguous.
 pub(crate) fn is_reserved_selector(value: &str) -> bool {
-    matches!(
-        value,
-        TLDR_PATH | TLDR_ID | DOCUMENT_ROOT_PATH | DOCUMENT_ROOT_ID
-    ) || is_outline_path(value)
-}
-
-fn is_outline_path(value: &str) -> bool {
-    if let Some(entry) = value.strip_prefix("root/o") {
-        return !entry.is_empty() && entry.bytes().all(|byte| byte.is_ascii_digit());
-    }
-    let (sections, entry) = value
-        .split_once("/o")
-        .map_or((value, None), |(sections, entry)| (sections, Some(entry)));
-    let section_path = !sections.is_empty()
-        && sections
-            .split('.')
-            .all(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()));
-    let entry_path = entry
-        .is_none_or(|index| !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()));
-    section_path && entry_path
+    matches!(value, TLDR_ID | DOCUMENT_ROOT_ID) || value.parse::<OutlinePath>().is_ok()
 }
 
 /// Failure to derive an addressable view from a complete query.
@@ -161,7 +140,7 @@ pub fn build_outline_with_detail(
     let mut nodes = Vec::new();
     if query.tldr.is_some() {
         nodes.push(OutlineNode::Tldr {
-            path: TLDR_PATH.to_owned().into(),
+            path: OutlinePath::Tldr.to_string().into(),
             id: TLDR_ID.into(),
             title: TLDR_TITLE.to_owned(),
         });
@@ -169,7 +148,7 @@ pub fn build_outline_with_detail(
     if let Some(manual) = &query.document {
         if !manual.blocks.is_empty() {
             nodes.push(OutlineNode::DocumentRoot {
-                path: DOCUMENT_ROOT_PATH.to_owned().into(),
+                path: OutlinePath::DocumentRoot.to_string().into(),
                 id: DOCUMENT_ROOT_ID.into(),
                 title: DOCUMENT_ROOT_TITLE.to_owned(),
             });
@@ -181,7 +160,10 @@ pub fn build_outline_with_detail(
                         .filter_map(|(index, (entry, _))| {
                             let identity = entry.identity.as_ref()?;
                             Some(OutlineNode::DocumentEntry {
-                                path: format!("{DOCUMENT_ROOT_PATH}/o{}", index + 1).into(),
+                                path: OutlinePath::entry(None, index + 1)
+                                    .expect("enumerated entry paths are one-based")
+                                    .to_string()
+                                    .into(),
                                 id: identity.id.clone(),
                                 title: identity.names.join(", "),
                                 role: identity.role,
@@ -247,11 +229,13 @@ pub fn select_excerpt(
         if selector.is_empty() {
             return Err(ProjectionError::EmptySelector);
         }
-        if matches!(selector, TLDR_PATH | TLDR_ID) && query.tldr.is_some() {
+        if (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr))
+            && query.tldr.is_some()
+        {
             tldr_selected = true;
             continue;
         }
-        if matches!(selector, DOCUMENT_ROOT_PATH | DOCUMENT_ROOT_ID)
+        if (selector == DOCUMENT_ROOT_ID || selector.parse() == Ok(OutlinePath::DocumentRoot))
             && query
                 .document
                 .as_ref()
@@ -271,7 +255,7 @@ pub fn select_excerpt(
         .map(|candidate| candidate.coordinates().to_vec())
         .collect::<Vec<_>>();
     selected.retain(|candidate| {
-        if document_root_selected && candidate.path().starts_with("root/o") {
+        if document_root_selected && candidate.path().is_document_root_entry() {
             return false;
         }
         !selected_sections.iter().any(|ancestor| {
@@ -294,7 +278,7 @@ pub fn select_excerpt(
     let mut selections = Vec::new();
     if let (true, Some(document)) = (tldr_selected, query.tldr.clone()) {
         selections.push(ExcerptSelection::Tldr {
-            path: TLDR_PATH.to_owned().into(),
+            path: OutlinePath::Tldr.to_string().into(),
             id: TLDR_ID.into(),
             title: TLDR_TITLE.to_owned(),
             document,
@@ -302,7 +286,7 @@ pub fn select_excerpt(
     }
     if let (true, Some(document)) = (document_root_selected, query.document.as_ref()) {
         selections.push(ExcerptSelection::DocumentRoot {
-            path: DOCUMENT_ROOT_PATH.to_owned().into(),
+            path: OutlinePath::DocumentRoot.to_string().into(),
             id: DOCUMENT_ROOT_ID.into(),
             title: DOCUMENT_ROOT_TITLE.to_owned(),
             blocks: document.blocks.clone(),
@@ -352,7 +336,7 @@ pub fn select_explanation(
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
     let candidate = resolve_explanation_candidate(query, &located, selector)?;
-    select_excerpt(query, &[candidate.path().to_owned()])
+    select_excerpt(query, &[candidate.path().to_string()])
 }
 
 fn resolve_explanation_candidate<'a>(
@@ -361,7 +345,7 @@ fn resolve_explanation_candidate<'a>(
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
     if let Some(candidate) = located.iter().find(|candidate| {
-        !candidate.is_section() && (candidate.path() == selector || candidate.id() == selector)
+        !candidate.is_section() && (candidate.matches_path(selector) || candidate.id() == selector)
     }) {
         return Ok(candidate);
     }
@@ -377,7 +361,7 @@ fn resolve_explanation_candidate<'a>(
                 candidates: matches
                     .into_iter()
                     .map(|candidate| SelectorCandidate {
-                        path: candidate.path().to_owned(),
+                        path: candidate.path().to_string(),
                         id: candidate.id().into(),
                     })
                     .collect(),
@@ -385,14 +369,16 @@ fn resolve_explanation_candidate<'a>(
         }
     }
 
-    let selects_tldr = matches!(selector, TLDR_PATH | TLDR_ID) && query.tldr.is_some();
-    let selects_root = matches!(selector, DOCUMENT_ROOT_PATH | DOCUMENT_ROOT_ID)
+    let selects_tldr =
+        (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr)) && query.tldr.is_some();
+    let selects_root = (selector == DOCUMENT_ROOT_ID
+        || selector.parse() == Ok(OutlinePath::DocumentRoot))
         && query
             .document
             .as_ref()
             .is_some_and(|document| !document.blocks.is_empty());
     let selects_section = located.iter().any(|candidate| {
-        candidate.is_section() && (candidate.path() == selector || candidate.id() == selector)
+        candidate.is_section() && (candidate.matches_path(selector) || candidate.id() == selector)
     });
     if selects_tldr || selects_root || selects_section {
         return Err(ProjectionError::ExplanationRequiresEntry {
@@ -414,7 +400,7 @@ fn resolve_candidate<'a>(
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
     if let Some(candidate) = located
         .iter()
-        .find(|candidate| candidate.path() == selector || candidate.id() == selector)
+        .find(|candidate| candidate.matches_path(selector) || candidate.id() == selector)
     {
         return Ok(candidate);
     }
@@ -432,7 +418,7 @@ fn resolve_candidate<'a>(
             candidates: matches
                 .into_iter()
                 .map(|candidate| SelectorCandidate {
-                    path: candidate.path().to_owned(),
+                    path: candidate.path().to_string(),
                     id: candidate.id().into(),
                 })
                 .collect(),
@@ -451,7 +437,8 @@ fn outline_nodes(
         .map(|(index, section)| {
             let mut coordinates = parent.to_vec();
             coordinates.push(index + 1);
-            let path = format_path(&coordinates);
+            let path =
+                OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
             let mut children = Vec::new();
             if detail == OutlineDetail::Entries {
                 children.extend(
@@ -461,7 +448,10 @@ fn outline_nodes(
                         .filter_map(|(index, (entry, _))| {
                             let identity = entry.identity.as_ref()?;
                             Some(OutlineNode::DocumentEntry {
-                                path: format!("{path}/o{}", index + 1).into(),
+                                path: OutlinePath::entry(Some(&coordinates), index + 1)
+                                    .expect("enumerated entry paths are one-based")
+                                    .to_string()
+                                    .into(),
                                 id: identity.id.clone(),
                                 title: identity.names.join(", "),
                                 role: identity.role,
@@ -473,7 +463,7 @@ fn outline_nodes(
             }
             children.extend(outline_nodes(&section.children, &coordinates, detail));
             OutlineNode::DocumentSection {
-                path: path.into(),
+                path: path.to_string().into(),
                 id: section.id.clone(),
                 title: section.title.clone(),
                 children,
@@ -486,14 +476,14 @@ enum LocatedNode<'a> {
     Section {
         order: usize,
         coordinates: Vec<usize>,
-        path: String,
+        path: OutlinePath,
         breadcrumbs: Vec<OutlineReference>,
         section: &'a Section,
     },
     Entry {
         order: usize,
         coordinates: Vec<usize>,
-        path: String,
+        path: OutlinePath,
         title: String,
         breadcrumbs: Vec<OutlineReference>,
         entry: &'a DefinitionItem,
@@ -514,10 +504,16 @@ impl LocatedNode<'_> {
         }
     }
 
-    fn path(&self) -> &str {
+    fn path(&self) -> &OutlinePath {
         match self {
             Self::Section { path, .. } | Self::Entry { path, .. } => path,
         }
+    }
+
+    fn matches_path(&self, selector: &str) -> bool {
+        selector
+            .parse::<OutlinePath>()
+            .is_ok_and(|path| path == *self.path())
     }
 
     fn id(&self) -> &str {
@@ -584,7 +580,7 @@ impl LocatedNode<'_> {
                 section,
                 ..
             } => ExcerptSelection::DocumentSection {
-                path: path.clone().into(),
+                path: path.to_string().into(),
                 id: section.id.clone(),
                 title: section.title.clone(),
                 breadcrumbs: breadcrumbs.clone(),
@@ -597,7 +593,7 @@ impl LocatedNode<'_> {
                 entry,
                 ..
             } => ExcerptSelection::DocumentEntry {
-                path: path.clone().into(),
+                path: path.to_string().into(),
                 id: entry
                     .identity
                     .as_ref()
@@ -734,7 +730,8 @@ fn collect_sections<'a>(
     for (index, section) in sections.iter().enumerate() {
         let mut coordinates = parent_coordinates.to_vec();
         coordinates.push(index + 1);
-        let path = format_path(&coordinates);
+        let path =
+            OutlinePath::section(&coordinates).expect("enumerated section paths are one-based");
         let order = output.len();
         output.push(LocatedNode::Section {
             order,
@@ -745,7 +742,7 @@ fn collect_sections<'a>(
         });
         let mut child_breadcrumbs = breadcrumbs.to_vec();
         child_breadcrumbs.push(OutlineReference {
-            path: path.clone().into(),
+            path: path.to_string().into(),
             id: section.id.clone(),
             title: section.title.clone(),
         });
@@ -757,7 +754,8 @@ fn collect_sections<'a>(
             output.push(LocatedNode::Entry {
                 order: output.len(),
                 coordinates: coordinates.clone(),
-                path: format!("{path}/o{}", index + 1),
+                path: OutlinePath::entry(Some(&coordinates), index + 1)
+                    .expect("enumerated entry paths are one-based"),
                 title: identity.names.join(", "),
                 breadcrumbs: child_breadcrumbs.clone(),
                 entry,
@@ -770,7 +768,7 @@ fn collect_sections<'a>(
 
 fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a>>) {
     let breadcrumbs = vec![OutlineReference {
-        path: DOCUMENT_ROOT_PATH.to_owned().into(),
+        path: OutlinePath::DocumentRoot.to_string().into(),
         id: DOCUMENT_ROOT_ID.into(),
         title: DOCUMENT_ROOT_TITLE.to_owned(),
     }];
@@ -781,21 +779,14 @@ fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a
         output.push(LocatedNode::Entry {
             order: output.len(),
             coordinates: Vec::new(),
-            path: format!("{DOCUMENT_ROOT_PATH}/o{}", index + 1),
+            path: OutlinePath::entry(None, index + 1)
+                .expect("enumerated entry paths are one-based"),
             title: identity.names.join(", "),
             breadcrumbs: breadcrumbs.clone(),
             entry,
             source,
         });
     }
-}
-
-fn format_path(coordinates: &[usize]) -> String {
-    coordinates
-        .iter()
-        .map(usize::to_string)
-        .collect::<Vec<_>>()
-        .join(".")
 }
 
 fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
