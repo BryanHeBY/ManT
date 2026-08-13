@@ -21,7 +21,7 @@ const TLDR_PATH: &str = "0";
 pub(crate) const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
 pub(crate) const DOCUMENT_ROOT_PATH: &str = "root";
-pub(crate) const DOCUMENT_ROOT_ID: &str = "document-overview";
+pub(crate) use mant_ir::DOCUMENT_ROOT_ID;
 pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 
 /// Whether an identifier belongs to the selector namespace rather than a

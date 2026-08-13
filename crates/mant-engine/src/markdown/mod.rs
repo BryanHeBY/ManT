@@ -24,7 +24,8 @@ use std::{
 
 use mant_ir::{
     Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline, ParserInfo,
-    Section, SourceFormat, TldrDocument, TldrOrigin,
+    Section, SourceFormat, TldrDocument, TldrOrigin, validate_document,
+    visit::{self, VisitMut},
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
@@ -187,7 +188,7 @@ fn parse_document_with_entries(
 ) -> Document {
     let source = MarkdownSource::new(source_text);
     let ParsedDocumentStructure {
-        mut diagnostics,
+        diagnostics,
         mut root_blocks,
         flat_sections,
         mut ids,
@@ -232,14 +233,7 @@ fn parse_document_with_entries(
         &root_blocks,
         &sections,
     ));
-    resolve_local_links(
-        &mut root_blocks,
-        &mut sections,
-        &ids.targets,
-        &mut diagnostics,
-    );
-
-    Document {
+    let mut document = Document {
         parser: Some(markdown_parser()),
         source: DocumentSource {
             format: SourceFormat::Markdown,
@@ -252,7 +246,10 @@ fn parse_document_with_entries(
         diagnostics,
         blocks: root_blocks,
         sections,
-    }
+    };
+    LocalLinkResolver::new(&ids.targets).visit_document_mut(&mut document);
+    document.diagnostics.extend(validate_document(&document));
+    document
 }
 
 struct ParsedDocumentStructure {
@@ -535,92 +532,33 @@ fn slug(value: &str) -> String {
     output.trim_matches('-').to_owned()
 }
 
-fn resolve_local_links(
-    root_blocks: &mut [Block],
-    sections: &mut [Section],
-    targets: &HashMap<String, String>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    resolve_blocks(root_blocks, targets, diagnostics);
-    for section in sections {
-        resolve_blocks(&mut section.blocks, targets, diagnostics);
-        resolve_local_links(&mut [], &mut section.children, targets, diagnostics);
+struct LocalLinkResolver<'targets> {
+    targets: &'targets HashMap<String, String>,
+}
+
+impl<'targets> LocalLinkResolver<'targets> {
+    fn new(targets: &'targets HashMap<String, String>) -> Self {
+        Self { targets }
     }
 }
 
-fn resolve_blocks(
-    blocks: &mut [Block],
-    targets: &HashMap<String, String>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for block in blocks {
-        match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                resolve_inlines(children, targets, diagnostics);
+impl VisitMut for LocalLinkResolver<'_> {
+    fn visit_inline_mut(&mut self, inline: &mut Inline) {
+        if let Inline::Link {
+            target: mant_ir::LinkTarget::Section { id },
+            ..
+        } = inline
+        {
+            let lookup = id.trim().trim_start_matches('#');
+            if let Some(resolved) = self
+                .targets
+                .get(lookup)
+                .or_else(|| self.targets.get(&slug(lookup)))
+            {
+                *id = resolved.as_str().into();
             }
-            Block::List { items, .. } => {
-                for item in items {
-                    resolve_blocks(&mut item.blocks, targets, diagnostics);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    for term in &mut item.terms {
-                        resolve_inlines(term, targets, diagnostics);
-                    }
-                    resolve_blocks(&mut item.description, targets, diagnostics);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for row in rows {
-                    for cell in &mut row.cells {
-                        resolve_blocks(&mut cell.blocks, targets, diagnostics);
-                    }
-                }
-            }
-            Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
         }
-    }
-}
-
-fn resolve_inlines(
-    inlines: &mut [Inline],
-    targets: &HashMap<String, String>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for inline in inlines {
-        match inline {
-            Inline::Link {
-                target: mant_ir::LinkTarget::Section { id },
-                children,
-                ..
-            } => {
-                let lookup = id.trim().trim_start_matches('#');
-                if let Some(resolved) = targets.get(lookup).or_else(|| targets.get(&slug(lookup))) {
-                    *id = resolved.as_str().into();
-                } else {
-                    diagnostics.push(Diagnostic {
-                        level: DiagnosticLevel::Warning,
-                        code: Some("markdown.unresolved-reference".to_owned()),
-                        message: format!("unresolved Markdown document link '#{lookup}'"),
-                        source: None,
-                    });
-                }
-                resolve_inlines(children, targets, diagnostics);
-            }
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => {
-                resolve_inlines(children, targets, diagnostics);
-            }
-            Inline::Text { .. }
-            | Inline::Code { .. }
-            | Inline::Anchor { .. }
-            | Inline::LineBreak => {}
-        }
+        visit::walk_inline_mut(self, inline);
     }
 }
 

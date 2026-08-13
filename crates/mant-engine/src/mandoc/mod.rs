@@ -17,7 +17,7 @@ use libmandoc_rs::{
 };
 use mant_ir::{
     Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, SourceFormat,
-    SourceSpan,
+    SourceSpan, validate_document,
 };
 
 use self::{
@@ -129,7 +129,7 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
         &explicit_targets,
     ));
     navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
-    Document {
+    let mut document = Document {
         parser: Some(ParserInfo {
             name: "libmandoc".to_owned(),
             version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
@@ -156,7 +156,9 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
         diagnostics,
         blocks: root_blocks,
         sections,
-    }
+    };
+    document.diagnostics.extend(validate_document(&document));
+    document
 }
 
 /// Metadata strings come from roff macro arguments rather than visible text

@@ -5,7 +5,13 @@ use std::{borrow::Borrow, fmt, ops::Deref};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Validated document-local identity shared by sections, anchors, and entries.
+/// Virtual identity used for content before the first section heading.
+pub const DOCUMENT_ROOT_ID: &str = "document-overview";
+
+/// Document-local identity shared by sections, anchors, and entries.
+///
+/// Lowering layers normalize these values; [`crate::validate_document`] reports
+/// any invalid value introduced through deserialization or custom producers.
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
 )]
@@ -13,7 +19,7 @@ use serde::{Deserialize, Serialize};
 pub struct NodeId(String);
 
 impl NodeId {
-    /// Construct an ID after the lowering layer has normalized and validated it.
+    /// Construct an ID after the lowering layer has normalized it.
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())

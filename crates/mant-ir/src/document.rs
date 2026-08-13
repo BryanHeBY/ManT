@@ -70,7 +70,7 @@ pub struct DocumentMeta {
     pub alias_target: Option<String>,
 }
 
-/// Recoverable parser finding attached to the returned best-effort document.
+/// Recoverable parser or IR validation finding attached to the document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Diagnostic {

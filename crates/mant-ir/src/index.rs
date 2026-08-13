@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    DefinitionItem, Document, Inline, NodeId, Section,
+    DOCUMENT_ROOT_ID, DefinitionItem, Document, Inline, NodeId, Section,
     visit::{self, Visit},
 };
 
@@ -32,6 +32,11 @@ impl IndexedNode {
     pub fn containing_section(&self) -> Option<&NodeId> {
         self.containing_section.as_ref()
     }
+
+    #[must_use]
+    pub fn has_role(&self, role: IndexedRole) -> bool {
+        self.roles.contains(&role)
+    }
 }
 
 /// A repeated identity with the same semantic role.
@@ -52,6 +57,9 @@ impl DocumentIndex {
     #[must_use]
     pub fn build(document: &Document) -> Self {
         let mut builder = IndexBuilder::default();
+        if !document.blocks.is_empty() {
+            builder.register(&NodeId::from(DOCUMENT_ROOT_ID), IndexedRole::Anchor);
+        }
         builder.visit_document(document);
         builder.index
     }

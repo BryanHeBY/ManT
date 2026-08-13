@@ -6,6 +6,7 @@ mod identity;
 mod index;
 mod resolved;
 mod tldr;
+mod validation;
 pub mod visit;
 
 pub use address::*;
@@ -14,3 +15,4 @@ pub use identity::*;
 pub use index::*;
 pub use resolved::*;
 pub use tldr::*;
+pub use validation::*;
