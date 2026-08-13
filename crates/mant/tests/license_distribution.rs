@@ -6,7 +6,14 @@ use std::{
     process::Command,
 };
 
-const APACHE_CRATES: &[&str] = &["mant-ast", "mant-core", "mant-sources", "mant-ui", "mant"];
+const APACHE_CRATES: &[&str] = &[
+    "mant-ir",
+    "mant-protocol",
+    "mant-core",
+    "mant-sources",
+    "mant-ui",
+    "mant",
+];
 
 fn portable_package_path(path: &str) -> String {
     path.replace('\\', "/")

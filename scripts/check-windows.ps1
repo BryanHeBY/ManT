@@ -27,7 +27,8 @@ $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 $Packages = @(
     "--package", "libmandoc-rs",
-    "--package", "mant-ast",
+    "--package", "mant-ir",
+    "--package", "mant-protocol",
     "--package", "mant-sources",
     "--package", "mant-core",
     "--package", "mant-ui",

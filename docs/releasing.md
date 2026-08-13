@@ -6,7 +6,7 @@ releases; publishing remains a deliberate human action.
 ## Before tagging
 
 1. Choose a semantic version and update `[workspace.package].version` in
-   `Cargo.toml`. The six Rust crates use one lockstep version, so
+   `Cargo.toml`. The seven Rust crates use one lockstep version, so
    update every exact internal dependency in their manifests at the same time.
    Refresh both `Cargo.lock` and the standalone `fuzz/Cargo.lock` before running
    locked checks.
@@ -27,12 +27,12 @@ releases; publishing remains a deliberate human action.
    cargo deny check
    ```
 
-4. Inspect the publishable file list for all six crates. Each package must
+4. Inspect the publishable file list for all seven crates. Each package must
    contain its applicable complete license texts and no unexpected fixture or
    documentation assets:
 
    ```sh
-   for package in mant-ast libmandoc-rs mant-sources mant-core mant-ui mant; do
+   for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-core mant-ui mant; do
      cargo package --locked --list -p "$package"
    done
    ```
@@ -47,13 +47,16 @@ releases; publishing remains a deliberate human action.
 The crates.io packages form one dependency graph. `mant-ui` first entered
 crates.io as the `0.4.1` bootstrap release against the existing `0.4.0`
 contracts. Starting with `0.5.0`, the original five packages use one lockstep
-version; `mant-sources` joins the same graph and version policy:
+version; `mant-sources` joined the same graph in `0.6.0`. Version `0.7.0`
+replaces the mixed `mant-ast` package with separate `mant-ir` and
+`mant-protocol` packages under the same lockstep policy:
 
 ```text
-mant-sources ───────────────┐
-libmandoc-rs ─┐             ├─> mant-core ─┬─> mant-ui ─> mant
-mant-ast ─────┴─────────────┘               └────────────> mant
-mant-sources ────────────────────────────────────────────> mant
+mant-ir ──> mant-protocol ───────────────┐
+   └─────────────────────────────────────┤
+mant-sources ────────────────────────────┤
+libmandoc-rs ────────────────────────────┴─> mant-core ─> mant-ui ─> mant
+mant-sources ─────────────────────────────────────────────────────> mant
 ```
 
 Each previously published package must configure the same crates.io Trusted
@@ -72,9 +75,10 @@ non-release refs, and contain no long-lived Cargo token. The release job has
 only `contents: read` and `id-token: write`; the official crates.io action
 exchanges that identity for a short-lived credential.
 
-On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ast`,
-`libmandoc-rs`, `mant-sources`, `mant-core`, `mant-ui`, and `mant` in dependency
-order. Exact internal dependencies require each predecessor to become visible
+On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ir`,
+`mant-protocol`, `libmandoc-rs`, `mant-sources`, `mant-core`, `mant-ui`, and
+`mant` in dependency order. Exact internal dependencies require each
+predecessor to become visible
 in the registry before its dependent can be packaged, so the script validates
 each package immediately before uploading it and then waits for the index
 before continuing. It skips versions already present, making a partially
@@ -112,6 +116,26 @@ tag after the upload. The release script detects that `mant-sources 0.6.0`
 already exists, skips re-uploading it, and continues with the remaining
 dependency graph when that tag is pushed.
 
+### One-time `mant-ir` and `mant-protocol` bootstrap for `0.7.0`
+
+Both names first enter crates.io in `0.7.0`, so publish them manually from the
+frozen, green release commit before pushing the tag. Wait for `mant-ir` to be
+visible before packaging its exact-version dependent:
+
+```sh
+cargo login
+cargo publish --locked -p mant-ir
+cargo info mant-ir@0.7.0
+cargo publish --locked -p mant-protocol
+cargo info mant-protocol@0.7.0
+cargo logout
+```
+
+Use a temporary narrowly scoped token as described above. Configure the same
+Trusted Publisher for both packages after their initial upload. The tag job
+then skips those immutable versions and publishes the remaining graph. Do not
+repeat this bootstrap after `0.7.0`.
+
 ## Tag and draft release
 
 The tag must exactly match the Cargo workspace version. Create it from the
@@ -130,7 +154,7 @@ Clippy, MSRV, coverage, and supply-chain jobs. After all targets pass, it
 creates a **draft** GitHub Release and independently pauses at the protected
 `crates-io` Environment before publishing crates. Review the tag and draft
 artifacts, replace the generated notes with a curated user-facing summary,
-then approve that deployment. Wait for all six crates to become visible before
+then approve that deployment. Wait for all seven crates to become visible before
 making the GitHub Release public; the macOS installer depends on the published
 `mant` crate. A manually dispatched release rebuilds a named tag and draft but
 publishes no crates by default and can create the draft only when that tag has
