@@ -430,6 +430,7 @@ trait QueryHost {
         &self,
         candidates: &[String],
         source: Option<&str>,
+        phase: RegisteredLookupPhase,
     ) -> Result<Option<RegisteredSelection>, String>;
     fn locate_registered_address(
         &self,
@@ -440,6 +441,12 @@ trait QueryHost {
     fn parse_manual_input(&self, path: &Path) -> Result<Document, String>;
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
+}
+
+#[derive(Clone, Copy)]
+enum RegisteredLookupPhase {
+    BeforeManual,
+    AfterManual,
 }
 
 #[derive(Clone)]
@@ -543,14 +550,22 @@ impl QueryHost for DocumentResolver {
         &self,
         candidates: &[String],
         source: Option<&str>,
+        phase: RegisteredLookupPhase,
     ) -> Result<Option<RegisteredSelection>, String> {
         let index = self
             .registered
             .get_or_init(RegisteredDocumentIndex::load)
             .as_ref()
             .map_err(ToString::to_string)?;
-        index
-            .find(candidates, source)
+        let selected = if source.is_some() {
+            index.find(candidates, source)
+        } else {
+            match phase {
+                RegisteredLookupPhase::BeforeManual => index.find_before_manual(candidates),
+                RegisteredLookupPhase::AfterManual => index.find_after_manual(candidates),
+            }
+        };
+        selected
             .map(|registered| {
                 registered.map(|registered| RegisteredSelection {
                     path: registered.path.clone(),
@@ -906,12 +921,13 @@ fn query_named_document(
     let require_manual = policy.manual_only || section.is_some();
     let candidates = host.name_candidates(name);
 
-    // An unqualified name first consults one snapshot of the platform-native
-    // registration namespace. Section selectors and the explicit manual-only
-    // policy bypass Markdown name discovery.
+    // Personal documents and positive-priority sources form the preferred
+    // registration phase. Explicit source selection always wins regardless of
+    // its configured rank. Non-positive sources are consulted only after the
+    // priority-zero native-manual phase fails.
     if section.is_none() && !policy.manual_only {
         let registered = host
-            .locate_registered_document(&candidates, source)
+            .locate_registered_document(&candidates, source, RegisteredLookupPhase::BeforeManual)
             .map_err(|detail| QueryError::Registry { detail })?;
         if let Some(registered) = registered {
             return query_registered_document(name, &registered, host);
@@ -956,6 +972,16 @@ fn query_named_document(
         };
     }
 
+    finish_unqualified_manual(name, &candidates, manual, tldr, host)
+}
+
+fn finish_unqualified_manual(
+    name: &str,
+    candidates: &[String],
+    manual: Result<LoadedManual, ManualLoadError>,
+    tldr: Option<TldrDocument>,
+    host: &dyn QueryHost,
+) -> Result<ResolvedContent, QueryError> {
     match manual {
         Ok(manual) => Ok(ResolvedContent {
             address: Some(manual.address),
@@ -963,13 +989,23 @@ fn query_named_document(
             document: Some(manual.document),
             tldr,
         }),
-        Err(_) if tldr.is_some() => Ok(ResolvedContent {
-            address: None,
-            label: name.to_owned(),
-            document: None,
-            tldr,
-        }),
-        Err(error) => Err(QueryError::Manual(error)),
+        Err(error) => {
+            let registered = host
+                .locate_registered_document(candidates, None, RegisteredLookupPhase::AfterManual)
+                .map_err(|detail| QueryError::Registry { detail })?;
+            if let Some(registered) = registered {
+                query_registered_document(name, &registered, host)
+            } else if tldr.is_some() {
+                Ok(ResolvedContent {
+                    address: None,
+                    label: name.to_owned(),
+                    document: None,
+                    tldr,
+                })
+            } else {
+                Err(QueryError::Manual(error))
+            }
+        }
     }
 }
 
@@ -1104,8 +1140,9 @@ mod tests {
     use crate::{ManualPage, ManualRequest};
 
     use super::{
-        MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, RegisteredSelection,
-        query_markdown_text, query_with, read_capped_utf8, read_capped_utf8_io,
+        MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, RegisteredLookupPhase,
+        RegisteredSelection, query_markdown_text, query_with, read_capped_utf8,
+        read_capped_utf8_io,
     };
 
     #[derive(Clone)]
@@ -1113,6 +1150,7 @@ mod tests {
         name_candidates: Option<Vec<String>>,
         registered_document: Option<PathBuf>,
         registered_name: Option<String>,
+        registered_source_priority: Option<i32>,
         locate: Result<ManualPage, String>,
         manual_name: Option<String>,
         direct: Result<Document, String>,
@@ -1132,11 +1170,31 @@ mod tests {
             &self,
             candidates: &[String],
             source: Option<&str>,
+            phase: RegisteredLookupPhase,
         ) -> Result<Option<RegisteredSelection>, String> {
             self.calls
                 .lock()
                 .expect("calls lock")
-                .push(if source.is_some() { "source" } else { "name" });
+                .push(if source.is_some() {
+                    "source"
+                } else {
+                    match phase {
+                        RegisteredLookupPhase::BeforeManual => "name",
+                        RegisteredLookupPhase::AfterManual => "fallback",
+                    }
+                });
+            if source.is_none()
+                && match phase {
+                    RegisteredLookupPhase::BeforeManual => self
+                        .registered_source_priority
+                        .is_some_and(|priority| priority <= 0),
+                    RegisteredLookupPhase::AfterManual => self
+                        .registered_source_priority
+                        .is_none_or(|priority| priority > 0),
+                }
+            {
+                return Ok(None);
+            }
             if self
                 .registered_name
                 .as_deref()
@@ -1261,6 +1319,7 @@ mod tests {
             name_candidates: None,
             registered_document: None,
             registered_name: None,
+            registered_source_priority: None,
             locate: Ok(ManualPage {
                 name: "tool".to_owned(),
                 section: "1".to_owned(),
@@ -1592,6 +1651,63 @@ mod tests {
             *host.calls.lock().expect("calls lock"),
             ["name", "markdown"],
             "a registered name must not consult man or external tldr caches"
+        );
+    }
+
+    #[test]
+    fn positive_source_priority_shadows_a_native_manual() {
+        let mut host = host(Err("manual parser must not run".to_owned()));
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(1);
+        host.markdown = Ok("# Team tool\n\nConfigured documentation.\n".to_owned());
+
+        let result = query_with(&request(), QueryPolicy::default(), &host)
+            .expect("positive-priority Markdown");
+
+        assert_eq!(
+            result.document.expect("document").source.format,
+            SourceFormat::Markdown
+        );
+        assert_eq!(*host.calls.lock().expect("calls"), ["name", "markdown"]);
+    }
+
+    #[test]
+    fn native_manual_wins_a_zero_priority_tie() {
+        let mut host = host(Ok(document(SourceFormat::Man, false, true)));
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(0);
+        host.markdown = Ok("# Team tool\n\nConfigured documentation.\n".to_owned());
+
+        let result = query_with(&request(), QueryPolicy::default(), &host).expect("native manual");
+
+        assert_eq!(
+            result.document.expect("document").source.format,
+            SourceFormat::Man
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls"),
+            ["name", "tldr", "locate", "parse"]
+        );
+    }
+
+    #[test]
+    fn non_positive_source_priority_falls_back_when_the_manual_is_unavailable() {
+        let mut host = host(Err("manual parser must not run".to_owned()));
+        host.locate = Err("source not found".to_owned());
+        host.registered_document = Some(PathBuf::from("/sources/team/tool.md"));
+        host.registered_source_priority = Some(-1);
+        host.markdown = Ok("# Team tool\n\nConfigured documentation.\n".to_owned());
+
+        let result =
+            query_with(&request(), QueryPolicy::default(), &host).expect("Markdown fallback");
+
+        assert_eq!(
+            result.document.expect("document").source.format,
+            SourceFormat::Markdown
+        );
+        assert_eq!(
+            *host.calls.lock().expect("calls"),
+            ["name", "tldr", "locate", "fallback", "markdown"]
         );
     }
 

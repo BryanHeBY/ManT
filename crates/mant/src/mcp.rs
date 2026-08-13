@@ -685,6 +685,7 @@ mod tests {
                     manual_section: None,
                     path: PathBuf::from("/data/mant/printf.md"),
                     origin: AvailableDocumentOrigin::Documents,
+                    source_priority: None,
                 },
                 AvailableDocument {
                     name: "printf".to_owned(),
@@ -693,6 +694,7 @@ mod tests {
                     manual_section: Some("1".to_owned()),
                     path: PathBuf::from("/usr/share/man/man1/printf.1.gz"),
                     origin: AvailableDocumentOrigin::ManualPath,
+                    source_priority: None,
                 },
                 AvailableDocument {
                     name: "printf".to_owned(),
@@ -701,6 +703,7 @@ mod tests {
                     manual_section: Some("3".to_owned()),
                     path: PathBuf::from("/usr/share/man/man3/printf.3.gz"),
                     origin: AvailableDocumentOrigin::ManualPath,
+                    source_priority: None,
                 },
             ],
             &catalog_query(&parameters),

@@ -82,7 +82,7 @@ Fields are:
 | `path` | No | Directory inside the checkout; defaults to `.` |
 | `include` | No | Exact relative files or directory subtrees below `path` |
 | `exclude` | No | Exact relative files or directory subtrees removed after inclusion |
-| `priority` | No | Signed integer used for fallback; defaults to `0` |
+| `priority` | No | Signed integer relative to native manuals at `0`; defaults to `1` |
 
 Configure either `url`, or both `repo` and `branch`; they cannot be combined.
 The archive URL is the complete artifact identity, so a fixed release belongs
@@ -197,12 +197,19 @@ under its public name.
 
 ## Lookup
 
-For `mant tool`, Markdown lookup is:
+For `mant tool`, document lookup is:
 
 1. an exact or unique component-suffix path below personal `documents/`;
-2. configured sources by descending `priority`, then source name in ascending
-   bytewise order;
-3. the native manual index.
+2. configured sources with positive `priority`, in descending priority and
+   then ascending bytewise source-name order;
+3. the native manual index, treated as priority `0`;
+4. configured sources with priority `0` or below, again in descending priority
+   and ascending source-name order.
+
+Native manuals win ties at priority `0`. Because the configured-source default
+is `1`, an existing source that omits `priority` continues to override a manual
+with the same selector. Set cross-platform or fallback documentation to `0` or
+a negative value when the installed native page should win.
 
 Exact relative paths win before component suffixes. If one origin contains
 both `languages/en/tool.md` and `languages/zh/tool.md`, the selector `tool` is

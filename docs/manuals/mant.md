@@ -100,9 +100,11 @@ mant --list --man-section 3 --format json
 ## Input
 
 Input is resolved before parsing. An ordinary selector first checks the user's
-hierarchical `documents` tree, then configured installed sources by descending
-priority and source name in ascending bytewise order, and finally the native
-manual index. Linux uses
+hierarchical `documents` tree. Configured installed sources then compete with
+the native manual index, whose priority is `0`: positive source priorities win,
+the native manual wins a zero tie, and non-positive sources provide fallback.
+Sources within either side are ordered by descending priority and ascending
+bytewise name. The configured-source default is `1`. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as its
 data root. Physical filesystem paths are never inferred from positional
@@ -112,8 +114,9 @@ Registered `.md` and `.markdown` files retain their extension-free relative
 paths. Exact paths win before unique component suffixes; ambiguous suffixes are
 reported with their candidates. Complete selectors use
 `documents/PATH`, `sources/SOURCE/PATH`, or `manual/SECTION/NAME`. Root
-documents always win; source priority and name resolve remaining duplicates in
-the order above; `.md` wins over `.markdown` for one logical path.
+documents always win; source priority, the native-manual zero baseline, and
+source name resolve remaining duplicates in the order above; `.md` wins over
+`.markdown` for one logical path.
 `--source NAME` selects exactly one configured Git or archive source.
 `--manual` or `--man-section` selects only native manual content and cannot be
 combined with `--source`. A manual category is distinct from a heading or

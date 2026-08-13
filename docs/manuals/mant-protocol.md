@@ -223,10 +223,12 @@ Every request has three required fields:
 
 ### Input Variants
 
-An unqualified selector first checks the singular per-user `documents` tree,
-then installed sources configured by `sources.toml` in descending
-`priority` and ascending bytewise source-name order, then the native manual
-index. Linux uses
+An unqualified selector first checks the singular per-user `documents` tree.
+Installed sources configured by `sources.toml` then compete with the native
+manual index at priority `0`: positive source priorities win, the native manual
+wins a zero tie, and non-positive sources are fallbacks. Sources on either side
+use descending `priority` and ascending bytewise source-name order. Omitted
+source priorities default to `1`. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as the
 data root. Regular `.md` and `.markdown` files are registered recursively by

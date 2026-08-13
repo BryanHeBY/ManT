@@ -187,9 +187,11 @@ sources/<source>/           installed Markdown collections
 manual/<section>/           native man and mdoc pages
 ```
 
-Exact catalog paths are unambiguous. Short selectors use root documents first,
-then configured sources, then native manuals; unique component suffixes make a
-deep path such as `languages/en/tool` convenient without hiding collisions.
+Exact catalog paths are unambiguous. Short selectors use root documents first;
+configured sources then sort around native manuals at priority `0`. Positive
+sources win, manuals win a zero tie, and negative sources act as fallbacks.
+Unique component suffixes make a deep path such as `languages/en/tool`
+convenient without hiding collisions.
 
 ### Native manuals
 

@@ -110,8 +110,9 @@ symlinks are ignored. Git or direct archive sources configured in sibling
 `--source`. Removed source tables are reported as orphaned installed data;
 preview cleanup with `mant --prune-docs --dry-run` and apply it with
 `mant --prune-docs`. An unqualified path or unique component suffix resolves
-root documents, sources by
-descending priority and ascending source name, then a native manual. See the
+root documents first. Sources then sort around native manuals at priority zero:
+positive sources win, manuals win a zero tie, and non-positive sources are
+fallbacks. Omitted source priority defaults to one. See the
 complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 
 When compatible local tldr data exists, an unqualified query prepends it as

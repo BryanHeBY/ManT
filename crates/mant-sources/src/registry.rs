@@ -32,6 +32,8 @@ pub struct RegisteredDocument {
     pub path: PathBuf,
     /// Storage namespace used for precedence and explicit selection.
     pub origin: RegisteredDocumentOrigin,
+    /// Configured priority relative to native manuals, or `None` for `documents/`.
+    pub source_priority: Option<i32>,
 }
 
 /// Immutable snapshot of the configured Markdown document namespace.
@@ -60,10 +62,14 @@ impl RegisteredDocumentIndex {
                 logical_path,
                 path,
                 origin: RegisteredDocumentOrigin::Documents,
+                source_priority: None,
             })
             .collect::<Vec<_>>();
         let mut ready_sources = std::collections::BTreeSet::new();
         for source in config.precedence() {
+            let Some(priority) = config.get(source).map(|source| source.priority) else {
+                continue;
+            };
             let directory = paths.sources.join(source);
             if !source_directory_ready(&directory) {
                 continue;
@@ -74,6 +80,7 @@ impl RegisteredDocumentIndex {
                     logical_path,
                     path,
                     origin: RegisteredDocumentOrigin::Source(source.to_owned()),
+                    source_priority: Some(priority),
                 },
             ));
         }
@@ -108,17 +115,60 @@ impl RegisteredDocumentIndex {
                 "document source '{source}' is not installed; run 'mant --update-docs' first"
             )));
         }
+        self.find_matching(candidates, |document| {
+            source.is_none_or(|source| {
+                matches!(
+                    &document.origin,
+                    RegisteredDocumentOrigin::Source(candidate) if candidate == source
+                )
+            })
+        })
+    }
+
+    /// Resolve personal documents and positive-priority configured sources.
+    ///
+    /// This is the portion of the namespace that precedes native manuals.
+    /// Lower-priority ambiguities are deliberately not observed in this phase.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a matching origin contains an ambiguous suffix.
+    pub fn find_before_manual(
+        &self,
+        candidates: &[String],
+    ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
+        self.find_matching(candidates, |document| {
+            document.source_priority.is_none_or(|priority| priority > 0)
+        })
+    }
+
+    /// Resolve configured sources at priority zero or below.
+    ///
+    /// This phase is consulted only after native manual lookup fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a matching origin contains an ambiguous suffix.
+    pub fn find_after_manual(
+        &self,
+        candidates: &[String],
+    ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
+        self.find_matching(candidates, |document| {
+            document
+                .source_priority
+                .is_some_and(|priority| priority <= 0)
+        })
+    }
+
+    fn find_matching(
+        &self,
+        candidates: &[String],
+        include: impl Fn(&RegisteredDocument) -> bool,
+    ) -> Result<Option<&RegisteredDocument>, SourceConfigError> {
         let origins = self
             .documents
             .iter()
-            .filter(|document| {
-                source.is_none_or(|source| {
-                    matches!(
-                        &document.origin,
-                        RegisteredDocumentOrigin::Source(candidate) if candidate == source
-                    )
-                })
-            })
+            .filter(|document| include(document))
             .fold(
                 Vec::<&RegisteredDocumentOrigin>::new(),
                 |mut origins, document| {
@@ -136,7 +186,7 @@ impl RegisteredDocumentIndex {
                 let in_origin = self
                     .documents
                     .iter()
-                    .filter(|document| &document.origin == origin);
+                    .filter(|document| include(document) && &document.origin == origin);
                 if let Some(exact) = in_origin
                     .clone()
                     .find(|document| document_paths_equal(&document.logical_path, &candidate))
@@ -430,11 +480,13 @@ mod tests {
                     logical_path: "languages/en/tool".to_owned(),
                     path: PathBuf::from("/documents/languages/en/tool.md"),
                     origin: RegisteredDocumentOrigin::Documents,
+                    source_priority: None,
                 },
                 RegisteredDocument {
                     logical_path: "languages/zh/tool".to_owned(),
                     path: PathBuf::from("/documents/languages/zh/tool.md"),
                     origin: RegisteredDocumentOrigin::Documents,
+                    source_priority: None,
                 },
             ],
             ready_sources: std::collections::BTreeSet::default(),
@@ -449,6 +501,37 @@ mod tests {
             .expect_err("leaf selector must be ambiguous");
         assert!(error.to_string().contains("languages/en/tool"));
         assert!(error.to_string().contains("languages/zh/tool"));
+    }
+
+    #[test]
+    fn fallback_ambiguity_does_not_leak_into_the_before_manual_phase() {
+        let index = RegisteredDocumentIndex {
+            config: SourceConfig::default(),
+            documents: ["languages/en/tool", "languages/zh/tool"]
+                .into_iter()
+                .map(|logical_path| RegisteredDocument {
+                    logical_path: logical_path.to_owned(),
+                    path: PathBuf::from(format!("/sources/fallback/{logical_path}.md")),
+                    origin: RegisteredDocumentOrigin::Source("fallback".to_owned()),
+                    source_priority: Some(-1),
+                })
+                .collect(),
+            ready_sources: std::collections::BTreeSet::default(),
+        };
+
+        assert_eq!(
+            index
+                .find_before_manual(&["tool".to_owned()])
+                .expect("preferred phase"),
+            None
+        );
+        assert!(
+            index
+                .find_after_manual(&["tool".to_owned()])
+                .expect_err("fallback remains ambiguous")
+                .to_string()
+                .contains("source 'fallback'")
+        );
     }
 
     // Keep the imported schema types exercised here so changes to their shape

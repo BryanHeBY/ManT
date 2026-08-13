@@ -59,7 +59,7 @@ pub struct ConfiguredSource {
     pub include: Vec<String>,
     /// Literal path prefixes removed after inclusion.
     pub exclude: Vec<String>,
-    /// Lookup priority; larger values are searched first.
+    /// Lookup priority relative to native manuals at zero; larger values win.
     pub priority: i32,
 }
 
@@ -78,7 +78,7 @@ struct SourceDeclaration {
     include: Vec<String>,
     #[serde(default)]
     exclude: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_source_priority")]
     priority: i32,
 }
 
@@ -161,6 +161,10 @@ pub fn load_source_config() -> Result<(DocumentPaths, SourceConfig), SourceConfi
 
 fn default_source_path() -> String {
     ".".to_owned()
+}
+
+const fn default_source_priority() -> i32 {
+    1
 }
 
 fn document_paths_with(
@@ -421,6 +425,22 @@ priority = -1
             loaded.get("later").expect("later").location,
             SourceLocation::Archive { .. }
         ));
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn source_priority_defaults_above_native_manuals() {
+        let root = temp("default-priority");
+        fs::create_dir_all(&root).expect("create fixture");
+        let config = root.join("sources.toml");
+        fs::write(
+            &config,
+            "[docs]\nrepo = 'https://example.invalid/docs.git'\nbranch = 'main'\n",
+        )
+        .expect("write config");
+
+        let loaded = load_source_config_from(&config).expect("load config");
+        assert_eq!(loaded.get("docs").expect("docs").priority, 1);
         fs::remove_dir_all(root).expect("remove fixture");
     }
 

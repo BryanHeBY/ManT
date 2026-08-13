@@ -50,6 +50,8 @@ pub struct AvailableDocument {
     pub path: PathBuf,
     /// Storage namespace and precedence class.
     pub origin: AvailableDocumentOrigin,
+    /// Configured priority relative to native manuals, or `None` otherwise.
+    pub source_priority: Option<i32>,
 }
 
 /// Invalid document-catalog filter or regular expression.
@@ -167,7 +169,7 @@ pub fn query_available_documents(
             .then_with(|| left.logical_path.cmp(&right.logical_path))
             .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
             .then_with(|| left.name.cmp(&right.name))
-            .then_with(|| left.kind.cmp(&right.kind))
+            .then_with(|| compare_precedence(left, right))
             .then_with(|| left.manual_section.cmp(&right.manual_section))
             .then_with(|| left.origin.cmp(&right.origin))
     });
@@ -312,6 +314,27 @@ fn available_catalog_path(document: &AvailableDocument) -> String {
     }
 }
 
+fn compare_precedence(left: &AvailableDocument, right: &AvailableDocument) -> std::cmp::Ordering {
+    fn class(document: &AvailableDocument) -> u8 {
+        match (&document.origin, document.source_priority) {
+            (AvailableDocumentOrigin::Documents, _) => 0,
+            (AvailableDocumentOrigin::Source(_), Some(priority)) if priority > 0 => 1,
+            (AvailableDocumentOrigin::ManualPath, _) => 2,
+            (AvailableDocumentOrigin::Source(_), _) => 3,
+        }
+    }
+
+    class(left)
+        .cmp(&class(right))
+        .then_with(|| match (&left.origin, &right.origin) {
+            (AvailableDocumentOrigin::Source(_), AvailableDocumentOrigin::Source(_)) => right
+                .source_priority
+                .unwrap_or_default()
+                .cmp(&left.source_priority.unwrap_or_default()),
+            _ => std::cmp::Ordering::Equal,
+        })
+}
+
 pub(crate) fn list_available_documents_from(
     registered: Vec<RegisteredDocument>,
     manuals: &[crate::ManualPage],
@@ -329,6 +352,7 @@ pub(crate) fn list_available_documents_from(
             kind: AvailableDocumentKind::Markdown,
             manual_section: None,
             path: document.path,
+            source_priority: document.source_priority,
             origin: match document.origin {
                 RegisteredDocumentOrigin::Documents => AvailableDocumentOrigin::Documents,
                 RegisteredDocumentOrigin::Source(source) => AvailableDocumentOrigin::Source(source),
@@ -341,14 +365,15 @@ pub(crate) fn list_available_documents_from(
             manual_section: Some(page.section.clone()),
             path: page.path.clone(),
             origin: AvailableDocumentOrigin::ManualPath,
+            source_priority: None,
         }))
         .collect::<Vec<_>>();
     documents.sort_by(|left, right| {
-        (&left.logical_path, left.kind, &left.manual_section).cmp(&(
-            &right.logical_path,
-            right.kind,
-            &right.manual_section,
-        ))
+        left.logical_path
+            .cmp(&right.logical_path)
+            .then_with(|| compare_precedence(left, right))
+            .then_with(|| left.manual_section.cmp(&right.manual_section))
+            .then_with(|| left.origin.cmp(&right.origin))
     });
     documents
 }
@@ -377,6 +402,7 @@ mod tests {
                 logical_path: "printf".to_owned(),
                 path: PathBuf::from("/home/demo/.local/share/mant/documents/printf.md"),
                 origin: RegisteredDocumentOrigin::Documents,
+                source_priority: None,
             }],
             &[
                 ManualPage {
@@ -409,11 +435,13 @@ mod tests {
                     logical_path: "tool".to_owned(),
                     path: PathBuf::from("/data/mant/documents/tool.md"),
                     origin: RegisteredDocumentOrigin::Documents,
+                    source_priority: None,
                 },
                 RegisteredDocument {
                     logical_path: "tool".to_owned(),
                     path: PathBuf::from("/data/mant/documents/sources/alpha/tool.md"),
                     origin: RegisteredDocumentOrigin::Source("alpha".to_owned()),
+                    source_priority: Some(1),
                 },
             ],
             &[],
@@ -423,6 +451,50 @@ mod tests {
         assert_eq!(
             documents[1].origin,
             AvailableDocumentOrigin::Source("alpha".to_owned())
+        );
+    }
+
+    #[test]
+    fn catalog_orders_sources_around_the_native_manual_zero_baseline() {
+        let documents = list_available_documents_from(
+            vec![
+                RegisteredDocument {
+                    logical_path: "tool".to_owned(),
+                    path: PathBuf::from("/sources/low/tool.md"),
+                    origin: RegisteredDocumentOrigin::Source("low".to_owned()),
+                    source_priority: Some(-1),
+                },
+                RegisteredDocument {
+                    logical_path: "tool".to_owned(),
+                    path: PathBuf::from("/sources/high/tool.md"),
+                    origin: RegisteredDocumentOrigin::Source("high".to_owned()),
+                    source_priority: Some(1),
+                },
+                RegisteredDocument {
+                    logical_path: "tool".to_owned(),
+                    path: PathBuf::from("/sources/tie/tool.md"),
+                    origin: RegisteredDocumentOrigin::Source("tie".to_owned()),
+                    source_priority: Some(0),
+                },
+            ],
+            &[ManualPage {
+                name: "tool".to_owned(),
+                section: "1".to_owned(),
+                path: PathBuf::from("/man/tool.1"),
+                manual_root: PathBuf::from("/man"),
+            }],
+        );
+
+        assert_eq!(
+            documents
+                .iter()
+                .map(|document| match &document.origin {
+                    AvailableDocumentOrigin::Source(name) => format!("source:{name}"),
+                    AvailableDocumentOrigin::ManualPath => "manual".to_owned(),
+                    AvailableDocumentOrigin::Documents => "documents".to_owned(),
+                })
+                .collect::<Vec<_>>(),
+            ["source:high", "manual", "source:tie", "source:low"]
         );
     }
 
@@ -437,6 +509,7 @@ mod tests {
                 manual_section: None,
                 path: PathBuf::from(format!("/data/{name}.md")),
                 origin: AvailableDocumentOrigin::Source("pwsh7".to_owned()),
+                source_priority: Some(1),
             })
             .collect::<Vec<_>>();
         let catalog = query_available_documents(
@@ -466,6 +539,7 @@ mod tests {
                 manual_section: Some("1".to_owned()),
                 path: PathBuf::from(format!("/man/{name}.1")),
                 origin: AvailableDocumentOrigin::ManualPath,
+                source_priority: None,
             })
             .collect::<Vec<_>>();
         let catalog = query_available_documents(
@@ -497,6 +571,7 @@ mod tests {
                 manual_section: None,
                 path: PathBuf::from(format!("/documents/{logical_path}.md")),
                 origin: AvailableDocumentOrigin::Documents,
+                source_priority: None,
             })
             .collect::<Vec<_>>();
         let catalog = query_available_documents(
@@ -529,6 +604,7 @@ mod tests {
             manual_section: None,
             path: PathBuf::from("/documents/en/tool.md"),
             origin: AvailableDocumentOrigin::Documents,
+            source_priority: None,
         };
         let catalog = query_available_documents(
             &[exact, documents[1].clone()],
@@ -559,6 +635,7 @@ mod tests {
                 manual_section: Some("1".to_owned()),
                 path: PathBuf::from("/man/printf.1"),
                 origin: AvailableDocumentOrigin::ManualPath,
+                source_priority: None,
             },
             AvailableDocument {
                 name: "printf".to_owned(),
@@ -567,6 +644,7 @@ mod tests {
                 manual_section: Some("3".to_owned()),
                 path: PathBuf::from("/man/printf.3"),
                 origin: AvailableDocumentOrigin::ManualPath,
+                source_priority: None,
             },
         ];
         let catalog = query_available_documents(

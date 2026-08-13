@@ -131,9 +131,11 @@ sources/<source>/<path>
 manual/<section>/<name>
 ```
 
-An unqualified selector checks personal Markdown, configured sources in
-priority order, and then native manuals. Exact paths precede unique component
-suffixes. Collisions remain explicit instead of choosing an arbitrary file.
+An unqualified selector checks personal Markdown first. Configured sources then
+sort around native manuals at priority zero: positive sources precede manuals,
+manuals precede zero and negative sources, and sources are ordered by descending
+priority and ascending name. Exact paths precede unique component suffixes.
+Collisions remain explicit instead of choosing an arbitrary file.
 Physical input is a separate request variant and never becomes a positional
 logical selector.
 

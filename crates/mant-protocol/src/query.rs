@@ -35,7 +35,8 @@ pub enum RequestSchema {
     deny_unknown_fields
 )]
 pub enum QueryInput {
-    /// Resolve a registered Markdown document first, then a local manual page.
+    /// Resolve personal Markdown first, then configured sources around the
+    /// priority-zero native-manual baseline.
     Document {
         /// Hierarchical catalog path or unqualified component-suffix selector.
         selector: String,

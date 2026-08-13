@@ -89,6 +89,8 @@ fn document(index: usize, logical_path: String) -> AvailableDocument {
         AvailableDocumentKind::Markdown if index & 1 == 0 => AvailableDocumentOrigin::Documents,
         AvailableDocumentKind::Markdown => AvailableDocumentOrigin::Source("alpha".to_owned()),
     };
+    let source_priority = matches!(origin, AvailableDocumentOrigin::Source(_))
+        .then(|| [-1, 0, 1][index % 3]);
     AvailableDocument {
         name,
         logical_path,
@@ -97,5 +99,6 @@ fn document(index: usize, logical_path: String) -> AvailableDocument {
             .then(|| ["1", "3", "8"][index % 3].to_owned()),
         path: PathBuf::from(format!("/fuzz/document-{index}")),
         origin,
+        source_priority,
     }
 }

@@ -51,8 +51,10 @@ if let Some(document) = index.find(&candidates, None)? {
 The read-only API loads one `RegisteredDocumentIndex` snapshot, scans the root
 document tree and each ready configured source once, then resolves ordered
 path and component-suffix candidates without repeating filesystem discovery.
-Root documents win; configured sources follow descending priority and
-ascending bytewise source-name order.
+Root documents win. Configured sources use native manuals as a priority-zero
+baseline: positive sources precede manuals, while zero and negative sources
+follow them. The source default is `1`; equal-priority sources use ascending
+bytewise name order.
 
 With `update` enabled, Git and archive acquisition share the same staging and
 atomic activation transaction. Temporary checkouts, downloads, and staging
