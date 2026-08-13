@@ -128,6 +128,26 @@ fn explicit_ui_requires_a_real_terminal_before_loading_a_document() {
 }
 
 #[test]
+fn man_style_sections_do_not_turn_into_hyphenated_tldr_topics() {
+    for arguments in [
+        ["1", "tar", "--tldr"].as_slice(),
+        ["tar(1)", "--tldr"].as_slice(),
+    ] {
+        let output = Command::new(executable())
+            .args(arguments)
+            .output()
+            .expect("run conflicting man-style tldr query");
+
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+        assert!(diagnostic.contains("--tldr cannot be combined"));
+        assert!(diagnostic.contains("mant NAME --tldr"));
+        assert!(!diagnostic.contains("1-tar"));
+    }
+}
+
+#[test]
 fn request_schema_is_discoverable_without_host_state() {
     let output = Command::new(executable())
         .args(["--schema", "request", "--compact"])

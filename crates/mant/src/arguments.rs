@@ -921,6 +921,14 @@ fn normalize_document_operands(
                 "--tldr requires a page name",
             ));
         }
+        if matches!(operands, [selector] if manual_reference(selector).is_some())
+            || matches!(operands, [section, _] if likely_manual_section(section))
+        {
+            return Err(command_error(
+                ErrorKind::ArgumentConflict,
+                "--tldr cannot be combined with a man-style section selector; use `mant NAME --tldr`",
+            ));
+        }
         return Ok((operands.join("-").to_lowercase(), None));
     }
     match operands {
@@ -1299,6 +1307,14 @@ mod tests {
                 ..
             }
         ));
+
+        for values in [vec!["1", "tar", "--tldr"], vec!["tar(1)", "--tldr"]] {
+            let diagnostic = parse(&args(&values))
+                .expect_err("manual sections do not identify tldr pages")
+                .to_string();
+            assert!(diagnostic.contains("--tldr cannot be combined"));
+            assert!(diagnostic.contains("mant NAME --tldr"));
+        }
     }
 
     #[test]
