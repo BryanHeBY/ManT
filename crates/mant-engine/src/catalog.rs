@@ -37,7 +37,7 @@ pub struct AvailableDocument {
     /// Extension-free path relative to this document's origin.
     pub logical_path: String,
     pub kind: AvailableDocumentKind,
-    pub section: Option<String>,
+    pub manual_section: Option<String>,
     pub path: PathBuf,
     pub origin: AvailableDocumentOrigin,
 }
@@ -61,7 +61,7 @@ impl fmt::Display for CatalogError {
             }
             Self::InvalidLimit => formatter.write_str("catalog limit must be between 1 and 10000"),
             Self::ConflictingSelectors => {
-                formatter.write_str("catalog source and section filters cannot be combined")
+                formatter.write_str("catalog source and manual-section filters cannot be combined")
             }
             Self::InvalidPattern(message) => {
                 write!(formatter, "invalid catalog pattern: {message}")
@@ -107,8 +107,8 @@ pub fn query_available_documents(
             query.kind.is_none_or(|kind| match kind {
                 CatalogDocumentKind::Markdown => document.kind == AvailableDocumentKind::Markdown,
                 CatalogDocumentKind::Manual => document.kind == AvailableDocumentKind::Manual,
-            }) && query.section.as_ref().is_none_or(|section| {
-                document.section.as_ref().is_some_and(|value| value == section)
+            }) && query.manual_section.as_ref().is_none_or(|section| {
+                document.manual_section.as_ref().is_some_and(|value| value == section)
             }) && query.source.as_ref().is_none_or(|source| {
                 matches!(&document.origin, AvailableDocumentOrigin::Source(value) if value == source)
             })
@@ -153,7 +153,7 @@ pub fn query_available_documents(
             .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
             .then_with(|| left.name.cmp(&right.name))
             .then_with(|| left.kind.cmp(&right.kind))
-            .then_with(|| left.section.cmp(&right.section))
+            .then_with(|| left.manual_section.cmp(&right.manual_section))
             .then_with(|| left.origin.cmp(&right.origin))
     });
 
@@ -204,11 +204,11 @@ fn validate_catalog_query(query: &CatalogQuery) -> Result<(), CatalogError> {
     if query.limit == 0 || query.limit > 10_000 {
         return Err(CatalogError::InvalidLimit);
     }
-    if query.source.is_some() && query.section.is_some() {
+    if query.source.is_some() && query.manual_section.is_some() {
         return Err(CatalogError::ConflictingSelectors);
     }
     if query.source.is_some() && query.kind == Some(CatalogDocumentKind::Manual)
-        || query.section.is_some() && query.kind == Some(CatalogDocumentKind::Markdown)
+        || query.manual_section.is_some() && query.kind == Some(CatalogDocumentKind::Markdown)
     {
         return Err(CatalogError::ConflictingSelectors);
     }
@@ -274,7 +274,7 @@ fn document_summary(document: &AvailableDocument) -> DocumentSummary {
         },
         AvailableDocumentOrigin::ManualPath => DocumentAddress::Manual {
             name: document.name.clone(),
-            section: document.section.clone().unwrap_or_default(),
+            manual_section: document.manual_section.clone().unwrap_or_default(),
         },
     };
     DocumentSummary {
@@ -292,7 +292,7 @@ fn available_catalog_path(document: &AvailableDocument) -> String {
         }
         AvailableDocumentOrigin::ManualPath => format!(
             "manual/{}/{}",
-            document.section.as_deref().unwrap_or_default(),
+            document.manual_section.as_deref().unwrap_or_default(),
             document.name
         ),
     }
@@ -313,7 +313,7 @@ pub(crate) fn list_available_documents_from(
                 .to_owned(),
             logical_path: document.logical_path,
             kind: AvailableDocumentKind::Markdown,
-            section: None,
+            manual_section: None,
             path: document.path,
             origin: match document.origin {
                 RegisteredDocumentOrigin::Documents => AvailableDocumentOrigin::Documents,
@@ -324,16 +324,16 @@ pub(crate) fn list_available_documents_from(
             name: page.name.clone(),
             logical_path: page.name.clone(),
             kind: AvailableDocumentKind::Manual,
-            section: Some(page.section.clone()),
+            manual_section: Some(page.section.clone()),
             path: page.path.clone(),
             origin: AvailableDocumentOrigin::ManualPath,
         }))
         .collect::<Vec<_>>();
     documents.sort_by(|left, right| {
-        (&left.logical_path, left.kind, &left.section).cmp(&(
+        (&left.logical_path, left.kind, &left.manual_section).cmp(&(
             &right.logical_path,
             right.kind,
-            &right.section,
+            &right.manual_section,
         ))
     });
     documents
@@ -383,8 +383,8 @@ mod tests {
         assert_eq!(documents.len(), 3);
         assert_eq!(documents[0].kind, AvailableDocumentKind::Markdown);
         assert_eq!(documents[0].origin, AvailableDocumentOrigin::Documents);
-        assert_eq!(documents[1].section.as_deref(), Some("1"));
-        assert_eq!(documents[2].section.as_deref(), Some("3"));
+        assert_eq!(documents[1].manual_section.as_deref(), Some("1"));
+        assert_eq!(documents[2].manual_section.as_deref(), Some("3"));
     }
 
     #[test]
@@ -420,7 +420,7 @@ mod tests {
                 name: name.to_owned(),
                 logical_path: name.to_owned(),
                 kind: AvailableDocumentKind::Markdown,
-                section: None,
+                manual_section: None,
                 path: PathBuf::from(format!("/data/{name}.md")),
                 origin: AvailableDocumentOrigin::Source("pwsh7".to_owned()),
             })
@@ -449,7 +449,7 @@ mod tests {
                 name: name.to_owned(),
                 logical_path: name.to_owned(),
                 kind: AvailableDocumentKind::Manual,
-                section: Some("1".to_owned()),
+                manual_section: Some("1".to_owned()),
                 path: PathBuf::from(format!("/man/{name}.1")),
                 origin: AvailableDocumentOrigin::ManualPath,
             })
@@ -480,7 +480,7 @@ mod tests {
                 name: logical_path.rsplit('/').next().expect("leaf").to_owned(),
                 logical_path: logical_path.to_owned(),
                 kind: AvailableDocumentKind::Markdown,
-                section: None,
+                manual_section: None,
                 path: PathBuf::from(format!("/documents/{logical_path}.md")),
                 origin: AvailableDocumentOrigin::Documents,
             })
@@ -512,7 +512,7 @@ mod tests {
             name: "tool".to_owned(),
             logical_path: "en/tool".to_owned(),
             kind: AvailableDocumentKind::Markdown,
-            section: None,
+            manual_section: None,
             path: PathBuf::from("/documents/en/tool.md"),
             origin: AvailableDocumentOrigin::Documents,
         };
@@ -542,7 +542,7 @@ mod tests {
                 name: "printf".to_owned(),
                 logical_path: "printf".to_owned(),
                 kind: AvailableDocumentKind::Manual,
-                section: Some("1".to_owned()),
+                manual_section: Some("1".to_owned()),
                 path: PathBuf::from("/man/printf.1"),
                 origin: AvailableDocumentOrigin::ManualPath,
             },
@@ -550,7 +550,7 @@ mod tests {
                 name: "printf".to_owned(),
                 logical_path: "printf".to_owned(),
                 kind: AvailableDocumentKind::Manual,
-                section: Some("3".to_owned()),
+                manual_section: Some("3".to_owned()),
                 path: PathBuf::from("/man/printf.3"),
                 origin: AvailableDocumentOrigin::ManualPath,
             },
@@ -562,7 +562,7 @@ mod tests {
                 syntax: SearchSyntax::Regex,
                 case: SearchCase::Insensitive,
                 kind: Some(CatalogDocumentKind::Manual),
-                section: Some("3".to_owned()),
+                manual_section: Some("3".to_owned()),
                 limit: 10,
                 ..CatalogQuery::default()
             },
@@ -574,7 +574,7 @@ mod tests {
             catalog.documents[0].address,
             DocumentAddress::Manual {
                 name: "printf".to_owned(),
-                section: "3".to_owned(),
+                manual_section: "3".to_owned(),
             }
         );
     }

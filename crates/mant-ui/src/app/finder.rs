@@ -340,7 +340,7 @@ pub(super) fn document_category(address: &DocumentAddress) -> String {
             origin: MarkdownOrigin::Source { name },
             ..
         } => format!("sources/{name}"),
-        DocumentAddress::Manual { section, .. } => format!("manual/{section}"),
+        DocumentAddress::Manual { manual_section, .. } => format!("manual/{manual_section}"),
     }
 }
 

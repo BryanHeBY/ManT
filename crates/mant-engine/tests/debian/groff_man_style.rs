@@ -40,12 +40,12 @@ fn keeps_mr_fallbacks_as_typed_manual_references() {
             target:
                 mant_ir::LinkTarget::Manual {
                     name,
-                    section: Some(section),
+                    manual_section: Some(manual_section),
                 },
             ..
         } = inline
         {
-            references.push((name.clone(), section.clone()));
+            references.push((name.clone(), manual_section.clone()));
         }
     });
 

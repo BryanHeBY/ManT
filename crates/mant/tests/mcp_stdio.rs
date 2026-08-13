@@ -151,7 +151,7 @@ fn assert_document_catalog(replies: &[Value]) {
     assert!(documents.iter().any(|document| {
         document["address"]["name"] == "mcp-manual"
             && document["address"]["kind"] == "manual"
-            && document["address"]["section"] == "1"
+            && document["address"]["manualSection"] == "1"
     }));
     assert_eq!(
         documents
@@ -337,7 +337,7 @@ fn request_document_get(input: &mut impl Write) {
                 "name": "mant_document_get",
                 "arguments": {
                     "name": "mcp-registered",
-                    "nodes": "[\"root\"]"
+                    "selectors": "[\"root\"]"
                 }
             }
         }),

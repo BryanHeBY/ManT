@@ -58,7 +58,7 @@ fn unknown_query_schema_is_rejected() {
 #[test]
 fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     let request: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"printf","section":"3"},"view":{"kind":"full"}}"#,
+        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"printf","manualSection":"3"},"view":{"kind":"full"}}"#,
     )
     .expect("valid full query request");
     assert_eq!(request.schema, RequestSchema::V7);
@@ -67,7 +67,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
         QueryInput::Document {
             selector: "printf".to_owned(),
             source: None,
-            section: Some("3".to_owned()),
+            manual_section: Some("3".to_owned()),
         }
     );
     assert_eq!(request.view, QueryView::Full {});
@@ -84,13 +84,13 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let excerpt: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"excerpt","nodes":["acls"]}}"#,
+        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"excerpt","selectors":["acls"]}}"#,
     )
     .expect("valid excerpt request");
     assert_eq!(
         excerpt.view,
         QueryView::Excerpt {
-            nodes: vec!["acls".to_owned()],
+            selectors: vec!["acls".into()],
         }
     );
 
@@ -185,7 +185,7 @@ fn request_v7_selects_one_configured_source_without_accepting_v4() {
         selected.input,
         QueryInput::Document {
             source: Some(ref source),
-            section: None,
+            manual_section: None,
             ..
         } if source == "team"
     ));

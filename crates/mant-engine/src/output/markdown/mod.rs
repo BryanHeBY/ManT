@@ -280,7 +280,7 @@ pub fn render_outline_markdown(outline: &QueryOutline) -> String {
         outline
             .meta
             .as_ref()
-            .and_then(|meta| meta.section.as_deref()),
+            .and_then(|meta| meta.manual_section.as_deref()),
     );
     let mut blocks = vec![heading(1, &format!("{label} outline"))];
     if !outline.nodes.is_empty() {
@@ -306,7 +306,7 @@ pub fn render_excerpt_markdown_with_options(
         excerpt
             .meta
             .as_ref()
-            .and_then(|meta| meta.section.as_deref()),
+            .and_then(|meta| meta.manual_section.as_deref()),
     );
     let mut output = vec![heading(1, &label)];
     for (index, selection) in excerpt.selections.iter().enumerate() {

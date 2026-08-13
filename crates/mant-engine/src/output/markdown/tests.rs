@@ -443,7 +443,7 @@ fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
                     Vec::new(),
                 )],
             )]);
-            document.meta.section = Some("1".to_owned());
+            document.meta.manual_section = Some("1".to_owned());
             document
         }),
         tldr: None,
@@ -517,7 +517,7 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
     let MarkdownNode::DocumentEntry { path, id, .. } = &mapped.node else {
         unreachable!();
     };
-    assert_eq!(path.to_string(), "1/o1");
+    assert_eq!(path.to_string(), "1/e1");
     assert_eq!(id, "help-entry");
     let rendered = &artifact.text[mapped.range.clone()];
     assert!(rendered.contains("--help"));

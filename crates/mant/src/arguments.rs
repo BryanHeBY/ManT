@@ -8,8 +8,9 @@ use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, InputFormat, OutlineDetail, QueryInput, QueryRequest,
-    QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax, default_search_limit,
+    CatalogDocumentKind, CatalogQuery, InputFormat, NodeSelector, OutlineDetail, QueryInput,
+    QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
+    default_search_limit,
 };
 
 // ── Public command model ───────────────────────────────────────────────────
@@ -240,22 +241,23 @@ struct Cli {
     #[arg(long, value_name = "KIND", value_enum, help_heading = "Discovery")]
     kind: Option<CatalogKindMode>,
 
-    /// Print only a manual section such as 1 or 3p.
+    /// Print only a native manual category such as 1 or 3p.
     #[arg(
-        long,
-        value_name = "SECTION",
+        long = "man-section",
+        visible_alias = "section",
+        value_name = "MAN_SECTION",
         value_parser = non_empty,
         conflicts_with = "input",
         help_heading = "Document selection"
     )]
-    section: Option<String>,
+    man_section: Option<String>,
 
     /// Select exactly one configured Markdown source.
     #[arg(
         long,
         value_name = "SOURCE",
         value_parser = non_empty,
-        conflicts_with_all = ["section", "manual", "input"],
+        conflicts_with_all = ["man_section", "manual", "input"],
         help_heading = "Document selection"
     )]
     source: Option<String>,
@@ -273,7 +275,7 @@ struct Cli {
     #[arg(
         long,
         requires = "selector",
-        conflicts_with_all = ["section", "manual", "outline", "node", "explain", "search", "ui", "input"],
+        conflicts_with_all = ["man_section", "manual", "outline", "node", "explain", "search", "ui", "input"],
         help_heading = "Document selection"
     )]
     tldr: bool,
@@ -290,10 +292,10 @@ struct Cli {
     )]
     outline: Option<OutlineMode>,
 
-    /// Print a node by outline path, document ID, or option alias; repeatable.
+    /// Print an outline node selected by path, stable ID, or semantic-entry alias; repeatable.
     #[arg(
         long,
-        value_name = "NODE",
+        value_name = "SELECTOR",
         value_parser = non_empty,
         conflicts_with = "explain",
         help_heading = "Document selection"
@@ -370,7 +372,7 @@ struct Cli {
     #[arg(
         long,
         conflicts_with_all = [
-            "section",
+            "man_section",
             "tldr",
             "outline",
             "node",
@@ -413,7 +415,7 @@ struct Cli {
     /// Update tldr data through the installed client or `ManT` cache.
     #[arg(
         long,
-        conflicts_with_all = ["section", "outline", "node", "search", "format"],
+        conflicts_with_all = ["man_section", "outline", "node", "search", "format"],
         help_heading = "Data"
     )]
     update_tldr: bool,
@@ -421,7 +423,7 @@ struct Cli {
     /// Update configured Markdown repositories from sources.toml.
     #[arg(
         long,
-        conflicts_with_all = ["section", "source", "outline", "node", "search", "format"],
+        conflicts_with_all = ["man_section", "source", "outline", "node", "search", "format"],
         help_heading = "Data"
     )]
     update_docs: bool,
@@ -429,7 +431,7 @@ struct Cli {
     /// Remove installed document sources absent from sources.toml.
     #[arg(
         long,
-        conflicts_with_all = ["section", "source", "outline", "node", "search", "format"],
+        conflicts_with_all = ["man_section", "source", "outline", "node", "search", "format"],
         help_heading = "Data"
     )]
     prune_docs: bool,
@@ -441,7 +443,7 @@ struct Cli {
     /// Print the native protocol description as JSON.
     #[arg(
         long,
-        conflicts_with_all = ["section", "outline", "node", "search", "format"],
+        conflicts_with_all = ["man_section", "outline", "node", "search", "format"],
         help_heading = "Integration"
     )]
     protocol_version: bool,
@@ -451,7 +453,7 @@ struct Cli {
         long,
         value_name = "CONTRACT",
         value_enum,
-        conflicts_with_all = ["section", "outline", "node", "search", "format"],
+        conflicts_with_all = ["man_section", "outline", "node", "search", "format"],
         help_heading = "Integration"
     )]
     schema: Option<SchemaContract>,
@@ -463,7 +465,7 @@ struct Cli {
             "selector",
             "input",
             "input_format",
-            "section",
+            "man_section",
             "source",
             "outline",
             "node",
@@ -594,7 +596,7 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
             input_path: parsed.input,
             input_format: parsed.input_format,
             configured_source: parsed.source,
-            section: parsed.section,
+            manual_section: parsed.man_section,
             tldr: parsed.tldr,
         },
         view,
@@ -638,11 +640,11 @@ fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
         ));
     }
     if parsed.source.is_some() && parsed.kind == Some(CatalogKindMode::Manual)
-        || parsed.section.is_some() && parsed.kind == Some(CatalogKindMode::Markdown)
+        || parsed.man_section.is_some() && parsed.kind == Some(CatalogKindMode::Markdown)
     {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
-            "--source selects Markdown while --section selects native manuals",
+            "--source selects Markdown while --man-section selects native manuals",
         ));
     }
     let format = parsed.format.unwrap_or(QueryFormat::Text);
@@ -671,7 +673,7 @@ fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
                 .map_or(SearchCase::Insensitive, Into::into),
             kind: parsed.kind.map(Into::into),
             source: parsed.source,
-            section: parsed.section,
+            manual_section: parsed.man_section,
             limit: parsed.limit.unwrap_or(10_000),
             offset: parsed.offset.unwrap_or(0),
         },
@@ -705,7 +707,7 @@ fn validate_query_search_options(parsed: &Cli) -> Result<(), clap::Error> {
 fn normalize_query_view(parsed: &mut Cli) -> QueryView {
     if parsed.tldr {
         QueryView::Excerpt {
-            nodes: vec!["tldr".to_owned()],
+            selectors: vec![NodeSelector::from("tldr")],
         }
     } else if let Some(detail) = parsed.outline.take() {
         QueryView::Outline {
@@ -738,7 +740,10 @@ fn normalize_query_view(parsed: &mut Cli) -> QueryView {
         QueryView::Full {}
     } else {
         QueryView::Excerpt {
-            nodes: std::mem::take(&mut parsed.node),
+            selectors: std::mem::take(&mut parsed.node)
+                .into_iter()
+                .map(NodeSelector::from)
+                .collect(),
         }
     }
 }
@@ -835,7 +840,7 @@ struct QuerySourceOptions {
     input_path: Option<String>,
     input_format: Option<InputFormatMode>,
     configured_source: Option<String>,
-    section: Option<String>,
+    manual_section: Option<String>,
     tldr: bool,
 }
 
@@ -863,14 +868,14 @@ fn normalize_query_source(
             })
         }
     } else {
-        let (selector, section) =
-            normalize_document_operands(&options.selectors, options.section, options.tldr)?;
+        let (selector, manual_section) =
+            normalize_document_operands(&options.selectors, options.manual_section, options.tldr)?;
         QuerySource::Arguments(QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
                 selector,
                 source: options.configured_source,
-                section,
+                manual_section,
             },
             view,
         })
@@ -880,7 +885,7 @@ fn normalize_query_source(
 
 fn normalize_document_operands(
     operands: &[String],
-    explicit_section: Option<String>,
+    explicit_manual_section: Option<String>,
     tldr: bool,
 ) -> Result<(String, Option<String>), clap::Error> {
     if tldr {
@@ -895,22 +900,22 @@ fn normalize_document_operands(
     match operands {
         [selector] => {
             if let Some((name, section)) = manual_reference(selector) {
-                if explicit_section.is_some() {
+                if explicit_manual_section.is_some() {
                     return Err(command_error(
                         ErrorKind::ArgumentConflict,
-                        "a name(section) selector cannot be combined with --section",
+                        "a name(section) selector cannot be combined with --man-section",
                     ));
                 }
                 Ok((name, Some(section)))
             } else {
-                Ok((selector.clone(), explicit_section))
+                Ok((selector.clone(), explicit_manual_section))
             }
         }
         [section, name] if likely_manual_section(section) => {
-            if explicit_section.is_some() {
+            if explicit_manual_section.is_some() {
                 return Err(command_error(
                     ErrorKind::ArgumentConflict,
-                    "SECTION NAME cannot be combined with --section",
+                    "MAN_SECTION NAME cannot be combined with --man-section",
                 ));
             }
             Ok((name.clone(), Some(section.clone())))
@@ -992,7 +997,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "git".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Full {},
                 }),
@@ -1045,7 +1050,7 @@ mod tests {
                     case: SearchCase::Sensitive,
                     kind: Some(CatalogDocumentKind::Manual),
                     source: None,
-                    section: Some("3".to_owned()),
+                    manual_section: Some("3".to_owned()),
                     limit: 20,
                     offset: 0,
                 },
@@ -1164,7 +1169,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "printf".to_owned(),
                         source: None,
-                        section: Some("3".to_owned()),
+                        manual_section: Some("3".to_owned()),
                     },
                     view: QueryView::Full {},
                 }),
@@ -1180,7 +1185,7 @@ mod tests {
                 source: QuerySource::Arguments(QueryRequest {
                     input: QueryInput::Document {
                         ref source,
-                        section: None,
+                        manual_section: None,
                         ..
                     },
                     ..
@@ -1199,20 +1204,20 @@ mod tests {
                     source: QuerySource::Arguments(QueryRequest {
                         input: QueryInput::Document {
                             ref selector,
-                            section: Some(ref section),
+                            manual_section: Some(ref manual_section),
                             ..
                         },
                         ..
                     }),
                     ..
-                } if selector == "git" && section == "1"
+                } if selector == "git" && manual_section == "1"
             ));
         }
         assert!(matches!(
             parse(&args(&["manual/1/git"])).expect("canonical selector"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    input: QueryInput::Document { ref selector, section: None, .. },
+                    input: QueryInput::Document { ref selector, manual_section: None, .. },
                     ..
                 }),
                 ..
@@ -1270,13 +1275,13 @@ mod tests {
             parse(&args(&["tar", "--tldr"])).expect("tldr-only query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    view: QueryView::Excerpt { ref nodes },
+                    view: QueryView::Excerpt { ref selectors },
                     ..
                 }),
                 presentation: QueryPresentation::Tldr(ColorMode::Auto),
                 manual_only: false,
                 ..
-            } if nodes == &["tldr"]
+            } if selectors == &["tldr"]
         ));
     }
 
@@ -1290,7 +1295,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "gcc".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Outline {
                         detail: OutlineDetail::Entries,
@@ -1311,7 +1316,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "tar".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Outline {
                         detail: OutlineDetail::Entries,
@@ -1334,10 +1339,10 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "gcc".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Excerpt {
-                        nodes: vec!["4.2".to_owned(), "files-8".to_owned()],
+                        selectors: vec!["4.2".into(), "files-8".into()],
                     },
                 }),
                 presentation: QueryPresentation::Output(QueryFormat::Text),
@@ -1363,7 +1368,7 @@ mod tests {
                         input: QueryInput::Document {
                             selector: "tar".to_owned(),
                             source: None,
-                            section: None,
+                            manual_section: None,
                         },
                         view: QueryView::Explain {
                             entry: selector.to_owned(),
@@ -1388,7 +1393,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "tar".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Search {
                         pattern: "--acls".to_owned(),
@@ -1434,7 +1439,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "git".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Search {
                         pattern: "worktree|branch".to_owned(),
@@ -1559,7 +1564,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: "--help".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Full {},
                 }),

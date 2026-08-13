@@ -17,7 +17,7 @@
     },
     "meta": {
       "title": "LS",
-      "section": "1",
+      "manualSection": "1",
       "names": ["ls"]
     },
     "sections": [
@@ -40,7 +40,7 @@
                 "target": {
                   "kind": "manual",
                   "name": "dir",
-                  "section": "1"
+                  "manualSection": "1"
                 },
                 "children": [
                   { "type": "text", "value": "dir(1)" }

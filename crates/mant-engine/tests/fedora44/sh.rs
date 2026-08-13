@@ -9,7 +9,7 @@ use crate::fixtures::fedora44_manual;
 fn parses_the_real_bash_backed_shell_manual() {
     let document = fedora44_manual("sh");
     assert_eq!(document.source.format, SourceFormat::Man);
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert!(source_path_ends_with(document, "fedora44/sh.1.zst"));
 
     let mut sections = Vec::new();

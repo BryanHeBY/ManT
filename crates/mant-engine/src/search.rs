@@ -513,7 +513,7 @@ mod tests {
                     path: None,
                 },
                 meta: DocumentMeta {
-                    section: Some("1".to_owned()),
+                    manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
@@ -588,7 +588,7 @@ mod tests {
         let result = search_query(&query(), &request("access control")).expect("search");
 
         assert_eq!(result.total, 1);
-        assert_eq!(result.matches[0].node.path(), "1/o1");
+        assert_eq!(result.matches[0].node.path(), "1/e1");
         assert_eq!(result.matches[0].matched_text, "access control");
         assert!(result.matches[0].markdown.start_line > 1);
         assert!(result.matches[0].preview.contains("**access control**"));

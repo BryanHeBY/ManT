@@ -488,7 +488,7 @@ impl SectionIds {
             .or_insert_with(|| id.clone());
         // Heading attributes are source-level link aliases. Preserve the
         // original alias even when its final section ID had to move out of the
-        // selector namespace (`{#root}`, `{#2.1}`, or `{#2.1/o3}`).
+        // selector namespace (`{#root}`, `{#2.1}`, or `{#2.1/e3}`).
         if let Some(explicit) = explicit {
             self.targets.entry(explicit).or_insert_with(|| id.clone());
         }

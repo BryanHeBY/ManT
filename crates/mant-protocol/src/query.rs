@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use mant_ir::{ResolvedContent, TldrDocument};
 
 use crate::{
-    DocumentAddress, DocumentResponse, OutlineDetail, SearchCase, SearchScope, SearchSyntax,
-    default_search_limit,
+    DocumentAddress, DocumentResponse, NodeSelector, OutlineDetail, SearchCase, SearchScope,
+    SearchSyntax, default_search_limit,
 };
 
 /// Exact schema marker for a complete `ManT` query result.
@@ -42,8 +42,9 @@ pub enum QueryInput {
         /// Optional configured Markdown source. It bypasses root documents and manuals.
         #[serde(skip_serializing_if = "Option::is_none")]
         source: Option<String>,
+        /// Optional native manual category such as `1` or `3p`.
         #[serde(skip_serializing_if = "Option::is_none")]
-        section: Option<String>,
+        manual_section: Option<String>,
     },
     /// Read and parse one explicit local Markdown or roff file.
     File { path: String, format: InputFormat },
@@ -74,7 +75,7 @@ pub enum QueryView {
     },
     Excerpt {
         #[schemars(length(min = 1))]
-        nodes: Vec<String>,
+        selectors: Vec<NodeSelector>,
     },
     /// Resolve exactly one semantic entry and return its complete description.
     Explain {

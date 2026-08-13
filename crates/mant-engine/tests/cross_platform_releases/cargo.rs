@@ -24,7 +24,7 @@ const CARGO_SECTIONS: &[&str] = &[
 fn keeps_commands_options_files_and_examples() {
     let document = cross_platform_release_manual("cargo");
     common::assert_section_topology("cross-platform-releases/cargo", document, CARGO_SECTIONS);
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(
         document.meta.volume.as_deref(),
         Some("General Commands Manual")

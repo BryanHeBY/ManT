@@ -24,7 +24,7 @@ const RUSTC_SECTIONS: &[&str] = &[
 fn keeps_compiler_options_environment_and_release_metadata() {
     let document = cross_platform_release_manual("rustc");
     common::assert_section_topology("cross-platform-releases/rustc", document, RUSTC_SECTIONS);
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("April 2019"));
     assert_eq!(
         document.meta.os.as_deref(),

@@ -119,7 +119,7 @@ impl DocumentView {
         let terminal_label = bundle.document.as_ref().map_or_else(
             || bundle.label.clone(),
             |document| {
-                document.meta.section.as_ref().map_or_else(
+                document.meta.manual_section.as_ref().map_or_else(
                     || bundle.label.clone(),
                     |section| format!("{}({section})", bundle.label),
                 )
@@ -911,14 +911,20 @@ fn append_inline(
                         target.as_ref(),
                     );
                 }
-                mant_ir::LinkTarget::Manual { name, section } => {
-                    let target = section.as_ref().map(|section| LinkTarget::Document {
-                        address: DocumentAddress::Manual {
-                            name: name.clone(),
-                            section: section.clone(),
-                        },
-                        fragment: None,
-                    });
+                mant_ir::LinkTarget::Manual {
+                    name,
+                    manual_section,
+                } => {
+                    let target =
+                        manual_section
+                            .as_ref()
+                            .map(|manual_section| LinkTarget::Document {
+                                address: DocumentAddress::Manual {
+                                    name: name.clone(),
+                                    manual_section: manual_section.clone(),
+                                },
+                                fragment: None,
+                            });
                     append_addressable_inline(
                         children,
                         Style::default()
@@ -1121,7 +1127,7 @@ mod tests {
     fn terminal_chrome_keeps_the_manual_section_out_of_the_sidebar_label() {
         let mut bundle = bundle();
         let document = bundle.document.as_mut().expect("document");
-        document.meta.section = Some("1".to_owned());
+        document.meta.manual_section = Some("1".to_owned());
         document.blocks.push(Block::Paragraph {
             children: vec![Inline::Text {
                 value: "overview".to_owned(),
@@ -1185,7 +1191,7 @@ mod tests {
             &[Inline::Link {
                 target: mant_ir::LinkTarget::Manual {
                     name: "printf".to_owned(),
-                    section: Some("3".to_owned()),
+                    manual_section: Some("3".to_owned()),
                 },
                 title: None,
                 children: vec![Inline::Text {
@@ -1208,7 +1214,7 @@ mod tests {
             LinkTarget::Document {
                 address: DocumentAddress::Manual {
                     name: "printf".to_owned(),
-                    section: "3".to_owned(),
+                    manual_section: "3".to_owned(),
                 },
                 fragment: None,
             }

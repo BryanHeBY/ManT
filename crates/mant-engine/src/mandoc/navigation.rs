@@ -161,7 +161,7 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
         promoted.push(Inline::Link {
             target: LinkTarget::Manual {
                 name: name.clone(),
-                section: Some(section.clone()),
+                manual_section: Some(section.clone()),
             },
             title: None,
             children: vec![Inline::Text {
@@ -328,8 +328,8 @@ mod tests {
 
         assert!(matches!(
             &nodes[0],
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
-                if name == "printf" && section == "3"
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+                if name == "printf" && manual_section == "3"
         ));
         assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
     }
@@ -351,9 +351,9 @@ mod tests {
 
         assert!(matches!(
             &nodes[0],
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, children, .. }
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, children, .. }
                 if name == "git-add"
-                    && section == "1"
+                    && manual_section == "1"
                     && crate::inline::plain_text(children) == "git-add(1)"
         ));
     }
@@ -375,8 +375,8 @@ mod tests {
 
         assert!(matches!(
             &nodes[0],
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
-                if name == "groff_man" && section == "7"
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+                if name == "groff_man" && manual_section == "7"
         ));
         assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
     }

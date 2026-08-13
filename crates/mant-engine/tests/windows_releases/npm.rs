@@ -7,7 +7,7 @@ use crate::fixtures::windows_release_manual;
 fn keeps_the_nested_npm_manual_and_windows_build_requirements() {
     let document = windows_release_manual("npm");
     assert_eq!(document.meta.title.as_deref(), Some("NPM"));
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("June 2026"));
     assert_eq!(document.meta.os.as_deref(), Some("NPM@11.17.0"));
     assert_eq!(document.sections.len(), 1);

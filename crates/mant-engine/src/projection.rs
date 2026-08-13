@@ -26,7 +26,7 @@ pub(crate) const DOCUMENT_ROOT_TITLE: &str = "OVERVIEW";
 /// document-defined node.
 ///
 /// Section paths use dotted positive indices (`2.1`), while semantic entries
-/// append an option index (`2.1/o3`). The parser reserves the complete grammar,
+/// append a semantic-entry index (`2.1/e3`). The parser reserves the complete grammar,
 /// not only selectors present in one particular document, so source-defined
 /// IDs can never make excerpt lookup ambiguous.
 pub(crate) fn is_reserved_selector(value: &str) -> bool {
@@ -199,9 +199,9 @@ pub fn build_outline_with_detail(
 /// # Errors
 ///
 /// Returns an error when no content exists or any selector is empty or unknown.
-pub fn select_excerpt(
+pub fn select_excerpt<S: AsRef<str>>(
     query: &ResolvedContent,
-    selectors: &[String],
+    selectors: &[S],
 ) -> Result<QueryExcerpt, ProjectionError> {
     if selectors.is_empty() {
         return Err(ProjectionError::EmptySelection);
@@ -222,7 +222,7 @@ pub fn select_excerpt(
     let mut selected_ids = HashSet::new();
     let mut selected = Vec::new();
     for raw_selector in selectors {
-        let selector = raw_selector.trim();
+        let selector = raw_selector.as_ref().trim();
         if selector.is_empty() {
             return Err(ProjectionError::EmptySelector);
         }
@@ -823,7 +823,7 @@ mod tests {
                     path: Some("/man/demo.1".to_owned()),
                 },
                 meta: DocumentMeta {
-                    section: Some("1".to_owned()),
+                    manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
@@ -866,7 +866,7 @@ mod tests {
             outline
                 .meta
                 .as_ref()
-                .and_then(|meta| meta.section.as_deref()),
+                .and_then(|meta| meta.manual_section.as_deref()),
             Some("1")
         );
         assert_eq!(outline.nodes[1].path(), "2");
@@ -1008,7 +1008,7 @@ mod tests {
             Err(ProjectionError::MissingContent { .. })
         ));
         assert_eq!(
-            select_excerpt(&query(), &[]),
+            select_excerpt(&query(), &[] as &[String]),
             Err(ProjectionError::EmptySelection)
         );
         assert_eq!(

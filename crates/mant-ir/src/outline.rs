@@ -58,13 +58,13 @@ impl fmt::Display for OutlinePath {
             Self::Entry {
                 section: None,
                 index,
-            } => write!(formatter, "root/o{index}"),
+            } => write!(formatter, "root/e{index}"),
             Self::Entry {
                 section: Some(coordinates),
                 index,
             } => {
                 write_coordinates(formatter, coordinates)?;
-                write!(formatter, "/o{index}")
+                write!(formatter, "/e{index}")
             }
         }
     }
@@ -104,14 +104,14 @@ impl FromStr for OutlinePath {
             "root" => return Ok(Self::DocumentRoot),
             _ => {}
         }
-        if let Some(index) = value.strip_prefix("root/o") {
+        if let Some(index) = value.strip_prefix("root/e") {
             return Ok(Self::Entry {
                 section: None,
                 index: parse_index(index)?,
             });
         }
         let (section, entry) = value
-            .split_once("/o")
+            .split_once("/e")
             .map_or((value, None), |(section, entry)| (section, Some(entry)));
         let coordinates = parse_coordinates(section)?;
         match entry {
@@ -151,14 +151,14 @@ mod tests {
 
     #[test]
     fn round_trips_every_outline_path_family() {
-        for value in ["0", "root", "root/o2", "1", "2.3", "2.3/o4"] {
+        for value in ["0", "root", "root/e2", "1", "2.3", "2.3/e4"] {
             assert_eq!(value.parse::<OutlinePath>().unwrap().to_string(), value);
         }
     }
 
     #[test]
     fn rejects_zero_empty_and_malformed_indices() {
-        for value in ["", "00", "01", "1.0", "root/o0", "1/o", "1/o2/o3", "x"] {
+        for value in ["", "00", "01", "1.0", "root/e0", "1/o", "1/e2/e3", "x"] {
             assert!(value.parse::<OutlinePath>().is_err(), "accepted {value}");
         }
     }
@@ -168,7 +168,7 @@ mod tests {
         assert_eq!(OutlinePath::section(&[2, 3]).unwrap().to_string(), "2.3");
         assert_eq!(
             OutlinePath::entry(Some(&[2, 3]), 4).unwrap().to_string(),
-            "2.3/o4"
+            "2.3/e4"
         );
         assert!(OutlinePath::section(&[]).is_none());
         assert!(OutlinePath::entry(Some(&[1, 0]), 2).is_none());

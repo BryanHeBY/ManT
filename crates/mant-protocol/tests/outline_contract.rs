@@ -31,7 +31,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
             id: "options-2".to_owned().into(),
             title: "OPTIONS".to_owned(),
             children: vec![OutlineNode::DocumentEntry {
-                path: "2/o1".to_owned().into(),
+                path: "2/e1".to_owned().into(),
                 id: "all".to_owned().into(),
                 title: "-a, --all".to_owned(),
                 role: DefinitionRole::Option,
@@ -131,7 +131,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         meta: None,
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentEntry {
-            path: "2/o1".to_owned().into(),
+            path: "2/e1".to_owned().into(),
             id: "all".to_owned().into(),
             title: "-a, --all".to_owned(),
             breadcrumbs: Vec::new(),

@@ -277,7 +277,7 @@ fn explicit_roff_files_and_stdin_use_the_native_parser() {
     assert!(file.stderr.is_empty());
     let file: serde_json::Value = serde_json::from_slice(&file.stdout).expect("roff file JSON");
     assert_eq!(file["document"]["source"]["format"], "man");
-    assert_eq!(file["document"]["meta"]["section"], "1");
+    assert_eq!(file["document"]["meta"]["manualSection"], "1");
 
     let mut child = Command::new(executable())
         .args([
@@ -1027,7 +1027,7 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
     assert!(manual.stderr.is_empty());
     let manual: serde_json::Value = serde_json::from_slice(&manual.stdout).expect("manual JSON");
     assert_eq!(manual["document"]["source"]["format"], "man");
-    assert_eq!(manual["document"]["meta"]["section"], "1");
+    assert_eq!(manual["document"]["meta"]["manualSection"], "1");
     assert!(manual["tldr"].is_null());
 
     fs::remove_dir_all(root).expect("remove source-policy fixture");
@@ -1072,11 +1072,11 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
     assert_eq!(combined["document"]["source"]["format"], "man");
     assert!(!combined["tldr"].is_null());
 
-    for selector in ["--manual", "--section"] {
-        let arguments = if selector == "--section" {
-            vec![selector, "1", "--format", "json", "--compact"]
-        } else {
+    for selector in ["--manual", "--man-section", "--section"] {
+        let arguments = if selector == "--manual" {
             vec![selector, "--format", "json", "--compact"]
+        } else {
+            vec![selector, "1", "--format", "json", "--compact"]
         };
         let manual = run(&arguments);
         assert!(manual.status.success(), "{manual:?}");
@@ -1120,7 +1120,7 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
         assert!(output.status.success(), "{output:?}");
         let value: serde_json::Value =
             serde_json::from_slice(&output.stdout).expect("man-style selector JSON");
-        assert_eq!(value["document"]["meta"]["section"], "1");
+        assert_eq!(value["document"]["meta"]["manualSection"], "1");
     }
 
     fs::remove_dir_all(root).expect("remove explicit-content fixture");
@@ -1183,7 +1183,7 @@ fn manual_queries_use_native_paths_without_a_man_executable() {
     assert!(output.stderr.is_empty());
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
     assert_eq!(value["label"], "native-only");
-    assert_eq!(value["document"]["meta"]["section"], "1");
+    assert_eq!(value["document"]["meta"]["manualSection"], "1");
     assert_eq!(value["document"]["source"]["format"], "man");
 
     fs::remove_dir_all(root).expect("remove native manual fixture");
@@ -1210,7 +1210,7 @@ fn manual_queries_accept_flat_user_man_roots() {
 
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("query JSON");
-    assert_eq!(value["document"]["meta"]["section"], "1");
+    assert_eq!(value["document"]["meta"]["manualSection"], "1");
     assert_eq!(value["document"]["source"]["format"], "man");
 
     let canonical = Command::new(executable())
@@ -1222,7 +1222,7 @@ fn manual_queries_accept_flat_user_man_roots() {
     let canonical: serde_json::Value =
         serde_json::from_slice(&canonical.stdout).expect("canonical manual JSON");
     assert_eq!(canonical["address"]["kind"], "manual");
-    assert_eq!(canonical["address"]["section"], "1");
+    assert_eq!(canonical["address"]["manualSection"], "1");
 
     let catalog = Command::new(executable())
         .args([

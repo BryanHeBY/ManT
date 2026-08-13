@@ -425,9 +425,9 @@ fn explicit_heading_ids_cannot_shadow_paths_and_remain_link_targets() {
         "\
 # Demo
 
-See [entry owner](#1/o1), [path owner](#3.1), and [explicit root](#root).
+See [entry owner](#1/e1), [path owner](#3.1), and [explicit root](#root).
 
-## Entry owner {#1/o1}
+## Entry owner {#1/e1}
 
 - `--help`: Show help.
 
@@ -448,7 +448,7 @@ Root body.
         None,
     );
 
-    assert_eq!(document.sections[0].id, "1/o1-section");
+    assert_eq!(document.sections[0].id, "1/e1-section");
     assert_eq!(document.sections[1].id, "3.1-section");
     assert_eq!(document.sections[2].children[0].id, "child");
     assert_eq!(document.sections[3].id, "root-section");
@@ -467,7 +467,7 @@ Root body.
         .collect::<Vec<_>>();
     assert_eq!(
         targets,
-        ["1/o1-section", "3.1-section", "root-section"],
+        ["1/e1-section", "3.1-section", "root-section"],
         "renamed explicit IDs remain valid Markdown link aliases"
     );
     assert!(
@@ -483,7 +483,7 @@ Root body.
         document: Some(document),
         tldr: None,
     };
-    let entry = select_excerpt(&query, &["1/o1".to_owned()]).expect("entry path");
+    let entry = select_excerpt(&query, &["1/e1".to_owned()]).expect("entry path");
     assert!(matches!(
         entry.selections.as_slice(),
         [ExcerptSelection::DocumentEntry { title, .. }] if title.contains("--help")
@@ -746,8 +746,8 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
     .expect("duplicate entries remain valid input");
     assert!(parsed.document.diagnostics.iter().any(|diagnostic| {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
-            && diagnostic.message.contains("1/o1 (option-f)")
-            && diagnostic.message.contains("2/o1 (option-f-2)")
+            && diagnostic.message.contains("1/e1 (option-f)")
+            && diagnostic.message.contains("2/e1 (option-f-2)")
     }));
     let query = ResolvedContent {
         address: None,
@@ -765,10 +765,10 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
             .iter()
             .map(|candidate| candidate.path.as_str())
             .collect::<Vec<_>>(),
-        ["1/o1", "2/o1"]
+        ["1/e1", "2/e1"]
     );
     assert_eq!(
-        select_explanation(&query, "2/o1")
+        select_explanation(&query, "2/e1")
             .expect("qualified path")
             .selections
             .len(),
@@ -831,8 +831,8 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
         diagnostic.code.as_deref() == Some("markdown.semantic-entry.ambiguous-selector")
             && diagnostic.message.contains("semantic selector 'help'")
             && diagnostic.message.contains("normalized shorthand")
-            && diagnostic.message.contains("1/o1 (option-help)")
-            && diagnostic.message.contains("1/o2 (option-help-2)")
+            && diagnostic.message.contains("1/e1 (option-help)")
+            && diagnostic.message.contains("1/e2 (option-help-2)")
     }));
     let query = ResolvedContent {
         address: None,

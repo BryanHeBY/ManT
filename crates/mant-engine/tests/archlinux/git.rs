@@ -93,10 +93,10 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
                 Inline::Link {
                     target: mant_ir::LinkTarget::Manual {
                         name,
-                        section: Some(section),
+                        manual_section: Some(manual_section),
                     },
                     ..
-                } if name == "git-add" && section == "1"
+                } if name == "git-add" && manual_section == "1"
             );
         });
     }

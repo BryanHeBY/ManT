@@ -30,7 +30,7 @@ pub enum DocumentAddress {
     },
     Manual {
         name: String,
-        section: String,
+        manual_section: String,
     },
 }
 
@@ -48,7 +48,10 @@ impl DocumentAddress {
     pub fn relative_path(&self) -> String {
         match self {
             Self::Markdown { path, .. } => path.clone(),
-            Self::Manual { name, section } => format!("{section}/{name}"),
+            Self::Manual {
+                name,
+                manual_section,
+            } => format!("{manual_section}/{name}"),
         }
     }
 
@@ -64,7 +67,10 @@ impl DocumentAddress {
                 path,
                 origin: MarkdownOrigin::Source { name },
             } => format!("sources/{name}/{path}"),
-            Self::Manual { name, section } => format!("manual/{section}/{name}"),
+            Self::Manual {
+                name,
+                manual_section,
+            } => format!("manual/{manual_section}/{name}"),
         }
     }
 }

@@ -32,7 +32,7 @@ fn render_query_body(query: &ResolvedContent, include_tldr: bool) -> String {
     let section = query
         .document
         .as_ref()
-        .and_then(|document| document.meta.section.as_deref());
+        .and_then(|document| document.meta.manual_section.as_deref());
     let mut parts = vec![document_label(&query.label, section)];
     if include_tldr && let Some(tldr) = &query.tldr {
         parts.push(render_tldr_text(tldr));
@@ -52,7 +52,7 @@ pub fn render_outline_text(outline: &QueryOutline) -> String {
         outline
             .meta
             .as_ref()
-            .and_then(|meta| meta.section.as_deref()),
+            .and_then(|meta| meta.manual_section.as_deref()),
     )];
     render_outline_nodes(&outline.nodes, "", &mut lines);
     lines.join("\n").trim_end().to_owned()
@@ -66,7 +66,7 @@ pub fn render_excerpt_text(excerpt: &QueryExcerpt) -> String {
         excerpt
             .meta
             .as_ref()
-            .and_then(|meta| meta.section.as_deref()),
+            .and_then(|meta| meta.manual_section.as_deref()),
     )];
     for selection in &excerpt.selections {
         parts.push(render_selection(selection));
@@ -437,7 +437,7 @@ mod tests {
                     path: None,
                 },
                 meta: DocumentMeta {
-                    section: Some("1".to_owned()),
+                    manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
@@ -589,7 +589,7 @@ mod tests {
                         path: None,
                     },
                     meta: DocumentMeta {
-                        section: Some("1".to_owned()),
+                        manual_section: Some("1".to_owned()),
                         ..DocumentMeta::default()
                     },
                     diagnostics: Vec::new(),
@@ -655,7 +655,7 @@ mod tests {
                     path: None,
                 },
                 meta: DocumentMeta {
-                    section: Some("1".to_owned()),
+                    manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),
@@ -735,7 +735,7 @@ mod tests {
                     path: None,
                 },
                 meta: DocumentMeta {
-                    section: Some("1".to_owned()),
+                    manual_section: Some("1".to_owned()),
                     ..DocumentMeta::default()
                 },
                 diagnostics: Vec::new(),

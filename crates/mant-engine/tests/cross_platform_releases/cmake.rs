@@ -21,7 +21,7 @@ fn keeps_cross_compiler_and_windows_toolchain_sections() {
         document,
         CMAKE_TOOLCHAIN_SECTIONS,
     );
-    assert_eq!(document.meta.section.as_deref(), Some("7"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("7"));
     assert_eq!(document.meta.date.as_deref(), Some("July 31, 2026"));
     assert_eq!(document.meta.os.as_deref(), Some("4.4.2"));
 

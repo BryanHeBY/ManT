@@ -15,7 +15,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("clang");
     assert_eq!(document.source.format, SourceFormat::Man);
     assert_eq!(document.sections.len(), 9);
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.os.as_deref(), Some("22"));
     assert!(source_path_ends_with(document, "fedora44/clang.1.zst"));
 

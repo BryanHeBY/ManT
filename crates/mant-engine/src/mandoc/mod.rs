@@ -143,7 +143,7 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
         },
         meta: DocumentMeta {
             title: normalize_metadata(parsed.metadata.title.as_deref()),
-            section: normalize_metadata(parsed.metadata.section.as_deref()),
+            manual_section: normalize_metadata(parsed.metadata.section.as_deref()),
             date: normalize_metadata(parsed.metadata.date.as_deref()),
             volume: normalize_metadata(parsed.metadata.volume.as_deref()),
             os: normalize_metadata(parsed.metadata.os.as_deref()),
@@ -753,13 +753,13 @@ mod tests {
         };
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
-                if name == "printf" && section == "3"
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+                if name == "printf" && manual_section == "3"
         )));
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
-                if name == "man" && section == "1"
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+                if name == "man" && manual_section == "1"
         )));
 
         let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
@@ -767,8 +767,8 @@ mod tests {
         };
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
-                if name == "printf" && section == "3"
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+                if name == "printf" && manual_section == "3"
         )));
     }
 
@@ -803,10 +803,10 @@ mod tests {
                         target:
                             mant_ir::LinkTarget::Manual {
                                 name,
-                                section: Some(section),
+                                manual_section: Some(manual_section),
                             },
                         ..
-                    } if name == "git-add" && section == "1" => manual = true,
+                    } if name == "git-add" && manual_section == "1" => manual = true,
                     Inline::Link {
                         target: mant_ir::LinkTarget::External { uri },
                         ..

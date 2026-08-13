@@ -16,7 +16,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     let document = fedora44_manual("tar");
     assert_eq!(document.source.format, SourceFormat::Man);
     assert_eq!(document.sections.len(), 9);
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.os.as_deref(), Some("TAR"));
 
     let query = query_for_document("tar", document);
@@ -88,7 +88,7 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
                 if names.iter().any(|name| name == "--acls"))
         })
         .expect("--acls option match");
-    assert!(option.node.path().contains("/o"));
+    assert!(option.node.path().contains("/e"));
     assert!(option.markdown.start_line > 1);
     assert!(option.markdown.start_column > 0);
     assert!(option.preview.contains("--acls"));

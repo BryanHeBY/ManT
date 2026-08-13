@@ -27,7 +27,7 @@ const RG_SECTIONS: &[&str] = &[
 fn keeps_release_metadata_sections_and_semantic_options() {
     let document = windows_release_manual("rg");
     common::assert_section_topology("windows-releases/rg", document, RG_SECTIONS);
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("2026-07-15"));
     assert_eq!(document.meta.os.as_deref(), Some("15.2.0 (rev e89fff89ac)"));
 

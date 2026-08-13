@@ -21,15 +21,15 @@ const SUPPORTED_COMPRESSION_SUFFIXES: [&str; 2] = [".gz", ".zst"];
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManualRequest {
     pub name: String,
-    pub section: Option<String>,
+    pub manual_section: Option<String>,
 }
 
 impl ManualRequest {
     #[must_use]
-    pub fn new(name: impl Into<String>, section: Option<String>) -> Self {
+    pub fn new(name: impl Into<String>, manual_section: Option<String>) -> Self {
         Self {
             name: name.into(),
-            section,
+            manual_section,
         }
     }
 }
@@ -90,7 +90,7 @@ impl ManualIndex {
         &self.pages
     }
 
-    /// Resolve one page using an optional exact section selector.
+    /// Resolve one page using an optional exact manual category.
     #[must_use]
     pub fn find(&self, name: &str, section: Option<&str>) -> Option<&ManualPage> {
         let name = name.trim();
@@ -100,6 +100,7 @@ impl ManualIndex {
                 && section.is_none_or(|section| page.section == section)
         })
     }
+
 }
 
 fn manual_names_equal(left: &str, right: &str) -> bool {
@@ -136,7 +137,7 @@ pub(crate) struct CommandOutput {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LocateError {
     EmptyName,
-    InvalidSection,
+    InvalidManualSection,
     NotFound { name: String },
 }
 
@@ -144,7 +145,7 @@ impl fmt::Display for LocateError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyName => formatter.write_str("manual page name must not be empty"),
-            Self::InvalidSection => formatter.write_str("manual section must not be empty"),
+            Self::InvalidManualSection => formatter.write_str("manual section must not be empty"),
             Self::NotFound { name } => {
                 write!(formatter, "no local manual source was found for '{name}'")
             }
@@ -174,9 +175,9 @@ pub fn locate_manual_source_in(
     if name.is_empty() {
         return Err(LocateError::EmptyName);
     }
-    let section = request.section.as_deref().map(str::trim);
+    let section = request.manual_section.as_deref().map(str::trim);
     if section.is_some_and(str::is_empty) {
-        return Err(LocateError::InvalidSection);
+        return Err(LocateError::InvalidManualSection);
     }
     index
         .find(name, section)
@@ -619,7 +620,7 @@ mod tests {
         );
         assert_eq!(
             locate_manual_source_in(&ManualRequest::new("git", Some(" ".to_owned())), &index,),
-            Err(LocateError::InvalidSection)
+            Err(LocateError::InvalidManualSection)
         );
     }
 

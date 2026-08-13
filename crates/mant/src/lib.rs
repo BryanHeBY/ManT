@@ -444,7 +444,9 @@ fn catalog_category(address: &DocumentAddress) -> (String, &'static str) {
             origin: MarkdownOrigin::Source { name },
             ..
         } => (format!("sources/{name}"), "markdown"),
-        DocumentAddress::Manual { section, .. } => (format!("manual/{section}"), "manual"),
+        DocumentAddress::Manual { manual_section, .. } => {
+            (format!("manual/{manual_section}"), "manual")
+        }
     }
 }
 
@@ -600,7 +602,7 @@ fn open_external_uri(uri: &str) -> Result<(), String> {
 }
 
 fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {
-    let (name, source, section, manual_only) = match address {
+    let (name, source, manual_section, manual_only) = match address {
         DocumentAddress::Markdown { path, origin } => (
             path.clone(),
             match origin {
@@ -610,9 +612,10 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
             None,
             false,
         ),
-        DocumentAddress::Manual { name, section } => {
-            (name.clone(), None, Some(section.clone()), true)
-        }
+        DocumentAddress::Manual {
+            name,
+            manual_section,
+        } => (name.clone(), None, Some(manual_section.clone()), true),
     };
     (
         QueryRequest {
@@ -620,7 +623,7 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
             input: QueryInput::Document {
                 selector: name,
                 source,
-                section,
+                manual_section,
             },
             view: QueryView::Full {},
         },
@@ -726,21 +729,21 @@ mod tests {
             QueryInput::Document {
                 selector: "Start-Process".to_owned(),
                 source: Some("pwsh7".to_owned()),
-                section: None,
+                manual_section: None,
             }
         );
         assert!(!policy.manual_only);
 
         let (request, policy) = request_for_address(&DocumentAddress::Manual {
             name: "printf".to_owned(),
-            section: "3".to_owned(),
+            manual_section: "3".to_owned(),
         });
         assert_eq!(
             request.input,
             QueryInput::Document {
                 selector: "printf".to_owned(),
                 source: None,
-                section: Some("3".to_owned()),
+                manual_section: Some("3".to_owned()),
             }
         );
         assert!(policy.manual_only);
@@ -916,7 +919,7 @@ mod tests {
                     DocumentSummary {
                         address: DocumentAddress::Manual {
                             name: "printf".to_owned(),
-                            section: "3".to_owned(),
+                            manual_section: "3".to_owned(),
                         },
                         catalog_path: "manual/3/printf".to_owned(),
                         source_path: "/usr/share/man/man3/printf.3".to_owned(),
@@ -1008,7 +1011,7 @@ mod tests {
                 path: Some("/man/demo.1".to_owned()),
             },
             meta: DocumentMeta {
-                section: Some("1".to_owned()),
+                manual_section: Some("1".to_owned()),
                 ..DocumentMeta::default()
             },
             diagnostics: Vec::new(),
@@ -1109,7 +1112,7 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git","section":"1"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git","manualSection":"1"},"view":{"kind":"full"}}"#,
             &host,
         );
 
@@ -1160,7 +1163,7 @@ mod tests {
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","nodes":["2.1"]}}"#,
+            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","selectors":["2.1"]}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1249,7 +1252,7 @@ mod tests {
         let (status, output, diagnostics) = invoke(&["demo", "--explain", "--exclude"], b"", &host);
 
         assert_eq!(status, 0);
-        assert!(output.contains("Outline `2/o1`: OPTIONS → --exclude"));
+        assert!(output.contains("Outline `2/e1`: OPTIONS → --exclude"));
         assert!(output.contains("--exclude=PATTERN"));
         assert!(output.contains("Exclude matching files from the archive."));
         assert!(diagnostics.is_empty());

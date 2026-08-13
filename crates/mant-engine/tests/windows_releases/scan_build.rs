@@ -33,7 +33,7 @@ fn keeps_the_analyzer_options_checkers_and_archive_metadata() {
             .collect::<Vec<_>>(),
         SCAN_BUILD_SECTIONS,
     );
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("August 18, 2024"));
     assert_eq!(document.meta.os.as_deref(), Some("clang 20"));
 

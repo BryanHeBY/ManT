@@ -37,7 +37,7 @@ pub struct CatalogQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub section: Option<String>,
+    pub manual_section: Option<String>,
     #[serde(default = "default_catalog_limit")]
     #[schemars(range(min = 1, max = 10000))]
     pub limit: u32,
@@ -53,7 +53,7 @@ impl Default for CatalogQuery {
             case: SearchCase::Insensitive,
             kind: None,
             source: None,
-            section: None,
+            manual_section: None,
             limit: default_catalog_limit(),
             offset: 0,
         }

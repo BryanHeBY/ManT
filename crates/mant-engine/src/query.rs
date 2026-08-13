@@ -36,7 +36,7 @@ pub const MAX_MARKDOWN_BYTES: u64 = 16 * 1024 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryError {
     EmptyName,
-    InvalidSection,
+    InvalidManualSection,
     InvalidSource,
     ConflictingSourceSelectors,
     EmptyMarkdownPath,
@@ -98,7 +98,7 @@ impl fmt::Display for QueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyName => formatter.write_str("name must not be empty"),
-            Self::InvalidSection => formatter.write_str("manual section must not be empty"),
+            Self::InvalidManualSection => formatter.write_str("manual section must not be empty"),
             Self::InvalidSource => formatter.write_str("document source must not be empty"),
             Self::ConflictingSourceSelectors => formatter.write_str(
                 "document source cannot be combined with a manual section or manual-only policy",
@@ -142,7 +142,7 @@ impl Error for QueryError {
             Self::InvalidSearch(error) => Some(error),
             Self::Manual(error) => Some(error),
             Self::EmptyName
-            | Self::InvalidSection
+            | Self::InvalidManualSection
             | Self::InvalidSource
             | Self::ConflictingSourceSelectors
             | Self::EmptyMarkdownPath
@@ -161,12 +161,10 @@ impl Error for QueryError {
 impl fmt::Display for ManualLoadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotFound { name, detail } | Self::Parse { name, detail } => {
-                write!(
-                    formatter,
-                    "could not load manual '{name}': manual source: {detail}"
-                )
-            }
+            Self::NotFound { name, detail } | Self::Parse { name, detail } => write!(
+                formatter,
+                "could not load manual '{name}': manual source: {detail}"
+            ),
             Self::Empty {
                 name,
                 path,
@@ -258,7 +256,7 @@ pub fn project_query_view(
         QueryView::Outline { detail } => build_outline_with_detail(&query, *detail)
             .map(QueryViewResult::Outline)
             .map_err(QueryExecutionError::Projection),
-        QueryView::Excerpt { nodes } => select_excerpt(&query, nodes)
+        QueryView::Excerpt { selectors } => select_excerpt(&query, selectors)
             .map(QueryViewResult::Excerpt)
             .map_err(QueryExecutionError::Projection),
         QueryView::Explain { entry } => select_explanation(&query, entry)
@@ -304,7 +302,7 @@ pub fn validate_query_request(
         QueryInput::Document {
             selector,
             source,
-            section,
+            manual_section,
         } => {
             if selector.trim().is_empty() {
                 return Err(QueryError::EmptyName);
@@ -315,13 +313,13 @@ pub fn validate_query_request(
             {
                 return Err(QueryError::InvalidSource);
             }
-            if section
+            if manual_section
                 .as_deref()
                 .is_some_and(|value| value.trim().is_empty())
             {
-                return Err(QueryError::InvalidSection);
+                return Err(QueryError::InvalidManualSection);
             }
-            if source.is_some() && (section.is_some() || policy.manual_only) {
+            if source.is_some() && (manual_section.is_some() || policy.manual_only) {
                 return Err(QueryError::ConflictingSourceSelectors);
             }
         }
@@ -338,11 +336,11 @@ pub fn validate_query_request(
         }
     }
     match &request.view {
-        QueryView::Excerpt { nodes } => {
-            if nodes.is_empty() {
+        QueryView::Excerpt { selectors } => {
+            if selectors.is_empty() {
                 return Err(QueryError::EmptySelection);
             }
-            if nodes.iter().any(|node| node.trim().is_empty()) {
+            if selectors.iter().any(|selector| selector.trim().is_empty()) {
                 return Err(QueryError::EmptySelector);
             }
         }
@@ -593,11 +591,11 @@ fn query_with(
         QueryInput::Document {
             selector,
             source,
-            section,
+            manual_section,
         } => query_named_document(
             selector,
             source.as_deref(),
-            section.as_deref(),
+            manual_section.as_deref(),
             policy,
             host,
         ),
@@ -807,7 +805,7 @@ pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedContent, QueryError> {
 fn query_named_document(
     name: &str,
     requested_source: Option<&str>,
-    requested_section: Option<&str>,
+    requested_manual_section: Option<&str>,
     policy: QueryPolicy,
     host: &dyn QueryHost,
 ) -> Result<ResolvedContent, QueryError> {
@@ -816,7 +814,7 @@ fn query_named_document(
         return Err(QueryError::EmptyName);
     }
     if let Some(address) = parse_catalog_address(name) {
-        if requested_source.is_some() || requested_section.is_some() || policy.manual_only {
+        if requested_source.is_some() || requested_manual_section.is_some() || policy.manual_only {
             return Err(QueryError::ConflictingSourceSelectors);
         }
         return match address {
@@ -831,19 +829,19 @@ fn query_named_document(
             }
             DocumentAddress::Manual {
                 name: manual_name,
-                section,
+                manual_section,
             } => query_named_document(
                 &manual_name,
                 None,
-                Some(&section),
+                Some(&manual_section),
                 QueryPolicy { manual_only: true },
                 host,
             ),
         };
     }
-    let section = requested_section.map(str::trim);
+    let section = requested_manual_section.map(str::trim);
     if section.is_some_and(str::is_empty) {
-        return Err(QueryError::InvalidSection);
+        return Err(QueryError::InvalidManualSection);
     }
     let section = section.map(ToOwned::to_owned);
     let source = requested_source.map(str::trim);
@@ -887,9 +885,9 @@ fn query_named_document(
     // A malformed page may omit its own section metadata. Preserve the
     // requested section so labels stay `name(N)`.
     if let (Ok(manual), Some(section)) = (&mut manual, section.as_deref())
-        && manual.document.meta.section.is_none()
+        && manual.document.meta.manual_section.is_none()
     {
-        manual.document.meta.section = Some(section.to_owned());
+        manual.document.meta.manual_section = Some(section.to_owned());
     }
 
     // An explicit manual request must not degrade into an apparently
@@ -944,11 +942,11 @@ fn parse_catalog_address(selector: &str) -> Option<DocumentAddress> {
         }
     }
     if let Some(rest) = selector.strip_prefix("manual/") {
-        let (section, name) = rest.split_once('/')?;
-        if !section.is_empty() && !name.is_empty() && !name.contains('/') {
+        let (manual_section, name) = rest.split_once('/')?;
+        if !manual_section.is_empty() && !name.is_empty() && !name.contains('/') {
             return Some(DocumentAddress::Manual {
                 name: name.to_owned(),
-                section: section.to_owned(),
+                manual_section: manual_section.to_owned(),
             });
         }
     }
@@ -1006,7 +1004,7 @@ fn load_manual(
     let source_path = page.path.clone();
     let address = DocumentAddress::Manual {
         name: page.name.clone(),
-        section: page.section.clone(),
+        manual_section: page.section.clone(),
     };
     let document = host
         .parse_manual(&page)
@@ -1231,7 +1229,7 @@ mod tests {
             input: QueryInput::Document {
                 selector: " tool ".to_owned(),
                 source: None,
-                section: None,
+                manual_section: None,
             },
             view: QueryView::Full {},
         }
@@ -1254,7 +1252,7 @@ mod tests {
     }
 
     #[test]
-    fn requested_section_backfills_metadata_the_parser_left_empty() {
+    fn requested_manual_section_backfills_metadata_the_parser_left_empty() {
         let mut host = host(Ok(document(SourceFormat::Man, false, true)));
         host.locate.as_mut().expect("manual page").section = "3".to_owned();
         host.tldr = Ok(Some(tldr()));
@@ -1263,7 +1261,7 @@ mod tests {
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: None,
-                section: Some("3".to_owned()),
+                manual_section: Some("3".to_owned()),
             },
             view: QueryView::Full {},
         };
@@ -1273,7 +1271,7 @@ mod tests {
             result.address,
             Some(DocumentAddress::Manual {
                 name: "tool".to_owned(),
-                section: "3".to_owned(),
+                manual_section: "3".to_owned(),
             })
         );
         assert_eq!(
@@ -1282,7 +1280,7 @@ mod tests {
                 .as_ref()
                 .expect("manual")
                 .meta
-                .section
+                .manual_section
                 .as_deref(),
             Some("3"),
             "requested section must label output when the parser omits it"
@@ -1305,7 +1303,7 @@ mod tests {
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: Some("team".to_owned()),
-                section: None,
+                manual_section: None,
             },
             view: QueryView::Full {},
         };
@@ -1339,7 +1337,7 @@ mod tests {
             input: QueryInput::Document {
                 selector: "documents/en/tool".to_owned(),
                 source: None,
-                section: None,
+                manual_section: None,
             },
             view: QueryView::Full {},
         };
@@ -1362,7 +1360,7 @@ mod tests {
             input: QueryInput::Document {
                 selector: "manual/1/tool".to_owned(),
                 source: None,
-                section: None,
+                manual_section: None,
             },
             view: QueryView::Full {},
         };
@@ -1371,7 +1369,7 @@ mod tests {
             result.address,
             Some(DocumentAddress::Manual {
                 name: "tool".to_owned(),
-                section: "1".to_owned(),
+                manual_section: "1".to_owned(),
             })
         );
         assert_eq!(*manual.calls.lock().expect("calls"), ["locate", "parse"]);
@@ -1434,7 +1432,7 @@ mod tests {
     }
 
     #[test]
-    fn requested_section_failure_is_not_hidden_by_tldr() {
+    fn requested_manual_section_failure_is_not_hidden_by_tldr() {
         let mut host = host(Err("libmandoc failed".to_owned()));
         host.locate = Err("section not found".to_owned());
         host.tldr = Ok(Some(tldr()));
@@ -1443,7 +1441,7 @@ mod tests {
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: None,
-                section: Some("7".to_owned()),
+                manual_section: Some("7".to_owned()),
             },
             view: QueryView::Full {},
         };
@@ -1512,7 +1510,7 @@ mod tests {
                     input: QueryInput::Document {
                         selector: " ".to_owned(),
                         source: None,
-                        section: None,
+                        manual_section: None,
                     },
                     view: QueryView::Full {},
                 },

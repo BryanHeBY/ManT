@@ -127,7 +127,7 @@ fn document_label(search: &QuerySearch) -> String {
     search
         .meta
         .as_ref()
-        .and_then(|meta| meta.section.as_deref())
+        .and_then(|meta| meta.manual_section.as_deref())
         .map_or_else(
             || search.label.clone(),
             |section| format!("{}({section})", search.label),
@@ -171,7 +171,7 @@ mod tests {
             label: "tar".to_owned(),
             source: None,
             meta: Some(mant_ir::DocumentMeta {
-                section: Some("1".to_owned()),
+                manual_section: Some("1".to_owned()),
                 ..mant_ir::DocumentMeta::default()
             }),
             query: SearchQuery {
@@ -200,7 +200,7 @@ mod tests {
             matches: vec![SearchMatch {
                 ordinal: 1,
                 node: SearchNode::DocumentEntry {
-                    path: "5.3/o17".to_owned().into(),
+                    path: "5.3/e17".to_owned().into(),
                     id: "acls-option".to_owned().into(),
                     title: "--acls".to_owned(),
                     role: mant_ir::DefinitionRole::Option,
@@ -227,9 +227,9 @@ mod tests {
     #[test]
     fn search_reports_are_human_readable_but_keep_machine_node_paths() {
         let result = result();
-        assert!(render_search_text(&result).contains("tar(1):824:3 [5.3/o17] --acls"));
+        assert!(render_search_text(&result).contains("tar(1):824:3 [5.3/e17] --acls"));
         let markdown = render_search_markdown(&result);
         assert!(markdown.contains("# Search results for `--acls` in tar(1)"));
-        assert!(markdown.contains("- Node: `5.3/o17`"));
+        assert!(markdown.contains("- Node: `5.3/e17`"));
     }
 }

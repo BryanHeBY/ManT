@@ -13,8 +13,8 @@ use std::{
 
 use mant_engine::{QueryPolicy, QueryViewResult};
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, DocumentCatalog, OutlineDetail, QueryExcerpt, QueryInput,
-    QueryOutline, QueryRequest, QueryView, SearchCase, SearchScope, SearchSyntax,
+    CatalogDocumentKind, CatalogQuery, DocumentCatalog, NodeSelector, OutlineDetail, QueryExcerpt,
+    QueryInput, QueryOutline, QueryRequest, QueryView, SearchCase, SearchScope, SearchSyntax,
     default_search_limit,
 };
 use rmcp::{
@@ -127,8 +127,8 @@ struct DocumentSelector {
     name: String,
     /// Optional configured Markdown source. It bypasses root documents and manuals.
     source: Option<String>,
-    /// Optional man section. Supplying it bypasses registered Markdown.
-    section: Option<String>,
+    /// Optional native manual category. Supplying it bypasses registered Markdown.
+    manual_section: Option<String>,
 }
 
 /// Parameters for the hierarchy-discovery tool.
@@ -149,8 +149,8 @@ struct GetParams {
     selector: DocumentSelector,
     /// Outline paths, stable IDs, or entry aliases returned by `mant_document_outline`.
     #[schemars(length(min = 1))]
-    #[serde(deserialize_with = "lenient_nodes")]
-    nodes: Vec<String>,
+    #[serde(deserialize_with = "lenient_selectors")]
+    selectors: Vec<NodeSelector>,
 }
 
 /// Parameters for resolving a single option, command, variable, or environment entry.
@@ -206,8 +206,8 @@ struct DocumentListParams {
     syntax: Option<SearchSyntax>,
     /// Case-folding policy. The default is `insensitive`.
     case: Option<SearchCase>,
-    /// Restrict manual pages to one exact section; excludes Markdown entries.
-    section: Option<String>,
+    /// Restrict manual pages to one exact manual category; excludes Markdown entries.
+    manual_section: Option<String>,
     /// Restrict Markdown discovery to one configured source.
     source: Option<String>,
     /// Maximum entries returned from 1 through 10,000. The default is 100.
@@ -243,10 +243,11 @@ where
     }
 }
 
-const NODES_HINT: &str = r#"nodes must be an array of outline selectors such as ["2","1/o1"]"#;
+const SELECTORS_HINT: &str =
+    r#"selectors must be an array of outline selectors such as ["2","1/e1"]"#;
 
 /// Accepts a selector array, one bare selector, or a stringified JSON array.
-fn lenient_nodes<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+fn lenient_selectors<'de, D>(deserializer: D) -> Result<Vec<NodeSelector>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -256,12 +257,12 @@ where
     let value = match value {
         serde_json::Value::String(text) => match serde_json::from_str(&text) {
             Ok(parsed @ serde_json::Value::Array(_)) => parsed,
-            _ => return Ok(vec![text]),
+            _ => return Ok(vec![text.into()]),
         },
         other => other,
     };
     serde_json::from_value(value)
-        .map_err(|error| D::Error::custom(format!("{error}; {NODES_HINT}")))
+        .map_err(|error| D::Error::custom(format!("{error}; {SELECTORS_HINT}")))
 }
 
 // ── Query execution ──────────────────────────────────────────────────────
@@ -373,7 +374,7 @@ impl MantMcpServer {
         let request = request_for(
             parameters.selector,
             QueryView::Excerpt {
-                nodes: parameters.nodes.clone(),
+                selectors: parameters.selectors.clone(),
             },
         );
         let QueryViewResult::Excerpt(mut excerpt) = self.query(request).await? else {
@@ -467,16 +468,16 @@ fn validate_document_list(
         .query
         .map(|query| query.trim().to_owned())
         .filter(|query| !query.is_empty());
-    parameters.section = parameters
-        .section
-        .map(|section| non_empty(&section, "section"))
+    parameters.manual_section = parameters
+        .manual_section
+        .map(|manual_section| non_empty(&manual_section, "manualSection"))
         .transpose()?;
     parameters.source = parameters
         .source
         .map(|source| non_empty(&source, "source"))
         .transpose()?;
-    if parameters.source.is_some() && parameters.section.is_some() {
-        return Err("source and section cannot be combined".to_owned());
+    if parameters.source.is_some() && parameters.manual_section.is_some() {
+        return Err("source and manualSection cannot be combined".to_owned());
     }
     let limit = parameters.limit.unwrap_or(100);
     if !(1..=10_000).contains(&limit) {
@@ -494,7 +495,7 @@ fn catalog_query(parameters: &DocumentListParams) -> CatalogQuery {
         case: parameters.case.unwrap_or_default(),
         kind: parameters.kind,
         source: parameters.source.clone(),
-        section: parameters.section.clone(),
+        manual_section: parameters.manual_section.clone(),
         limit: parameters.limit.unwrap_or(100),
         offset: parameters.offset.unwrap_or(0),
     }
@@ -518,7 +519,7 @@ fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
     let input = QueryInput::Document {
         selector: selector.name,
         source: selector.source,
-        section: selector.section,
+        manual_section: selector.manual_section,
     };
     QueryRequest {
         schema: mant_protocol::RequestSchema::V7,
@@ -590,7 +591,7 @@ mod tests {
         let schema = serde_json::to_value(&outline.input_schema).expect("schema JSON");
         assert_eq!(schema["properties"]["name"]["type"], "string");
         assert!(schema["properties"]["source"].is_object());
-        assert!(schema["properties"]["section"].is_object());
+        assert!(schema["properties"]["manualSection"].is_object());
         assert!(schema["properties"].get("target").is_none());
         assert!(!schema.to_string().contains("markdown-file"));
     }
@@ -599,11 +600,11 @@ mod tests {
     fn a_name_and_optional_manual_section_deserialize_directly() {
         let parameters: OutlineParams = serde_json::from_value(json!({
             "name": "printf",
-            "section": "3"
+            "manualSection": "3"
         }))
         .expect("name selector");
         assert_eq!(parameters.selector.name, "printf");
-        assert_eq!(parameters.selector.section.as_deref(), Some("3"));
+        assert_eq!(parameters.selector.manual_section.as_deref(), Some("3"));
     }
 
     #[test]
@@ -623,7 +624,7 @@ mod tests {
         let parameters: OutlineParams = serde_json::from_value(json!({
             "name": "tool",
             "source": "team",
-            "section": "1"
+            "manualSection": "1"
         }))
         .expect("deserialize combined selector before semantic validation");
         let request = super::request_for(parameters.selector, mant_protocol::QueryView::Full {});
@@ -651,7 +652,7 @@ mod tests {
             kind: Some(CatalogDocumentKind::Manual),
             syntax: None,
             case: None,
-            section: None,
+            manual_section: None,
             source: None,
             limit: Some(1),
             offset: Some(1),
@@ -663,7 +664,7 @@ mod tests {
                     name: "printf".to_owned(),
                     logical_path: "printf".to_owned(),
                     kind: AvailableDocumentKind::Markdown,
-                    section: None,
+                    manual_section: None,
                     path: PathBuf::from("/data/mant/printf.md"),
                     origin: AvailableDocumentOrigin::Documents,
                 },
@@ -671,7 +672,7 @@ mod tests {
                     name: "printf".to_owned(),
                     logical_path: "printf".to_owned(),
                     kind: AvailableDocumentKind::Manual,
-                    section: Some("1".to_owned()),
+                    manual_section: Some("1".to_owned()),
                     path: PathBuf::from("/usr/share/man/man1/printf.1.gz"),
                     origin: AvailableDocumentOrigin::ManualPath,
                 },
@@ -679,7 +680,7 @@ mod tests {
                     name: "printf".to_owned(),
                     logical_path: "printf".to_owned(),
                     kind: AvailableDocumentKind::Manual,
-                    section: Some("3".to_owned()),
+                    manual_section: Some("3".to_owned()),
                     path: PathBuf::from("/usr/share/man/man3/printf.3.gz"),
                     origin: AvailableDocumentOrigin::ManualPath,
                 },
@@ -696,7 +697,7 @@ mod tests {
             catalog.documents[0].address,
             DocumentAddress::Manual {
                 name: "printf".to_owned(),
-                section: "3".to_owned(),
+                manual_section: "3".to_owned(),
             }
         );
     }
@@ -731,17 +732,17 @@ mod tests {
 
     #[test]
     fn node_selectors_accept_arrays_bare_strings_and_stringified_arrays() {
-        for (nodes, expected) in [
-            (json!(["2", "1/o1"]), vec!["2", "1/o1"]),
+        for (selectors, expected) in [
+            (json!(["2", "1/e1"]), vec!["2", "1/e1"]),
             (json!("2"), vec!["2"]),
-            (json!("[\"2\", \"1/o1\"]"), vec!["2", "1/o1"]),
+            (json!("[\"2\", \"1/e1\"]"), vec!["2", "1/e1"]),
         ] {
             let parameters: GetParams = serde_json::from_value(json!({
                 "name": "ls",
-                "nodes": nodes,
+                "selectors": selectors,
             }))
             .expect("lenient nodes");
-            assert_eq!(parameters.nodes, expected);
+            assert_eq!(parameters.selectors, expected);
         }
     }
 
@@ -749,11 +750,11 @@ mod tests {
     fn malformed_node_selectors_report_a_correct_example() {
         let error = serde_json::from_value::<GetParams>(json!({
             "name": "ls",
-            "nodes": "[1, 2]",
+            "selectors": "[1, 2]",
         }))
         .expect_err("non-string selectors");
         assert!(
-            error.to_string().contains(r#"["2","1/o1"]"#),
+            error.to_string().contains(r#"["2","1/e1"]"#),
             "missing example in: {error}"
         );
     }

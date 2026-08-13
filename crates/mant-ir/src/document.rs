@@ -55,7 +55,8 @@ pub struct DocumentMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub section: Option<String>,
+    /// Native manual category such as `1` or `3p`; unrelated to document headings.
+    pub manual_section: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -170,7 +171,10 @@ pub struct SourceSpan {
     pub end_column: Option<u32>,
 }
 
-/// Hierarchical manual section. Depth is derived from tree position.
+/// Source-neutral document section headed by Markdown, man, or mdoc content.
+///
+/// This is a content subtree, not the native manual category stored in
+/// [`DocumentMeta::manual_section`]. Depth is derived from tree position.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Section {
@@ -433,7 +437,7 @@ pub enum LinkTarget {
     Manual {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
-        section: Option<String>,
+        manual_section: Option<String>,
     },
     /// A reference to a section in this document, normally originating at
     /// mdoc `Sx`.

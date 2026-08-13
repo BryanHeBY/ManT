@@ -13,7 +13,7 @@ use crate::fixtures::{windows_release_manual, windows_release_query};
 fn keeps_the_large_release_topology_and_windows_specific_sections() {
     let document = windows_release_manual("rclone");
     assert_eq!(document.meta.title.as_deref(), Some("rclone"));
-    assert_eq!(document.meta.section.as_deref(), Some("1"));
+    assert_eq!(document.meta.manual_section.as_deref(), Some("1"));
     assert_eq!(document.meta.date.as_deref(), Some("July 31, 2026"));
     assert_eq!(document.meta.os.as_deref(), Some("User Manual"));
     assert_eq!(document.sections.len(), 191);

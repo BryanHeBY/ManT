@@ -261,7 +261,10 @@ fn lower_manual_reference(children: &[Node], default_name: Option<&str>) -> Vec<
         .as_ref()
         .map_or_else(|| name.clone(), |section| format!("{name}({section})"));
     let mut output = vec![Inline::Link {
-        target: mant_ir::LinkTarget::Manual { name, section },
+        target: mant_ir::LinkTarget::Manual {
+            name,
+            manual_section: section,
+        },
         title: None,
         children: text_node(&display),
     }];

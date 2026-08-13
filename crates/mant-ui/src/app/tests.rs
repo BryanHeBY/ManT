@@ -130,7 +130,7 @@ fn document_catalog() -> DocumentCatalog {
         DocumentSummary {
             address: DocumentAddress::Manual {
                 name: "printf".to_owned(),
-                section: "3".to_owned(),
+                manual_section: "3".to_owned(),
             },
             catalog_path: "manual/3/printf".to_owned(),
             source_path: "/man/man3/printf.3".to_owned(),
@@ -152,9 +152,14 @@ fn manual_bundle(name: &str, section: &str) -> ResolvedContent {
     bundle.label = name.to_owned();
     bundle.address = Some(DocumentAddress::Manual {
         name: name.to_owned(),
-        section: section.to_owned(),
+        manual_section: section.to_owned(),
     });
-    bundle.document.as_mut().expect("manual").meta.section = Some(section.to_owned());
+    bundle
+        .document
+        .as_mut()
+        .expect("manual")
+        .meta
+        .manual_section = Some(section.to_owned());
     bundle
 }
 
@@ -177,7 +182,7 @@ fn document_finder_filters_live_and_emits_an_exact_address() {
             .map(|request| request.address().clone()),
         Some(DocumentAddress::Manual {
             name: "printf".to_owned(),
-            section: "3".to_owned(),
+            manual_section: "3".to_owned(),
         })
     );
 }
@@ -268,7 +273,7 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
         .map(|name| DocumentSummary {
             address: DocumentAddress::Manual {
                 name: name.to_owned(),
-                section: "1".to_owned(),
+                manual_section: "1".to_owned(),
             },
             catalog_path: format!("manual/1/{name}"),
             source_path: format!("/man/{name}.1"),
@@ -337,7 +342,7 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
         documents: vec![DocumentSummary {
             address: DocumentAddress::Manual {
                 name: ".k5identity".to_owned(),
-                section: "5".to_owned(),
+                manual_section: "5".to_owned(),
             },
             catalog_path: "manual/5/.k5identity".to_owned(),
             source_path: "/man/.k5identity.5".to_owned(),
@@ -369,7 +374,7 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
             DocumentSummary {
                 address: DocumentAddress::Manual {
                     name: "woman".to_owned(),
-                    section: "1".to_owned(),
+                    manual_section: "1".to_owned(),
                 },
                 catalog_path: "manual/1/woman".to_owned(),
                 source_path: "/man/woman.1".to_owned(),
@@ -377,7 +382,7 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
             DocumentSummary {
                 address: DocumentAddress::Manual {
                     name: "man".to_owned(),
-                    section: "1".to_owned(),
+                    manual_section: "1".to_owned(),
                 },
                 catalog_path: "manual/1/man".to_owned(),
                 source_path: "/man/man.1".to_owned(),
@@ -504,7 +509,12 @@ fn collapse_all_over_an_empty_navigation_does_not_panic() {
 #[test]
 fn terminal_title_includes_the_manual_section_but_the_sidebar_does_not() {
     let mut bundle = navigation_bundle();
-    bundle.document.as_mut().expect("document").meta.section = Some("1".to_owned());
+    bundle
+        .document
+        .as_mut()
+        .expect("document")
+        .meta
+        .manual_section = Some("1".to_owned());
     let backend = TestBackend::new(80, 14);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     let mut app = App::new(&bundle);
@@ -1416,7 +1426,7 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
                 children: vec![Inline::Link {
                     target: mant_ir::LinkTarget::Manual {
                         name: "git-add".to_owned(),
-                        section: Some("1".to_owned()),
+                        manual_section: Some("1".to_owned()),
                     },
                     title: None,
                     children: vec![Inline::Text {
@@ -1449,7 +1459,7 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
         app.take_open_request().expect("manual request").address(),
         &DocumentAddress::Manual {
             name: "git-add".to_owned(),
-            section: "1".to_owned(),
+            manual_section: "1".to_owned(),
         }
     );
 }
@@ -1462,7 +1472,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
     let bundle = ResolvedContent {
         address: Some(DocumentAddress::Manual {
             name: "git".to_owned(),
-            section: "1".to_owned(),
+            manual_section: "1".to_owned(),
         }),
         label: "git".to_owned(),
         document: Some(document),
@@ -1495,7 +1505,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
         opened,
         Some(DocumentAddress::Manual {
             name: "git-add".to_owned(),
-            section: "1".to_owned(),
+            manual_section: "1".to_owned(),
         })
     );
 }
