@@ -166,19 +166,20 @@ Manual retries always build the immutable tag's product tree while taking the
 release helpers from the trusted workflow revision on `main`. Automation fixes
 can therefore recover older tags without changing their product input.
 
-The archive keeps `mant.md` beside the executable so installation remains
-transparent. User-facing release notes should lead with the one-line
-installers, which register this document automatically. Manual archive users
-can copy it to `${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents/mant.md`;
-a system package may ship it as ordinary package documentation and tell users
-how to copy it into their ManT data directory. The document is optional at
-runtime, but a user-scoped copy makes `mant mant` and MCP document discovery
-work without a repository checkout.
+The archive keeps the versioned `manuals/` set beside the executable so
+installation remains transparent. User-facing release notes should lead with
+the one-line installers, which register these documents automatically. Manual
+archive users can copy `manuals/*.md` into
+`${XDG_DATA_HOME:-$HOME/.local/share}/mant/documents`; a system package may
+ship them as ordinary package documentation and explain how to register them.
+The documents are optional at runtime, but user-scoped copies make the command,
+IR, protocol, and input references available to CLI and MCP discovery without
+a repository checkout.
 
 Linux x64 uses the baseline target so the executable does not require AVX2.
 Windows x64 is distributed as a ZIP and contains bundled libmandoc alongside
-Markdown support. The bundled `mant.md` can be installed at
-`%APPDATA%\ManT\documents\mant.md`.
+Markdown support. Its `manuals\*.md` files can be installed below
+`%APPDATA%\ManT\documents`.
 macOS supports Cargo installation and local source builds, but public macOS
 archives remain disabled until they can be Developer ID-signed and notarized.
 
@@ -187,7 +188,7 @@ to these human-readable archive names and their nested executable paths.
 `crates/mant/tests/release_metadata.rs` keeps that mapping synchronized with
 the packaging and one-line installer scripts. The installers resolve GitHub's
 latest public release, download `SHA256SUMS`, install the platform archive and
-register its bundled manual. They keep a versioned receipt so later runs can
+register its bundled manuals. They keep a versioned receipt so later runs can
 update the same destinations or safely uninstall only installer-owned files.
 If an archive name, root, checksum publication, or receipt schema changes,
 update the crate metadata, installers, installation guide, and regression test

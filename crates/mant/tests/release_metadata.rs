@@ -165,7 +165,12 @@ fn one_line_installers_follow_the_published_release_contract() {
     assert!(unix.contains("$GITHUB_URL/releases/latest"));
     assert!(unix.contains(r#"archive="mant-$version-$target.tar.gz""#));
     assert!(unix.contains(r#"download "$release_url/SHA256SUMS""#));
-    assert!(unix.contains(r#"install -m 0644 "$manual" "$manual_path""#));
+    assert!(unix.contains(
+        "BUNDLED_MANUALS=\"mant.md mant-ir.md mant-markdown.md mant-protocol.md mant-roff.md\""
+    ));
+    assert!(
+        unix.contains(r#"install -m 0644 "$manual_dir/$manual_name" "$data_dir/$manual_name""#)
+    );
     assert!(unix.contains("RECEIPT_SCHEMA=mant.install/v1"));
     assert!(unix.contains(r#"[ "$uninstall" = true ]"#));
     assert!(unix.contains("ManT %s is already up to date."));
@@ -176,6 +181,7 @@ fn one_line_installers_follow_the_published_release_contract() {
     assert!(
         windows.contains(r#"Invoke-WebRequest -UseBasicParsing -Uri "$ReleaseUrl/SHA256SUMS""#)
     );
+    assert!(windows.contains(r#"$BundledManuals = @("mant.md", "mant-ir.md", "mant-markdown.md", "mant-protocol.md", "mant-roff.md")"#));
     assert!(windows.contains(r"Copy-Item $Manual $ManualPath -Force"));
     assert!(windows.contains(r#"$ReceiptSchema = "mant.install/v1""#));
     assert!(windows.contains("if ($Uninstall)"));
@@ -185,6 +191,25 @@ fn one_line_installers_follow_the_published_release_contract() {
     let installation = include_str!("../../../docs/installation.md");
     assert!(installation.contains("sh -s -- --uninstall"));
     assert!(installation.contains("-Uninstall"));
+
+    let manifest = include_str!("../../../docs/manuals/manifest.txt");
+    assert_eq!(
+        manifest.lines().collect::<Vec<_>>(),
+        [
+            "mant.md",
+            "mant-ir.md",
+            "mant-markdown.md",
+            "mant-protocol.md",
+            "mant-roff.md",
+        ]
+    );
+    assert!(
+        include_str!("../../../scripts/package-release.sh")
+            .contains("done < docs/manuals/manifest.txt")
+    );
+    assert!(
+        include_str!("../../../scripts/package-release.ps1").contains("docs/manuals/manifest.txt")
+    );
 }
 
 #[cfg(target_os = "linux")]
@@ -194,7 +219,7 @@ fn unix_installer_uninstalls_only_files_owned_by_its_receipt() {
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("system time after epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("mant-installer-{}-{nonce}", process::id()));
+    let root = std::env::temp_dir().join(format!("mant installer-{}-{nonce}", process::id()));
     let state = root.join("state/mant");
     let bin = root.join("bin");
     let documents = root.join("documents");
@@ -204,18 +229,21 @@ fn unix_installer_uninstalls_only_files_owned_by_its_receipt() {
 
     let binary = bin.join("mant");
     let manual = documents.join("mant.md");
+    let ir_manual = documents.join("mant-ir.md");
     let user_document = documents.join("user.md");
     fs::write(&binary, "installed binary").expect("installed binary fixture");
     fs::write(&manual, "installed manual").expect("installed manual fixture");
+    fs::write(&ir_manual, "installed IR manual").expect("installed IR manual fixture");
     fs::write(&user_document, "user document").expect("user document fixture");
     fs::write(
         state.join("install-receipt"),
         format!(
-            "schema\tmant.install/v1\nversion\t0.5.0\ninstall_dir\t{}\ndata_dir\t{}\nbinary\t{}\nmanual\t{}\n",
+            "schema\tmant.install/v1\nversion\t0.7.0\ninstall_dir\t{}\ndata_dir\t{}\nbinary\t{}\nmanual\t{}\nmanual\t{}\n",
             bin.display(),
             documents.display(),
             binary.display(),
-            manual.display()
+            manual.display(),
+            ir_manual.display()
         ),
     )
     .expect("installer receipt fixture");
@@ -234,6 +262,7 @@ fn unix_installer_uninstalls_only_files_owned_by_its_receipt() {
     );
     assert!(!binary.exists());
     assert!(!manual.exists());
+    assert!(!ir_manual.exists());
     assert!(!state.join("install-receipt").exists());
     assert!(user_document.exists());
     assert!(documents.exists());

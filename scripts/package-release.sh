@@ -62,9 +62,15 @@ cleanup() {
 trap cleanup EXIT
 
 rm -rf "$staging"
-mkdir -p "$package/LICENSES"
+mkdir -p "$package/LICENSES" "$package/manuals"
 install -m 0755 "$binary" "$package/mant"
-install -m 0644 docs/manuals/mant.md "$package/mant.md"
+install -m 0644 docs/manuals/manifest.txt "$package/manuals/manifest.txt"
+while IFS= read -r manual; do
+  [[ -n $manual ]] || continue
+  [[ $manual == *.md && $manual != */* ]] \
+    || fail "invalid bundled manual name '$manual'"
+  install -m 0644 "docs/manuals/$manual" "$package/manuals/$manual"
+done < docs/manuals/manifest.txt
 install -m 0644 README.md "$package/README.md"
 install -m 0644 LICENSE "$package/LICENSE"
 install -m 0644 \

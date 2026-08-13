@@ -6,6 +6,7 @@ set -eu
 REPOSITORY=BryanHeBY/ManT
 GITHUB_URL="https://github.com/$REPOSITORY"
 RECEIPT_SCHEMA=mant.install/v1
+BUNDLED_MANUALS="mant.md mant-ir.md mant-markdown.md mant-protocol.md mant-roff.md"
 
 fail() {
   printf 'mant installer: %s\n' "$1" >&2
@@ -46,7 +47,7 @@ Options:
   --version VERSION        Install a specific release instead of latest
   --install-dir DIRECTORY  Override the executable directory
   --data-dir DIRECTORY     Override the registered-document directory
-  --no-manual              Do not install the bundled mant.md manual
+  --no-manual              Do not install the bundled ManT manuals
   --force                  Reinstall even when the selected version is current
   -h, --help               Show this help
 
@@ -133,6 +134,12 @@ receipt_value() {
   }' "$receipt"
 }
 
+receipt_values() {
+  awk -v key="$1" 'index($0, key "\t") == 1 {
+    print substr($0, length(key) + 2)
+  }' "$receipt"
+}
+
 validate_path() {
   case "$1" in
     /*) ;;
@@ -147,7 +154,7 @@ validate_path() {
 receipt_install_dir=
 receipt_data_dir=
 receipt_binary=
-receipt_manual=
+receipt_manuals=
 receipt_version=
 if [ -f "$receipt" ]; then
   [ "$(receipt_value schema)" = "$RECEIPT_SCHEMA" ] \
@@ -155,7 +162,7 @@ if [ -f "$receipt" ]; then
   receipt_install_dir=$(receipt_value install_dir)
   receipt_data_dir=$(receipt_value data_dir)
   receipt_binary=$(receipt_value binary)
-  receipt_manual=$(receipt_value manual)
+  receipt_manuals=$(receipt_values manual)
   receipt_version=$(receipt_value version)
 fi
 
@@ -164,11 +171,10 @@ data_dir=${data_dir_override:-${receipt_data_dir:-$default_data_dir}}
 validate_path "$install_dir" "install directory"
 validate_path "$data_dir" "data directory"
 binary_path="$install_dir/mant"
-manual_path="$data_dir/mant.md"
 
 write_receipt() {
   installed_version=$1
-  owned_manual=$2
+  owned_manuals=$2
   require mkdir
   require mv
   mkdir -p "$state_dir"
@@ -179,7 +185,13 @@ write_receipt() {
     printf 'install_dir\t%s\n' "$install_dir"
     printf 'data_dir\t%s\n' "$data_dir"
     printf 'binary\t%s\n' "$binary_path"
-    printf 'manual\t%s\n' "$owned_manual"
+    saved_ifs=$IFS
+    IFS='
+'
+    for owned_manual in $owned_manuals; do
+      printf 'manual\t%s\n' "$owned_manual"
+    done
+    IFS=$saved_ifs
   } > "$receipt_temporary"
   chmod 0600 "$receipt_temporary"
   mv "$receipt_temporary" "$receipt"
@@ -191,11 +203,17 @@ uninstall_owned_files() {
   validate_path "$receipt_binary" "receipt binary path"
   [ "$receipt_binary" = "$receipt_install_dir/mant" ] \
     || fail "installer receipt contains an invalid binary path"
-  if [ -n "$receipt_manual" ]; then
+  saved_ifs=$IFS
+  IFS='
+'
+  for receipt_manual in $receipt_manuals; do
     validate_path "$receipt_manual" "receipt manual path"
-    [ "$receipt_manual" = "$receipt_data_dir/mant.md" ] \
-      || fail "installer receipt contains an invalid manual path"
-  fi
+    case "$receipt_manual" in
+      "$receipt_data_dir"/mant.md|"$receipt_data_dir"/mant-ir.md|"$receipt_data_dir"/mant-markdown.md|"$receipt_data_dir"/mant-protocol.md|"$receipt_data_dir"/mant-roff.md) ;;
+      *) fail "installer receipt contains an invalid manual path" ;;
+    esac
+  done
+  IFS=$saved_ifs
 
   require rm
   removed=false
@@ -204,12 +222,17 @@ uninstall_owned_files() {
     printf 'Removed %s\n' "$receipt_binary"
     removed=true
   fi
-  if [ -n "$receipt_manual" ] \
-    && { [ -e "$receipt_manual" ] || [ -L "$receipt_manual" ]; }; then
-    rm -f "$receipt_manual"
-    printf 'Removed %s\n' "$receipt_manual"
-    removed=true
-  fi
+  saved_ifs=$IFS
+  IFS='
+'
+  for receipt_manual in $receipt_manuals; do
+    if [ -e "$receipt_manual" ] || [ -L "$receipt_manual" ]; then
+      rm -f "$receipt_manual"
+      printf 'Removed %s\n' "$receipt_manual"
+      removed=true
+    fi
+  done
+  IFS=$saved_ifs
   rm -f "$receipt"
 
   if [ "$removed" = true ]; then
@@ -272,21 +295,32 @@ printf '%s\n' "$tag" \
 version=${tag#v}
 current_version=$(installed_version)
 
-owned_manual=$receipt_manual
+case "$version" in
+  0.[0-6].*) manual_names="mant.md" ;;
+  *) manual_names=$BUNDLED_MANUALS ;;
+esac
+
+owned_manuals=$receipt_manuals
 if [ "$install_manual" = true ]; then
-  owned_manual=$manual_path
+  owned_manuals=
+  for manual_name in $manual_names; do
+    owned_manuals="${owned_manuals}${owned_manuals:+
+}$data_dir/$manual_name"
+  done
 elif [ -n "$receipt_data_dir" ] && [ "$receipt_data_dir" != "$data_dir" ]; then
-  owned_manual=
+  owned_manuals=
 fi
 manual_ready=true
-if [ "$install_manual" = true ] && [ ! -f "$manual_path" ]; then
-  manual_ready=false
+if [ "$install_manual" = true ]; then
+  for manual_name in $manual_names; do
+    [ -f "$data_dir/$manual_name" ] || manual_ready=false
+  done
 fi
 
 if [ "$force" = false ] \
   && [ "$current_version" = "$version" ] \
   && [ "$manual_ready" = true ]; then
-  write_receipt "$version" "$owned_manual"
+  write_receipt "$version" "$owned_manuals"
   printf 'ManT %s is already up to date.\n' "$version"
   exit 0
 fi
@@ -296,16 +330,34 @@ trap 'rm -rf "$temporary"' EXIT HUP INT TERM
 
 install_files() {
   binary=$1
-  manual=$2
+  manual_dir=$2
   mkdir -p "$install_dir"
   install -m 0755 "$binary" "$binary_path"
   if [ "$install_manual" = true ]; then
     mkdir -p "$data_dir"
-    install -m 0644 "$manual" "$manual_path"
-  elif [ -n "$owned_manual" ] && [ ! -f "$owned_manual" ]; then
-    owned_manual=
+    owned_manuals=
+    for manual_name in $manual_names; do
+      [ -f "$manual_dir/$manual_name" ] \
+        || fail "manual bundle is missing $manual_name"
+      install -m 0644 "$manual_dir/$manual_name" "$data_dir/$manual_name"
+      owned_manuals="${owned_manuals}${owned_manuals:+
+}$data_dir/$manual_name"
+    done
+  else
+    retained_manuals=
+    saved_ifs=$IFS
+    IFS='
+'
+    for owned_manual in $owned_manuals; do
+      if [ -f "$owned_manual" ]; then
+        retained_manuals="${retained_manuals}${retained_manuals:+
+}$owned_manual"
+      fi
+    done
+    IFS=$saved_ifs
+    owned_manuals=$retained_manuals
   fi
-  write_receipt "$version" "$owned_manual"
+  write_receipt "$version" "$owned_manuals"
 
   if [ -z "$current_version" ]; then
     action=Installed
@@ -319,8 +371,8 @@ install_files() {
     printf ' (from %s)' "$current_version"
   fi
   printf '\n  executable: %s\n' "$binary_path"
-  if [ -n "$owned_manual" ]; then
-    printf '  manual:     %s\n' "$owned_manual"
+  if [ -n "$owned_manuals" ]; then
+    printf '  manuals:    %s\n' "$data_dir"
   fi
   case ":${PATH:-}:" in
     *":$install_dir:"*) ;;
@@ -350,17 +402,26 @@ install_linux() {
   tar -xzf "$temporary/$archive" -C "$temporary"
   package="$temporary/mant-$version-$target"
   [ -x "$package/mant" ] || fail "$archive does not contain the mant executable"
-  [ -f "$package/mant.md" ] || fail "$archive does not contain the ManT manual"
-  install_files "$package/mant" "$package/mant.md"
+  if [ -f "$package/manuals/manifest.txt" ]; then
+    manual_dir="$package/manuals"
+  else
+    manual_names="mant.md"
+    manual_dir=$package
+  fi
+  [ -f "$manual_dir/mant.md" ] || fail "$archive does not contain the ManT manuals"
+  install_files "$package/mant" "$manual_dir"
 }
 
 install_macos() {
   require cargo
   cargo_root="$temporary/cargo-root"
   cargo install --locked --root "$cargo_root" --version "$version" mant
-  manual="$temporary/mant.md"
-  download "https://raw.githubusercontent.com/$REPOSITORY/$tag/docs/manuals/mant.md" "$manual"
-  install_files "$cargo_root/bin/mant" "$manual"
+  manual_dir="$temporary/manuals"
+  mkdir -p "$manual_dir"
+  for manual_name in $manual_names; do
+    download "https://raw.githubusercontent.com/$REPOSITORY/$tag/docs/manuals/$manual_name" "$manual_dir/$manual_name"
+  done
+  install_files "$cargo_root/bin/mant" "$manual_dir"
 }
 
 case "$host" in

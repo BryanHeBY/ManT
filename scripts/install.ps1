@@ -16,6 +16,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $ReceiptSchema = "mant.install/v1"
+$BundledManuals = @("mant.md", "mant-ir.md", "mant-markdown.md", "mant-protocol.md", "mant-roff.md")
 
 function Fail([string]$Message) {
     throw "mant installer: $Message"
@@ -34,7 +35,7 @@ Options:
   -Version VERSION        Install a specific release instead of latest
   -InstallDir DIRECTORY   Override the executable directory
   -DataDir DIRECTORY      Override the registered-document directory
-  -NoManual               Do not install the bundled mant.md manual
+  -NoManual               Do not install the bundled ManT manuals
   -NoModifyPath           Do not add the executable directory to user PATH
   -Force                  Reinstall even when the selected version is current
   -Help                   Show this help
@@ -117,7 +118,7 @@ function Write-Receipt(
     [string]$ExecutableDirectory,
     [string]$DocumentDirectory,
     [string]$Binary,
-    [string]$Manual,
+    [string[]]$Manuals,
     [bool]$PathAdded
 ) {
     $ReceiptDirectory = Split-Path -Parent $Path
@@ -129,7 +130,7 @@ function Write-Receipt(
         installDir = $ExecutableDirectory
         dataDir = $DocumentDirectory
         binary = $Binary
-        manual = $Manual
+        manuals = @($Manuals)
         pathAdded = $PathAdded
     } | ConvertTo-Json | Set-Content $TemporaryReceipt -Encoding UTF8
     Move-Item $TemporaryReceipt $Path -Force
@@ -180,10 +181,18 @@ if ($Uninstall) {
     if (-not (Test-PathEntry $Receipt.binary $ExpectedBinary)) {
         Fail "installer receipt contains an invalid binary path"
     }
-    if ($Receipt.manual) {
-        Validate-AbsolutePath $Receipt.manual "receipt manual path"
-        $ExpectedManual = Join-Path $Receipt.dataDir "mant.md"
-        if (-not (Test-PathEntry $Receipt.manual $ExpectedManual)) {
+    $ReceiptManuals = if ($Receipt.PSObject.Properties.Name -contains "manuals") {
+        @($Receipt.manuals)
+    } elseif ($Receipt.manual) {
+        @([string]$Receipt.manual)
+    } else {
+        @()
+    }
+    foreach ($ReceiptManual in $ReceiptManuals) {
+        Validate-AbsolutePath $ReceiptManual "receipt manual path"
+        $ManualName = Split-Path -Leaf $ReceiptManual
+        $ExpectedManual = Join-Path $Receipt.dataDir $ManualName
+        if ($ManualName -notin $BundledManuals -or -not (Test-PathEntry $ReceiptManual $ExpectedManual)) {
             Fail "installer receipt contains an invalid manual path"
         }
     }
@@ -194,10 +203,12 @@ if ($Uninstall) {
         Write-Host "Removed $($Receipt.binary)"
         $Removed = $true
     }
-    if ($Receipt.manual -and (Test-Path -PathType Leaf $Receipt.manual)) {
-        Remove-Item $Receipt.manual -Force
-        Write-Host "Removed $($Receipt.manual)"
-        $Removed = $true
+    foreach ($ReceiptManual in $ReceiptManuals) {
+        if (Test-Path -PathType Leaf $ReceiptManual) {
+            Remove-Item $ReceiptManual -Force
+            Write-Host "Removed $ReceiptManual"
+            $Removed = $true
+        }
     }
     if ($Receipt.pathAdded) {
         Remove-PathEntry $Receipt.installDir
@@ -253,29 +264,39 @@ if ($Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$') {
 }
 
 $Version = $Tag.Substring(1)
+$ManualNames = if ($Version -match '^0\.[0-6]\.\d+') { @("mant.md") } else { $BundledManuals }
 $Target = "windows-x64"
 $Archive = "mant-$Version-$Target.zip"
 $ReleaseUrl = "$GitHub/releases/download/$Tag"
 $BinaryPath = Join-Path $InstallDir "mant.exe"
-$ManualPath = Join-Path $DataDir "mant.md"
 $CurrentVersion = Get-InstalledVersion $BinaryPath
-$OwnedManual = if (-not $NoManual) {
-    $ManualPath
-} elseif ($Receipt -and (Test-PathEntry $Receipt.dataDir $DataDir)) {
-    [string]$Receipt.manual
+$ReceiptManuals = if ($Receipt -and $Receipt.PSObject.Properties.Name -contains "manuals") {
+    @($Receipt.manuals)
+} elseif ($Receipt -and $Receipt.manual) {
+    @([string]$Receipt.manual)
 } else {
-    ""
+    @()
 }
-$ManualReady = $NoManual -or (Test-Path -PathType Leaf $ManualPath)
+$OwnedManuals = if (-not $NoManual) {
+    @($ManualNames | ForEach-Object { Join-Path $DataDir $_ })
+} elseif ($Receipt -and (Test-PathEntry $Receipt.dataDir $DataDir)) {
+    $ReceiptManuals
+} else {
+    @()
+}
+$MissingManuals = @($ManualNames | Where-Object {
+    -not (Test-Path -PathType Leaf (Join-Path $DataDir $_))
+})
+$ManualReady = $NoManual -or $MissingManuals.Count -eq 0
 $PathAdded = [bool]($Receipt -and $Receipt.pathAdded)
 
 if (-not $Force -and $CurrentVersion -eq $Version -and $ManualReady) {
-    Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManual $PathAdded
+    Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
     if (-not $NoModifyPath) {
         try {
             if (Add-UserPath $InstallDir) {
                 $PathAdded = $true
-                Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManual $PathAdded
+                Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
             }
             Add-ProcessPath $InstallDir
         } catch {
@@ -310,28 +331,41 @@ try {
     Expand-Archive -Path $ArchivePath -DestinationPath $Expanded
     $Package = Join-Path $Expanded "mant-$Version-$Target"
     $Binary = Join-Path $Package "mant.exe"
-    $Manual = Join-Path $Package "mant.md"
     if (-not (Test-Path -PathType Leaf $Binary)) {
         Fail "$Archive does not contain mant.exe"
     }
-    if (-not (Test-Path -PathType Leaf $Manual)) {
-        Fail "$Archive does not contain the ManT manual"
+    $ManualDirectory = Join-Path $Package "manuals"
+    if (-not (Test-Path -PathType Leaf (Join-Path $ManualDirectory "manifest.txt"))) {
+        $ManualDirectory = $Package
+        $ManualNames = @("mant.md")
+    }
+    if (-not (Test-Path -PathType Leaf (Join-Path $ManualDirectory "mant.md"))) {
+        Fail "$Archive does not contain the ManT manuals"
     }
 
     New-Item $InstallDir -ItemType Directory -Force | Out-Null
     Copy-Item $Binary $BinaryPath -Force
     if (-not $NoManual) {
         New-Item $DataDir -ItemType Directory -Force | Out-Null
-        Copy-Item $Manual $ManualPath -Force
-    } elseif ($OwnedManual -and -not (Test-Path -PathType Leaf $OwnedManual)) {
-        $OwnedManual = ""
+        $OwnedManuals = @()
+        foreach ($ManualName in $ManualNames) {
+            $Manual = Join-Path $ManualDirectory $ManualName
+            if (-not (Test-Path -PathType Leaf $Manual)) {
+                Fail "manual bundle is missing $ManualName"
+            }
+            $ManualPath = Join-Path $DataDir $ManualName
+            Copy-Item $Manual $ManualPath -Force
+            $OwnedManuals += $ManualPath
+        }
+    } else {
+        $OwnedManuals = @($OwnedManuals | Where-Object { Test-Path -PathType Leaf $_ })
     }
-    Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManual $PathAdded
+    Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
     if (-not $NoModifyPath) {
         try {
             if (Add-UserPath $InstallDir) {
                 $PathAdded = $true
-                Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManual $PathAdded
+                Write-Receipt $ReceiptPath $Version $InstallDir $DataDir $BinaryPath $OwnedManuals $PathAdded
             }
             Add-ProcessPath $InstallDir
         } catch {
@@ -352,8 +386,8 @@ try {
     }
     Write-Host $Message
     Write-Host "  executable: $BinaryPath"
-    if ($OwnedManual) {
-        Write-Host "  manual:     $OwnedManual"
+    if ($OwnedManuals.Count) {
+        Write-Host "  manuals:    $DataDir"
     }
     if ($NoModifyPath) {
         Write-Host ""
