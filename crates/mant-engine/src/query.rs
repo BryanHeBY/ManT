@@ -161,7 +161,10 @@ impl Error for QueryError {
 impl fmt::Display for ManualLoadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotFound { name, detail } | Self::Parse { name, detail } => write!(
+            Self::NotFound { name, detail } => {
+                write!(formatter, "could not load manual '{name}': {detail}")
+            }
+            Self::Parse { name, detail } => write!(
                 formatter,
                 "could not load manual '{name}': manual source: {detail}"
             ),
@@ -1496,7 +1499,7 @@ mod tests {
             .expect_err("empty query must fail");
         assert_eq!(
             error.to_string(),
-            "could not load manual 'tool': manual source: source not found"
+            "could not load manual 'tool': source not found"
         );
     }
 

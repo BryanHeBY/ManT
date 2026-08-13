@@ -1086,6 +1086,13 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
         assert!(manual["tldr"].is_null());
     }
 
+    let unavailable = run(&["--man-section", "DESCRIPTION"]);
+    assert_eq!(unavailable.status.code(), Some(1));
+    let diagnostic = String::from_utf8(unavailable.stderr).expect("section diagnostic");
+    assert!(diagnostic.contains("requested manual section 'DESCRIPTION' is unavailable"));
+    assert!(diagnostic.contains("available manual sections: 1"));
+    assert!(diagnostic.contains("--node selects a document section"));
+
     let tldr = run(&["--tldr"]);
     assert!(tldr.status.success(), "{tldr:?}");
     assert!(tldr.stderr.is_empty());

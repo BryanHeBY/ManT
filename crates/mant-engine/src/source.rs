@@ -101,6 +101,16 @@ impl ManualIndex {
         })
     }
 
+    /// Exact manual categories available for one logical page name.
+    #[must_use]
+    pub fn available_manual_sections(&self, name: &str) -> Vec<String> {
+        let name = name.trim();
+        self.pages
+            .iter()
+            .filter(|page| manual_names_equal(&page.name, name))
+            .map(|page| page.section.clone())
+            .collect()
+    }
 }
 
 fn manual_names_equal(left: &str, right: &str) -> bool {
@@ -138,7 +148,11 @@ pub(crate) struct CommandOutput {
 pub enum LocateError {
     EmptyName,
     InvalidManualSection,
-    NotFound { name: String },
+    NotFound {
+        name: String,
+        requested_manual_section: Option<String>,
+        available_manual_sections: Vec<String>,
+    },
 }
 
 impl fmt::Display for LocateError {
@@ -146,7 +160,24 @@ impl fmt::Display for LocateError {
         match self {
             Self::EmptyName => formatter.write_str("manual page name must not be empty"),
             Self::InvalidManualSection => formatter.write_str("manual section must not be empty"),
-            Self::NotFound { name } => {
+            Self::NotFound {
+                name,
+                requested_manual_section: Some(requested),
+                available_manual_sections,
+            } if !available_manual_sections.is_empty() => write!(
+                formatter,
+                "requested manual section '{requested}' is unavailable for '{name}'; available manual sections: {}; --man-section selects a manual category such as 1 or 3p, while --node selects a document section such as DESCRIPTION",
+                available_manual_sections.join(", ")
+            ),
+            Self::NotFound {
+                name,
+                requested_manual_section: Some(requested),
+                ..
+            } => write!(
+                formatter,
+                "no local manual source was found for '{name}' in manual section '{requested}'"
+            ),
+            Self::NotFound { name, .. } => {
                 write!(formatter, "no local manual source was found for '{name}'")
             }
         }
@@ -184,6 +215,8 @@ pub fn locate_manual_source_in(
         .cloned()
         .ok_or_else(|| LocateError::NotFound {
             name: name.to_owned(),
+            requested_manual_section: section.map(ToOwned::to_owned),
+            available_manual_sections: index.available_manual_sections(name),
         })
 }
 
@@ -486,6 +519,16 @@ mod tests {
             locate_manual_source_in(&ManualRequest::new("ignored", None), &index),
             Err(LocateError::NotFound { .. })
         ));
+
+        let error = locate_manual_source_in(
+            &ManualRequest::new("printf", Some("DESCRIPTION".to_owned())),
+            &index,
+        )
+        .expect_err("document heading is not a manual section");
+        assert_eq!(
+            error.to_string(),
+            "requested manual section 'DESCRIPTION' is unavailable for 'printf'; available manual sections: 1, 3; --man-section selects a manual category such as 1 or 3p, while --node selects a document section such as DESCRIPTION"
+        );
 
         fs::remove_dir_all(root).expect("remove fixture");
     }
