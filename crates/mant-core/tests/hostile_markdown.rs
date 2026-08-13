@@ -8,15 +8,15 @@
 
 use std::{fs, path::PathBuf};
 
-use mant_ast::{
-    OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-    default_search_limit,
-};
 use mant_core::{
     MarkdownOptions, build_outline_with_detail, parse_markdown, query_markdown_text,
     render_excerpt_markdown, render_excerpt_text, render_markdown, render_markdown_with_options,
     render_outline_text, render_query_json, render_query_man, render_query_text,
     render_search_text, search_query, select_excerpt,
+};
+use mant_protocol::{
+    OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+    default_search_limit,
 };
 
 fn hostile_fixture_dir() -> PathBuf {
@@ -132,8 +132,8 @@ fn exercise(label: &str, source: &str) {
 
 fn verify_search_result(
     label: &str,
-    query: &mant_ast::QueryBundle,
-    result: &mant_ast::QuerySearch,
+    query: &mant_core::ResolvedQuery,
+    result: &mant_protocol::QuerySearch,
     addressable: &str,
     scope: SearchScope,
 ) {

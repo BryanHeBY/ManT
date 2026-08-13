@@ -1,0 +1,14 @@
+//! Source-neutral document intermediate representation shared by `ManT`.
+
+mod address;
+mod document;
+mod identity;
+mod index;
+mod tldr;
+pub mod visit;
+
+pub use address::*;
+pub use document::*;
+pub use identity::*;
+pub use index::*;
+pub use tldr::*;

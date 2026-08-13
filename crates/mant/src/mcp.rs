@@ -11,12 +11,12 @@ use std::{
     task::{Context, Poll},
 };
 
-use mant_ast::{
+use mant_core::{QueryPolicy, QueryViewResult};
+use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentCatalog, OutlineDetail, QueryExcerpt, QueryInput,
     QueryOutline, QueryRequest, QueryView, SearchCase, SearchScope, SearchSyntax,
     default_search_limit,
 };
-use mant_core::{QueryPolicy, QueryViewResult};
 use rmcp::{
     Json, ServerHandler, ServiceExt,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -425,7 +425,7 @@ impl MantMcpServer {
     async fn document_search(
         &self,
         parameters: Parameters<SearchParams>,
-    ) -> Result<Json<mant_ast::QuerySearch>, String> {
+    ) -> Result<Json<mant_protocol::QuerySearch>, String> {
         let parameters = parameters.0;
         let request = request_for(
             parameters.selector,
@@ -521,7 +521,7 @@ fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
         section: selector.section,
     };
     QueryRequest {
-        schema: mant_ast::RequestSchema::V7,
+        schema: mant_protocol::RequestSchema::V7,
         input,
         view,
     }
@@ -540,8 +540,8 @@ fn non_empty(value: &str, field: &str) -> Result<String, String> {
 mod tests {
     use std::{io, path::PathBuf};
 
-    use mant_ast::{CatalogDocumentKind, DocumentAddress};
     use mant_core::{AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin};
+    use mant_protocol::{CatalogDocumentKind, DocumentAddress};
     use serde_json::json;
 
     use super::{
@@ -614,7 +614,7 @@ mod tests {
         }))
         .expect("source selector");
         assert_eq!(parameters.selector.source.as_deref(), Some("team"));
-        let request = super::request_for(parameters.selector, mant_ast::QueryView::Full {});
+        let request = super::request_for(parameters.selector, mant_protocol::QueryView::Full {});
         assert!(
             mant_core::validate_query_request(&request, mant_core::QueryPolicy::default()).is_ok()
         );
@@ -625,7 +625,7 @@ mod tests {
             "section": "1"
         }))
         .expect("deserialize combined selector before semantic validation");
-        let request = super::request_for(parameters.selector, mant_ast::QueryView::Full {});
+        let request = super::request_for(parameters.selector, mant_protocol::QueryView::Full {});
         assert!(
             mant_core::validate_query_request(&request, mant_core::QueryPolicy::default())
                 .expect_err("reject combined source and section")
@@ -759,7 +759,8 @@ mod tests {
 
     #[test]
     fn excerpts_discard_all_lowering_diagnostics() {
-        use mant_ast::{Diagnostic, DiagnosticLevel, ExcerptSchema, QueryExcerpt};
+        use mant_ir::{Diagnostic, DiagnosticLevel};
+        use mant_protocol::{ExcerptSchema, QueryExcerpt};
 
         let diagnostic = |level| Diagnostic {
             level,
@@ -788,7 +789,8 @@ mod tests {
 
     #[test]
     fn outlines_keep_completeness_without_lowering_diagnostics() {
-        use mant_ast::{Diagnostic, DiagnosticLevel, OutlineDetail, OutlineSchema, QueryOutline};
+        use mant_ir::{Diagnostic, DiagnosticLevel};
+        use mant_protocol::{OutlineDetail, OutlineSchema, QueryOutline};
 
         let mut outline = QueryOutline {
             schema: OutlineSchema::V7,

@@ -3,9 +3,9 @@
 
 use std::collections::HashSet;
 
-use mant_ast::{
-    Block, Inline, MantDocument, OutlineNode, QueryBundle, QuerySchema, Section, SourceFormat,
-};
+use mant_core::ResolvedQuery;
+use mant_ir::{Block, Document, Inline, Section, SourceFormat};
+use mant_protocol::OutlineNode;
 
 pub const LS_SECTIONS: &[&str] = &[
     "NAME",
@@ -161,9 +161,8 @@ pub const DEBIAN_GROFF_MAN_STYLE_SECTIONS: &[&str] = &[
     "See also",
 ];
 
-pub fn query_for_document(name: &str, document: &MantDocument) -> QueryBundle {
-    QueryBundle {
-        schema: QuerySchema::V7,
+pub fn query_for_document(name: &str, document: &Document) -> ResolvedQuery {
+    ResolvedQuery {
         address: None,
         label: name.to_owned(),
         document: Some(document.clone()),
@@ -182,7 +181,7 @@ pub fn collect_sections<'a>(sections: &'a [Section], output: &mut Vec<&'a Sectio
     }
 }
 
-pub fn section<'a>(document: &'a MantDocument, title: &str) -> &'a Section {
+pub fn section<'a>(document: &'a Document, title: &str) -> &'a Section {
     let mut sections = Vec::new();
     collect_sections(&document.sections, &mut sections);
     sections
@@ -194,7 +193,7 @@ pub fn section<'a>(document: &'a MantDocument, title: &str) -> &'a Section {
 /// Assert the authored, indented-line layout shared by distro-generated GCC
 /// manuals.  Fedora and Arch package different snapshots of the page, but the
 /// SYNOPSIS uses the same filled-roff convention and must lower identically.
-pub fn assert_gcc_synopsis_layout(document: &MantDocument) {
+pub fn assert_gcc_synopsis_layout(document: &Document) {
     let synopsis = section(document, "SYNOPSIS");
     let synopsis_inlines = synopsis
         .blocks
@@ -227,7 +226,7 @@ pub fn assert_gcc_synopsis_layout(document: &MantDocument) {
     );
 }
 
-pub fn document_blocks(document: &MantDocument) -> Vec<&Block> {
+pub fn document_blocks(document: &Document) -> Vec<&Block> {
     document_blocks_from_sections(&document.sections)
 }
 
@@ -273,7 +272,7 @@ fn collect_blocks<'a>(blocks: &'a [Block], output: &mut Vec<&'a Block>) {
 // Definition list helpers
 // ---------------------------------------------------------------------------
 
-pub fn definition_items(section: &Section) -> Vec<&mant_ast::DefinitionItem> {
+pub fn definition_items(section: &Section) -> Vec<&mant_ir::DefinitionItem> {
     section
         .blocks
         .iter()
@@ -285,7 +284,7 @@ pub fn definition_items(section: &Section) -> Vec<&mant_ast::DefinitionItem> {
         .collect()
 }
 
-pub fn nested_definition_items(section: &Section) -> Vec<&mant_ast::DefinitionItem> {
+pub fn nested_definition_items(section: &Section) -> Vec<&mant_ir::DefinitionItem> {
     document_blocks_from_sections(std::slice::from_ref(section))
         .into_iter()
         .filter_map(|block| match block {
@@ -296,7 +295,7 @@ pub fn nested_definition_items(section: &Section) -> Vec<&mant_ast::DefinitionIt
         .collect()
 }
 
-pub fn semantic_definition_items(document: &MantDocument) -> Vec<&mant_ast::DefinitionItem> {
+pub fn semantic_definition_items(document: &Document) -> Vec<&mant_ir::DefinitionItem> {
     document_blocks(document)
         .into_iter()
         .filter_map(|block| match block {
@@ -400,18 +399,14 @@ fn block_spacing_before(block: &Block) -> u16 {
 // Markup / control-character leak assertions
 // ---------------------------------------------------------------------------
 
-pub fn assert_document_has_no_source_markup(name: &str, document: &MantDocument) {
+pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
     for block in document_blocks(document) {
         visit_block_inlines(block, &mut |inline| {
             let value = match inline {
                 Inline::Text { value } | Inline::Code { value } => value,
                 Inline::Strong { .. }
                 | Inline::Emphasis { .. }
-                | Inline::ExternalLink { .. }
-                | Inline::EmailLink { .. }
-                | Inline::ManualReference { .. }
-                | Inline::DocumentReference { .. }
-                | Inline::SectionReference { .. }
+                | Inline::Link { .. }
                 | Inline::Anchor { .. }
                 | Inline::LineBreak => return,
             };
@@ -435,7 +430,7 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &MantDocument)
 /// highlighted title and its footnote. Both the Arch and Fedora packages carry
 /// this construct, making it a useful full-pipeline guard against presentation
 /// requests leaking into renderer-neutral text.
-pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &MantDocument) {
+pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &Document) {
     let description = section(document, "DESCRIPTION");
     let text = block_slice_text(&description.blocks);
     assert!(
@@ -463,7 +458,7 @@ pub fn assert_git_generated_highlight_is_lowered(name: &str, document: &MantDocu
     );
 }
 
-pub fn assert_anchor_ids_are_clean(name: &str, document: &MantDocument) {
+pub fn assert_anchor_ids_are_clean(name: &str, document: &Document) {
     for block in document_blocks(document) {
         visit_block_inlines(block, &mut |inline| {
             if let Inline::Anchor { id } = inline {
@@ -554,12 +549,9 @@ fn find_preformatted<'a>(
 pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Strong { children } => inline_text(children) == expected,
-        Inline::Emphasis { children }
-        | Inline::ExternalLink { children, .. }
-        | Inline::EmailLink { children, .. }
-        | Inline::DocumentReference { children, .. }
-        | Inline::ManualReference { children, .. }
-        | Inline::SectionReference { children, .. } => contains_strong(children, expected),
+        Inline::Emphasis { children } | Inline::Link { children, .. } => {
+            contains_strong(children, expected)
+        }
         Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
             false
         }
@@ -569,12 +561,9 @@ pub fn contains_strong(children: &[Inline], expected: &str) -> bool {
 pub fn contains_emphasis(children: &[Inline], expected: &str) -> bool {
     children.iter().any(|inline| match inline {
         Inline::Emphasis { children } => inline_text(children) == expected,
-        Inline::Strong { children }
-        | Inline::ExternalLink { children, .. }
-        | Inline::EmailLink { children, .. }
-        | Inline::DocumentReference { children, .. }
-        | Inline::ManualReference { children, .. }
-        | Inline::SectionReference { children, .. } => contains_emphasis(children, expected),
+        Inline::Strong { children } | Inline::Link { children, .. } => {
+            contains_emphasis(children, expected)
+        }
         Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {
             false
         }
@@ -588,11 +577,7 @@ pub fn count_line_breaks(children: &[Inline]) -> usize {
             Inline::LineBreak => 1,
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => count_line_breaks(children),
+            | Inline::Link { children, .. } => count_line_breaks(children),
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => 0,
         })
         .sum()
@@ -609,11 +594,7 @@ pub fn inline_text(children: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => value.clone(),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => inline_text(children),
+            | Inline::Link { children, .. } => inline_text(children),
             Inline::Anchor { .. } => String::new(),
             Inline::LineBreak => "\n".to_owned(),
         })
@@ -666,7 +647,7 @@ fn block_text(block: &Block) -> String {
 // Inline visitor
 // ---------------------------------------------------------------------------
 
-pub fn visit_document_inlines(document: &MantDocument, visitor: &mut impl FnMut(&Inline)) {
+pub fn visit_document_inlines(document: &Document, visitor: &mut impl FnMut(&Inline)) {
     visit_section_inlines(&document.sections, visitor);
 }
 
@@ -721,11 +702,7 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
         match inline {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => visit_inlines(children, visitor),
+            | Inline::Link { children, .. } => visit_inlines(children, visitor),
             Inline::Text { .. }
             | Inline::Code { .. }
             | Inline::Anchor { .. }
@@ -738,7 +715,7 @@ fn visit_inlines(children: &[Inline], visitor: &mut impl FnMut(&Inline)) {
 // Section-topology assertion (reusable pattern across distributions)
 // ---------------------------------------------------------------------------
 
-pub fn assert_section_topology(name: &str, document: &MantDocument, expected_titles: &[&str]) {
+pub fn assert_section_topology(name: &str, document: &Document, expected_titles: &[&str]) {
     assert_eq!(document.source.format, SourceFormat::Man, "fixture {name}");
     assert!(
         document
@@ -768,7 +745,7 @@ pub fn assert_section_topology(name: &str, document: &MantDocument, expected_tit
     assert_eq!(ids.len(), sections.len(), "fixture {name} section IDs");
 }
 
-pub fn source_path_ends_with(document: &MantDocument, suffix: &str) -> bool {
+pub fn source_path_ends_with(document: &Document, suffix: &str) -> bool {
     document
         .source
         .path

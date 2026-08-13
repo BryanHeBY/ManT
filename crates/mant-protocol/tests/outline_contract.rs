@@ -1,10 +1,12 @@
 //! Locks the public JSON shapes used for outline discovery and excerpts.
 
-use mant_ast::{
+use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-    DocumentSource, ExcerptSchema, ExcerptSelection, Inline, LayoutHint, OutlineDetail,
-    OutlineNode, OutlineReference, OutlineSchema, Producer, QueryExcerpt, QueryOutline, Section,
-    SourceFormat, TldrDocument, TldrOrigin,
+    DocumentSource, Inline, LayoutHint, Section, SourceFormat, TldrDocument, TldrOrigin,
+};
+use mant_protocol::{
+    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference, OutlineSchema,
+    Producer, QueryExcerpt, QueryOutline,
 };
 
 fn source() -> DocumentSource {
@@ -25,12 +27,12 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
         diagnostics: Vec::new(),
         entries_complete: true,
         nodes: vec![OutlineNode::DocumentSection {
-            path: "2".to_owned(),
-            id: "options-2".to_owned(),
+            path: "2".to_owned().into(),
+            id: "options-2".to_owned().into(),
             title: "OPTIONS".to_owned(),
             children: vec![OutlineNode::DocumentEntry {
-                path: "2/o1".to_owned(),
-                id: "all".to_owned(),
+                path: "2/o1".to_owned().into(),
+                id: "all".to_owned().into(),
                 title: "-a, --all".to_owned(),
                 role: DefinitionRole::Option,
                 case: DefinitionCase::Sensitive,
@@ -68,7 +70,7 @@ fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
 #[test]
 fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
     let section = Section {
-        id: "common-3".to_owned(),
+        id: "common-3".to_owned().into(),
         title: "Common options".to_owned(),
         spacing_before_lines: 0,
         blocks: Vec::new(),
@@ -87,12 +89,12 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentSection {
-            path: "2.1".to_owned(),
+            path: "2.1".to_owned().into(),
             id: section.id.clone(),
             title: section.title.clone(),
             breadcrumbs: vec![OutlineReference {
-                path: "2".to_owned(),
-                id: "options-2".to_owned(),
+                path: "2".to_owned().into(),
+                id: "options-2".to_owned().into(),
                 title: "OPTIONS".to_owned(),
             }],
             section,
@@ -112,7 +114,7 @@ fn excerpt_contract_can_return_one_semantic_definition() {
     let entry = DefinitionItem {
         inline_term: false,
         identity: Some(DefinitionIdentity {
-            id: "all".to_owned(),
+            id: "all".to_owned().into(),
             role: DefinitionRole::Option,
             case: DefinitionCase::Sensitive,
             names: vec!["-a".to_owned(), "--all".to_owned()],
@@ -129,8 +131,8 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         meta: None,
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentEntry {
-            path: "2/o1".to_owned(),
-            id: "all".to_owned(),
+            path: "2/o1".to_owned().into(),
+            id: "all".to_owned().into(),
             title: "-a, --all".to_owned(),
             breadcrumbs: Vec::new(),
             entry,
@@ -166,8 +168,8 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         diagnostics: Vec::new(),
         entries_complete: true,
         nodes: vec![OutlineNode::DocumentRoot {
-            path: "root".to_owned(),
-            id: "document-overview".to_owned(),
+            path: "root".to_owned().into(),
+            id: "document-overview".to_owned().into(),
             title: "OVERVIEW".to_owned(),
         }],
     };
@@ -179,8 +181,8 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         meta: outline.meta.clone(),
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentRoot {
-            path: "root".to_owned(),
-            id: "document-overview".to_owned(),
+            path: "root".to_owned().into(),
+            id: "document-overview".to_owned().into(),
             title: "OVERVIEW".to_owned(),
             blocks,
         }],
@@ -218,8 +220,8 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         diagnostics: Vec::new(),
         entries_complete: true,
         nodes: vec![OutlineNode::Tldr {
-            path: "0".to_owned(),
-            id: "tldr".to_owned(),
+            path: "0".to_owned().into(),
+            id: "tldr".to_owned().into(),
             title: "TLDR QUICK REFERENCE".to_owned(),
         }],
     };
@@ -231,8 +233,8 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         meta: None,
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::Tldr {
-            path: "0".to_owned(),
-            id: "tldr".to_owned(),
+            path: "0".to_owned().into(),
+            id: "tldr".to_owned().into(),
             title: "TLDR QUICK REFERENCE".to_owned(),
             document,
         }],

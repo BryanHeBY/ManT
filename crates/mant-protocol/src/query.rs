@@ -3,9 +3,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use mant_ir::TldrDocument;
+
 use crate::{
-    DocumentAddress, MantDocument, OutlineDetail, SearchCase, SearchScope, SearchSyntax,
-    TldrDocument, default_search_limit,
+    DocumentAddress, DocumentResponse, OutlineDetail, SearchCase, SearchScope, SearchSyntax,
+    default_search_limit,
 };
 
 /// Exact schema marker for a complete `ManT` query result.
@@ -111,7 +113,7 @@ pub struct QueryRequest {
     pub view: QueryView,
 }
 
-/// Native result consumed by JSON, Markdown, and interactive frontends.
+/// Versioned full-query result emitted at JSON and MCP boundaries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("$id" = "urn:mant:query:v7"))]
@@ -123,7 +125,7 @@ pub struct QueryBundle {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<DocumentAddress>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub document: Option<MantDocument>,
+    pub document: Option<DocumentResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tldr: Option<TldrDocument>,
 }

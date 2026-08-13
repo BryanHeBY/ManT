@@ -37,8 +37,9 @@ pub use projection::{
 };
 pub use query::{
     DocumentResolver, MAX_MARKDOWN_BYTES, ManualLoadError, QueryError, QueryExecutionError,
-    QueryPolicy, QueryViewResult, execute_query, project_query_view, query_markdown_text,
-    query_roff_bytes, resolve_query, resolve_query_with_policy, validate_query_request,
+    QueryPolicy, QueryViewResult, ResolvedQuery, execute_query, project_query_view,
+    query_markdown_text, query_roff_bytes, resolve_query, resolve_query_with_policy,
+    validate_query_request,
 };
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
@@ -55,7 +56,7 @@ pub use tldr::{
 /// Reports the native contract version through the engine layer.
 #[must_use]
 pub const fn native_api_version() -> &'static str {
-    mant_ast::NATIVE_API_VERSION
+    mant_protocol::NATIVE_API_VERSION
 }
 
 #[cfg(test)]
@@ -63,7 +64,7 @@ mod tests {
     use super::native_api_version;
 
     #[test]
-    fn exposes_the_ast_contract_version() {
+    fn exposes_the_native_api_version() {
         assert_eq!(native_api_version(), "7");
     }
 }

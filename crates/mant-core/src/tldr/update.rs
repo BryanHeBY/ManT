@@ -11,7 +11,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use mant_ast::{TldrCacheAction, TldrCacheUpdate};
+use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
 use crate::{
     executable::{environment_value, find_executable},
@@ -386,7 +386,7 @@ mod tests {
         sync::Mutex,
     };
 
-    use mant_ast::{TldrCacheAction, TldrCacheUpdate};
+    use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
     use crate::source::CommandOutput;
 

@@ -1,6 +1,6 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
 
-use mant_ast::SourceFormat;
+use mant_ir::SourceFormat;
 
 use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::fedora44_manual;

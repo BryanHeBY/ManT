@@ -18,7 +18,8 @@ grep-matcher.workspace = true
 grep-regex.workspace = true
 flate2.workspace = true
 libmandoc-rs = { path = "../libmandoc-rs", version = "=0.7.0" }
-mant-ast = { path = "../mant-ast", version = "=0.7.0" }
+mant-ir = { path = "../mant-ir", version = "=0.7.0" }
+mant-protocol = { path = "../mant-protocol", version = "=0.7.0" }
 mant-sources = { path = "../mant-sources", version = "=0.7.0" }
 pulldown-cmark.workspace = true
 serde.workspace = true

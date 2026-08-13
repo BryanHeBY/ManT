@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use mant_ast::{
+use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
     DiagnosticLevel, Inline, ListItem, ListKind, SourceSpan,
 };
@@ -133,6 +133,10 @@ fn read_declaration(
         .find("-->")
         .map(|relative| comment_start + relative + 3);
     let source = SourceSpan {
+        byte_range: Some(mant_ir::TextRange::new(
+            mant_ir::TextSize::from_usize_saturating(offset + comment_start),
+            mant_ir::TextSize::from_usize_saturating(offset + comment_end.unwrap_or(line.len())),
+        )),
         line: line_number,
         column: u32::try_from(comment_start + 1).unwrap_or(u32::MAX),
         end_line: Some(line_number),
@@ -274,7 +278,7 @@ pub(super) fn normalize_entry_lists(
         }
         // Plan every signature before taking ownership so a mixed or prose
         // list remains untouched. Plans retain only delimiter coordinates:
-        // successful conversion can then move the original AST exactly once,
+        // successful conversion can then move the original IR exactly once,
         // including potentially large nested description blocks.
         let declaration = source.and_then(|source| declarations.remove(&source.line));
         let role = declaration.map_or(DefinitionRole::Option, |value| value.role);
@@ -296,6 +300,7 @@ pub(super) fn normalize_entry_lists(
                 semantic_diagnostic(
                     diagnostics,
                     source.unwrap_or(SourceSpan {
+                        byte_range: None,
                         line: 1,
                         column: 1,
                         end_line: None,
@@ -552,7 +557,7 @@ fn entry_definition(
 
     DefinitionItem {
         identity: Some(DefinitionIdentity {
-            id: String::new(),
+            id: String::new().into(),
             role,
             case,
             names: signature.names,
@@ -941,7 +946,7 @@ fn delimiter_location(value: &str) -> Option<(usize, usize)> {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{Block, DefinitionCase, DefinitionRole, Inline, LayoutHint, ListItem, ListKind};
+    use mant_ir::{Block, DefinitionCase, DefinitionRole, Inline, LayoutHint, ListItem, ListKind};
 
     use super::normalize_option_lists;
 

@@ -1,8 +1,9 @@
 //! Cross-language golden tests for the versioned query protocol suite.
 
-use mant_ast::{
-    Block, Inline, OutlineDetail, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView,
-    RequestSchema, SearchCase, SearchScope, SearchSyntax, SourceFormat,
+use mant_ir::{Block, Inline, SourceFormat};
+use mant_protocol::{
+    OutlineDetail, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView, RequestSchema,
+    SearchCase, SearchScope, SearchSyntax,
 };
 use serde_json::Value;
 
@@ -27,13 +28,13 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
         panic!("NAME starts with a paragraph");
     };
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::ExternalLink { uri, .. } if uri == "https://example.test/ls")
+        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.test/ls")
     ));
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::EmailLink { address, .. } if address == "docs@example.test")
+        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, .. } if address == "docs@example.test")
     ));
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::SectionReference { target, .. } if target == "options-1")
+        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "options-1")
     ));
     assert!(matches!(
         &manual.sections[1].blocks[0],

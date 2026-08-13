@@ -1,10 +1,11 @@
 //! Keeps the shipped Markdown manuals inside the supported document subset.
 
-use mant_ast::{ExcerptSelection, OutlineDetail, OutlineNode, TldrCommandPart, TldrOrigin};
 use mant_core::{
     build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
     select_excerpt,
 };
+use mant_ir::{TldrCommandPart, TldrOrigin};
+use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
 const MANT_MANUAL: &str = include_str!("../../../docs/manuals/mant.md");
@@ -154,7 +155,7 @@ fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
         document
             .sections
             .iter()
-            .any(|section| section.title == "Document AST")
+            .any(|section| section.title == "Document Response and IR Projection")
     );
 
     let examples = json_fenced_examples(PROTOCOL_REFERENCE);

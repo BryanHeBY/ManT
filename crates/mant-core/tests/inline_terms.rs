@@ -11,8 +11,8 @@
 
 use std::path::PathBuf;
 
-use mant_ast::{Block, MantDocument};
 use mant_core::{parse_manual_source, render_markdown, render_query_man, render_query_text};
+use mant_ir::{Block, Document};
 
 #[path = "common/mod.rs"]
 #[allow(dead_code)]
@@ -24,9 +24,9 @@ fn fixture_path() -> PathBuf {
         .join("tests/fixtures/roff/inline-terms.1")
 }
 
-fn document() -> &'static MantDocument {
+fn document() -> &'static Document {
     use std::sync::OnceLock;
-    static DOC: OnceLock<MantDocument> = OnceLock::new();
+    static DOC: OnceLock<Document> = OnceLock::new();
     DOC.get_or_init(|| parse_manual_source(&fixture_path()).expect("parse inline-terms fixture"))
 }
 
@@ -100,7 +100,7 @@ fn uniform_bullet_markers_are_normalised_to_a_bullet_list() {
         matches!(
             block,
             Block::List {
-                kind: mant_ast::ListKind::Bullet,
+                kind: mant_ir::ListKind::Bullet,
                 ..
             }
         )
@@ -113,9 +113,9 @@ fn uniform_bullet_markers_are_normalised_to_a_bullet_list() {
             .map(|b| match b {
                 Block::DefinitionList { .. } => "DefinitionList",
                 Block::List { kind, .. } => match kind {
-                    mant_ast::ListKind::Bullet => "BulletList",
-                    mant_ast::ListKind::Ordered => "OrderedList",
-                    mant_ast::ListKind::Plain => "PlainList",
+                    mant_ir::ListKind::Bullet => "BulletList",
+                    mant_ir::ListKind::Ordered => "OrderedList",
+                    mant_ir::ListKind::Plain => "PlainList",
                 },
                 _ => "other",
             })
@@ -199,7 +199,7 @@ fn explicit_tp_widths_control_layout_and_persist() {
 // Text / --format man rendering
 // ---------------------------------------------------------------------------
 
-fn query() -> mant_ast::QueryBundle {
+fn query() -> mant_core::ResolvedQuery {
     common::query_for_document("inline-terms", document())
 }
 

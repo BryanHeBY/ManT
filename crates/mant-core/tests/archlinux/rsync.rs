@@ -3,8 +3,8 @@
 
 use crate::common::{self, RSYNC_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_ast::Block;
 use mant_core::render_query_man;
+use mant_ir::Block;
 
 /// Section topology: 32 sections from NAME through AUTHOR.
 #[test]
@@ -23,7 +23,7 @@ fn exit_values_is_normalised_to_bullet_list() {
         matches!(
             block,
             Block::List {
-                kind: mant_ast::ListKind::Bullet,
+                kind: mant_ir::ListKind::Bullet,
                 ..
             }
         )

@@ -2,8 +2,9 @@
 
 use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_ast::{Block, ExcerptSelection, Inline, OutlineDetail};
 use mant_core::{build_outline, build_outline_with_detail, select_excerpt};
+use mant_ir::{Block, Inline};
+use mant_protocol::{ExcerptSelection, OutlineDetail};
 
 /// Section topology (24 sections), nested children in ENVIRONMENT VARIABLES,
 /// preformatted blocks in SYNOPSIS and OPTIONS, semantic `--help` option,
@@ -89,9 +90,11 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
         common::visit_block_inlines(block, &mut |inline| {
             linked_git_add |= matches!(
                 inline,
-                Inline::ManualReference {
-                    name,
-                    section: Some(section),
+                Inline::Link {
+                    target: mant_ir::LinkTarget::Manual {
+                        name,
+                        section: Some(section),
+                    },
                     ..
                 } if name == "git-add" && section == "1"
             );

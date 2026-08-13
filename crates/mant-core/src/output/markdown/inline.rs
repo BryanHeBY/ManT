@@ -1,6 +1,6 @@
 //! Converts renderer-neutral inline nodes to safe `CommonMark` phrasing.
 
-use mant_ast::Inline;
+use mant_ir::{Inline, LinkTarget};
 
 use super::MarkdownOptions;
 
@@ -21,11 +21,7 @@ pub(super) fn flatten_inline(children: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => output.push_str(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => {
+            | Inline::Link { children, .. } => {
                 output.push_str(&flatten_inline(children));
             }
             Inline::Anchor { .. } => {}
@@ -102,41 +98,40 @@ fn render_inline_raw(children: &[Inline], options: MarkdownOptions) -> String {
                 output.push_str(&render_styled(children, "*", "_", &output, options));
             }
             Inline::Code { value } => output.push_str(&code_span(value)),
-            Inline::ExternalLink {
-                uri,
+            Inline::Link {
+                target,
                 title,
                 children,
-            } => output.push_str(&render_link(uri, title.as_deref(), children, options)),
-            Inline::EmailLink { address, children } => {
-                output.push_str(&render_link(
+            } => match target {
+                LinkTarget::External { uri } => {
+                    output.push_str(&render_link(uri, title.as_deref(), children, options));
+                }
+                LinkTarget::Email { address } => output.push_str(&render_link(
                     &format!("mailto:{address}"),
-                    None,
+                    title.as_deref(),
                     children,
                     options,
-                ));
-            }
-            Inline::DocumentReference {
-                name,
-                fragment,
-                children,
-            } => {
-                let mut destination = format!("{name}.md");
-                if let Some(fragment) = fragment {
-                    destination.push('#');
-                    destination.push_str(fragment);
+                )),
+                LinkTarget::Document { name, fragment } => {
+                    let mut destination = format!("{name}.md");
+                    if let Some(fragment) = fragment {
+                        destination.push('#');
+                        destination.push_str(fragment);
+                    }
+                    output.push_str(&render_link(
+                        &destination,
+                        title.as_deref(),
+                        children,
+                        options,
+                    ));
                 }
-                output.push_str(&render_link(&destination, None, children, options));
-            }
-            Inline::ManualReference { children, .. } => {
-                output.push_str(&render_inline_raw(children, options));
-            }
-            Inline::SectionReference { target, children } => {
-                if options.preserve_anchors {
-                    output.push_str(&render_link(&format!("#{target}"), None, children, options));
-                } else {
+                LinkTarget::Section { id } if options.preserve_anchors => output.push_str(
+                    &render_link(&format!("#{id}"), title.as_deref(), children, options),
+                ),
+                LinkTarget::Manual { .. } | LinkTarget::Section { .. } => {
                     output.push_str(&render_inline_raw(children, options));
                 }
-            }
+            },
             Inline::Anchor { id } if options.preserve_anchors => {
                 output.push_str(&html_anchor(id));
             }

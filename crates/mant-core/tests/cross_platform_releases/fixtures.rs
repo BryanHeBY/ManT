@@ -2,16 +2,17 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_ast::{MantDocument, QueryBundle};
+use mant_core::ResolvedQuery;
 use mant_core::parse_manual_source;
+use mant_ir::Document;
 
 use crate::common::query_for_document;
 
-static CARGO: OnceLock<MantDocument> = OnceLock::new();
-static RUSTC: OnceLock<MantDocument> = OnceLock::new();
-static CMAKE_TOOLCHAINS: OnceLock<MantDocument> = OnceLock::new();
+static CARGO: OnceLock<Document> = OnceLock::new();
+static RUSTC: OnceLock<Document> = OnceLock::new();
+static CMAKE_TOOLCHAINS: OnceLock<Document> = OnceLock::new();
 
-pub fn cross_platform_release_manual(name: &str) -> &'static MantDocument {
+pub fn cross_platform_release_manual(name: &str) -> &'static Document {
     let slot = match name {
         "cargo" => &CARGO,
         "rustc" => &RUSTC,
@@ -24,7 +25,7 @@ pub fn cross_platform_release_manual(name: &str) -> &'static MantDocument {
     })
 }
 
-pub fn cross_platform_release_query(name: &str) -> QueryBundle {
+pub fn cross_platform_release_query(name: &str) -> ResolvedQuery {
     query_for_document(name, cross_platform_release_manual(name))
 }
 

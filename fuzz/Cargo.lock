@@ -192,14 +192,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
-name = "mant-ast"
-version = "0.7.0"
-dependencies = [
- "schemars",
- "serde",
-]
-
-[[package]]
 name = "mant-core"
 version = "0.7.0"
 dependencies = [
@@ -207,7 +199,8 @@ dependencies = [
  "grep-matcher",
  "grep-regex",
  "libmandoc-rs",
- "mant-ast",
+ "mant-ir",
+ "mant-protocol",
  "mant-sources",
  "pulldown-cmark",
  "serde",
@@ -220,8 +213,25 @@ name = "mant-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "mant-ast",
  "mant-core",
+ "mant-protocol",
+]
+
+[[package]]
+name = "mant-ir"
+version = "0.7.0"
+dependencies = [
+ "schemars",
+ "serde",
+]
+
+[[package]]
+name = "mant-protocol"
+version = "0.7.0"
+dependencies = [
+ "mant-ir",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

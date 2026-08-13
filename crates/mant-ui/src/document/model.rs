@@ -1,6 +1,6 @@
-//! Width-independent logical rows produced from the document AST.
+//! Width-independent logical rows produced from the document IR.
 
-use mant_ast::DocumentAddress;
+use mant_ir::DocumentAddress;
 use ratatui::{style::Style, text::Span};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

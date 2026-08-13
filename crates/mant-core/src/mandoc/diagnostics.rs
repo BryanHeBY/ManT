@@ -1,6 +1,6 @@
 //! Adapts libmandoc-rs diagnostics into `ManT`'s document contract.
 
-use mant_ast::{Diagnostic, DiagnosticLevel};
+use mant_ir::{Diagnostic, DiagnosticLevel};
 
 use libmandoc_rs::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
 
@@ -16,7 +16,8 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
             },
             code: None,
             message: diagnostic.message.clone(),
-            source: diagnostic.location.map(|location| mant_ast::SourceSpan {
+            source: diagnostic.location.map(|location| mant_ir::SourceSpan {
+                byte_range: None,
                 line: location.line,
                 column: location.column,
                 end_line: None,
@@ -29,7 +30,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
 #[cfg(test)]
 mod tests {
     use libmandoc_rs::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
-    use mant_ast::DiagnosticLevel;
+    use mant_ir::DiagnosticLevel;
 
     use super::lower_diagnostics;
 

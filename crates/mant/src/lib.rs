@@ -19,11 +19,11 @@ use arguments::{ColorMode, Command, QueryFormat, QueryPresentation, QuerySource,
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
 };
-use mant_ast::{
-    CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin, QueryBundle,
-    QueryInput, QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
+use mant_core::{QueryPolicy, ResolvedQuery};
+use mant_protocol::{
+    CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin, QueryInput,
+    QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
 };
-use mant_core::QueryPolicy;
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
 use serde::Serialize;
@@ -74,8 +74,8 @@ struct TerminalCapabilities {
 
 trait CliHost {
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
-    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure>;
-    fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure>;
+    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<ResolvedQuery, Failure>;
+    fn query_markdown(&self, source: &str) -> Result<ResolvedQuery, Failure>;
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure>;
     fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure>;
@@ -98,13 +98,13 @@ impl CliHost for SystemHost {
         self.resolver.discover(query).map_err(Failure::operational)
     }
 
-    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<QueryBundle, Failure> {
+    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<ResolvedQuery, Failure> {
         self.resolver
             .resolve(request, policy)
             .map_err(query_failure)
     }
 
-    fn query_markdown(&self, source: &str) -> Result<QueryBundle, Failure> {
+    fn query_markdown(&self, source: &str) -> Result<ResolvedQuery, Failure> {
         mant_core::query_markdown_text(source, None).map_err(Failure::operational)
     }
 
@@ -321,15 +321,25 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             pretty,
         ),
         Command::Schema { contract, pretty } => match contract {
-            SchemaContract::Request => render_json(&mant_ast::query_request_json_schema(), pretty),
-            SchemaContract::Query => render_json(&mant_ast::query_bundle_json_schema(), pretty),
-            SchemaContract::Outline => render_json(&mant_ast::query_outline_json_schema(), pretty),
-            SchemaContract::Excerpt => render_json(&mant_ast::query_excerpt_json_schema(), pretty),
-            SchemaContract::Search => render_json(&mant_ast::query_search_json_schema(), pretty),
-            SchemaContract::Catalog => {
-                render_json(&mant_ast::document_catalog_json_schema(), pretty)
+            SchemaContract::Request => {
+                render_json(&mant_protocol::query_request_json_schema(), pretty)
             }
-            SchemaContract::All => render_json(&mant_ast::query_json_schema_catalog(), pretty),
+            SchemaContract::Query => {
+                render_json(&mant_protocol::query_bundle_json_schema(), pretty)
+            }
+            SchemaContract::Outline => {
+                render_json(&mant_protocol::query_outline_json_schema(), pretty)
+            }
+            SchemaContract::Excerpt => {
+                render_json(&mant_protocol::query_excerpt_json_schema(), pretty)
+            }
+            SchemaContract::Search => {
+                render_json(&mant_protocol::query_search_json_schema(), pretty)
+            }
+            SchemaContract::Catalog => {
+                render_json(&mant_protocol::document_catalog_json_schema(), pretty)
+            }
+            SchemaContract::All => render_json(&mant_protocol::query_json_schema_catalog(), pretty),
         },
         Command::Catalog {
             query,
@@ -464,7 +474,7 @@ fn execute_query(
         }
     };
     if let QueryPresentation::Tldr(color) = command.presentation {
-        let mant_core::QueryViewResult::Excerpt(mant_ast::QueryExcerpt { selections, .. }) =
+        let mant_core::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt { selections, .. }) =
             &result
         else {
             return Err(Failure::operational(
@@ -472,7 +482,7 @@ fn execute_query(
             ));
         };
         let document = selections.iter().find_map(|selection| match selection {
-            mant_ast::ExcerptSelection::Tldr { document, .. } => Some(document),
+            mant_protocol::ExcerptSelection::Tldr { document, .. } => Some(document),
             _ => None,
         });
         return document.map_or_else(
@@ -660,16 +670,20 @@ fn write_output(output: &mut dyn Write, rendered: &str) -> io::Result<()> {
 mod tests {
     use std::cell::Cell;
 
+    use mant_core::ResolvedQuery;
+
     use mant_sources::{
         DocumentSourcesPrune, DocumentSourcesPruneSchema, DocumentSourcesUpdate,
         DocumentSourcesUpdateSchema,
     };
 
-    use mant_ast::{
-        Block, CatalogSchema, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole,
-        DocumentMeta, DocumentSchema, DocumentSource, DocumentSummary, Inline, LayoutHint,
-        MantDocument, Producer, QueryBundle, QueryInput, QueryRequest, QuerySchema, Section,
-        SourceFormat, TldrCacheAction, TldrCacheUpdate, TldrDocument, TldrOrigin,
+    use mant_ir::{
+        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
+        DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat, TldrDocument,
+        TldrOrigin,
+    };
+    use mant_protocol::{
+        CatalogSchema, DocumentSummary, QueryInput, QueryRequest, TldrCacheAction, TldrCacheUpdate,
     };
 
     use super::{
@@ -683,7 +697,7 @@ mod tests {
         query_calls: Cell<usize>,
         update_calls: Cell<usize>,
         last_policy: Cell<QueryPolicy>,
-        document: Option<MantDocument>,
+        document: Option<Document>,
         tldr: Option<TldrDocument>,
     }
 
@@ -903,15 +917,14 @@ mod tests {
             &self,
             request: &QueryRequest,
             policy: QueryPolicy,
-        ) -> Result<QueryBundle, Failure> {
+        ) -> Result<ResolvedQuery, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
             self.last_policy.set(policy);
             let label = match &request.input {
                 QueryInput::Document { selector, .. } => selector.trim().to_owned(),
                 QueryInput::File { path, .. } => path.clone(),
             };
-            Ok(QueryBundle {
-                schema: QuerySchema::V7,
+            Ok(ResolvedQuery {
                 address: None,
                 label,
                 document: self.document.clone(),
@@ -919,10 +932,9 @@ mod tests {
             })
         }
 
-        fn query_markdown(&self, _source: &str) -> Result<QueryBundle, Failure> {
+        fn query_markdown(&self, _source: &str) -> Result<ResolvedQuery, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
-            Ok(QueryBundle {
-                schema: QuerySchema::V7,
+            Ok(ResolvedQuery {
                 address: None,
                 label: "stdin".to_owned(),
                 document: self.document.clone(),
@@ -976,14 +988,9 @@ mod tests {
         )
     }
 
-    fn manual() -> MantDocument {
-        MantDocument {
-            schema: DocumentSchema::V7,
-            producer: Producer {
-                name: "test".to_owned(),
-                version: "1".to_owned(),
-                engine: None,
-            },
+    fn manual() -> Document {
+        Document {
+            parser: None,
             source: DocumentSource {
                 format: SourceFormat::Man,
                 path: Some("/man/demo.1".to_owned()),
@@ -1011,7 +1018,7 @@ mod tests {
         }
     }
 
-    fn explainable_manual() -> MantDocument {
+    fn explainable_manual() -> Document {
         let mut manual = manual();
         let options = manual
             .sections
@@ -1022,7 +1029,7 @@ mod tests {
             items: vec![DefinitionItem {
                 inline_term: false,
                 identity: Some(DefinitionIdentity {
-                    id: "exclude".to_owned(),
+                    id: "exclude".to_owned().into(),
                     role: DefinitionRole::Option,
                     case: DefinitionCase::Sensitive,
                     names: vec!["--exclude".to_owned()],
@@ -1046,7 +1053,7 @@ mod tests {
         manual
     }
 
-    fn semantic_markdown() -> MantDocument {
+    fn semantic_markdown() -> Document {
         mant_core::parse_markdown(
             "# Tool\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n",
             Some("semantic.md".to_owned()),
@@ -1070,7 +1077,7 @@ mod tests {
 
     fn section(id: &str, title: &str, text: &str, children: Vec<Section>) -> Section {
         Section {
-            id: id.to_owned(),
+            id: id.to_owned().into(),
             title: title.to_owned(),
             spacing_before_lines: 0,
             blocks: vec![Block::Paragraph {

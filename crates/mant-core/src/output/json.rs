@@ -1,14 +1,16 @@
 //! Serializes stable native contracts directly from their Rust source types.
 
-use mant_ast::{QueryBundle, QueryExcerpt, QueryOutline, QuerySearch, TldrCacheUpdate};
+use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch, TldrCacheUpdate};
+
+use crate::ResolvedQuery;
 
 /// Serialize a query contract in compact or human-readable form.
 ///
 /// # Errors
 ///
 /// Propagates the unlikely JSON writer failure from [`serde_json`].
-pub fn render_query_json(query: &QueryBundle, pretty: bool) -> Result<String, serde_json::Error> {
-    render_json(query, pretty)
+pub fn render_query_json(query: &ResolvedQuery, pretty: bool) -> Result<String, serde_json::Error> {
+    render_json(&query.to_protocol(), pretty)
 }
 
 /// Serialize a complete query outline in compact or human-readable form.
@@ -66,14 +68,14 @@ fn render_json(value: &impl serde::Serialize, pretty: bool) -> Result<String, se
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{QueryBundle, QuerySchema, TldrCacheAction, TldrCacheUpdate};
+    use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
     use super::{render_query_json, render_update_json};
+    use crate::ResolvedQuery;
 
     #[test]
     fn compact_and_pretty_query_output_share_the_same_contract() {
-        let query = QueryBundle {
-            schema: QuerySchema::V7,
+        let query = ResolvedQuery {
             address: None,
             label: "ls".to_owned(),
             document: None,

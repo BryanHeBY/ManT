@@ -3,21 +3,22 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_ast::{MantDocument, QueryBundle};
+use mant_core::ResolvedQuery;
 use mant_core::parse_manual_source;
+use mant_ir::Document;
 
 use crate::common::query_for_document;
 
-static LS: OnceLock<MantDocument> = OnceLock::new();
-static GIT: OnceLock<MantDocument> = OnceLock::new();
-static GCC: OnceLock<MantDocument> = OnceLock::new();
-static CLANG: OnceLock<MantDocument> = OnceLock::new();
-static GAWK: OnceLock<MantDocument> = OnceLock::new();
-static RSYNC: OnceLock<MantDocument> = OnceLock::new();
-static TAR: OnceLock<MantDocument> = OnceLock::new();
-static SH: OnceLock<MantDocument> = OnceLock::new();
+static LS: OnceLock<Document> = OnceLock::new();
+static GIT: OnceLock<Document> = OnceLock::new();
+static GCC: OnceLock<Document> = OnceLock::new();
+static CLANG: OnceLock<Document> = OnceLock::new();
+static GAWK: OnceLock<Document> = OnceLock::new();
+static RSYNC: OnceLock<Document> = OnceLock::new();
+static TAR: OnceLock<Document> = OnceLock::new();
+static SH: OnceLock<Document> = OnceLock::new();
 
-pub fn archlinux_manual(name: &str) -> &'static MantDocument {
+pub fn archlinux_manual(name: &str) -> &'static Document {
     let slot = match name {
         "ls" => &LS,
         "git" => &GIT,
@@ -35,7 +36,7 @@ pub fn archlinux_manual(name: &str) -> &'static MantDocument {
     })
 }
 
-pub fn archlinux_manual_query(name: &str) -> QueryBundle {
+pub fn archlinux_manual_query(name: &str) -> ResolvedQuery {
     query_for_document(name, archlinux_manual(name))
 }
 

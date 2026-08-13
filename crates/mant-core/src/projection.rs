@@ -6,13 +6,16 @@ use std::{
     fmt,
 };
 
-use mant_ast::{
+use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference,
-    OutlineSchema, QueryBundle, QueryExcerpt, QueryOutline, Section, SourceSpan,
+    DiagnosticLevel, Section, SourceSpan,
+};
+use mant_protocol::{
+    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference, OutlineSchema,
+    QueryExcerpt, QueryOutline,
 };
 
-use crate::definitions::definition_entries;
+use crate::{ResolvedQuery, definitions::definition_entries};
 
 const TLDR_PATH: &str = "0";
 pub(crate) const TLDR_ID: &str = "tldr";
@@ -126,7 +129,7 @@ impl Error for ProjectionError {}
 ///
 /// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
 /// is available.
-pub fn build_outline(query: &QueryBundle) -> Result<QueryOutline, ProjectionError> {
+pub fn build_outline(query: &ResolvedQuery) -> Result<QueryOutline, ProjectionError> {
     build_outline_with_detail(query, OutlineDetail::Sections)
 }
 
@@ -137,7 +140,7 @@ pub fn build_outline(query: &QueryBundle) -> Result<QueryOutline, ProjectionErro
 /// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
 /// is available.
 pub fn build_outline_with_detail(
-    query: &QueryBundle,
+    query: &ResolvedQuery,
     detail: OutlineDetail,
 ) -> Result<QueryOutline, ProjectionError> {
     if query.tldr.is_none() && query.document.is_none() {
@@ -158,16 +161,16 @@ pub fn build_outline_with_detail(
     let mut nodes = Vec::new();
     if query.tldr.is_some() {
         nodes.push(OutlineNode::Tldr {
-            path: TLDR_PATH.to_owned(),
-            id: TLDR_ID.to_owned(),
+            path: TLDR_PATH.to_owned().into(),
+            id: TLDR_ID.into(),
             title: TLDR_TITLE.to_owned(),
         });
     }
     if let Some(manual) = &query.document {
         if !manual.blocks.is_empty() {
             nodes.push(OutlineNode::DocumentRoot {
-                path: DOCUMENT_ROOT_PATH.to_owned(),
-                id: DOCUMENT_ROOT_ID.to_owned(),
+                path: DOCUMENT_ROOT_PATH.to_owned().into(),
+                id: DOCUMENT_ROOT_ID.into(),
                 title: DOCUMENT_ROOT_TITLE.to_owned(),
             });
             if detail == OutlineDetail::Entries {
@@ -178,7 +181,7 @@ pub fn build_outline_with_detail(
                         .filter_map(|(index, (entry, _))| {
                             let identity = entry.identity.as_ref()?;
                             Some(OutlineNode::DocumentEntry {
-                                path: format!("{DOCUMENT_ROOT_PATH}/o{}", index + 1),
+                                path: format!("{DOCUMENT_ROOT_PATH}/o{}", index + 1).into(),
                                 id: identity.id.clone(),
                                 title: identity.names.join(", "),
                                 role: identity.role,
@@ -218,7 +221,7 @@ pub fn build_outline_with_detail(
 ///
 /// Returns an error when no content exists or any selector is empty or unknown.
 pub fn select_excerpt(
-    query: &QueryBundle,
+    query: &ResolvedQuery,
     selectors: &[String],
 ) -> Result<QueryExcerpt, ProjectionError> {
     if selectors.is_empty() {
@@ -291,16 +294,16 @@ pub fn select_excerpt(
     let mut selections = Vec::new();
     if let (true, Some(document)) = (tldr_selected, query.tldr.clone()) {
         selections.push(ExcerptSelection::Tldr {
-            path: TLDR_PATH.to_owned(),
-            id: TLDR_ID.to_owned(),
+            path: TLDR_PATH.to_owned().into(),
+            id: TLDR_ID.into(),
             title: TLDR_TITLE.to_owned(),
             document,
         });
     }
     if let (true, Some(document)) = (document_root_selected, query.document.as_ref()) {
         selections.push(ExcerptSelection::DocumentRoot {
-            path: DOCUMENT_ROOT_PATH.to_owned(),
-            id: DOCUMENT_ROOT_ID.to_owned(),
+            path: DOCUMENT_ROOT_PATH.to_owned().into(),
+            id: DOCUMENT_ROOT_ID.into(),
             title: DOCUMENT_ROOT_TITLE.to_owned(),
             blocks: document.blocks.clone(),
         });
@@ -310,7 +313,7 @@ pub fn select_excerpt(
     Ok(QueryExcerpt {
         schema: ExcerptSchema::V7,
         label: query.label.clone(),
-        producer: document.map(|document| document.producer.clone()),
+        producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),
         meta: document.map(|document| document.meta.clone()),
         diagnostics: document
@@ -331,7 +334,7 @@ pub fn select_excerpt(
 /// Returns an error when the selector is empty, unknown, names a section, or
 /// matches more than one semantic entry.
 pub fn select_explanation(
-    query: &QueryBundle,
+    query: &ResolvedQuery,
     selector: &str,
 ) -> Result<QueryExcerpt, ProjectionError> {
     if query.tldr.is_none() && query.document.is_none() {
@@ -353,7 +356,7 @@ pub fn select_explanation(
 }
 
 fn resolve_explanation_candidate<'a>(
-    query: &QueryBundle,
+    query: &ResolvedQuery,
     located: &'a [LocatedNode<'a>],
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
@@ -375,7 +378,7 @@ fn resolve_explanation_candidate<'a>(
                     .into_iter()
                     .map(|candidate| SelectorCandidate {
                         path: candidate.path().to_owned(),
-                        id: candidate.id().to_owned(),
+                        id: candidate.id().into(),
                     })
                     .collect(),
             });
@@ -405,7 +408,7 @@ fn resolve_explanation_candidate<'a>(
 }
 
 fn resolve_candidate<'a>(
-    query: &QueryBundle,
+    query: &ResolvedQuery,
     located: &'a [LocatedNode<'a>],
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
@@ -430,7 +433,7 @@ fn resolve_candidate<'a>(
                 .into_iter()
                 .map(|candidate| SelectorCandidate {
                     path: candidate.path().to_owned(),
-                    id: candidate.id().to_owned(),
+                    id: candidate.id().into(),
                 })
                 .collect(),
         }),
@@ -458,7 +461,7 @@ fn outline_nodes(
                         .filter_map(|(index, (entry, _))| {
                             let identity = entry.identity.as_ref()?;
                             Some(OutlineNode::DocumentEntry {
-                                path: format!("{path}/o{}", index + 1),
+                                path: format!("{path}/o{}", index + 1).into(),
                                 id: identity.id.clone(),
                                 title: identity.names.join(", "),
                                 role: identity.role,
@@ -470,7 +473,7 @@ fn outline_nodes(
             }
             children.extend(outline_nodes(&section.children, &coordinates, detail));
             OutlineNode::DocumentSection {
-                path,
+                path: path.into(),
                 id: section.id.clone(),
                 title: section.title.clone(),
                 children,
@@ -581,7 +584,7 @@ impl LocatedNode<'_> {
                 section,
                 ..
             } => ExcerptSelection::DocumentSection {
-                path: path.clone(),
+                path: path.clone().into(),
                 id: section.id.clone(),
                 title: section.title.clone(),
                 breadcrumbs: breadcrumbs.clone(),
@@ -594,7 +597,7 @@ impl LocatedNode<'_> {
                 entry,
                 ..
             } => ExcerptSelection::DocumentEntry {
-                path: path.clone(),
+                path: path.clone().into(),
                 id: entry
                     .identity
                     .as_ref()
@@ -742,7 +745,7 @@ fn collect_sections<'a>(
         });
         let mut child_breadcrumbs = breadcrumbs.to_vec();
         child_breadcrumbs.push(OutlineReference {
-            path: path.clone(),
+            path: path.clone().into(),
             id: section.id.clone(),
             title: section.title.clone(),
         });
@@ -767,8 +770,8 @@ fn collect_sections<'a>(
 
 fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a>>) {
     let breadcrumbs = vec![OutlineReference {
-        path: DOCUMENT_ROOT_PATH.to_owned(),
-        id: DOCUMENT_ROOT_ID.to_owned(),
+        path: DOCUMENT_ROOT_PATH.to_owned().into(),
+        id: DOCUMENT_ROOT_ID.into(),
         title: DOCUMENT_ROOT_TITLE.to_owned(),
     }];
     for (index, (entry, source)) in definition_entries(blocks).into_iter().enumerate() {
@@ -801,17 +804,18 @@ fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{
-        Block, DocumentMeta, DocumentSchema, DocumentSource, ExcerptSelection, Inline, LayoutHint,
-        MantDocument, OutlineNode, Producer, QueryBundle, QuerySchema, Section, SourceFormat,
+    use crate::ResolvedQuery;
+    use mant_ir::{
+        Block, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
         TldrDocument, TldrOrigin,
     };
+    use mant_protocol::{ExcerptSelection, OutlineNode};
 
     use super::{ProjectionError, build_outline, select_excerpt};
 
     fn section(id: &str, title: &str, children: Vec<Section>) -> Section {
         Section {
-            id: id.to_owned(),
+            id: id.to_owned().into(),
             title: title.to_owned(),
             spacing_before_lines: 0,
             blocks: Vec::new(),
@@ -820,18 +824,12 @@ mod tests {
         }
     }
 
-    fn query() -> QueryBundle {
-        QueryBundle {
-            schema: QuerySchema::V7,
+    fn query() -> ResolvedQuery {
+        ResolvedQuery {
             address: None,
             label: "demo".to_owned(),
-            document: Some(MantDocument {
-                schema: DocumentSchema::V7,
-                producer: Producer {
-                    name: "test".to_owned(),
-                    version: "1".to_owned(),
-                    engine: None,
-                },
+            document: Some(Document {
+                parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
                     path: Some("/man/demo.1".to_owned()),

@@ -2,7 +2,7 @@
 
 use crate::common::{self, DEBIAN_GROFF_ME_SECTIONS};
 use crate::fixtures::debian_manual;
-use mant_ast::Inline;
+use mant_ir::Inline;
 
 /// 6-section topology (Name, Synopsis, Description, Files, Notes, See also).
 #[test]
@@ -31,9 +31,12 @@ fn keeps_mr_fallbacks_as_typed_manual_references() {
     let document = debian_manual("groff_me");
     let mut references = Vec::new();
     common::visit_document_inlines(document, &mut |inline| {
-        if let Inline::ManualReference {
-            name,
-            section: Some(section),
+        if let Inline::Link {
+            target:
+                mant_ir::LinkTarget::Manual {
+                    name,
+                    section: Some(section),
+                },
             ..
         } = inline
         {

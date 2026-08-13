@@ -1,13 +1,16 @@
 //! Renders query, outline, and excerpt contracts as unstyled semantic text.
 
-use mant_ast::{
-    Block, DefinitionItem, ExcerptSelection, Inline, ListItem, ListKind, OutlineNode, QueryBundle,
-    QueryExcerpt, QueryOutline, Section, TableCell, TldrCommandPart, TldrDocument,
+use mant_ir::{
+    Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell, TldrCommandPart,
+    TldrDocument,
 };
+use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
+
+use crate::ResolvedQuery;
 
 /// Render a complete query without Markdown or terminal escape sequences.
 #[must_use]
-pub fn render_query_text(query: &QueryBundle) -> String {
+pub fn render_query_text(query: &ResolvedQuery) -> String {
     render_query_body(query, true)
 }
 
@@ -18,14 +21,14 @@ pub fn render_query_text(query: &QueryBundle) -> String {
 /// page (no page furniture, overstrike, or hyphenation — those never enter
 /// the document model because the source is parsed directly).
 #[must_use]
-pub fn render_query_man(query: &QueryBundle) -> String {
+pub fn render_query_man(query: &ResolvedQuery) -> String {
     if query.document.is_none() {
         return String::new();
     }
     render_query_body(query, false)
 }
 
-fn render_query_body(query: &QueryBundle, include_tldr: bool) -> String {
+fn render_query_body(query: &ResolvedQuery, include_tldr: bool) -> String {
     let section = query
         .document
         .as_ref()
@@ -354,11 +357,7 @@ fn inline_text(children: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => output.push_str(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => output.push_str(&inline_text(children)),
+            | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),
         }
@@ -418,27 +417,21 @@ fn join_parts(parts: Vec<String>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{
-        Block, DefinitionItem, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint,
-        MantDocument, Producer, QueryBundle, QuerySchema, Section, SourceFormat, TldrDocument,
-        TldrOrigin,
+    use crate::ResolvedQuery;
+    use mant_ir::{
+        Block, DefinitionItem, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section,
+        SourceFormat, TldrDocument, TldrOrigin,
     };
 
     use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
     use crate::{build_outline, select_excerpt};
 
-    fn query() -> QueryBundle {
-        QueryBundle {
-            schema: QuerySchema::V7,
+    fn query() -> ResolvedQuery {
+        ResolvedQuery {
             address: None,
             label: "demo".to_owned(),
-            document: Some(MantDocument {
-                schema: DocumentSchema::V7,
-                producer: Producer {
-                    name: "test".to_owned(),
-                    version: "1".to_owned(),
-                    engine: None,
-                },
+            document: Some(Document {
+                parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
                     path: None,
@@ -450,12 +443,12 @@ mod tests {
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
-                    id: "options-1".to_owned(),
+                    id: "options-1".to_owned().into(),
                     title: "OPTIONS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![paragraph("parent details", true)],
                     children: vec![Section {
-                        id: "common-2".to_owned(),
+                        id: "common-2".to_owned().into(),
                         title: "Common options".to_owned(),
                         spacing_before_lines: 1,
                         blocks: vec![paragraph("child details", false)],
@@ -585,18 +578,12 @@ mod tests {
 
     #[test]
     fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
-        fn document_with(blocks: Vec<Block>) -> QueryBundle {
-            QueryBundle {
-                schema: QuerySchema::V7,
+        fn document_with(blocks: Vec<Block>) -> ResolvedQuery {
+            ResolvedQuery {
                 address: None,
                 label: "demo".to_owned(),
-                document: Some(MantDocument {
-                    schema: DocumentSchema::V7,
-                    producer: Producer {
-                        name: "test".to_owned(),
-                        version: "1".to_owned(),
-                        engine: None,
-                    },
+                document: Some(Document {
+                    parser: None,
                     source: DocumentSource {
                         format: SourceFormat::Man,
                         path: None,
@@ -608,7 +595,7 @@ mod tests {
                     diagnostics: Vec::new(),
                     blocks: Vec::new(),
                     sections: vec![Section {
-                        id: "s-1".to_owned(),
+                        id: "s-1".to_owned().into(),
                         title: "S".to_owned(),
                         spacing_before_lines: 0,
                         blocks,
@@ -658,17 +645,11 @@ mod tests {
 
     #[test]
     fn inline_definition_descriptions_are_tight_against_their_terms() {
-        let bundle = QueryBundle {
-            schema: QuerySchema::V7,
+        let bundle = ResolvedQuery {
             address: None,
             label: "demo".to_owned(),
-            document: Some(MantDocument {
-                schema: DocumentSchema::V7,
-                producer: Producer {
-                    name: "test".to_owned(),
-                    version: "1".to_owned(),
-                    engine: None,
-                },
+            document: Some(Document {
+                parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
                     path: None,
@@ -680,7 +661,7 @@ mod tests {
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
-                    id: "ops".to_owned(),
+                    id: "ops".to_owned().into(),
                     title: "OPERATORS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
@@ -744,17 +725,11 @@ mod tests {
 
     #[test]
     fn man_format_keeps_inline_definitions_tight() {
-        let bundle = QueryBundle {
-            schema: QuerySchema::V7,
+        let bundle = ResolvedQuery {
             address: None,
             label: "demo".to_owned(),
-            document: Some(MantDocument {
-                schema: DocumentSchema::V7,
-                producer: Producer {
-                    name: "test".to_owned(),
-                    version: "1".to_owned(),
-                    engine: None,
-                },
+            document: Some(Document {
+                parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
                     path: None,
@@ -766,7 +741,7 @@ mod tests {
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
-                    id: "ops".to_owned(),
+                    id: "ops".to_owned().into(),
                     title: "OPERATORS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {

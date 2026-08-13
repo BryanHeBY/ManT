@@ -3,10 +3,12 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{
+use mant_ir::{
     Block, DefinitionCase, DefinitionItem, DefinitionRole, Diagnostic, DocumentMeta,
-    DocumentSource, Producer, Section, TldrDocument,
+    DocumentSource, NodeId, Section, TldrDocument,
 };
+
+use crate::{NodePath, Producer};
 
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -66,25 +68,25 @@ const fn is_true(value: &bool) -> bool {
 )]
 pub enum OutlineNode {
     Tldr {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
     },
     /// Addressable document content that precedes the first heading.
     DocumentRoot {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
     },
     DocumentSection {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
         children: Vec<OutlineNode>,
     },
     DocumentEntry {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
         role: DefinitionRole,
         case: DefinitionCase,
@@ -167,22 +169,22 @@ pub struct QueryExcerpt {
 pub enum ExcerptSelection {
     /// Optional quick-reference content preceding the primary document.
     Tldr {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
         document: TldrDocument,
     },
     /// Complete document content that appears before the first heading.
     DocumentRoot {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
         blocks: Vec<Block>,
     },
     /// Complete selected document node, including all descendant sections.
     DocumentSection {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         breadcrumbs: Vec<OutlineReference>,
@@ -190,8 +192,8 @@ pub enum ExcerptSelection {
     },
     /// One addressable semantic definition and its complete description.
     DocumentEntry {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         breadcrumbs: Vec<OutlineReference>,
@@ -203,7 +205,7 @@ pub enum ExcerptSelection {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlineReference {
-    pub path: String,
-    pub id: String,
+    pub path: NodePath,
+    pub id: NodeId,
     pub title: String,
 }

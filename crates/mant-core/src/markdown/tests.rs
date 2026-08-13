@@ -1,13 +1,17 @@
 //! Contract-focused tests for Markdown lowering and source preservation.
 
-use mant_ast::{
-    Block, DefinitionCase, DefinitionRole, ExcerptSelection, Inline, ListKind, OutlineDetail,
-    OutlineNode, QueryBundle, QuerySchema, SearchCase, SearchNode, SearchQuery, SearchScope,
-    SearchSyntax, SourceFormat, TableAlignment, TldrOrigin,
+use mant_ir::{
+    Block, DefinitionCase, DefinitionRole, Inline, ListKind, SourceFormat, TableAlignment,
+    TldrOrigin,
+};
+use mant_protocol::{
+    ExcerptSelection, OutlineDetail, OutlineNode, SearchCase, SearchNode, SearchQuery, SearchScope,
+    SearchSyntax,
 };
 
 use crate::{
-    ProjectionError, build_outline_with_detail, search_query, select_excerpt, select_explanation,
+    ProjectionError, ResolvedQuery, build_outline_with_detail, search_query, select_excerpt,
+    select_explanation,
 };
 
 use super::{parse_document, parse_markdown};
@@ -58,7 +62,7 @@ fn main() {}
             .any(|inline| matches!(inline, Inline::Strong { .. }))
     );
     assert!(children.iter().any(
-        |inline| matches!(inline, Inline::ExternalLink { uri, .. } if uri == "https://example.test")
+        |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.test")
     ));
 
     assert!(matches!(
@@ -66,10 +70,10 @@ fn main() {}
         Block::Paragraph { children, .. }
             if children.iter().any(|inline| matches!(
                 inline,
-                Inline::SectionReference { target, .. } if target == "options"
+                Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "options"
             )) && children.iter().any(|inline| matches!(
                 inline,
-                Inline::SectionReference { target, .. } if target == "document-overview"
+                Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "document-overview"
             )) && children.iter().any(|inline| matches!(inline, Inline::LineBreak))
     ));
 
@@ -132,16 +136,16 @@ fn lowers_hierarchical_markdown_links_into_same_source_document_references() {
 
     assert!(children.iter().any(|inline| matches!(
         inline,
-        Inline::DocumentReference { name, fragment: None, .. } if name == "Start-Process"
+        Inline::Link { target: mant_ir::LinkTarget::Document { name, fragment: None }, .. } if name == "Start-Process"
     )));
     assert!(children.iter().any(|inline| matches!(
         inline,
-        Inline::DocumentReference { name, fragment: Some(fragment), .. }
+        Inline::Link { target: mant_ir::LinkTarget::Document { name, fragment: Some(fragment) }, .. }
             if name == "about_Profiles" && fragment == "examples"
     )));
     assert!(children.iter().any(|inline| matches!(
         inline,
-        Inline::DocumentReference { name, fragment: None, .. } if name == "../other"
+        Inline::Link { target: mant_ir::LinkTarget::Document { name, fragment: None }, .. } if name == "../other"
     )));
 }
 
@@ -201,7 +205,7 @@ Text with ~~strike~~, ![alt](image.png), <kbd>raw</kbd>, and $math$.
 }
 
 #[test]
-fn separates_a_leading_tldr_directive_from_the_document_ast() {
+fn separates_a_leading_tldr_directive_from_the_document_ir() {
     let parsed = parse_markdown(
         "\
 <!-- mant:tldr:start -->
@@ -270,7 +274,7 @@ Duplicate heading.
     assert!(
         children.iter().any(|inline| matches!(
             inline,
-            Inline::SectionReference { target, .. } if target == "options"
+            Inline::Link { target: mant_ir::LinkTarget::Section { id: target }, .. } if target == "options"
         )),
         "a #options link must resolve to the first section, not options-2"
     );
@@ -303,8 +307,7 @@ Gamma.
         .collect();
     assert_eq!(ids, ["foo-2", "foo-2-2"]);
 
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "collision".to_owned(),
         document: Some(document),
@@ -455,7 +458,10 @@ Root body.
     let targets = children
         .iter()
         .filter_map(|inline| match inline {
-            Inline::SectionReference { target, .. } => Some(target.as_str()),
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section { id: target },
+                ..
+            } => Some(target.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -471,8 +477,7 @@ Root body.
             .all(|diagnostic| diagnostic.code.as_deref() != Some("markdown.unresolved-reference"))
     );
 
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "demo.md".to_owned(),
         document: Some(document),
@@ -522,8 +527,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
     ));
 
     let outline = build_outline_with_detail(
-        &QueryBundle {
-            schema: QuerySchema::V7,
+        &ResolvedQuery {
             address: None,
             label: "tool.md".to_owned(),
             document: Some(document),
@@ -570,8 +574,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         identity.role == DefinitionRole::Option && identity.case == DefinitionCase::Insensitive
     }));
 
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -638,8 +641,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
         ]
     );
 
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "dot-option.md".to_owned(),
         document: Some(parsed.document),
@@ -670,8 +672,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
     .expect("variable semantic entries");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "shell".to_owned(),
         document: Some(parsed.document),
@@ -748,8 +749,7 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
             && diagnostic.message.contains("1/o1 (option-f)")
             && diagnostic.message.contains("2/o1 (option-f-2)")
     }));
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -784,8 +784,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
     )
     .expect("help spelling fixture");
     assert!(parsed.document.diagnostics.is_empty());
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "help-spellings.md".to_owned(),
         document: Some(parsed.document),
@@ -835,8 +834,7 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
             && diagnostic.message.contains("1/o1 (option-help)")
             && diagnostic.message.contains("1/o2 (option-help-2)")
     }));
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "shorthand-collision.md".to_owned(),
         document: Some(parsed.document),
@@ -858,8 +856,7 @@ fn the_same_alias_in_different_roles_is_ambiguous() {
         None,
     )
     .expect("cross-role alias fixture");
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -886,8 +883,7 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
         None,
     )
     .expect("entry ID precedence fixture");
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -911,8 +907,7 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
         None,
     )
     .expect("case-sensitive entries");
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -986,8 +981,7 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     )
     .expect("fixed attached option values");
     assert!(parsed.document.diagnostics.is_empty());
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "tool.md".to_owned(),
         document: Some(parsed.document),
@@ -1042,8 +1036,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
     .expect("Windows-native semantic entries");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "native.md".to_owned(),
         document: Some(parsed.document),
@@ -1123,8 +1116,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
     }));
 
     let outline = build_outline_with_detail(
-        &QueryBundle {
-            schema: QuerySchema::V7,
+        &ResolvedQuery {
             address: None,
             label: "tool.md".to_owned(),
             document: Some(parsed.document),

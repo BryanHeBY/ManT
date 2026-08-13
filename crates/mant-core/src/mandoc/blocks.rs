@@ -4,7 +4,7 @@ use libmandoc_rs::{
     AuthorMode, DisplayKind, Node, NodeKind, NormalizedFont, NormalizedListKind,
     TableAlignment as MandocTableAlignment,
 };
-use mant_ast::{
+use mant_ir::{
     Block, DefinitionItem, Inline, LayoutHint, ListItem, ListKind, Section,
     TableAlignment as AstTableAlignment, TableCell as AstTableCell, TableRow,
 };
@@ -100,7 +100,7 @@ fn lower_section(
         children.push(child);
     }
     Section {
-        id,
+        id: id.into(),
         title,
         spacing_before_lines,
         blocks,
@@ -418,17 +418,19 @@ fn wrap_blocks_in_link(blocks: &mut [Block], target: &str, email: bool) {
 }
 
 fn link_inline(target: &str, email: bool, children: Vec<Inline>) -> Inline {
-    if email {
-        Inline::EmailLink {
+    let target = if email {
+        mant_ir::LinkTarget::Email {
             address: target.to_owned(),
-            children,
         }
     } else {
-        Inline::ExternalLink {
+        mant_ir::LinkTarget::External {
             uri: target.to_owned(),
-            title: None,
-            children,
         }
+    };
+    Inline::Link {
+        target,
+        title: None,
+        children,
     }
 }
 
@@ -604,10 +606,10 @@ fn append_table_row(output: &mut Vec<Block>, node: &Node, indent_columns: u16) {
 struct BlockState {
     output: Vec<Block>,
     paragraph: InlineBuilder,
-    paragraph_source: Option<mant_ast::SourceSpan>,
+    paragraph_source: Option<mant_ir::SourceSpan>,
     paragraph_last_line: Option<u32>,
     preformatted: Vec<Inline>,
-    pre_source: Option<mant_ast::SourceSpan>,
+    pre_source: Option<mant_ir::SourceSpan>,
     indent_columns: u16,
 }
 
@@ -627,7 +629,7 @@ impl BlockState {
     fn push_inline(
         &mut self,
         nodes: Vec<Inline>,
-        source: Option<mant_ast::SourceSpan>,
+        source: Option<mant_ir::SourceSpan>,
         starts_indented_line: bool,
     ) {
         if nodes.is_empty() {
@@ -658,7 +660,7 @@ impl BlockState {
         self.paragraph.hard_break();
     }
 
-    fn push_preformatted(&mut self, nodes: Vec<Inline>, source: Option<mant_ast::SourceSpan>) {
+    fn push_preformatted(&mut self, nodes: Vec<Inline>, source: Option<mant_ir::SourceSpan>) {
         self.flush_paragraph();
         if !self.preformatted.is_empty() {
             self.preformatted.push(Inline::LineBreak);
@@ -794,7 +796,7 @@ fn definition_item(
 ) -> DefinitionItem {
     let mut term = lower_inline_nodes(visible_definition_head(node), context.default_name);
     if let Some(id) = definition_head_anchor(node, &term) {
-        term.insert(0, Inline::Anchor { id });
+        term.insert(0, Inline::Anchor { id: id.into() });
     }
     let terms: Vec<Vec<Inline>> = (!term.is_empty()).then_some(term).into_iter().collect();
     DefinitionItem {
@@ -855,7 +857,7 @@ fn append_definition(
     mut item: DefinitionItem,
     indent_columns: u16,
     paragraph_distance: u16,
-    source: Option<mant_ast::SourceSpan>,
+    source: Option<mant_ir::SourceSpan>,
     max_term_width: usize,
 ) {
     if let Some(Block::DefinitionList { items, compact, .. }) = output
@@ -931,7 +933,7 @@ fn append_ip_bullet(
     item: DefinitionItem,
     indent_columns: u16,
     paragraph_distance: u16,
-    source: Option<mant_ast::SourceSpan>,
+    source: Option<mant_ir::SourceSpan>,
 ) {
     let list_item = ListItem {
         blocks: item.description,
@@ -1106,7 +1108,7 @@ fn preformatted_inlines(nodes: &[Node], default_name: Option<&str>) -> Vec<Inlin
 fn flush_paragraph(
     output: &mut Vec<Block>,
     paragraph: &mut InlineBuilder,
-    source: &mut Option<mant_ast::SourceSpan>,
+    source: &mut Option<mant_ir::SourceSpan>,
     indent_columns: u16,
 ) {
     let current = std::mem::replace(paragraph, InlineBuilder::new()).finish();
@@ -1124,7 +1126,7 @@ fn flush_paragraph(
 fn flush_preformatted(
     output: &mut Vec<Block>,
     preformatted: &mut Vec<Inline>,
-    source: &mut Option<mant_ast::SourceSpan>,
+    source: &mut Option<mant_ir::SourceSpan>,
     indent_columns: u16,
 ) {
     if preformatted.is_empty() {
@@ -1156,7 +1158,7 @@ fn is_nonprinting_request(node: &Node) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{Block, DefinitionItem, Inline, LayoutHint};
+    use mant_ir::{Block, DefinitionItem, Inline, LayoutHint};
 
     fn text(value: &str) -> Vec<Inline> {
         vec![Inline::Text {

@@ -36,17 +36,23 @@
               },
               { "type": "text", "value": " - list directory contents; see " },
               {
-                "type": "manual-reference",
-                "name": "dir",
-                "section": "1",
+                "type": "link",
+                "target": {
+                  "kind": "manual",
+                  "name": "dir",
+                  "section": "1"
+                },
                 "children": [
                   { "type": "text", "value": "dir(1)" }
                 ]
               },
               { "type": "text", "value": "; visit " },
               {
-                "type": "external-link",
-                "uri": "https://example.test/ls",
+                "type": "link",
+                "target": {
+                  "kind": "external",
+                  "uri": "https://example.test/ls"
+                },
                 "title": "Project documentation",
                 "children": [
                   { "type": "text", "value": "the project site" }
@@ -54,16 +60,22 @@
               },
               { "type": "text", "value": ", contact " },
               {
-                "type": "email-link",
-                "address": "docs@example.test",
+                "type": "link",
+                "target": {
+                  "kind": "email",
+                  "address": "docs@example.test"
+                },
                 "children": [
                   { "type": "text", "value": "the documentation team" }
                 ]
               },
               { "type": "text", "value": ", or read " },
               {
-                "type": "section-reference",
-                "target": "options-1",
+                "type": "link",
+                "target": {
+                  "kind": "section",
+                  "id": "options-1"
+                },
                 "children": [
                   { "type": "text", "value": "OPTIONS" }
                 ]

@@ -3,8 +3,8 @@
 //! The Pandoc-generated page exercises GNU verbatim font extensions that the
 //! native parser compatibility layer must preserve without diagnostics.
 
-use mant_ast::Inline;
 use mant_core::{render_excerpt_markdown, select_excerpt};
+use mant_ir::Inline;
 
 use crate::common::{self, block_slice_text, collect_sections, source_path_ends_with};
 use crate::fixtures::{windows_release_manual, windows_release_query};

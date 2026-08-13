@@ -43,7 +43,7 @@ query the manual database, read tldr data, or start the TUI.
 | `7` | Native API generation negotiated by process clients | `nativeApiVersion` |
 | `mant.request/v7` | Closed request accepted by `--request-json` | Request `schema` |
 | `mant.query/v7` | Complete document plus optional quick reference | Full response `schema` |
-| `mant.document/v7` | Source-neutral document AST | `QueryBundle.document.schema` |
+| `mant.document/v7` | Source-neutral document response | `QueryBundle.document.schema` |
 | `mant.outline/v7` | Block-free addressable tree | Outline response `schema` |
 | `mant.excerpt/v7` | One or more selected nodes | Excerpt response `schema` |
 | `mant.search/v7` | Search results and pagination | Search response `schema` |
@@ -55,8 +55,10 @@ request and response contracts are v7; the independent Markdown coordinate
 contract remains `mant.markdown/v1`. Clients must compare every complete
 identifier rather than infer one contract from another. Version 7 adds a
 shared local-document catalog with exact addresses for every Markdown and
-manual-page candidate. Further v7 navigation fields use the same address
-model. These additions are not wire-compatible with v6 catalog consumers.
+manual-page candidate. It also separates producer metadata from the in-memory
+IR, gives selectors typed `NodePath` semantics, uses typed node IDs and exact
+byte ranges, and represents every link through one tagged target union. These
+changes are not wire-compatible with v6 consumers.
 
 ### Compatibility Rules
 
@@ -183,7 +185,7 @@ Manual pages have one parser path: ManT performs bounded reads, decompression,
 and constrained redirect-only `.so` alias resolution, then gives plain roff
 bytes to `libmandoc-rs` with includes denied. Renderer selection is
 deliberately absent from `mant.request/v7`. This native-manual source family is
-available on Linux, macOS, and Windows through the same owned AST boundary.
+available on Linux, macOS, and Windows through the same owned IR boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires only readable native manual content, without an
@@ -467,11 +469,13 @@ An abbreviated but structurally valid Markdown result is:
 The actual `producer.version` is the installed ManT version; clients must not
 hard-code the illustrative value above.
 
-## Document AST
+## Document Response and IR Projection
 
-`MantDocument` is renderer-neutral. It describes semantics and normalized
-layout without exposing libmandoc pointers, roff macro nodes, HTML, or TUI
-components.
+`DocumentResponse` is the v7 wire projection of ManT's renderer-neutral
+`mant-ir::Document`. It describes semantics and normalized layout without
+exposing libmandoc pointers, roff macro nodes, internal indexes, HTML, or TUI
+components. Schema and producer metadata belong to the response envelope, not
+to the reusable in-memory IR.
 
 ### Document Envelope
 
@@ -508,7 +512,9 @@ Each section contains:
 
 `SourceSpan.line` and `SourceSpan.column` are one-based positions in the
 original source. `endLine` and `endColumn` are optional because not every
-renderer or roff node exposes an exact end location.
+parser node exposes an exact end location. When available, `byteRange` is the
+canonical machine-facing half-open UTF-8 range with zero-based `start` and
+`end` offsets. Markdown supplies it exactly; native roff nodes may omit it.
 
 Section depth comes from the tree, not a stored heading-level integer.
 Section and explicit anchor IDs share one namespace within a document.
@@ -584,22 +590,20 @@ Inline nodes are tagged by `type`:
 | `strong` | `children` | Strong emphasis |
 | `emphasis` | `children` | Emphasis |
 | `code` | `value` | Inline or preformatted code fragment |
-| `external-link` | `uri`, optional `title`, `children` | External destination |
-| `email-link` | `address`, `children` | Email destination without synthetic `mailto:` |
-| `document-reference` | `name`, optional `fragment`, `children` | Relative hierarchical Markdown document in the current source |
-| `manual-reference` | `name`, optional `section`, `children` | Another installed manual |
-| `section-reference` | `target`, `children` | Document-local section ID |
+| `link` | `target`, optional `title`, `children` | Typed destination described below |
 | `anchor` | `id` | Zero-width document-local destination |
 | `line-break` | None | Explicit hard break |
 
-Visible child content must be preserved even when a consumer cannot activate
-a link. `section-reference.target` is a document ID, not a generated Markdown
-slug. `document-reference` retains the extension-free relative path derived
-from a `.md` or `.markdown` link and is resolved lexically only inside the
-current registered source; `..` cannot cross that source boundary.
-`manual-reference` comes directly from mdoc `Xr` and GNU man `MR`, or
-conservatively from an unambiguous strongly styled `name(section)` pair in a
-traditional man page.
+Every `link.target` is tagged by `kind`: `external { uri }`,
+`email { address }`, `document { name, fragment? }`,
+`manual { name, section? }`, or `section { id }`. Visible child content must
+be preserved even when a consumer cannot activate a link. A section target is
+a document-local ID, not a generated Markdown slug. A document target retains
+the extension-free relative path derived from a `.md` or `.markdown` link and
+is resolved lexically only inside the current registered source; `..` cannot
+cross that source boundary. Manual targets come directly from mdoc `Xr` and
+GNU man `MR`, or conservatively from an unambiguous strongly styled
+`name(section)` pair in a traditional man page.
 
 ### Quick Reference Contract
 

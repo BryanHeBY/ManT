@@ -4,11 +4,11 @@ use crate::common::{
     self, count_outline_entries, find_outline_entry, query_for_document, semantic_definition_items,
 };
 use crate::fixtures::fedora44_manual;
-use mant_ast::{
-    ExcerptSelection, OutlineDetail, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-    SourceFormat,
-};
 use mant_core::{build_outline_with_detail, search_query, select_excerpt};
+use mant_ir::SourceFormat;
+use mant_protocol::{
+    ExcerptSelection, OutlineDetail, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+};
 
 /// 9 sections, `os = "TAR"`, 156 option-outline entries.
 #[test]
@@ -48,7 +48,7 @@ fn options_are_addressable_in_v7_outlines_and_excerpts() {
     let outline =
         build_outline_with_detail(&query, OutlineDetail::Entries).expect("tar option outline");
     let outlined = find_outline_entry(&outline.nodes, "--acls").expect("outlined --acls");
-    assert_eq!(outlined.id(), identity.id);
+    assert_eq!(identity.id, outlined.id());
 
     let excerpt = select_excerpt(&query, &["acls".to_owned()]).expect("--acls excerpt by alias");
     assert!(matches!(
@@ -84,7 +84,7 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
         .iter()
         .find(|found| {
             matches!(&found.node,
-                mant_ast::SearchNode::DocumentEntry { names, .. }
+                mant_protocol::SearchNode::DocumentEntry { names, .. }
                 if names.iter().any(|name| name == "--acls"))
         })
         .expect("--acls option match");

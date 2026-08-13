@@ -1,8 +1,8 @@
-//! Parses the constrained tldr-pages Markdown dialect into the shared AST.
+//! Parses the constrained tldr-pages Markdown dialect into the shared IR.
 
 use std::{error::Error, fmt};
 
-use mant_ast::{TldrCommandPart, TldrDocument, TldrExample, TldrOrigin};
+use mant_ir::{TldrCommandPart, TldrDocument, TldrExample, TldrOrigin};
 
 use crate::text_safety::mask_terminal_controls;
 
@@ -306,7 +306,7 @@ fn strip_paired_marker(value: &str, marker: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::TldrCommandPart;
+    use mant_ir::TldrCommandPart;
 
     use super::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 

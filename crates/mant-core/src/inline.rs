@@ -1,6 +1,6 @@
-//! Shared operations over source-independent inline AST nodes.
+//! Shared operations over source-independent inline IR nodes.
 
-use mant_ast::Inline;
+use mant_ir::Inline;
 
 /// Flatten inline structure into the text visible to readers and search.
 pub(crate) fn plain_text(nodes: &[Inline]) -> String {
@@ -10,11 +10,7 @@ pub(crate) fn plain_text(nodes: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => output.push_str(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => output.push_str(&plain_text(children)),
+            | Inline::Link { children, .. } => output.push_str(&plain_text(children)),
             Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),
         }

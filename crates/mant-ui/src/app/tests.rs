@@ -7,11 +7,14 @@ use std::{
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use mant_ast::{
-    Block as AstBlock, CatalogSchema, DefinitionCase, DefinitionIdentity, DefinitionItem,
-    DefinitionRole, DocumentAddress, DocumentCatalog, DocumentMeta, DocumentSchema, DocumentSource,
-    DocumentSummary, Inline, LayoutHint, MantDocument, MarkdownOrigin, Producer, QueryBundle,
-    QuerySchema, Section, SourceFormat, TldrDocument, TldrOrigin,
+use mant_core::ResolvedQuery;
+use mant_ir::{
+    Block as AstBlock, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole,
+    Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
+    TldrDocument, TldrOrigin,
+};
+use mant_protocol::{
+    CatalogSchema, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin,
 };
 use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
@@ -28,9 +31,8 @@ use crate::{
     theme,
 };
 
-fn empty_bundle() -> QueryBundle {
-    QueryBundle {
-        schema: QuerySchema::V7,
+fn empty_bundle() -> ResolvedQuery {
+    ResolvedQuery {
         address: None,
         label: "demo".to_owned(),
         document: None,
@@ -38,9 +40,8 @@ fn empty_bundle() -> QueryBundle {
     }
 }
 
-fn tldr_bundle() -> QueryBundle {
-    QueryBundle {
-        schema: QuerySchema::V7,
+fn tldr_bundle() -> ResolvedQuery {
+    ResolvedQuery {
         address: None,
         label: "demo".to_owned(),
         document: None,
@@ -57,7 +58,7 @@ fn tldr_bundle() -> QueryBundle {
     }
 }
 
-fn navigation_bundle() -> QueryBundle {
+fn navigation_bundle() -> ResolvedQuery {
     let paragraph = |value: &str| AstBlock::Paragraph {
         children: vec![Inline::Text {
             value: value.to_owned(),
@@ -65,17 +66,11 @@ fn navigation_bundle() -> QueryBundle {
         layout: LayoutHint::default(),
         source: None,
     };
-    QueryBundle {
-        schema: QuerySchema::V7,
+    ResolvedQuery {
         address: None,
         label: "demo".to_owned(),
-        document: Some(MantDocument {
-            schema: DocumentSchema::V7,
-            producer: Producer {
-                name: "mant".to_owned(),
-                version: "test".to_owned(),
-                engine: None,
-            },
+        document: Some(Document {
+            parser: None,
             source: DocumentSource {
                 format: SourceFormat::Man,
                 path: None,
@@ -84,13 +79,13 @@ fn navigation_bundle() -> QueryBundle {
             diagnostics: Vec::new(),
             blocks: Vec::new(),
             sections: vec![Section {
-                id: "options".to_owned(),
+                id: "options".to_owned().into(),
                 title: "OPTIONS".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![AstBlock::DefinitionList {
                     items: vec![DefinitionItem {
                         identity: Some(DefinitionIdentity {
-                            id: "help-option".to_owned(),
+                            id: "help-option".to_owned().into(),
                             role: DefinitionRole::Option,
                             case: DefinitionCase::Sensitive,
                             names: vec!["-h".to_owned(), "--help".to_owned()],
@@ -107,7 +102,7 @@ fn navigation_bundle() -> QueryBundle {
                     source: None,
                 }],
                 children: vec![Section {
-                    id: "details".to_owned(),
+                    id: "details".to_owned().into(),
                     title: "Details".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![paragraph("Nested details")],
@@ -153,7 +148,7 @@ fn document_catalog() -> DocumentCatalog {
     }
 }
 
-fn manual_bundle(name: &str, section: &str) -> QueryBundle {
+fn manual_bundle(name: &str, section: &str) -> ResolvedQuery {
     let mut bundle = navigation_bundle();
     bundle.label = name.to_owned();
     bundle.address = Some(DocumentAddress::Manual {
@@ -1322,8 +1317,11 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
                     Inline::Text {
                         value: "Continue with ".to_owned(),
                     },
-                    Inline::SectionReference {
-                        target: "details".to_owned(),
+                    Inline::Link {
+                        target: mant_ir::LinkTarget::Section {
+                            id: "details".into(),
+                        },
+                        title: None,
                         children: vec![Inline::Text {
                             value: "the nested details section".to_owned(),
                         }],
@@ -1416,9 +1414,12 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
         .insert(
             0,
             AstBlock::Paragraph {
-                children: vec![Inline::ManualReference {
-                    name: "git-add".to_owned(),
-                    section: Some("1".to_owned()),
+                children: vec![Inline::Link {
+                    target: mant_ir::LinkTarget::Manual {
+                        name: "git-add".to_owned(),
+                        section: Some("1".to_owned()),
+                    },
+                    title: None,
                     children: vec![Inline::Text {
                         value: "git-add(1)".to_owned(),
                     }],
@@ -1459,8 +1460,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real/archlinux/git.1.gz");
     let document = mant_core::parse_manual_source(&fixture).expect("parse real git manual");
-    let bundle = QueryBundle {
-        schema: QuerySchema::V7,
+    let bundle = ResolvedQuery {
         address: Some(DocumentAddress::Manual {
             name: "git".to_owned(),
             section: "1".to_owned(),
@@ -1553,8 +1553,10 @@ fn clicking_an_external_link_returns_the_uri_to_the_host() {
         .insert(
             0,
             AstBlock::Paragraph {
-                children: vec![Inline::ExternalLink {
-                    uri: "https://example.test/docs".to_owned(),
+                children: vec![Inline::Link {
+                    target: mant_ir::LinkTarget::External {
+                        uri: "https://example.test/docs".to_owned(),
+                    },
                     title: None,
                     children: vec![Inline::Text {
                         value: "external docs".to_owned(),

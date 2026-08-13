@@ -1,7 +1,7 @@
-use mant_ast::{
-    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-    DocumentSchema, DocumentSource, LayoutHint, MantDocument, Producer, QueryBundle, QuerySchema,
-    Section, SourceFormat,
+use mant_core::ResolvedQuery;
+use mant_ir::{
+    Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
+    DocumentMeta, DocumentSource, LayoutHint, Section, SourceFormat,
 };
 use mant_ui::{DocumentView, NavKind};
 
@@ -17,7 +17,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
     .enumerate()
     .map(|(index, (role, name))| DefinitionItem {
         identity: Some(DefinitionIdentity {
-            id: format!("entry-{index}"),
+            id: format!("entry-{index}").into(),
             role,
             case: DefinitionCase::Sensitive,
             names: vec![name.to_owned()],
@@ -28,18 +28,12 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         spacing_before_lines: None,
     })
     .collect();
-    let bundle = QueryBundle {
-        schema: QuerySchema::V7,
+    let bundle = ResolvedQuery {
         address: None,
         label: "tool".to_owned(),
         tldr: None,
-        document: Some(MantDocument {
-            schema: DocumentSchema::V7,
-            producer: Producer {
-                name: "test".to_owned(),
-                version: "1".to_owned(),
-                engine: None,
-            },
+        document: Some(Document {
+            parser: None,
             source: DocumentSource {
                 format: SourceFormat::Markdown,
                 path: None,
@@ -48,7 +42,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
             diagnostics: Vec::new(),
             blocks: Vec::new(),
             sections: vec![Section {
-                id: "reference".to_owned(),
+                id: "reference".to_owned().into(),
                 title: "REFERENCE".to_owned(),
                 spacing_before_lines: 0,
                 blocks: vec![Block::DefinitionList {

@@ -3,18 +3,16 @@
 mod blocks;
 mod inline;
 
-use mant_ast::{
-    Block, ExcerptSelection, LayoutHint, OutlineNode, QueryBundle, QueryExcerpt, QueryOutline,
-    Section, TldrCommandPart, TldrDocument, TldrOrigin,
-};
+use mant_ir::{Block, LayoutHint, Section, TldrCommandPart, TldrDocument, TldrOrigin};
+use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
 use self::{
     blocks::render_blocks,
     inline::{code_span, escape_text},
 };
-use crate::projection::DOCUMENT_ROOT_ID;
+use crate::{ResolvedQuery, projection::DOCUMENT_ROOT_ID};
 
-/// Markdown serialization controls that do not alter the query AST.
+/// Markdown serialization controls that do not alter the query IR.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct MarkdownOptions {
     /// Emit stable raw-HTML destinations and links for document-local references.
@@ -30,13 +28,13 @@ impl MarkdownOptions {
 
 /// Render a complete query as clean Markdown without a trailing newline.
 #[must_use]
-pub fn render_markdown(query: &QueryBundle) -> String {
+pub fn render_markdown(query: &ResolvedQuery) -> String {
     render_markdown_with_options(query, MarkdownOptions::default())
 }
 
 /// Render a complete query using explicit presentation-only options.
 #[must_use]
-pub fn render_markdown_with_options(query: &QueryBundle, options: MarkdownOptions) -> String {
+pub fn render_markdown_with_options(query: &ResolvedQuery, options: MarkdownOptions) -> String {
     let mut output = Vec::new();
     output.push(heading(1, &query.label));
 

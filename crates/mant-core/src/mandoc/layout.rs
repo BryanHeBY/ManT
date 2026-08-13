@@ -5,7 +5,7 @@
 //! the `LayoutHint` values consumed by every output format.
 
 use libmandoc_rs::Node;
-use mant_ast::{Block, LayoutHint};
+use mant_ir::{Block, LayoutHint};
 
 /// Update the current man(7) paragraph distance after a `.PD` request.
 pub(super) fn update_paragraph_distance(node: &Node, paragraph_distance: &mut u16) {
@@ -250,7 +250,7 @@ mod tests {
         display_indent, horizontal_distance_columns, layout, layout_with_spacing,
         normalize_explicit_vertical_spacing, paragraph_distance_lines, vertical_distance_lines,
     };
-    use mant_ast::Block;
+    use mant_ir::Block;
 
     fn node(kind: NodeKind, text: Option<&str>, offset: Option<&str>) -> Node {
         Node {

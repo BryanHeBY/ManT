@@ -1,7 +1,8 @@
 //! Tests for LLVM's scan-build manual from its official Windows MSVC archive.
 
-use mant_ast::{OutlineDetail, SourceFormat};
 use mant_core::build_outline_with_detail;
+use mant_ir::SourceFormat;
+use mant_protocol::OutlineDetail;
 
 use crate::common::{self, count_outline_entries, find_outline_entry};
 use crate::fixtures::{windows_release_manual, windows_release_query};

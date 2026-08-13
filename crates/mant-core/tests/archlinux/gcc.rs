@@ -2,7 +2,7 @@
 
 use crate::common::{self, GCC_SECTIONS};
 use crate::fixtures::archlinux_manual;
-use mant_ast::Block;
+use mant_ir::Block;
 
 /// Deeply nested OPTIONS hierarchy (20 sub-sections), >250 preformatted
 /// blocks, C++ class-hierarchy examples, phantom-paragraph suppression,

@@ -1,19 +1,20 @@
 [package]
-name = "mant-ast"
+name = "mant-protocol"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "Versioned, renderer-neutral document and query contracts for ManT"
+description = "Versioned request, response, and JSON Schema contracts for ManT"
 repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
-keywords = ["man", "markdown", "ast", "schema", "protocol"]
+keywords = ["man", "markdown", "schema", "protocol", "mcp"]
 categories = ["data-structures", "text-processing"]
 include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
+mant-ir = { path = "../mant-ir", version = "=0.7.0" }
 schemars.workspace = true
 serde.workspace = true
 

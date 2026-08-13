@@ -11,8 +11,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4.13"
-mant-ast = { path = "../crates/mant-ast" }
 mant-core = { path = "../crates/mant-core" }
+mant-protocol = { path = "../crates/mant-protocol" }
 
 [[bin]]
 name = "markdown_parse"

@@ -1,6 +1,7 @@
 [workspace]
 members = [
-  "crates/mant-ast",
+  "crates/mant-ir",
+  "crates/mant-protocol",
   "crates/mant",
   "crates/mant-core",
   "crates/mant-sources",
@@ -8,7 +9,8 @@ members = [
   "crates/libmandoc-rs",
 ]
 default-members = [
-  "crates/mant-ast",
+  "crates/mant-ir",
+  "crates/mant-protocol",
   "crates/mant",
   "crates/mant-core",
   "crates/mant-sources",

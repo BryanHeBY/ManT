@@ -1,7 +1,7 @@
 //! Tests for ripgrep's official MSVC Windows release manual.
 
-use mant_ast::OutlineDetail;
 use mant_core::{build_outline_with_detail, render_excerpt_markdown, select_excerpt};
+use mant_protocol::OutlineDetail;
 
 use crate::common::{self, count_outline_entries, find_outline_entry};
 use crate::fixtures::{windows_release_manual, windows_release_query};

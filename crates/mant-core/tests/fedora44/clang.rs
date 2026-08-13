@@ -4,8 +4,9 @@ use crate::common::{
     self, count_outline_entries, find_outline_entry, query_for_document, source_path_ends_with,
 };
 use crate::fixtures::fedora44_manual;
-use mant_ast::{OutlineDetail, SourceFormat};
 use mant_core::build_outline_with_detail;
+use mant_ir::SourceFormat;
+use mant_protocol::OutlineDetail;
 
 /// 9 sections, `os = "22"`, 78 option-outline entries, and no duplicate
 /// vertical spacing.

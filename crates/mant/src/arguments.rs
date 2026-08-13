@@ -7,7 +7,7 @@
 use std::iter;
 
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
-use mant_ast::{
+use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, InputFormat, OutlineDetail, QueryInput, QueryRequest,
     QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
@@ -91,7 +91,7 @@ impl From<OutlineMode> for OutlineDetail {
     }
 }
 
-/// Case policy exposed without coupling the AST crate to clap.
+/// Case policy exposed without coupling the protocol crate to clap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum SearchCaseMode {
     Insensitive,
@@ -969,7 +969,7 @@ fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Erro
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{
+    use mant_protocol::{
         CatalogDocumentKind, CatalogQuery, InputFormat, OutlineDetail, QueryInput, QueryRequest,
         QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
     };

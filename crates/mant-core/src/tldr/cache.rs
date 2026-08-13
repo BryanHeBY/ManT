@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use mant_ast::TldrDocument;
+use mant_ir::TldrDocument;
 
 use crate::executable::{environment_value, find_executable};
 

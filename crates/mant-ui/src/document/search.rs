@@ -41,7 +41,7 @@ pub(super) struct RenderedSearchSourceCell {
 }
 
 impl RenderedDocument {
-    /// Search visible terminal rows without rebuilding or traversing the AST.
+    /// Search visible terminal rows without rebuilding or traversing the IR.
     #[must_use]
     pub fn search(&self, query: &str) -> Vec<RenderedSearchMatch> {
         let needle = query.to_lowercase();

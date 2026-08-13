@@ -1,4 +1,4 @@
-//! Versioned, renderer-neutral contracts shared by every `ManT` frontend.
+//! Versioned process contracts for `ManT`'s CLI, JSON, and MCP boundaries.
 
 mod catalog;
 mod document;
@@ -6,7 +6,8 @@ mod outline;
 mod query;
 mod schema;
 mod search;
-mod tldr;
+mod selector;
+mod update;
 
 pub use catalog::*;
 pub use document::*;
@@ -14,7 +15,8 @@ pub use outline::*;
 pub use query::*;
 pub use schema::*;
 pub use search::*;
-pub use tldr::*;
+pub use selector::*;
+pub use update::*;
 
 /// Native API version negotiated independently from document schema versions.
 pub const NATIVE_API_VERSION: &str = "7";

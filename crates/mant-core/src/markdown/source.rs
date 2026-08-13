@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use mant_ast::{Block, Diagnostic, DiagnosticLevel, LayoutHint, SourceSpan};
+use mant_ir::{Block, Diagnostic, DiagnosticLevel, LayoutHint, SourceSpan, TextRange, TextSize};
 
 /// Original Markdown together with a compact byte-to-line index.
 pub(super) struct MarkdownSource<'a> {
@@ -30,6 +30,10 @@ impl<'a> MarkdownSource<'a> {
         let start = self.position(range.start);
         let end = self.position(range.end);
         SourceSpan {
+            byte_range: Some(TextRange::new(
+                TextSize::from_usize_saturating(range.start),
+                TextSize::from_usize_saturating(range.end),
+            )),
             line: start.0,
             column: start.1,
             end_line: Some(end.0),
@@ -41,11 +45,19 @@ impl<'a> MarkdownSource<'a> {
     /// empty line. Parser ranges sometimes include the first newline in the
     /// preceding block, so inspect both sides of that boundary.
     pub(super) fn has_blank_line_between(&self, previous: SourceSpan, current: SourceSpan) -> bool {
-        let previous_end = self.offset(
-            previous.end_line.unwrap_or(previous.line),
-            previous.end_column.unwrap_or(previous.column),
+        let previous_end = previous.byte_range.map_or_else(
+            || {
+                self.offset(
+                    previous.end_line.unwrap_or(previous.line),
+                    previous.end_column.unwrap_or(previous.column),
+                )
+            },
+            |range| usize::try_from(range.end.get()).unwrap_or(usize::MAX),
         );
-        let current_start = self.offset(current.line, current.column);
+        let current_start = current.byte_range.map_or_else(
+            || self.offset(current.line, current.column),
+            |range| usize::try_from(range.start.get()).unwrap_or(usize::MAX),
+        );
         // Look back far enough to catch a newline the preceding block's range
         // may have absorbed, then settle onto a char boundary so a multi-byte
         // character before the boundary cannot make the slice fail.
@@ -130,12 +142,13 @@ impl<'a> MarkdownSource<'a> {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::SourceSpan;
+    use mant_ir::SourceSpan;
 
     use super::MarkdownSource;
 
     fn span(line: u32, column: u32, end_line: u32, end_column: u32) -> SourceSpan {
         SourceSpan {
+            byte_range: None,
             line,
             column,
             end_line: Some(end_line),
@@ -165,5 +178,16 @@ mod tests {
         let current = span(2, 1, 2, 5);
 
         assert!(!source.has_blank_line_between(previous, current));
+    }
+
+    #[test]
+    fn records_exact_half_open_utf8_byte_ranges() {
+        let source = MarkdownSource::new("# 中\n");
+        let span = source.span(&(2..5));
+        let range = span.byte_range.expect("Markdown has exact offsets");
+
+        assert_eq!(range.start.get(), 2);
+        assert_eq!(range.end.get(), 5);
+        assert_eq!(&source.text[2..5], "中");
     }
 }

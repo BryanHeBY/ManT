@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mant_ast::{
+use mant_protocol::{
     CatalogQuery, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase,
     catalog_literal_match_rank,
 };
@@ -227,7 +227,7 @@ fn finder_match_rank(
     address: &DocumentAddress,
     catalog_path: &str,
     pattern: &str,
-) -> mant_ast::CatalogMatchRank {
+) -> mant_protocol::CatalogMatchRank {
     let pattern = (!pattern.is_empty()).then_some(pattern);
     let relative_path = address.relative_path();
     [
@@ -241,7 +241,7 @@ fn finder_match_rank(
     .flatten()
     .map(|candidate| catalog_literal_match_rank(candidate, pattern, SearchCase::Insensitive))
     .min()
-    .unwrap_or(mant_ast::CatalogMatchRank::Unranked)
+    .unwrap_or(mant_protocol::CatalogMatchRank::Unranked)
 }
 
 fn append_tree_rows(

@@ -2,7 +2,7 @@
 
 use crate::common::{self, CLANG_SECTIONS};
 use crate::fixtures::archlinux_manual;
-use mant_ast::Block;
+use mant_ir::Block;
 
 /// Stage-selection options, Sphinx INDENT wrappers that must collapse into
 /// one semantic option list, `.in` dimension suppression, and preformatted

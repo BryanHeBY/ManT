@@ -4,7 +4,7 @@
 //! leave blank-line presentation to HTML/CSS. `ManT` has no CSS layer, so this
 //! pass makes those semantics explicit before any renderer sees the document.
 
-use mant_ast::{Block, Inline, LayoutHint, Section, SourceSpan};
+use mant_ir::{Block, Inline, LayoutHint, Section, SourceSpan};
 
 use super::source::MarkdownSource;
 
@@ -87,11 +87,7 @@ fn trim_code_framing_newline(children: &mut Vec<Inline>) {
         }
         Inline::Strong { .. }
         | Inline::Emphasis { .. }
-        | Inline::ExternalLink { .. }
-        | Inline::EmailLink { .. }
-        | Inline::DocumentReference { .. }
-        | Inline::ManualReference { .. }
-        | Inline::SectionReference { .. }
+        | Inline::Link { .. }
         | Inline::Anchor { .. } => {}
     }
 }

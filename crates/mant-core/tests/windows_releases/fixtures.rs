@@ -2,17 +2,18 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_ast::{MantDocument, QueryBundle};
+use mant_core::ResolvedQuery;
 use mant_core::parse_manual_source;
+use mant_ir::Document;
 
 use crate::common::query_for_document;
 
-static RG: OnceLock<MantDocument> = OnceLock::new();
-static RCLONE: OnceLock<MantDocument> = OnceLock::new();
-static NPM: OnceLock<MantDocument> = OnceLock::new();
-static SCAN_BUILD: OnceLock<MantDocument> = OnceLock::new();
+static RG: OnceLock<Document> = OnceLock::new();
+static RCLONE: OnceLock<Document> = OnceLock::new();
+static NPM: OnceLock<Document> = OnceLock::new();
+static SCAN_BUILD: OnceLock<Document> = OnceLock::new();
 
-pub fn windows_release_manual(name: &str) -> &'static MantDocument {
+pub fn windows_release_manual(name: &str) -> &'static Document {
     let slot = match name {
         "rg" => &RG,
         "rclone" => &RCLONE,
@@ -27,7 +28,7 @@ pub fn windows_release_manual(name: &str) -> &'static MantDocument {
     })
 }
 
-pub fn windows_release_query(name: &str) -> QueryBundle {
+pub fn windows_release_query(name: &str) -> ResolvedQuery {
     query_for_document(name, windows_release_manual(name))
 }
 

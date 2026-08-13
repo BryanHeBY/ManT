@@ -2,8 +2,9 @@
 
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
-use mant_ast::{OutlineDetail, SourceFormat};
 use mant_core::build_outline_with_detail;
+use mant_ir::SourceFormat;
+use mant_protocol::OutlineDetail;
 
 /// 24 sections, `os = "Git 2.53.0"`, 25 option-outline entries.
 #[test]

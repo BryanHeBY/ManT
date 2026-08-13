@@ -1,6 +1,6 @@
 //! Verifies that the discoverable contracts are generated from Rust types.
 
-use mant_ast::{
+use mant_protocol::{
     document_catalog_json_schema, query_bundle_json_schema, query_excerpt_json_schema,
     query_json_schema_catalog, query_outline_json_schema, query_request_json_schema,
     query_search_json_schema,
@@ -69,6 +69,10 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(!fields.contains(&"tldr"));
     assert!(encoded_query.contains("mant.document/v7"));
     assert!(encoded_query.contains("DefinitionIdentity"));
+    assert!(encoded_query.contains("LinkTarget"));
+    assert!(encoded_query.contains("byteRange"));
+    assert!(!encoded_query.contains("external-link"));
+    assert!(!encoded_query.contains("manual-reference"));
     assert!(encoded_query.contains("\"variable\""));
     assert!(encoded_query.contains("\"environment-variable\""));
     assert!(encoded_query.contains("\"man\""));

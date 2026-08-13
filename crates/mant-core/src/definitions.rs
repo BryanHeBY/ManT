@@ -9,9 +9,10 @@ use std::{
     mem,
 };
 
-use mant_ast::{
+use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Inline, LayoutHint,
     Section, SourceSpan,
+    visit::{self, Visit},
 };
 
 use crate::inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline};
@@ -90,9 +91,18 @@ fn collect_definition_entries<'a>(
 }
 
 fn collect_section_ids(sections: &[Section], output: &mut HashSet<String>) {
+    struct Collector<'a>(&'a mut HashSet<String>);
+
+    impl<'ir> Visit<'ir> for Collector<'_> {
+        fn visit_section(&mut self, section: &'ir Section) {
+            self.0.insert(section.id.to_string());
+            visit::walk_section(self, section);
+        }
+    }
+
+    let mut collector = Collector(output);
     for section in sections {
-        output.insert(section.id.clone());
-        collect_section_ids(&section.children, output);
+        collector.visit_section(section);
     }
 }
 
@@ -304,11 +314,16 @@ fn identify_item(
     if !anchors.iter().any(|anchor| anchor == &id)
         && let Some(term) = item.terms.first_mut()
     {
-        term.insert(0, Inline::Anchor { id: id.clone() });
+        term.insert(
+            0,
+            Inline::Anchor {
+                id: id.clone().into(),
+            },
+        );
     }
     retained.insert(id.clone());
     item.identity = Some(DefinitionIdentity {
-        id,
+        id: id.into(),
         role,
         case,
         names,
@@ -395,18 +410,20 @@ fn is_option_name_body(value: &str) -> bool {
 }
 
 fn collect_anchor_ids(nodes: &[Inline], output: &mut Vec<String>) {
-    for node in nodes {
-        match node {
-            Inline::Anchor { id } => output.push(id.clone()),
-            Inline::Strong { children }
-            | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => collect_anchor_ids(children, output),
-            Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
+    struct Collector<'a>(&'a mut Vec<String>);
+
+    impl<'ir> Visit<'ir> for Collector<'_> {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            if let Inline::Anchor { id } = inline {
+                self.0.push(id.to_string());
+            }
+            visit::walk_inline(self, inline);
         }
+    }
+
+    let mut collector = Collector(output);
+    for node in nodes {
+        collector.visit_inline(node);
     }
 }
 
@@ -452,7 +469,7 @@ fn unique_id(base: &str, used: &mut HashSet<String>, reserved: &HashSet<String>)
 mod tests {
     use std::collections::HashSet;
 
-    use mant_ast::{Block, DefinitionItem, Inline, LayoutHint, Section};
+    use mant_ir::{Block, DefinitionItem, Inline, LayoutHint, Section};
 
     use super::{identify_definitions, option_names, option_prefix};
 
@@ -493,7 +510,7 @@ mod tests {
             source: None,
         };
         let mut sections = vec![Section {
-            id: "options".to_owned(),
+            id: "options".to_owned().into(),
             title: "OPTIONS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![

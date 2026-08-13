@@ -1,14 +1,16 @@
-use mant_ast::{OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax};
 use mant_core::{
     build_outline_with_detail, render_excerpt_json, render_excerpt_markdown, render_excerpt_text,
     render_markdown, render_outline_json, render_outline_markdown, render_outline_text,
     render_query_json, render_query_man, render_query_text, render_search_json,
     render_search_markdown, render_search_text, search_query, select_excerpt, select_explanation,
 };
+use mant_protocol::{
+    OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
+};
 
 pub const MAX_INPUT_BYTES: usize = 64 * 1024;
 
-pub fn exercise(query: &mant_ast::QueryBundle, pattern_seed: &str) {
+pub fn exercise(query: &mant_core::ResolvedQuery, pattern_seed: &str) {
     let _ = render_markdown(query);
     let _ = render_query_text(query);
     let _ = render_query_man(query);

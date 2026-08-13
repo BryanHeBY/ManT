@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use mant_ast::{
+use mant_ir::{
     Block, Diagnostic, Inline, LayoutHint, ListItem, ListKind, TableAlignment, TableCell, TableRow,
 };
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, Tag, TagEnd};

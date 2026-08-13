@@ -3,20 +3,15 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Exact schema marker for a normalized structured document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub enum DocumentSchema {
-    /// Source-neutral model with role-aware, case-aware semantic entries.
-    #[serde(rename = "mant.document/v7")]
-    V7,
-}
+use crate::NodeId;
 
 /// A normalized document ready for interactive or textual rendering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct MantDocument {
-    pub schema: DocumentSchema,
-    pub producer: Producer,
+pub struct Document {
+    /// Parser provenance retained independently from process-protocol metadata.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parser: Option<ParserInfo>,
     pub source: DocumentSource,
     pub meta: DocumentMeta,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -27,20 +22,10 @@ pub struct MantDocument {
     pub sections: Vec<Section>,
 }
 
-/// Identifies `ManT` and the parsing engine used to build the document.
+/// Parser implementation that produced this normalized document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct Producer {
-    pub name: String,
-    pub version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub engine: Option<Engine>,
-}
-
-/// Pinned parser implementation behind the stable `ManT` contract.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Engine {
+pub struct ParserInfo {
     pub name: String,
     pub version: String,
 }
@@ -107,10 +92,76 @@ pub enum DiagnosticLevel {
     Unsupported,
 }
 
-/// One-based location in the original source file.
+/// Zero-based UTF-8 byte offset in the original source.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+)]
+#[serde(transparent)]
+pub struct TextSize(u32);
+
+impl TextSize {
+    #[must_use]
+    pub const fn new(value: u32) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_usize_saturating(value: usize) -> Self {
+        Self(u32::try_from(value).unwrap_or(u32::MAX))
+    }
+}
+
+/// Half-open UTF-8 byte range (`start..end`) in the original source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TextRange {
+    pub start: TextSize,
+    pub end: TextSize,
+}
+
+impl TextRange {
+    /// Construct a half-open range.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `end` precedes `start`.
+    #[must_use]
+    pub fn new(start: TextSize, end: TextSize) -> Self {
+        assert!(start <= end, "a source range cannot end before it starts");
+        Self { start, end }
+    }
+
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.start.0 == self.end.0
+    }
+}
+
+/// Location in the original source file.
+///
+/// Lines and columns are one-based for diagnostics. `byte_range`, when the
+/// parser provides exact offsets, is the canonical machine-facing boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceSpan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub byte_range: Option<TextRange>,
     pub line: u32,
     pub column: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -124,7 +175,7 @@ pub struct SourceSpan {
 #[serde(rename_all = "camelCase")]
 pub struct Section {
     /// Unique within one document; consumers must not treat it as a global ID.
-    pub id: String,
+    pub id: NodeId,
     pub title: String,
     /// Terminal rows requested before this heading by the source macro set.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
@@ -269,7 +320,7 @@ pub struct DefinitionItem {
 #[serde(rename_all = "camelCase")]
 pub struct DefinitionIdentity {
     /// Unique within one document and shared with the term's inline anchor.
-    pub id: String,
+    pub id: NodeId,
     pub role: DefinitionRole,
     /// Matching policy used for aliases in semantic entry lookup.
     pub case: DefinitionCase,
@@ -344,51 +395,52 @@ pub enum Inline {
     Code {
         value: String,
     },
-    /// An external URI from mdoc `Lk`, man `UR`, or Markdown links.
-    ///
-    /// Roff section references use [`Inline::SectionReference`] instead so
-    /// consumers never have to infer navigation semantics from URI syntax.
-    ExternalLink {
-        uri: String,
+    /// A typed link whose navigation semantics are explicit in the IR.
+    Link {
+        target: LinkTarget,
         #[serde(skip_serializing_if = "Option::is_none")]
         title: Option<String>,
-        children: Vec<Inline>,
-    },
-    /// An email address from mdoc `Mt` or man `MT` without a `mailto:` prefix.
-    EmailLink {
-        address: String,
-        children: Vec<Inline>,
-    },
-    /// A relative Markdown link to another document in the current source.
-    DocumentReference {
-        name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        fragment: Option<String>,
-        children: Vec<Inline>,
-    },
-    /// A typed reference to another installed manual page.
-    ManualReference {
-        name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        section: Option<String>,
-        children: Vec<Inline>,
-    },
-    /// A reference to a section in this document, normally originating at
-    /// mdoc `Sx`.
-    ///
-    /// `target` is the document-local [`Section::id`] rather than a rendered
-    /// heading slug. This keeps navigation stable across output formats.
-    SectionReference {
-        target: String,
         children: Vec<Inline>,
     },
     /// A zero-width, document-local navigation destination such as mdoc `Tg`.
     ///
     /// Anchor IDs and section IDs share one namespace within a document.
     Anchor {
-        id: String,
+        id: NodeId,
     },
     LineBreak,
+}
+
+/// Resolved destination kind for [`Inline::Link`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum LinkTarget {
+    /// An external URI from mdoc `Lk`, man `UR`, or Markdown links.
+    External { uri: String },
+    /// An email address without a `mailto:` prefix.
+    Email { address: String },
+    /// A relative Markdown link to another document in the current source.
+    Document {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fragment: Option<String>,
+    },
+    /// A typed reference to another installed manual page.
+    Manual {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        section: Option<String>,
+    },
+    /// A reference to a section in this document, normally originating at
+    /// mdoc `Sx`.
+    ///
+    /// `target` is the document-local [`Section::id`] rather than a rendered
+    /// heading slug. This keeps navigation stable across output formats.
+    Section { id: NodeId },
 }
 
 impl LayoutHint {

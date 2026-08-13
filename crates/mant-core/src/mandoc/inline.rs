@@ -1,9 +1,9 @@
-//! Lowers typed roff events and semantic mdoc macros into inline AST nodes.
+//! Lowers typed roff events and semantic mdoc macros into inline IR nodes.
 
 use std::borrow::Cow;
 
 use libmandoc_rs::{Node, NodeKind};
-use mant_ast::Inline;
+use mant_ir::Inline;
 
 pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
@@ -194,8 +194,11 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         // Keep the heading text as a private unresolved target until the
         // complete section tree is available. The document post-pass replaces
         // it with the stable Section::id or degrades it to ordinary text.
-        Some("Sx") if !lowered.is_empty() => vec![Inline::SectionReference {
-            target: plain_text(&lowered).trim().to_owned(),
+        Some("Sx") if !lowered.is_empty() => vec![Inline::Link {
+            target: mant_ir::LinkTarget::Section {
+                id: plain_text(&lowered).trim().into(),
+            },
+            title: None,
             children: lowered,
         }],
         Some("Nd") => {
@@ -217,7 +220,7 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
     output
 }
 
-/// Convert libmandoc's validated deep-link marker into a zero-width AST node.
+/// Convert libmandoc's validated deep-link marker into a zero-width IR node.
 /// Explicit `.Tg` tags carry `node.tag`; automatically discovered tags fall
 /// back to the same first visible word that libmandoc uses.
 fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
@@ -230,7 +233,7 @@ fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
             .next()
             .map(ToOwned::to_owned)
     })?;
-    (!id.is_empty()).then_some(Inline::Anchor { id })
+    (!id.is_empty()).then_some(Inline::Anchor { id: id.into() })
 }
 
 fn inline_children(node: &Node) -> &[Node] {
@@ -257,9 +260,9 @@ fn lower_manual_reference(children: &[Node], default_name: Option<&str>) -> Vec<
     let display = section
         .as_ref()
         .map_or_else(|| name.clone(), |section| format!("{name}({section})"));
-    let mut output = vec![Inline::ManualReference {
-        name,
-        section,
+    let mut output = vec![Inline::Link {
+        target: mant_ir::LinkTarget::Manual { name, section },
+        title: None,
         children: text_node(&display),
     }];
     for child in children.iter().skip(2) {
@@ -282,15 +285,16 @@ fn lower_link(children: &[Node], default_name: Option<&str>, email: bool) -> Vec
     } else {
         label
     };
-    if email {
-        vec![Inline::EmailLink { address, children }]
+    let target = if email {
+        mant_ir::LinkTarget::Email { address }
     } else {
-        vec![Inline::ExternalLink {
-            uri: address,
-            title: None,
-            children,
-        }]
-    }
+        mant_ir::LinkTarget::External { uri: address }
+    };
+    vec![Inline::Link {
+        target,
+        title: None,
+        children,
+    }]
 }
 
 fn wrap_strong(children: Vec<Inline>) -> Vec<Inline> {
@@ -478,8 +482,10 @@ fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link
         },
     };
     if let Some(target) = link {
-        output.push(Inline::ExternalLink {
-            uri: target.to_owned(),
+        output.push(Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: target.to_owned(),
+            },
             title: None,
             children: vec![styled],
         });
@@ -515,7 +521,7 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 #[cfg(test)]
 mod tests {
     use super::{parse_roff_text, plain_text};
-    use mant_ast::Inline;
+    use mant_ir::Inline;
 
     #[test]
     fn decodes_fonts_hyphens_and_renderer_links() {
@@ -523,7 +529,13 @@ mod tests {
             parse_roff_text("\\X'tty: link https://example.test'\\fB\\-h\\fR\\X'tty: link' FILE");
 
         assert_eq!(plain_text(&nodes), "-h FILE");
-        assert!(matches!(nodes[0], Inline::ExternalLink { .. }));
+        assert!(matches!(
+            nodes[0],
+            Inline::Link {
+                target: mant_ir::LinkTarget::External { .. },
+                ..
+            }
+        ));
     }
 
     #[test]

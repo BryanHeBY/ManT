@@ -1,6 +1,6 @@
 //! Parses a conservative Markdown subset into the shared document contract.
 //!
-//! Supported syntax becomes semantic AST nodes. Recognized extensions outside
+//! Supported syntax becomes semantic IR nodes. Recognized extensions outside
 //! the subset remain visible as exact source text with an attached diagnostic.
 
 mod blocks;
@@ -22,9 +22,9 @@ use std::{
     ops::Range,
 };
 
-use mant_ast::{
-    Block, Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, Engine,
-    Inline, MantDocument, Producer, Section, SourceFormat, TldrDocument, TldrOrigin,
+use mant_ir::{
+    Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline, ParserInfo,
+    Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
@@ -47,7 +47,7 @@ type SpannedEvent<'a> = (Event<'a>, Range<usize>);
 /// Complete result of parsing one ManT-flavoured Markdown input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedMarkdown {
-    pub document: MantDocument,
+    pub document: Document,
     pub tldr: Option<TldrDocument>,
 }
 
@@ -174,7 +174,7 @@ fn sanitize_source(source_text: &str, diagnostics: &mut Vec<Diagnostic>) -> Opti
 
 /// Lower the ordinary document portion after extension extraction.
 #[cfg(test)]
-fn parse_document(source_text: &str, source_path: Option<String>) -> MantDocument {
+fn parse_document(source_text: &str, source_path: Option<String>) -> Document {
     let mut diagnostics = Vec::new();
     parse_document_with_entries(source_text, source_path, BTreeMap::new(), &mut diagnostics)
 }
@@ -184,7 +184,7 @@ fn parse_document_with_entries(
     source_path: Option<String>,
     mut declarations: BTreeMap<u32, options::EntryDeclaration>,
     entry_diagnostics: &mut Vec<Diagnostic>,
-) -> MantDocument {
+) -> Document {
     let source = MarkdownSource::new(source_text);
     let ParsedDocumentStructure {
         mut diagnostics,
@@ -239,9 +239,8 @@ fn parse_document_with_entries(
         &mut diagnostics,
     );
 
-    MantDocument {
-        schema: DocumentSchema::V7,
-        producer: markdown_producer(),
+    Document {
+        parser: Some(markdown_parser()),
         source: DocumentSource {
             format: SourceFormat::Markdown,
             path: source_path,
@@ -317,7 +316,7 @@ fn lower_document_structure(
                 level: heading_level(level),
                 is_document_title,
                 section: Section {
-                    id,
+                    id: id.into(),
                     title: heading.clone(),
                     spacing_before_lines: u16::from(!flat_sections.is_empty()),
                     blocks: Vec::new(),
@@ -348,14 +347,10 @@ fn lower_document_structure(
     }
 }
 
-fn markdown_producer() -> Producer {
-    Producer {
-        name: "mant".to_owned(),
-        version: env!("CARGO_PKG_VERSION").to_owned(),
-        engine: Some(Engine {
-            name: "pulldown-cmark".to_owned(),
-            version: "0.13".to_owned(),
-        }),
+fn markdown_parser() -> ParserInfo {
+    ParserInfo {
+        name: "pulldown-cmark".to_owned(),
+        version: "0.13".to_owned(),
     }
 }
 
@@ -598,10 +593,14 @@ fn resolve_inlines(
 ) {
     for inline in inlines {
         match inline {
-            Inline::SectionReference { target, children } => {
-                let lookup = target.trim().trim_start_matches('#');
-                if let Some(id) = targets.get(lookup).or_else(|| targets.get(&slug(lookup))) {
-                    *target = id.clone();
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section { id },
+                children,
+                ..
+            } => {
+                let lookup = id.trim().trim_start_matches('#');
+                if let Some(resolved) = targets.get(lookup).or_else(|| targets.get(&slug(lookup))) {
+                    *id = resolved.as_str().into();
                 } else {
                     diagnostics.push(Diagnostic {
                         level: DiagnosticLevel::Warning,
@@ -614,10 +613,7 @@ fn resolve_inlines(
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. } => {
+            | Inline::Link { children, .. } => {
                 resolve_inlines(children, targets, diagnostics);
             }
             Inline::Text { .. }

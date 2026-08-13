@@ -4,7 +4,7 @@ use std::{error::Error, fmt, path::PathBuf};
 
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
-use mant_ast::{
+use mant_protocol::{
     CatalogDocumentKind, CatalogMatchRank, CatalogQuery, CatalogSchema, DocumentAddress,
     DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
 };
@@ -253,7 +253,9 @@ fn match_rank(document: &AvailableDocument, query: &CatalogQuery) -> CatalogMatc
     ]
     .into_iter()
     .flatten()
-    .map(|candidate| mant_ast::catalog_literal_match_rank(candidate, Some(pattern), query.case))
+    .map(|candidate| {
+        mant_protocol::catalog_literal_match_rank(candidate, Some(pattern), query.case)
+    })
     .min()
     .unwrap_or(CatalogMatchRank::Unranked)
 }
@@ -345,7 +347,9 @@ mod tests {
 
     use crate::ManualPage;
 
-    use mant_ast::{CatalogDocumentKind, CatalogQuery, DocumentAddress, SearchCase, SearchSyntax};
+    use mant_protocol::{
+        CatalogDocumentKind, CatalogQuery, DocumentAddress, SearchCase, SearchSyntax,
+    };
 
     use super::{
         AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin,

@@ -4,9 +4,11 @@
 //! complementary source map: it assigns each canonical Markdown offset to the
 //! most specific enclosing section or definition entry.
 
-use mant_ast::{QueryBundle, SearchNode, SearchSectionReference, Section, SourceSpan};
+use mant_ir::{Section, SourceSpan};
+use mant_protocol::{SearchNode, SearchSectionReference};
 
 use crate::{
+    ResolvedQuery,
     definitions::definition_entries,
     output::html_anchor,
     projection::{DOCUMENT_ROOT_ID, DOCUMENT_ROOT_PATH, DOCUMENT_ROOT_TITLE},
@@ -31,7 +33,7 @@ pub(super) struct OwnerIndex {
 }
 
 impl OwnerIndex {
-    pub(super) fn new(query: &QueryBundle, markdown: &str) -> Self {
+    pub(super) fn new(query: &ResolvedQuery, markdown: &str) -> Self {
         let mut sections = Vec::new();
         let mut entries = Vec::new();
         let mut root = None;
@@ -66,8 +68,8 @@ impl OwnerIndex {
                             .first()
                             .map_or(markdown.len(), |section| section.start),
                         node: SearchNode::DocumentRoot {
-                            path: DOCUMENT_ROOT_PATH.to_owned(),
-                            id: DOCUMENT_ROOT_ID.to_owned(),
+                            path: DOCUMENT_ROOT_PATH.to_owned().into(),
+                            id: DOCUMENT_ROOT_ID.into(),
                             title: DOCUMENT_ROOT_TITLE.to_owned(),
                         },
                         section: None,
@@ -85,8 +87,8 @@ impl OwnerIndex {
                 start,
                 end: document_start,
                 node: SearchNode::Tldr {
-                    path: "0".to_owned(),
-                    id: "tldr".to_owned(),
+                    path: "0".to_owned().into(),
+                    id: "tldr".into(),
                     title: "TLDR QUICK REFERENCE".to_owned(),
                 },
                 section: None,
@@ -166,7 +168,7 @@ fn collect_section_owners(
             continue;
         };
         let section_reference = SearchSectionReference {
-            path: path.clone(),
+            path: path.clone().into(),
             id: section.id.clone(),
             title: section.title.clone(),
         };
@@ -174,7 +176,7 @@ fn collect_section_owners(
             start,
             end: markdown.len(),
             node: SearchNode::DocumentSection {
-                path: path.clone(),
+                path: path.clone().into(),
                 id: section.id.clone(),
                 title: section.title.clone(),
             },
@@ -199,7 +201,7 @@ fn collect_section_owners(
                 start: entry_start,
                 end: definition_item_end(markdown, entry_start),
                 node: SearchNode::DocumentEntry {
-                    path: format!("{path}/o{}", entry_index + 1),
+                    path: format!("{path}/o{}", entry_index + 1).into(),
                     id: identity.id.clone(),
                     title: identity.names.join(", "),
                     role: identity.role,

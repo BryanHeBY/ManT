@@ -3,7 +3,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, SourceSpan};
+use mant_ir::{DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, NodeId, SourceSpan};
+
+use crate::NodePath;
 
 pub const DEFAULT_SEARCH_LIMIT: u32 = 100;
 
@@ -154,23 +156,23 @@ pub struct SearchMatch {
 )]
 pub enum SearchNode {
     Tldr {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
     },
     DocumentRoot {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
     },
     DocumentSection {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
     },
     DocumentEntry {
-        path: String,
-        id: String,
+        path: NodePath,
+        id: NodeId,
         title: String,
         role: DefinitionRole,
         case: DefinitionCase,
@@ -204,8 +206,8 @@ impl SearchNode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchSectionReference {
-    pub path: String,
-    pub id: String,
+    pub path: NodePath,
+    pub id: NodeId,
     pub title: String,
 }
 

@@ -3,15 +3,15 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_ast::MantDocument;
 use mant_core::parse_manual_source;
+use mant_ir::Document;
 
-static MT_GNU: OnceLock<MantDocument> = OnceLock::new();
-static GROFF_ME: OnceLock<MantDocument> = OnceLock::new();
-static GROFF_MAN_STYLE: OnceLock<MantDocument> = OnceLock::new();
-static SH: OnceLock<MantDocument> = OnceLock::new();
+static MT_GNU: OnceLock<Document> = OnceLock::new();
+static GROFF_ME: OnceLock<Document> = OnceLock::new();
+static GROFF_MAN_STYLE: OnceLock<Document> = OnceLock::new();
+static SH: OnceLock<Document> = OnceLock::new();
 
-pub fn debian_manual(name: &str) -> &'static MantDocument {
+pub fn debian_manual(name: &str) -> &'static Document {
     let slot = match name {
         "mt-gnu" => &MT_GNU,
         "groff_me" => &GROFF_ME,

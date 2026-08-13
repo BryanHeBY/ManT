@@ -3,16 +3,16 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_ast::MantDocument;
 use mant_core::parse_manual_source;
+use mant_ir::Document;
 
-static CLANG: OnceLock<MantDocument> = OnceLock::new();
-static GCC: OnceLock<MantDocument> = OnceLock::new();
-static GIT: OnceLock<MantDocument> = OnceLock::new();
-static TAR: OnceLock<MantDocument> = OnceLock::new();
-static SH: OnceLock<MantDocument> = OnceLock::new();
+static CLANG: OnceLock<Document> = OnceLock::new();
+static GCC: OnceLock<Document> = OnceLock::new();
+static GIT: OnceLock<Document> = OnceLock::new();
+static TAR: OnceLock<Document> = OnceLock::new();
+static SH: OnceLock<Document> = OnceLock::new();
 
-pub fn fedora44_manual(name: &str) -> &'static MantDocument {
+pub fn fedora44_manual(name: &str) -> &'static Document {
     let slot = match name {
         "clang" => &CLANG,
         "gcc" => &GCC,

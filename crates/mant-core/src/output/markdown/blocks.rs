@@ -1,6 +1,6 @@
 //! Maps native block nodes to portable `CommonMark` block constructs.
 
-use mant_ast::{Block, DefinitionItem, ListItem, ListKind, TableCell, TableRow};
+use mant_ir::{Block, DefinitionItem, ListItem, ListKind, TableCell, TableRow};
 
 use super::MarkdownOptions;
 use super::inline::{code_span, escape_text, fenced_code, flatten_inline, render_inline};

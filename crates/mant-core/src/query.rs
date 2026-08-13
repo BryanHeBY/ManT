@@ -9,10 +9,10 @@ use std::{
     sync::OnceLock,
 };
 
-use mant_ast::{
-    CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MantDocument, MarkdownOrigin,
-    QueryBundle, QueryExcerpt, QueryInput, QueryOutline, QueryRequest, QuerySchema, QuerySearch,
-    QueryView, SearchQuery, TldrDocument,
+use mant_ir::{Document, DocumentAddress, DocumentIndex, MarkdownOrigin, TldrDocument};
+use mant_protocol::{
+    CatalogQuery, DocumentCatalog, InputFormat, QueryBundle, QueryExcerpt, QueryInput,
+    QueryOutline, QueryRequest, QuerySchema, QuerySearch, QueryView, SearchQuery,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
@@ -73,7 +73,7 @@ pub enum ManualLoadError {
 /// Materialized result of the view carried by a [`QueryRequest`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryViewResult {
-    Full(Box<QueryBundle>),
+    Full(Box<ResolvedQuery>),
     Outline(QueryOutline),
     Excerpt(QueryExcerpt),
     Search(QuerySearch),
@@ -92,6 +92,50 @@ pub enum QueryExecutionError {
 pub struct QueryPolicy {
     /// Bypass registered Markdown and require a readable native manual.
     pub manual_only: bool,
+}
+
+/// Fully resolved content used inside the engine and interactive frontend.
+///
+/// Unlike [`QueryBundle`], this type is not a versioned wire contract. It keeps
+/// protocol markers and serialization concerns outside parsing, rendering, and
+/// navigation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedQuery {
+    pub label: String,
+    pub address: Option<DocumentAddress>,
+    pub document: Option<Document>,
+    pub tldr: Option<TldrDocument>,
+}
+
+impl ResolvedQuery {
+    /// Build the immutable node index used by navigation-oriented consumers.
+    #[must_use]
+    pub fn document_index(&self) -> Option<DocumentIndex> {
+        self.document.as_ref().map(DocumentIndex::build)
+    }
+
+    /// Materialize the current v7 process response at the protocol boundary.
+    #[must_use]
+    pub fn to_protocol(&self) -> QueryBundle {
+        QueryBundle {
+            schema: QuerySchema::V7,
+            label: self.label.clone(),
+            address: self.address.clone(),
+            document: self.document.as_ref().map(Into::into),
+            tldr: self.tldr.clone(),
+        }
+    }
+}
+
+impl From<QueryBundle> for ResolvedQuery {
+    fn from(bundle: QueryBundle) -> Self {
+        Self {
+            label: bundle.label,
+            address: bundle.address,
+            document: bundle.document.map(Into::into),
+            tldr: bundle.tldr,
+        }
+    }
 }
 
 impl fmt::Display for QueryError {
@@ -214,7 +258,7 @@ impl Error for QueryExecutionError {
 ///
 /// Returns [`QueryError`] for invalid input or when neither source can produce
 /// readable content.
-pub fn resolve_query(request: &QueryRequest) -> Result<QueryBundle, QueryError> {
+pub fn resolve_query(request: &QueryRequest) -> Result<ResolvedQuery, QueryError> {
     resolve_query_with_policy(request, QueryPolicy::default())
 }
 
@@ -226,7 +270,7 @@ pub fn resolve_query(request: &QueryRequest) -> Result<QueryBundle, QueryError> 
 pub fn resolve_query_with_policy(
     request: &QueryRequest,
     policy: QueryPolicy,
-) -> Result<QueryBundle, QueryError> {
+) -> Result<ResolvedQuery, QueryError> {
     let resolver = DocumentResolver::from_system();
     resolver.resolve(request, policy)
 }
@@ -250,7 +294,7 @@ pub fn execute_query(
 ///
 /// Returns a typed projection or search failure.
 pub fn project_query_view(
-    query: QueryBundle,
+    query: ResolvedQuery,
     view: &QueryView,
 ) -> Result<QueryViewResult, QueryExecutionError> {
     match view {
@@ -386,8 +430,8 @@ trait QueryHost {
         address: &DocumentAddress,
     ) -> Result<Option<RegisteredSelection>, String>;
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String>;
-    fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String>;
-    fn parse_manual_input(&self, path: &Path) -> Result<MantDocument, String>;
+    fn parse_manual(&self, page: &ManualPage) -> Result<Document, String>;
+    fn parse_manual_input(&self, path: &Path) -> Result<Document, String>;
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }
@@ -399,7 +443,7 @@ struct RegisteredSelection {
 }
 
 struct LoadedManual {
-    document: MantDocument,
+    document: Document,
     address: DocumentAddress,
 }
 
@@ -436,7 +480,7 @@ impl DocumentResolver {
         &self,
         request: &QueryRequest,
         policy: QueryPolicy,
-    ) -> Result<QueryBundle, QueryError> {
+    ) -> Result<ResolvedQuery, QueryError> {
         validate_query_request(request, policy)?;
         query_with(request, policy, self)
     }
@@ -552,11 +596,11 @@ impl QueryHost for DocumentResolver {
         locate_manual_source_in(request, manuals).map_err(|error| error.to_string())
     }
 
-    fn parse_manual(&self, page: &ManualPage) -> Result<MantDocument, String> {
+    fn parse_manual(&self, page: &ManualPage) -> Result<Document, String> {
         parse_manual_page(page).map_err(|error| error.to_string())
     }
 
-    fn parse_manual_input(&self, path: &Path) -> Result<MantDocument, String> {
+    fn parse_manual_input(&self, path: &Path) -> Result<Document, String> {
         parse_manual_source(path).map_err(|error| error.to_string())
     }
 
@@ -588,7 +632,7 @@ fn query_with(
     request: &QueryRequest,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<QueryBundle, QueryError> {
+) -> Result<ResolvedQuery, QueryError> {
     match &request.input {
         QueryInput::Document {
             selector,
@@ -610,7 +654,7 @@ fn query_input_file(
     format: InputFormat,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<QueryBundle, QueryError> {
+) -> Result<ResolvedQuery, QueryError> {
     let path = requested_path.trim();
     if path.is_empty() {
         return Err(QueryError::EmptyMarkdownPath);
@@ -647,8 +691,7 @@ fn query_input_file(
                 .cloned()
                 .or_else(|| document.meta.title.clone())
                 .unwrap_or_else(|| input_file_label(path));
-            Ok(QueryBundle {
-                schema: QuerySchema::V7,
+            Ok(ResolvedQuery {
                 label,
                 address: None,
                 document: Some(document),
@@ -701,7 +744,7 @@ fn query_markdown_file(
     requested_path: &str,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<QueryBundle, QueryError> {
+) -> Result<ResolvedQuery, QueryError> {
     let path = requested_path.trim();
     if path.is_empty() {
         return Err(QueryError::EmptyMarkdownPath);
@@ -733,7 +776,7 @@ fn query_markdown_file(
 pub fn query_markdown_text(
     source: &str,
     source_path: Option<String>,
-) -> Result<QueryBundle, QueryError> {
+) -> Result<ResolvedQuery, QueryError> {
     let label = source_path.as_deref().map_or_else(
         || "stdin".to_owned(),
         |path| {
@@ -756,8 +799,7 @@ pub fn query_markdown_text(
             label: label.clone(),
         });
     }
-    Ok(QueryBundle {
-        schema: QuerySchema::V7,
+    Ok(ResolvedQuery {
         address: None,
         label,
         document: (!document_is_empty).then_some(parsed.document),
@@ -770,7 +812,7 @@ pub fn query_markdown_text(
 /// # Errors
 ///
 /// Returns a native parse error or an empty-document error.
-pub fn query_roff_bytes(source: &[u8]) -> Result<QueryBundle, QueryError> {
+pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedQuery, QueryError> {
     if u64::try_from(source.len()).unwrap_or(u64::MAX) > crate::MAX_MANUAL_BYTES {
         return Err(QueryError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
@@ -798,8 +840,7 @@ pub fn query_roff_bytes(source: &[u8]) -> Result<QueryBundle, QueryError> {
         .cloned()
         .or_else(|| document.meta.title.clone())
         .unwrap_or_else(|| "stdin".to_owned());
-    Ok(QueryBundle {
-        schema: QuerySchema::V7,
+    Ok(ResolvedQuery {
         address: None,
         label,
         document: Some(document),
@@ -813,7 +854,7 @@ fn query_named_document(
     requested_section: Option<&str>,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<QueryBundle, QueryError> {
+) -> Result<ResolvedQuery, QueryError> {
     let name = name.trim();
     if name.is_empty() {
         return Err(QueryError::EmptyName);
@@ -899,8 +940,7 @@ fn query_named_document(
     // successful tldr-only response.
     if require_manual {
         return match manual {
-            Ok(manual) => Ok(QueryBundle {
-                schema: QuerySchema::V7,
+            Ok(manual) => Ok(ResolvedQuery {
                 address: Some(manual.address),
                 label: name.to_owned(),
                 document: Some(manual.document),
@@ -911,15 +951,13 @@ fn query_named_document(
     }
 
     match manual {
-        Ok(manual) => Ok(QueryBundle {
-            schema: QuerySchema::V7,
+        Ok(manual) => Ok(ResolvedQuery {
             address: Some(manual.address),
             label: name.to_owned(),
             document: Some(manual.document),
             tldr,
         }),
-        Err(_) if tldr.is_some() => Ok(QueryBundle {
-            schema: QuerySchema::V7,
+        Err(_) if tldr.is_some() => Ok(ResolvedQuery {
             address: None,
             label: name.to_owned(),
             document: None,
@@ -965,7 +1003,7 @@ fn query_registered_document(
     name: &str,
     registered: &RegisteredSelection,
     host: &dyn QueryHost,
-) -> Result<QueryBundle, QueryError> {
+) -> Result<ResolvedQuery, QueryError> {
     let path = &registered.path;
     let source_path = path.to_string_lossy().into_owned();
     let source = host
@@ -1048,10 +1086,13 @@ mod tests {
         sync::Mutex,
     };
 
-    use mant_ast::{
-        Diagnostic, DiagnosticLevel, DocumentAddress, DocumentMeta, DocumentSchema, DocumentSource,
-        InputFormat, MantDocument, MarkdownOrigin, Producer, QueryInput, QueryRequest, QueryView,
-        RequestSchema, Section, SourceFormat, TldrDocument, TldrOrigin,
+    use mant_ir::{
+        Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Section, SourceFormat,
+        TldrDocument, TldrOrigin,
+    };
+    use mant_protocol::{
+        DocumentAddress, InputFormat, MarkdownOrigin, QueryInput, QueryRequest, QueryView,
+        RequestSchema,
     };
 
     use crate::{ManualPage, ManualRequest};
@@ -1068,7 +1109,7 @@ mod tests {
         registered_name: Option<String>,
         locate: Result<ManualPage, String>,
         manual_name: Option<String>,
-        direct: Result<MantDocument, String>,
+        direct: Result<Document, String>,
         tldr: Result<Option<TldrDocument>, String>,
         markdown: Result<String, String>,
         calls: std::sync::Arc<Mutex<Vec<&'static str>>>,
@@ -1146,12 +1187,12 @@ mod tests {
             self.locate.clone()
         }
 
-        fn parse_manual(&self, _page: &ManualPage) -> Result<MantDocument, String> {
+        fn parse_manual(&self, _page: &ManualPage) -> Result<Document, String> {
             self.calls.lock().expect("calls lock").push("parse");
             self.direct.clone()
         }
 
-        fn parse_manual_input(&self, _path: &Path) -> Result<MantDocument, String> {
+        fn parse_manual_input(&self, _path: &Path) -> Result<Document, String> {
             self.calls.lock().expect("calls lock").push("manual-input");
             self.direct.clone()
         }
@@ -1167,14 +1208,9 @@ mod tests {
         }
     }
 
-    fn document(format: SourceFormat, unsupported: bool, readable: bool) -> MantDocument {
-        MantDocument {
-            schema: DocumentSchema::V7,
-            producer: Producer {
-                name: "test".to_owned(),
-                version: "1".to_owned(),
-                engine: None,
-            },
+    fn document(format: SourceFormat, unsupported: bool, readable: bool) -> Document {
+        Document {
+            parser: None,
             source: DocumentSource { format, path: None },
             meta: DocumentMeta::default(),
             diagnostics: unsupported
@@ -1189,7 +1225,7 @@ mod tests {
             blocks: Vec::new(),
             sections: readable
                 .then_some(Section {
-                    id: "name-1".to_owned(),
+                    id: "name-1".to_owned().into(),
                     title: "NAME".to_owned(),
                     spacing_before_lines: 0,
                     blocks: Vec::new(),
@@ -1214,7 +1250,7 @@ mod tests {
         }
     }
 
-    fn host(direct: Result<MantDocument, String>) -> StubHost {
+    fn host(direct: Result<Document, String>) -> StubHost {
         StubHost {
             name_candidates: None,
             registered_document: None,
@@ -1699,7 +1735,7 @@ Document overview.
             document
                 .blocks
                 .iter()
-                .any(|block| matches!(block, mant_ast::Block::Paragraph { .. }))
+                .any(|block| matches!(block, mant_ir::Block::Paragraph { .. }))
         );
         assert!(
             document

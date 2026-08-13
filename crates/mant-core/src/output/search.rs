@@ -2,7 +2,7 @@
 
 use std::fmt::Write as _;
 
-use mant_ast::QuerySearch;
+use mant_protocol::QuerySearch;
 
 /// Render grep-like results with stable Markdown coordinates and node paths.
 #[must_use]
@@ -157,7 +157,7 @@ fn escape_text(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{
+    use mant_protocol::{
         MarkdownSchema, QuerySearch, SearchCase, SearchMarkdownRange, SearchMatch, SearchNode,
         SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSchema,
         SearchScope, SearchSyntax,
@@ -170,9 +170,9 @@ mod tests {
             schema: SearchSchema::V7,
             label: "tar".to_owned(),
             source: None,
-            meta: Some(mant_ast::DocumentMeta {
+            meta: Some(mant_ir::DocumentMeta {
                 section: Some("1".to_owned()),
-                ..mant_ast::DocumentMeta::default()
+                ..mant_ir::DocumentMeta::default()
             }),
             query: SearchQuery {
                 pattern: "--acls".to_owned(),
@@ -200,11 +200,11 @@ mod tests {
             matches: vec![SearchMatch {
                 ordinal: 1,
                 node: SearchNode::DocumentEntry {
-                    path: "5.3/o17".to_owned(),
-                    id: "acls-option".to_owned(),
+                    path: "5.3/o17".to_owned().into(),
+                    id: "acls-option".to_owned().into(),
                     title: "--acls".to_owned(),
-                    role: mant_ast::DefinitionRole::Option,
-                    case: mant_ast::DefinitionCase::Sensitive,
+                    role: mant_ir::DefinitionRole::Option,
+                    case: mant_ir::DefinitionCase::Sensitive,
                     names: vec!["--acls".to_owned()],
                 },
                 section: None,

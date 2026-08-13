@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::roff_escape::visible_text;
 use libmandoc_rs::{Node, NodeKind};
-use mant_ast::{Block, Diagnostic, DiagnosticLevel, Inline, Section};
+use mant_ir::{Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section};
 
 type SectionTargets = HashMap<String, Option<String>>;
 
@@ -26,7 +26,7 @@ pub(super) fn resolve_navigation(
 
 /// Return only destinations requested by `.Tg`. libmandoc also marks many
 /// definitions for renderer-generated permalinks; exposing all of those as
-/// inline AST nodes would add layout work and change ordinary paragraphs.
+/// inline IR nodes would add layout work and change ordinary paragraphs.
 pub(super) fn explicit_targets(root: &Node) -> HashSet<String> {
     let mut nodes = Vec::new();
     flatten_nodes(root, &mut nodes);
@@ -82,7 +82,7 @@ fn collect_section_targets(sections: &[Section], targets: &mut SectionTargets) {
         targets
             .entry(section.title.clone())
             .and_modify(|target| *target = None)
-            .or_insert_with(|| Some(section.id.clone()));
+            .or_insert_with(|| Some(section.id.to_string()));
         collect_section_targets(&section.children, targets);
     }
 }
@@ -158,9 +158,12 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
         }
 
         source.next();
-        promoted.push(Inline::ManualReference {
-            name: name.clone(),
-            section: Some(section.clone()),
+        promoted.push(Inline::Link {
+            target: LinkTarget::Manual {
+                name: name.clone(),
+                section: Some(section.clone()),
+            },
+            title: None,
             children: vec![Inline::Text {
                 value: format!("{name}({section})"),
             }],
@@ -256,58 +259,43 @@ fn resolve_inlines(
                 resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
                 resolved.push(Inline::Emphasis { children });
             }
-            Inline::ExternalLink {
-                uri,
+            Inline::Link {
+                target: LinkTarget::Section { id },
                 title,
                 mut children,
             } => {
                 resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                resolved.push(Inline::ExternalLink {
-                    uri,
-                    title,
-                    children,
-                });
-            }
-            Inline::EmailLink {
-                address,
-                mut children,
-            } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                resolved.push(Inline::EmailLink { address, children });
-            }
-            Inline::ManualReference {
-                name,
-                section,
-                mut children,
-            } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                resolved.push(Inline::ManualReference {
-                    name,
-                    section,
-                    children,
-                });
-            }
-            Inline::SectionReference {
-                target,
-                mut children,
-            } => {
-                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                if let Some(Some(section_id)) = targets.get(&target) {
-                    resolved.push(Inline::SectionReference {
-                        target: section_id.clone(),
+                if let Some(Some(section_id)) = targets.get(id.as_str()) {
+                    resolved.push(Inline::Link {
+                        target: LinkTarget::Section {
+                            id: section_id.as_str().into(),
+                        },
+                        title,
                         children,
                     });
                 } else {
                     diagnostics.push(Diagnostic {
                         level: DiagnosticLevel::Warning,
                         code: Some("unresolved-section-reference".to_owned()),
-                        message: format!("cannot resolve section reference: {target}"),
+                        message: format!("cannot resolve section reference: {id}"),
                         source: None,
                     });
                     resolved.extend(children);
                 }
             }
-            Inline::Anchor { id } if explicit_targets.contains(&id) => {
+            Inline::Link {
+                target,
+                title,
+                mut children,
+            } => {
+                resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
+                resolved.push(Inline::Link {
+                    target,
+                    title,
+                    children,
+                });
+            }
+            Inline::Anchor { id } if explicit_targets.contains(id.as_str()) => {
                 resolved.push(Inline::Anchor { id });
             }
             Inline::Anchor { .. } => {}
@@ -319,7 +307,7 @@ fn resolve_inlines(
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::Inline;
+    use mant_ir::Inline;
 
     use super::promote_manual_reference_inlines;
 
@@ -340,7 +328,7 @@ mod tests {
 
         assert!(matches!(
             &nodes[0],
-            Inline::ManualReference { name, section: Some(section), .. }
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
                 if name == "printf" && section == "3"
         ));
         assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
@@ -363,7 +351,7 @@ mod tests {
 
         assert!(matches!(
             &nodes[0],
-            Inline::ManualReference { name, section: Some(section), children }
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, children, .. }
                 if name == "git-add"
                     && section == "1"
                     && crate::inline::plain_text(children) == "git-add(1)"
@@ -387,7 +375,7 @@ mod tests {
 
         assert!(matches!(
             &nodes[0],
-            Inline::ManualReference { name, section: Some(section), .. }
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
                 if name == "groff_man" && section == "7"
         ));
         assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));

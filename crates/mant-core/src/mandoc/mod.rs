@@ -12,11 +12,12 @@ mod source;
 use std::path::Path;
 
 use libmandoc_rs::{
-    Compression, Document, IncludePolicy, MacroSet, Node, ParseOptions, ParseReport, Parser,
+    Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseOptions,
+    ParseReport, Parser,
 };
-use mant_ast::{
-    Diagnostic, DiagnosticLevel, DocumentMeta, DocumentSchema, DocumentSource, Engine,
-    MantDocument, Producer, SourceFormat, SourceSpan,
+use mant_ir::{
+    Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, SourceFormat,
+    SourceSpan,
 };
 
 use self::{
@@ -38,7 +39,7 @@ pub use source::MAX_MANUAL_BYTES;
 /// # Errors
 ///
 /// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
-pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ManualError> {
+pub fn parse_manual_source(path: &Path) -> Result<Document, ManualError> {
     let loaded = load_manual_source(path)?;
     reject_standalone_redirect(path, &loaded.source)?;
     parse_plain_manual(path, &loaded.source, None)
@@ -52,7 +53,7 @@ pub fn parse_manual_source(path: &Path) -> Result<MantDocument, ManualError> {
 /// # Errors
 ///
 /// Returns [`ManualError`] when libmandoc rejects the input.
-pub fn parse_manual_bytes(path: &Path, source: &[u8]) -> Result<MantDocument, ManualError> {
+pub fn parse_manual_bytes(path: &Path, source: &[u8]) -> Result<Document, ManualError> {
     reject_standalone_redirect(path, source)?;
     parse_plain_manual(path, source, None)
 }
@@ -73,7 +74,7 @@ fn reject_standalone_redirect(path: &Path, source: &[u8]) -> Result<(), ManualEr
 /// # Errors
 ///
 /// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
-pub fn parse_manual_page(page: &ManualPage) -> Result<MantDocument, ManualError> {
+pub fn parse_manual_page(page: &ManualPage) -> Result<Document, ManualError> {
     let resolved = resolve_manual_redirects(page)?;
     parse_plain_manual(
         &page.path,
@@ -86,7 +87,7 @@ fn parse_plain_manual(
     path: &Path,
     source: &[u8],
     alias_target: Option<&str>,
-) -> Result<MantDocument, ManualError> {
+) -> Result<Document, ManualError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
     let report = Parser::new(ParseOptions {
         includes: IncludePolicy::Deny,
@@ -114,8 +115,8 @@ fn parse_plain_manual(
 
 /// Convert a completed low-level parse into the stable document contract.
 #[must_use]
-pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument {
-    let parsed: &Document = &report.document;
+pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
+    let parsed: &MandocDocument = &report.document;
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref());
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
@@ -128,16 +129,11 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> MantDocument 
         &explicit_targets,
     ));
     navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
-    MantDocument {
-        schema: DocumentSchema::V7,
-        producer: Producer {
-            name: "mant".to_owned(),
-            version: env!("CARGO_PKG_VERSION").to_owned(),
-            engine: Some(Engine {
-                name: "libmandoc".to_owned(),
-                version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
-            }),
-        },
+    Document {
+        parser: Some(ParserInfo {
+            name: "libmandoc".to_owned(),
+            version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
+        }),
         source: DocumentSource {
             format: match parsed.macro_set {
                 MacroSet::Mdoc => SourceFormat::Mdoc,
@@ -212,6 +208,7 @@ impl<'a> LoweringContext<'a> {
 
 fn source_span(node: &Node) -> Option<SourceSpan> {
     (node.line > 0).then_some(SourceSpan {
+        byte_range: None,
         line: node.line,
         column: node.column.max(1),
         end_line: None,
@@ -230,7 +227,7 @@ fn part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
 mod tests {
     use std::{fs, process};
 
-    use mant_ast::{Block, DiagnosticLevel, Inline, SourceFormat};
+    use mant_ir::{Block, DiagnosticLevel, Inline, SourceFormat};
 
     use super::{parse_manual_bytes, parse_manual_source};
 
@@ -718,14 +715,14 @@ mod tests {
         );
         assert!(
             children.iter().any(
-                |inline| matches!(inline, Inline::ManualReference { name, .. } if name == "man")
+                |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Manual { name, .. }, .. } if name == "man")
             )
         );
         assert!(children.iter().any(
-            |inline| matches!(inline, Inline::ExternalLink { uri, .. } if uri == "https://example.test/docs")
+            |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::External { uri }, .. } if uri == "https://example.test/docs")
         ));
         assert!(children.iter().any(
-            |inline| matches!(inline, Inline::EmailLink { address, .. } if address == "docs@example.test")
+            |inline| matches!(inline, Inline::Link { target: mant_ir::LinkTarget::Email { address }, .. } if address == "docs@example.test")
         ));
     }
 
@@ -754,12 +751,12 @@ mod tests {
         };
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::ManualReference { name, section: Some(section), .. }
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
                 if name == "printf" && section == "3"
         )));
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::ManualReference { name, section: Some(section), .. }
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
                 if name == "man" && section == "1"
         )));
 
@@ -768,7 +765,7 @@ mod tests {
         };
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::ManualReference { name, section: Some(section), .. }
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, section: Some(section) }, .. }
                 if name == "printf" && section == "3"
         )));
     }
@@ -800,15 +797,24 @@ mod tests {
         }) {
             for inline in children {
                 match inline {
-                    Inline::ManualReference {
-                        name,
-                        section: Some(section),
+                    Inline::Link {
+                        target:
+                            mant_ir::LinkTarget::Manual {
+                                name,
+                                section: Some(section),
+                            },
                         ..
                     } if name == "git-add" && section == "1" => manual = true,
-                    Inline::ExternalLink { uri, .. } if uri == "https://example.test/docs" => {
+                    Inline::Link {
+                        target: mant_ir::LinkTarget::External { uri },
+                        ..
+                    } if uri == "https://example.test/docs" => {
                         web = true;
                     }
-                    Inline::EmailLink { address, .. } if address == "docs@example.test" => {
+                    Inline::Link {
+                        target: mant_ir::LinkTarget::Email { address },
+                        ..
+                    } if address == "docs@example.test" => {
                         mail = true;
                     }
                     _ => {}
@@ -829,7 +835,13 @@ mod tests {
                     if children.iter().any(|inline| {
                         matches!(
                             inline,
-                            Inline::ExternalLink { .. } | Inline::EmailLink { .. }
+                            Inline::Link {
+                                target: mant_ir::LinkTarget::External { .. },
+                                ..
+                            } | Inline::Link {
+                                target: mant_ir::LinkTarget::Email { .. },
+                                ..
+                            }
                         )
                     }) =>
                 {
@@ -867,8 +879,11 @@ mod tests {
         };
         assert!(children.iter().any(|inline| matches!(
             inline,
-            Inline::SectionReference { target, children }
-                if target == "details-2" && inline_text(children) == "DETAILS"
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section { id },
+                children,
+                ..
+            } if id == "details-2" && inline_text(children) == "DETAILS"
         )));
         assert!(children.iter().any(|inline| matches!(
             inline,
@@ -890,11 +905,13 @@ mod tests {
             panic!("expected reference paragraph");
         };
         assert_eq!(inline_text(children), "MISSING");
-        assert!(
-            children
-                .iter()
-                .all(|inline| !matches!(inline, Inline::SectionReference { .. }))
-        );
+        assert!(children.iter().all(|inline| !matches!(
+            inline,
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section { .. },
+                ..
+            }
+        )));
         assert!(document.diagnostics.iter().any(|diagnostic| {
             diagnostic.code.as_deref() == Some("unresolved-section-reference")
         }));
@@ -947,7 +964,7 @@ mod tests {
         assert!(matches!(
             document.sections[0].blocks[0],
             Block::List {
-                kind: mant_ast::ListKind::Ordered,
+                kind: mant_ir::ListKind::Ordered,
                 compact: true,
                 ..
             }
@@ -1075,11 +1092,7 @@ mod tests {
                 Inline::Text { value } | Inline::Code { value } => value.clone(),
                 Inline::Strong { children }
                 | Inline::Emphasis { children }
-                | Inline::ExternalLink { children, .. }
-                | Inline::EmailLink { children, .. }
-                | Inline::DocumentReference { children, .. }
-                | Inline::ManualReference { children, .. }
-                | Inline::SectionReference { children, .. } => inline_text(children),
+                | Inline::Link { children, .. } => inline_text(children),
                 Inline::Anchor { .. } => String::new(),
                 Inline::LineBreak => "\n".to_owned(),
             })

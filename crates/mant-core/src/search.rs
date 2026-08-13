@@ -8,14 +8,17 @@ use std::{error::Error, fmt, ops::Range};
 
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
-use mant_ast::{
-    MarkdownSchema, QueryBundle, QuerySearch, SearchCase, SearchContextLine, SearchMarkdownRange,
-    SearchMatch, SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSchema,
-    SearchScope, SearchSyntax,
+use mant_protocol::{
+    MarkdownSchema, QuerySearch, SearchCase, SearchContextLine, SearchMarkdownRange, SearchMatch,
+    SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope,
+    SearchSyntax,
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
 
-use crate::output::{MarkdownOptions, render_markdown_with_options};
+use crate::{
+    ResolvedQuery,
+    output::{MarkdownOptions, render_markdown_with_options},
+};
 
 mod owners;
 
@@ -65,7 +68,7 @@ impl Error for SearchError {}
 /// Returns [`SearchError`] for empty or excessive inputs and invalid regular
 /// expressions. A valid search with no matches is a successful empty result.
 pub fn search_query(
-    query: &QueryBundle,
+    query: &ResolvedQuery,
     request: &SearchQuery,
 ) -> Result<QuerySearch, SearchError> {
     validate_request(request)?;
@@ -492,26 +495,21 @@ impl<'a> VisibleBuilder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{
-        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-        DocumentSchema, DocumentSource, Inline, LayoutHint, MantDocument, Producer, QueryBundle,
-        QuerySchema, SearchCase, SearchQuery, SearchScope, SearchSyntax, Section, SourceFormat,
+    use crate::ResolvedQuery;
+    use mant_ir::{
+        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
+        DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
     };
+    use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
 
     use super::search_query;
 
-    fn query() -> QueryBundle {
-        QueryBundle {
-            schema: QuerySchema::V7,
+    fn query() -> ResolvedQuery {
+        ResolvedQuery {
             address: None,
             label: "demo".to_owned(),
-            document: Some(MantDocument {
-                schema: DocumentSchema::V7,
-                producer: Producer {
-                    name: "test".to_owned(),
-                    version: "1".to_owned(),
-                    engine: None,
-                },
+            document: Some(Document {
+                parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Man,
                     path: None,
@@ -523,21 +521,21 @@ mod tests {
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
-                    id: "options-1".to_owned(),
+                    id: "options-1".to_owned().into(),
                     title: "OPTIONS".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::DefinitionList {
                         items: vec![DefinitionItem {
                             inline_term: false,
                             identity: Some(DefinitionIdentity {
-                                id: "option-acls".to_owned(),
+                                id: "option-acls".to_owned().into(),
                                 role: DefinitionRole::Option,
                                 case: DefinitionCase::Sensitive,
                                 names: vec!["--acls".to_owned()],
                             }),
                             terms: vec![vec![
                                 Inline::Anchor {
-                                    id: "option-acls".to_owned(),
+                                    id: "option-acls".to_owned().into(),
                                 },
                                 Inline::Code {
                                     value: "--acls".to_owned(),
@@ -616,7 +614,7 @@ mod tests {
         let result = search_query(&query, &request("section tail")).expect("search");
         assert!(matches!(
             &result.matches[0].node,
-            mant_ast::SearchNode::DocumentSection { path, .. } if path == "1"
+            mant_protocol::SearchNode::DocumentSection { path, .. } if path == "1"
         ));
     }
 
@@ -638,7 +636,7 @@ mod tests {
         assert_eq!(result.total, 1);
         assert!(matches!(
             &result.matches[0].node,
-            mant_ast::SearchNode::DocumentRoot { path, id, .. }
+            mant_protocol::SearchNode::DocumentRoot { path, id, .. }
                 if path == "root" && id == "document-overview"
         ));
         assert!(result.matches[0].section.is_none());
@@ -674,20 +672,20 @@ Manual needle.
         let quick = search_query(&query, &request("quick needle")).expect("tldr search");
         assert!(matches!(
             &quick.matches[0].node,
-            mant_ast::SearchNode::Tldr { path, id, .. }
+            mant_protocol::SearchNode::Tldr { path, id, .. }
                 if path == "0" && id == "tldr"
         ));
 
         let overview = search_query(&query, &request("overview needle")).expect("root search");
         assert!(matches!(
             &overview.matches[0].node,
-            mant_ast::SearchNode::DocumentRoot { path, .. } if path == "root"
+            mant_protocol::SearchNode::DocumentRoot { path, .. } if path == "root"
         ));
 
         let manual = search_query(&query, &request("manual needle")).expect("section search");
         assert!(matches!(
             &manual.matches[0].node,
-            mant_ast::SearchNode::DocumentSection { path, id, .. }
+            mant_protocol::SearchNode::DocumentSection { path, id, .. }
                 if path == "1" && id == "synopsis"
         ));
     }

@@ -1,17 +1,18 @@
 //! Contract-oriented tests for `CommonMark` structure and escaping.
 
-use mant_ast::{
-    Block, DefinitionItem, DocumentMeta, DocumentSchema, DocumentSource, Inline, LayoutHint,
-    ListItem, ListKind, MantDocument, Producer, QueryBundle, QuerySchema, Section, SourceFormat,
-    TableCell, TableRow, TldrCommandPart, TldrDocument, TldrExample, TldrOrigin,
+use mant_ir::{
+    Block, DefinitionItem, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, ListItem,
+    ListKind, Section, SourceFormat, TableCell, TableRow, TldrCommandPart, TldrDocument,
+    TldrExample, TldrOrigin,
 };
+use mant_protocol::QueryBundle;
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
 use super::{
     MarkdownOptions, render_excerpt_markdown, render_markdown, render_markdown_with_options,
     render_outline_markdown,
 };
-use crate::{build_outline, select_excerpt};
+use crate::{ResolvedQuery, build_outline, select_excerpt};
 
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
@@ -21,14 +22,9 @@ fn paragraph(children: Vec<Inline>) -> Block {
     }
 }
 
-fn manual(sections: Vec<Section>) -> MantDocument {
-    MantDocument {
-        schema: DocumentSchema::V7,
-        producer: Producer {
-            name: "test".to_owned(),
-            version: "1".to_owned(),
-            engine: None,
-        },
+fn manual(sections: Vec<Section>) -> Document {
+    Document {
+        parser: None,
         source: DocumentSource {
             format: SourceFormat::Man,
             path: None,
@@ -42,7 +38,7 @@ fn manual(sections: Vec<Section>) -> MantDocument {
 
 fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
     Section {
-        id: title.to_lowercase(),
+        id: title.to_lowercase().into(),
         title: title.to_owned(),
         spacing_before_lines: 0,
         blocks,
@@ -53,8 +49,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 
 #[test]
 fn renders_tldr_before_manual_and_resolves_placeholders() {
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "ls".to_owned(),
         document: Some(manual(vec![section("NAME", Vec::new(), Vec::new())])),
@@ -106,8 +101,7 @@ fn renders_and_selects_content_before_the_first_heading() {
     document.blocks = vec![paragraph(vec![Inline::Text {
         value: "Document preface.".to_owned(),
     }])];
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "guide.md".to_owned(),
         document: Some(document),
@@ -196,8 +190,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         layout: LayoutHint::default(),
         source: None,
     };
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "demo * command".to_owned(),
         document: Some(manual(vec![section(
@@ -259,8 +252,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
         layout: LayoutHint::default(),
         source: None,
     };
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "man".to_owned(),
         document: Some(manual(vec![section(
@@ -302,8 +294,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
 
 #[test]
 fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "demo".to_owned(),
         document: Some(manual(vec![section(
@@ -373,9 +364,11 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("tests/contracts/minimal-query-v7.json");
-    let query: QueryBundle =
-        serde_json::from_str(&std::fs::read_to_string(fixture).expect("shared query fixture"))
-            .expect("query contract");
+    let query = serde_json::from_str::<QueryBundle>(
+        &std::fs::read_to_string(fixture).expect("shared query fixture"),
+    )
+    .expect("query contract")
+    .into();
 
     let markdown = render_markdown(&query);
     assert!(markdown.starts_with("# ls\n"));
@@ -399,8 +392,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
 
 #[test]
 fn protects_paragraph_lines_from_accidental_block_syntax() {
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "syntax".to_owned(),
         document: Some(manual(vec![section(
@@ -432,8 +424,7 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 
 #[test]
 fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "demo".to_owned(),
         document: Some({
@@ -479,8 +470,7 @@ fn serializes_a_large_source_lowered_document() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
     let document = crate::parse_manual_source(&source).expect("large native document");
-    let query = QueryBundle {
-        schema: QuerySchema::V7,
+    let query = ResolvedQuery {
         address: None,
         label: "mandoc".to_owned(),
         document: Some(document),

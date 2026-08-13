@@ -6,10 +6,9 @@
 
 use std::path::{Path, PathBuf};
 
-use mant_ast::{
-    Block, Inline, MantDocument, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView,
-    RequestSchema, Section,
-};
+use mant_core::ResolvedQuery;
+use mant_ir::{Block, Document, Inline, Section};
+use mant_protocol::{QueryInput, QueryRequest, QueryView, RequestSchema};
 use mant_ui::DocumentView;
 use ratatui::style::Modifier;
 
@@ -47,8 +46,7 @@ fn project_file(relative: &str) -> PathBuf {
 
 fn view(relative: &str) -> DocumentView {
     let document = mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
-    DocumentView::new(&QueryBundle {
-        schema: QuerySchema::V7,
+    DocumentView::new(&ResolvedQuery {
         address: None,
         label: relative.to_owned(),
         document: Some(document),
@@ -130,8 +128,7 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
                 .then(|| identity.id.clone())
         })
         .expect("tar --acls identity");
-    let view = DocumentView::new(&QueryBundle {
-        schema: QuerySchema::V7,
+    let view = DocumentView::new(&ResolvedQuery {
         address: None,
         label: "tar".to_owned(),
         document: Some(document),
@@ -189,8 +186,7 @@ fn real_manual_lowering_preserves_every_substantial_text_fragment() {
             mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
         let mut fragments = Vec::new();
         collect_document_fragments(&document, &mut fragments);
-        let view = DocumentView::new(&QueryBundle {
-            schema: QuerySchema::V7,
+        let view = DocumentView::new(&ResolvedQuery {
             address: None,
             label: relative.to_owned(),
             document: Some(document),
@@ -251,7 +247,7 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
             schema: RequestSchema::V7,
             input: QueryInput::File {
                 path: path.to_string_lossy().into_owned(),
-                format: mant_ast::InputFormat::Markdown,
+                format: mant_protocol::InputFormat::Markdown,
             },
             view: QueryView::Full {},
         })
@@ -277,7 +273,7 @@ fn self_hosted_markdown_manuals_use_the_same_terminal_pipeline() {
     }
 }
 
-fn collect_document_fragments(document: &MantDocument, output: &mut Vec<ExpectedFragment>) {
+fn collect_document_fragments(document: &Document, output: &mut Vec<ExpectedFragment>) {
     collect_blocks(&document.blocks, output, false);
     for section in &document.sections {
         collect_section_fragments(section, output);
@@ -339,11 +335,7 @@ fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, indep
             }),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::SectionReference { children, .. } => {
+            | Inline::Link { children, .. } => {
                 collect_inlines(children, output, independent);
             }
             Inline::Anchor { .. } | Inline::LineBreak => {}
@@ -351,7 +343,7 @@ fn collect_inlines(inlines: &[Inline], output: &mut Vec<ExpectedFragment>, indep
     }
 }
 
-fn section_definitions(section: &mant_ast::Section) -> Vec<&mant_ast::DefinitionIdentity> {
+fn section_definitions(section: &mant_ir::Section) -> Vec<&mant_ir::DefinitionIdentity> {
     let mut definitions = Vec::new();
     collect_block_definitions(&section.blocks, &mut definitions);
     for child in &section.children {
@@ -361,12 +353,12 @@ fn section_definitions(section: &mant_ast::Section) -> Vec<&mant_ast::Definition
 }
 
 fn collect_block_definitions<'a>(
-    blocks: &'a [mant_ast::Block],
-    definitions: &mut Vec<&'a mant_ast::DefinitionIdentity>,
+    blocks: &'a [mant_ir::Block],
+    definitions: &mut Vec<&'a mant_ir::DefinitionIdentity>,
 ) {
     for block in blocks {
         match block {
-            mant_ast::Block::DefinitionList { items, .. } => {
+            mant_ir::Block::DefinitionList { items, .. } => {
                 for item in items {
                     if let Some(identity) = &item.identity {
                         definitions.push(identity);
@@ -374,22 +366,22 @@ fn collect_block_definitions<'a>(
                     collect_block_definitions(&item.description, definitions);
                 }
             }
-            mant_ast::Block::List { items, .. } => {
+            mant_ir::Block::List { items, .. } => {
                 for item in items {
                     collect_block_definitions(&item.blocks, definitions);
                 }
             }
-            mant_ast::Block::Table { rows, .. } => {
+            mant_ir::Block::Table { rows, .. } => {
                 for cell in rows.iter().flat_map(|row| &row.cells) {
                     collect_block_definitions(&cell.blocks, definitions);
                 }
             }
-            mant_ast::Block::Paragraph { .. }
-            | mant_ast::Block::Preformatted { .. }
-            | mant_ast::Block::Equation { .. }
-            | mant_ast::Block::VerticalSpace { .. }
-            | mant_ast::Block::ThematicBreak { .. }
-            | mant_ast::Block::Unsupported { .. } => {}
+            mant_ir::Block::Paragraph { .. }
+            | mant_ir::Block::Preformatted { .. }
+            | mant_ir::Block::Equation { .. }
+            | mant_ir::Block::VerticalSpace { .. }
+            | mant_ir::Block::ThematicBreak { .. }
+            | mant_ir::Block::Unsupported { .. } => {}
         }
     }
 }

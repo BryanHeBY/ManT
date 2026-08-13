@@ -7,7 +7,8 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use mant_ast::{CatalogQuery, DocumentAddress, DocumentCatalog, QueryBundle};
+use mant_core::ResolvedQuery;
+use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::{App, UpdateOutcome};
@@ -17,11 +18,11 @@ use crate::{App, UpdateOutcome};
 /// # Errors
 ///
 /// Returns terminal setup, event, drawing, or restoration errors.
-pub fn run(bundle: &QueryBundle) -> io::Result<()> {
+pub fn run(bundle: &ResolvedQuery) -> io::Result<()> {
     run_with_catalog(
         bundle,
         DocumentCatalog {
-            schema: mant_ast::CatalogSchema::V7,
+            schema: mant_protocol::CatalogSchema::V7,
             total: 0,
             returned: 0,
             offset: 0,
@@ -49,7 +50,7 @@ pub fn run(bundle: &QueryBundle) -> io::Result<()> {
 /// Returns terminal setup, event, drawing, or restoration errors. Document
 /// loading failures are shown inside the UI and leave the current page open.
 pub fn run_with_catalog<D, F, E>(
-    bundle: &QueryBundle,
+    bundle: &ResolvedQuery,
     catalog: DocumentCatalog,
     mut discover_documents: D,
     mut open_document: F,
@@ -57,7 +58,7 @@ pub fn run_with_catalog<D, F, E>(
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-    F: FnMut(&DocumentAddress) -> Result<QueryBundle, String>,
+    F: FnMut(&DocumentAddress) -> Result<ResolvedQuery, String>,
     E: FnMut(&str) -> Result<(), String>,
 {
     let mut stdout = io::stdout();
@@ -172,7 +173,7 @@ where
 
 fn service_open_request<F>(app: &mut App, open_document: &mut F) -> bool
 where
-    F: FnMut(&DocumentAddress) -> Result<QueryBundle, String>,
+    F: FnMut(&DocumentAddress) -> Result<ResolvedQuery, String>,
 {
     let Some(address) = app.take_open_request() else {
         return false;
@@ -219,7 +220,7 @@ impl Drop for TerminalGuard {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{CatalogSchema, DocumentSummary};
+    use mant_protocol::{CatalogSchema, DocumentSummary};
 
     use super::*;
 

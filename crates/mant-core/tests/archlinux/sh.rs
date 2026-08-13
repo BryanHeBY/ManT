@@ -1,6 +1,6 @@
 //! Tests for Arch Linux's POSIX `sh(1p)` gzip fixture.
 
-use mant_ast::SourceFormat;
+use mant_ir::SourceFormat;
 
 use crate::common::{self, collect_sections, source_path_ends_with};
 use crate::fixtures::archlinux_manual;

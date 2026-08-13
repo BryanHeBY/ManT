@@ -10,12 +10,14 @@ mod wrap;
 
 use std::collections::HashMap;
 
-use mant_ast::{
-    Block, DefinitionIdentity, DefinitionRole, DocumentAddress, Inline, ListKind, QueryBundle,
-    Section, SourceFormat, TldrDocument,
+use mant_core::ResolvedQuery;
+use mant_ir::DocumentAddress;
+use mant_ir::{
+    Block, DefinitionIdentity, DefinitionRole, Inline, ListKind, Section, SourceFormat,
+    TldrDocument,
 };
 #[cfg(test)]
-use mant_ast::{TldrCommandPart, TldrOrigin};
+use mant_ir::{TldrCommandPart, TldrOrigin};
 #[cfg(test)]
 use ratatui::text::Line;
 use ratatui::{
@@ -102,7 +104,7 @@ struct RenderedLinkRegion {
 impl DocumentView {
     /// Build one immutable view from the normalized query contract.
     #[must_use]
-    pub fn new(bundle: &QueryBundle) -> Self {
+    pub fn new(bundle: &ResolvedQuery) -> Self {
         let mut builder = DocumentBuilder::new(bundle.label.clone(), bundle.address.clone());
         let source_label = bundle.document.as_ref().map_or("MANUAL", |document| {
             if document.source.format == SourceFormat::Markdown {
@@ -417,8 +419,8 @@ impl DocumentBuilder {
         let entries = section_semantic_entries(&section.blocks);
         let has_children = !entries.is_empty() || !section.children.is_empty();
         self.anchor(NavItem {
-            id: section.id.clone(),
-            target_id: section.id.clone(),
+            id: section.id.to_string(),
+            target_id: section.id.to_string(),
             title: section.title.clone(),
             depth,
             kind: NavKind::Section,
@@ -430,19 +432,19 @@ impl DocumentBuilder {
             let group_id = format!("__mant-entries__{}", section.id);
             self.navigation(NavItem {
                 id: group_id.clone(),
-                target_id: section.id.clone(),
+                target_id: section.id.to_string(),
                 title: format!("ENTRIES ({})", entries.len()),
                 depth: depth + 1,
                 kind: NavKind::EntryGroup,
                 has_children: true,
                 is_last: section.children.is_empty(),
-                parent_id: Some(section.id.clone()),
+                parent_id: Some(section.id.to_string()),
             });
             let entry_count = entries.len();
             for (index, identity) in entries.into_iter().enumerate() {
                 self.navigation(NavItem {
-                    id: identity.id.clone(),
-                    target_id: identity.id.clone(),
+                    id: identity.id.to_string(),
+                    target_id: identity.id.to_string(),
                     title: identity.names.join(", "),
                     depth: depth + 2,
                     kind: NavKind::Entry(identity.role),
@@ -585,7 +587,8 @@ impl DocumentBuilder {
                         .unwrap_or(u16::from(index > 0 && !compact));
                     self.spacing(spacing);
                     if let Some(identity) = &item.identity {
-                        self.anchors.insert(identity.id.clone(), self.lines.len());
+                        self.anchors
+                            .insert(identity.id.to_string(), self.lines.len());
                     }
                     if item.inline_term {
                         self.inline_definition(item, indent);
@@ -647,7 +650,7 @@ impl DocumentBuilder {
         }
     }
 
-    fn inline_definition(&mut self, item: &mant_ast::DefinitionItem, indent: usize) {
+    fn inline_definition(&mut self, item: &mant_ir::DefinitionItem, indent: usize) {
         let mut term_spans = Vec::new();
         let mut term_links = Vec::new();
         for (index, term) in item.terms.iter().enumerate() {
@@ -770,14 +773,10 @@ fn inline_anchor_ids(nodes: &[Inline]) -> Vec<String> {
     let mut ids = Vec::new();
     for node in nodes {
         match node {
-            Inline::Anchor { id } => ids.push(id.clone()),
+            Inline::Anchor { id } => ids.push(id.to_string()),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => ids.extend(inline_anchor_ids(children)),
+            | Inline::Link { children, .. } => ids.extend(inline_anchor_ids(children)),
             Inline::Text { .. } | Inline::Code { .. } | Inline::LineBreak => {}
         }
     }
@@ -884,71 +883,63 @@ fn append_inline(
             Inline::Code { value } => {
                 append_text(value, Style::default().fg(theme::HEADING), lines);
             }
-            Inline::ExternalLink { uri, children, .. } => {
-                append_external_link(uri, children, current_address, lines);
-            }
-            Inline::EmailLink { address, children } => {
-                append_external_link(
+            Inline::Link {
+                target, children, ..
+            } => match target {
+                mant_ir::LinkTarget::External { uri } => {
+                    append_external_link(uri, children, current_address, lines);
+                }
+                mant_ir::LinkTarget::Email { address } => append_external_link(
                     &format!("mailto:{address}"),
                     children,
                     current_address,
                     lines,
-                );
-            }
-            Inline::DocumentReference {
-                name,
-                fragment,
-                children,
-            } => {
-                let target = markdown_reference_address(current_address, name).map(|address| {
-                    LinkTarget::Document {
-                        address,
-                        fragment: fragment.clone(),
-                    }
-                });
-                append_addressable_inline(
+                ),
+                mant_ir::LinkTarget::Document { name, fragment } => {
+                    let target = markdown_reference_address(current_address, name).map(|address| {
+                        LinkTarget::Document {
+                            address,
+                            fragment: fragment.clone(),
+                        }
+                    });
+                    append_addressable_inline(
+                        children,
+                        Style::default()
+                            .fg(theme::LINK)
+                            .add_modifier(Modifier::UNDERLINED),
+                        current_address,
+                        lines,
+                        target.as_ref(),
+                    );
+                }
+                mant_ir::LinkTarget::Manual { name, section } => {
+                    let target = section.as_ref().map(|section| LinkTarget::Document {
+                        address: DocumentAddress::Manual {
+                            name: name.clone(),
+                            section: section.clone(),
+                        },
+                        fragment: None,
+                    });
+                    append_addressable_inline(
+                        children,
+                        Style::default()
+                            .fg(theme::LINK)
+                            .add_modifier(Modifier::UNDERLINED),
+                        current_address,
+                        lines,
+                        target.as_ref(),
+                    );
+                }
+                mant_ir::LinkTarget::Section { id } => append_addressable_inline(
                     children,
                     Style::default()
                         .fg(theme::LINK)
                         .add_modifier(Modifier::UNDERLINED),
                     current_address,
                     lines,
-                    target.as_ref(),
-                );
-            }
-            Inline::ManualReference {
-                name,
-                section,
-                children,
-            } => {
-                let target = section.as_ref().map(|section| LinkTarget::Document {
-                    address: DocumentAddress::Manual {
-                        name: name.clone(),
-                        section: section.clone(),
-                    },
-                    fragment: None,
-                });
-                append_addressable_inline(
-                    children,
-                    Style::default()
-                        .fg(theme::LINK)
-                        .add_modifier(Modifier::UNDERLINED),
-                    current_address,
-                    lines,
-                    target.as_ref(),
-                );
-            }
-            Inline::SectionReference { target, children } => {
-                append_addressable_inline(
-                    children,
-                    Style::default()
-                        .fg(theme::LINK)
-                        .add_modifier(Modifier::UNDERLINED),
-                    current_address,
-                    lines,
-                    Some(&LinkTarget::Section(target.clone())),
-                );
-            }
+                    Some(&LinkTarget::Section(id.to_string())),
+                ),
+            },
             Inline::Anchor { .. } => {}
             Inline::LineBreak => lines.push(StyledInlineLine::default()),
         }
@@ -1076,27 +1067,21 @@ fn append_text(value: &str, style: Style, lines: &mut Vec<StyledInlineLine>) {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{
-        DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, DocumentMeta,
-        DocumentSchema, DocumentSource, LayoutHint, ListItem, MantDocument, Producer, QuerySchema,
-        SourceFormat, TableCell, TableRow, TldrDocument, TldrExample,
+    use mant_ir::{
+        DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document, DocumentMeta,
+        DocumentSource, LayoutHint, ListItem, SourceFormat, TableCell, TableRow, TldrDocument,
+        TldrExample,
     };
     use unicode_width::UnicodeWidthStr;
 
     use super::*;
 
-    fn bundle() -> QueryBundle {
-        QueryBundle {
-            schema: QuerySchema::V7,
+    fn bundle() -> ResolvedQuery {
+        ResolvedQuery {
             address: None,
             label: "demo".to_owned(),
-            document: Some(MantDocument {
-                schema: DocumentSchema::V7,
-                producer: Producer {
-                    name: "mant".to_owned(),
-                    version: "test".to_owned(),
-                    engine: None,
-                },
+            document: Some(Document {
+                parser: None,
                 source: DocumentSource {
                     format: SourceFormat::Markdown,
                     path: None,
@@ -1105,7 +1090,7 @@ mod tests {
                 diagnostics: Vec::new(),
                 blocks: Vec::new(),
                 sections: vec![Section {
-                    id: "description".to_owned(),
+                    id: "description".to_owned().into(),
                     title: "Description".to_owned(),
                     spacing_before_lines: 0,
                     blocks: vec![Block::Paragraph {
@@ -1198,9 +1183,12 @@ mod tests {
     #[test]
     fn manual_references_are_typed_clickable_links_when_the_section_is_known() {
         let lines = styled_inline_lines(
-            &[Inline::ManualReference {
-                name: "printf".to_owned(),
-                section: Some("3".to_owned()),
+            &[Inline::Link {
+                target: mant_ir::LinkTarget::Manual {
+                    name: "printf".to_owned(),
+                    section: Some("3".to_owned()),
+                },
+                title: None,
                 children: vec![Inline::Text {
                     value: "printf(3)".to_owned(),
                 }],
@@ -1232,14 +1220,17 @@ mod tests {
     fn markdown_references_keep_the_current_source_and_fragment() {
         let current = DocumentAddress::Markdown {
             path: "about_Profiles".to_owned(),
-            origin: mant_ast::MarkdownOrigin::Source {
+            origin: mant_protocol::MarkdownOrigin::Source {
                 name: "pwsh7".to_owned(),
             },
         };
         let lines = styled_inline_lines(
-            &[Inline::DocumentReference {
-                name: "Start-Process".to_owned(),
-                fragment: Some("examples".to_owned()),
+            &[Inline::Link {
+                target: mant_ir::LinkTarget::Document {
+                    name: "Start-Process".to_owned(),
+                    fragment: Some("examples".to_owned()),
+                },
+                title: None,
                 children: vec![Inline::Text {
                     value: "Start-Process".to_owned(),
                 }],
@@ -1253,7 +1244,7 @@ mod tests {
             LinkTarget::Document {
                 address: DocumentAddress::Markdown {
                     path: "Start-Process".to_owned(),
-                    origin: mant_ast::MarkdownOrigin::Source {
+                    origin: mant_protocol::MarkdownOrigin::Source {
                         name: "pwsh7".to_owned(),
                     },
                 },
@@ -1263,7 +1254,7 @@ mod tests {
     }
 
     #[test]
-    fn inline_styles_preserve_the_renderer_neutral_ast_semantics() {
+    fn inline_styles_preserve_the_renderer_neutral_ir_semantics() {
         let lines = styled_inline_lines(
             &[
                 Inline::Strong {
@@ -1288,8 +1279,10 @@ mod tests {
                 Inline::Text {
                     value: " ".to_owned(),
                 },
-                Inline::ExternalLink {
-                    uri: "https://example.test".to_owned(),
+                Inline::Link {
+                    target: mant_ir::LinkTarget::External {
+                        uri: "https://example.test".to_owned(),
+                    },
                     title: None,
                     children: vec![Inline::Text {
                         value: "link".to_owned(),
@@ -1317,8 +1310,10 @@ mod tests {
     #[test]
     fn unsafe_external_schemes_remain_visible_but_inert() {
         let lines = styled_inline_lines(
-            &[Inline::ExternalLink {
-                uri: "file:///etc/passwd".to_owned(),
+            &[Inline::Link {
+                target: mant_ir::LinkTarget::External {
+                    uri: "file:///etc/passwd".to_owned(),
+                },
                 title: None,
                 children: vec![Inline::Text {
                     value: "local file".to_owned(),
@@ -1601,7 +1596,7 @@ mod tests {
             vec![Block::DefinitionList {
                 items: vec![DefinitionItem {
                     identity: Some(DefinitionIdentity {
-                        id: "help-option".to_owned(),
+                        id: "help-option".to_owned().into(),
                         role: DefinitionRole::Option,
                         case: DefinitionCase::Sensitive,
                         names: vec!["-h".to_owned()],
@@ -1933,8 +1928,11 @@ mod tests {
                 Inline::Text {
                     value: "Read ".to_owned(),
                 },
-                Inline::SectionReference {
-                    target: "details".to_owned(),
+                Inline::Link {
+                    target: mant_ir::LinkTarget::Section {
+                        id: "details".into(),
+                    },
+                    title: None,
                     children: vec![Inline::Text {
                         value: "the detailed section".to_owned(),
                     }],
@@ -1944,7 +1942,7 @@ mod tests {
             source: None,
         }];
         document.sections[0].children.push(Section {
-            id: "details".to_owned(),
+            id: "details".to_owned().into(),
             title: "Details".to_owned(),
             spacing_before_lines: 0,
             blocks: Vec::new(),

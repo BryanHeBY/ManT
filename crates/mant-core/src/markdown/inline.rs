@@ -1,6 +1,6 @@
 //! Lowers supported Markdown spans and preserves unsupported inline source.
 
-use mant_ast::{Diagnostic, Inline};
+use mant_ir::{Diagnostic, Inline};
 use pulldown_cmark::{Event, LinkType, Tag, TagEnd};
 
 use super::{EventCursor, source::MarkdownSource};
@@ -106,24 +106,28 @@ fn parse_inline_sequence(
                 end_offset = nested_end;
                 let destination = dest_url.into_string();
                 if let Some(target) = destination.strip_prefix('#') {
-                    output.push(Inline::SectionReference {
-                        target: target.to_owned(),
+                    output.push(Inline::Link {
+                        target: mant_ir::LinkTarget::Section { id: target.into() },
+                        title: None,
                         children,
                     });
                 } else if let Some(address) = destination.strip_prefix("mailto:") {
-                    output.push(Inline::EmailLink {
-                        address: address.to_owned(),
+                    output.push(Inline::Link {
+                        target: mant_ir::LinkTarget::Email {
+                            address: address.to_owned(),
+                        },
+                        title: None,
                         children,
                     });
                 } else if let Some((name, fragment)) = markdown_document_reference(&destination) {
-                    output.push(Inline::DocumentReference {
-                        name,
-                        fragment,
+                    output.push(Inline::Link {
+                        target: mant_ir::LinkTarget::Document { name, fragment },
+                        title: None,
                         children,
                     });
                 } else {
-                    output.push(Inline::ExternalLink {
-                        uri: destination,
+                    output.push(Inline::Link {
+                        target: mant_ir::LinkTarget::External { uri: destination },
                         title: (!title.is_empty()).then(|| title.into_string()),
                         children,
                     });
@@ -226,11 +230,7 @@ pub(super) fn inline_text(inlines: &[Inline]) -> String {
             Inline::Text { value } | Inline::Code { value } => output.push_str(value),
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::ExternalLink { children, .. }
-            | Inline::EmailLink { children, .. }
-            | Inline::DocumentReference { children, .. }
-            | Inline::ManualReference { children, .. }
-            | Inline::SectionReference { children, .. } => output.push_str(&inline_text(children)),
+            | Inline::Link { children, .. } => output.push_str(&inline_text(children)),
             Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push(' '),
         }

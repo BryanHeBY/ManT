@@ -13,7 +13,7 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use mant_ast::DefinitionRole;
+use mant_ir::DefinitionRole;
 
 use crate::{NavItem, NavKind, theme};
 

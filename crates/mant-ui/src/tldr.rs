@@ -1,6 +1,6 @@
 //! Shared semantic layout for interactive and one-shot tldr presentation.
 
-use mant_ast::{TldrCommandPart, TldrDocument, TldrOrigin};
+use mant_ir::{TldrCommandPart, TldrDocument, TldrOrigin};
 
 /// Presentation role independent from Ratatui and ANSI escape sequences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,7 +131,7 @@ const fn ansi_style(role: TldrRole) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use mant_ast::{TldrDocument, TldrOrigin};
+    use mant_ir::{TldrDocument, TldrOrigin};
 
     use super::render_tldr_terminal;
 

@@ -1,6 +1,6 @@
 //! Regression tests for Debian's `sh(1)` alias of the mdoc-formatted dash page.
 
-use mant_ast::{Block, SourceFormat};
+use mant_ir::{Block, SourceFormat};
 
 use crate::common::{self, block_slice_text, source_path_ends_with};
 use crate::fixtures::debian_manual;
