@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="720" viewBox="0 0 900 720" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="740" viewBox="0 0 900 740" role="img" aria-labelledby="title description">
   <title id="title">ManT architecture</title>
-  <desc id="description">Native manuals, Markdown, and tldr enter mant-engine. Its nested mant-ir semantic core feeds mant-ui and human renderers directly, while host callbacks, CLI JSON, request JSON, and MCP share the versioned mant-protocol structured boundary.</desc>
+  <desc id="description">Native manuals, Markdown, and tldr enter mant-engine around its mant-ir semantic center. A thin mant-protocol DTO layer serves TUI host interactions, CLI and request JSON, and MCP. Separate direct paths carry document IR to the TUI and human renderers.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
@@ -15,6 +15,7 @@
       .ir { fill: #dafbe1; stroke: #2da44e; stroke-width: 2; }
       .protocol { fill: #fff8c5; stroke: #bf8700; stroke-width: 2; }
       .connector { fill: none; stroke: #8c959f; stroke-width: 2; marker-end: url(#arrow); }
+      .protocol-connector { fill: none; stroke: #bf8700; stroke-width: 1.75; stroke-dasharray: 6 5; marker-end: url(#arrow); }
       .arrow-head { fill: #8c959f; }
       .label { fill: #57606a; font: 650 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 1.5px; }
       .title { fill: #1f2328; font: 650 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -22,18 +23,21 @@
       .engine-title { fill: #0969da; font: 700 21px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
       .ir-title { fill: #1a7f37; font: 700 22px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
       .protocol-title { fill: #9a6700; font: 700 18px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+      .interface-title { fill: #1f2328; font: 650 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       @media (prefers-color-scheme: dark) {
         .card, .stage { fill: #161b22; stroke: #30363d; }
         .engine { fill: #0d2033; stroke: #1f6feb; }
         .ir { fill: #173b24; stroke: #2ea043; }
         .protocol { fill: #3b2e0b; stroke: #d29922; }
         .connector { stroke: #6e7681; }
+        .protocol-connector { stroke: #d29922; }
         .arrow-head { fill: #6e7681; }
         .label, .detail { fill: #8b949e; }
         .title { fill: #f0f6fc; }
         .engine-title { fill: #58a6ff; }
         .ir-title { fill: #56d364; }
         .protocol-title { fill: #e3b341; }
+        .interface-title { fill: #f0f6fc; }
       }
     </style>
   </defs>
@@ -87,27 +91,33 @@
 
   <text x="450" y="448" text-anchor="middle" class="detail">project · search · render · validate</text>
 
-  <text x="35" y="518" class="label">PRESENTATION &amp; INTEGRATION BOUNDARIES</text>
-  <path d="M 300 418 C 300 500, 160 500, 160 570" class="connector"/>
-  <path d="M 450 418 L 450 570" class="connector"/>
-  <path d="M 600 418 C 600 485, 740 475, 740 535" class="connector"/>
+  <path d="M 300 418 C 300 500, 85 500, 85 635" class="connector"/>
+  <path d="M 600 418 C 600 500, 765 500, 765 635" class="connector"/>
+  <path d="M 450 418 L 450 520" class="connector"/>
+  <g filter="url(#shadow)">
+    <rect x="325" y="520" width="250" height="58" rx="12" class="protocol"/>
+  </g>
+  <text x="450" y="544" text-anchor="middle" class="protocol-title">mant-protocol</text>
+  <text x="450" y="565" text-anchor="middle" class="detail">versioned logical DTOs</text>
+
+  <path d="M 350 578 C 300 610, 210 600, 155 635" class="protocol-connector"/>
+  <path d="M 405 578 L 335 635" class="connector"/>
+  <path d="M 495 578 L 550 635" class="connector"/>
 
   <g filter="url(#shadow)">
-    <rect x="35" y="570" width="250" height="84" rx="12" class="card"/>
-    <rect x="325" y="570" width="250" height="84" rx="12" class="card"/>
-    <rect x="615" y="535" width="250" height="84" rx="12" class="protocol"/>
+    <rect x="25" y="635" width="190" height="85" rx="12" class="card"/>
+    <rect x="240" y="635" width="190" height="85" rx="12" class="card"/>
+    <rect x="455" y="635" width="190" height="85" rx="12" class="card"/>
+    <rect x="670" y="635" width="190" height="85" rx="12" class="card"/>
   </g>
-  <text x="160" y="602" text-anchor="middle" class="title">Interactive TUI</text>
-  <text x="160" y="628" text-anchor="middle" class="detail">direct IR · protocol host DTOs</text>
-  <text x="450" y="602" text-anchor="middle" class="title">Human renderers</text>
-  <text x="450" y="628" text-anchor="middle" class="detail">terminal · text · Markdown</text>
-  <text x="740" y="568" text-anchor="middle" class="protocol-title">mant-protocol</text>
-  <text x="740" y="594" text-anchor="middle" class="detail">versioned structured contracts</text>
-
-  <path d="M 740 619 L 740 646" class="connector"/>
-  <g filter="url(#shadow)">
-    <rect x="615" y="646" width="250" height="58" rx="12" class="card"/>
-  </g>
-  <text x="740" y="671" text-anchor="middle" class="title">Structured integrations</text>
-  <text x="740" y="691" text-anchor="middle" class="detail">host · CLI JSON · MCP</text>
+  <text x="120" y="661" text-anchor="middle" class="interface-title">Interactive TUI</text>
+  <text x="120" y="684" text-anchor="middle" class="detail">document IR</text>
+  <text x="120" y="705" text-anchor="middle" class="detail">protocol host DTOs</text>
+  <text x="335" y="661" text-anchor="middle" class="interface-title">CLI &amp; request JSON</text>
+  <text x="335" y="692" text-anchor="middle" class="detail">queries · schemas</text>
+  <text x="550" y="661" text-anchor="middle" class="interface-title">MCP stdio</text>
+  <text x="550" y="692" text-anchor="middle" class="detail">read-only tools</text>
+  <text x="765" y="661" text-anchor="middle" class="interface-title">Human renderers</text>
+  <text x="765" y="684" text-anchor="middle" class="detail">terminal · text</text>
+  <text x="765" y="705" text-anchor="middle" class="detail">Markdown · man</text>
 </svg>

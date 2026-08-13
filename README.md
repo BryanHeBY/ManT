@@ -275,7 +275,7 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
-![ManT architecture: source adapters enter mant-engine around the mant-ir semantic center; direct renderers consume the IR while host callbacks, CLI JSON, and MCP share mant-protocol](docs/assets/architecture.svg)
+![ManT architecture: source adapters enter mant-engine around the mant-ir semantic center; the TUI consumes document IR directly and uses mant-protocol host DTOs, while CLI and request JSON and MCP share the same versioned contracts](docs/assets/architecture.svg)
 
 `mant-ir` is the semantic center nested inside the `mant-engine` execution
 layer. Interactive use passes its in-memory `ResolvedContent` directly to
