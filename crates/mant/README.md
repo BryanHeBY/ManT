@@ -104,8 +104,10 @@ Reusable Markdown documents can be registered by relative path below:
 - macOS: `~/Library/Application Support/ManT/documents`
 - Windows: `%APPDATA%\ManT\documents`
 
-Regular Markdown files are discovered recursively with their hierarchy;
-symlinks are ignored. Git or direct archive sources configured in sibling
+Regular Markdown files are discovered recursively with their hierarchy.
+Personal `documents/` may use leaf-file symlinks to regular files, including
+external targets; directory and broken links are ignored. Managed source
+caches never follow links. Git or direct archive sources configured in sibling
 `sources.toml` can be installed with `mant --update-docs` and selected with
 `--source`. Removed source tables are reported as orphaned installed data;
 preview cleanup with `mant --prune-docs --dry-run` and apply it with

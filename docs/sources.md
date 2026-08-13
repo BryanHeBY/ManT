@@ -39,13 +39,15 @@ managed by the user. Each immediate
 directory below `documents/sources/` is managed by `mant --update-docs`; do not
 edit it by hand because a later update replaces the complete directory.
 
-Every discoverable Markdown document remains below `documents/`. Regular `.md`
+Every discoverable Markdown identity remains below `documents/`. Regular `.md`
 and `.markdown` files are discovered recursively and addressed by their
-extension-free path relative to `documents/` or one installed source. Other
-extensions, directory symlinks, and file symlinks are ignored. A registry
-snapshot is bounded to 32 directory levels and 10,000 logical documents per
-origin; exceeding either limit fails discovery instead of returning a partial
-tree.
+extension-free path relative to `documents/` or one installed source. The
+personal tree accepts an explicitly named leaf-file symlink when its target is
+a regular file, including a target outside `documents/`; the link path supplies
+the logical identity. Broken links and directory symlinks are ignored. Managed
+source caches never follow links. A registry snapshot is bounded to 32
+directory levels and 10,000 logical documents per origin; exceeding either
+limit fails discovery instead of returning a partial tree.
 
 ## Configuration
 
@@ -145,6 +147,14 @@ relative paths, check logical-path collisions, and write `.mant-source.toml`. Th
 configuration fingerprint excludes `priority`, so a priority-only change
 takes effect immediately without reinstalling identical files. The installed
 directory is replaced only after staging succeeds.
+
+Source snapshots are deliberately self-contained. Archive symbolic links and
+hard links are rejected. For Git, ManT reads tree modes before installation and
+rejects a selected Markdown entry with mode `120000`, even on Windows where Git
+may check that entry out as a regular file containing only its target. A
+configured `path` also cannot traverse a Git link. Unrelated and unselected Git
+links do not affect the source. Source authors should publish regular Markdown
+files instead of filesystem aliases.
 
 Archive processing is intentionally bounded: downloads are limited to 64 MiB,
 archives to 20,000 entries and 256 MiB of declared expanded regular-file data,

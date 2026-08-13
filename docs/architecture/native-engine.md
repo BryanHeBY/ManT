@@ -177,8 +177,11 @@ of disappearing. Recognized definition lists receive the same semantic
 identities as native-manual definitions.
 
 The registry preserves extension-free relative paths below personal
-`documents/` and each installed source. Discovery is bounded, ignores
-symlinks, and rejects case-only logical collisions for cross-platform safety.
+`documents/` and each installed source. Discovery is bounded and rejects
+case-only logical collisions for cross-platform safety. Personal documents may
+use explicit leaf-file links to regular files, including external targets;
+directory and broken links are ignored. Managed caches never follow links, and
+source acquisition rejects selected Git or archive links before activation.
 Relative Markdown references are resolved lexically within their current
 source and cannot escape into another source.
 

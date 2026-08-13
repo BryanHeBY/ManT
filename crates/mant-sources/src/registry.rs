@@ -310,17 +310,19 @@ fn origin_label(origin: &RegisteredDocumentOrigin) -> String {
     }
 }
 
-/// Recursively scan one origin. Symbolic links and the managed `sources`
-/// subtree beneath personal documents are ignored.
+/// Recursively scan one origin. Personal documents accept explicit leaf-file
+/// links, while managed source caches never follow links. Directory links are
+/// never traversed.
 fn scan_directory(
     directory: &Path,
-    skip_managed_sources: bool,
+    personal_documents: bool,
 ) -> Result<Vec<(String, PathBuf)>, SourceConfigError> {
     let mut candidates = BTreeMap::<String, (u8, PathBuf)>::new();
     scan_directory_into(
         directory,
         directory,
-        skip_managed_sources,
+        personal_documents,
+        personal_documents,
         0,
         &mut candidates,
     )?;
@@ -334,6 +336,7 @@ fn scan_directory_into(
     root: &Path,
     directory: &Path,
     skip_managed_sources: bool,
+    allow_leaf_symlinks: bool,
     depth: usize,
     candidates: &mut BTreeMap<String, (u8, PathBuf)>,
 ) -> Result<(), SourceConfigError> {
@@ -353,15 +356,29 @@ fn scan_directory_into(
             continue;
         };
         if file_type.is_symlink() {
-            continue;
+            // Follow only the explicitly named leaf far enough to prove its
+            // target is a regular file. Its logical identity still comes from
+            // the link path; broken and directory links remain invisible.
+            if !allow_leaf_symlinks
+                || !fs::metadata(entry.path()).is_ok_and(|metadata| metadata.is_file())
+            {
+                continue;
+            }
         }
         if file_type.is_dir() {
             if !(skip_managed_sources && entry.path() == root.join("sources")) {
-                scan_directory_into(root, &entry.path(), false, depth + 1, candidates)?;
+                scan_directory_into(
+                    root,
+                    &entry.path(),
+                    false,
+                    allow_leaf_symlinks,
+                    depth + 1,
+                    candidates,
+                )?;
             }
             continue;
         }
-        if !file_type.is_file() {
+        if !file_type.is_file() && !file_type.is_symlink() {
             continue;
         }
         let path = entry.path();
@@ -433,6 +450,35 @@ mod tests {
         ))
     }
 
+    #[cfg(unix)]
+    fn symlink_file(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_file(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+
+    #[cfg(unix)]
+    fn symlink_directory(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_directory(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    fn created_link(result: std::io::Result<()>) -> bool {
+        match result {
+            Ok(()) => true,
+            #[cfg(windows)]
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => false,
+            Err(error) => panic!("create fixture symlink: {error}"),
+        }
+    }
+
     #[test]
     fn discovery_is_hierarchical_and_markdown_only() {
         let root = temporary_root("flat");
@@ -463,6 +509,40 @@ mod tests {
         assert_eq!(documents.len(), 1);
         assert_eq!(documents[0].1, root.join("tool.md"));
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn personal_documents_accept_only_regular_leaf_file_links() {
+        let base = temporary_root("leaf-links");
+        let documents = base.join("documents");
+        let outside = base.join("outside");
+        fs::create_dir_all(&documents).expect("create documents");
+        fs::create_dir_all(&outside).expect("create outside directory");
+        fs::write(outside.join("mant-source.md"), "# ManT").expect("write external document");
+        fs::write(outside.join("nested.md"), "# Nested").expect("write linked directory file");
+
+        if !created_link(symlink_file(
+            &outside.join("mant-source.md"),
+            &documents.join("mant.md"),
+        )) || !created_link(symlink_file(
+            &outside.join("missing.md"),
+            &documents.join("broken.md"),
+        )) || !created_link(symlink_directory(
+            &outside,
+            &documents.join("linked-directory"),
+        )) {
+            fs::remove_dir_all(base).expect("remove unsupported symlink fixture");
+            return;
+        }
+
+        let personal = scan_directory(&documents, true).expect("scan personal documents");
+        assert_eq!(
+            personal,
+            vec![("mant".to_owned(), documents.join("mant.md"))]
+        );
+        let managed = scan_directory(&documents, false).expect("scan managed source");
+        assert!(managed.is_empty());
+        fs::remove_dir_all(base).expect("remove fixture");
     }
 
     #[test]

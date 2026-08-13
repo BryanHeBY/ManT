@@ -56,6 +56,12 @@ baseline: positive sources precede manuals, while zero and negative sources
 follow them. The source default is `1`; equal-priority sources use ascending
 bytewise name order.
 
+Personal `documents/` may contain explicitly named leaf-file links to regular
+files, including external targets. Directory and broken links are ignored.
+Managed source caches never follow links; Git tree modes and archive entry
+types reject selected link entries before installation so source snapshots
+remain portable.
+
 With `update` enabled, Git and archive acquisition share the same staging and
 atomic activation transaction. Temporary checkouts, downloads, and staging
 directories are owned by an RAII workspace and cleaned on every exit path.

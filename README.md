@@ -234,6 +234,11 @@ Windows selectors try an exact documented executable name before following
 defines platform paths, archive configuration, selection, precedence, and
 transactional update behavior.
 
+Personal `documents/` may use leaf-file symlinks to regular files, including
+targets outside that tree; broken links and directory symlinks are ignored.
+Installed source caches never follow links, and source acquisition rejects
+selected Git or archive links so packages remain portable across platforms.
+
 Markdown headings, prose, code, links, lists, tables, and selected semantic
 definition lists enter the same model as native manuals. Unsupported syntax
 remains visible with a diagnostic instead of being silently discarded. The

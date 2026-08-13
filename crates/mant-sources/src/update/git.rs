@@ -4,7 +4,7 @@ use std::{ffi::OsStr, path::Path, process::Command};
 
 use super::{
     SourceMetadata, SourceUpdateContext, SourceUpdateResult, UpdateWorkspace, activate_source,
-    install_selected_documents,
+    install_selected_documents, source_selects_markdown_path,
 };
 
 pub(super) fn update(
@@ -55,6 +55,11 @@ pub(super) fn update(
     if commit_count.trim() != "1" {
         return Err("git did not produce the required single-commit checkout".to_owned());
     }
+    reject_selected_symlink_documents(
+        &context.paths.root,
+        &workspace.checkout,
+        context.configured,
+    )?;
     workspace.create_staging()?;
     let documents =
         install_selected_documents(&workspace.checkout, &workspace.staging, context.configured)?;
@@ -69,6 +74,69 @@ pub(super) fn update(
     );
     activate_source(&workspace.staging, &context.target, &metadata)?;
     Ok(context.updated(revision, document_count))
+}
+
+fn reject_selected_symlink_documents(
+    working_directory: &Path,
+    checkout: &Path,
+    source: &crate::ConfiguredSource,
+) -> Result<(), String> {
+    let tree = run_git_bytes(
+        working_directory,
+        [
+            OsStr::new("-C"),
+            checkout.as_os_str(),
+            OsStr::new("ls-tree"),
+            OsStr::new("-rz"),
+            OsStr::new("--full-tree"),
+            OsStr::new("HEAD"),
+        ],
+    )?;
+    if let Some(path) = selected_symlink_document(&tree, source)? {
+        return Err(format!(
+            "configured Git source selects symbolic-link Markdown document '{path}'; publish a regular file instead"
+        ));
+    }
+    Ok(())
+}
+
+fn selected_symlink_document(
+    tree: &[u8],
+    source: &crate::ConfiguredSource,
+) -> Result<Option<String>, String> {
+    let configured_root = (source.path != ".").then(|| Path::new(&source.path));
+    for record in tree
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let Some(separator) = record.iter().position(|byte| *byte == b'\t') else {
+            return Err("git returned malformed tree metadata".to_owned());
+        };
+        let metadata = &record[..separator];
+        let path = &record[separator + 1..];
+        if !metadata.starts_with(b"120000 ") {
+            continue;
+        }
+        let path = std::str::from_utf8(path)
+            .map_err(|_| "Git source contains a symbolic link with a non-UTF-8 path".to_owned())?;
+        let path = Path::new(path);
+        if configured_root.is_some_and(|root| root == path || root.starts_with(path)) {
+            return Err(format!(
+                "configured path '{}' traverses Git symbolic link '{}'",
+                source.path,
+                path.display()
+            ));
+        }
+        let Some(relative) =
+            configured_root.map_or(Some(path), |root| path.strip_prefix(root).ok())
+        else {
+            continue;
+        };
+        if source_selects_markdown_path(source, relative) {
+            return Ok(Some(path.to_string_lossy().into_owned()));
+        }
+    }
+    Ok(None)
 }
 
 fn remote_revision(working_directory: &Path, repo: &str, branch: &str) -> Result<String, String> {
@@ -113,6 +181,14 @@ fn run_git<'a>(
     working_directory: &Path,
     arguments: impl IntoIterator<Item = &'a OsStr>,
 ) -> Result<String, String> {
+    let stdout = run_git_bytes(working_directory, arguments)?;
+    String::from_utf8(stdout).map_err(|_| "git output was not UTF-8".to_owned())
+}
+
+fn run_git_bytes<'a>(
+    working_directory: &Path,
+    arguments: impl IntoIterator<Item = &'a OsStr>,
+) -> Result<Vec<u8>, String> {
     let output = Command::new("git")
         .args([
             "-c",
@@ -139,5 +215,58 @@ fn run_git<'a>(
             format!("git failed: {detail}")
         });
     }
-    String::from_utf8(output.stdout).map_err(|_| "git output was not UTF-8".to_owned())
+    Ok(output.stdout)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{ConfiguredSource, SourceLocation};
+
+    use super::selected_symlink_document;
+
+    fn source(path: &str) -> ConfiguredSource {
+        ConfiguredSource {
+            location: SourceLocation::Git {
+                repo: "repo".to_owned(),
+                branch: "main".to_owned(),
+            },
+            path: path.to_owned(),
+            include: Vec::new(),
+            exclude: vec!["drafts".to_owned()],
+            priority: 1,
+        }
+    }
+
+    #[test]
+    fn git_tree_modes_reject_only_selected_markdown_links() {
+        let tree = b"100644 blob aaaa\tdocs/regular.md\0\
+120000 blob bbbb\tdocs/linked.md\0\
+120000 blob cccc\tdocs/drafts/ignored.md\0\
+120000 blob dddd\tdocs/image.png\0";
+
+        assert_eq!(
+            selected_symlink_document(tree, &source("docs")).expect("inspect tree"),
+            Some("docs/linked.md".to_owned())
+        );
+    }
+
+    #[test]
+    fn configured_paths_cannot_traverse_git_links() {
+        let tree = b"120000 blob aaaa\tdocs\0";
+        let error = selected_symlink_document(tree, &source("docs/reference"))
+            .expect_err("reject linked configured root");
+        assert!(error.contains("traverses Git symbolic link 'docs'"));
+    }
+
+    #[test]
+    fn unrelated_git_links_do_not_affect_a_source() {
+        let tree = b"120000 blob aaaa\twebsite/index.md\0\
+120000 blob bbbb\tdocs/drafts/ignored.md\0\
+120000 blob cccc\tdocs/image.png\0";
+
+        assert_eq!(
+            selected_symlink_document(tree, &source("docs")).expect("inspect tree"),
+            None
+        );
+    }
 }

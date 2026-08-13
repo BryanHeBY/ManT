@@ -232,8 +232,11 @@ source priorities default to `1`. Linux uses
 `${XDG_DATA_HOME:-$HOME/.local/share}/mant`, macOS uses
 `~/Library/Application Support/ManT`, and Windows uses `%APPDATA%\ManT` as the
 data root. Regular `.md` and `.markdown` files are registered recursively by
-extension-free relative path; symbolic links are ignored. Exact paths precede
-unique component suffixes, and collisions are reported explicitly:
+extension-free relative path. Personal `documents/` accepts leaf-file symlinks
+to regular files, including external targets; their link path supplies the
+identity. Directory and broken links are ignored, and managed source caches
+never follow links. Exact paths precede unique component suffixes, and
+collisions are reported explicitly:
 
 ```json
 {

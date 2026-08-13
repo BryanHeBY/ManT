@@ -212,6 +212,12 @@ search, and output pipeline as manual pages. The supported subset is
 deliberately structural rather than a complete browser-oriented Markdown
 implementation.
 
+Registered personal documents may be leaf-file symlinks whose targets are
+regular files, including targets outside `documents/`. The link's `.md` or
+`.markdown` name defines its logical identity. Directory and broken links are
+ignored. Installed source caches never follow links; source updates require
+selected Markdown entries to be regular files.
+
 ### Supported Structure
 
 - When the first heading is H1, it supplies the document title and does not

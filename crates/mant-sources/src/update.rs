@@ -306,17 +306,7 @@ pub(in crate::update) fn install_selected_documents(
     }
     let mut candidates = Vec::new();
     collect_markdown(&root, &root, 0, &mut candidates)?;
-    candidates.retain(|(relative, _)| {
-        (source.include.is_empty()
-            || source
-                .include
-                .iter()
-                .any(|selector| selector_matches(relative, selector)))
-            && !source
-                .exclude
-                .iter()
-                .any(|selector| selector_matches(relative, selector))
-    });
+    candidates.retain(|(relative, _)| source_selects_path(source, relative));
     candidates.sort_unstable_by(|left, right| left.0.cmp(&right.0));
     if candidates.is_empty() {
         return Err(format!(
@@ -424,6 +414,25 @@ fn collect_markdown(
 
 fn is_markdown_file(path: &Path) -> bool {
     markdown_extension_priority(path).is_some()
+}
+
+pub(in crate::update) fn source_selects_markdown_path(
+    source: &ConfiguredSource,
+    relative: &Path,
+) -> bool {
+    is_markdown_file(relative) && source_selects_path(source, relative)
+}
+
+fn source_selects_path(source: &ConfiguredSource, relative: &Path) -> bool {
+    (source.include.is_empty()
+        || source
+            .include
+            .iter()
+            .any(|selector| selector_matches(relative, selector)))
+        && !source
+            .exclude
+            .iter()
+            .any(|selector| selector_matches(relative, selector))
 }
 
 fn markdown_extension_priority(path: &Path) -> Option<u8> {
