@@ -9,7 +9,7 @@ The architecture follows four constraints:
 
 - parse each source once and share the resulting semantics;
 - keep filesystem and process authority outside renderers;
-- make every external machine contract explicit and versioned;
+- make every structured host and process contract explicit and versioned;
 - keep ordinary reading local, bounded, and independent from host manual tools.
 
 ## Layer model
@@ -20,8 +20,8 @@ source adapters
    ├─ mant-sources      local Markdown registry and optional updates
    ├─ libmandoc-rs     owned native parser boundary
    └─ mant-ir           semantic center: ResolvedContent and document IR
-      ├───────────────> mant-ui and human renderers (direct in-memory use)
-      └─ projection ──> mant-protocol ──> MCP, request JSON, and CLI JSON
+      ├───────────────> mant-ui and human renderers (direct semantic use)
+      └─ projection ──> mant-protocol ──> host callbacks, CLI JSON, and MCP
 
 mant                    composes modes, policies, updates, terminal, and stdio
 ```
@@ -42,9 +42,9 @@ mant
 └── mant-ir
 ```
 
-Arrows mean “depends on”; they do not imply that every consumer crosses a
-serialized boundary. `mant-ui` deliberately depends on both the direct IR and
-the small catalog DTOs it exchanges with its host. `mant-engine` owns human
+Arrows mean “depends on”; they do not imply serialization. `mant-ui`
+deliberately depends on both the direct IR and the stable catalog DTOs it
+exchanges with its host. `mant-engine` owns human
 renderers as query operations, while `mant-ui` owns interactive terminal
 presentation. The `mant` crate is the composition root and the only crate that
 turns those components into the user-facing process.
@@ -54,7 +54,7 @@ The crates have deliberately asymmetric responsibilities:
 | Crate | Owns | Does not own |
 | --- | --- | --- |
 | `mant-ir` | Logical document addresses; source-neutral document and quick-reference IR; typed node IDs and ranges; visitors and derived indexes | Versioned process envelopes, parsing, files, or rendering |
-| `mant-protocol` | Versioned query, document-response, catalog, outline, excerpt, search, tldr-update, and schema DTOs | Parsing, files, rendering, or processes |
+| `mant-protocol` | Unified versioned structured contracts for host callbacks, CLI JSON, request JSON, and MCP | Parsing, files, rendering, transports, or processes |
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, and C build boundary | ManT types, source discovery, or output |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-engine` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
@@ -65,13 +65,14 @@ The crates have deliberately asymmetric responsibilities:
 execution layer that creates and operates on it. Interactive queries pass an
 in-memory `ResolvedContent` directly to `mant-ui`; human renderers also consume
 the in-memory model. They do not serialize through JSON or spawn a child
-process. One-shot request JSON, CLI query JSON, JSON Schema, and MCP query
-results cross `mant-protocol`, the supported external document-query boundary.
+process. Structured host and process interactions instead use
+`mant-protocol`: the TUI catalog callbacks, one-shot request JSON, CLI query
+JSON, JSON Schema, and MCP all share its logical identities and projections.
 Source update and prune commands use their own schema-marked maintenance
 reports owned by `mant-sources`; they do not become document protocol variants.
 
-This separation also explains why `mant-protocol` depends on `mant-ir`: the
-wire DTOs project selected semantic types and provide explicit conversions,
+This separation also explains why `mant-protocol` depends on `mant-ir`: its
+DTOs project selected semantic types and provide explicit conversions,
 but the IR never depends on a protocol version. Dependency direction therefore
 keeps the semantic model usable without process framing.
 
@@ -85,8 +86,8 @@ values; `DocumentIndex` provides a derived lookup sidecar without embedding
 mutable caches in the tree. Syn-style `Visit` and `VisitMut` traits keep
 cross-cutting passes exhaustive as the IR evolves.
 
-At a machine boundary, `mant-protocol::DocumentResponse` adds the exact
-`mant.document/v7` discriminator and producer metadata. `mant.query/v7`
+At a structured integration boundary, `mant-protocol::DocumentResponse` adds
+the exact `mant.document/v7` discriminator and producer metadata. `mant.query/v7`
 combines an optional document response with an optional tldr quick reference
 while preserving their different origins and licences.
 
@@ -110,8 +111,11 @@ visible link text even when their output medium cannot activate it.
 
 Every versioned document-query payload carries an exact schema discriminator.
 Rust Serde types are the serialization authority and Schemars derives Draft
-2020-12 schemas from them. The complete compatibility rules and field-level
-contracts live in the [protocol reference](../manuals/mant-protocol.md).
+2020-12 schemas from them. IR types reused by protocol projections are treated
+as a wire-bearing semantic subset: CI snapshots their complete structural
+schemas and rejects representation drift under an unchanged discriminator.
+The complete compatibility rules and field-level contracts live in the
+[protocol reference](../manuals/mant-protocol.md).
 
 ## Source resolution
 

@@ -8,7 +8,7 @@ mant-ir — source-neutral document model shared by ManT parsers and in-process 
 
 `mant-ir` is the normalized in-memory representation produced after Markdown, man, mdoc, and tldr input has been parsed. It lets the query engine, terminal UI, renderers, and indexes operate without depending on source-specific syntax trees.
 
-The Rust crate is a library contract for trusted in-process components. It is not the public process protocol and its Serde representation is not, by itself, a compatibility promise. External consumers should use the versioned projections and generated schemas described by [mant-protocol(5)](mant-protocol.md).
+The Rust crate is a library contract for trusted semantic components. It is not the versioned structured integration contract, and its Serde representation is not, by itself, a compatibility promise. Host and process consumers should use the versioned projections and generated schemas described by [mant-protocol(5)](mant-protocol.md).
 
 ## Pipeline Position
 
@@ -19,7 +19,7 @@ tldr ─────┘                           ├─> renderers
                                      └─> mant-protocol
 ```
 
-Source parsers retain syntax-specific facts only until they can be expressed as shared document semantics. Protocol projections may omit internal data, add schema discriminators, or reshape fields for a stable external boundary.
+Source parsers retain syntax-specific facts only until they can be expressed as shared document semantics. Protocol projections may omit internal data, add schema discriminators, or reshape fields for a stable host or process boundary.
 
 ## Document
 
@@ -152,7 +152,7 @@ Prefer constructors and visitors from the crate over recursively rewriting publi
 
 ## Stability
 
-The crate follows ManT release versioning, but pre-1.0 Rust API evolution may require downstream source changes. The stable external promise is the exact schema identifier emitted by the executable, not semver inference from the crate alone.
+The crate follows ManT release versioning, but pre-1.0 Rust API evolution may require downstream source changes. The stable structured promise is the exact schema identifier exposed by `mant-protocol` and emitted by the executable, not semver inference from the IR crate alone.
 
 ## See Also
 

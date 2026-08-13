@@ -75,10 +75,11 @@ caller needs the parsed document and tldr preface without query composition.
 `DocumentResolver` can be reused when several operations must share one lazy
 filesystem snapshot; constructing a new resolver refreshes discovery.
 
-The engine returns `mant_ir::ResolvedContent` for trusted in-process callers
-and creates `mant-protocol` projections only at an external machine boundary.
-Serializing the IR directly is not a supported substitute for those versioned
-DTOs.
+The engine returns `mant_ir::ResolvedContent` to direct semantic consumers and
+creates `mant-protocol` projections for every structured host or process
+boundary. A projection can stay in memory for a TUI callback or be serialized
+for CLI JSON and MCP. Serializing the IR directly is not a supported substitute
+for those versioned DTOs.
 
 ## Platform behavior
 
@@ -93,8 +94,8 @@ transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
 
 ## Layering
 
-`mant-engine` returns an owned `mant_ir::ResolvedContent` for in-process use and
-owned `mant-protocol` values at versioned machine boundaries. It does not expose
+`mant-engine` returns an owned `mant_ir::ResolvedContent` for direct semantic
+use and owned `mant-protocol` values at versioned integration boundaries. It does not expose
 libmandoc C structures. Applications that only need raw roff syntax should use
 [`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
 that need the complete command or reader should install

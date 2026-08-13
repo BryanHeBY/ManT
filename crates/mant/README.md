@@ -128,7 +128,7 @@ roff files are supported. Standard input additionally requires
 ## Crate architecture
 
 - `mant-ir` defines the source-neutral in-memory document and quick-reference model.
-- `mant-protocol` defines the versioned document and query contracts.
+- `mant-protocol` defines the unified versioned contracts shared by host callbacks, CLI JSON, and MCP.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
 - `mant-sources` owns local Markdown discovery and optional source updates.
 - `mant-engine` performs document lookup, lowering, projections, search, and output.

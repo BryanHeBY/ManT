@@ -1,14 +1,17 @@
 # mant-protocol
 
-`mant-protocol` defines `ManT`'s closed, versioned request and response contracts
-for CLI JSON and MCP payload boundaries. It owns schema markers, pagination,
-catalog, outline, excerpt, search, tldr-update results, and JSON Schema
-generation. The `mant` crate separately owns process framing and MCP transport.
+`mant-protocol` is `ManT`'s versioned structured interaction boundary. It
+defines the request and response DTOs shared by in-process hosts, CLI JSON,
+request JSON, and MCP without owning any transport. It owns schema markers,
+logical catalog addresses, pagination, outline, excerpt, search, tldr-update
+results, and JSON Schema generation. The `mant` crate separately composes host
+callbacks, process framing, and MCP transport.
 
-Use this crate when integrating with `ManT` across a process boundary or when a
-Rust host needs to produce or consume the same DTOs. It contains data contracts
-only: it performs no document discovery, parsing, query execution, rendering,
-terminal I/O, or MCP transport.
+Use this crate whenever a Rust host or process consumer needs stable structured
+inputs and projections. The same DTO may cross an in-memory callback or a
+serialized transport; serialization is a supported representation, not the
+crate's sole purpose. It contains data contracts only: it performs no document
+discovery, parsing, query execution, rendering, terminal I/O, or MCP transport.
 
 ## Contract families
 
@@ -66,6 +69,15 @@ Adding or changing a Rust field does not by itself authorize a wire change.
 Each schema family advances only when its serialized contract requires it;
 clients must compare complete discriminators rather than infer compatibility
 from the `ManT` package version.
+
+`mant-protocol` deliberately reuses the semantic `Block`, `Section`, `Inline`,
+`DefinitionIdentity`, `DocumentAddress`, source, metadata, diagnostic, and tldr
+types from `mant-ir`. Those types form the wire-bearing semantic subset: a
+Serde change to any of them is also a protocol change. CI compares every
+generated structural schema with the checked-in v7 snapshot, so an accidental
+IR representation change fails until compatibility is restored or the
+affected protocol discriminator is advanced explicitly. Rustdoc descriptions
+and schema titles are excluded from that structural comparison.
 
 Normalized document content is defined separately by
 [`mant-ir`](https://crates.io/crates/mant-ir). Parsing, lookup, projection, and

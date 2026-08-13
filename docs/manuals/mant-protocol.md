@@ -2,17 +2,27 @@
 
 ## Name
 
-mant-protocol — versioned JSON, schema, process, and MCP contracts for ManT
+mant-protocol — unified versioned structured interaction contracts for ManT
 
 ## Description
 
-This document describes the public machine boundary of `mant`: protocol
-discovery, the one-shot JSON request transport, every response projection, the
-normalized document model, search coordinates, and the MCP stdio tools.
+This document describes the unified structured boundary of `mant`: Rust host
+DTOs, protocol discovery, the one-shot JSON request transport, every response
+projection, the normalized document model, search coordinates, and the MCP
+stdio tools. The same contract may remain in memory or cross a serialized
+transport.
 
 The generated JSON Schemas emitted by the installed binary are authoritative.
 This reference explains how those schemas fit together and how clients should
 use them; it is not a substitute for validating against the schemas.
+
+Protocol projections reuse selected semantic types from `mant-ir`, including
+blocks, sections, inline nodes, definition identities, logical document
+addresses, metadata, diagnostics, and tldr content. These types are the
+wire-bearing semantic subset. Their Serde representations are locked by a
+complete structural Schema snapshot; changing one under an unchanged schema
+discriminator fails CI. Descriptions and titles may improve without changing
+the structural contract.
 
 ## Contract Discovery
 
@@ -143,8 +153,8 @@ mant --find '^git' --regex --kind manual --format json
 `--list` renders the hierarchy rooted at `documents`, `sources/<source>`, and
 `manual/<section>`. `--find` emits tab-separated canonical catalog paths and
 document kinds by default. JSON output contains a flat, paginatable `documents`
-array; each row has an exact `address`, stable `catalogPath`, and descriptive
-local `sourcePath`.
+array; each row has an exact `address` and stable `catalogPath`. Physical paths
+are intentionally absent from discovery results.
 
 Markdown addresses distinguish the root `documents` directory from every
 configured source. Manual addresses contain both name and exact section, so
@@ -623,7 +633,7 @@ GNU man `MR`, or conservatively from an unambiguous strongly styled
 | `examples` | Description/command pairs |
 | `platform` | tldr platform or `embedded` |
 | `language` | Language code or `und` |
-| `sourcePath` | Source page identity |
+| `sourcePath` | Optional source provenance in diagnostic-oriented CLI JSON; omitted from MCP |
 | `origin` | `embedded`, or omitted for community tldr-pages data |
 
 Every example contains the complete `command` and a `commandParts` array.
@@ -920,8 +930,8 @@ Discover both registered Markdown and section-qualified manual pages with:
 ```
 
 The catalog response reports `total`, `returned`, `offset`, `truncated`, an
-optional `nextOffset`, and `documents`. Each row has an exact tagged `address`,
-a stable canonical `catalogPath`, and a descriptive local `sourcePath`.
+optional `nextOffset`, and `documents`. Each row has an exact tagged `address`
+and a stable canonical `catalogPath`; host filesystem paths are not exposed.
 Markdown addresses carry their relative path plus a `documents` or named
 `source` origin; manual addresses carry the exact name and section. `query`
 matches leaf names and relative paths case-insensitively by default; a query

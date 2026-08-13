@@ -171,7 +171,7 @@ mant --protocol-version
 mant --version
 ```
 
-The [JSON protocol and Schema reference](docs/manuals/mant-protocol.md) documents every
+The [structured protocol and Schema reference](docs/manuals/mant-protocol.md) documents every
 versioned request and response projection, coordinate rule, and MCP tool. The
 separate [IR reference](docs/manuals/mant-ir.md) describes the richer
 in-process model from which those wire types are projected.
@@ -275,13 +275,14 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 ## Architecture
 
-![ManT architecture: source adapters enter mant-engine, which contains the mant-ir semantic center; the TUI and human renderers consume it directly, while external consumers cross mant-protocol](docs/assets/architecture.svg)
+![ManT architecture: source adapters enter mant-engine around the mant-ir semantic center; direct renderers consume the IR while host callbacks, CLI JSON, and MCP share mant-protocol](docs/assets/architecture.svg)
 
 `mant-ir` is the semantic center nested inside the `mant-engine` execution
 layer. Interactive use passes its in-memory `ResolvedContent` directly to
-`mant-ui`, and human renderers operate on the same model. External process
-consumers cross the versioned `mant-protocol` boundary hosted by the `mant`
-process instead. Git and archive updates are an optional native CLI capability
+`mant-ui`, and human renderers operate on the same model. Structured host and
+process interactions share the versioned `mant-protocol` contract layer;
+catalog callbacks, CLI JSON, request JSON, and MCP therefore use the same
+logical identities and projections. Git and archive updates are an optional native CLI capability
 layered on `mant-sources`, not part of document reads or MCP.
 
 ## Documentation
@@ -289,7 +290,7 @@ layered on `mant-sources`, not part of document reads or MCP.
 - [Installation methods and platform requirements](docs/installation.md)
 - [mant(1) command manual](docs/manuals/mant.md)
 - [Document source configuration and updates](docs/sources.md)
-- [mant-protocol(5) JSON and MCP contract](docs/manuals/mant-protocol.md)
+- [mant-protocol(5) structured integration contract](docs/manuals/mant-protocol.md)
 - [mant-ir(7) normalized document model](docs/manuals/mant-ir.md)
 - [mant-markdown(7) supported Markdown](docs/manuals/mant-markdown.md)
 - [mant-roff(7) native manual compatibility](docs/manuals/mant-roff.md)
