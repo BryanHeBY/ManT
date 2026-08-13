@@ -292,7 +292,6 @@ mod tests {
                 manual_section: "1".to_owned(),
             },
             catalog_path: format!("manual/1/{name}"),
-            source_path: format!("/usr/share/man/man1/{name}.1"),
         }
     }
 }

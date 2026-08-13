@@ -14,8 +14,8 @@ use std::{
 use mant_engine::{QueryPolicy, QueryViewResult};
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentCatalog, NodeSelector, OutlineDetail, QueryExcerpt,
-    QueryInput, QueryOutline, QueryRequest, QueryView, SearchCase, SearchScope, SearchSyntax,
-    default_search_limit,
+    QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, SearchCase, SearchScope,
+    SearchSyntax, default_search_limit,
 };
 use rmcp::{
     Json, ServerHandler, ServiceExt,
@@ -352,7 +352,7 @@ impl MantMcpServer {
         let QueryViewResult::Outline(mut outline) = self.query(request).await? else {
             unreachable!("outline request materializes an outline")
         };
-        discard_outline_diagnostics(&mut outline);
+        prepare_outline_for_mcp(&mut outline);
         Ok(Json(outline))
     }
 
@@ -380,7 +380,7 @@ impl MantMcpServer {
         let QueryViewResult::Excerpt(mut excerpt) = self.query(request).await? else {
             unreachable!("excerpt request materializes an excerpt")
         };
-        discard_lowering_diagnostics(&mut excerpt);
+        prepare_excerpt_for_mcp(&mut excerpt);
         Ok(Json(excerpt))
     }
 
@@ -409,7 +409,7 @@ impl MantMcpServer {
         let QueryViewResult::Excerpt(mut excerpt) = self.query(request).await? else {
             unreachable!("explain request materializes an excerpt")
         };
-        discard_lowering_diagnostics(&mut excerpt);
+        prepare_excerpt_for_mcp(&mut excerpt);
         Ok(Json(excerpt))
     }
 
@@ -441,9 +441,10 @@ impl MantMcpServer {
                 offset: parameters.offset.unwrap_or(0),
             },
         );
-        let QueryViewResult::Search(result) = self.query(request).await? else {
+        let QueryViewResult::Search(mut result) = self.query(request).await? else {
             unreachable!("search request materializes search results")
         };
+        prepare_search_for_mcp(&mut result);
         Ok(Json(result))
     }
 }
@@ -506,13 +507,30 @@ fn catalog_query(parameters: &DocumentListParams) -> CatalogQuery {
 /// The ordinary CLI JSON representation remains the inspection surface for
 /// these findings. MCP callers receive only selected document content and
 /// structured tool errors, avoiding repeated parser noise in agent context.
-fn discard_lowering_diagnostics(excerpt: &mut QueryExcerpt) {
+fn prepare_excerpt_for_mcp(excerpt: &mut QueryExcerpt) {
     excerpt.diagnostics.clear();
+    discard_document_source_path(&mut excerpt.source);
+    for selection in &mut excerpt.selections {
+        if let mant_protocol::ExcerptSelection::Tldr { document, .. } = selection {
+            document.source_path.clear();
+        }
+    }
 }
 
-/// Retain the compact completeness signal while omitting parser detail.
-fn discard_outline_diagnostics(outline: &mut QueryOutline) {
+/// Retain useful semantic results while omitting diagnostics and host paths.
+fn prepare_outline_for_mcp(outline: &mut QueryOutline) {
     outline.diagnostics.clear();
+    discard_document_source_path(&mut outline.source);
+}
+
+fn prepare_search_for_mcp(search: &mut QuerySearch) {
+    discard_document_source_path(&mut search.source);
+}
+
+fn discard_document_source_path(source: &mut Option<mant_ir::DocumentSource>) {
+    if let Some(source) = source {
+        source.path = None;
+    }
 }
 
 fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
@@ -761,8 +779,11 @@ mod tests {
 
     #[test]
     fn excerpts_discard_all_lowering_diagnostics() {
-        use mant_ir::{Diagnostic, DiagnosticLevel};
-        use mant_protocol::{ExcerptSchema, QueryExcerpt};
+        use mant_ir::{
+            Diagnostic, DiagnosticLevel, DocumentSource, NodeId, SourceFormat, TldrDocument,
+            TldrOrigin,
+        };
+        use mant_protocol::{ExcerptSchema, ExcerptSelection, NodePath, QueryExcerpt};
 
         let diagnostic = |level| Diagnostic {
             level,
@@ -774,7 +795,10 @@ mod tests {
             schema: ExcerptSchema::V7,
             label: "demo".to_owned(),
             producer: None,
-            source: None,
+            source: Some(DocumentSource {
+                format: SourceFormat::Markdown,
+                path: Some("/private/documents/demo.md".to_owned()),
+            }),
             meta: None,
             diagnostics: vec![
                 diagnostic(DiagnosticLevel::Style),
@@ -782,23 +806,51 @@ mod tests {
                 diagnostic(DiagnosticLevel::Error),
                 diagnostic(DiagnosticLevel::Unsupported),
             ],
-            selections: Vec::new(),
+            selections: vec![ExcerptSelection::Tldr {
+                path: NodePath::new("0"),
+                id: NodeId::new("tldr"),
+                title: "demo".to_owned(),
+                document: TldrDocument {
+                    title: "demo".to_owned(),
+                    description: Vec::new(),
+                    more_information: None,
+                    examples: Vec::new(),
+                    platform: "common".to_owned(),
+                    language: "en".to_owned(),
+                    source_path: "/private/cache/tldr/demo.md".to_owned(),
+                    origin: TldrOrigin::TldrPages,
+                },
+            }],
         };
 
-        super::discard_lowering_diagnostics(&mut excerpt);
+        super::prepare_excerpt_for_mcp(&mut excerpt);
         assert!(excerpt.diagnostics.is_empty());
+        assert_eq!(
+            excerpt
+                .source
+                .as_ref()
+                .and_then(|source| source.path.as_ref()),
+            None
+        );
+        let ExcerptSelection::Tldr { document, .. } = &excerpt.selections[0] else {
+            panic!("expected tldr selection")
+        };
+        assert!(document.source_path.is_empty());
     }
 
     #[test]
     fn outlines_keep_completeness_without_lowering_diagnostics() {
-        use mant_ir::{Diagnostic, DiagnosticLevel};
+        use mant_ir::{Diagnostic, DiagnosticLevel, DocumentSource, SourceFormat};
         use mant_protocol::{OutlineDetail, OutlineSchema, QueryOutline};
 
         let mut outline = QueryOutline {
             schema: OutlineSchema::V7,
             detail: OutlineDetail::Entries,
             label: "demo".to_owned(),
-            source: None,
+            source: Some(DocumentSource {
+                format: SourceFormat::Markdown,
+                path: Some("/private/documents/demo.md".to_owned()),
+            }),
             meta: None,
             diagnostics: vec![Diagnostic {
                 level: DiagnosticLevel::Warning,
@@ -810,8 +862,15 @@ mod tests {
             nodes: Vec::new(),
         };
 
-        super::discard_outline_diagnostics(&mut outline);
+        super::prepare_outline_for_mcp(&mut outline);
         assert!(outline.diagnostics.is_empty());
+        assert_eq!(
+            outline
+                .source
+                .as_ref()
+                .and_then(|source| source.path.as_ref()),
+            None
+        );
         assert!(!outline.entries_complete);
     }
 

@@ -24,6 +24,7 @@ pub struct TldrDocument {
     /// BCP-47-like tldr language directory, such as `en` or `zh`.
     pub language: String,
     /// Stable source path used for diagnostics and attribution.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source_path: String,
     /// Distinguishes community cache data from a document-owned quick reference.
     ///
@@ -105,5 +106,10 @@ mod tests {
         assert!(cached.get("origin").is_none());
         let embedded = serde_json::to_value(page(TldrOrigin::Embedded)).expect("embedded page");
         assert_eq!(embedded["origin"], "embedded");
+
+        let mut redacted = page(TldrOrigin::TldrPages);
+        redacted.source_path.clear();
+        let redacted = serde_json::to_value(redacted).expect("redacted page");
+        assert!(redacted.get("sourcePath").is_none());
     }
 }

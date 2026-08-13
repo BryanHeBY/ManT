@@ -295,7 +295,6 @@ fn document_summary(document: &AvailableDocument) -> DocumentSummary {
     DocumentSummary {
         catalog_path: address.catalog_path(),
         address,
-        source_path: document.path.to_string_lossy().into_owned(),
     }
 }
 

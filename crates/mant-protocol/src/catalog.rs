@@ -71,7 +71,7 @@ impl Default for CatalogQuery {
     }
 }
 
-/// One catalog row. Paths describe local provenance but are not document IDs.
+/// One catalog row identified entirely by logical names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentSummary {
@@ -79,8 +79,6 @@ pub struct DocumentSummary {
     pub address: DocumentAddress,
     /// Stable logical path used by tree and discovery frontends.
     pub catalog_path: String,
-    /// Local file provenance; never a document identifier.
-    pub source_path: String,
 }
 
 /// Deterministically ordered page of discoverable local documents.

@@ -125,7 +125,6 @@ fn document_catalog() -> DocumentCatalog {
                 },
             },
             catalog_path: "sources/pwsh7/Start-Process".to_owned(),
-            source_path: "/docs/Start-Process.md".to_owned(),
         },
         DocumentSummary {
             address: DocumentAddress::Manual {
@@ -133,7 +132,6 @@ fn document_catalog() -> DocumentCatalog {
                 manual_section: "3".to_owned(),
             },
             catalog_path: "manual/3/printf".to_owned(),
-            source_path: "/man/man3/printf.3".to_owned(),
         },
     ];
     DocumentCatalog {
@@ -203,7 +201,6 @@ fn document_finder_tree_collapses_expands_and_opens_a_nested_document() {
         documents: vec![DocumentSummary {
             address: address.clone(),
             catalog_path: "documents/languages/zh-CN/tool".to_owned(),
-            source_path: "/documents/languages/zh-CN/tool.md".to_owned(),
         }],
     };
     let mut app = App::with_catalog(&navigation_bundle(), catalog);
@@ -276,7 +273,6 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
                 manual_section: "1".to_owned(),
             },
             catalog_path: format!("manual/1/{name}"),
-            source_path: format!("/man/{name}.1"),
         })
         .collect::<Vec<_>>();
     let catalog = DocumentCatalog {
@@ -318,7 +314,6 @@ fn document_finder_keeps_matches_found_only_in_a_hierarchical_path() {
                 origin: MarkdownOrigin::Documents,
             },
             catalog_path: "documents/languages/zh-CN/tool".to_owned(),
-            source_path: "/documents/languages/zh-CN/tool.md".to_owned(),
         }],
     };
     let mut app = App::with_catalog(&navigation_bundle(), catalog);
@@ -345,7 +340,6 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
                 manual_section: "5".to_owned(),
             },
             catalog_path: "manual/5/.k5identity".to_owned(),
-            source_path: "/man/.k5identity.5".to_owned(),
         }],
     };
     let mut app = App::with_catalog(&navigation_bundle(), initial);
@@ -377,7 +371,6 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
                     manual_section: "1".to_owned(),
                 },
                 catalog_path: "manual/1/woman".to_owned(),
-                source_path: "/man/woman.1".to_owned(),
             },
             DocumentSummary {
                 address: DocumentAddress::Manual {
@@ -385,7 +378,6 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
                     manual_section: "1".to_owned(),
                 },
                 catalog_path: "manual/1/man".to_owned(),
-                source_path: "/man/man.1".to_owned(),
             },
         ],
     });

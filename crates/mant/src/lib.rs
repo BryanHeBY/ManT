@@ -911,7 +911,6 @@ mod tests {
                             },
                         },
                         catalog_path: "sources/team/guide".to_owned(),
-                        source_path: "/data/team/guide.md".to_owned(),
                     },
                     DocumentSummary {
                         address: DocumentAddress::Manual {
@@ -919,7 +918,6 @@ mod tests {
                             manual_section: "3".to_owned(),
                         },
                         catalog_path: "manual/3/printf".to_owned(),
-                        source_path: "/usr/share/man/man3/printf.3".to_owned(),
                     },
                 ],
             })
@@ -1520,6 +1518,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&output).expect("catalog JSON");
         assert_eq!(value["schema"], "mant.catalog/v7");
         assert_eq!(value["documents"][0]["address"]["path"], "guide");
+        assert!(value["documents"][0].get("sourcePath").is_none());
         assert!(diagnostics.is_empty());
     }
 

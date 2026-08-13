@@ -105,6 +105,12 @@ fn assert_tool_replies(replies: &[Value]) {
     assert_eq!(search["id"], 4);
     assert_ne!(search["result"]["isError"], true);
     assert_eq!(search["result"]["structuredContent"]["total"], 1);
+    assert!(
+        search["result"]["structuredContent"]["source"]
+            .get("path")
+            .is_none(),
+        "MCP search must omit host paths"
+    );
     assert_eq!(
         search["result"]["structuredContent"]["matches"][0]["node"]["kind"],
         "document-root"
@@ -125,6 +131,12 @@ fn assert_tool_replies(replies: &[Value]) {
         "root"
     );
     assert!(
+        excerpt["result"]["structuredContent"]["source"]
+            .get("path")
+            .is_none(),
+        "MCP excerpts must omit host paths"
+    );
+    assert!(
         excerpt["result"]["structuredContent"]
             .get("diagnostics")
             .is_none(),
@@ -143,6 +155,12 @@ fn assert_document_catalog(replies: &[Value]) {
         .as_array()
         .expect("document catalog");
     assert_eq!(documents.len(), 3);
+    assert!(
+        documents
+            .iter()
+            .all(|document| document.get("sourcePath").is_none()),
+        "MCP catalog rows must expose logical identities, not host paths"
+    );
     assert!(documents.iter().any(|document| {
         document["address"]["path"] == "mcp-registered"
             && document["address"]["kind"] == "markdown"
@@ -186,6 +204,12 @@ fn assert_semantic_replies(replies: &[Value]) {
             .is_none(),
         "MCP outlines must expose completeness without lowering diagnostics"
     );
+    assert!(
+        outline["result"]["structuredContent"]["source"]
+            .get("path")
+            .is_none(),
+        "MCP outlines must omit host paths"
+    );
 
     for (id, role) in [
         (7, "command"),
@@ -221,9 +245,9 @@ fn assert_windows_suffix_reply(replies: &[Value]) {
         .expect("Windows suffix outline reply");
     assert_ne!(suffix["result"]["isError"], true);
     assert!(
-        suffix["result"]["structuredContent"]["source"]["path"]
-            .as_str()
-            .is_some_and(|path| path.ends_with("mcp-suffix.exe.md"))
+        suffix["result"]["structuredContent"]["source"]
+            .get("path")
+            .is_none()
     );
 }
 

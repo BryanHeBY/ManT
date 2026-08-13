@@ -1251,6 +1251,7 @@ fn manual_queries_accept_flat_user_man_roots() {
         catalog["documents"][0]["catalogPath"],
         "manual/1/flat-native"
     );
+    assert!(catalog["documents"][0].get("sourcePath").is_none());
 
     fs::remove_dir_all(root).expect("remove flat manual fixture");
 }
