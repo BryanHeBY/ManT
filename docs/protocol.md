@@ -189,11 +189,11 @@ available on Linux, macOS, and Windows through the same owned IR boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires only readable native manual content, without an
-attached tldr quick reference. `--section` has the same exclusivity, while
+attached tldr quick reference. `--man-section` has the same exclusivity, while
 `--tldr` is CLI shorthand for the existing reserved `tldr` node projection. A
 request JSON client can select the same manual source unambiguously by supplying
-its discovered `section`; sections apply only to native manuals and therefore
-bypass registered Markdown.
+its discovered `manualSection`; manual sections apply only to native manuals
+and therefore bypass registered Markdown.
 
 ## Request Contract
 
@@ -221,7 +221,7 @@ unique component suffixes, and collisions are reported explicitly:
 {
   "kind": "document",
   "selector": "printf",
-  "section": "3"
+  "manualSection": "3"
 }
 ```
 
@@ -236,7 +236,7 @@ one configured source and bypasses root Markdown and manuals:
 }
 ```
 
-`source` and `section` are mutually exclusive. A missing document in an
+`source` and `manualSection` are mutually exclusive. A missing document in an
 explicit source is an error rather than a fallback.
 
 On Windows only, an extensionless document name is tried exactly and then with
@@ -287,7 +287,7 @@ does not follow redirect-only `.so` pages.
 | --- | --- | --- | --- |
 | `full` | None | None | `mant.query/v7` |
 | `outline` | `detail` | Required: `sections` or `entries` | `mant.outline/v7` |
-| `excerpt` | `nodes` | Non-empty string array | `mant.excerpt/v7` |
+| `excerpt` | `selectors` | Non-empty node-selector array | `mant.excerpt/v7` |
 | `explain` | `entry` | One non-empty semantic path, ID, or alias | `mant.excerpt/v7` |
 | `search` | Search fields below | Defaults are applied while decoding | `mant.search/v7` |
 
@@ -324,7 +324,7 @@ Request a full manual:
   "input": {
     "kind": "document",
     "selector": "printf",
-    "section": "3"
+    "manualSection": "3"
   },
   "view": {
     "kind": "full"
@@ -375,7 +375,7 @@ Retrieve a section and one option by selectors returned from an outline:
   },
   "view": {
     "kind": "excerpt",
-    "nodes": [
+    "selectors": [
       "5.4",
       "acls"
     ]
@@ -647,7 +647,7 @@ Node kinds are:
 | `tldr` | `0` | Reserved quick reference |
 | `document-root` | `root` | Content before the first heading |
 | `document-section` | `1`, `1.2`, `1.2.1` | Recursive `children` |
-| `document-entry` | `1.2/o3` | `role`, `case`, and normalized `names` |
+| `document-entry` | `1.2/e3` | `role`, `case`, and normalized `names` |
 
 `detail = "sections"` omits semantic entries. `detail = "entries"` includes
 all recognized entry roles. A missing `entriesComplete` field means `true`;
@@ -687,7 +687,7 @@ An illustrative response is:
       "children": [
         {
           "kind": "document-entry",
-          "path": "1/o1",
+          "path": "1/e1",
           "id": "option-help",
           "title": "-h, --help",
           "role": "option",
@@ -881,17 +881,18 @@ read-only tools:
 
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
-| `mant_documents_list` | None | `query`, `kind`, `source`, `section`, `limit`, `offset` | Paginated document catalog |
-| `mant_document_outline` | `name` | `source` or `section`; `detail`, default `entries` | `mant.outline/v7` |
-| `mant_document_get` | `name`, non-empty `nodes` | `source` or `section` | `mant.excerpt/v7` |
-| `mant_document_explain` | `name`, `entry` | `source` or `section` | `mant.excerpt/v7` |
-| `mant_document_search` | `name`, `pattern` | `source` or `section`, plus search settings | `mant.search/v7` |
+| `mant_documents_list` | None | `query`, `kind`, `source`, `manualSection`, `limit`, `offset` | Paginated document catalog |
+| `mant_document_outline` | `name` | `source` or `manualSection`; `detail`, default `entries` | `mant.outline/v7` |
+| `mant_document_get` | `name`, non-empty `selectors` | `source` or `manualSection` | `mant.excerpt/v7` |
+| `mant_document_explain` | `name`, `entry` | `source` or `manualSection` | `mant.excerpt/v7` |
+| `mant_document_search` | `name`, `pattern` | `source` or `manualSection`, plus search settings | `mant.search/v7` |
 
 Every tool is annotated read-only, non-destructive, and
 closed-world. Document tools resolve one name through root Markdown,
 configured installed sources, and then the native manual index. They do not
-accept arbitrary file paths. `source` selects one configured source; `section`
-selects a manual; the two selectors cannot be combined.
+accept arbitrary file paths. `source` selects one configured source;
+`manualSection` selects a native manual category; the two selectors cannot be
+combined.
 
 Discover both registered Markdown and section-qualified manual pages with:
 
@@ -960,7 +961,7 @@ The same tool accepts option aliases such as `/query` and environment aliases
 such as `PATH` or `$env:PATH`. Matching follows the entry's declared case
 policy. If an alias occurs more than once, the tool error names every candidate
 path and ID; repeat the call with one of those qualifiers, for example
-`"entry":"2/o1"` or `"entry":"command-query"`. Tool-error text is a
+`"entry":"2/e1"` or `"entry":"command-query"`. Tool-error text is a
 human-readable diagnostic rather than a separately versioned structured
 schema, so automated clients should prefer outline-provided paths and IDs and
 must not depend on parsing its prose.

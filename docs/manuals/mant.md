@@ -81,7 +81,7 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 | `--find PATTERN` | Filter document names and emit one stable record per match. |
 | `--kind KIND` | Restrict discovery to `markdown` or `manual`. |
 | `--source SOURCE` | Restrict Markdown discovery to one configured source. |
-| `--section SECTION` | Restrict manual discovery to one exact section. |
+| `--man-section MAN_SECTION` | Restrict discovery to one exact native manual category. |
 
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
@@ -94,7 +94,7 @@ the canonical catalog path and `kind`, while `--format json` returns
 mant --list
 mant --find process --source pwsh7
 mant --find '^git' --regex --kind manual
-mant --list --section 3 --format json
+mant --list --man-section 3 --format json
 ```
 
 ## Input
@@ -115,8 +115,11 @@ reported with their candidates. Complete selectors use
 documents always win; source priority and name resolve remaining duplicates in
 the order above; `.md` wins over `.markdown` for one logical path.
 `--source NAME` selects exactly one configured Git or archive source.
-`--manual` or `--section` selects only native manual content and cannot be
-combined with `--source`.
+`--manual` or `--man-section` selects only native manual content and cannot be
+combined with `--source`. `--section` remains a compatibility alias for
+`--man-section`; new commands and integrations should use the canonical name.
+This manual category is distinct from a heading inside the loaded document,
+which is selected with `--node`.
 
 `--input-format auto|markdown|roff` defaults to `auto` for files and infers the
 parser from the filename suffix. The roff loader accepts plain, gzip, and zstd
@@ -145,7 +148,8 @@ a system `mandoc` executable is required for ordinary use.
 Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
 and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 
-- `--section SECTION`: Select only a manual section such as `1` or `3p`.
+- `--man-section MAN_SECTION`: Select only a native manual category such as `1`
+  or `3p`; `--section` is a compatibility alias.
 - `--manual`: Require only a native manual instead of registered Markdown with
   the same name or an attached quick reference.
 - `--tldr`: Print only the available quick reference; equivalent to
@@ -169,7 +173,7 @@ For example, expose `widget.1` as document name `widget`:
 ```sh
 mkdir -p ./project-man/man1
 cp ./widget.1 ./project-man/man1/widget.1
-MANT_MANPATH="$PWD/project-man" mant widget --section 1
+MANT_MANPATH="$PWD/project-man" mant widget --man-section 1
 ```
 
 The equivalent PowerShell setup is:
@@ -178,7 +182,7 @@ The equivalent PowerShell setup is:
 New-Item .\project-man\man1 -ItemType Directory -Force | Out-Null
 Copy-Item .\widget.1 .\project-man\man1\widget.1
 $env:MANT_MANPATH = (Resolve-Path .\project-man).Path
-mant widget --section 1
+mant widget --man-section 1
 ```
 
 `MANT_MANPATH` is a complete ManT-specific override. `MANPATH` also replaces
@@ -195,7 +199,7 @@ index broken links. If that leaf is a redirect-only `.so` page, its target is
 resolved from the symlink's logical location and must remain inside the
 configured root; the same boundary applies to every later redirect.
 
-Logical queries accept `mant widget --section 1`, `mant 1 widget`,
+Logical queries accept `mant widget --man-section 1`, `mant 1 widget`,
 `mant 'widget(1)'`, and the canonical `mant manual/1/widget`. For isolated
 files, `mant --input ./widget.1` is also valid; only MANPATH queries may resolve
 redirect-only `.so` aliases.
@@ -476,14 +480,15 @@ exit, errors, and Rust panics.
 - `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and
   `sections` is the compact form. The CLI accepts historical `options` as an
   alias for `entries`.
-- `--node NODE`: Return a node by path or ID; repeat the option to select
-  several nodes.
+- `--node SELECTOR`: Return an outline node selected by path, stable ID, or
+  semantic-entry alias; repeat the option to select several nodes.
 - `--explain ENTRY`: Return exactly one semantic option, command, variable, or
   environment entry.
 
-Path `0` and ID alias `tldr` are reserved for either an external tldr page or a
-Markdown document's explicitly marked tldr preface. Remaining headings use
-one-based paths such as `2.3`, and semantic entries use paths such as `2.3/o4`.
+Outline path `0` and node ID `tldr` designate the reserved tldr outline node,
+which contains either an external tldr page or a Markdown document's explicitly
+marked tldr preface. It is not a native manual section. Remaining headings use
+one-based paths such as `2.3`, and semantic entries use paths such as `2.3/e4`.
 `--tldr` is a shortcut for selecting that reserved node alone.
 
 `--node` first recognizes the reserved tldr and document-root selectors, then
@@ -579,7 +584,7 @@ used by external process integrations. MCP exposes `mant_documents_list`,
 `mant_document_search`. Document tools accept a name and optional source or
 manual section, not an arbitrary local path. `mant_documents_list` merges
 local Markdown candidates with the native manual index and supports `query`,
-`kind`, exact `source` or `section`, and bounded pagination. MCP reads current
+`kind`, exact `source` or `manualSection`, and bounded pagination. MCP reads current
 local files only; it has no update tool and no cross-call snapshot guarantee.
 
 ## Data

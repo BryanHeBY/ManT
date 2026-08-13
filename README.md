@@ -203,7 +203,7 @@ MANT_MANPATH="$PWD/project-man" mant widget --manual
 ```
 
 The same index works on Linux with glibc, macOS, and Windows. Logical queries
-accept `mant 1 git`, `mant 'git(1)'`, `mant git --section 1`, and the canonical
+accept `mant 1 git`, `mant 'git(1)'`, `mant git --man-section 1`, and the canonical
 path `mant manual/1/git`. Manual aliases and parser I/O remain bounded to their
 indexed collection; the complete lookup and `.so` policy is documented in the
 [mant manual](docs/manuals/mant.md).
@@ -250,7 +250,7 @@ cat widget.1 | mant --input - --input-format roff
 
 When compatible local tldr data exists, an ordinary query places its quick
 reference before the full document as reserved node `0`. `mant git --tldr`
-selects only that presentation, while `--manual` and `--section` select only
+selects only that presentation, while `--manual` and `--man-section` select only
 native manual content. ManT reads installed-client caches or its private cache,
 which `mant --update-tldr` can update. Markdown authors may also embed a
 document-owned quick reference using the format described in the

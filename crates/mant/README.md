@@ -116,7 +116,7 @@ complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/doc
 
 When compatible local tldr data exists, an unqualified query prepends it as
 reserved outline node `0`. `--tldr` selects only that node, while `--manual`
-and `--section` select only native manual content. Reads prefer installed-client
+and `--man-section` select only native manual content. Reads prefer installed-client
 caches and then ManT's private cache; `mant --update-tldr` updates through an
 installed client or the private checkout.
 
