@@ -160,10 +160,7 @@ pub fn build_outline_with_detail(
                         .filter_map(|(index, (entry, _))| {
                             let identity = entry.identity.as_ref()?;
                             Some(OutlineNode::DocumentEntry {
-                                path: OutlinePath::entry(None, index + 1)
-                                    .expect("enumerated entry paths are one-based")
-                                    .to_string()
-                                    .into(),
+                                path: OutlinePath::entry(None, index + 1)?.to_string().into(),
                                 id: identity.id.clone(),
                                 title: identity.names.join(", "),
                                 role: identity.role,
