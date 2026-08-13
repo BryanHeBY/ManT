@@ -923,7 +923,7 @@ fn query_named_document(
         }
     }
 
-    // Explicit manual selection is exclusive: --manual and --section must not
+    // Explicit manual selection is exclusive: --manual and --man-section must not
     // appear to resolve to tldr just because the quick reference is rendered
     // before the requested page. Unqualified queries retain tldr as an
     // optional augmentation and never update it during a read.

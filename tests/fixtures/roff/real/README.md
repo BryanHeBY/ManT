@@ -30,7 +30,7 @@ behaviour.
 These summaries show **which upstream packages have actually been exercised**
 by the parser and at what breadth, so a reviewer can see corpus diversity at a
 glance and reproduce representative requests with a plain
-`mant <topic> --section <n>` invocation.
+`mant <topic> --man-section <n>` invocation.
 
 The summaries follow these principles:
 

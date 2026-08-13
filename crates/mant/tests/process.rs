@@ -1072,7 +1072,7 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
     assert_eq!(combined["document"]["source"]["format"], "man");
     assert!(!combined["tldr"].is_null());
 
-    for selector in ["--manual", "--man-section", "--section"] {
+    for selector in ["--manual", "--man-section"] {
         let arguments = if selector == "--manual" {
             vec![selector, "--format", "json", "--compact"]
         } else {
@@ -1085,6 +1085,13 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
         assert_eq!(manual["document"]["source"]["format"], "man");
         assert!(manual["tldr"].is_null());
     }
+
+    let removed = run(&["--section", "1"]);
+    assert_eq!(removed.status.code(), Some(2));
+    let diagnostic = String::from_utf8(removed.stderr).expect("removed option diagnostic");
+    assert!(diagnostic.contains("--section was removed in ManT 0.7.0"));
+    assert!(diagnostic.contains("--man-section <MAN_SECTION>"));
+    assert!(diagnostic.contains("--node <SELECTOR>"));
 
     let unavailable = run(&["--man-section", "DESCRIPTION"]);
     assert_eq!(unavailable.status.code(), Some(1));

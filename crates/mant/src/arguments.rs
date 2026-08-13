@@ -203,7 +203,7 @@ pub(crate) enum Command {
     about = "Read or query structured local manuals and Markdown",
     disable_help_flag = true,
     version,
-    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
     after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --update-docs\n  mant --mcp",
     group = ArgGroup::new("action")
         .args(["selector", "input", "list", "find", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
@@ -211,7 +211,7 @@ pub(crate) enum Command {
         .multiple(false)
 )]
 struct Cli {
-    /// Document selector, or a man-style SECTION NAME pair.
+    /// Document selector, or a man-style MAN_SECTION NAME pair.
     #[arg(value_name = "SELECTOR", value_parser = non_empty, num_args = 0..)]
     selector: Vec<String>,
 
@@ -244,7 +244,6 @@ struct Cli {
     /// Print only a native manual category such as 1 or 3p.
     #[arg(
         long = "man-section",
-        visible_alias = "section",
         value_name = "MAN_SECTION",
         value_parser = non_empty,
         conflicts_with = "input",
@@ -280,7 +279,7 @@ struct Cli {
     )]
     tldr: bool,
 
-    /// Print selectable sections and semantic entries by default.
+    /// Print the addressable outline tree; semantic entries are included by default.
     #[arg(
         long,
         value_name = "DETAIL",
@@ -529,6 +528,12 @@ struct Cli {
 // ── Normalization and semantic validation ─────────────────────────────────
 
 pub(crate) fn parse(arguments: &[String]) -> Result<Command, clap::Error> {
+    if uses_removed_section_option(arguments) {
+        return Err(command_error(
+            ErrorKind::UnknownArgument,
+            "--section was removed in ManT 0.7.0 because \"section\" is ambiguous\n\n  select a Unix manual category:\n    mant <NAME> --man-section <MAN_SECTION>\n\n  select a document heading or outline node:\n    mant <NAME> --node <SELECTOR>\n\n  inspect available outline nodes:\n    mant <NAME> --outline",
+        ));
+    }
     let parsed =
         match Cli::try_parse_from(iter::once("mant").chain(arguments.iter().map(String::as_str))) {
             Ok(parsed) => parsed,
@@ -544,6 +549,27 @@ pub(crate) fn parse(arguments: &[String]) -> Result<Command, clap::Error> {
         };
 
     normalize(parsed)
+}
+
+fn uses_removed_section_option(arguments: &[String]) -> bool {
+    let mut explain_value = false;
+    for argument in arguments {
+        if explain_value {
+            explain_value = false;
+            continue;
+        }
+        if argument == "--" {
+            break;
+        }
+        if argument == "--explain" {
+            explain_value = true;
+            continue;
+        }
+        if argument == "--section" || argument.starts_with("--section=") {
+            return true;
+        }
+    }
+    false
 }
 
 fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
@@ -1034,7 +1060,7 @@ mod tests {
                 "sensitive",
                 "--kind",
                 "manual",
-                "--section",
+                "--man-section",
                 "3",
                 "--limit",
                 "20",
@@ -1132,7 +1158,7 @@ mod tests {
             }
         ));
         assert!(
-            parse(&args(&["--input", "README.md", "--section", "1"]))
+            parse(&args(&["--input", "README.md", "--man-section", "1"]))
                 .expect_err("input has no man section selector")
                 .to_string()
                 .contains("cannot be used with")
@@ -1152,11 +1178,11 @@ mod tests {
     }
 
     #[test]
-    fn parses_format_section_and_compact_json_options() {
+    fn parses_format_man_section_and_compact_json_options() {
         assert_eq!(
             parse(&args(&[
                 "printf",
-                "--section",
+                "--man-section",
                 "3",
                 "--format",
                 "json",
@@ -1193,6 +1219,34 @@ mod tests {
                 ..
             } if source.as_deref() == Some("team")
         ));
+    }
+
+    #[test]
+    fn removed_section_option_is_hidden_and_explains_both_replacements() {
+        let Command::Help(help) = parse(&args(&["--help"])).expect("help") else {
+            panic!("expected help output")
+        };
+        assert!(!help.contains("--section"));
+
+        for arguments in [
+            vec!["cmake", "--section", "1"],
+            vec!["cmake", "--section=DESCRIPTION"],
+            vec!["--section", "1"],
+        ] {
+            let diagnostic = parse(&args(&arguments))
+                .expect_err("removed option")
+                .to_string();
+            assert!(diagnostic.contains("--section was removed in ManT 0.7.0"));
+            assert!(diagnostic.contains("--man-section <MAN_SECTION>"));
+            assert!(diagnostic.contains("--node <SELECTOR>"));
+            assert!(diagnostic.contains("--outline"));
+        }
+
+        assert!(!super::uses_removed_section_option(&args(&[
+            "cmake",
+            "--explain",
+            "--section",
+        ])));
     }
 
     #[test]
@@ -1501,7 +1555,7 @@ mod tests {
             vec!["git", "--outline", "--preserve-anchors"],
             vec!["git", "--search", "branch", "--preserve-anchors"],
             vec!["--request-json", "git", "--format", "json"],
-            vec!["--request-json", "--section", "1", "--format", "json"],
+            vec!["--request-json", "--man-section", "1", "--format", "json"],
             vec!["--request-json", "--outline", "--format", "json"],
             vec!["git", "--outline", "--node", "1"],
             vec!["git", "--outline", "--search", "branch"],
@@ -1512,15 +1566,15 @@ mod tests {
             vec!["git", "--regex"],
             vec!["git", "--search", "branch", "--limit", "many"],
             vec!["git", "--node"],
-            vec!["--section", "1"],
+            vec!["--man-section", "1"],
             vec!["--update-tldr", "--format", "json"],
             vec!["--update-docs", "--format", "json"],
             vec!["--prune-docs", "--format", "json"],
             vec!["--dry-run"],
-            vec!["git", "--source", "team", "--section", "1"],
+            vec!["git", "--source", "team", "--man-section", "1"],
             vec!["git", "--source", "team", "--manual"],
             vec!["git", "--manual", "--tldr"],
-            vec!["git", "--section", "1", "--tldr"],
+            vec!["git", "--man-section", "1", "--tldr"],
             vec!["git", "--tldr", "--color", "always", "--format", "json"],
             vec!["git", "--tldr", "--node", "0"],
             vec!["git", "--tldr", "--ui"],

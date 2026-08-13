@@ -46,7 +46,7 @@
 
 ```text
 mant <SELECTOR> [OPTIONS]
-mant <SECTION> <NAME> [OPTIONS]
+mant <MAN_SECTION> <NAME> [OPTIONS]
 mant --input <PATH|-> [--input-format FORMAT] [OPTIONS]
 mant --list [FILTERS]
 mant --find PATTERN [FILTERS]
@@ -116,10 +116,8 @@ documents always win; source priority and name resolve remaining duplicates in
 the order above; `.md` wins over `.markdown` for one logical path.
 `--source NAME` selects exactly one configured Git or archive source.
 `--manual` or `--man-section` selects only native manual content and cannot be
-combined with `--source`. `--section` remains a compatibility alias for
-`--man-section`; new commands and integrations should use the canonical name.
-This manual category is distinct from a heading inside the loaded document,
-which is selected with `--node`.
+combined with `--source`. A manual category is distinct from a heading or
+other node inside the loaded document, which is selected with `--node`.
 
 `--input-format auto|markdown|roff` defaults to `auto` for files and infers the
 parser from the filename suffix. The roff loader accepts plain, gzip, and zstd
@@ -149,7 +147,7 @@ Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
 and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 
 - `--man-section MAN_SECTION`: Select only a native manual category such as `1`
-  or `3p`; `--section` is a compatibility alias.
+  or `3p`.
 - `--manual`: Require only a native manual instead of registered Markdown with
   the same name or an attached quick reference.
 - `--tldr`: Print only the available quick reference; equivalent to
