@@ -1,0 +1,5005 @@
+{
+  "catalog": {
+    "$id": "urn:mant:catalog:v7",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "DocumentCatalog",
+    "description": "Deterministically ordered page of discoverable local documents.",
+    "type": "object",
+    "properties": {
+      "documents": {
+        "description": "Deterministically ordered page of document summaries.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/DocumentSummary"
+        }
+      },
+      "nextOffset": {
+        "description": "Offset for the next page, when one exists.",
+        "type": [
+          "integer",
+          "null"
+        ],
+        "format": "uint32",
+        "minimum": 0
+      },
+      "offset": {
+        "description": "Applied zero-based result offset.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "returned": {
+        "description": "Number of rows present in [`Self::documents`].",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "schema": {
+        "description": "Exact response schema discriminator.",
+        "$ref": "#/$defs/CatalogSchema"
+      },
+      "total": {
+        "description": "Total rows matching the filters before pagination.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "truncated": {
+        "description": "Whether matching rows remain after this page.",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "schema",
+      "total",
+      "returned",
+      "offset",
+      "truncated",
+      "documents"
+    ],
+    "$defs": {
+      "CatalogSchema": {
+        "description": "Exact schema marker for a local document catalog.",
+        "oneOf": [
+          {
+            "description": "Version 7 of the document-catalog protocol.",
+            "type": "string",
+            "const": "mant.catalog/v7"
+          }
+        ]
+      },
+      "DocumentAddress": {
+        "description": "Stable selector for one discoverable document candidate.",
+        "oneOf": [
+          {
+            "description": "A Markdown document registered in the document catalog.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "markdown"
+              },
+              "origin": {
+                "description": "Storage namespace containing the relative path.",
+                "$ref": "#/$defs/MarkdownOrigin"
+              },
+              "path": {
+                "description": "Extension-free path relative to the selected Markdown origin.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "origin"
+            ]
+          },
+          {
+            "description": "An installed native manual page.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category such as `1` or `3p`.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Manual topic without its section suffix.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "manualSection"
+            ]
+          }
+        ]
+      },
+      "DocumentSummary": {
+        "description": "One catalog row identified entirely by logical names.",
+        "type": "object",
+        "properties": {
+          "address": {
+            "description": "Stable logical document identity.",
+            "$ref": "#/$defs/DocumentAddress"
+          },
+          "catalogPath": {
+            "description": "Stable logical path used by tree and discovery frontends.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "catalogPath"
+        ]
+      },
+      "MarkdownOrigin": {
+        "description": "Storage identity of one registered Markdown document.",
+        "oneOf": [
+          {
+            "description": "The user's primary `documents` tree.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "documents"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A configured source cache.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "source"
+              },
+              "name": {
+                "description": "Configured source name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "excerpt": {
+    "$id": "urn:mant:excerpt:v7",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "QueryExcerpt",
+    "description": "One or more independently selected nodes from a complete query.",
+    "type": "object",
+    "properties": {
+      "diagnostics": {
+        "description": "Recoverable parser and validation findings.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/Diagnostic"
+        }
+      },
+      "label": {
+        "description": "Human-readable selected-document label.",
+        "type": "string"
+      },
+      "meta": {
+        "description": "Document metadata, when one was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentMeta"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "producer": {
+        "description": "Process and parser provenance, when a document was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Producer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "schema": {
+        "description": "Exact response schema discriminator.",
+        "$ref": "#/$defs/ExcerptSchema"
+      },
+      "selections": {
+        "description": "Selected nodes in request order.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/ExcerptSelection"
+        }
+      },
+      "source": {
+        "description": "Authoritative document source, when one was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentSource"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "schema",
+      "label",
+      "selections"
+    ],
+    "$defs": {
+      "Block": {
+        "description": "A document block capable of preserving nested manual structures.",
+        "oneOf": [
+          {
+            "description": "Reflowable prose.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Styled inline content in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "paragraph"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Literal content that preserves line boundaries.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Styled literal runs and line breaks.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "language": {
+                "description": "Optional language hint, primarily from fenced Markdown.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "preformatted"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Ordered, unordered, or marker-free block list.",
+            "type": "object",
+            "properties": {
+              "compact": {
+                "description": "Whether renderers should suppress extra spacing between items.",
+                "type": "boolean"
+              },
+              "items": {
+                "description": "List items in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ListItem"
+                }
+              },
+              "kind": {
+                "description": "Marker behavior for the list.",
+                "$ref": "#/$defs/ListKind"
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "start": {
+                "description": "First ordinal for an ordered list.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "const": "list"
+              }
+            },
+            "required": [
+              "type",
+              "kind",
+              "items"
+            ]
+          },
+          {
+            "description": "Term-and-description list.",
+            "type": "object",
+            "properties": {
+              "compact": {
+                "description": "Whether renderers should suppress extra spacing between definitions.",
+                "type": "boolean"
+              },
+              "items": {
+                "description": "Definitions in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DefinitionItem"
+                }
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "definition-list"
+              }
+            },
+            "required": [
+              "type",
+              "items"
+            ]
+          },
+          {
+            "description": "Block-capable table.",
+            "type": "object",
+            "properties": {
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "rows": {
+                "description": "Logical rows in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/TableRow"
+                }
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "table"
+              }
+            },
+            "required": [
+              "type",
+              "rows"
+            ]
+          },
+          {
+            "description": "Equation retained as a normalized expression.",
+            "type": "object",
+            "properties": {
+              "display": {
+                "description": "Whether the equation occupies its own display block.",
+                "type": "boolean"
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "equation"
+              },
+              "value": {
+                "description": "Equation source after parser normalization.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Explicit vertical spacing requested by the source.",
+            "type": "object",
+            "properties": {
+              "lines": {
+                "description": "Number of terminal rows requested.",
+                "type": "integer",
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "vertical-space"
+              }
+            },
+            "required": [
+              "type",
+              "lines"
+            ]
+          },
+          {
+            "description": "Horizontal thematic separator.",
+            "type": "object",
+            "properties": {
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "thematic-break"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "description": "Source construct retained because it has no native IR representation.",
+            "type": "object",
+            "properties": {
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "name": {
+                "description": "Macro or construct name, when known.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "text": {
+                "description": "Best-effort visible text retained for consumers.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "const": "unsupported"
+              }
+            },
+            "required": [
+              "type",
+              "text"
+            ]
+          }
+        ]
+      },
+      "DefinitionCase": {
+        "description": "Case policy used when matching one semantic entry's names.",
+        "oneOf": [
+          {
+            "description": "Names must match with the same Unicode scalar values and case.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Names match without ASCII case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
+      "DefinitionIdentity": {
+        "description": "Stable, renderer-independent identity for one navigable definition.",
+        "type": "object",
+        "properties": {
+          "case": {
+            "description": "Matching policy used for aliases in semantic entry lookup.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "id": {
+            "description": "Unique within one document and shared with the term's inline anchor.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "names": {
+            "description": "Plain normalized names suitable for outlines and agent selection.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Semantic category used by lookup and presentation.",
+            "$ref": "#/$defs/DefinitionRole"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "case",
+          "names"
+        ]
+      },
+      "DefinitionItem": {
+        "description": "A term may have aliases and its description may contain arbitrary blocks.",
+        "type": "object",
+        "properties": {
+          "description": {
+            "description": "Block content describing the terms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "identity": {
+            "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DefinitionIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inlineTerm": {
+            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
+            "type": "boolean"
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "terms": {
+            "description": "One or more equivalent displayed terms.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Inline"
+              }
+            }
+          }
+        },
+        "required": [
+          "terms",
+          "description"
+        ]
+      },
+      "DefinitionRole": {
+        "description": "Semantic role assigned before roff macro details leave the native layer.",
+        "oneOf": [
+          {
+            "description": "Command-line option or switch.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Executable subcommand or verb.",
+            "type": "string",
+            "const": "command"
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Other named configuration or language variable.",
+            "type": "string",
+            "const": "variable"
+          }
+        ]
+      },
+      "Diagnostic": {
+        "description": "Recoverable parser or IR validation finding attached to the document.",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code, when the producer defines one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "description": "Severity of the finding.",
+            "$ref": "#/$defs/DiagnosticLevel"
+          },
+          "message": {
+            "description": "Concise human-readable explanation.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Original source location associated with the finding.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "level",
+          "message"
+        ]
+      },
+      "DiagnosticLevel": {
+        "description": "Severity reported by the parser without turning useful output into failure.",
+        "oneOf": [
+          {
+            "description": "Non-semantic source style issue.",
+            "type": "string",
+            "const": "style"
+          },
+          {
+            "description": "Recoverable source defect or portability concern.",
+            "type": "string",
+            "const": "warning"
+          },
+          {
+            "description": "Invalid source that left partial output available.",
+            "type": "string",
+            "const": "error"
+          },
+          {
+            "description": "Valid construct that the active parser cannot represent fully.",
+            "type": "string",
+            "const": "unsupported"
+          }
+        ]
+      },
+      "DocumentMeta": {
+        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "type": "object",
+        "properties": {
+          "aliasTarget": {
+            "description": "Logical target of a native `.so` alias page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "arch": {
+            "description": "Architecture qualifier declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "description": "Normalized publication or revision date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manualSection": {
+            "description": "Native manual category such as `1` or `3p`; unrelated to document headings.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "names": {
+            "description": "Primary name followed by any aliases from the NAME section.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "os": {
+            "description": "Operating-system label declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "Canonical document title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "description": "Manual volume or collection label.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DocumentSource": {
+        "description": "Original source identity; temporary decompression paths must not appear.",
+        "type": "object",
+        "properties": {
+          "format": {
+            "description": "Syntax family consumed by the parser.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "path": {
+            "description": "Stable caller-facing path, when the source has one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "Engine": {
+        "description": "Parser implementation recorded at the process boundary.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Parser implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Parser implementation version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "ExcerptSchema": {
+        "description": "Exact schema marker for selected query content.",
+        "oneOf": [
+          {
+            "description": "Version 7 of the excerpt protocol.",
+            "type": "string",
+            "const": "mant.excerpt/v7"
+          }
+        ]
+      },
+      "ExcerptSelection": {
+        "description": "One selected document node together with its location in the complete outline.",
+        "oneOf": [
+          {
+            "description": "Optional quick-reference content preceding the primary document.",
+            "type": "object",
+            "properties": {
+              "document": {
+                "description": "Complete quick-reference content.",
+                "$ref": "#/$defs/TldrDocument"
+              },
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "tldr"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "document"
+            ]
+          },
+          {
+            "description": "Complete document content that appears before the first heading.",
+            "type": "object",
+            "properties": {
+              "blocks": {
+                "description": "Complete leading blocks.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Block"
+                }
+              },
+              "id": {
+                "description": "Virtual document-root identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-root"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title for the leading content.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "blocks"
+            ]
+          },
+          {
+            "description": "Complete selected document node, including all descendant sections.",
+            "type": "object",
+            "properties": {
+              "breadcrumbs": {
+                "description": "Ordered ancestors from the document root to the parent section.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/OutlineReference"
+                }
+              },
+              "id": {
+                "description": "Stable document-local section identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-section"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "section": {
+                "description": "Complete selected section including descendants.",
+                "$ref": "#/$defs/Section"
+              },
+              "title": {
+                "description": "Section heading text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "section"
+            ]
+          },
+          {
+            "description": "One addressable semantic definition and its complete description.",
+            "type": "object",
+            "properties": {
+              "breadcrumbs": {
+                "description": "Ordered containing sections from outermost to innermost.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/OutlineReference"
+                }
+              },
+              "entry": {
+                "description": "Complete semantic definition.",
+                "$ref": "#/$defs/DefinitionItem"
+              },
+              "id": {
+                "description": "Stable document-local entry identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-entry"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Primary display term.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "entry"
+            ]
+          }
+        ]
+      },
+      "Inline": {
+        "description": "Inline content shared by prose, terms, and styled preformatted runs.",
+        "oneOf": [
+          {
+            "description": "Plain visible text.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "value": {
+                "description": "Text after source escape processing.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Strongly emphasized content.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Nested inline content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "type": {
+                "type": "string",
+                "const": "strong"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Emphasized content.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Nested inline content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "type": {
+                "type": "string",
+                "const": "emphasis"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Literal code or symbolic token.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "code"
+              },
+              "value": {
+                "description": "Literal text value.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "A typed link whose navigation semantics are explicit in the IR.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Visible linked content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "target": {
+                "description": "Resolved navigation destination.",
+                "$ref": "#/$defs/LinkTarget"
+              },
+              "title": {
+                "description": "Optional advisory title.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "link"
+              }
+            },
+            "required": [
+              "type",
+              "target",
+              "children"
+            ]
+          },
+          {
+            "description": "A zero-width, document-local navigation destination such as mdoc `Tg`.\n\nAnchor IDs and section IDs share one namespace within a document.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Document-local destination identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "type": {
+                "type": "string",
+                "const": "anchor"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ]
+          },
+          {
+            "description": "Hard line break that renderers must preserve.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "line-break"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        ]
+      },
+      "LayoutHint": {
+        "description": "Presentation hints retained from roff but optional for semantic outputs.",
+        "type": "object",
+        "properties": {
+          "indentColumns": {
+            "description": "Additional terminal columns requested before the block.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this block.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        }
+      },
+      "LinkTarget": {
+        "description": "Resolved destination kind for [`Inline::Link`].",
+        "oneOf": [
+          {
+            "description": "An external URI from mdoc `Lk`, man `UR`, or Markdown links.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "external"
+              },
+              "uri": {
+                "description": "Absolute URI.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "uri"
+            ]
+          },
+          {
+            "description": "An email address without a `mailto:` prefix.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Mailbox address without a URI scheme.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "email"
+              }
+            },
+            "required": [
+              "kind",
+              "address"
+            ]
+          },
+          {
+            "description": "A relative Markdown link to another document in the current source.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local destination.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed reference to another installed manual page.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when specified by the source.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A reference to a section in this document, normally originating at\nmdoc `Sx`.\n\n`target` is the document-local [`Section::id`] rather than a rendered\nheading slug. This keeps navigation stable across output formats.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Target section identity in the current document.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "section"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
+          }
+        ]
+      },
+      "ListItem": {
+        "description": "A list item contains blocks so nested lists and displays remain intact.",
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "description": "Arbitrary item content in source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          }
+        },
+        "required": [
+          "blocks"
+        ]
+      },
+      "ListKind": {
+        "description": "Marker behavior of an ordinary list.",
+        "oneOf": [
+          {
+            "description": "Unordered list with bullets.",
+            "type": "string",
+            "const": "bullet"
+          },
+          {
+            "description": "Ordered list with ordinal markers.",
+            "type": "string",
+            "const": "ordered"
+          },
+          {
+            "description": "Marker-free list.",
+            "type": "string",
+            "const": "plain"
+          }
+        ]
+      },
+      "NodeId": {
+        "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
+        "type": "string"
+      },
+      "NodePath": {
+        "description": "Canonical structural address emitted for a node in a projected outline.",
+        "type": "string"
+      },
+      "OutlineReference": {
+        "description": "Compact ancestor identity attached to an excerpt selection.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Stable document-local identity.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "path": {
+            "description": "Canonical structural outline path.",
+            "$ref": "#/$defs/NodePath"
+          },
+          "title": {
+            "description": "Display title.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "id",
+          "title"
+        ]
+      },
+      "Producer": {
+        "description": "Identifies `ManT` and the parser used to build a wire document.",
+        "type": "object",
+        "properties": {
+          "engine": {
+            "description": "Parser implementation, when an authoritative document was parsed.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Engine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "description": "Process implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Process package version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "Section": {
+        "description": "Source-neutral document section headed by Markdown, man, or mdoc content.\n\nThis is a content subtree, not the native manual category stored in\n[`DocumentMeta::manual_section`]. Depth is derived from tree position.",
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "description": "Content directly owned by this section.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "children": {
+            "description": "Nested subsections in source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Section"
+            }
+          },
+          "id": {
+            "description": "Unique within one document; consumers must not treat it as a global ID.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "source": {
+            "description": "Heading location in the original source.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this heading by the source macro set.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "title": {
+            "description": "Visible heading text.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "blocks",
+          "children"
+        ]
+      },
+      "SourceFormat": {
+        "description": "Source format consumed by the normalization engine.",
+        "oneOf": [
+          {
+            "description": "Traditional man(7) macros.",
+            "type": "string",
+            "const": "man"
+          },
+          {
+            "description": "Semantic mdoc(7) macros.",
+            "type": "string",
+            "const": "mdoc"
+          },
+          {
+            "description": "Markdown with `ManT` semantic extensions.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SourceSpan": {
+        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "type": "object",
+        "properties": {
+          "byteRange": {
+            "description": "Exact half-open byte range, when supplied by the parser.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TextRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "column": {
+            "description": "One-based starting column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endColumn": {
+            "description": "One-based exclusive ending column, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endLine": {
+            "description": "One-based inclusive ending line, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "line": {
+            "description": "One-based starting line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "line",
+          "column"
+        ]
+      },
+      "TableAlignment": {
+        "description": "Horizontal alignment requested by a source table.",
+        "oneOf": [
+          {
+            "description": "Align content to the left edge.",
+            "type": "string",
+            "const": "left"
+          },
+          {
+            "description": "Center content horizontally.",
+            "type": "string",
+            "const": "center"
+          },
+          {
+            "description": "Align content to the right edge.",
+            "type": "string",
+            "const": "right"
+          }
+        ]
+      },
+      "TableCell": {
+        "description": "Block-capable table cell with optional layout information.",
+        "type": "object",
+        "properties": {
+          "alignment": {
+            "description": "Requested horizontal alignment, if explicitly known.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableAlignment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocks": {
+            "description": "Block content contained in the cell.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "columnSpan": {
+            "description": "Number of logical columns occupied by the cell.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "rowSpan": {
+            "description": "Number of logical rows occupied by the cell.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "blocks"
+        ]
+      },
+      "TableRow": {
+        "description": "One logical table row.",
+        "type": "object",
+        "properties": {
+          "cells": {
+            "description": "Logical cells in column order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TableCell"
+            }
+          }
+        },
+        "required": [
+          "cells"
+        ]
+      },
+      "TextRange": {
+        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive end offset.",
+            "$ref": "#/$defs/TextSize"
+          },
+          "start": {
+            "description": "Inclusive start offset.",
+            "$ref": "#/$defs/TextSize"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "TextSize": {
+        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "TldrCommandPart": {
+        "description": "Styled command fragment used by the TUI to distinguish placeholders.",
+        "oneOf": [
+          {
+            "description": "Literal command text.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "value": {
+                "description": "Literal fragment value.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Replaceable value marked by the tldr placeholder syntax.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "placeholder"
+              },
+              "value": {
+                "description": "Placeholder text without presentation styling.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          }
+        ]
+      },
+      "TldrDocument": {
+        "description": "One normalized quick reference included in a query bundle.",
+        "type": "object",
+        "properties": {
+          "description": {
+            "description": "`CommonMark` paragraphs from the page's leading block quote.\n\nSource-only soft line breaks are normalized to spaces inside each\nelement; distinct paragraphs remain distinct elements.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "examples": {
+            "description": "Command examples in display order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TldrExample"
+            }
+          },
+          "language": {
+            "description": "BCP-47-like tldr language directory, such as `en` or `zh`.",
+            "type": "string"
+          },
+          "moreInformation": {
+            "description": "Upstream reference URL extracted from the page, when present.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin": {
+            "description": "Distinguishes community cache data from a document-owned quick reference.\n\nThe field is omitted for tldr-pages data to preserve the established\nwire representation. Absence therefore means [`TldrOrigin::TldrPages`].",
+            "$ref": "#/$defs/TldrOrigin"
+          },
+          "platform": {
+            "description": "tldr platform bucket such as `common`, `linux`, or `windows`.",
+            "type": "string"
+          },
+          "sourcePath": {
+            "description": "Stable source path used for diagnostics and attribution.",
+            "type": "string"
+          },
+          "title": {
+            "description": "Page title, normally the command name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "examples",
+          "platform",
+          "language"
+        ]
+      },
+      "TldrExample": {
+        "description": "Human explanation paired with one shell command example.",
+        "type": "object",
+        "properties": {
+          "command": {
+            "description": "Complete shell command with placeholders in their source spelling.",
+            "type": "string"
+          },
+          "commandParts": {
+            "description": "Styled fragments whose concatenation equals [`Self::command`].",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TldrCommandPart"
+            }
+          },
+          "description": {
+            "description": "One normalized prose paragraph describing the command example.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "command",
+          "commandParts"
+        ]
+      },
+      "TldrOrigin": {
+        "description": "Provenance controls attribution without changing quick-reference rendering.",
+        "oneOf": [
+          {
+            "description": "Content obtained from the community tldr-pages cache.",
+            "type": "string",
+            "const": "tldr-pages"
+          },
+          {
+            "description": "Quick reference embedded in the authoritative Markdown document.",
+            "type": "string",
+            "const": "embedded"
+          }
+        ]
+      }
+    }
+  },
+  "outline": {
+    "$id": "urn:mant:outline:v7",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "QueryOutline",
+    "description": "A block-free tree used to discover selectable query content.",
+    "type": "object",
+    "properties": {
+      "detail": {
+        "description": "Detail level used to build this projection.",
+        "$ref": "#/$defs/OutlineDetail"
+      },
+      "diagnostics": {
+        "description": "Recoverable parser findings available to diagnostic-oriented transports.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/Diagnostic"
+        }
+      },
+      "entriesComplete": {
+        "description": "False when semantic-entry declarations were rejected during lowering.\n\nThe field is omitted for complete outlines so compact transports pay no\nsteady-state bandwidth cost.",
+        "type": "boolean"
+      },
+      "label": {
+        "description": "Human-readable selected-document label.",
+        "type": "string"
+      },
+      "meta": {
+        "description": "Document metadata, when an authoritative document was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentMeta"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "nodes": {
+        "description": "Addressable nodes in document order.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/OutlineNode"
+        }
+      },
+      "schema": {
+        "description": "Exact response schema discriminator.",
+        "$ref": "#/$defs/OutlineSchema"
+      },
+      "source": {
+        "description": "Authoritative document source, when one was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentSource"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "schema",
+      "detail",
+      "label",
+      "nodes"
+    ],
+    "$defs": {
+      "DefinitionCase": {
+        "description": "Case policy used when matching one semantic entry's names.",
+        "oneOf": [
+          {
+            "description": "Names must match with the same Unicode scalar values and case.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Names match without ASCII case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
+      "DefinitionRole": {
+        "description": "Semantic role assigned before roff macro details leave the native layer.",
+        "oneOf": [
+          {
+            "description": "Command-line option or switch.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Executable subcommand or verb.",
+            "type": "string",
+            "const": "command"
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Other named configuration or language variable.",
+            "type": "string",
+            "const": "variable"
+          }
+        ]
+      },
+      "Diagnostic": {
+        "description": "Recoverable parser or IR validation finding attached to the document.",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code, when the producer defines one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "description": "Severity of the finding.",
+            "$ref": "#/$defs/DiagnosticLevel"
+          },
+          "message": {
+            "description": "Concise human-readable explanation.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Original source location associated with the finding.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "level",
+          "message"
+        ]
+      },
+      "DiagnosticLevel": {
+        "description": "Severity reported by the parser without turning useful output into failure.",
+        "oneOf": [
+          {
+            "description": "Non-semantic source style issue.",
+            "type": "string",
+            "const": "style"
+          },
+          {
+            "description": "Recoverable source defect or portability concern.",
+            "type": "string",
+            "const": "warning"
+          },
+          {
+            "description": "Invalid source that left partial output available.",
+            "type": "string",
+            "const": "error"
+          },
+          {
+            "description": "Valid construct that the active parser cannot represent fully.",
+            "type": "string",
+            "const": "unsupported"
+          }
+        ]
+      },
+      "DocumentMeta": {
+        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "type": "object",
+        "properties": {
+          "aliasTarget": {
+            "description": "Logical target of a native `.so` alias page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "arch": {
+            "description": "Architecture qualifier declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "description": "Normalized publication or revision date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manualSection": {
+            "description": "Native manual category such as `1` or `3p`; unrelated to document headings.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "names": {
+            "description": "Primary name followed by any aliases from the NAME section.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "os": {
+            "description": "Operating-system label declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "Canonical document title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "description": "Manual volume or collection label.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DocumentSource": {
+        "description": "Original source identity; temporary decompression paths must not appear.",
+        "type": "object",
+        "properties": {
+          "format": {
+            "description": "Syntax family consumed by the parser.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "path": {
+            "description": "Stable caller-facing path, when the source has one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "NodeId": {
+        "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
+        "type": "string"
+      },
+      "NodePath": {
+        "description": "Canonical structural address emitted for a node in a projected outline.",
+        "type": "string"
+      },
+      "OutlineDetail": {
+        "description": "Amount of semantic detail included in an outline projection.",
+        "oneOf": [
+          {
+            "description": "Include only section-level navigation nodes.",
+            "type": "string",
+            "const": "sections"
+          },
+          {
+            "description": "Include sections and semantic definition entries.",
+            "type": "string",
+            "const": "entries"
+          }
+        ]
+      },
+      "OutlineNode": {
+        "description": "One uniquely addressable node in a query outline.",
+        "oneOf": [
+          {
+            "description": "Optional quick-reference node.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "tldr"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "Addressable document content that precedes the first heading.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Virtual document-root identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-root"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title for the leading content.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "One semantic document section.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Nested section and entry nodes.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/OutlineNode"
+                }
+              },
+              "id": {
+                "description": "Stable document-local section identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-section"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Section heading text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "children"
+            ]
+          },
+          {
+            "description": "One semantic command, option, or variable definition.",
+            "type": "object",
+            "properties": {
+              "case": {
+                "description": "Alias case-matching policy.",
+                "$ref": "#/$defs/DefinitionCase"
+              },
+              "id": {
+                "description": "Stable document-local entry identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-entry"
+              },
+              "names": {
+                "description": "Normalized selectable aliases.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "role": {
+                "description": "Semantic category of the entry.",
+                "$ref": "#/$defs/DefinitionRole"
+              },
+              "title": {
+                "description": "Primary display term.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "role",
+              "case",
+              "names"
+            ]
+          }
+        ]
+      },
+      "OutlineSchema": {
+        "description": "Exact schema marker for a query outline response.",
+        "oneOf": [
+          {
+            "description": "Version 7 of the outline protocol.",
+            "type": "string",
+            "const": "mant.outline/v7"
+          }
+        ]
+      },
+      "SourceFormat": {
+        "description": "Source format consumed by the normalization engine.",
+        "oneOf": [
+          {
+            "description": "Traditional man(7) macros.",
+            "type": "string",
+            "const": "man"
+          },
+          {
+            "description": "Semantic mdoc(7) macros.",
+            "type": "string",
+            "const": "mdoc"
+          },
+          {
+            "description": "Markdown with `ManT` semantic extensions.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SourceSpan": {
+        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "type": "object",
+        "properties": {
+          "byteRange": {
+            "description": "Exact half-open byte range, when supplied by the parser.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TextRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "column": {
+            "description": "One-based starting column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endColumn": {
+            "description": "One-based exclusive ending column, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endLine": {
+            "description": "One-based inclusive ending line, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "line": {
+            "description": "One-based starting line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "line",
+          "column"
+        ]
+      },
+      "TextRange": {
+        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive end offset.",
+            "$ref": "#/$defs/TextSize"
+          },
+          "start": {
+            "description": "Inclusive start offset.",
+            "$ref": "#/$defs/TextSize"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "TextSize": {
+        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      }
+    }
+  },
+  "query": {
+    "$id": "urn:mant:query:v7",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "QueryBundle",
+    "description": "Versioned full-query result emitted at JSON and MCP boundaries.",
+    "type": "object",
+    "properties": {
+      "address": {
+        "description": "Exact registered address selected for this query. Direct input paths\nand standard input do not belong to the registered catalog.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentAddress"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "document": {
+        "description": "Authoritative structured document, when found.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentResponse"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "label": {
+        "description": "Human-readable selected-document label.",
+        "type": "string"
+      },
+      "schema": {
+        "description": "Exact response schema discriminator.",
+        "$ref": "#/$defs/QuerySchema"
+      },
+      "tldr": {
+        "description": "Optional quick-reference page resolved alongside the document.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/TldrDocument"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "schema",
+      "label"
+    ],
+    "$defs": {
+      "Block": {
+        "description": "A document block capable of preserving nested manual structures.",
+        "oneOf": [
+          {
+            "description": "Reflowable prose.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Styled inline content in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "paragraph"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Literal content that preserves line boundaries.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Styled literal runs and line breaks.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "language": {
+                "description": "Optional language hint, primarily from fenced Markdown.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "preformatted"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Ordered, unordered, or marker-free block list.",
+            "type": "object",
+            "properties": {
+              "compact": {
+                "description": "Whether renderers should suppress extra spacing between items.",
+                "type": "boolean"
+              },
+              "items": {
+                "description": "List items in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ListItem"
+                }
+              },
+              "kind": {
+                "description": "Marker behavior for the list.",
+                "$ref": "#/$defs/ListKind"
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "start": {
+                "description": "First ordinal for an ordered list.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint64",
+                "minimum": 0
+              },
+              "type": {
+                "type": "string",
+                "const": "list"
+              }
+            },
+            "required": [
+              "type",
+              "kind",
+              "items"
+            ]
+          },
+          {
+            "description": "Term-and-description list.",
+            "type": "object",
+            "properties": {
+              "compact": {
+                "description": "Whether renderers should suppress extra spacing between definitions.",
+                "type": "boolean"
+              },
+              "items": {
+                "description": "Definitions in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DefinitionItem"
+                }
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "definition-list"
+              }
+            },
+            "required": [
+              "type",
+              "items"
+            ]
+          },
+          {
+            "description": "Block-capable table.",
+            "type": "object",
+            "properties": {
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "rows": {
+                "description": "Logical rows in source order.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/TableRow"
+                }
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "table"
+              }
+            },
+            "required": [
+              "type",
+              "rows"
+            ]
+          },
+          {
+            "description": "Equation retained as a normalized expression.",
+            "type": "object",
+            "properties": {
+              "display": {
+                "description": "Whether the equation occupies its own display block.",
+                "type": "boolean"
+              },
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "equation"
+              },
+              "value": {
+                "description": "Equation source after parser normalization.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Explicit vertical spacing requested by the source.",
+            "type": "object",
+            "properties": {
+              "lines": {
+                "description": "Number of terminal rows requested.",
+                "type": "integer",
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "vertical-space"
+              }
+            },
+            "required": [
+              "type",
+              "lines"
+            ]
+          },
+          {
+            "description": "Horizontal thematic separator.",
+            "type": "object",
+            "properties": {
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "thematic-break"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          {
+            "description": "Source construct retained because it has no native IR representation.",
+            "type": "object",
+            "properties": {
+              "layout": {
+                "description": "Source-derived indentation and vertical spacing.",
+                "$ref": "#/$defs/LayoutHint"
+              },
+              "name": {
+                "description": "Macro or construct name, when known.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source": {
+                "description": "Original source range.",
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceSpan"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "text": {
+                "description": "Best-effort visible text retained for consumers.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "const": "unsupported"
+              }
+            },
+            "required": [
+              "type",
+              "text"
+            ]
+          }
+        ]
+      },
+      "DefinitionCase": {
+        "description": "Case policy used when matching one semantic entry's names.",
+        "oneOf": [
+          {
+            "description": "Names must match with the same Unicode scalar values and case.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Names match without ASCII case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
+      "DefinitionIdentity": {
+        "description": "Stable, renderer-independent identity for one navigable definition.",
+        "type": "object",
+        "properties": {
+          "case": {
+            "description": "Matching policy used for aliases in semantic entry lookup.",
+            "$ref": "#/$defs/DefinitionCase"
+          },
+          "id": {
+            "description": "Unique within one document and shared with the term's inline anchor.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "names": {
+            "description": "Plain normalized names suitable for outlines and agent selection.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "role": {
+            "description": "Semantic category used by lookup and presentation.",
+            "$ref": "#/$defs/DefinitionRole"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "case",
+          "names"
+        ]
+      },
+      "DefinitionItem": {
+        "description": "A term may have aliases and its description may contain arbitrary blocks.",
+        "type": "object",
+        "properties": {
+          "description": {
+            "description": "Block content describing the terms.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "identity": {
+            "description": "Present when the native lowering pass can identify this definition as\na stable semantic entry, such as a command-line option.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DefinitionIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inlineTerm": {
+            "description": "Render the term on the same line as the first description line (a man(7)\nhanging tag that fits the indent) instead of on its own line. Decided\nonce during lowering so every renderer lays the item out identically.",
+            "type": "boolean"
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this item when man(7) changes `.PD`.\n`None` inherits the containing list's compactness policy.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "terms": {
+            "description": "One or more equivalent displayed terms.",
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Inline"
+              }
+            }
+          }
+        },
+        "required": [
+          "terms",
+          "description"
+        ]
+      },
+      "DefinitionRole": {
+        "description": "Semantic role assigned before roff macro details leave the native layer.",
+        "oneOf": [
+          {
+            "description": "Command-line option or switch.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Executable subcommand or verb.",
+            "type": "string",
+            "const": "command"
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Other named configuration or language variable.",
+            "type": "string",
+            "const": "variable"
+          }
+        ]
+      },
+      "Diagnostic": {
+        "description": "Recoverable parser or IR validation finding attached to the document.",
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code, when the producer defines one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "description": "Severity of the finding.",
+            "$ref": "#/$defs/DiagnosticLevel"
+          },
+          "message": {
+            "description": "Concise human-readable explanation.",
+            "type": "string"
+          },
+          "source": {
+            "description": "Original source location associated with the finding.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "level",
+          "message"
+        ]
+      },
+      "DiagnosticLevel": {
+        "description": "Severity reported by the parser without turning useful output into failure.",
+        "oneOf": [
+          {
+            "description": "Non-semantic source style issue.",
+            "type": "string",
+            "const": "style"
+          },
+          {
+            "description": "Recoverable source defect or portability concern.",
+            "type": "string",
+            "const": "warning"
+          },
+          {
+            "description": "Invalid source that left partial output available.",
+            "type": "string",
+            "const": "error"
+          },
+          {
+            "description": "Valid construct that the active parser cannot represent fully.",
+            "type": "string",
+            "const": "unsupported"
+          }
+        ]
+      },
+      "DocumentAddress": {
+        "description": "Stable selector for one discoverable document candidate.",
+        "oneOf": [
+          {
+            "description": "A Markdown document registered in the document catalog.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "markdown"
+              },
+              "origin": {
+                "description": "Storage namespace containing the relative path.",
+                "$ref": "#/$defs/MarkdownOrigin"
+              },
+              "path": {
+                "description": "Extension-free path relative to the selected Markdown origin.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "origin"
+            ]
+          },
+          {
+            "description": "An installed native manual page.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category such as `1` or `3p`.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Manual topic without its section suffix.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "manualSection"
+            ]
+          }
+        ]
+      },
+      "DocumentMeta": {
+        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "type": "object",
+        "properties": {
+          "aliasTarget": {
+            "description": "Logical target of a native `.so` alias page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "arch": {
+            "description": "Architecture qualifier declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "description": "Normalized publication or revision date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manualSection": {
+            "description": "Native manual category such as `1` or `3p`; unrelated to document headings.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "names": {
+            "description": "Primary name followed by any aliases from the NAME section.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "os": {
+            "description": "Operating-system label declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "Canonical document title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "description": "Manual volume or collection label.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DocumentResponse": {
+        "description": "Serializable v7 envelope around `ManT`'s protocol-independent document IR.",
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "description": "Content preceding the first section.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "diagnostics": {
+            "description": "Recoverable parsing and validation findings.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Diagnostic"
+            }
+          },
+          "meta": {
+            "description": "Source-neutral document metadata.",
+            "$ref": "#/$defs/DocumentMeta"
+          },
+          "producer": {
+            "description": "Process and parser provenance.",
+            "$ref": "#/$defs/Producer"
+          },
+          "schema": {
+            "description": "Exact response schema discriminator.",
+            "$ref": "#/$defs/DocumentSchema"
+          },
+          "sections": {
+            "description": "Top-level semantic sections in source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Section"
+            }
+          },
+          "source": {
+            "description": "Original source identity.",
+            "$ref": "#/$defs/DocumentSource"
+          }
+        },
+        "required": [
+          "schema",
+          "producer",
+          "source",
+          "meta",
+          "sections"
+        ]
+      },
+      "DocumentSchema": {
+        "description": "Exact schema marker for a normalized structured document response.",
+        "oneOf": [
+          {
+            "description": "Version 7 of the structured-document protocol.",
+            "type": "string",
+            "const": "mant.document/v7"
+          }
+        ]
+      },
+      "DocumentSource": {
+        "description": "Original source identity; temporary decompression paths must not appear.",
+        "type": "object",
+        "properties": {
+          "format": {
+            "description": "Syntax family consumed by the parser.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "path": {
+            "description": "Stable caller-facing path, when the source has one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "Engine": {
+        "description": "Parser implementation recorded at the process boundary.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Parser implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Parser implementation version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "Inline": {
+        "description": "Inline content shared by prose, terms, and styled preformatted runs.",
+        "oneOf": [
+          {
+            "description": "Plain visible text.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "value": {
+                "description": "Text after source escape processing.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Strongly emphasized content.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Nested inline content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "type": {
+                "type": "string",
+                "const": "strong"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Emphasized content.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Nested inline content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "type": {
+                "type": "string",
+                "const": "emphasis"
+              }
+            },
+            "required": [
+              "type",
+              "children"
+            ]
+          },
+          {
+            "description": "Literal code or symbolic token.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "code"
+              },
+              "value": {
+                "description": "Literal text value.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "A typed link whose navigation semantics are explicit in the IR.",
+            "type": "object",
+            "properties": {
+              "children": {
+                "description": "Visible linked content.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Inline"
+                }
+              },
+              "target": {
+                "description": "Resolved navigation destination.",
+                "$ref": "#/$defs/LinkTarget"
+              },
+              "title": {
+                "description": "Optional advisory title.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "const": "link"
+              }
+            },
+            "required": [
+              "type",
+              "target",
+              "children"
+            ]
+          },
+          {
+            "description": "A zero-width, document-local navigation destination such as mdoc `Tg`.\n\nAnchor IDs and section IDs share one namespace within a document.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Document-local destination identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "type": {
+                "type": "string",
+                "const": "anchor"
+              }
+            },
+            "required": [
+              "type",
+              "id"
+            ]
+          },
+          {
+            "description": "Hard line break that renderers must preserve.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "line-break"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        ]
+      },
+      "LayoutHint": {
+        "description": "Presentation hints retained from roff but optional for semantic outputs.",
+        "type": "object",
+        "properties": {
+          "indentColumns": {
+            "description": "Additional terminal columns requested before the block.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this block.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        }
+      },
+      "LinkTarget": {
+        "description": "Resolved destination kind for [`Inline::Link`].",
+        "oneOf": [
+          {
+            "description": "An external URI from mdoc `Lk`, man `UR`, or Markdown links.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "external"
+              },
+              "uri": {
+                "description": "Absolute URI.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "uri"
+            ]
+          },
+          {
+            "description": "An email address without a `mailto:` prefix.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "Mailbox address without a URI scheme.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "email"
+              }
+            },
+            "required": [
+              "kind",
+              "address"
+            ]
+          },
+          {
+            "description": "A relative Markdown link to another document in the current source.",
+            "type": "object",
+            "properties": {
+              "fragment": {
+                "description": "Optional document-local destination.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "description": "Extension-free relative document path.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A typed reference to another installed manual page.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "manual"
+              },
+              "manualSection": {
+                "description": "Native manual category, when specified by the source.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "description": "Manual topic without a section suffix.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          },
+          {
+            "description": "A reference to a section in this document, normally originating at\nmdoc `Sx`.\n\n`target` is the document-local [`Section::id`] rather than a rendered\nheading slug. This keeps navigation stable across output formats.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Target section identity in the current document.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "section"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
+          }
+        ]
+      },
+      "ListItem": {
+        "description": "A list item contains blocks so nested lists and displays remain intact.",
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "description": "Arbitrary item content in source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          }
+        },
+        "required": [
+          "blocks"
+        ]
+      },
+      "ListKind": {
+        "description": "Marker behavior of an ordinary list.",
+        "oneOf": [
+          {
+            "description": "Unordered list with bullets.",
+            "type": "string",
+            "const": "bullet"
+          },
+          {
+            "description": "Ordered list with ordinal markers.",
+            "type": "string",
+            "const": "ordered"
+          },
+          {
+            "description": "Marker-free list.",
+            "type": "string",
+            "const": "plain"
+          }
+        ]
+      },
+      "MarkdownOrigin": {
+        "description": "Storage identity of one registered Markdown document.",
+        "oneOf": [
+          {
+            "description": "The user's primary `documents` tree.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "documents"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A configured source cache.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "source"
+              },
+              "name": {
+                "description": "Configured source name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "name"
+            ]
+          }
+        ]
+      },
+      "NodeId": {
+        "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
+        "type": "string"
+      },
+      "Producer": {
+        "description": "Identifies `ManT` and the parser used to build a wire document.",
+        "type": "object",
+        "properties": {
+          "engine": {
+            "description": "Parser implementation, when an authoritative document was parsed.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Engine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "description": "Process implementation name.",
+            "type": "string"
+          },
+          "version": {
+            "description": "Process package version.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "QuerySchema": {
+        "description": "Exact schema marker for a complete `ManT` query result.",
+        "oneOf": [
+          {
+            "description": "Query envelope built around `mant.document/v7`.",
+            "type": "string",
+            "const": "mant.query/v7"
+          }
+        ]
+      },
+      "Section": {
+        "description": "Source-neutral document section headed by Markdown, man, or mdoc content.\n\nThis is a content subtree, not the native manual category stored in\n[`DocumentMeta::manual_section`]. Depth is derived from tree position.",
+        "type": "object",
+        "properties": {
+          "blocks": {
+            "description": "Content directly owned by this section.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "children": {
+            "description": "Nested subsections in source order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Section"
+            }
+          },
+          "id": {
+            "description": "Unique within one document; consumers must not treat it as a global ID.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "source": {
+            "description": "Heading location in the original source.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spacingBeforeLines": {
+            "description": "Terminal rows requested before this heading by the source macro set.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "title": {
+            "description": "Visible heading text.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "blocks",
+          "children"
+        ]
+      },
+      "SourceFormat": {
+        "description": "Source format consumed by the normalization engine.",
+        "oneOf": [
+          {
+            "description": "Traditional man(7) macros.",
+            "type": "string",
+            "const": "man"
+          },
+          {
+            "description": "Semantic mdoc(7) macros.",
+            "type": "string",
+            "const": "mdoc"
+          },
+          {
+            "description": "Markdown with `ManT` semantic extensions.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SourceSpan": {
+        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "type": "object",
+        "properties": {
+          "byteRange": {
+            "description": "Exact half-open byte range, when supplied by the parser.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TextRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "column": {
+            "description": "One-based starting column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endColumn": {
+            "description": "One-based exclusive ending column, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endLine": {
+            "description": "One-based inclusive ending line, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "line": {
+            "description": "One-based starting line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "line",
+          "column"
+        ]
+      },
+      "TableAlignment": {
+        "description": "Horizontal alignment requested by a source table.",
+        "oneOf": [
+          {
+            "description": "Align content to the left edge.",
+            "type": "string",
+            "const": "left"
+          },
+          {
+            "description": "Center content horizontally.",
+            "type": "string",
+            "const": "center"
+          },
+          {
+            "description": "Align content to the right edge.",
+            "type": "string",
+            "const": "right"
+          }
+        ]
+      },
+      "TableCell": {
+        "description": "Block-capable table cell with optional layout information.",
+        "type": "object",
+        "properties": {
+          "alignment": {
+            "description": "Requested horizontal alignment, if explicitly known.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TableAlignment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocks": {
+            "description": "Block content contained in the cell.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Block"
+            }
+          },
+          "columnSpan": {
+            "description": "Number of logical columns occupied by the cell.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "rowSpan": {
+            "description": "Number of logical rows occupied by the cell.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "blocks"
+        ]
+      },
+      "TableRow": {
+        "description": "One logical table row.",
+        "type": "object",
+        "properties": {
+          "cells": {
+            "description": "Logical cells in column order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TableCell"
+            }
+          }
+        },
+        "required": [
+          "cells"
+        ]
+      },
+      "TextRange": {
+        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive end offset.",
+            "$ref": "#/$defs/TextSize"
+          },
+          "start": {
+            "description": "Inclusive start offset.",
+            "$ref": "#/$defs/TextSize"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "TextSize": {
+        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "TldrCommandPart": {
+        "description": "Styled command fragment used by the TUI to distinguish placeholders.",
+        "oneOf": [
+          {
+            "description": "Literal command text.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "value": {
+                "description": "Literal fragment value.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          },
+          {
+            "description": "Replaceable value marked by the tldr placeholder syntax.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "placeholder"
+              },
+              "value": {
+                "description": "Placeholder text without presentation styling.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ]
+          }
+        ]
+      },
+      "TldrDocument": {
+        "description": "One normalized quick reference included in a query bundle.",
+        "type": "object",
+        "properties": {
+          "description": {
+            "description": "`CommonMark` paragraphs from the page's leading block quote.\n\nSource-only soft line breaks are normalized to spaces inside each\nelement; distinct paragraphs remain distinct elements.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "examples": {
+            "description": "Command examples in display order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TldrExample"
+            }
+          },
+          "language": {
+            "description": "BCP-47-like tldr language directory, such as `en` or `zh`.",
+            "type": "string"
+          },
+          "moreInformation": {
+            "description": "Upstream reference URL extracted from the page, when present.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin": {
+            "description": "Distinguishes community cache data from a document-owned quick reference.\n\nThe field is omitted for tldr-pages data to preserve the established\nwire representation. Absence therefore means [`TldrOrigin::TldrPages`].",
+            "$ref": "#/$defs/TldrOrigin"
+          },
+          "platform": {
+            "description": "tldr platform bucket such as `common`, `linux`, or `windows`.",
+            "type": "string"
+          },
+          "sourcePath": {
+            "description": "Stable source path used for diagnostics and attribution.",
+            "type": "string"
+          },
+          "title": {
+            "description": "Page title, normally the command name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "examples",
+          "platform",
+          "language"
+        ]
+      },
+      "TldrExample": {
+        "description": "Human explanation paired with one shell command example.",
+        "type": "object",
+        "properties": {
+          "command": {
+            "description": "Complete shell command with placeholders in their source spelling.",
+            "type": "string"
+          },
+          "commandParts": {
+            "description": "Styled fragments whose concatenation equals [`Self::command`].",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/TldrCommandPart"
+            }
+          },
+          "description": {
+            "description": "One normalized prose paragraph describing the command example.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "command",
+          "commandParts"
+        ]
+      },
+      "TldrOrigin": {
+        "description": "Provenance controls attribution without changing quick-reference rendering.",
+        "oneOf": [
+          {
+            "description": "Content obtained from the community tldr-pages cache.",
+            "type": "string",
+            "const": "tldr-pages"
+          },
+          {
+            "description": "Quick reference embedded in the authoritative Markdown document.",
+            "type": "string",
+            "const": "embedded"
+          }
+        ]
+      }
+    }
+  },
+  "request": {
+    "$id": "urn:mant:request:v7",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "QueryRequest",
+    "description": "Native use-case input. The engine validates semantic constraints before I/O.",
+    "type": "object",
+    "properties": {
+      "input": {
+        "description": "Document source to resolve.",
+        "$ref": "#/$defs/QueryInput"
+      },
+      "schema": {
+        "description": "Exact request schema discriminator.",
+        "$ref": "#/$defs/RequestSchema"
+      },
+      "view": {
+        "description": "Projection applied after the document is loaded.",
+        "$ref": "#/$defs/QueryView"
+      }
+    },
+    "additionalProperties": false,
+    "required": [
+      "schema",
+      "input",
+      "view"
+    ],
+    "$defs": {
+      "InputFormat": {
+        "description": "Parser selected for an explicit physical input.",
+        "oneOf": [
+          {
+            "description": "Infer the parser from extension and content conventions.",
+            "type": "string",
+            "const": "auto"
+          },
+          {
+            "description": "Parse the input as Markdown.",
+            "type": "string",
+            "const": "markdown"
+          },
+          {
+            "description": "Parse the input as roff with libmandoc.",
+            "type": "string",
+            "const": "roff"
+          }
+        ]
+      },
+      "NodeSelector": {
+        "description": "User-supplied outline selector interpreted as a path, node ID, or entry alias.\n\nResolution remains an engine concern; this wire type prevents an input\nselector from being confused with a canonical [`NodePath`].",
+        "type": "string"
+      },
+      "OutlineDetail": {
+        "description": "Amount of semantic detail included in an outline projection.",
+        "oneOf": [
+          {
+            "description": "Include only section-level navigation nodes.",
+            "type": "string",
+            "const": "sections"
+          },
+          {
+            "description": "Include sections and semantic definition entries.",
+            "type": "string",
+            "const": "entries"
+          }
+        ]
+      },
+      "QueryInput": {
+        "description": "Source selected by one public query request.",
+        "oneOf": [
+          {
+            "description": "Resolve a registered Markdown document first, then a local manual page.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "document"
+              },
+              "manualSection": {
+                "description": "Optional native manual category such as `1` or `3p`.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "selector": {
+                "description": "Hierarchical catalog path or unqualified component-suffix selector.",
+                "type": "string"
+              },
+              "source": {
+                "description": "Optional configured Markdown source. It bypasses root documents and manuals.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "selector"
+            ]
+          },
+          {
+            "description": "Read and parse one explicit local Markdown or roff file.",
+            "type": "object",
+            "properties": {
+              "format": {
+                "description": "Parser-selection policy for the file.",
+                "$ref": "#/$defs/InputFormat"
+              },
+              "kind": {
+                "type": "string",
+                "const": "file"
+              },
+              "path": {
+                "description": "Physical path supplied by the caller.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "path",
+              "format"
+            ]
+          }
+        ]
+      },
+      "QueryView": {
+        "description": "Projection requested after loading one complete structured document.",
+        "oneOf": [
+          {
+            "description": "Return the complete structured query bundle.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "full"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Return a navigable structural projection.",
+            "type": "object",
+            "properties": {
+              "detail": {
+                "description": "Amount of semantic detail included in the outline.",
+                "$ref": "#/$defs/OutlineDetail"
+              },
+              "kind": {
+                "type": "string",
+                "const": "outline"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "detail"
+            ]
+          },
+          {
+            "description": "Return content selected by one or more node paths, IDs, or aliases.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "excerpt"
+              },
+              "selectors": {
+                "description": "Ordered selectors resolved by the engine.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/NodeSelector"
+                },
+                "minItems": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "selectors"
+            ]
+          },
+          {
+            "description": "Resolve exactly one semantic entry and return its complete description.",
+            "type": "object",
+            "properties": {
+              "entry": {
+                "description": "Exact or normalized semantic entry name.",
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "const": "explain"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "entry"
+            ]
+          },
+          {
+            "description": "Search visible document content with bounded pagination.",
+            "type": "object",
+            "properties": {
+              "case": {
+                "description": "Case-matching policy.",
+                "$ref": "#/$defs/SearchCase",
+                "default": "insensitive"
+              },
+              "contextLines": {
+                "description": "Neighboring rendered lines included around each match.",
+                "type": "integer",
+                "format": "uint16",
+                "default": 0,
+                "maximum": 100,
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "search"
+              },
+              "limit": {
+                "description": "Maximum number of matches returned.",
+                "type": "integer",
+                "format": "uint32",
+                "default": 100,
+                "maximum": 10000,
+                "minimum": 1
+              },
+              "offset": {
+                "description": "Number of matching results skipped before collection.",
+                "type": "integer",
+                "format": "uint32",
+                "default": 0,
+                "minimum": 0
+              },
+              "pattern": {
+                "description": "Literal or regular-expression search pattern.",
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 1
+              },
+              "scope": {
+                "description": "Semantic content included in the search.",
+                "$ref": "#/$defs/SearchScope",
+                "default": "visible"
+              },
+              "syntax": {
+                "description": "Pattern language.",
+                "$ref": "#/$defs/SearchSyntax",
+                "default": "literal"
+              },
+              "word": {
+                "description": "Require matches to be bounded by word boundaries.",
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "pattern"
+            ]
+          }
+        ]
+      },
+      "RequestSchema": {
+        "description": "Exact schema marker for a native query request.",
+        "oneOf": [
+          {
+            "description": "Query and projection request accepted through `--request-json`.",
+            "type": "string",
+            "const": "mant.request/v7"
+          }
+        ]
+      },
+      "SearchCase": {
+        "description": "Case-folding policy applied when compiling the matcher.",
+        "oneOf": [
+          {
+            "description": "Ignore case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          },
+          {
+            "description": "Preserve case distinctions.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Match case-sensitively only when the pattern contains uppercase text.",
+            "type": "string",
+            "const": "smart"
+          }
+        ]
+      },
+      "SearchScope": {
+        "description": "Text representation searched while Markdown remains the coordinate basis.",
+        "oneOf": [
+          {
+            "description": "Search the text visible after parsing `ManT`'s generated `CommonMark`.",
+            "type": "string",
+            "const": "visible"
+          },
+          {
+            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SearchSyntax": {
+        "description": "Pattern language used for one search.",
+        "oneOf": [
+          {
+            "description": "Match the pattern as ordinary text.",
+            "type": "string",
+            "const": "literal"
+          },
+          {
+            "description": "Interpret the pattern as a Rust regular expression.",
+            "type": "string",
+            "const": "regex"
+          }
+        ]
+      }
+    }
+  },
+  "search": {
+    "$id": "urn:mant:search:v7",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "QuerySearch",
+    "description": "Complete, paginatable search result returned to agents and scripts.",
+    "type": "object",
+    "properties": {
+      "label": {
+        "description": "Human-readable selected-document label.",
+        "type": "string"
+      },
+      "matches": {
+        "description": "Matching occurrences in render order.",
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/SearchMatch"
+        }
+      },
+      "meta": {
+        "description": "Document metadata, when one was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentMeta"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "nextOffset": {
+        "description": "Offset for the next page, when one exists.",
+        "type": [
+          "integer",
+          "null"
+        ],
+        "format": "uint32",
+        "minimum": 0
+      },
+      "offset": {
+        "description": "Applied zero-based match offset.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "query": {
+        "description": "Normalized query applied by the engine.",
+        "$ref": "#/$defs/SearchQuery"
+      },
+      "render": {
+        "description": "Coordinate-space description shared by all matches.",
+        "$ref": "#/$defs/SearchRender"
+      },
+      "returned": {
+        "description": "Number of matches present in [`Self::matches`].",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "schema": {
+        "description": "Exact response schema discriminator.",
+        "$ref": "#/$defs/SearchSchema"
+      },
+      "source": {
+        "description": "Authoritative document source, when one was loaded.",
+        "anyOf": [
+          {
+            "$ref": "#/$defs/DocumentSource"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "total": {
+        "description": "Total matches before pagination.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      },
+      "truncated": {
+        "description": "Whether additional matches remain.",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "schema",
+      "label",
+      "query",
+      "render",
+      "total",
+      "returned",
+      "offset",
+      "truncated",
+      "matches"
+    ],
+    "$defs": {
+      "DefinitionCase": {
+        "description": "Case policy used when matching one semantic entry's names.",
+        "oneOf": [
+          {
+            "description": "Names must match with the same Unicode scalar values and case.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Names match without ASCII case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          }
+        ]
+      },
+      "DefinitionRole": {
+        "description": "Semantic role assigned before roff macro details leave the native layer.",
+        "oneOf": [
+          {
+            "description": "Command-line option or switch.",
+            "type": "string",
+            "const": "option"
+          },
+          {
+            "description": "Executable subcommand or verb.",
+            "type": "string",
+            "const": "command"
+          },
+          {
+            "description": "Process environment variable.",
+            "type": "string",
+            "const": "environment-variable"
+          },
+          {
+            "description": "Other named configuration or language variable.",
+            "type": "string",
+            "const": "variable"
+          }
+        ]
+      },
+      "DocumentMeta": {
+        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "type": "object",
+        "properties": {
+          "aliasTarget": {
+            "description": "Logical target of a native `.so` alias page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "arch": {
+            "description": "Architecture qualifier declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "description": "Normalized publication or revision date.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manualSection": {
+            "description": "Native manual category such as `1` or `3p`; unrelated to document headings.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "names": {
+            "description": "Primary name followed by any aliases from the NAME section.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "os": {
+            "description": "Operating-system label declared by the source.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "Canonical document title.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "description": "Manual volume or collection label.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "DocumentSource": {
+        "description": "Original source identity; temporary decompression paths must not appear.",
+        "type": "object",
+        "properties": {
+          "format": {
+            "description": "Syntax family consumed by the parser.",
+            "$ref": "#/$defs/SourceFormat"
+          },
+          "path": {
+            "description": "Stable caller-facing path, when the source has one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "MarkdownSchema": {
+        "description": "Markdown contract used as the coordinate space for every search format.",
+        "oneOf": [
+          {
+            "description": "Version 1 of `ManT`'s deterministic Markdown rendering contract.",
+            "type": "string",
+            "const": "mant.markdown/v1"
+          }
+        ]
+      },
+      "NodeId": {
+        "description": "Document-local identity shared by sections, anchors, and entries.\n\nLowering layers normalize these values; [`crate::validate_document`] reports\nany invalid value introduced through deserialization or custom producers.",
+        "type": "string"
+      },
+      "NodePath": {
+        "description": "Canonical structural address emitted for a node in a projected outline.",
+        "type": "string"
+      },
+      "SearchCase": {
+        "description": "Case-folding policy applied when compiling the matcher.",
+        "oneOf": [
+          {
+            "description": "Ignore case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          },
+          {
+            "description": "Preserve case distinctions.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Match case-sensitively only when the pattern contains uppercase text.",
+            "type": "string",
+            "const": "smart"
+          }
+        ]
+      },
+      "SearchContextLine": {
+        "description": "One rendered Markdown line surrounding a match.",
+        "type": "object",
+        "properties": {
+          "line": {
+            "description": "One-based line number in the deterministic Markdown render.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "matched": {
+            "description": "Whether this is one of the lines intersecting the match.",
+            "type": "boolean"
+          },
+          "text": {
+            "description": "Complete rendered line without its newline terminator.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "text",
+          "matched"
+        ]
+      },
+      "SearchMarkdownRange": {
+        "description": "Half-open byte range plus one-based human coordinates in full Markdown.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive zero-based UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "endColumn": {
+            "description": "One-based exclusive ending column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endLine": {
+            "description": "One-based ending line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "startByte": {
+            "description": "Inclusive zero-based UTF-8 byte offset.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "startColumn": {
+            "description": "One-based starting column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "startLine": {
+            "description": "One-based starting line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "startByte",
+          "endByte",
+          "startLine",
+          "startColumn",
+          "endLine",
+          "endColumn"
+        ]
+      },
+      "SearchMatch": {
+        "description": "One exact occurrence and both of its structural and rendered locations.",
+        "type": "object",
+        "properties": {
+          "context": {
+            "description": "Optional rendered lines surrounding the match.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchContextLine"
+            }
+          },
+          "markdown": {
+            "description": "Location in the deterministic full Markdown render.",
+            "$ref": "#/$defs/SearchMarkdownRange"
+          },
+          "matchedText": {
+            "description": "Exact text consumed by the matcher.",
+            "type": "string"
+          },
+          "node": {
+            "description": "Nearest structurally addressable node.",
+            "$ref": "#/$defs/SearchNode"
+          },
+          "ordinal": {
+            "description": "One-based occurrence number in the unpaginated result set.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "preview": {
+            "description": "Compact single-string presentation of the match.",
+            "type": "string"
+          },
+          "section": {
+            "description": "Containing document section, when applicable.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SearchSectionReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "description": "Original-source location, when the parser retained one.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ordinal",
+          "node",
+          "matchedText",
+          "markdown",
+          "preview"
+        ]
+      },
+      "SearchNode": {
+        "description": "Nearest node accepted by `mant --node` for a matching occurrence.",
+        "oneOf": [
+          {
+            "description": "Match in optional quick-reference content.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "tldr"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "Match in content preceding the first heading.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Virtual document-root identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-root"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "Match in an ordinary semantic section.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local section identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-section"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Section heading text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "Match within a semantic definition.",
+            "type": "object",
+            "properties": {
+              "case": {
+                "description": "Alias case-matching policy.",
+                "$ref": "#/$defs/DefinitionCase"
+              },
+              "id": {
+                "description": "Stable document-local entry identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-entry"
+              },
+              "names": {
+                "description": "Normalized selectable aliases.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "role": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/DefinitionRole"
+              },
+              "title": {
+                "description": "Primary display term.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "role",
+              "case",
+              "names"
+            ]
+          }
+        ]
+      },
+      "SearchQuery": {
+        "description": "Normalized search configuration echoed in a search response.",
+        "type": "object",
+        "properties": {
+          "case": {
+            "description": "Case-matching policy.",
+            "$ref": "#/$defs/SearchCase",
+            "default": "insensitive"
+          },
+          "contextLines": {
+            "description": "Neighboring rendered lines included around each match.",
+            "type": "integer",
+            "format": "uint16",
+            "default": 0,
+            "maximum": 100,
+            "minimum": 0
+          },
+          "limit": {
+            "description": "Maximum number of matches returned.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 100,
+            "maximum": 10000,
+            "minimum": 1
+          },
+          "offset": {
+            "description": "Number of matching results skipped before collection.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          },
+          "pattern": {
+            "description": "Literal or regular-expression search pattern.",
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1
+          },
+          "scope": {
+            "description": "Text representation searched.",
+            "$ref": "#/$defs/SearchScope",
+            "default": "visible"
+          },
+          "syntax": {
+            "description": "Pattern language.",
+            "$ref": "#/$defs/SearchSyntax",
+            "default": "literal"
+          },
+          "word": {
+            "description": "Require matches to be bounded by word boundaries.",
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "pattern",
+          "syntax",
+          "case",
+          "scope",
+          "word",
+          "contextLines",
+          "limit",
+          "offset"
+        ]
+      },
+      "SearchRender": {
+        "description": "Description of the deterministic document whose Markdown coordinates are reported.",
+        "type": "object",
+        "properties": {
+          "columnBase": {
+            "description": "First valid human-readable column number.",
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "format": {
+            "description": "Rendered text format.",
+            "$ref": "#/$defs/SearchRenderFormat"
+          },
+          "lineBase": {
+            "description": "First valid human-readable line number.",
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "lineCount": {
+            "description": "Total rendered line count.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "schema": {
+            "description": "Coordinate-space schema discriminator.",
+            "$ref": "#/$defs/MarkdownSchema"
+          },
+          "scope": {
+            "description": "Portion of the query represented by the render.",
+            "$ref": "#/$defs/SearchRenderScope"
+          }
+        },
+        "required": [
+          "schema",
+          "format",
+          "scope",
+          "lineBase",
+          "columnBase",
+          "lineCount"
+        ]
+      },
+      "SearchRenderFormat": {
+        "description": "Canonical render format used for search coordinates.",
+        "oneOf": [
+          {
+            "description": "Generated `CommonMark` text.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SearchRenderScope": {
+        "description": "Amount of the query included in the coordinate-bearing render.",
+        "oneOf": [
+          {
+            "description": "Complete query document, including optional tldr content.",
+            "type": "string",
+            "const": "full"
+          }
+        ]
+      },
+      "SearchSchema": {
+        "description": "Exact schema marker for structure-aware search results.",
+        "oneOf": [
+          {
+            "description": "Version 7 of the search protocol.",
+            "type": "string",
+            "const": "mant.search/v7"
+          }
+        ]
+      },
+      "SearchScope": {
+        "description": "Text representation searched while Markdown remains the coordinate basis.",
+        "oneOf": [
+          {
+            "description": "Search the text visible after parsing `ManT`'s generated `CommonMark`.",
+            "type": "string",
+            "const": "visible"
+          },
+          {
+            "description": "Search the generated `CommonMark` bytes, including markup.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SearchSectionReference": {
+        "description": "Addressable containing section for a non-tldr match.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Stable document-local section identity.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "path": {
+            "description": "Canonical structural outline path.",
+            "$ref": "#/$defs/NodePath"
+          },
+          "title": {
+            "description": "Section heading text.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "id",
+          "title"
+        ]
+      },
+      "SearchSyntax": {
+        "description": "Pattern language used for one search.",
+        "oneOf": [
+          {
+            "description": "Match the pattern as ordinary text.",
+            "type": "string",
+            "const": "literal"
+          },
+          {
+            "description": "Interpret the pattern as a Rust regular expression.",
+            "type": "string",
+            "const": "regex"
+          }
+        ]
+      },
+      "SourceFormat": {
+        "description": "Source format consumed by the normalization engine.",
+        "oneOf": [
+          {
+            "description": "Traditional man(7) macros.",
+            "type": "string",
+            "const": "man"
+          },
+          {
+            "description": "Semantic mdoc(7) macros.",
+            "type": "string",
+            "const": "mdoc"
+          },
+          {
+            "description": "Markdown with `ManT` semantic extensions.",
+            "type": "string",
+            "const": "markdown"
+          }
+        ]
+      },
+      "SourceSpan": {
+        "description": "Location in the original source file.\n\nLines and columns are one-based for diagnostics. `byte_range`, when the\nparser provides exact offsets, is the canonical machine-facing boundary.",
+        "type": "object",
+        "properties": {
+          "byteRange": {
+            "description": "Exact half-open byte range, when supplied by the parser.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TextRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "column": {
+            "description": "One-based starting column.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endColumn": {
+            "description": "One-based exclusive ending column, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "endLine": {
+            "description": "One-based inclusive ending line, when known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "line": {
+            "description": "One-based starting line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "line",
+          "column"
+        ]
+      },
+      "TextRange": {
+        "description": "Half-open UTF-8 byte range (`start..end`) in the original source.",
+        "type": "object",
+        "properties": {
+          "end": {
+            "description": "Exclusive end offset.",
+            "$ref": "#/$defs/TextSize"
+          },
+          "start": {
+            "description": "Inclusive start offset.",
+            "$ref": "#/$defs/TextSize"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "TextSize": {
+        "description": "Zero-based UTF-8 byte offset in the original source.",
+        "type": "integer",
+        "format": "uint32",
+        "minimum": 0
+      }
+    }
+  }
+}

@@ -32,6 +32,7 @@ run() {
 run "check Rust formatting" cargo fmt --all --check
 run "check Unix installer syntax" sh -n scripts/install.sh
 run "check manual packaging script syntax" bash -n scripts/package-manuals.sh
+run "check protocol snapshot script syntax" bash -n scripts/update-protocol-schema-snapshot.sh
 run "check screenshot script syntax" bash -n scripts/update-reader-screenshot.sh
 run "check product build script syntax" bash -n scripts/build-and-smoke.sh
 run "check CI verification script syntax" bash -n scripts/find-successful-ci.sh

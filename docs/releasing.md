@@ -27,6 +27,12 @@ releases; publishing remains a deliberate human action.
    cargo deny check
    ```
 
+   If a deliberate protocol version change modified a generated structural
+   schema, update every affected discriminator first and then regenerate its
+   versioned snapshot with `scripts/update-protocol-schema-snapshot.sh`. Never
+   refresh an existing-version snapshot merely to silence a compatibility
+   failure.
+
 4. Inspect the publishable file list for all seven crates. Each package must
    contain its applicable complete license texts and no unexpected fixture or
    documentation assets:
