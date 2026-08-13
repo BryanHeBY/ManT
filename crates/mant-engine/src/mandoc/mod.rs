@@ -729,6 +729,61 @@ mod tests {
     }
 
     #[test]
+    fn lowers_documented_mdoc_delimiters_and_common_roff_characters() {
+        let path = temporary_source(
+            "mdoc-delimiters",
+            ".Dd July 19, 2026\n\
+             .Dt DELIMITERS 7\n\
+             .Os\n\
+             .Sh DESCRIPTION\n\
+             .Op optional\n\
+             .Bq bracket\n\
+             .Dq double\n\
+             .Sq single\n\
+             .Pq parenthesized\n\
+             .Brq braced\n\
+             .Aq angled\n\
+             .Oo multi Ar value\n\
+             .Oc\n\
+             .Sh CHARACTERS\n\
+             \\(en \\(em \\(aq \\(dq \\(co \\(rg \\(tm \\(bu \\(ha \\(ti \\(rs\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower delimiter and character source");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let description = document.sections[0]
+            .blocks
+            .iter()
+            .map(|block| match block {
+                Block::Paragraph { children, .. } => inline_text(children),
+                _ => String::new(),
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        for expected in [
+            "[optional]",
+            "[bracket]",
+            "“double”",
+            "‘single’",
+            "(parenthesized)",
+            "{braced}",
+            "<angled>",
+            "[multi value]",
+        ] {
+            assert!(
+                description.contains(expected),
+                "missing {expected:?} in {description:?}"
+            );
+        }
+
+        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!("expected one special-character paragraph");
+        };
+        assert_eq!(inline_text(children), "– — ' \" © ® ™ • ^ ~ \\");
+    }
+
+    #[test]
     fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
         let path = temporary_source(
             "man-see-also",
