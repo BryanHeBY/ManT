@@ -57,6 +57,7 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::EmptyMarkdown { .. }
         | QueryError::Registry { .. }
         | QueryError::Manual(_)
+        | QueryError::ManualWithTldr { .. }
         | QueryError::NoReadableContent { .. } => Failure::operational(error),
     }
 }

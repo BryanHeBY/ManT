@@ -455,6 +455,7 @@ fn execute_query(
 ) -> Result<String, Failure> {
     let policy = QueryPolicy {
         manual_only: command.manual_only,
+        allow_tldr_only: matches!(command.presentation, QueryPresentation::Tldr(_)),
     };
     let result = match command.source {
         QuerySource::InputStdin { format, view } => {
@@ -544,7 +545,10 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
             diagnostics,
         );
     }
-    let policy = QueryPolicy { manual_only };
+    let policy = QueryPolicy {
+        manual_only,
+        allow_tldr_only: false,
+    };
     if let Err(error) = mant_engine::validate_query_request(&request, policy).map_err(query_failure)
     {
         return report_failure(&error, diagnostics);
@@ -624,7 +628,10 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
             },
             view: QueryView::Full {},
         },
-        QueryPolicy { manual_only },
+        QueryPolicy {
+            manual_only,
+            allow_tldr_only: false,
+        },
     )
 }
 
@@ -1390,7 +1397,13 @@ mod tests {
         assert_eq!(status, 0);
         assert!(output.contains("[name-1] NAME"));
         assert!(diagnostics.is_empty());
-        assert_eq!(host.last_policy.get(), QueryPolicy { manual_only: true });
+        assert_eq!(
+            host.last_policy.get(),
+            QueryPolicy {
+                manual_only: true,
+                allow_tldr_only: false,
+            }
+        );
     }
 
     #[test]

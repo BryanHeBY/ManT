@@ -206,10 +206,10 @@ available on Linux, macOS, and Windows through the same owned IR boundary.
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires only readable native manual content, without an
 attached tldr quick reference. `--man-section` has the same exclusivity, while
-`--tldr` is CLI shorthand for the existing reserved `tldr` node projection. A
-request JSON client can select the same manual source unambiguously by supplying
-its discovered `manualSection`; manual sections apply only to native manuals
-and therefore bypass registered Markdown.
+`--tldr` selects the reserved `tldr` node and explicitly permits a cached
+tldr-only result. A request JSON client can select the same manual source
+unambiguously by supplying its discovered `manualSection`; manual sections
+apply only to native manuals and therefore bypass registered Markdown.
 
 ## Request Contract
 
@@ -448,10 +448,11 @@ printf '%s\n' \
 | `document` | No | Normalized `mant.document/v7` document |
 | `tldr` | No | Normalized external or embedded quick reference |
 
-A successful runtime result contains useful `document`, `tldr`, or both.
-A tldr-only result is possible when a cached quick reference exists but the
-manual is unavailable. A Markdown file can provide an embedded quick
-reference and a document in the same bundle.
+A successful runtime result contains useful `document`, `tldr`, or both. The
+CLI permits a cached tldr-only result only for an explicit `--tldr` invocation;
+an ordinary document query remains a failed lookup and receives a command hint.
+A Markdown file can provide an embedded quick reference and a document in the
+same bundle.
 
 The embedded form is an input-layer extension, not an additional wire shape.
 At the physical start of a Markdown source, invisible

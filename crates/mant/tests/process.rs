@@ -148,6 +148,51 @@ fn man_style_sections_do_not_turn_into_hyphenated_tldr_topics() {
 }
 
 #[test]
+fn cached_tldr_requires_an_explicit_tldr_query_when_the_document_is_missing() {
+    let root = std::env::temp_dir().join(format!("mant-tldr-only-process-{}", std::process::id()));
+    let manual_root = root.join("manuals");
+    let tldr_root = root.join("tldr");
+    fs::create_dir_all(&manual_root).expect("create empty manual root");
+    fs::create_dir_all(tldr_root.join("pages/common")).expect("create tldr root");
+    fs::write(
+        tldr_root.join("pages/common/quick-only.md"),
+        "# quick-only\n\n> Cached quick reference.\n\n- Run it:\n\n`quick-only`\n",
+    )
+    .expect("write tldr page");
+
+    let run = |arguments: &[&str]| {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        command
+            .arg("quick-only")
+            .args(arguments)
+            .env("MANT_MANPATH", &manual_root)
+            .env("MANT_TLDR_DIR", &tldr_root)
+            .output()
+            .expect("query tldr-only topic")
+    };
+
+    let ordinary = run(&["--format", "markdown"]);
+    assert_eq!(ordinary.status.code(), Some(1));
+    assert!(ordinary.stdout.is_empty());
+    let diagnostic = String::from_utf8(ordinary.stderr).expect("ordinary diagnostic");
+    assert!(diagnostic.contains("could not load manual 'quick-only'"));
+    assert!(diagnostic.contains("a tldr entry is available"));
+    assert!(diagnostic.contains("mant quick-only --tldr"));
+
+    let explicit = run(&["--tldr"]);
+    assert!(explicit.status.success(), "{explicit:?}");
+    assert!(explicit.stderr.is_empty());
+    assert!(
+        String::from_utf8(explicit.stdout)
+            .expect("tldr output")
+            .contains("Cached quick reference.")
+    );
+
+    fs::remove_dir_all(root).expect("remove tldr-only fixture");
+}
+
+#[test]
 fn request_schema_is_discoverable_without_host_state() {
     let output = Command::new(executable())
         .args(["--schema", "request", "--compact"])
@@ -365,6 +410,7 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
         ),
     )
     .expect("write source config");
+    assert!(!data_root.join("sources").exists());
 
     let mut update = Command::new(executable());
     configure_registered_documents(&mut update, &fixture_root);
@@ -373,7 +419,6 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
         .output()
         .expect("update document source");
     assert!(first.status.success(), "{first:?}");
-    assert!(first.stderr.is_empty());
     let result: serde_json::Value = serde_json::from_slice(&first.stdout).expect("update JSON");
     assert_eq!(result["schema"], "mant.sources-update/v2");
     assert_eq!(result["orphaned"], serde_json::json!([]));

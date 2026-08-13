@@ -77,6 +77,13 @@ pub enum QueryError {
     },
     /// Native manual loading failed.
     Manual(ManualLoadError),
+    /// No full document was found, but an optional tldr entry is available.
+    ManualWithTldr {
+        /// Native-manual failure retained as the authoritative lookup error.
+        error: ManualLoadError,
+        /// Topic that can be queried explicitly with `--tldr`.
+        topic: String,
+    },
     /// No Markdown, manual, or quick-reference content could be resolved.
     NoReadableContent {
         /// Requested document name.
@@ -141,6 +148,8 @@ pub enum QueryExecutionError {
 pub struct QueryPolicy {
     /// Bypass registered Markdown and require a readable native manual.
     pub manual_only: bool,
+    /// Permit an explicit tldr query to succeed without a full document.
+    pub allow_tldr_only: bool,
 }
 
 impl fmt::Display for QueryError {
@@ -175,6 +184,13 @@ impl fmt::Display for QueryError {
             }
             Self::Registry { detail } => formatter.write_str(detail),
             Self::Manual(error) => error.fmt(formatter),
+            Self::ManualWithTldr { error, topic } => {
+                error.fmt(formatter)?;
+                write!(
+                    formatter,
+                    "\nhint: a tldr entry is available; run `mant {topic} --tldr`"
+                )
+            }
             Self::NoReadableContent { name } => {
                 write!(
                     formatter,
@@ -189,7 +205,7 @@ impl Error for QueryError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::InvalidSearch(error) => Some(error),
-            Self::Manual(error) => Some(error),
+            Self::Manual(error) | Self::ManualWithTldr { error, .. } => Some(error),
             Self::EmptyName
             | Self::InvalidManualSection
             | Self::InvalidSource
@@ -901,7 +917,10 @@ fn query_named_document(
                 &manual_name,
                 None,
                 Some(&manual_section),
-                QueryPolicy { manual_only: true },
+                QueryPolicy {
+                    manual_only: true,
+                    allow_tldr_only: false,
+                },
                 host,
             ),
         };
@@ -972,7 +991,14 @@ fn query_named_document(
         };
     }
 
-    finish_unqualified_manual(name, &candidates, manual, tldr, host)
+    finish_unqualified_manual(
+        name,
+        &candidates,
+        manual,
+        tldr,
+        policy.allow_tldr_only,
+        host,
+    )
 }
 
 fn finish_unqualified_manual(
@@ -980,6 +1006,7 @@ fn finish_unqualified_manual(
     candidates: &[String],
     manual: Result<LoadedManual, ManualLoadError>,
     tldr: Option<TldrDocument>,
+    allow_tldr_only: bool,
     host: &dyn QueryHost,
 ) -> Result<ResolvedContent, QueryError> {
     match manual {
@@ -995,12 +1022,17 @@ fn finish_unqualified_manual(
                 .map_err(|detail| QueryError::Registry { detail })?;
             if let Some(registered) = registered {
                 query_registered_document(name, &registered, host)
-            } else if tldr.is_some() {
+            } else if allow_tldr_only && tldr.is_some() {
                 Ok(ResolvedContent {
                     address: None,
                     label: name.to_owned(),
                     document: None,
                     tldr,
+                })
+            } else if tldr.is_some() {
+                Err(QueryError::ManualWithTldr {
+                    error,
+                    topic: name.to_owned(),
                 })
             } else {
                 Err(QueryError::Manual(error))
@@ -1507,8 +1539,15 @@ mod tests {
         host.registered_document = Some(PathBuf::from("/data/mant/tool.md"));
         host.markdown = Ok("# Registered".to_owned());
         host.tldr = Ok(Some(tldr()));
-        let result = query_with(&request(), QueryPolicy { manual_only: true }, &host)
-            .expect("manual-only query");
+        let result = query_with(
+            &request(),
+            QueryPolicy {
+                manual_only: true,
+                allow_tldr_only: false,
+            },
+            &host,
+        )
+        .expect("manual-only query");
 
         assert_eq!(
             result.document.as_ref().expect("manual").source.format,
@@ -1527,8 +1566,15 @@ mod tests {
         let mut host = host(Ok(document(SourceFormat::Man, true, false)));
         host.tldr = Ok(Some(tldr()));
 
-        let error = query_with(&request(), QueryPolicy { manual_only: true }, &host)
-            .expect_err("an optional tldr page must not hide native parser failure");
+        let error = query_with(
+            &request(),
+            QueryPolicy {
+                manual_only: true,
+                allow_tldr_only: false,
+            },
+            &host,
+        )
+        .expect_err("an optional tldr page must not hide native parser failure");
 
         let QueryError::Manual(detail) = error else {
             panic!("expected the native parser diagnostic");
@@ -1588,12 +1634,34 @@ mod tests {
     }
 
     #[test]
-    fn cached_tldr_survives_total_manual_failure() {
+    fn ordinary_query_reports_a_tldr_hint_after_total_document_failure() {
         let mut host = host(Err("libmandoc failed".to_owned()));
         host.locate = Err("source not found".to_owned());
         host.tldr = Ok(Some(tldr()));
-        let result =
-            query_with(&request(), QueryPolicy::default(), &host).expect("tldr-only query");
+        let error = query_with(&request(), QueryPolicy::default(), &host)
+            .expect_err("ordinary query must require a full document");
+
+        assert!(matches!(error, QueryError::ManualWithTldr { .. }));
+        assert_eq!(
+            error.to_string(),
+            "could not load manual 'tool': source not found\nhint: a tldr entry is available; run `mant tool --tldr`"
+        );
+    }
+
+    #[test]
+    fn explicit_tldr_policy_survives_total_manual_failure() {
+        let mut host = host(Err("libmandoc failed".to_owned()));
+        host.locate = Err("source not found".to_owned());
+        host.tldr = Ok(Some(tldr()));
+        let result = query_with(
+            &request(),
+            QueryPolicy {
+                manual_only: false,
+                allow_tldr_only: true,
+            },
+            &host,
+        )
+        .expect("explicit tldr-only query");
 
         assert!(result.document.is_none());
         assert_eq!(result.tldr.expect("tldr").title, "tool");
