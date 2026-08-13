@@ -3915,7 +3915,7 @@
         "description": "Source selected by one public query request.",
         "oneOf": [
           {
-            "description": "Resolve a registered Markdown document first, then a local manual page.",
+            "description": "Resolve personal Markdown first, then configured sources around the\npriority-zero native-manual baseline.",
             "type": "object",
             "properties": {
               "kind": {
