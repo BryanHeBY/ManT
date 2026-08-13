@@ -131,7 +131,7 @@ scripts/package-release.ps1 Windows x64 ZIP assembly
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/installation.md         User installation methods and platform requirements
 docs/sources.md              Markdown source configuration and update behavior
-docs/protocol.md             Versioned process and MCP interface reference
+docs/manuals/mant-protocol.md Versioned process and MCP interface manual
 docs/releasing.md            Maintainer release procedure
 docs/manuals/                Self-hosted Markdown manual shipped in releases
 docs/assets/                 README screenshots and documentation assets

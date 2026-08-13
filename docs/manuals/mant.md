@@ -573,7 +573,7 @@ Future revisions may advance individual contracts only when their wire shapes
 change, so consumers must compare every exact schema identifier. Generated
 schemas use JSON Schema Draft 2020-12 and remain the authoritative field-level
 definition.
-The online [protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/protocol.md)
+The bundled [mant-protocol(5)](mant-protocol.md)
 supplies the complete field reference, examples, compatibility policy,
 coordinate rules, and MCP tool contracts.
 
@@ -657,7 +657,4 @@ an operational failure.
 
 ## See Also
 
-The online [protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/protocol.md)
-documents the JSON and MCP contracts used by external integrations. The
-[document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md)
-defines `sources.toml` and its update lifecycle.
+[mant-protocol(5)](mant-protocol.md), [mant-ir(7)](mant-ir.md), [mant-markdown(7)](mant-markdown.md), and [mant-roff(7)](mant-roff.md) describe the machine boundary, normalized model, and accepted input languages. The [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md) defines `sources.toml` and its update lifecycle.

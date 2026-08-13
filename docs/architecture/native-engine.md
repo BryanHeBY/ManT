@@ -81,7 +81,7 @@ visible link text even when their output medium cannot activate it.
 Every external machine payload carries an exact schema discriminator. Rust
 Serde types are the serialization authority and Schemars derives Draft
 2020-12 schemas from them. The complete compatibility rules and field-level
-contracts live in the [protocol reference](../protocol.md).
+contracts live in the [protocol reference](../manuals/mant-protocol.md).
 
 ## Source resolution
 

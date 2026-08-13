@@ -135,7 +135,7 @@ roff files are supported. Standard input additionally requires
 - `mant` owns command-line, terminal-selection, and MCP process boundaries.
 
 The complete [user manual](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant.md),
-[protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/protocol.md),
+[protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-protocol.md),
 and [release archives](https://github.com/BryanHeBY/ManT/releases) live in the
 ManT repository.
 

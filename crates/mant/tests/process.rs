@@ -38,7 +38,7 @@ fn run_with_registered_documents(
     command.args(arguments).output().expect("run isolated mant")
 }
 
-const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/protocol.md");
+const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/manuals/mant-protocol.md");
 
 #[test]
 fn help_groups_the_public_query_surface() {

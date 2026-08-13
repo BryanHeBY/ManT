@@ -9,7 +9,10 @@ use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
 const MANT_MANUAL: &str = include_str!("../../../docs/manuals/mant.md");
-const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/protocol.md");
+const PROTOCOL_REFERENCE: &str = include_str!("../../../docs/manuals/mant-protocol.md");
+const IR_MANUAL: &str = include_str!("../../../docs/manuals/mant-ir.md");
+const MARKDOWN_MANUAL: &str = include_str!("../../../docs/manuals/mant-markdown.md");
+const ROFF_MANUAL: &str = include_str!("../../../docs/manuals/mant-roff.md");
 
 #[test]
 fn shipped_manual_parses_without_lossy_fallbacks() {
@@ -138,14 +141,14 @@ fn shipped_manual_explains_hierarchical_registered_documents_and_sources() {
 
 #[test]
 fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
-    let query = query_markdown_text(PROTOCOL_REFERENCE, Some("docs/protocol.md".to_owned()))
-        .expect("protocol reference query");
+    let query = query_markdown_text(
+        PROTOCOL_REFERENCE,
+        Some("docs/manuals/mant-protocol.md".to_owned()),
+    )
+    .expect("protocol reference query");
     let document = query.document.as_ref().expect("protocol document");
 
-    assert_eq!(
-        document.meta.title.as_deref(),
-        Some("ManT JSON Protocol and Schema Reference")
-    );
+    assert_eq!(document.meta.title.as_deref(), Some("mant-protocol"));
     assert!(
         document.diagnostics.is_empty(),
         "the protocol reference must remain inside ManT's supported Markdown subset: {:?}",
@@ -166,6 +169,59 @@ fn protocol_reference_is_structured_and_its_json_examples_are_valid() {
         examples.len() >= 10,
         "the protocol reference should retain comprehensive JSON examples"
     );
+}
+
+#[test]
+fn bundled_reference_manuals_parse_losslessly_and_cross_link() {
+    let manuals = [
+        ("mant-ir.md", IR_MANUAL, "mant-ir"),
+        ("mant-markdown.md", MARKDOWN_MANUAL, "mant-markdown"),
+        ("mant-protocol.md", PROTOCOL_REFERENCE, "mant-protocol"),
+        ("mant-roff.md", ROFF_MANUAL, "mant-roff"),
+    ];
+
+    for (name, source, title) in manuals {
+        let query = query_markdown_text(source, Some(format!("docs/manuals/{name}")))
+            .expect("reference manual query");
+        let document = query.document.as_ref().expect("reference manual body");
+        assert_eq!(document.meta.title.as_deref(), Some(title), "{name}");
+        assert_eq!(document.sections[0].title, "Name", "{name}");
+        assert!(
+            document.diagnostics.is_empty(),
+            "{name} must stay inside the supported Markdown subset: {:?}",
+            document.diagnostics
+        );
+        assert!(
+            document
+                .sections
+                .iter()
+                .any(|section| section.title == "See Also"),
+            "{name} should end with conventional cross references"
+        );
+    }
+
+    for name in [
+        "mant.md",
+        "mant-ir.md",
+        "mant-markdown.md",
+        "mant-protocol.md",
+        "mant-roff.md",
+    ] {
+        assert!(
+            [
+                MANT_MANUAL,
+                IR_MANUAL,
+                MARKDOWN_MANUAL,
+                PROTOCOL_REFERENCE,
+                ROFF_MANUAL
+            ]
+            .iter()
+            .filter(|source| source.contains(name))
+            .count()
+                >= 2,
+            "{name} should participate in the bundled manual cross-link graph"
+        );
+    }
 }
 
 #[test]

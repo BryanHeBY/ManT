@@ -14,6 +14,8 @@ filesystem access, or process protocol handling.
 Versioned CLI JSON and MCP contracts live in
 [`mant-protocol`](https://crates.io/crates/mant-protocol); parsing and document
 operations live in [`mant-engine`](https://crates.io/crates/mant-engine).
+The complete node and stability reference is
+[`mant-ir(7)`](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-ir.md).
 
 ## License
 

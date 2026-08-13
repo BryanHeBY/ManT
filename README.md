@@ -171,7 +171,7 @@ mant --protocol-version
 mant --version
 ```
 
-The [JSON protocol and Schema reference](docs/protocol.md) documents every
+The [JSON protocol and Schema reference](docs/manuals/mant-protocol.md) documents every
 versioned request and response projection, normalized IR node, coordinate
 rule, and MCP tool.
 
@@ -234,8 +234,9 @@ transactional update behavior.
 Markdown headings, prose, code, links, lists, tables, and selected semantic
 definition lists enter the same model as native manuals. Unsupported syntax
 remains visible with a diagnostic instead of being silently discarded. The
-shipped [mant manual](docs/manuals/mant.md) is both the complete syntax
-reference and a self-hosted ManT document.
+bundled [mant-markdown(7)](docs/manuals/mant-markdown.md) and
+[mant-roff(7)](docs/manuals/mant-roff.md) manuals define the exact input
+contracts; every bundled manual is also a self-hosted ManT document.
 
 ### One-off input and quick references
 
@@ -285,9 +286,12 @@ part of document reads or MCP.
 ## Documentation
 
 - [Installation methods and platform requirements](docs/installation.md)
-- [mant self manual](docs/manuals/mant.md)
+- [mant(1) command manual](docs/manuals/mant.md)
 - [Document source configuration and updates](docs/sources.md)
-- [JSON protocol and Schema reference](docs/protocol.md)
+- [mant-protocol(5) JSON and MCP contract](docs/manuals/mant-protocol.md)
+- [mant-ir(7) normalized document model](docs/manuals/mant-ir.md)
+- [mant-markdown(7) supported Markdown](docs/manuals/mant-markdown.md)
+- [mant-roff(7) native manual compatibility](docs/manuals/mant-roff.md)
 - [Native engine and crate boundaries](docs/architecture/native-engine.md)
 - [Development guide and repository map](docs/development.md)
 - [Maintainer release procedure](docs/releasing.md)
