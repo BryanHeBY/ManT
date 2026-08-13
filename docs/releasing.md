@@ -55,8 +55,8 @@ crates.io as the `0.4.1` bootstrap release against the existing `0.4.0`
 contracts. Starting with `0.5.0`, the original five packages use one lockstep
 version; `mant-sources` joined the same graph in `0.6.0`. Version `0.7.0`
 replaces the mixed `mant-ast` package with separate `mant-ir` and
-`mant-protocol` packages under the same lockstep policy. Publication follows
-this dependency order:
+`mant-protocol` packages, and renames `mant-core` to `mant-engine`, under the
+same lockstep policy. Publication follows this dependency order:
 
 ```text
 mant-ir ─> mant-protocol
@@ -101,11 +101,14 @@ and does not install a second command.
 
 Never move a tag after crates.io publication. Registry versions are immutable.
 
-### One-time `mant-ir` and `mant-protocol` bootstrap for `0.7.0`
+### One-time new-crate bootstrap for `0.7.0`
 
-Both names first enter crates.io in `0.7.0`, so publish them manually from the
-frozen, green release commit before pushing the tag. Wait for `mant-ir` to be
-visible before packaging its exact-version dependent:
+The `mant-ir`, `mant-protocol`, and `mant-engine` names first enter crates.io in
+`0.7.0`. Trusted Publishing cannot create a crate, so each required a one-time
+manual upload from the frozen, green release commit before its Trusted
+Publisher could be configured. `mant-ir` and `mant-protocol` could be
+bootstrapped before the tag; wait for `mant-ir` to become visible before
+packaging its exact-version dependent:
 
 ```sh
 cargo login
@@ -113,13 +116,25 @@ cargo publish --locked -p mant-ir
 cargo info mant-ir@0.7.0
 cargo publish --locked -p mant-protocol
 cargo info mant-protocol@0.7.0
+```
+
+`mant-engine` also depends on the exact `0.7.0` releases of `libmandoc-rs` and
+`mant-sources`. The initial tag job can publish those established crates and
+then stop when crates.io rejects creation of `mant-engine`. Once both
+dependencies are visible, bootstrap the remaining new name from the same
+release commit:
+
+```sh
+cargo publish --locked -p mant-engine
+cargo info mant-engine@0.7.0
 cargo logout
 ```
 
-Use a temporary narrowly scoped token as described above. Configure the same
-Trusted Publisher for both packages after their initial upload. The tag job
-then skips those immutable versions and publishes the remaining graph. Do not
-repeat this bootstrap after `0.7.0`.
+Use a temporary narrowly scoped token for these manual uploads. Configure the
+same Trusted Publisher for all three new packages after their initial upload,
+then rerun the failed tag job. The publish script skips every immutable version
+already present and continues with `mant-ui` and `mant`. Do not repeat this
+bootstrap after `0.7.0`.
 
 ## Tag and draft release
 
