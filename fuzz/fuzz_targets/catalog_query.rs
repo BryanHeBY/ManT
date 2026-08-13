@@ -50,7 +50,7 @@ fuzz_target!(|data: &[u8]| {
             _ => Some(CatalogDocumentKind::Manual),
         },
         source: (control(4) & 1 != 0).then(|| "alpha".to_owned()),
-        section: (control(5) & 1 != 0)
+        manual_section: (control(5) & 1 != 0)
             .then(|| ["1", "3", "8"][usize::from(control(5)) % 3].to_owned()),
         limit: [0, 1, 2, 100, 10_000, 10_001][usize::from(control(6)) % 6],
         offset: [0, 1, 2, 100, u32::MAX][usize::from(control(7)) % 5],
@@ -93,7 +93,7 @@ fn document(index: usize, logical_path: String) -> AvailableDocument {
         name,
         logical_path,
         kind,
-        section: (kind == AvailableDocumentKind::Manual)
+        manual_section: (kind == AvailableDocumentKind::Manual)
             .then(|| ["1", "3", "8"][index % 3].to_owned()),
         path: PathBuf::from(format!("/fuzz/document-{index}")),
         origin,
