@@ -9,10 +9,10 @@ use std::{
     sync::OnceLock,
 };
 
-use mant_ir::{Document, DocumentAddress, DocumentIndex, MarkdownOrigin, TldrDocument};
+use mant_ir::{Document, DocumentAddress, MarkdownOrigin, ResolvedContent, TldrDocument};
 use mant_protocol::{
-    CatalogQuery, DocumentCatalog, InputFormat, QueryBundle, QueryExcerpt, QueryInput,
-    QueryOutline, QueryRequest, QuerySchema, QuerySearch, QueryView, SearchQuery,
+    CatalogQuery, DocumentCatalog, InputFormat, QueryExcerpt, QueryInput, QueryOutline,
+    QueryRequest, QuerySearch, QueryView, SearchQuery,
 };
 use mant_sources::{RegisteredDocumentIndex, RegisteredDocumentOrigin, SourceConfigError};
 
@@ -73,7 +73,7 @@ pub enum ManualLoadError {
 /// Materialized result of the view carried by a [`QueryRequest`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryViewResult {
-    Full(Box<ResolvedQuery>),
+    Full(Box<ResolvedContent>),
     Outline(QueryOutline),
     Excerpt(QueryExcerpt),
     Search(QuerySearch),
@@ -92,50 +92,6 @@ pub enum QueryExecutionError {
 pub struct QueryPolicy {
     /// Bypass registered Markdown and require a readable native manual.
     pub manual_only: bool,
-}
-
-/// Fully resolved content used inside the engine and interactive frontend.
-///
-/// Unlike [`QueryBundle`], this type is not a versioned wire contract. It keeps
-/// protocol markers and serialization concerns outside parsing, rendering, and
-/// navigation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedQuery {
-    pub label: String,
-    pub address: Option<DocumentAddress>,
-    pub document: Option<Document>,
-    pub tldr: Option<TldrDocument>,
-}
-
-impl ResolvedQuery {
-    /// Build the immutable node index used by navigation-oriented consumers.
-    #[must_use]
-    pub fn document_index(&self) -> Option<DocumentIndex> {
-        self.document.as_ref().map(DocumentIndex::build)
-    }
-
-    /// Materialize the current v7 process response at the protocol boundary.
-    #[must_use]
-    pub fn to_protocol(&self) -> QueryBundle {
-        QueryBundle {
-            schema: QuerySchema::V7,
-            label: self.label.clone(),
-            address: self.address.clone(),
-            document: self.document.as_ref().map(Into::into),
-            tldr: self.tldr.clone(),
-        }
-    }
-}
-
-impl From<QueryBundle> for ResolvedQuery {
-    fn from(bundle: QueryBundle) -> Self {
-        Self {
-            label: bundle.label,
-            address: bundle.address,
-            document: bundle.document.map(Into::into),
-            tldr: bundle.tldr,
-        }
-    }
 }
 
 impl fmt::Display for QueryError {
@@ -258,7 +214,7 @@ impl Error for QueryExecutionError {
 ///
 /// Returns [`QueryError`] for invalid input or when neither source can produce
 /// readable content.
-pub fn resolve_query(request: &QueryRequest) -> Result<ResolvedQuery, QueryError> {
+pub fn resolve_query(request: &QueryRequest) -> Result<ResolvedContent, QueryError> {
     resolve_query_with_policy(request, QueryPolicy::default())
 }
 
@@ -270,7 +226,7 @@ pub fn resolve_query(request: &QueryRequest) -> Result<ResolvedQuery, QueryError
 pub fn resolve_query_with_policy(
     request: &QueryRequest,
     policy: QueryPolicy,
-) -> Result<ResolvedQuery, QueryError> {
+) -> Result<ResolvedContent, QueryError> {
     let resolver = DocumentResolver::from_system();
     resolver.resolve(request, policy)
 }
@@ -294,7 +250,7 @@ pub fn execute_query(
 ///
 /// Returns a typed projection or search failure.
 pub fn project_query_view(
-    query: ResolvedQuery,
+    query: ResolvedContent,
     view: &QueryView,
 ) -> Result<QueryViewResult, QueryExecutionError> {
     match view {
@@ -480,7 +436,7 @@ impl DocumentResolver {
         &self,
         request: &QueryRequest,
         policy: QueryPolicy,
-    ) -> Result<ResolvedQuery, QueryError> {
+    ) -> Result<ResolvedContent, QueryError> {
         validate_query_request(request, policy)?;
         query_with(request, policy, self)
     }
@@ -632,7 +588,7 @@ fn query_with(
     request: &QueryRequest,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<ResolvedQuery, QueryError> {
+) -> Result<ResolvedContent, QueryError> {
     match &request.input {
         QueryInput::Document {
             selector,
@@ -654,7 +610,7 @@ fn query_input_file(
     format: InputFormat,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<ResolvedQuery, QueryError> {
+) -> Result<ResolvedContent, QueryError> {
     let path = requested_path.trim();
     if path.is_empty() {
         return Err(QueryError::EmptyMarkdownPath);
@@ -691,7 +647,7 @@ fn query_input_file(
                 .cloned()
                 .or_else(|| document.meta.title.clone())
                 .unwrap_or_else(|| input_file_label(path));
-            Ok(ResolvedQuery {
+            Ok(ResolvedContent {
                 label,
                 address: None,
                 document: Some(document),
@@ -744,7 +700,7 @@ fn query_markdown_file(
     requested_path: &str,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<ResolvedQuery, QueryError> {
+) -> Result<ResolvedContent, QueryError> {
     let path = requested_path.trim();
     if path.is_empty() {
         return Err(QueryError::EmptyMarkdownPath);
@@ -776,7 +732,7 @@ fn query_markdown_file(
 pub fn query_markdown_text(
     source: &str,
     source_path: Option<String>,
-) -> Result<ResolvedQuery, QueryError> {
+) -> Result<ResolvedContent, QueryError> {
     let label = source_path.as_deref().map_or_else(
         || "stdin".to_owned(),
         |path| {
@@ -799,7 +755,7 @@ pub fn query_markdown_text(
             label: label.clone(),
         });
     }
-    Ok(ResolvedQuery {
+    Ok(ResolvedContent {
         address: None,
         label,
         document: (!document_is_empty).then_some(parsed.document),
@@ -812,7 +768,7 @@ pub fn query_markdown_text(
 /// # Errors
 ///
 /// Returns a native parse error or an empty-document error.
-pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedQuery, QueryError> {
+pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedContent, QueryError> {
     if u64::try_from(source.len()).unwrap_or(u64::MAX) > crate::MAX_MANUAL_BYTES {
         return Err(QueryError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
@@ -840,7 +796,7 @@ pub fn query_roff_bytes(source: &[u8]) -> Result<ResolvedQuery, QueryError> {
         .cloned()
         .or_else(|| document.meta.title.clone())
         .unwrap_or_else(|| "stdin".to_owned());
-    Ok(ResolvedQuery {
+    Ok(ResolvedContent {
         address: None,
         label,
         document: Some(document),
@@ -854,7 +810,7 @@ fn query_named_document(
     requested_section: Option<&str>,
     policy: QueryPolicy,
     host: &dyn QueryHost,
-) -> Result<ResolvedQuery, QueryError> {
+) -> Result<ResolvedContent, QueryError> {
     let name = name.trim();
     if name.is_empty() {
         return Err(QueryError::EmptyName);
@@ -940,7 +896,7 @@ fn query_named_document(
     // successful tldr-only response.
     if require_manual {
         return match manual {
-            Ok(manual) => Ok(ResolvedQuery {
+            Ok(manual) => Ok(ResolvedContent {
                 address: Some(manual.address),
                 label: name.to_owned(),
                 document: Some(manual.document),
@@ -951,13 +907,13 @@ fn query_named_document(
     }
 
     match manual {
-        Ok(manual) => Ok(ResolvedQuery {
+        Ok(manual) => Ok(ResolvedContent {
             address: Some(manual.address),
             label: name.to_owned(),
             document: Some(manual.document),
             tldr,
         }),
-        Err(_) if tldr.is_some() => Ok(ResolvedQuery {
+        Err(_) if tldr.is_some() => Ok(ResolvedContent {
             address: None,
             label: name.to_owned(),
             document: None,
@@ -1003,7 +959,7 @@ fn query_registered_document(
     name: &str,
     registered: &RegisteredSelection,
     host: &dyn QueryHost,
-) -> Result<ResolvedQuery, QueryError> {
+) -> Result<ResolvedContent, QueryError> {
     let path = &registered.path;
     let source_path = path.to_string_lossy().into_owned();
     let source = host

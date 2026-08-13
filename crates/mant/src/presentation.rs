@@ -1,7 +1,7 @@
 //! Deterministic rendering of already materialized query views.
 
-use mant_core::{QueryViewResult, ResolvedQuery};
-use mant_ir::SourceFormat;
+use mant_core::QueryViewResult;
+use mant_ir::{ResolvedContent, SourceFormat};
 use serde::Serialize;
 
 use crate::{arguments::QueryFormat, error::Failure};
@@ -53,7 +53,7 @@ fn render_excerpt(
 }
 
 fn render_full_query(
-    query: &ResolvedQuery,
+    query: &ResolvedContent,
     format: QueryFormat,
     pretty: bool,
     preserve_anchors: bool,

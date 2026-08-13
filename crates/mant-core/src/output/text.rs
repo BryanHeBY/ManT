@@ -6,11 +6,11 @@ use mant_ir::{
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
-use crate::ResolvedQuery;
+use crate::ResolvedContent;
 
 /// Render a complete query without Markdown or terminal escape sequences.
 #[must_use]
-pub fn render_query_text(query: &ResolvedQuery) -> String {
+pub fn render_query_text(query: &ResolvedContent) -> String {
     render_query_body(query, true)
 }
 
@@ -21,14 +21,14 @@ pub fn render_query_text(query: &ResolvedQuery) -> String {
 /// page (no page furniture, overstrike, or hyphenation — those never enter
 /// the document model because the source is parsed directly).
 #[must_use]
-pub fn render_query_man(query: &ResolvedQuery) -> String {
+pub fn render_query_man(query: &ResolvedContent) -> String {
     if query.document.is_none() {
         return String::new();
     }
     render_query_body(query, false)
 }
 
-fn render_query_body(query: &ResolvedQuery, include_tldr: bool) -> String {
+fn render_query_body(query: &ResolvedContent, include_tldr: bool) -> String {
     let section = query
         .document
         .as_ref()
@@ -417,7 +417,7 @@ fn join_parts(parts: Vec<String>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::ResolvedQuery;
+    use crate::ResolvedContent;
     use mant_ir::{
         Block, DefinitionItem, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section,
         SourceFormat, TldrDocument, TldrOrigin,
@@ -426,8 +426,8 @@ mod tests {
     use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
     use crate::{build_outline, select_excerpt};
 
-    fn query() -> ResolvedQuery {
-        ResolvedQuery {
+    fn query() -> ResolvedContent {
+        ResolvedContent {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
@@ -578,8 +578,8 @@ mod tests {
 
     #[test]
     fn vertical_space_sets_the_gap_instead_of_stacking_blank_lines() {
-        fn document_with(blocks: Vec<Block>) -> ResolvedQuery {
-            ResolvedQuery {
+        fn document_with(blocks: Vec<Block>) -> ResolvedContent {
+            ResolvedContent {
                 address: None,
                 label: "demo".to_owned(),
                 document: Some(Document {
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn inline_definition_descriptions_are_tight_against_their_terms() {
-        let bundle = ResolvedQuery {
+        let bundle = ResolvedContent {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
@@ -725,7 +725,7 @@ mod tests {
 
     #[test]
     fn man_format_keeps_inline_definitions_tight() {
-        let bundle = ResolvedQuery {
+        let bundle = ResolvedContent {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {

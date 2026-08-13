@@ -7,11 +7,10 @@ use std::{
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use mant_core::ResolvedQuery;
 use mant_ir::{
     Block as AstBlock, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole,
-    Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
-    TldrDocument, TldrOrigin,
+    Document, DocumentMeta, DocumentSource, Inline, LayoutHint, ResolvedContent, Section,
+    SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
     CatalogSchema, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin,
@@ -31,8 +30,8 @@ use crate::{
     theme,
 };
 
-fn empty_bundle() -> ResolvedQuery {
-    ResolvedQuery {
+fn empty_bundle() -> ResolvedContent {
+    ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: None,
@@ -40,8 +39,8 @@ fn empty_bundle() -> ResolvedQuery {
     }
 }
 
-fn tldr_bundle() -> ResolvedQuery {
-    ResolvedQuery {
+fn tldr_bundle() -> ResolvedContent {
+    ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: None,
@@ -58,7 +57,7 @@ fn tldr_bundle() -> ResolvedQuery {
     }
 }
 
-fn navigation_bundle() -> ResolvedQuery {
+fn navigation_bundle() -> ResolvedContent {
     let paragraph = |value: &str| AstBlock::Paragraph {
         children: vec![Inline::Text {
             value: value.to_owned(),
@@ -66,7 +65,7 @@ fn navigation_bundle() -> ResolvedQuery {
         layout: LayoutHint::default(),
         source: None,
     };
-    ResolvedQuery {
+    ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: Some(Document {
@@ -148,7 +147,7 @@ fn document_catalog() -> DocumentCatalog {
     }
 }
 
-fn manual_bundle(name: &str, section: &str) -> ResolvedQuery {
+fn manual_bundle(name: &str, section: &str) -> ResolvedContent {
     let mut bundle = navigation_bundle();
     bundle.label = name.to_owned();
     bundle.address = Some(DocumentAddress::Manual {
@@ -1460,7 +1459,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real/archlinux/git.1.gz");
     let document = mant_core::parse_manual_source(&fixture).expect("parse real git manual");
-    let bundle = ResolvedQuery {
+    let bundle = ResolvedContent {
         address: Some(DocumentAddress::Manual {
             name: "git".to_owned(),
             section: "1".to_owned(),

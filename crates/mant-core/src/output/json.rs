@@ -2,15 +2,18 @@
 
 use mant_protocol::{QueryExcerpt, QueryOutline, QuerySearch, TldrCacheUpdate};
 
-use crate::ResolvedQuery;
+use crate::ResolvedContent;
 
 /// Serialize a query contract in compact or human-readable form.
 ///
 /// # Errors
 ///
 /// Propagates the unlikely JSON writer failure from [`serde_json`].
-pub fn render_query_json(query: &ResolvedQuery, pretty: bool) -> Result<String, serde_json::Error> {
-    render_json(&query.to_protocol(), pretty)
+pub fn render_query_json(
+    query: &ResolvedContent,
+    pretty: bool,
+) -> Result<String, serde_json::Error> {
+    render_json(&mant_protocol::QueryBundle::from(query), pretty)
 }
 
 /// Serialize a complete query outline in compact or human-readable form.
@@ -71,11 +74,11 @@ mod tests {
     use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
     use super::{render_query_json, render_update_json};
-    use crate::ResolvedQuery;
+    use crate::ResolvedContent;
 
     #[test]
     fn compact_and_pretty_query_output_share_the_same_contract() {
-        let query = ResolvedQuery {
+        let query = ResolvedContent {
             address: None,
             label: "ls".to_owned(),
             document: None,

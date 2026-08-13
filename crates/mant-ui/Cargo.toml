@@ -17,10 +17,12 @@ include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 [dependencies]
 crossterm.workspace = true
 mant-ir = { path = "../mant-ir", version = "=0.7.0" }
-mant-core = { path = "../mant-core", version = "=0.7.0" }
 mant-protocol = { path = "../mant-protocol", version = "=0.7.0" }
 ratatui.workspace = true
 unicode-width.workspace = true
+
+[dev-dependencies]
+mant-core = { path = "../mant-core", version = "=0.7.0" }
 
 [lints]
 workspace = true

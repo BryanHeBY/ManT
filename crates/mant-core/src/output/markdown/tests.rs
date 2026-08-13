@@ -12,7 +12,7 @@ use super::{
     MarkdownOptions, render_excerpt_markdown, render_markdown, render_markdown_with_options,
     render_outline_markdown,
 };
-use crate::{ResolvedQuery, build_outline, select_excerpt};
+use crate::{ResolvedContent, build_outline, select_excerpt};
 
 fn paragraph(children: Vec<Inline>) -> Block {
     Block::Paragraph {
@@ -49,7 +49,7 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 
 #[test]
 fn renders_tldr_before_manual_and_resolves_placeholders() {
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "ls".to_owned(),
         document: Some(manual(vec![section("NAME", Vec::new(), Vec::new())])),
@@ -101,7 +101,7 @@ fn renders_and_selects_content_before_the_first_heading() {
     document.blocks = vec![paragraph(vec![Inline::Text {
         value: "Document preface.".to_owned(),
     }])];
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "guide.md".to_owned(),
         document: Some(document),
@@ -190,7 +190,7 @@ fn preserves_inline_lists_definitions_and_nested_headings() {
         layout: LayoutHint::default(),
         source: None,
     };
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "demo * command".to_owned(),
         document: Some(manual(vec![section(
@@ -252,7 +252,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
         layout: LayoutHint::default(),
         source: None,
     };
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "man".to_owned(),
         document: Some(manual(vec![section(
@@ -294,7 +294,7 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
 
 #[test]
 fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: Some(manual(vec![section(
@@ -392,7 +392,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
 
 #[test]
 fn protects_paragraph_lines_from_accidental_block_syntax() {
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "syntax".to_owned(),
         document: Some(manual(vec![section(
@@ -424,7 +424,7 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 
 #[test]
 fn renders_selectable_outline_paths_and_excerpt_breadcrumbs() {
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "demo".to_owned(),
         document: Some({
@@ -470,7 +470,7 @@ fn serializes_a_large_source_lowered_document() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
     let document = crate::parse_manual_source(&source).expect("large native document");
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "mandoc".to_owned(),
         document: Some(document),

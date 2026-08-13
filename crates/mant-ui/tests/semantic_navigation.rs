@@ -1,7 +1,6 @@
-use mant_core::ResolvedQuery;
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
-    DocumentMeta, DocumentSource, LayoutHint, Section, SourceFormat,
+    DocumentMeta, DocumentSource, LayoutHint, ResolvedContent, Section, SourceFormat,
 };
 use mant_ui::{DocumentView, NavKind};
 
@@ -28,7 +27,7 @@ fn sidebar_exposes_every_semantic_role_supported_by_the_document_contract() {
         spacing_before_lines: None,
     })
     .collect();
-    let bundle = ResolvedQuery {
+    let bundle = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
         tldr: None,

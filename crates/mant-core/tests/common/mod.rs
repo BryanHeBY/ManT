@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use mant_core::ResolvedQuery;
+use mant_core::ResolvedContent;
 use mant_ir::{Block, Document, Inline, Section, SourceFormat};
 use mant_protocol::OutlineNode;
 
@@ -161,8 +161,8 @@ pub const DEBIAN_GROFF_MAN_STYLE_SECTIONS: &[&str] = &[
     "See also",
 ];
 
-pub fn query_for_document(name: &str, document: &Document) -> ResolvedQuery {
-    ResolvedQuery {
+pub fn query_for_document(name: &str, document: &Document) -> ResolvedContent {
+    ResolvedContent {
         address: None,
         label: name.to_owned(),
         document: Some(document.clone()),

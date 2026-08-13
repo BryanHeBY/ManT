@@ -7,7 +7,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use mant_core::ResolvedQuery;
+use mant_ir::ResolvedContent;
 use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -18,7 +18,7 @@ use crate::{App, UpdateOutcome};
 /// # Errors
 ///
 /// Returns terminal setup, event, drawing, or restoration errors.
-pub fn run(bundle: &ResolvedQuery) -> io::Result<()> {
+pub fn run(bundle: &ResolvedContent) -> io::Result<()> {
     run_with_catalog(
         bundle,
         DocumentCatalog {
@@ -50,7 +50,7 @@ pub fn run(bundle: &ResolvedQuery) -> io::Result<()> {
 /// Returns terminal setup, event, drawing, or restoration errors. Document
 /// loading failures are shown inside the UI and leave the current page open.
 pub fn run_with_catalog<D, F, E>(
-    bundle: &ResolvedQuery,
+    bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     mut discover_documents: D,
     mut open_document: F,
@@ -58,7 +58,7 @@ pub fn run_with_catalog<D, F, E>(
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
-    F: FnMut(&DocumentAddress) -> Result<ResolvedQuery, String>,
+    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
     E: FnMut(&str) -> Result<(), String>,
 {
     let mut stdout = io::stdout();
@@ -173,7 +173,7 @@ where
 
 fn service_open_request<F>(app: &mut App, open_document: &mut F) -> bool
 where
-    F: FnMut(&DocumentAddress) -> Result<ResolvedQuery, String>,
+    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
 {
     let Some(address) = app.take_open_request() else {
         return false;

@@ -6,8 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use mant_core::ResolvedQuery;
-use mant_ir::{Block, Document, Inline, Section};
+use mant_ir::{Block, Document, Inline, ResolvedContent, Section};
 use mant_protocol::{QueryInput, QueryRequest, QueryView, RequestSchema};
 use mant_ui::DocumentView;
 use ratatui::style::Modifier;
@@ -46,7 +45,7 @@ fn project_file(relative: &str) -> PathBuf {
 
 fn view(relative: &str) -> DocumentView {
     let document = mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
-    DocumentView::new(&ResolvedQuery {
+    DocumentView::new(&ResolvedContent {
         address: None,
         label: relative.to_owned(),
         document: Some(document),
@@ -128,7 +127,7 @@ fn semantic_definition_anchors_survive_real_tar_lowering() {
                 .then(|| identity.id.clone())
         })
         .expect("tar --acls identity");
-    let view = DocumentView::new(&ResolvedQuery {
+    let view = DocumentView::new(&ResolvedContent {
         address: None,
         label: "tar".to_owned(),
         document: Some(document),
@@ -186,7 +185,7 @@ fn real_manual_lowering_preserves_every_substantial_text_fragment() {
             mant_core::parse_manual_source(&fixture(relative)).expect("parse real fixture");
         let mut fragments = Vec::new();
         collect_document_fragments(&document, &mut fragments);
-        let view = DocumentView::new(&ResolvedQuery {
+        let view = DocumentView::new(&ResolvedContent {
             address: None,
             label: relative.to_owned(),
             document: Some(document),

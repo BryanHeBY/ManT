@@ -3,7 +3,7 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_core::ResolvedQuery;
+use mant_core::ResolvedContent;
 use mant_core::parse_manual_source;
 use mant_ir::Document;
 
@@ -36,7 +36,7 @@ pub fn archlinux_manual(name: &str) -> &'static Document {
     })
 }
 
-pub fn archlinux_manual_query(name: &str) -> ResolvedQuery {
+pub fn archlinux_manual_query(name: &str) -> ResolvedContent {
     query_for_document(name, archlinux_manual(name))
 }
 

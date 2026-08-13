@@ -15,7 +15,7 @@ use mant_protocol::{
     QueryExcerpt, QueryOutline,
 };
 
-use crate::{ResolvedQuery, definitions::definition_entries};
+use crate::{ResolvedContent, definitions::definition_entries};
 
 const TLDR_PATH: &str = "0";
 pub(crate) const TLDR_ID: &str = "tldr";
@@ -129,7 +129,7 @@ impl Error for ProjectionError {}
 ///
 /// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
 /// is available.
-pub fn build_outline(query: &ResolvedQuery) -> Result<QueryOutline, ProjectionError> {
+pub fn build_outline(query: &ResolvedContent) -> Result<QueryOutline, ProjectionError> {
     build_outline_with_detail(query, OutlineDetail::Sections)
 }
 
@@ -140,7 +140,7 @@ pub fn build_outline(query: &ResolvedQuery) -> Result<QueryOutline, ProjectionEr
 /// Returns [`ProjectionError::MissingContent`] when neither tldr nor a manual
 /// is available.
 pub fn build_outline_with_detail(
-    query: &ResolvedQuery,
+    query: &ResolvedContent,
     detail: OutlineDetail,
 ) -> Result<QueryOutline, ProjectionError> {
     if query.tldr.is_none() && query.document.is_none() {
@@ -221,7 +221,7 @@ pub fn build_outline_with_detail(
 ///
 /// Returns an error when no content exists or any selector is empty or unknown.
 pub fn select_excerpt(
-    query: &ResolvedQuery,
+    query: &ResolvedContent,
     selectors: &[String],
 ) -> Result<QueryExcerpt, ProjectionError> {
     if selectors.is_empty() {
@@ -334,7 +334,7 @@ pub fn select_excerpt(
 /// Returns an error when the selector is empty, unknown, names a section, or
 /// matches more than one semantic entry.
 pub fn select_explanation(
-    query: &ResolvedQuery,
+    query: &ResolvedContent,
     selector: &str,
 ) -> Result<QueryExcerpt, ProjectionError> {
     if query.tldr.is_none() && query.document.is_none() {
@@ -356,7 +356,7 @@ pub fn select_explanation(
 }
 
 fn resolve_explanation_candidate<'a>(
-    query: &ResolvedQuery,
+    query: &ResolvedContent,
     located: &'a [LocatedNode<'a>],
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
@@ -408,7 +408,7 @@ fn resolve_explanation_candidate<'a>(
 }
 
 fn resolve_candidate<'a>(
-    query: &ResolvedQuery,
+    query: &ResolvedContent,
     located: &'a [LocatedNode<'a>],
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
@@ -804,7 +804,7 @@ fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::ResolvedQuery;
+    use crate::ResolvedContent;
     use mant_ir::{
         Block, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
         TldrDocument, TldrOrigin,
@@ -824,8 +824,8 @@ mod tests {
         }
     }
 
-    fn query() -> ResolvedQuery {
-        ResolvedQuery {
+    fn query() -> ResolvedContent {
+        ResolvedContent {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {

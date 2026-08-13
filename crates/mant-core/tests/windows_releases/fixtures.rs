@@ -2,7 +2,7 @@
 
 use std::{path::PathBuf, sync::OnceLock};
 
-use mant_core::ResolvedQuery;
+use mant_core::ResolvedContent;
 use mant_core::parse_manual_source;
 use mant_ir::Document;
 
@@ -28,7 +28,7 @@ pub fn windows_release_manual(name: &str) -> &'static Document {
     })
 }
 
-pub fn windows_release_query(name: &str) -> ResolvedQuery {
+pub fn windows_release_query(name: &str) -> ResolvedContent {
     query_for_document(name, windows_release_manual(name))
 }
 

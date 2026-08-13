@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use mant_ir::TldrDocument;
+use mant_ir::{ResolvedContent, TldrDocument};
 
 use crate::{
     DocumentAddress, DocumentResponse, OutlineDetail, SearchCase, SearchScope, SearchSyntax,
@@ -128,4 +128,27 @@ pub struct QueryBundle {
     pub document: Option<DocumentResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tldr: Option<TldrDocument>,
+}
+
+impl From<&ResolvedContent> for QueryBundle {
+    fn from(content: &ResolvedContent) -> Self {
+        Self {
+            schema: QuerySchema::V7,
+            label: content.label.clone(),
+            address: content.address.clone(),
+            document: content.document.as_ref().map(Into::into),
+            tldr: content.tldr.clone(),
+        }
+    }
+}
+
+impl From<QueryBundle> for ResolvedContent {
+    fn from(bundle: QueryBundle) -> Self {
+        Self {
+            label: bundle.label,
+            address: bundle.address,
+            document: bundle.document.map(Into::into),
+            tldr: bundle.tldr,
+        }
+    }
 }

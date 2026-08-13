@@ -132,7 +132,7 @@ fn exercise(label: &str, source: &str) {
 
 fn verify_search_result(
     label: &str,
-    query: &mant_core::ResolvedQuery,
+    query: &mant_core::ResolvedContent,
     result: &mant_protocol::QuerySearch,
     addressable: &str,
     scope: SearchScope,

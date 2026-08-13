@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use mant_core::ResolvedQuery;
+use mant_ir::ResolvedContent;
 use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
@@ -55,7 +55,7 @@ enum HistoryDirection {
 #[derive(Debug, Clone)]
 struct HistoryLocation {
     address: Option<DocumentAddress>,
-    fallback: Option<Arc<ResolvedQuery>>,
+    fallback: Option<Arc<ResolvedContent>>,
     target: Option<String>,
 }
 
@@ -188,7 +188,7 @@ pub struct App {
     pending_open: Option<NavigationRequest>,
     pending_external: Option<String>,
     current_address: Option<DocumentAddress>,
-    fallback_bundle: Option<Arc<ResolvedQuery>>,
+    fallback_bundle: Option<Arc<ResolvedContent>>,
     back_history: Vec<HistoryLocation>,
     forward_history: Vec<HistoryLocation>,
     notice: Option<String>,
@@ -203,7 +203,7 @@ pub struct App {
 
 impl App {
     #[must_use]
-    pub fn new(bundle: &ResolvedQuery) -> Self {
+    pub fn new(bundle: &ResolvedContent) -> Self {
         Self::with_catalog(
             bundle,
             DocumentCatalog {
@@ -219,7 +219,7 @@ impl App {
     }
 
     #[must_use]
-    pub fn with_catalog(bundle: &ResolvedQuery, catalog: DocumentCatalog) -> Self {
+    pub fn with_catalog(bundle: &ResolvedContent, catalog: DocumentCatalog) -> Self {
         let document = DocumentView::new(bundle);
         let mut finder = FinderState::default();
         finder.replace_catalog(catalog);
@@ -280,7 +280,7 @@ impl App {
         self.notice = Some(message);
     }
 
-    pub(crate) fn complete_open(&mut self, bundle: &ResolvedQuery, request: NavigationRequest) {
+    pub(crate) fn complete_open(&mut self, bundle: &ResolvedContent, request: NavigationRequest) {
         self.commit_history(request.direction);
         self.replace_document(bundle);
         if let Some(target) = request.target {
@@ -288,7 +288,7 @@ impl App {
         }
     }
 
-    fn replace_document(&mut self, bundle: &ResolvedQuery) {
+    fn replace_document(&mut self, bundle: &ResolvedContent) {
         self.document = DocumentView::new(bundle);
         self.current_address.clone_from(&bundle.address);
         self.fallback_bundle = bundle.address.is_none().then(|| Arc::new(bundle.clone()));
@@ -392,7 +392,7 @@ impl App {
 
     fn complete_local_bundle(
         &mut self,
-        bundle: &ResolvedQuery,
+        bundle: &ResolvedContent,
         target: Option<String>,
         direction: HistoryDirection,
     ) {

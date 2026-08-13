@@ -199,7 +199,7 @@ fn explicit_tp_widths_control_layout_and_persist() {
 // Text / --format man rendering
 // ---------------------------------------------------------------------------
 
-fn query() -> mant_core::ResolvedQuery {
+fn query() -> mant_core::ResolvedContent {
     common::query_for_document("inline-terms", document())
 }
 

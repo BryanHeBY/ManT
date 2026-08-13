@@ -16,7 +16,7 @@ use mant_protocol::{
 use pulldown_cmark::{Event, Parser, TagEnd};
 
 use crate::{
-    ResolvedQuery,
+    ResolvedContent,
     output::{MarkdownOptions, render_markdown_with_options},
 };
 
@@ -68,7 +68,7 @@ impl Error for SearchError {}
 /// Returns [`SearchError`] for empty or excessive inputs and invalid regular
 /// expressions. A valid search with no matches is a successful empty result.
 pub fn search_query(
-    query: &ResolvedQuery,
+    query: &ResolvedContent,
     request: &SearchQuery,
 ) -> Result<QuerySearch, SearchError> {
     validate_request(request)?;
@@ -495,7 +495,7 @@ impl<'a> VisibleBuilder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ResolvedQuery;
+    use crate::ResolvedContent;
     use mant_ir::{
         Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Document,
         DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
@@ -504,8 +504,8 @@ mod tests {
 
     use super::search_query;
 
-    fn query() -> ResolvedQuery {
-        ResolvedQuery {
+    fn query() -> ResolvedContent {
+        ResolvedContent {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {

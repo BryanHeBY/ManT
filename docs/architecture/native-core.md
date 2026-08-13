@@ -37,7 +37,7 @@ The crates have deliberately asymmetric responsibilities:
 | `mant-ui` | Interactive navigation, discovery, links, history, search, layout, and terminal lifecycle | Filesystem lookup or source mutation |
 | `mant` | User-facing modes, terminal detection, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
-Interactive queries pass an in-memory `ResolvedQuery` directly from
+Interactive queries pass an in-memory `ResolvedContent` directly from
 `mant-core` to `mant-ui`. They do not serialize through JSON or spawn a child
 process. Explicit output, redirection, one-shot request JSON, and MCP project
 that value into `mant-protocol` DTOs at their process boundaries.

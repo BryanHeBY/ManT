@@ -10,7 +10,7 @@ use mant_protocol::{
 };
 
 use crate::{
-    ProjectionError, ResolvedQuery, build_outline_with_detail, search_query, select_excerpt,
+    ProjectionError, ResolvedContent, build_outline_with_detail, search_query, select_excerpt,
     select_explanation,
 };
 
@@ -307,7 +307,7 @@ Gamma.
         .collect();
     assert_eq!(ids, ["foo-2", "foo-2-2"]);
 
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "collision".to_owned(),
         document: Some(document),
@@ -477,7 +477,7 @@ Root body.
             .all(|diagnostic| diagnostic.code.as_deref() != Some("markdown.unresolved-reference"))
     );
 
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "demo.md".to_owned(),
         document: Some(document),
@@ -527,7 +527,7 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
     ));
 
     let outline = build_outline_with_detail(
-        &ResolvedQuery {
+        &ResolvedContent {
             address: None,
             label: "tool.md".to_owned(),
             document: Some(document),
@@ -574,7 +574,7 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         identity.role == DefinitionRole::Option && identity.case == DefinitionCase::Insensitive
     }));
 
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -641,7 +641,7 @@ fn declared_dotted_dash_options_preserve_their_exact_names() {
         ]
     );
 
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "dot-option.md".to_owned(),
         document: Some(parsed.document),
@@ -672,7 +672,7 @@ fn declared_variables_keep_shell_and_powershell_automatic_names() {
     .expect("variable semantic entries");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "shell".to_owned(),
         document: Some(parsed.document),
@@ -749,7 +749,7 @@ fn duplicate_entry_aliases_require_a_stable_path_or_id() {
             && diagnostic.message.contains("1/o1 (option-f)")
             && diagnostic.message.contains("2/o1 (option-f-2)")
     }));
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -784,7 +784,7 @@ fn exact_aliases_win_before_normalized_option_shorthands() {
     )
     .expect("help spelling fixture");
     assert!(parsed.document.diagnostics.is_empty());
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "help-spellings.md".to_owned(),
         document: Some(parsed.document),
@@ -834,7 +834,7 @@ fn normalized_shorthand_collisions_are_reported_before_selection() {
             && diagnostic.message.contains("1/o1 (option-help)")
             && diagnostic.message.contains("1/o2 (option-help-2)")
     }));
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "shorthand-collision.md".to_owned(),
         document: Some(parsed.document),
@@ -856,7 +856,7 @@ fn the_same_alias_in_different_roles_is_ambiguous() {
         None,
     )
     .expect("cross-role alias fixture");
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -883,7 +883,7 @@ fn exact_entry_id_takes_precedence_over_another_entry_alias() {
         None,
     )
     .expect("entry ID precedence fixture");
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -907,7 +907,7 @@ fn declared_case_policy_preserves_distinct_sensitive_aliases() {
         None,
     )
     .expect("case-sensitive entries");
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "tool".to_owned(),
         document: Some(parsed.document),
@@ -981,7 +981,7 @@ fn declared_fixed_attached_values_keep_their_official_identity() {
     )
     .expect("fixed attached option values");
     assert!(parsed.document.diagnostics.is_empty());
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "tool.md".to_owned(),
         document: Some(parsed.document),
@@ -1036,7 +1036,7 @@ fn declared_option_entries_cover_windows_native_token_families() {
     .expect("Windows-native semantic entries");
     assert!(parsed.document.diagnostics.is_empty());
 
-    let query = ResolvedQuery {
+    let query = ResolvedContent {
         address: None,
         label: "native.md".to_owned(),
         document: Some(parsed.document),
@@ -1116,7 +1116,7 @@ fn rejected_declared_entries_report_each_term_reason_and_item_location() {
     }));
 
     let outline = build_outline_with_detail(
-        &ResolvedQuery {
+        &ResolvedContent {
             address: None,
             label: "tool.md".to_owned(),
             document: Some(parsed.document),

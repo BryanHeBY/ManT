@@ -8,7 +8,7 @@ use mant_ir::{Section, SourceSpan};
 use mant_protocol::{SearchNode, SearchSectionReference};
 
 use crate::{
-    ResolvedQuery,
+    ResolvedContent,
     definitions::definition_entries,
     output::html_anchor,
     projection::{DOCUMENT_ROOT_ID, DOCUMENT_ROOT_PATH, DOCUMENT_ROOT_TITLE},
@@ -33,7 +33,7 @@ pub(super) struct OwnerIndex {
 }
 
 impl OwnerIndex {
-    pub(super) fn new(query: &ResolvedQuery, markdown: &str) -> Self {
+    pub(super) fn new(query: &ResolvedContent, markdown: &str) -> Self {
         let mut sections = Vec::new();
         let mut entries = Vec::new();
         let mut root = None;

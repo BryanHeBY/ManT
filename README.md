@@ -277,7 +277,7 @@ calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
 
 Rust owns source discovery, parsing, the normalized document IR, tldr
 integration, output, and terminal presentation. Interactive use passes an
-in-memory `ResolvedQuery` containing `mant-ir` nodes directly to `mant-ui`;
+in-memory `ResolvedContent` containing `mant-ir` nodes directly to `mant-ui`;
 external process consumers receive v7 DTOs from `mant-protocol`. Git and
 archive updates are an optional native CLI capability layered on
 `mant-sources`, not part of document reads or MCP.

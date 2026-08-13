@@ -10,7 +10,7 @@ use self::{
     blocks::render_blocks,
     inline::{code_span, escape_text},
 };
-use crate::{ResolvedQuery, projection::DOCUMENT_ROOT_ID};
+use crate::{ResolvedContent, projection::DOCUMENT_ROOT_ID};
 
 /// Markdown serialization controls that do not alter the query IR.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -28,13 +28,13 @@ impl MarkdownOptions {
 
 /// Render a complete query as clean Markdown without a trailing newline.
 #[must_use]
-pub fn render_markdown(query: &ResolvedQuery) -> String {
+pub fn render_markdown(query: &ResolvedContent) -> String {
     render_markdown_with_options(query, MarkdownOptions::default())
 }
 
 /// Render a complete query using explicit presentation-only options.
 #[must_use]
-pub fn render_markdown_with_options(query: &ResolvedQuery, options: MarkdownOptions) -> String {
+pub fn render_markdown_with_options(query: &ResolvedContent, options: MarkdownOptions) -> String {
     let mut output = Vec::new();
     output.push(heading(1, &query.label));
 

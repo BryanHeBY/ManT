@@ -19,7 +19,8 @@ use arguments::{ColorMode, Command, QueryFormat, QueryPresentation, QuerySource,
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
 };
-use mant_core::{QueryPolicy, ResolvedQuery};
+use mant_core::QueryPolicy;
+use mant_ir::ResolvedContent;
 use mant_protocol::{
     CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin, QueryInput,
     QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
@@ -74,8 +75,12 @@ struct TerminalCapabilities {
 
 trait CliHost {
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
-    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<ResolvedQuery, Failure>;
-    fn query_markdown(&self, source: &str) -> Result<ResolvedQuery, Failure>;
+    fn query(
+        &self,
+        request: &QueryRequest,
+        policy: QueryPolicy,
+    ) -> Result<ResolvedContent, Failure>;
+    fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure>;
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure>;
     fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure>;
@@ -98,13 +103,17 @@ impl CliHost for SystemHost {
         self.resolver.discover(query).map_err(Failure::operational)
     }
 
-    fn query(&self, request: &QueryRequest, policy: QueryPolicy) -> Result<ResolvedQuery, Failure> {
+    fn query(
+        &self,
+        request: &QueryRequest,
+        policy: QueryPolicy,
+    ) -> Result<ResolvedContent, Failure> {
         self.resolver
             .resolve(request, policy)
             .map_err(query_failure)
     }
 
-    fn query_markdown(&self, source: &str) -> Result<ResolvedQuery, Failure> {
+    fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure> {
         mant_core::query_markdown_text(source, None).map_err(Failure::operational)
     }
 
@@ -670,7 +679,7 @@ fn write_output(output: &mut dyn Write, rendered: &str) -> io::Result<()> {
 mod tests {
     use std::cell::Cell;
 
-    use mant_core::ResolvedQuery;
+    use mant_ir::ResolvedContent;
 
     use mant_sources::{
         DocumentSourcesPrune, DocumentSourcesPruneSchema, DocumentSourcesUpdate,
@@ -917,14 +926,14 @@ mod tests {
             &self,
             request: &QueryRequest,
             policy: QueryPolicy,
-        ) -> Result<ResolvedQuery, Failure> {
+        ) -> Result<ResolvedContent, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
             self.last_policy.set(policy);
             let label = match &request.input {
                 QueryInput::Document { selector, .. } => selector.trim().to_owned(),
                 QueryInput::File { path, .. } => path.clone(),
             };
-            Ok(ResolvedQuery {
+            Ok(ResolvedContent {
                 address: None,
                 label,
                 document: self.document.clone(),
@@ -932,9 +941,9 @@ mod tests {
             })
         }
 
-        fn query_markdown(&self, _source: &str) -> Result<ResolvedQuery, Failure> {
+        fn query_markdown(&self, _source: &str) -> Result<ResolvedContent, Failure> {
             self.query_calls.set(self.query_calls.get() + 1);
-            Ok(ResolvedQuery {
+            Ok(ResolvedContent {
                 address: None,
                 label: "stdin".to_owned(),
                 document: self.document.clone(),

@@ -10,11 +10,10 @@ mod wrap;
 
 use std::collections::HashMap;
 
-use mant_core::ResolvedQuery;
 use mant_ir::DocumentAddress;
 use mant_ir::{
-    Block, DefinitionIdentity, DefinitionRole, Inline, ListKind, Section, SourceFormat,
-    TldrDocument,
+    Block, DefinitionIdentity, DefinitionRole, Inline, ListKind, ResolvedContent, Section,
+    SourceFormat, TldrDocument,
 };
 #[cfg(test)]
 use mant_ir::{TldrCommandPart, TldrOrigin};
@@ -104,7 +103,7 @@ struct RenderedLinkRegion {
 impl DocumentView {
     /// Build one immutable view from the normalized query contract.
     #[must_use]
-    pub fn new(bundle: &ResolvedQuery) -> Self {
+    pub fn new(bundle: &ResolvedContent) -> Self {
         let mut builder = DocumentBuilder::new(bundle.label.clone(), bundle.address.clone());
         let source_label = bundle.document.as_ref().map_or("MANUAL", |document| {
             if document.source.format == SourceFormat::Markdown {
@@ -1076,8 +1075,8 @@ mod tests {
 
     use super::*;
 
-    fn bundle() -> ResolvedQuery {
-        ResolvedQuery {
+    fn bundle() -> ResolvedContent {
+        ResolvedContent {
             address: None,
             label: "demo".to_owned(),
             document: Some(Document {
