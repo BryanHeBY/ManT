@@ -57,7 +57,7 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
     assert!(
         tldr.examples.iter().any(|example| {
             example.description == "Inspect a manual outline"
-                && example.command == "mant {{name}} --outline [=sections]"
+                && example.command == "mant {{name}} --outline [sections]"
         }),
         "{name} quick reference exposes the section-only outline"
     );

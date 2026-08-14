@@ -44,7 +44,7 @@ fi
 if [[ ${MANT_SCREENSHOT_XVFB:-} != 1 ]]; then
   require xvfb-run
   exec env MANT_SCREENSHOT_XVFB=1 \
-    xvfb-run -a -s '-screen 0 1800x1200x24 -dpi 96' \
+    xvfb-run -a -s '-screen 0 1800x1600x24 -dpi 96' \
     "$ROOT/scripts/update-reader-screenshot.sh" "$output"
 fi
 
@@ -126,7 +126,7 @@ printf '==> start isolated ManT reader\n'
 env "${runtime_environment[@]}" xterm \
   -name mant-screenshot \
   -title mant-screenshot \
-  -geometry 135x47 \
+  -geometry 135x55 \
   -fa "$font_pattern" \
   -fs 14 \
   -bg '#11111b' \

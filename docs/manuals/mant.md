@@ -9,7 +9,7 @@
 
 - Inspect a manual outline:
 
-`mant {{name}} --outline [=sections]`
+`mant {{name}} --outline [sections]`
 
 - Retrieve one section from that outline:
 
