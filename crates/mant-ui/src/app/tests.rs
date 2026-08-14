@@ -1160,6 +1160,12 @@ fn view_menu_is_clickable_and_toggles_the_sidebar() {
             .to_string()
             .contains("Reset Outline Width")
     );
+    assert!(
+        terminal
+            .backend()
+            .to_string()
+            .contains("[x] Outline Sidebar")
+    );
     let buffer = terminal.backend().buffer();
     let menu_left = MenuId::View.left();
     let menu_right = menu_left + 29;

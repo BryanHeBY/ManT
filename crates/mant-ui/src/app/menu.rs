@@ -446,8 +446,11 @@ impl App {
                 vertical: 0,
             });
             let active = index == cursor;
-            let checked = matches!(entry.action, MenuAction::ToggleSidebar) && self.show_sidebar;
-            let prefix = if checked { "✓ " } else { "  " };
+            let prefix = match entry.action {
+                MenuAction::ToggleSidebar if self.show_sidebar => "[x] ",
+                MenuAction::ToggleSidebar => "[ ] ",
+                _ => "    ",
+            };
             let label = format!("{prefix}{}", entry.label);
             let gap = usize::from(content.width)
                 .saturating_sub(label.width())
