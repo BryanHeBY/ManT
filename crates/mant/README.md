@@ -61,6 +61,16 @@ optional tldr quick references before the full document. `Ctrl+O` opens the
 shared Markdown and native-manual catalog. Redirected output stays
 deterministic instead of emitting terminal control sequences.
 
+Document discovery follows the same rule: long terminal text is pageable,
+while short, redirected, JSON, and explicit `--no-pager` output stays direct.
+
+```sh
+mant --list
+mant --find git
+mant --find git --no-pager
+mant --find git --format json
+```
+
 ## Structured queries for agents and scripts
 
 Discover the document before selecting only the content that matters:

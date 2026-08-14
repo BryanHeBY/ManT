@@ -13,7 +13,9 @@ use std::{
     io::{self, IsTerminal, Read, Write},
 };
 
-use arguments::{ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract};
+use arguments::{
+    CatalogPaging, ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract,
+};
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
 };
@@ -66,6 +68,13 @@ struct TerminalCapabilities {
     input: bool,
     output: bool,
     color: bool,
+    kind: TerminalKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminalKind {
+    Capable,
+    Dumb,
 }
 
 // ── Host boundary ─────────────────────────────────────────────────────────
@@ -164,18 +173,23 @@ pub async fn run_process(arguments: &[String]) -> u8 {
     }
     let host = SystemHost::default();
     let output_terminal = io::stdout().is_terminal();
+    let input_terminal = io::stdin().is_terminal();
+    let terminal_kind = if std::env::var("TERM").ok().as_deref() == Some("dumb") {
+        TerminalKind::Dumb
+    } else {
+        TerminalKind::Capable
+    };
     let ansi_supported = terminal::prepare_ansi_output(output_terminal);
+    let terminal = TerminalCapabilities {
+        input: input_terminal,
+        output: output_terminal,
+        color: std::env::var_os("NO_COLOR").is_none()
+            && terminal_kind == TerminalKind::Capable
+            && ansi_supported,
+        kind: terminal_kind,
+    };
 
-    if let Err(error) = resolve_process_presentation(
-        &mut command,
-        TerminalCapabilities {
-            input: io::stdin().is_terminal(),
-            output: output_terminal,
-            color: std::env::var_os("NO_COLOR").is_none()
-                && std::env::var("TERM").ok().as_deref() != Some("dumb")
-                && ansi_supported,
-        },
-    ) {
+    if let Err(error) = resolve_process_presentation(&mut command, terminal) {
         return report_failure(&error, &mut io::stderr().lock());
     }
 
@@ -188,6 +202,9 @@ pub async fn run_process(arguments: &[String]) -> u8 {
     ) {
         return run_interactive(command, &mut io::stderr().lock(), &host);
     }
+    if should_page_catalog(&command, terminal) {
+        return run_paged_catalog(command, &mut io::stderr().lock(), &host);
+    }
 
     run_command(
         command,
@@ -196,6 +213,36 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         &mut io::stderr().lock(),
         &host,
     )
+}
+
+fn should_page_catalog(command: &Command, terminal: TerminalCapabilities) -> bool {
+    terminal.input
+        && terminal.output
+        && terminal.kind == TerminalKind::Capable
+        && matches!(
+            command,
+            Command::Catalog {
+                format: QueryFormat::Text,
+                paging: CatalogPaging::Auto,
+                ..
+            }
+        )
+}
+
+fn run_paged_catalog(command: Command, diagnostics: &mut dyn Write, host: &dyn CliHost) -> u8 {
+    let prompt = match &command {
+        Command::Catalog { grouped: true, .. } => "mant --list",
+        Command::Catalog { grouped: false, .. } => "mant --find",
+        _ => unreachable!("pager accepts only catalog commands"),
+    };
+    let rendered = match execute(command, &mut io::empty(), host) {
+        Ok(rendered) => rendered,
+        Err(error) => return report_failure(&error, diagnostics),
+    };
+    match mant_ui::page_text(rendered, prompt) {
+        Ok(()) => 0,
+        Err(error) => report_failure(&Failure::operational(error), diagnostics),
+    }
 }
 
 /// Resolve terminal-sensitive defaults without coupling argument parsing to
@@ -355,6 +402,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             grouped,
             format,
             pretty,
+            ..
         } => {
             let catalog = host.discover(&query)?;
             match format {
@@ -705,9 +753,9 @@ mod tests {
 
     use super::{
         CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
-        MarkdownOrigin, QueryPolicy, TerminalCapabilities,
+        MarkdownOrigin, QueryPolicy, TerminalCapabilities, TerminalKind,
         arguments::{self, ColorMode, Command, QueryFormat, QueryPresentation},
-        request_for_address, resolve_process_presentation, run_with_host,
+        request_for_address, resolve_process_presentation, run_with_host, should_page_catalog,
     };
 
     struct FakeHost {
@@ -760,6 +808,7 @@ mod tests {
                 input: true,
                 output: true,
                 color: true,
+                kind: TerminalKind::Capable,
             },
         )
         .expect("terminal query");
@@ -778,6 +827,7 @@ mod tests {
                 input: true,
                 output: false,
                 color: true,
+                kind: TerminalKind::Capable,
             },
         )
         .expect("redirected query");
@@ -797,6 +847,7 @@ mod tests {
                 input: true,
                 output: true,
                 color: true,
+                kind: TerminalKind::Capable,
             },
         )
         .expect("outline remains non-interactive");
@@ -816,6 +867,7 @@ mod tests {
                 input: true,
                 output: true,
                 color: true,
+                kind: TerminalKind::Capable,
             },
         )
         .expect("tldr remains non-interactive");
@@ -835,11 +887,13 @@ mod tests {
                 input: false,
                 output: true,
                 color: true,
+                kind: TerminalKind::Capable,
             },
             TerminalCapabilities {
                 input: true,
                 output: false,
                 color: true,
+                kind: TerminalKind::Capable,
             },
         ] {
             let mut command =
@@ -848,6 +902,45 @@ mod tests {
                 .expect_err("incomplete terminal must fail");
             assert!(error.message().contains("interactive view requires"));
         }
+    }
+
+    #[test]
+    fn catalog_paging_requires_text_and_a_complete_non_dumb_terminal() {
+        let terminal = TerminalCapabilities {
+            input: true,
+            output: true,
+            color: false,
+            kind: TerminalKind::Capable,
+        };
+        let list = arguments::parse(&["--list".to_owned()]).expect("catalog list");
+        assert!(should_page_catalog(&list, terminal));
+
+        let direct = arguments::parse(&["--list".to_owned(), "--no-pager".to_owned()])
+            .expect("direct catalog list");
+        assert!(!should_page_catalog(&direct, terminal));
+
+        let json = arguments::parse(&[
+            "--find".to_owned(),
+            "git".to_owned(),
+            "--format".to_owned(),
+            "json".to_owned(),
+        ])
+        .expect("catalog JSON");
+        assert!(!should_page_catalog(&json, terminal));
+        assert!(!should_page_catalog(
+            &list,
+            TerminalCapabilities {
+                output: false,
+                ..terminal
+            }
+        ));
+        assert!(!should_page_catalog(
+            &list,
+            TerminalCapabilities {
+                kind: TerminalKind::Dumb,
+                ..terminal
+            }
+        ));
     }
 
     impl FakeHost {

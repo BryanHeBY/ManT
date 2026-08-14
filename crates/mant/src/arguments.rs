@@ -56,6 +56,13 @@ pub(crate) enum QueryPresentation {
     Tldr(ColorMode),
 }
 
+/// Whether process-owned catalog text may use the terminal pager.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CatalogPaging {
+    Auto,
+    Disabled,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub(crate) enum ColorMode {
     #[default]
@@ -171,6 +178,7 @@ pub(crate) enum Command {
         grouped: bool,
         format: QueryFormat,
         pretty: bool,
+        paging: CatalogPaging,
     },
     UpdateTldr {
         pretty: bool,
@@ -513,6 +521,10 @@ struct Cli {
     #[arg(long, help_heading = "Output")]
     compact: bool,
 
+    /// Print discovery text directly instead of opening the terminal pager.
+    #[arg(long, help_heading = "Output")]
+    no_pager: bool,
+
     /// Preserve raw HTML anchors and document-local links in Markdown output.
     #[arg(
         long,
@@ -574,6 +586,12 @@ fn uses_removed_section_option(arguments: &[String]) -> bool {
 }
 
 fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
+    if parsed.no_pager && !parsed.list && parsed.find.is_none() {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--no-pager applies only to --list and --find",
+        ));
+    }
     if parsed.mcp {
         return Ok(Command::Mcp);
     }
@@ -713,6 +731,11 @@ fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
         grouped: parsed.list,
         format,
         pretty: !parsed.compact,
+        paging: if parsed.no_pager {
+            CatalogPaging::Disabled
+        } else {
+            CatalogPaging::Auto
+        },
     })
 }
 
@@ -1021,8 +1044,8 @@ mod tests {
     };
 
     use super::{
-        ColorMode, Command, QueryFormat, QueryPolicy, QueryPresentation, QuerySource,
-        SchemaContract, parse,
+        CatalogPaging, ColorMode, Command, QueryFormat, QueryPolicy, QueryPresentation,
+        QuerySource, SchemaContract, parse,
     };
 
     fn args(values: &[&str]) -> Vec<String> {
@@ -1065,6 +1088,7 @@ mod tests {
                 grouped: true,
                 format: QueryFormat::Text,
                 pretty: true,
+                paging: CatalogPaging::Auto,
             }
         );
         assert_eq!(
@@ -1099,14 +1123,24 @@ mod tests {
                 grouped: false,
                 format: QueryFormat::Json,
                 pretty: false,
+                paging: CatalogPaging::Auto,
             }
         );
+
+        assert!(matches!(
+            parse(&args(&["--list", "--no-pager"])).expect("direct catalog list"),
+            Command::Catalog {
+                paging: CatalogPaging::Disabled,
+                ..
+            }
+        ));
 
         for invalid in [
             vec!["--list", "--regex"],
             vec!["--list", "--format", "markdown"],
             vec!["git", "--limit", "2"],
             vec!["git", "--kind", "manual"],
+            vec!["git", "--no-pager"],
         ] {
             assert!(parse(&args(&invalid)).is_err(), "accepted {invalid:?}");
         }

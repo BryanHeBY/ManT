@@ -22,6 +22,8 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
 - A Crossterm lifecycle boundary that restores raw mode and the alternate
   screen after normal exit, setup failure, or panic.
+- A static, less-like text pager for terminal-owned catalog output; short and
+  redirected results pass through without opening a full-screen interface.
 - Public `App` and `DocumentView` layers for callers embedding the frontend in
   an existing Ratatui host.
 

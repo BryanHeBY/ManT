@@ -163,7 +163,9 @@ selectable. Literal matching is case-insensitive by default; exact paths or
 leaf names rank before component suffixes, prefixes, and other substrings. A
 pattern containing `/` additionally matches the complete canonical path.
 Regex and case policies use the same
-values as document-content search.
+values as document-content search. The native process may page long text
+results when it owns an interactive terminal; this presentation-only behavior
+never changes JSON, redirected output, or the catalog protocol.
 
 ## One-Shot Process Transport
 

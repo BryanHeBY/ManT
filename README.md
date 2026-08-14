@@ -127,6 +127,12 @@ discovery ranks exact paths or leaf names first, then component suffixes,
 prefixes, and other substring matches; stable path order breaks ties. A query
 containing `/` also matches the complete canonical path.
 
+When both standard streams are terminals, text from `--list` and `--find`
+opens in a built-in less-like pager only if it exceeds the terminal height.
+Use the mouse or the usual less navigation and `/` search bindings;
+`--no-pager` forces direct text. Redirected output and `--format json` always
+remain plain, deterministic standard output.
+
 Start with an outline and retrieve only the section or option that matters:
 
 ```sh

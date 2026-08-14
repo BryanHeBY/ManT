@@ -82,6 +82,7 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 | `--kind KIND` | Restrict discovery to `markdown` or `manual`. |
 | `--source SOURCE` | Restrict Markdown discovery to one configured source. |
 | `--man-section MAN_SECTION` | Restrict discovery to one exact native manual category. |
+| `--no-pager` | Print `--list` or `--find` text directly even on a terminal. |
 
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
@@ -89,6 +90,12 @@ pagination. Plain `--find` output is tab-separated as
 the canonical catalog path and `kind`, while `--format json` returns
 `mant.catalog/v7`. `--list` groups the same hierarchy beneath `documents`,
 `sources/SOURCE`, or `manual/SECTION`.
+
+When stdin and stdout are terminals, discovery text longer than the terminal
+height opens in the built-in pager. It supports mouse scrolling, ordinary
+less-style movement, and `/` search. Short results print directly. Pipelines,
+redirection, `TERM=dumb`, `--format json`, and `--no-pager` never enter the
+pager.
 
 ```sh
 mant --list

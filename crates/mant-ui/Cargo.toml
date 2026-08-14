@@ -18,6 +18,7 @@ include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 crossterm.workspace = true
 mant-ir = { path = "../mant-ir", version = "=0.7.1" }
 mant-protocol = { path = "../mant-protocol", version = "=0.7.1" }
+minus.workspace = true
 ratatui.workspace = true
 unicode-width.workspace = true
 
