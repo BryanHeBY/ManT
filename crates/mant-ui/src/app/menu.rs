@@ -246,6 +246,16 @@ impl App {
     }
 
     pub(super) fn handle_overlay_mouse(&mut self, mouse: MouseEvent) -> Option<UpdateOutcome> {
+        if self.overlay == Overlay::DocumentFinder
+            && matches!(self.pointer_drag, super::PointerDrag::FinderScrollbar(_))
+            && matches!(
+                mouse.kind,
+                MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left)
+            )
+        {
+            return Some(self.handle_finder_mouse(mouse));
+        }
+
         let menu_bar_target = (mouse.row == 0)
             .then(|| {
                 MenuId::ALL.into_iter().find(|id| {
@@ -259,6 +269,7 @@ impl App {
         if let Some(id) = menu_bar_target {
             return match mouse.kind {
                 MouseEventKind::Down(MouseButton::Left) => {
+                    self.pointer_drag = super::PointerDrag::None;
                     self.overlay = if matches!(self.overlay, Overlay::Menu { id: open, .. } if open == id)
                     {
                         Overlay::None
@@ -321,7 +332,7 @@ impl App {
             return Some(UpdateOutcome::Unchanged);
         }
         if self.overlay == Overlay::DocumentFinder {
-            return Some(UpdateOutcome::Unchanged);
+            return Some(self.handle_finder_mouse(mouse));
         }
 
         None
@@ -411,7 +422,10 @@ impl App {
         );
     }
 
-    pub(super) fn draw_overlay(&self, frame: &mut Frame<'_>) {
+    pub(super) fn draw_overlay(&mut self, frame: &mut Frame<'_>) {
+        if self.overlay != Overlay::DocumentFinder {
+            self.clear_finder_geometry();
+        }
         match self.overlay {
             Overlay::None => {}
             Overlay::Menu { id, cursor } => self.draw_menu_overlay(frame, id, cursor),

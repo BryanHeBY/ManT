@@ -145,6 +145,30 @@ fn document_catalog() -> DocumentCatalog {
     }
 }
 
+fn overflowing_document_catalog() -> DocumentCatalog {
+    let documents = (0..40)
+        .map(|index| {
+            let name = format!("tool-{index:02}");
+            DocumentSummary {
+                address: DocumentAddress::Manual {
+                    name: name.clone(),
+                    manual_section: "1".to_owned(),
+                },
+                catalog_path: format!("manual/1/{name}"),
+            }
+        })
+        .collect::<Vec<_>>();
+    DocumentCatalog {
+        schema: CatalogSchema::V7,
+        total: u32::try_from(documents.len()).expect("fixture length"),
+        returned: u32::try_from(documents.len()).expect("fixture length"),
+        offset: 0,
+        truncated: false,
+        next_offset: None,
+        documents,
+    }
+}
+
 fn manual_bundle(name: &str, section: &str) -> ResolvedContent {
     let mut bundle = navigation_bundle();
     bundle.label = name.to_owned();
@@ -260,6 +284,81 @@ fn document_finder_is_available_from_the_manual_menu() {
     assert!(screen.contains("printf"));
     assert!(screen.contains("manual"));
     assert!(screen.contains('3'));
+}
+
+#[test]
+fn document_finder_scrolls_with_the_wheel_and_opens_a_clicked_result() {
+    let backend = TestBackend::new(90, 24);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::with_catalog(&navigation_bundle(), overflowing_document_catalog());
+    app.open_document_finder();
+    for character in "tool-".chars() {
+        app.handle_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE));
+    }
+    terminal.draw(|frame| app.draw(frame)).expect("draw finder");
+
+    let results = app.geometry.finder_results;
+    assert!(app.geometry.finder_scrollbar.is_some());
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: results.x,
+        row: results.y,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(app.finder.scroll, 3);
+    assert_eq!(app.finder.selected, 3);
+
+    let clicked_row = app.finder.scroll + 2;
+    let expected = app.finder.catalog[app.finder.matches[clicked_row]]
+        .address
+        .clone();
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: results.x,
+        row: results.y + 2,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(
+        app.take_open_request()
+            .map(|request| request.address().clone()),
+        Some(expected)
+    );
+}
+
+#[test]
+fn document_finder_scrollbar_track_and_drag_control_the_result_viewport() {
+    let backend = TestBackend::new(90, 24);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::with_catalog(&navigation_bundle(), overflowing_document_catalog());
+    app.open_document_finder();
+    terminal.draw(|frame| app.draw(frame)).expect("draw finder");
+    let scrollbar = app.geometry.finder_scrollbar.expect("finder scrollbar");
+    let area = scrollbar.area();
+
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: area.x,
+        row: area.bottom() - 1,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(app.finder.scroll, scrollbar.maximum());
+    assert!(matches!(app.pointer_drag, PointerDrag::FinderScrollbar(_)));
+
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        column: area.x,
+        row: area.y,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(app.finder.scroll, 0);
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: area.x,
+        row: area.y,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(app.pointer_drag, PointerDrag::None);
+    assert_eq!(app.overlay, Overlay::DocumentFinder);
 }
 
 #[test]

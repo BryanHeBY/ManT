@@ -377,10 +377,11 @@ impl App {
         }
     }
 
-    pub(super) fn draw_document_finder(&self, frame: &mut Frame<'_>) {
+    pub(super) fn draw_document_finder(&mut self, frame: &mut Frame<'_>) {
         let width = 76.min(frame.area().width.saturating_sub(2));
         let height = 18.min(frame.area().height.saturating_sub(2));
         if width < 24 || height < 7 {
+            self.clear_finder_geometry();
             return;
         }
         let area = Rect::new(
@@ -406,6 +407,7 @@ impl App {
             Constraint::Min(1),
         ])
         .areas(inner);
+        self.geometry.finder_query = query_area;
 
         let (before_cursor, after_cursor) = self.finder.draft.split_at(self.finder.cursor);
         let cursor_character = after_cursor.chars().next();
@@ -428,11 +430,9 @@ impl App {
         );
         let result_count = self.finder.total;
         let hint = if self.finder.draft.is_empty() {
-            format!(
-                "{result_count} documents · ←/→ collapse/expand · Enter open/toggle · Esc close"
-            )
+            format!("{result_count} documents · click/Enter open/toggle · wheel scroll · Esc close")
         } else {
-            format!("{result_count} matches · ↑/↓ select · Enter open · Esc close")
+            format!("{result_count} matches · click/Enter open · wheel scroll · Esc close")
         };
         frame.render_widget(
             Paragraph::new(hint).style(Style::default().fg(theme::SUBTEXT)),
@@ -442,22 +442,22 @@ impl App {
         self.draw_finder_results(frame, results_area);
     }
 
-    fn draw_finder_results(&self, frame: &mut Frame<'_>, results_area: Rect) {
+    fn draw_finder_results(&mut self, frame: &mut Frame<'_>, results_area: Rect) {
         let visible_height = usize::from(results_area.height);
-        let scroll = self
-            .finder
-            .selected
-            .saturating_sub(visible_height.saturating_sub(1));
-        let row_count = if self.finder.draft.is_empty() {
-            self.finder.tree.len()
-        } else {
-            self.finder.matches.len()
-        };
+        let row_count = self.finder.row_count();
+        self.finder.ensure_selected_visible(visible_height);
+        let scroll = self.finder.scroll;
+        self.geometry.finder_results = results_area;
+        self.geometry.finder_scrollbar =
+            VerticalScrollbar::new(results_area, row_count, visible_height, scroll);
+        let row_width = results_area
+            .width
+            .saturating_sub(u16::from(self.geometry.finder_scrollbar.is_some()));
         for visual_row in 0..visible_height.min(row_count.saturating_sub(scroll)) {
             let row = Rect::new(
                 results_area.x,
                 results_area.y + u16::try_from(visual_row).unwrap_or_default(),
-                results_area.width,
+                row_width,
                 1,
             );
             let selected = scroll + visual_row == self.finder.selected;
@@ -508,6 +508,20 @@ impl App {
                 Style::default().fg(theme::TEXT).bg(theme::BASE)
             };
             frame.render_widget(Paragraph::new(Span::styled(value, style)), row);
+        }
+        if let Some(scrollbar) = self.geometry.finder_scrollbar {
+            scrollbar.render(frame);
+        } else if matches!(self.pointer_drag, PointerDrag::FinderScrollbar(_)) {
+            self.pointer_drag = PointerDrag::None;
+        }
+    }
+
+    pub(super) fn clear_finder_geometry(&mut self) {
+        self.geometry.finder_query = Rect::default();
+        self.geometry.finder_results = Rect::default();
+        self.geometry.finder_scrollbar = None;
+        if matches!(self.pointer_drag, PointerDrag::FinderScrollbar(_)) {
+            self.pointer_drag = PointerDrag::None;
         }
     }
 }

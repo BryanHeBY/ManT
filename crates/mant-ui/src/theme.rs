@@ -13,7 +13,9 @@ pub const TLDR_SURFACE: Color = Color::Rgb(40, 36, 58);
 pub const TLDR_NAV: Color = Color::Rgb(29, 26, 43);
 pub const BORDER: Color = Color::Rgb(49, 50, 68);
 pub const OVERLAY: Color = Color::Rgb(69, 71, 90);
-pub const SCROLLBAR_TRACK: Color = BASE;
+// The track must remain visible on BASE-backed overlays as well as the darker
+// document and navigation surfaces.
+pub const SCROLLBAR_TRACK: Color = BORDER;
 pub const SCROLLBAR_THUMB: Color = OVERLAY;
 pub const TEXT: Color = Color::Rgb(166, 173, 200);
 pub const SUBTEXT: Color = Color::Rgb(127, 132, 156);

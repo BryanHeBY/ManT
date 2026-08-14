@@ -2,13 +2,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_protocol::{
     CatalogQuery, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase,
     catalog_literal_match_rank,
 };
 
-use super::{App, Overlay};
+use super::{App, Overlay, PointerDrag, UpdateOutcome};
 
 #[derive(Debug, Default)]
 pub(super) struct FinderState {
@@ -19,6 +19,7 @@ pub(super) struct FinderState {
     pub(super) matches: Vec<usize>,
     pub(super) tree: Vec<FinderTreeRow>,
     pub(super) selected: usize,
+    pub(super) scroll: usize,
     expanded: BTreeSet<String>,
     tree_initialized: bool,
 }
@@ -55,29 +56,7 @@ impl FinderState {
         match key.code {
             KeyCode::Esc => return None,
             KeyCode::Enter => {
-                if self.draft.is_empty() {
-                    match self.tree.get(self.selected).cloned() {
-                        Some(FinderTreeRow::Folder { path, .. }) => {
-                            if !self.expanded.remove(&path) {
-                                self.expanded.insert(path);
-                            }
-                            self.rebuild_tree();
-                        }
-                        Some(FinderTreeRow::Document { index, .. }) => {
-                            return self
-                                .catalog
-                                .get(index)
-                                .map(|document| document.address.clone());
-                        }
-                        None => {}
-                    }
-                } else {
-                    return self
-                        .matches
-                        .get(self.selected)
-                        .and_then(|index| self.catalog.get(*index))
-                        .map(|document| document.address.clone());
-                }
+                return self.activate_row(self.selected);
             }
             KeyCode::Left if self.draft.is_empty() => self.collapse_selected(),
             KeyCode::Right if self.draft.is_empty() => self.expand_selected(),
@@ -165,6 +144,88 @@ impl FinderState {
         });
         self.rebuild_tree();
         self.selected = 0;
+        self.scroll = 0;
+    }
+
+    pub(super) fn row_count(&self) -> usize {
+        if self.draft.is_empty() {
+            self.tree.len()
+        } else {
+            self.matches.len()
+        }
+    }
+
+    pub(super) fn ensure_selected_visible(&mut self, viewport_height: usize) {
+        if viewport_height == 0 {
+            return;
+        }
+        let row_count = self.row_count();
+        if row_count == 0 {
+            self.selected = 0;
+            self.scroll = 0;
+            return;
+        }
+        self.selected = self.selected.min(row_count - 1);
+        self.scroll = self.scroll.min(row_count.saturating_sub(viewport_height));
+        if self.selected < self.scroll {
+            self.scroll = self.selected;
+        } else if self.selected >= self.scroll.saturating_add(viewport_height) {
+            self.scroll = self.selected + 1 - viewport_height;
+        }
+    }
+
+    pub(super) fn set_scroll(&mut self, position: usize, viewport_height: usize) {
+        if viewport_height == 0 {
+            return;
+        }
+        let row_count = self.row_count();
+        self.scroll = position.min(row_count.saturating_sub(viewport_height));
+        if row_count == 0 {
+            self.selected = 0;
+        } else if self.selected < self.scroll {
+            self.selected = self.scroll;
+        } else if self.selected >= self.scroll.saturating_add(viewport_height) {
+            self.selected = self
+                .scroll
+                .saturating_add(viewport_height - 1)
+                .min(row_count - 1);
+        }
+    }
+
+    pub(super) fn scroll_relative(&mut self, delta: isize, viewport_height: usize) {
+        self.set_scroll(self.scroll.saturating_add_signed(delta), viewport_height);
+    }
+
+    pub(super) fn activate_row(&mut self, row: usize) -> Option<DocumentAddress> {
+        if row >= self.row_count() {
+            return None;
+        }
+        self.selected = row;
+        if self.draft.is_empty() {
+            match self.tree.get(row).cloned() {
+                Some(FinderTreeRow::Folder { path, .. }) => {
+                    if !self.expanded.remove(&path) {
+                        self.expanded.insert(path);
+                    }
+                    self.rebuild_tree();
+                    None
+                }
+                Some(FinderTreeRow::Document { index, .. }) => self
+                    .catalog
+                    .get(index)
+                    .map(|document| document.address.clone()),
+                None => None,
+            }
+        } else {
+            self.matches
+                .get(row)
+                .and_then(|index| self.catalog.get(*index))
+                .map(|document| document.address.clone())
+        }
+    }
+
+    pub(super) fn move_cursor_to_column(&mut self, column: usize) {
+        self.cursor = cursor_byte_at_column(&self.draft, column);
     }
 
     fn select_relative(&mut self, delta: isize) {
@@ -310,15 +371,117 @@ impl App {
         if key.code == KeyCode::Esc {
             self.pending_discovery = None;
             self.overlay = Overlay::None;
+            self.pointer_drag = PointerDrag::None;
             return;
         }
         let previous_draft = self.finder.draft.clone();
         if let Some(address) = self.finder.handle_key(key) {
             self.overlay = Overlay::None;
+            self.pointer_drag = PointerDrag::None;
             self.request_open(address, None);
         } else if self.finder.draft != previous_draft {
             self.pending_discovery = Some(finder_query(&self.finder.draft));
         }
+        self.finder
+            .ensure_selected_visible(usize::from(self.geometry.finder_results.height));
+    }
+
+    pub(super) fn handle_finder_mouse(&mut self, mouse: MouseEvent) -> UpdateOutcome {
+        let viewport_height = usize::from(self.geometry.finder_results.height);
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left)
+                if self
+                    .geometry
+                    .finder_scrollbar
+                    .is_some_and(|scrollbar| scrollbar.contains(mouse.column, mouse.row)) =>
+            {
+                let scrollbar = self.geometry.finder_scrollbar.expect("guarded scrollbar");
+                let (drag, position) = scrollbar.begin_drag(mouse.row);
+                self.finder.set_scroll(position, viewport_height);
+                self.pointer_drag = PointerDrag::FinderScrollbar(drag);
+                UpdateOutcome::Redraw
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                let PointerDrag::FinderScrollbar(drag) = self.pointer_drag else {
+                    return UpdateOutcome::Unchanged;
+                };
+                self.scroll_finder_to_pointer(mouse.row, drag);
+                UpdateOutcome::Redraw
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                if let PointerDrag::FinderScrollbar(drag) = self.pointer_drag {
+                    self.scroll_finder_to_pointer(mouse.row, drag);
+                    self.pointer_drag = PointerDrag::None;
+                    UpdateOutcome::Redraw
+                } else {
+                    UpdateOutcome::Unchanged
+                }
+            }
+            MouseEventKind::ScrollDown
+                if self
+                    .geometry
+                    .finder_results
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.finder.scroll_relative(3, viewport_height);
+                UpdateOutcome::Redraw
+            }
+            MouseEventKind::ScrollUp
+                if self
+                    .geometry
+                    .finder_results
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.finder.scroll_relative(-3, viewport_height);
+                UpdateOutcome::Redraw
+            }
+            MouseEventKind::Down(MouseButton::Left)
+                if self
+                    .geometry
+                    .finder_query
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                const SEARCH_PREFIX_WIDTH: u16 = 8;
+                let column = usize::from(
+                    mouse.column.saturating_sub(
+                        self.geometry
+                            .finder_query
+                            .x
+                            .saturating_add(SEARCH_PREFIX_WIDTH),
+                    ),
+                );
+                self.finder.move_cursor_to_column(column);
+                UpdateOutcome::Redraw
+            }
+            MouseEventKind::Down(MouseButton::Left)
+                if self
+                    .geometry
+                    .finder_results
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                let row = self.finder.scroll
+                    + usize::from(mouse.row.saturating_sub(self.geometry.finder_results.y));
+                if let Some(address) = self.finder.activate_row(row) {
+                    self.overlay = Overlay::None;
+                    self.pointer_drag = PointerDrag::None;
+                    self.request_open(address, None);
+                } else {
+                    self.finder.ensure_selected_visible(viewport_height);
+                }
+                UpdateOutcome::Redraw
+            }
+            _ => UpdateOutcome::Unchanged,
+        }
+    }
+
+    fn scroll_finder_to_pointer(&mut self, row: u16, drag: super::ScrollbarDrag) {
+        let Some(scrollbar) = self.geometry.finder_scrollbar else {
+            self.pointer_drag = PointerDrag::None;
+            return;
+        };
+        let position = scrollbar.position_for_pointer(row, drag);
+        self.finder
+            .set_scroll(position, usize::from(self.geometry.finder_results.height));
     }
 }
 
@@ -356,4 +519,18 @@ fn next_char_boundary(value: &str, cursor: usize) -> Option<usize> {
         .chars()
         .next()
         .map(|character| cursor + character.len_utf8())
+}
+
+fn cursor_byte_at_column(value: &str, column: usize) -> usize {
+    use unicode_width::UnicodeWidthChar;
+
+    let mut used = 0;
+    for (index, character) in value.char_indices() {
+        let next = used + character.width().unwrap_or(0);
+        if column < next {
+            return index;
+        }
+        used = next;
+    }
+    value.len()
 }

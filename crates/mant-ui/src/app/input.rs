@@ -212,7 +212,7 @@ impl App {
                     self.scroll_content_to_pointer(mouse.row, drag);
                     UpdateOutcome::Redraw
                 }
-                PointerDrag::None => return None,
+                PointerDrag::FinderScrollbar(_) | PointerDrag::None => return None,
             },
             MouseEventKind::Up(MouseButton::Left) if self.pointer_drag != PointerDrag::None => {
                 match self.pointer_drag {
@@ -223,7 +223,7 @@ impl App {
                     PointerDrag::ContentScrollbar(drag) => {
                         self.scroll_content_to_pointer(mouse.row, drag);
                     }
-                    PointerDrag::None => {}
+                    PointerDrag::FinderScrollbar(_) | PointerDrag::None => {}
                 }
                 self.pointer_drag = PointerDrag::None;
                 UpdateOutcome::Redraw

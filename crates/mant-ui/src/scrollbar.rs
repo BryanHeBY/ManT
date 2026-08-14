@@ -206,5 +206,6 @@ mod tests {
             theme::SCROLLBAR_TRACK
         );
         assert_ne!(theme::SCROLLBAR_THUMB, theme::SCROLLBAR_TRACK);
+        assert_ne!(theme::SCROLLBAR_TRACK, theme::BASE);
     }
 }

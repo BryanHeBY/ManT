@@ -96,6 +96,7 @@ enum PointerDrag {
     Sidebar,
     NavigationScrollbar(ScrollbarDrag),
     ContentScrollbar(ScrollbarDrag),
+    FinderScrollbar(ScrollbarDrag),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -172,6 +173,9 @@ struct FrameGeometry {
     sidebar_splitter: Rect,
     status: Rect,
     navigation_rows: Vec<usize>,
+    finder_query: Rect,
+    finder_results: Rect,
+    finder_scrollbar: Option<VerticalScrollbar>,
 }
 
 /// All mutable interaction state for one `ManT` document.
