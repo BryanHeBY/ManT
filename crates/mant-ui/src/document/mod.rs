@@ -8,7 +8,7 @@ mod model;
 mod search;
 mod wrap;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use mant_ir::DocumentAddress;
 use mant_ir::{
@@ -29,7 +29,10 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::theme;
 pub(crate) use model::LinkTarget;
-use model::{LineSurface, LogicalLine, LogicalLinkRange, StyledInlineLine, WrapMode};
+use model::{
+    LineSurface, LogicalLine, LogicalLinkRange, LogicalTableCell, LogicalTableLayout,
+    StyledInlineLine, WrapMode,
+};
 
 pub use self::search::RenderedSearchMatch;
 #[cfg(test)]
@@ -392,7 +395,7 @@ impl DocumentBuilder {
                 } else {
                     WrapMode::Word
                 },
-                table_cells: None,
+                table_row: None,
                 links,
             });
         }
@@ -628,17 +631,22 @@ impl DocumentBuilder {
             Block::Table { rows, layout, .. } => {
                 self.spacing(layout.spacing_before_lines);
                 let indent = base_indent + usize::from(layout.indent_columns);
-                for row in rows {
-                    let cells = row
-                        .cells
-                        .iter()
-                        .map(|cell| {
-                            let mut builder = Self::new(String::new(), self.address.clone());
-                            builder.blocks(&cell.blocks, 0);
-                            builder.lines
-                        })
-                        .collect();
-                    self.push(LogicalLine::table(indent, cells));
+                let rows = rows
+                    .iter()
+                    .map(|row| {
+                        row.cells
+                            .iter()
+                            .map(|cell| {
+                                let mut builder = Self::new(String::new(), self.address.clone());
+                                builder.blocks(&cell.blocks, 0);
+                                LogicalTableCell::new(builder.lines, cell.alignment)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+                let table_layout = Arc::new(LogicalTableLayout::for_rows(&rows));
+                for cells in rows {
+                    self.push(LogicalLine::table(indent, cells, Arc::clone(&table_layout)));
                 }
             }
             Block::Equation { value, layout, .. } => {
@@ -761,7 +769,7 @@ impl DocumentBuilder {
                     } else {
                         WrapMode::Word
                     },
-                    table_cells: None,
+                    table_row: None,
                     links: line.links,
                 }
             })
@@ -1757,7 +1765,7 @@ mod tests {
     }
 
     #[test]
-    fn table_cells_keep_equal_columns_and_independent_wrapping() {
+    fn table_cells_use_shared_content_driven_columns_and_independent_wrapping() {
         let mut bundle = bundle();
         let paragraph = |value: &str| Block::Paragraph {
             children: vec![Inline::Text {
@@ -1795,9 +1803,8 @@ mod tests {
             .map(ToString::to_string)
             .collect::<Vec<_>>();
 
-        assert!(rows[1].starts_with("   alpha beta "));
-        assert!(rows[1].contains("right hand"));
-        assert!(rows[2].starts_with("   gamma"));
+        assert_eq!(rows[1].trim_end(), "   alpha       right", "{rows:#?}");
+        assert_eq!(rows[2].trim_end(), "   beta gamma  hand", "{rows:#?}");
         assert_eq!(UnicodeWidthStr::width(rows[1].as_str()), 24);
         let left_match = rendered.search("alpha beta gamma");
         assert_eq!(left_match.len(), 1);
@@ -1807,14 +1814,55 @@ mod tests {
     }
 
     #[test]
-    fn narrow_tables_stack_cells_instead_of_dropping_content() {
-        let line = LogicalLine::table(
-            0,
-            vec![
-                vec![LogicalLine::plain(0, "a", Style::default())],
-                vec![LogicalLine::plain(0, "b", Style::default())],
+    fn short_table_keys_do_not_claim_half_of_a_wide_viewport() {
+        let paragraph = |value: &str| Block::Paragraph {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        let cell = |value: &str| TableCell {
+            blocks: vec![paragraph(value)],
+            column_span: 1,
+            row_span: 1,
+            alignment: None,
+        };
+        let mut bundle = bundle();
+        bundle.document.as_mut().expect("document").sections[0].blocks = vec![Block::Table {
+            rows: vec![
+                TableRow {
+                    cells: vec![cell("1"), cell("Executable programs and shell commands")],
+                },
+                TableRow {
+                    cells: vec![cell("8"), cell("System administration commands")],
+                },
             ],
-        );
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let rows = DocumentView::new(&bundle)
+            .render(80)
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert_eq!(rows[1], "   1  Executable programs and shell commands");
+        assert_eq!(rows[2].trim_end(), "   8  System administration commands");
+        assert!(UnicodeWidthStr::width(rows[2].as_str()) < 50);
+    }
+
+    #[test]
+    fn narrow_tables_stack_cells_instead_of_dropping_content() {
+        let cells = vec![
+            LogicalTableCell::new(vec![LogicalLine::plain(0, "a", Style::default())], None),
+            LogicalTableCell::new(vec![LogicalLine::plain(0, "b", Style::default())], None),
+        ];
+        let layout = Arc::new(LogicalTableLayout::for_rows(std::slice::from_ref(&cells)));
+        let line = LogicalLine::table(0, cells, layout);
 
         let rows = wrap_line(&line, 1);
         assert_eq!(

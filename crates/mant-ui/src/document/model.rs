@@ -1,7 +1,10 @@
 //! Width-independent logical rows produced from the document IR.
 
-use mant_ir::DocumentAddress;
+use std::sync::Arc;
+
+use mant_ir::{DocumentAddress, TableAlignment};
 use ratatui::{style::Style, text::Span};
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LinkTarget {
@@ -20,7 +23,7 @@ pub(super) struct LogicalLine {
     pub(super) spans: Vec<Span<'static>>,
     pub(super) surface: LineSurface,
     pub(super) wrap_mode: WrapMode,
-    pub(super) table_cells: Option<Vec<Vec<LogicalLine>>>,
+    pub(super) table_row: Option<LogicalTableRow>,
     pub(super) links: Vec<LogicalLinkRange>,
 }
 
@@ -29,6 +32,63 @@ pub(super) struct LogicalLinkRange {
     pub(super) target: LinkTarget,
     pub(super) start_column: usize,
     pub(super) end_column: usize,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct LogicalTableCell {
+    pub(super) lines: Vec<LogicalLine>,
+    pub(super) alignment: TableAlignment,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct LogicalTableRow {
+    pub(super) cells: Vec<LogicalTableCell>,
+    pub(super) layout: Arc<LogicalTableLayout>,
+}
+
+#[derive(Debug)]
+pub(super) struct LogicalTableLayout {
+    pub(super) preferred_widths: Vec<usize>,
+}
+
+impl LogicalTableLayout {
+    pub(super) fn for_rows(rows: &[Vec<LogicalTableCell>]) -> Self {
+        let column_count = rows.iter().map(Vec::len).max().unwrap_or(0);
+        let preferred_widths = (0..column_count)
+            .map(|column| {
+                rows.iter()
+                    .filter_map(|row| row.get(column))
+                    .map(LogicalTableCell::preferred_width)
+                    .max()
+                    .unwrap_or(1)
+                    .max(1)
+            })
+            .collect();
+        Self { preferred_widths }
+    }
+
+    fn preferred_width(&self) -> usize {
+        self.preferred_widths.iter().sum::<usize>()
+            + self.preferred_widths.len().saturating_sub(1) * 2
+    }
+}
+
+impl LogicalTableCell {
+    pub(super) fn new(lines: Vec<LogicalLine>, alignment: Option<TableAlignment>) -> Self {
+        Self {
+            lines,
+            alignment: alignment.unwrap_or(TableAlignment::Left),
+        }
+    }
+
+    fn preferred_width(&self) -> usize {
+        self.lines
+            .iter()
+            .map(LogicalLine::preferred_width)
+            .max()
+            .unwrap_or(1)
+            .max(1)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -62,7 +122,7 @@ impl LogicalLine {
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
-            table_cells: None,
+            table_row: None,
             links: Vec::new(),
         }
     }
@@ -74,7 +134,7 @@ impl LogicalLine {
             spans: vec![Span::styled(value.into(), style)],
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
-            table_cells: None,
+            table_row: None,
             links: Vec::new(),
         }
     }
@@ -105,19 +165,23 @@ impl LogicalLine {
             spans,
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
-            table_cells: None,
+            table_row: None,
             links: Vec::new(),
         }
     }
 
-    pub(super) fn table(indent: usize, cells: Vec<Vec<Self>>) -> Self {
+    pub(super) fn table(
+        indent: usize,
+        cells: Vec<LogicalTableCell>,
+        layout: Arc<LogicalTableLayout>,
+    ) -> Self {
         Self {
             indent,
             continuation_indent: indent,
             spans: Vec::new(),
             surface: LineSurface::Normal,
             wrap_mode: WrapMode::Word,
-            table_cells: Some(cells),
+            table_row: Some(LogicalTableRow { cells, layout }),
             links: Vec::new(),
         }
     }
@@ -128,5 +192,18 @@ impl LogicalLine {
         line.continuation_indent = indent;
         line.surface = LineSurface::Rule;
         line
+    }
+
+    fn preferred_width(&self) -> usize {
+        let content = self.table_row.as_ref().map_or_else(
+            || {
+                self.spans
+                    .iter()
+                    .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+                    .sum()
+            },
+            |table| table.layout.preferred_width(),
+        );
+        self.indent.saturating_add(content)
     }
 }

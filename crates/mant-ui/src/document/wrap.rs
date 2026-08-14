@@ -10,8 +10,12 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use super::{LineSurface, LinkTarget, LogicalLine, WrapMode};
+use mant_ir::TableAlignment;
+
+use super::{LineSurface, LinkTarget, LogicalLine, WrapMode, model::LogicalTableRow};
 use crate::theme;
+
+const TABLE_COLUMN_GAP: usize = 2;
 
 #[derive(Clone, Copy)]
 struct StyledCell {
@@ -52,8 +56,8 @@ pub(super) fn wrap_line(line: &LogicalLine, width: usize) -> Vec<Line<'static>> 
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<WrappedLine> {
-    if let Some(cells) = &line.table_cells {
-        return render_table_row_with_links(line.indent, cells, width);
+    if let Some(table) = &line.table_row {
+        return render_table_row_with_links(line.indent, table, width);
     }
     match line.surface {
         LineSurface::TldrTop => {
@@ -233,10 +237,10 @@ fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
 
 fn render_table_row_with_links(
     indent: usize,
-    cells: &[Vec<LogicalLine>],
+    table: &LogicalTableRow,
     width: usize,
 ) -> Vec<WrappedLine> {
-    if cells.is_empty() {
+    if table.cells.is_empty() {
         return vec![WrappedLine {
             line: Line::default(),
             links: Vec::new(),
@@ -245,41 +249,50 @@ fn render_table_row_with_links(
     }
     let indent = indent.min(width.saturating_sub(1));
     let available = width.saturating_sub(indent).max(1);
-    if available < cells.len() {
-        let mut rows = cells
-            .iter()
-            .flat_map(|lines| lines.iter())
-            .flat_map(|line| {
-                let mut line = line.clone();
-                line.indent = line.indent.saturating_add(indent);
-                line.continuation_indent = line.continuation_indent.saturating_add(indent);
-                wrap_line_with_links(&line, width)
-            })
-            .collect::<Vec<_>>();
-        if rows.is_empty() {
-            rows.push(WrappedLine {
-                line: Line::default(),
-                links: Vec::new(),
-                search_cells: Vec::new(),
-            });
-        }
-        return rows;
-    }
-    let base_width = available / cells.len();
-    let remainder = available % cells.len();
-    let column_widths = (0..cells.len())
-        .map(|index| base_width + usize::from(index < remainder))
-        .collect::<Vec<_>>();
-    let mut next_search_group = 0;
-    let rendered_cells = cells
+    let Some(column_widths) = table_column_widths(&table.layout.preferred_widths, available) else {
+        return stack_table_cells(indent, table, width);
+    };
+    render_table_columns(indent, table, &column_widths)
+}
+
+fn stack_table_cells(indent: usize, table: &LogicalTableRow, width: usize) -> Vec<WrappedLine> {
+    let mut rows = table
+        .cells
         .iter()
-        .zip(&column_widths)
-        .map(|(lines, column_width)| {
+        .flat_map(|cell| cell.lines.iter())
+        .flat_map(|line| {
+            let mut line = line.clone();
+            line.indent = line.indent.saturating_add(indent);
+            line.continuation_indent = line.continuation_indent.saturating_add(indent);
+            wrap_line_with_links(&line, width)
+        })
+        .collect::<Vec<_>>();
+    if rows.is_empty() {
+        rows.push(WrappedLine {
+            line: Line::default(),
+            links: Vec::new(),
+            search_cells: Vec::new(),
+        });
+    }
+    rows
+}
+
+fn render_table_columns(
+    indent: usize,
+    table: &LogicalTableRow,
+    column_widths: &[usize],
+) -> Vec<WrappedLine> {
+    let mut next_search_group = 0;
+    let rendered_cells = table
+        .cells
+        .iter()
+        .zip(column_widths)
+        .map(|(cell, column_width)| {
             if *column_width == 0 {
                 return Vec::new();
             }
             let mut rendered = Vec::new();
-            for line in lines {
+            for line in &cell.lines {
                 let group = next_search_group;
                 next_search_group += 1;
                 let mut wrapped = wrap_line_with_links(line, *column_width);
@@ -304,26 +317,47 @@ fn render_table_row_with_links(
             if indent > 0 {
                 spans.push(Span::raw(" ".repeat(indent)));
             }
-            for (cell_rows, column_width) in rendered_cells.iter().zip(&column_widths) {
+            for (column, column_width) in column_widths.iter().enumerate() {
+                let cell_rows = rendered_cells.get(column);
+                let alignment = table
+                    .cells
+                    .get(column)
+                    .map_or(TableAlignment::Left, |cell| cell.alignment);
                 let mut used = 0;
-                if let Some(row) = cell_rows.get(row_index) {
+                let mut left_padding = 0;
+                if let Some(row) = cell_rows.and_then(|rows| rows.get(row_index)) {
                     used = UnicodeWidthStr::width(row.line.to_string().as_str());
+                    let free = column_width.saturating_sub(used);
+                    left_padding = match alignment {
+                        TableAlignment::Left => 0,
+                        TableAlignment::Center => free / 2,
+                        TableAlignment::Right => free,
+                    };
+                    if left_padding > 0 {
+                        spans.push(Span::raw(" ".repeat(left_padding)));
+                    }
                     spans.extend(row.line.spans.clone());
                     links.extend(row.links.iter().map(|link| WrappedLink {
                         target: link.target.clone(),
-                        start_column: column_offset + link.start_column,
-                        end_column: column_offset + link.end_column,
+                        start_column: column_offset + left_padding + link.start_column,
+                        end_column: column_offset + left_padding + link.end_column,
                     }));
                     search_cells.extend(row.search_cells.iter().map(|cell| WrappedSearchCell {
                         group: cell.group,
                         join_before: cell.join_before,
                         character: cell.character,
-                        start_column: column_offset + cell.start_column,
-                        end_column: column_offset + cell.end_column,
+                        start_column: column_offset + left_padding + cell.start_column,
+                        end_column: column_offset + left_padding + cell.end_column,
                     }));
                 }
-                spans.push(Span::raw(" ".repeat(column_width.saturating_sub(used))));
+                spans.push(Span::raw(
+                    " ".repeat(column_width.saturating_sub(used + left_padding)),
+                ));
                 column_offset += column_width;
+                if column + 1 < column_widths.len() {
+                    spans.push(Span::raw(" ".repeat(TABLE_COLUMN_GAP)));
+                    column_offset += TABLE_COLUMN_GAP;
+                }
             }
             WrappedLine {
                 line: Line::from(spans),
@@ -332,6 +366,51 @@ fn render_table_row_with_links(
             }
         })
         .collect()
+}
+
+fn table_column_widths(preferred_widths: &[usize], available: usize) -> Option<Vec<usize>> {
+    const SOFT_MINIMUM: usize = 8;
+
+    if preferred_widths.is_empty() {
+        return Some(Vec::new());
+    }
+    let gaps = preferred_widths.len().saturating_sub(1) * TABLE_COLUMN_GAP;
+    let usable = available.checked_sub(gaps)?;
+    let preferred = preferred_widths
+        .iter()
+        .map(|width| (*width).max(1))
+        .collect::<Vec<_>>();
+    if preferred.iter().sum::<usize>() <= usable {
+        return Some(preferred);
+    }
+
+    let mut widths = preferred
+        .iter()
+        .map(|width| (*width).min(SOFT_MINIMUM))
+        .collect::<Vec<_>>();
+    let minimum = widths.iter().sum::<usize>();
+    if minimum > usable {
+        return None;
+    }
+
+    let mut remaining = usable - minimum;
+    while remaining > 0 {
+        let mut advanced = false;
+        for (width, preferred) in widths.iter_mut().zip(&preferred) {
+            if *width < *preferred {
+                *width += 1;
+                remaining -= 1;
+                advanced = true;
+                if remaining == 0 {
+                    break;
+                }
+            }
+        }
+        if !advanced {
+            break;
+        }
+    }
+    Some(widths)
 }
 
 fn fitting_prefix(cells: &[StyledCell], available: usize) -> usize {
