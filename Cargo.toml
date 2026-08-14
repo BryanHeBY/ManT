@@ -37,6 +37,7 @@ pedantic = "warn"
 [workspace.dependencies]
 clap = { version = "4.6.6", default-features = false, features = ["derive", "error-context", "help", "std", "suggestions", "usage"] }
 crossterm = "0.29.0"
+crossterm_winapi = "0.9.1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"

@@ -5,6 +5,7 @@ mod arguments;
 mod error;
 mod mcp;
 mod presentation;
+mod terminal;
 
 use std::{
     collections::BTreeMap,
@@ -162,14 +163,17 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         return mcp::run_stdio().await;
     }
     let host = SystemHost::default();
+    let output_terminal = io::stdout().is_terminal();
+    let ansi_supported = terminal::prepare_ansi_output(output_terminal);
 
     if let Err(error) = resolve_process_presentation(
         &mut command,
         TerminalCapabilities {
             input: io::stdin().is_terminal(),
-            output: io::stdout().is_terminal(),
+            output: output_terminal,
             color: std::env::var_os("NO_COLOR").is_none()
-                && std::env::var("TERM").ok().as_deref() != Some("dumb"),
+                && std::env::var("TERM").ok().as_deref() != Some("dumb")
+                && ansi_supported,
         },
     ) {
         return report_failure(&error, &mut io::stderr().lock());

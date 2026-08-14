@@ -772,6 +772,7 @@ name = "mant"
 version = "0.7.0"
 dependencies = [
  "clap",
+ "crossterm_winapi",
  "mant-engine",
  "mant-ir",
  "mant-protocol",
