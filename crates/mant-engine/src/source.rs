@@ -16,6 +16,9 @@ const DEFAULT_MANUAL_ROOTS: [&str; 4] = [
     "/usr/man",
 ];
 const SUPPORTED_COMPRESSION_SUFFIXES: [&str; 2] = [".gz", ".zst"];
+const DEFAULT_MANUAL_SECTIONS: [&str; 16] = [
+    "1", "1p", "n", "l", "8", "3", "3p", "0", "0p", "2", "3type", "5", "4", "9", "6", "7",
+];
 
 /// One validated manual lookup independent from CLI token syntax.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -65,10 +68,20 @@ impl ManualIndex {
     #[must_use]
     pub fn from_roots(roots: Vec<PathBuf>) -> Self {
         let locale = current_locale();
-        Self::from_roots_with_locale(roots, locale.as_deref())
+        let section_order = current_manual_section_order();
+        Self::from_roots_with_locale_and_sections(roots, locale.as_deref(), &section_order)
     }
 
+    #[cfg(test)]
     fn from_roots_with_locale(roots: Vec<PathBuf>, locale: Option<&str>) -> Self {
+        Self::from_roots_with_locale_and_sections(roots, locale, &default_manual_section_order())
+    }
+
+    fn from_roots_with_locale_and_sections(
+        roots: Vec<PathBuf>,
+        locale: Option<&str>,
+        section_order: &[String],
+    ) -> Self {
         let roots = deduplicate_paths(roots);
         let mut effective = BTreeMap::<(String, String), ManualPage>::new();
         for root in &roots {
@@ -78,10 +91,13 @@ impl ManualIndex {
                     .or_insert(page);
             }
         }
-        Self {
-            roots,
-            pages: effective.into_values().collect(),
-        }
+        let mut pages = effective.into_values().collect::<Vec<_>>();
+        pages.sort_by(|left, right| {
+            manual_name_key(&left.name)
+                .cmp(&manual_name_key(&right.name))
+                .then_with(|| compare_manual_sections(&left.section, &right.section, section_order))
+        });
+        Self { roots, pages }
     }
 
     /// Roots searched by this index, in precedence order.
@@ -138,6 +154,49 @@ fn manual_name_key(name: &str) -> String {
     #[cfg(not(windows))]
     {
         name.to_owned()
+    }
+}
+
+fn current_manual_section_order() -> Vec<String> {
+    env::var("MANSECT")
+        .ok()
+        .and_then(|value| parse_manual_section_order(&value))
+        .unwrap_or_else(default_manual_section_order)
+}
+
+fn default_manual_section_order() -> Vec<String> {
+    DEFAULT_MANUAL_SECTIONS.map(str::to_owned).to_vec()
+}
+
+fn parse_manual_section_order(value: &str) -> Option<Vec<String>> {
+    let mut sections = Vec::new();
+    for section in value
+        .split(':')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !sections.iter().any(|existing| existing == section) {
+            sections.push(section.to_owned());
+        }
+    }
+    (!sections.is_empty()).then_some(sections)
+}
+
+fn compare_manual_sections(
+    left: &str,
+    right: &str,
+    section_order: &[String],
+) -> std::cmp::Ordering {
+    let rank = |section: &str| {
+        section_order
+            .iter()
+            .position(|candidate| candidate == section)
+    };
+    match (rank(left), rank(right)) {
+        (Some(left), Some(right)) => left.cmp(&right),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => left.cmp(right),
     }
 }
 
@@ -453,7 +512,7 @@ mod tests {
 
     use super::{
         LocateError, ManualIndex, ManualRequest, deduplicate_paths, discover_manual_roots_with,
-        locate_manual_source_in, normalize_locale,
+        locate_manual_source_in, normalize_locale, parse_manual_section_order,
     };
 
     fn temporary_root(label: &str) -> PathBuf {
@@ -543,6 +602,53 @@ mod tests {
         );
 
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn unqualified_lookup_uses_manual_section_precedence_instead_of_lexical_order() {
+        let root = temporary_root("section-precedence");
+        fs::create_dir_all(root.join("man5")).expect("section 5");
+        fs::create_dir_all(root.join("man8")).expect("section 8");
+        fs::write(root.join("man5/btrfs.5"), b".TH BTRFS 5\n").expect("section 5 page");
+        fs::write(root.join("man8/btrfs.8"), b".TH BTRFS 8\n").expect("section 8 page");
+
+        let index = ManualIndex::from_roots_with_locale(vec![root.clone()], None);
+
+        assert_eq!(
+            index.find("btrfs", None).map(|page| page.section.as_str()),
+            Some("8")
+        );
+        assert_eq!(index.available_manual_sections("btrfs"), ["8", "5"]);
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn explicit_manual_section_order_controls_unqualified_lookup() {
+        let root = temporary_root("explicit-section-precedence");
+        fs::create_dir_all(root.join("man5")).expect("section 5");
+        fs::create_dir_all(root.join("man8")).expect("section 8");
+        fs::write(root.join("man5/btrfs.5"), b".TH BTRFS 5\n").expect("section 5 page");
+        fs::write(root.join("man8/btrfs.8"), b".TH BTRFS 8\n").expect("section 8 page");
+        let order = vec!["5".to_owned(), "8".to_owned()];
+
+        let index =
+            ManualIndex::from_roots_with_locale_and_sections(vec![root.clone()], None, &order);
+
+        assert_eq!(
+            index.find("btrfs", None).map(|page| page.section.as_str()),
+            Some("5")
+        );
+        assert_eq!(index.available_manual_sections("btrfs"), ["5", "8"]);
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn mansect_is_colon_separated_trimmed_and_deduplicated() {
+        assert_eq!(
+            parse_manual_section_order(" 8:1:8::5 "),
+            Some(vec!["8".to_owned(), "1".to_owned(), "5".to_owned()])
+        );
+        assert_eq!(parse_manual_section_order(":: "), None);
     }
 
     #[cfg(any(unix, windows))]

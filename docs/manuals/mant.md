@@ -153,6 +153,13 @@ file and decompression I/O for manual sources remains in ManT; bundled
 libmandoc receives only the final plain roff bytes. Neither a system `man` nor
 a system `mandoc` executable is required for ordinary use.
 
+An unqualified name with pages in several native categories follows `MANSECT`
+when that variable contains a colon-separated order. Without it, ManT uses the
+stable man-db order `1:1p:n:l:8:3:3p:0:0p:2:3type:5:4:9:6:7`; categories absent
+from that list follow in lexical order. An explicit `--man-section`, leading
+section argument, or `manual/SECTION/NAME` catalog path always selects exactly
+that category.
+
 Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
 and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 
@@ -668,6 +675,8 @@ for the schema and update lifecycle.
   ManT document roots.
 - `LC_ALL`, `LC_MESSAGES`, `LANGUAGE`, `LANG`: Select localized manual sources
   and translated tldr pages before English fallback.
+- `MANSECT`: Order native manual categories for an unqualified name as a
+  colon-separated list; unspecified categories follow after it.
 - `PATHEXT`: On Windows, order executable suffix fallback for extensionless
   registered-document and native-manual queries.
 - `NO_COLOR`: Disable automatic colour in human-readable terminal output.
