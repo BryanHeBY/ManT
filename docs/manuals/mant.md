@@ -600,7 +600,7 @@ to Markdown; outlines and command-line search default to text. JSON must be
 selected explicitly for document queries. `--compact` removes indentation from
 JSON queries, schemas, protocol descriptions, and update reports.
 
-Help, usage diagnostics, and the default tldr presentation share the colour
+Help, diagnostics, and the default tldr presentation share the colour
 policy. `auto` emits styling only to a capable terminal and respects
 `NO_COLOR`, `CLICOLOR`, and `TERM=dumb`; `always` and `never` explicitly
 override automatic detection. JSON, Markdown, man-format, MCP, and native

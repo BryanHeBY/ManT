@@ -164,6 +164,7 @@ pub fn run(
 /// owns operating-system stdio because the protocol reserves it exclusively
 /// for newline-delimited JSON-RPC messages.
 pub async fn run_process(arguments: &[String]) -> u8 {
+    let requested_color = arguments::requested_color(arguments);
     let mut command = match arguments::parse_process(arguments) {
         Ok(command) => command,
         Err(error) => return report_process_argument_error(&error),
@@ -173,6 +174,7 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         return mcp::run_stdio().await;
     }
     let host = SystemHost::default();
+    let mut diagnostics = anstream::AutoStream::new(io::stderr(), requested_color.into()).lock();
     let output_terminal = io::stdout().is_terminal();
     let input_terminal = io::stdin().is_terminal();
     let terminal_kind = if std::env::var("TERM").ok().as_deref() == Some("dumb") {
@@ -180,18 +182,16 @@ pub async fn run_process(arguments: &[String]) -> u8 {
     } else {
         TerminalKind::Capable
     };
-    let ansi_supported = terminal::prepare_ansi_output(output_terminal);
+    let output_ansi_supported = terminal::prepare_ansi_output(output_terminal);
     let terminal = TerminalCapabilities {
         input: input_terminal,
         output: output_terminal,
-        color: std::env::var_os("NO_COLOR").is_none()
-            && terminal_kind == TerminalKind::Capable
-            && ansi_supported,
+        color: terminal::color_enabled(requested_color, output_terminal, output_ansi_supported),
         kind: terminal_kind,
     };
 
     if let Err(error) = resolve_process_presentation(&mut command, terminal) {
-        return report_failure(&error, &mut io::stderr().lock());
+        return report_failure(&error, &mut diagnostics, true);
     }
 
     if matches!(
@@ -201,18 +201,19 @@ pub async fn run_process(arguments: &[String]) -> u8 {
             ..
         }
     ) {
-        return run_interactive(command, &mut io::stderr().lock(), &host);
+        return run_interactive(command, &mut diagnostics, &host, true);
     }
     if should_page_catalog(&command, terminal) {
-        return run_paged_catalog(command, &mut io::stderr().lock(), &host);
+        return run_paged_catalog(command, &mut diagnostics, &host, true);
     }
 
     run_command(
         command,
         &mut io::stdin().lock(),
         &mut io::stdout().lock(),
-        &mut io::stderr().lock(),
+        &mut diagnostics,
         &host,
+        true,
     )
 }
 
@@ -230,7 +231,12 @@ fn should_page_catalog(command: &Command, terminal: TerminalCapabilities) -> boo
         )
 }
 
-fn run_paged_catalog(command: Command, diagnostics: &mut dyn Write, host: &dyn CliHost) -> u8 {
+fn run_paged_catalog(
+    command: Command,
+    diagnostics: &mut dyn Write,
+    host: &dyn CliHost,
+    diagnostics_color: bool,
+) -> u8 {
     let prompt = match &command {
         Command::Catalog { grouped: true, .. } => "mant --list",
         Command::Catalog { grouped: false, .. } => "mant --find",
@@ -238,11 +244,11 @@ fn run_paged_catalog(command: Command, diagnostics: &mut dyn Write, host: &dyn C
     };
     let rendered = match execute(command, &mut io::empty(), host) {
         Ok(rendered) => rendered,
-        Err(error) => return report_failure(&error, diagnostics),
+        Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
     match mant_ui::page_text(rendered, prompt) {
         Ok(()) => 0,
-        Err(error) => report_failure(&Failure::operational(error), diagnostics),
+        Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
 }
 
@@ -288,12 +294,13 @@ fn run_with_host(
     diagnostics: &mut dyn Write,
     host: &dyn CliHost,
 ) -> u8 {
+    let diagnostics_color = arguments::requested_color(arguments) == ColorMode::Always;
     let command = match arguments::parse(arguments) {
         Ok(command) => command,
         Err(error) => return report_argument_error(&error, diagnostics),
     };
 
-    run_command(command, input, output, diagnostics, host)
+    run_command(command, input, output, diagnostics, host, diagnostics_color)
 }
 
 fn run_command(
@@ -302,11 +309,13 @@ fn run_command(
     output: &mut dyn Write,
     diagnostics: &mut dyn Write,
     host: &dyn CliHost,
+    diagnostics_color: bool,
 ) -> u8 {
     if matches!(command, Command::Mcp) {
         return report_failure(
             &Failure::usage("MCP mode must be launched through the native process entry point"),
             diagnostics,
+            diagnostics_color,
         );
     }
     if matches!(
@@ -319,6 +328,7 @@ fn run_command(
         return report_failure(
             &Failure::usage("interactive mode requires the native terminal process boundary"),
             diagnostics,
+            diagnostics_color,
         );
     }
 
@@ -326,37 +336,37 @@ fn run_command(
         Command::UpdateDocs { pretty } => {
             let update = match host.update_docs() {
                 Ok(update) => update,
-                Err(error) => return report_failure(&error, diagnostics),
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
             let status = u8::from(update.has_failures());
             let rendered = match render_json(&update, pretty) {
                 Ok(rendered) => rendered,
-                Err(error) => return report_failure(&error, diagnostics),
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
             (rendered, status)
         }
         Command::PruneDocs { pretty, dry_run } => {
             let prune = match host.prune_docs(dry_run) {
                 Ok(prune) => prune,
-                Err(error) => return report_failure(&error, diagnostics),
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
             let status = u8::from(prune.has_failures());
             let rendered = match render_json(&prune, pretty) {
                 Ok(rendered) => rendered,
-                Err(error) => return report_failure(&error, diagnostics),
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
             };
             (rendered, status)
         }
         command => match execute(command, input, host) {
             Ok(rendered) => (rendered, 0),
-            Err(error) => return report_failure(&error, diagnostics),
+            Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
         },
     };
 
     match write_output(output, &rendered) {
         Ok(()) => success_status,
         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => success_status,
-        Err(error) => report_failure(&Failure::operational(error), diagnostics),
+        Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
 }
 
@@ -569,7 +579,12 @@ fn execute_query(
 }
 
 /// Load one full query and hand the normalized document directly to Ratatui.
-fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn CliHost) -> u8 {
+fn run_interactive(
+    command: Command,
+    diagnostics: &mut dyn Write,
+    host: &dyn CliHost,
+    diagnostics_color: bool,
+) -> u8 {
     let Command::Query {
         source,
         presentation: QueryPresentation::Interactive,
@@ -580,31 +595,34 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
         return report_failure(
             &Failure::usage("interactive mode requires a document query"),
             diagnostics,
+            diagnostics_color,
         );
     };
     let QuerySource::Arguments(request) = source else {
         return report_failure(
             &Failure::usage("interactive mode requires a document selector or explicit input"),
             diagnostics,
+            diagnostics_color,
         );
     };
     if !matches!(request.view, QueryView::Full {}) {
         return report_failure(
             &Failure::usage("interactive mode requires the complete document view"),
             diagnostics,
+            diagnostics_color,
         );
     }
     if let Err(error) = mant_engine::validate_query_request(&request, policy).map_err(query_failure)
     {
-        return report_failure(&error, diagnostics);
+        return report_failure(&error, diagnostics, diagnostics_color);
     }
     let query = match host.query(&request, policy) {
         Ok(query) => query,
-        Err(error) => return report_failure(&error, diagnostics),
+        Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
     let catalog = match host.discover(&CatalogQuery::default()) {
         Ok(catalog) => catalog,
-        Err(error) => return report_failure(&error, diagnostics),
+        Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
     match mant_ui::run_with_catalog(
         &query,
@@ -617,7 +635,7 @@ fn run_interactive(command: Command, diagnostics: &mut dyn Write, host: &dyn Cli
         open_external_uri,
     ) {
         Ok(()) => 0,
-        Err(error) => report_failure(&Failure::operational(error), diagnostics),
+        Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
 }
 

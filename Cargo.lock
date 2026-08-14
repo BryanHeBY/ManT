@@ -843,6 +843,8 @@ dependencies = [
 name = "mant"
 version = "0.7.1"
 dependencies = [
+ "anstream",
+ "anstyle",
  "clap",
  "crossterm_winapi",
  "mant-engine",

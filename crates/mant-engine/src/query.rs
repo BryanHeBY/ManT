@@ -756,7 +756,7 @@ impl QueryHost for DocumentResolver {
         let manuals = self
             .manuals
             .get_or_init(|| ManualIndex::from_roots(self.manual_roots.clone()));
-        locate_manual_source_in(request, manuals).map_err(|error| error.to_string())
+        locate_manual_source_in(request, manuals).map_err(|error| error.load_detail())
     }
 
     fn parse_manual(&self, page: &ManualPage) -> Result<Document, String> {

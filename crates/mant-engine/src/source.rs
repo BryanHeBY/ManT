@@ -226,6 +226,28 @@ pub enum LocateError {
     },
 }
 
+impl LocateError {
+    /// Render this error as detail nested below an already identified topic.
+    pub(crate) fn load_detail(&self) -> String {
+        match self {
+            Self::NotFound {
+                requested_manual_section: Some(requested),
+                available_manual_sections,
+                ..
+            } if !available_manual_sections.is_empty() => format!(
+                "manual section '{requested}' is unavailable; available sections: {}",
+                available_manual_sections.join(", ")
+            ),
+            Self::NotFound {
+                requested_manual_section: Some(requested),
+                ..
+            } => format!("no source was found in manual section '{requested}'"),
+            Self::NotFound { .. } => "no local manual source was found".to_owned(),
+            Self::EmptyName | Self::InvalidManualSection => self.to_string(),
+        }
+    }
+}
+
 impl fmt::Display for LocateError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -239,7 +261,7 @@ impl fmt::Display for LocateError {
                 available_manual_sections,
             } if !available_manual_sections.is_empty() => write!(
                 formatter,
-                "requested manual section '{requested}' is unavailable for '{name}'; available manual sections: {}; --man-section selects a manual category such as 1 or 3p, while --node selects a document section such as DESCRIPTION",
+                "requested manual section '{requested}' is unavailable for '{name}'; available manual sections: {}",
                 available_manual_sections.join(", ")
             ),
             Self::NotFound {
@@ -605,7 +627,11 @@ mod tests {
                 .expect_err("valid but unavailable manual section");
         assert_eq!(
             unavailable.to_string(),
-            "requested manual section '5' is unavailable for 'printf'; available manual sections: 1, 3; --man-section selects a manual category such as 1 or 3p, while --node selects a document section such as DESCRIPTION"
+            "requested manual section '5' is unavailable for 'printf'; available manual sections: 1, 3"
+        );
+        assert_eq!(
+            unavailable.load_detail(),
+            "manual section '5' is unavailable; available sections: 1, 3"
         );
 
         fs::remove_dir_all(root).expect("remove fixture");

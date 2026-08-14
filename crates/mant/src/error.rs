@@ -2,7 +2,12 @@
 
 use std::io::Write;
 
+use anstyle::{AnsiColor, Style};
 use mant_engine::{ProjectionError, QueryError, QueryExecutionError, SearchError};
+
+const ERROR_STYLE: Style = AnsiColor::Red.on_default().bold();
+const WARNING_STYLE: Style = AnsiColor::Yellow.on_default().bold();
+const ADVICE_STYLE: Style = AnsiColor::Cyan.on_default().bold();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FailureKind {
@@ -88,14 +93,51 @@ fn search_failure(error: SearchError) -> Failure {
     Failure::usage(error)
 }
 
-pub(super) fn report_failure(error: &Failure, diagnostics: &mut dyn Write) -> u8 {
-    let _ = writeln!(diagnostics, "mant: {}", error.message);
+pub(super) fn report_failure(error: &Failure, diagnostics: &mut dyn Write, color: bool) -> u8 {
+    let mut lines = error.message.split('\n');
+    let first = lines.next().unwrap_or_default();
+    if color {
+        let _ = writeln!(diagnostics, "{ERROR_STYLE}mant:{ERROR_STYLE:#} {first}");
+    } else {
+        let _ = writeln!(diagnostics, "mant: {first}");
+    }
+    for line in lines {
+        let _ = write_diagnostic_line(diagnostics, line, color);
+    }
     if error.kind == FailureKind::Usage {
-        let _ = writeln!(diagnostics, "Try 'mant --help' for more information.");
+        if color {
+            let _ = writeln!(
+                diagnostics,
+                "{ADVICE_STYLE}Try{ADVICE_STYLE:#} 'mant --help' for more information."
+            );
+        } else {
+            let _ = writeln!(diagnostics, "Try 'mant --help' for more information.");
+        }
         2
     } else {
         1
     }
+}
+
+fn write_diagnostic_line(
+    diagnostics: &mut dyn Write,
+    line: &str,
+    color: bool,
+) -> std::io::Result<()> {
+    if !color {
+        return writeln!(diagnostics, "{line}");
+    }
+    for (label, style) in [
+        ("warning:", WARNING_STYLE),
+        ("hint:", ADVICE_STYLE),
+        ("help:", ADVICE_STYLE),
+        ("note:", ADVICE_STYLE),
+    ] {
+        if let Some(message) = line.strip_prefix(label) {
+            return writeln!(diagnostics, "{style}{label}{style:#}{message}");
+        }
+    }
+    writeln!(diagnostics, "{line}")
 }
 
 /// Preserve clap's actionable usage and suggestion text on the injected stream.

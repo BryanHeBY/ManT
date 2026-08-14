@@ -87,6 +87,16 @@ impl From<ColorMode> for clap::ColorChoice {
     }
 }
 
+impl From<ColorMode> for anstream::ColorChoice {
+    fn from(value: ColorMode) -> Self {
+        match value {
+            ColorMode::Auto => Self::Auto,
+            ColorMode::Always => Self::Always,
+            ColorMode::Never => Self::Never,
+        }
+    }
+}
+
 /// A discoverable JSON Schema exposed by the native process boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum SchemaContract {
@@ -612,7 +622,7 @@ fn parse_cli(arguments: &[String], color: ColorMode) -> Result<Cli, clap::Error>
     Cli::from_arg_matches_mut(&mut matches).map_err(|error| error.format(&mut command))
 }
 
-fn requested_color(arguments: &[String]) -> ColorMode {
+pub(crate) fn requested_color(arguments: &[String]) -> ColorMode {
     let mut arguments = arguments.iter();
     let mut color = ColorMode::Auto;
     while let Some(argument) = arguments.next() {

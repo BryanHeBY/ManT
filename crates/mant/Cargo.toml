@@ -29,6 +29,8 @@ bin-dir = "mant-{ version }-windows-x64/{ bin }{ binary-ext }"
 pkg-fmt = "zip"
 
 [dependencies]
+anstream.workspace = true
+anstyle.workspace = true
 clap.workspace = true
 mant-ir = { path = "../mant-ir", version = "=0.7.1" }
 mant-protocol = { path = "../mant-protocol", version = "=0.7.1" }

@@ -113,6 +113,25 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
     assert!(colored_semantic_error.stdout.is_empty());
     assert!(colored_semantic_error.stderr.contains(&0x1b));
 
+    let colored_runtime_error = run(&[
+        "definitely-not-a-real-manual-for-colour",
+        "--manual",
+        "--color",
+        "always",
+    ]);
+    assert_eq!(colored_runtime_error.status.code(), Some(1));
+    assert!(colored_runtime_error.stdout.is_empty());
+    assert!(colored_runtime_error.stderr.contains(&0x1b));
+
+    let plain_runtime_error = run(&[
+        "definitely-not-a-real-manual-for-colour",
+        "--manual",
+        "--color",
+        "never",
+    ]);
+    assert_eq!(plain_runtime_error.status.code(), Some(1));
+    assert!(!plain_runtime_error.stderr.contains(&0x1b));
+
     let protocol = run(&["--protocol-version", "--compact", "--color", "always"]);
     assert!(protocol.status.success());
     assert!(!protocol.stdout.contains(&0x1b));
@@ -265,6 +284,12 @@ fn cached_tldr_requires_an_explicit_tldr_query_when_the_document_is_missing() {
     assert!(diagnostic.contains("could not load manual 'quick-only'"));
     assert!(diagnostic.contains("a tldr entry is available"));
     assert!(diagnostic.contains("mant quick-only --tldr"));
+
+    let colored = run(&["--format", "markdown", "--color", "always"]);
+    assert_eq!(colored.status.code(), Some(1));
+    let diagnostic = String::from_utf8(colored.stderr).expect("colored diagnostic");
+    assert!(diagnostic.contains("\u{1b}[1m\u{1b}[31mmant:\u{1b}[0m"));
+    assert!(diagnostic.contains("\u{1b}[1m\u{1b}[36mhint:\u{1b}[0m"));
 
     let explicit = run(&["--tldr"]);
     assert!(explicit.status.success(), "{explicit:?}");
@@ -1352,10 +1377,18 @@ fn document_and_quick_reference_policies_remain_orthogonal() {
     assert!(diagnostic.contains("--man-section <MAN_SECTION>"));
     assert!(diagnostic.contains("--node <SELECTOR>"));
 
-    let unavailable = run(&["--man-section", "DESCRIPTION"]);
-    assert_eq!(unavailable.status.code(), Some(2));
+    let unavailable = run(&["--man-section", "3"]);
+    assert_eq!(unavailable.status.code(), Some(1));
     let diagnostic = String::from_utf8(unavailable.stderr).expect("section diagnostic");
-    assert!(diagnostic.contains("manual section must be a conventional number"));
+    assert!(
+        diagnostic.contains("manual section '3' is unavailable"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains("available sections: 1"), "{diagnostic}");
+    assert!(
+        !diagnostic.contains("--man-section selects"),
+        "{diagnostic}"
+    );
 
     let tldr = run(&["--tldr"]);
     assert!(tldr.status.success(), "{tldr:?}");
