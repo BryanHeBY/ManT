@@ -683,8 +683,8 @@ On Windows, documents live below `%APPDATA%\ManT`. ManT's private
 tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. The native
 manual fallback root is `%USERPROFILE%\.local\share\man`.
 
-`sources.toml` lives at the data root. Personal documents and installed source
-directories remain below `documents/`; see the online
+`sources.toml` lives at the data root. Personal documents remain below
+`documents/`; installed source directories remain below `sources/`. See the online
 [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md)
 for the schema and update lifecycle.
 

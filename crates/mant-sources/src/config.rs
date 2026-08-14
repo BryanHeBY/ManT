@@ -25,7 +25,7 @@ pub struct DocumentPaths {
     pub root: PathBuf,
     /// Path to `sources.toml`.
     pub config: PathBuf,
-    /// Root of user-authored and installed Markdown documents.
+    /// Root of user-authored Markdown documents.
     pub documents: PathBuf,
     /// Directory containing one installed cache per configured source.
     pub sources: PathBuf,
