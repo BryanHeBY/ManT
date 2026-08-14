@@ -441,9 +441,10 @@ document node.
 Underlined references can be followed directly. Markdown fragments and mdoc
 `Sx` references jump inside the current page. Relative Markdown links preserve
 their hierarchy but resolve only inside the current registered source. mdoc
-`Xr`, GNU man `MR`, and recognized
-strong `name(section)` references resolve to an exact manual section wherever
-they occur in a page. HTTP(S) and email links open through the platform's
+`Xr`, GNU man `MR`, recognized strong `name(section)` references, and validated
+legacy Sphinx empty-destination references resolve to an exact manual section
+wherever they occur in a page. Bare `name(section)` prose is not inferred as a
+link. HTTP(S) and email links open through the platform's
 default handler; local-file and executable URL schemes remain visible but
 inert. Successful document and in-page jumps are recorded in a bounded
 backward/forward history; missing targets and failed loads leave the current

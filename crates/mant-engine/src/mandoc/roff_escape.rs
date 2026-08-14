@@ -37,6 +37,9 @@ pub(super) enum RoffInlineEvent {
     Text(String),
     Font(RoffFont),
     Link(Option<String>),
+    /// Exact legacy Sphinx `\%<>` output. It is invisible only when the
+    /// preceding visible text proves that it belongs to a manual reference.
+    EmptyDestination,
     LineBreak,
     Presentation {
         kind: PresentationKind,
@@ -55,6 +58,7 @@ pub(super) fn visible_text(source: &str) -> String {
     for event in decode(source) {
         match event {
             RoffInlineEvent::Text(value) => output.push_str(&value),
+            RoffInlineEvent::EmptyDestination => output.push_str("<>"),
             RoffInlineEvent::LineBreak => output.push('\n'),
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::Link(_)
@@ -193,6 +197,10 @@ impl Decoder {
                     kind: PresentationKind::Spacing,
                     argument,
                 });
+            }
+            '%' if self.characters.get(self.index..self.index + 2) == Some(&['<', '>']) => {
+                self.index += 2;
+                self.emit(RoffInlineEvent::EmptyDestination);
             }
             // These requests affect formatter state or introduce zero-width
             // hints. Their trigger byte is never printable document content.
@@ -437,6 +445,21 @@ mod tests {
         let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next\\&.\\|.\\|.");
 
         assert_eq!(visible_text(&source), "git-config (1)next...");
+    }
+
+    #[test]
+    fn retains_legacy_sphinx_empty_destinations_as_typed_evidence() {
+        let source = r"btrfs-subvolume(8) \%<>";
+
+        assert_eq!(
+            decode(source),
+            vec![
+                RoffInlineEvent::Text("btrfs-subvolume(8) ".to_owned()),
+                RoffInlineEvent::EmptyDestination,
+            ]
+        );
+        assert_eq!(visible_text(source), "btrfs-subvolume(8) <>");
+        assert_eq!(visible_text(r"literal \%value"), "literal value");
     }
 
     #[test]

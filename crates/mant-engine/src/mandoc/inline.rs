@@ -9,6 +9,7 @@ pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
 use super::{
     part_children,
+    reference::trailing_sphinx_manual_reference,
     roff_escape::{RoffFont as Font, RoffInlineEvent, decode, visible_text},
 };
 
@@ -388,13 +389,17 @@ fn text_node(value: &str) -> Vec<Inline> {
 }
 
 pub(super) fn parse_roff_text(source: &str) -> Vec<Inline> {
-    parse_roff_text_with_font(source, Font::Regular)
+    parse_roff_text_with_font(source, Font::Regular, true)
 }
 
 /// Decode one roff text run using the font selected by its enclosing macro.
 /// Explicit `\\f` escapes change `font` while the run is scanned, so a reset
 /// to regular text remains visible even inside an alternating `.BI` argument.
-fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
+fn parse_roff_text_with_font(
+    source: &str,
+    initial_font: Font,
+    recognize_generated_references: bool,
+) -> Vec<Inline> {
     let mut output = Vec::new();
     let mut buffer = String::new();
     let mut font = initial_font;
@@ -412,6 +417,18 @@ fn parse_roff_text_with_font(source: &str, initial_font: Font) -> Vec<Inline> {
             RoffInlineEvent::Link(target) => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
                 link = target;
+            }
+            RoffInlineEvent::EmptyDestination => {
+                if !recognize_generated_references
+                    || !promote_sphinx_manual_reference(
+                        &mut output,
+                        &mut buffer,
+                        font,
+                        link.as_deref(),
+                    )
+                {
+                    buffer.push_str("<>");
+                }
             }
             RoffInlineEvent::LineBreak => {
                 flush_segment(&mut output, &mut buffer, font, link.as_deref());
@@ -454,8 +471,42 @@ fn lower_text_node(node: &Node, initial_font: Font) -> Vec<Inline> {
     if node.flags.no_print || node.kind == NodeKind::Comment {
         Vec::new()
     } else {
-        parse_roff_text_with_font(node.text.as_deref().unwrap_or_default(), initial_font)
+        parse_roff_text_with_font(
+            node.text.as_deref().unwrap_or_default(),
+            initial_font,
+            !node.flags.no_fill,
+        )
     }
+}
+
+fn promote_sphinx_manual_reference(
+    output: &mut Vec<Inline>,
+    buffer: &mut String,
+    font: Font,
+    external_link: Option<&str>,
+) -> bool {
+    if external_link.is_some() || matches!(font, Font::Code | Font::CodeStrong | Font::CodeEmphasis)
+    {
+        return false;
+    }
+    let Some(reference) = trailing_sphinx_manual_reference(buffer) else {
+        return false;
+    };
+    let prefix = reference.prefix.to_owned();
+    let display = reference.display.to_owned();
+    let name = reference.name.to_owned();
+    let manual_section = reference.manual_section.to_owned();
+    *buffer = prefix;
+    flush_segment(output, buffer, font, None);
+    output.push(Inline::Link {
+        target: mant_ir::LinkTarget::Manual {
+            name,
+            manual_section: Some(manual_section),
+        },
+        title: None,
+        children: vec![styled_segment(display, font)],
+    });
+    true
 }
 
 fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link: Option<&str>) {
@@ -463,7 +514,22 @@ fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link
         return;
     }
     let value = std::mem::take(buffer);
-    let styled = match font {
+    let styled = styled_segment(value, font);
+    if let Some(target) = link {
+        output.push(Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: target.to_owned(),
+            },
+            title: None,
+            children: vec![styled],
+        });
+    } else {
+        output.push(styled);
+    }
+}
+
+fn styled_segment(value: String, font: Font) -> Inline {
+    match font {
         Font::Regular => Inline::Text { value },
         Font::Strong => Inline::Strong {
             children: vec![Inline::Text { value }],
@@ -483,17 +549,6 @@ fn flush_segment(output: &mut Vec<Inline>, buffer: &mut String, font: Font, link
         Font::CodeEmphasis => Inline::Emphasis {
             children: vec![Inline::Code { value }],
         },
-    };
-    if let Some(target) = link {
-        output.push(Inline::Link {
-            target: mant_ir::LinkTarget::External {
-                uri: target.to_owned(),
-            },
-            title: None,
-            children: vec![styled],
-        });
-    } else {
-        output.push(styled);
     }
 }
 
@@ -523,7 +578,7 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_roff_text, plain_text};
+    use super::{Font, parse_roff_text, parse_roff_text_with_font, plain_text};
     use mant_ir::Inline;
 
     #[test]
@@ -598,5 +653,70 @@ mod tests {
 
         let literal = parse_roff_text(r"show \\fBbold\\fR markup");
         assert_eq!(plain_text(&literal), r"show \fBbold\fR markup");
+    }
+
+    #[test]
+    fn promotes_only_evidenced_sphinx_manual_references() {
+        let nodes = parse_roff_text(r"See btrfs\-subvolume(8) \%<> and btrfs(5) \%<> for details.");
+
+        assert_eq!(
+            plain_text(&nodes),
+            "See btrfs-subvolume(8) and btrfs(5) for details."
+        );
+        let references = nodes
+            .iter()
+            .filter_map(|inline| match inline {
+                Inline::Link {
+                    target:
+                        mant_ir::LinkTarget::Manual {
+                            name,
+                            manual_section: Some(manual_section),
+                        },
+                    ..
+                } => Some((name.as_str(), manual_section.as_str())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(references, [("btrfs-subvolume", "8"), ("btrfs", "5")]);
+    }
+
+    #[test]
+    fn preserves_empty_destinations_without_a_safe_reference() {
+        for source in [
+            r"literal \%<>",
+            r"group(qgroup) \%<>",
+            r"function(0) \%<>",
+            r"/tmp/tool(1) \%<>",
+            r"user@tool(1) \%<>",
+            r"tool(1)\%<>",
+        ] {
+            assert!(
+                plain_text(&parse_roff_text(source)).contains("<>"),
+                "empty destination disappeared from {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_sphinx_shape_in_no_fill_and_code_content() {
+        let no_fill = parse_roff_text_with_font(r"btrfs-subvolume(8) \%<>", Font::Regular, false);
+        let code = parse_roff_text_with_font(r"btrfs-subvolume(8) \%<>", Font::Code, true);
+
+        assert_eq!(plain_text(&no_fill), "btrfs-subvolume(8) <>");
+        assert_eq!(plain_text(&code), "btrfs-subvolume(8) <>");
+        assert!(!no_fill.iter().any(|inline| matches!(
+            inline,
+            Inline::Link {
+                target: mant_ir::LinkTarget::Manual { .. },
+                ..
+            }
+        )));
+        assert!(!code.iter().any(|inline| matches!(
+            inline,
+            Inline::Link {
+                target: mant_ir::LinkTarget::Manual { .. },
+                ..
+            }
+        )));
     }
 }

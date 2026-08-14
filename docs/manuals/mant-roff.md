@@ -55,8 +55,6 @@ The following `man(7)` macros have dedicated lowering behavior:
 
 `OP`, `SY`, `YS`, `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
 
-Traditional styled references such as `printf(3)` are recognized after lowering when the font and punctuation structure is unambiguous. `MR printf 3` is preferred because it carries explicit manual-reference semantics.
-
 ## mdoc Structure
 
 The required mdoc prologue and structural macros are normalized as follows:
@@ -73,6 +71,25 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Lk`, `Mt` | External URI or email link |
 
 Validated libmandoc tags on mdoc definitions are retained for page-local navigation. Tags and section IDs share one document-local namespace and are disambiguated during IR validation.
+
+## Manual References
+
+ManT retains explicit manual-reference semantics and recognizes two conservative compatibility forms:
+
+| Source form | ManT result |
+| --- | --- |
+| mdoc `.Xr name section` | Typed link to the exact manual name and section |
+| GNU man `.MR name section` | Typed link to the exact manual name and section |
+| Traditional styled `name` immediately followed by `(section)`, such as `.BR printf (3)` | Typed link when the font and punctuation structure is unambiguous |
+| Legacy Sphinx `name(section) \%<>` | Typed link with the empty destination marker removed after validation |
+
+The legacy Sphinx rule matches formatter evidence rather than rendered prose. It applies to discovered manuals and direct roff `--input` alike; it does not depend on a filename extension, MANPATH location, or a surrounding `SEE ALSO` section. Recognition is limited to filled, non-code text that is not already inside an external link. Invalid candidates keep their visible `<>` marker instead of silently losing source text.
+
+For this compatibility form, a manual name must contain 1–256 bytes of ASCII letters, digits, `.`, `_`, `+`, `:`, or `-`. A section must be a single `l` or `n`, or begin with `1` through `9` and continue with ASCII letters or digits, with a maximum length of 16 bytes. Path-like and email-like prefixes are rejected. These rules retain names such as `g++(1)` and `systemd.slice(5)` while rejecting ambiguous text such as `group(qgroup)`, `function(0)`, `/tmp/tool(1)`, and `user@tool(1)`.
+
+Bare `name(section)` prose is never inferred as a link. Authors should prefer `Xr` or `MR`, which carry explicit semantics and avoid compatibility recognition entirely.
+
+Parsing does not consult the installed manual index, so the same roff bytes produce the same IR and JSON on every host. An interactive consumer resolves the exact name and section only when the link is followed; an unavailable target leaves the current document and navigation history unchanged.
 
 ## mdoc Lists and Displays
 

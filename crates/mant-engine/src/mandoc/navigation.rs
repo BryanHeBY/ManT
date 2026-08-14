@@ -6,6 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use super::reference::{is_manual_reference_name, is_manual_section};
 use super::roff_escape::visible_text;
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::{Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section};
@@ -168,8 +169,16 @@ fn promote_manual_reference_inlines(nodes: &mut Vec<Inline>) {
                 value: format!("{name}({section})"),
             }],
         });
+        // Alternating-font macros can split the label and suffix across
+        // libmandoc nodes. The roff decoder therefore cannot consume a legacy
+        // Sphinx empty destination in this one case; once the styled pair has
+        // established an unambiguous manual reference, remove the same exact
+        // empty suffix here.
+        let remainder = remainder.strip_prefix(" <>").unwrap_or(&remainder);
         if !remainder.is_empty() {
-            promoted.push(Inline::Text { value: remainder });
+            promoted.push(Inline::Text {
+                value: remainder.to_owned(),
+            });
         }
     }
     *nodes = promoted;
@@ -179,23 +188,10 @@ fn manual_section_suffix(value: &str) -> Option<(String, String)> {
     let value = value.strip_prefix('(')?;
     let closing = value.find(')')?;
     let section = &value[..closing];
-    if section.is_empty()
-        || section.len() > 16
-        || !section
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric())
-    {
+    if !is_manual_section(section) {
         return None;
     }
     Some((section.to_owned(), value[closing + 1..].to_owned()))
-}
-
-fn is_manual_reference_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 256
-        && name.chars().all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '+' | ':' | '-')
-        })
 }
 
 fn resolve_blocks(
@@ -382,8 +378,31 @@ mod tests {
     }
 
     #[test]
+    fn removes_empty_sphinx_destination_after_styled_reference() {
+        let mut nodes = vec![
+            Inline::Strong {
+                children: vec![Inline::Text {
+                    value: "btrfs".to_owned(),
+                }],
+            },
+            Inline::Text {
+                value: "(5) <>, next".to_owned(),
+            },
+        ];
+
+        promote_manual_reference_inlines(&mut nodes);
+
+        assert!(matches!(
+            &nodes[0],
+            Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
+                if name == "btrfs" && manual_section == "5"
+        ));
+        assert!(matches!(&nodes[1], Inline::Text { value } if value == ", next"));
+    }
+
+    #[test]
     fn leaves_prose_and_malformed_sections_unchanged() {
-        for suffix in [" documentation", "()", "(section one)"] {
+        for suffix in [" documentation", "()", "(0)", "(section one)"] {
             let mut nodes = vec![
                 Inline::Strong {
                     children: vec![Inline::Text {

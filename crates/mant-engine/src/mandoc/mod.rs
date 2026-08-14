@@ -6,6 +6,7 @@ mod error;
 pub(crate) mod inline;
 mod layout;
 mod navigation;
+mod reference;
 mod roff_escape;
 mod source;
 
@@ -824,6 +825,67 @@ mod tests {
             inline,
             Inline::Link { target: mant_ir::LinkTarget::Manual { name, manual_section: Some(manual_section) }, .. }
                 if name == "printf" && manual_section == "3"
+        )));
+    }
+
+    #[test]
+    fn recognizes_legacy_sphinx_manual_links_in_roff_inputs() {
+        let path = temporary_source(
+            "sphinx-manual-links",
+            ".TH BTRFS 8\n\
+             .SH COMMANDS\n\
+             See btrfs\\-subvolume(8) \\%<> and btrfs(5) \\%<> for details.\n\
+             .EX\n\
+             btrfs-subvolume(8) \\%<>\n\
+             .EE\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower legacy Sphinx references");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let section = &document.sections[0];
+        let paragraph = section
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. } => Some(children),
+                _ => None,
+            })
+            .expect("commands paragraph");
+        assert_eq!(
+            inline_text(paragraph),
+            "See btrfs-subvolume(8) and btrfs(5) for details."
+        );
+        let references = paragraph
+            .iter()
+            .filter_map(|inline| match inline {
+                Inline::Link {
+                    target:
+                        mant_ir::LinkTarget::Manual {
+                            name,
+                            manual_section: Some(manual_section),
+                        },
+                    ..
+                } => Some((name.as_str(), manual_section.as_str())),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(references, [("btrfs-subvolume", "8"), ("btrfs", "5")]);
+
+        let literal = section
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Preformatted { children, .. } => Some(children),
+                _ => None,
+            })
+            .expect("literal display");
+        assert_eq!(inline_text(literal), "btrfs-subvolume(8) <>");
+        assert!(!literal.iter().any(|inline| matches!(
+            inline,
+            Inline::Link {
+                target: mant_ir::LinkTarget::Manual { .. },
+                ..
+            }
         )));
     }
 
