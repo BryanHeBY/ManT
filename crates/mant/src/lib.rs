@@ -665,7 +665,7 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
             name.clone(),
             None,
             Some(manual_section.clone()),
-            QueryPolicy::ManualOnly,
+            QueryPolicy::Combined,
         ),
     };
     (
@@ -797,7 +797,7 @@ mod tests {
                 manual_section: Some("3".to_owned()),
             }
         );
-        assert_eq!(policy, QueryPolicy::ManualOnly);
+        assert_eq!(policy, QueryPolicy::Combined);
     }
 
     #[test]

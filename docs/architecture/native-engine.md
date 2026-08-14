@@ -204,6 +204,13 @@ embedded content, and places the cache at the shared built-in priority-zero
 boundary. This keeps source ranking in `mant-sources` and content policy in the
 engine instead of duplicating either rule in the CLI.
 
+Named lookup plans the full-document source and quick-reference policy as
+orthogonal decisions. An explicit manual section fixes the full document to one
+native category but still permits a section `1` or `8` quick reference under
+the combined policy. Manual-only excludes it, and tldr-only omits the full
+document. The CLI recognizes only explicit section forms; dotted logical names
+are never reinterpreted after a failed lookup.
+
 ## Presentation boundaries
 
 ### Interactive TUI

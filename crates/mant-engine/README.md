@@ -75,6 +75,12 @@ caller needs the parsed document and tldr preface without query composition.
 `DocumentResolver` can be reused when several operations must share one lazy
 filesystem snapshot; constructing a new resolver refreshes discovery.
 
+Named resolution treats the full document and command quick reference as two
+orthogonal facets. A manual section selects an exact native full document; it
+does not by itself disable a compatible section `1` or `8` tldr attachment.
+`QueryPolicy::ManualOnly` excludes that facet, while `TldrOnly` requests it
+without requiring a full document. Dotted names are never split heuristically.
+
 The engine returns `mant_ir::ResolvedContent` to direct semantic consumers and
 creates `mant-protocol` projections for every structured host or process
 boundary. A projection can stay in memory for a TUI callback or be serialized

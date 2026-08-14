@@ -219,9 +219,11 @@ MANT_MANPATH="$PWD/project-man" mant widget --manual
 ```
 
 The same index works on Linux with glibc, macOS, and Windows. Logical queries
-accept `mant 1 git`, `mant 'git(1)'`, `mant git --man-section 1`, and the canonical
-path `mant manual/1/git`. Manual aliases and parser I/O remain bounded to their
-indexed collection; the complete lookup and `.so` policy is documented in the
+accept `mant 1 git`, `mant 'git(1)'`, `mant git --man-section 1`, and the
+canonical path `mant manual/1/git`. A dotted selector such as `git.1` remains
+an exact logical document name; ManT never guesses whether its suffix is a
+manual section. Manual aliases and parser I/O remain bounded to their indexed
+collection; the complete lookup and `.so` policy is documented in the
 [mant manual](docs/manuals/mant.md).
 
 ### Markdown collections
@@ -270,12 +272,14 @@ cat guide.md | mant --input - --input-format markdown
 cat widget.1 | mant --input - --input-format roff
 ```
 
-When compatible local tldr data exists, an ordinary unqualified query for a
-native section `1` or `8` family page places its quick reference before the full
-document as reserved node `0`. Other native categories do not acquire an
-unrelated command quick reference. `mant git --tldr` selects only that
-presentation regardless of native category, while `--manual` and
-`--man-section` select only native manual content. For `--tldr`, a Markdown
+When compatible local tldr data exists, a combined query that selects a native
+section `1` or `8` family page places its quick reference before the full
+document as reserved node `0`. This includes unqualified queries and exact
+section selectors such as `mant 1 tar`. Other native categories do not acquire
+an unrelated command quick reference. `--manual` deliberately excludes quick
+references. `mant git --tldr` selects only the quick reference; an unambiguous
+section qualifier such as `mant 1 tar --tldr` is accepted for command families
+`1` and `8`, but it does not become part of the tldr topic. For `--tldr`, a Markdown
 candidate participates only when it actually embeds a quick reference: personal
 documents win, positive source priorities precede the cached tldr baseline at
 `0`, and zero or negative sources follow it. `--source NAME` restricts this

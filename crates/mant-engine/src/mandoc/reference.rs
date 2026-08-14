@@ -46,15 +46,9 @@ pub(super) fn trailing_sphinx_manual_reference(value: &str) -> Option<TrailingMa
 }
 
 pub(super) fn is_manual_section(section: &str) -> bool {
-    if section.len() > 16 {
-        return false;
-    }
-    let mut characters = section.chars();
-    match characters.next() {
-        Some('1'..='9') => characters.all(|character| character.is_ascii_alphanumeric()),
-        Some('l' | 'n') => characters.next().is_none(),
-        _ => false,
-    }
+    // Section 0 is accepted for explicit manual lookup but is too ambiguous
+    // to promote from ordinary prose without a typed roff reference macro.
+    section != "0" && crate::is_manual_section(section)
 }
 
 pub(super) fn is_manual_reference_name(name: &str) -> bool {

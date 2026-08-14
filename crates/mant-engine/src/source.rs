@@ -213,7 +213,7 @@ pub(crate) struct CommandOutput {
 pub enum LocateError {
     /// The requested manual name was empty.
     EmptyName,
-    /// An explicitly requested manual category was empty.
+    /// An explicitly requested manual category was malformed.
     InvalidManualSection,
     /// No indexed page satisfied the request.
     NotFound {
@@ -230,7 +230,9 @@ impl fmt::Display for LocateError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyName => formatter.write_str("manual page name must not be empty"),
-            Self::InvalidManualSection => formatter.write_str("manual section must not be empty"),
+            Self::InvalidManualSection => formatter.write_str(
+                "manual section must be a conventional number or the single letter 'l' or 'n'",
+            ),
             Self::NotFound {
                 name,
                 requested_manual_section: Some(requested),
@@ -278,7 +280,7 @@ pub fn locate_manual_source_in(
         return Err(LocateError::EmptyName);
     }
     let section = request.manual_section.as_deref().map(str::trim);
-    if section.is_some_and(str::is_empty) {
+    if section.is_some_and(|section| !crate::is_manual_section(section)) {
         return Err(LocateError::InvalidManualSection);
     }
     index
@@ -591,14 +593,19 @@ mod tests {
             Err(LocateError::NotFound { .. })
         ));
 
-        let error = locate_manual_source_in(
+        let invalid = locate_manual_source_in(
             &ManualRequest::new("printf", Some("DESCRIPTION".to_owned())),
             &index,
         )
         .expect_err("document heading is not a manual section");
+        assert_eq!(invalid, LocateError::InvalidManualSection);
+
+        let unavailable =
+            locate_manual_source_in(&ManualRequest::new("printf", Some("5".to_owned())), &index)
+                .expect_err("valid but unavailable manual section");
         assert_eq!(
-            error.to_string(),
-            "requested manual section 'DESCRIPTION' is unavailable for 'printf'; available manual sections: 1, 3; --man-section selects a manual category such as 1 or 3p, while --node selects a document section such as DESCRIPTION"
+            unavailable.to_string(),
+            "requested manual section '5' is unavailable for 'printf'; available manual sections: 1, 3; --man-section selects a manual category such as 1 or 3p, while --node selects a document section such as DESCRIPTION"
         );
 
         fs::remove_dir_all(root).expect("remove fixture");

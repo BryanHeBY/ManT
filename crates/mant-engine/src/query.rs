@@ -39,6 +39,11 @@ pub enum QueryError {
     EmptyName,
     /// A native manual category was empty or malformed.
     InvalidManualSection,
+    /// A tldr command query was qualified by a non-command manual section.
+    TldrManualSection {
+        /// Incompatible native manual section.
+        section: String,
+    },
     /// An explicit Markdown source name was empty.
     InvalidSource,
     /// Markdown-source and native-manual selectors were combined.
@@ -167,11 +172,60 @@ pub enum QueryPolicy {
     TldrOnly,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FullDocumentMode {
+    Priority,
+    NativeManual,
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuickReferenceMode {
+    AttachToCommandManual,
+    Exclude,
+    Only,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct NamedResolutionPlan {
+    document: FullDocumentMode,
+    quick_reference: QuickReferenceMode,
+}
+
+impl QueryPolicy {
+    fn named_resolution_plan(self, has_manual_section: bool) -> NamedResolutionPlan {
+        match self {
+            Self::Combined => NamedResolutionPlan {
+                document: if has_manual_section {
+                    FullDocumentMode::NativeManual
+                } else {
+                    FullDocumentMode::Priority
+                },
+                quick_reference: QuickReferenceMode::AttachToCommandManual,
+            },
+            Self::ManualOnly => NamedResolutionPlan {
+                document: FullDocumentMode::NativeManual,
+                quick_reference: QuickReferenceMode::Exclude,
+            },
+            Self::TldrOnly => NamedResolutionPlan {
+                document: FullDocumentMode::None,
+                quick_reference: QuickReferenceMode::Only,
+            },
+        }
+    }
+}
+
 impl fmt::Display for QueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyName => formatter.write_str("name must not be empty"),
-            Self::InvalidManualSection => formatter.write_str("manual section must not be empty"),
+            Self::InvalidManualSection => formatter.write_str(
+                "manual section must be a conventional number or the single letter 'l' or 'n'",
+            ),
+            Self::TldrManualSection { section } => write!(
+                formatter,
+                "manual section '{section}' does not identify a command quick reference; tldr supports section families 1 and 8"
+            ),
             Self::InvalidSource => formatter.write_str("document source must not be empty"),
             Self::ConflictingSourceSelectors => formatter.write_str(
                 "document source cannot be combined with a manual section or manual-only policy",
@@ -229,6 +283,7 @@ impl Error for QueryError {
             Self::Manual(error) | Self::ManualWithTldr { error, .. } => Some(error),
             Self::EmptyName
             | Self::InvalidManualSection
+            | Self::TldrManualSection { .. }
             | Self::InvalidSource
             | Self::ConflictingSourceSelectors
             | Self::EmptyMarkdownPath
@@ -406,9 +461,17 @@ pub fn validate_query_request(
             }
             if manual_section
                 .as_deref()
-                .is_some_and(|value| value.trim().is_empty())
+                .is_some_and(|value| !crate::is_manual_section(value.trim()))
             {
                 return Err(QueryError::InvalidManualSection);
+            }
+            if policy == QueryPolicy::TldrOnly
+                && let Some(section) = manual_section.as_deref()
+                && !crate::is_command_manual_section(section.trim())
+            {
+                return Err(QueryError::TldrManualSection {
+                    section: section.trim().to_owned(),
+                });
             }
             if source.is_some() && (manual_section.is_some() || policy == QueryPolicy::ManualOnly) {
                 return Err(QueryError::ConflictingSourceSelectors);
@@ -820,16 +883,7 @@ fn detect_input_format(path: &str) -> Option<InputFormat> {
     if matches!(extension, "roff" | "man" | "mdoc") {
         return Some(InputFormat::Roff);
     }
-    let section = extension;
-    let valid_section = matches!(section, "l" | "n")
-        || section
-            .chars()
-            .next()
-            .is_some_and(|first| first.is_ascii_digit())
-            && section
-                .chars()
-                .all(|character| character.is_ascii_alphanumeric());
-    valid_section.then_some(InputFormat::Roff)
+    crate::is_manual_section(extension).then_some(InputFormat::Roff)
 }
 
 fn input_file_label(path: &str) -> String {
@@ -960,16 +1014,13 @@ fn query_named_document(
         return Err(QueryError::EmptyName);
     }
     if let Some(address) = parse_catalog_address(name) {
-        if requested_source.is_some()
-            || requested_manual_section.is_some()
-            || policy == QueryPolicy::ManualOnly
-        {
+        if requested_source.is_some() || requested_manual_section.is_some() {
             return Err(QueryError::ConflictingSourceSelectors);
         }
         return query_catalog_address(name, &address, policy, host);
     }
     let section = requested_manual_section.map(str::trim);
-    if section.is_some_and(str::is_empty) {
+    if section.is_some_and(|section| !crate::is_manual_section(section)) {
         return Err(QueryError::InvalidManualSection);
     }
     let section = section.map(ToOwned::to_owned);
@@ -977,16 +1028,20 @@ fn query_named_document(
     if source.is_some_and(str::is_empty) {
         return Err(QueryError::InvalidSource);
     }
-    if source.is_some() && (section.is_some() || policy == QueryPolicy::ManualOnly) {
+    let plan = policy.named_resolution_plan(section.is_some());
+    if source.is_some() && (section.is_some() || plan.document == FullDocumentMode::NativeManual) {
         return Err(QueryError::ConflictingSourceSelectors);
     }
-    if policy == QueryPolicy::TldrOnly && section.is_some() {
-        return Err(QueryError::ConflictingSourceSelectors);
-    }
-    let require_manual = policy == QueryPolicy::ManualOnly || section.is_some();
     let candidates = host.name_candidates(name);
 
-    if policy == QueryPolicy::TldrOnly {
+    if plan.quick_reference == QuickReferenceMode::Only {
+        if let Some(section) = section.as_deref()
+            && !crate::is_command_manual_section(section)
+        {
+            return Err(QueryError::TldrManualSection {
+                section: section.to_owned(),
+            });
+        }
         return query_tldr_only(name, &candidates, source, host);
     }
 
@@ -994,7 +1049,7 @@ fn query_named_document(
     // registration phase. Explicit source selection always wins regardless of
     // its configured rank. Non-positive sources are consulted only after the
     // priority-zero native-manual phase fails.
-    if section.is_none() && policy == QueryPolicy::Combined {
+    if plan.document == FullDocumentMode::Priority {
         let registered = host
             .locate_registered_document(&candidates, source, RegisteredLookupPhase::BeforeBuiltin)
             .map_err(|detail| QueryError::Registry { detail })?;
@@ -1018,42 +1073,36 @@ fn query_named_document(
         manual.document.meta.manual_section = Some(section.to_owned());
     }
 
-    // An explicit manual request must not degrade into an apparently
-    // successful tldr-only response.
-    if require_manual {
-        return match manual {
-            Ok(manual) => Ok(ResolvedContent {
-                address: Some(manual.address),
-                label: name.to_owned(),
-                document: Some(manual.document),
-                tldr: None,
-            }),
-            Err(error) => Err(QueryError::Manual(error)),
-        };
-    }
-
-    // tldr pages describe command-line tools rather than arbitrary manual
-    // categories. Attach one automatically only to an unqualified native
-    // command or administration page (section families 1 and 8). A failed
-    // ordinary lookup still probes tldr so its diagnostic can suggest the
-    // explicit `--tldr` query without turning that entry into a successful
-    // document result.
-    let tldr = match &manual {
-        Ok(manual) if manual_accepts_tldr(manual) => host.read_tldr(name).ok().flatten(),
-        Ok(_) => None,
-        Err(_) => host.read_tldr(name).ok().flatten(),
+    let tldr = match plan.quick_reference {
+        QuickReferenceMode::AttachToCommandManual => match &manual {
+            Ok(manual) if manual_accepts_tldr(manual) => host.read_tldr(name).ok().flatten(),
+            Err(_)
+                if section
+                    .as_deref()
+                    .is_none_or(crate::is_command_manual_section) =>
+            {
+                host.read_tldr(name).ok().flatten()
+            }
+            Ok(_) | Err(_) => None,
+        },
+        QuickReferenceMode::Exclude => None,
+        QuickReferenceMode::Only => unreachable!("tldr-only queries returned before manual I/O"),
     };
 
-    finish_unqualified_manual(name, &candidates, manual, tldr, host)
+    match plan.document {
+        FullDocumentMode::Priority => {
+            finish_unqualified_manual(name, &candidates, manual, tldr, host)
+        }
+        FullDocumentMode::NativeManual => finish_selected_manual(name, manual, tldr),
+        FullDocumentMode::None => unreachable!("tldr-only queries returned before manual I/O"),
+    }
 }
 
 fn manual_accepts_tldr(manual: &LoadedManual) -> bool {
     let DocumentAddress::Manual { manual_section, .. } = &manual.address else {
         return false;
     };
-    let mut characters = manual_section.chars();
-    matches!(characters.next(), Some('1' | '8'))
-        && characters.all(|character| character.is_ascii_alphabetic())
+    crate::is_command_manual_section(manual_section)
 }
 
 fn query_catalog_address(
@@ -1076,6 +1125,9 @@ fn query_catalog_address(
                 }
             })
         }
+        DocumentAddress::Markdown { .. } if policy == QueryPolicy::ManualOnly => {
+            Err(QueryError::ConflictingSourceSelectors)
+        }
         DocumentAddress::Markdown { .. } => {
             let registered = host
                 .locate_registered_address(address)
@@ -1085,19 +1137,10 @@ fn query_catalog_address(
                 })?;
             query_registered_document(selector, &registered, host)
         }
-        DocumentAddress::Manual { .. } if policy == QueryPolicy::TldrOnly => {
-            Err(QueryError::ConflictingSourceSelectors)
-        }
         DocumentAddress::Manual {
             name,
             manual_section,
-        } => query_named_document(
-            name,
-            None,
-            Some(manual_section),
-            QueryPolicy::ManualOnly,
-            host,
-        ),
+        } => query_named_document(name, None, Some(manual_section), policy, host),
     }
 }
 
@@ -1187,6 +1230,26 @@ fn query_registered_tldr(
         document: None,
         tldr: Some(tldr),
     }))
+}
+
+fn finish_selected_manual(
+    name: &str,
+    manual: Result<LoadedManual, ManualLoadError>,
+    tldr: Option<TldrDocument>,
+) -> Result<ResolvedContent, QueryError> {
+    match manual {
+        Ok(manual) => Ok(ResolvedContent {
+            address: Some(manual.address),
+            label: name.to_owned(),
+            document: Some(manual.document),
+            tldr,
+        }),
+        Err(error) if tldr.is_some() => Err(QueryError::ManualWithTldr {
+            error,
+            topic: name.to_owned(),
+        }),
+        Err(error) => Err(QueryError::Manual(error)),
+    }
 }
 
 fn finish_unqualified_manual(
@@ -1688,11 +1751,64 @@ Full documentation.
             Some("3"),
             "requested section must label output when the parser omits it"
         );
-        assert!(result.tldr.is_none(), "an explicit section is manual-only");
+        assert!(
+            result.tldr.is_none(),
+            "a non-command manual category cannot inherit a tldr page"
+        );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
             ["locate", "parse"],
-            "an explicit manual section bypasses Markdown and tldr"
+            "an explicit non-command section bypasses Markdown and tldr lookup"
+        );
+    }
+
+    #[test]
+    fn requested_command_section_keeps_the_combined_tldr_facet() {
+        let mut host = host(Ok(document(SourceFormat::Man, false, true)));
+        host.tldr = Ok(Some(tldr()));
+        let request = QueryRequest {
+            schema: RequestSchema::V7,
+            input: QueryInput::Document {
+                selector: "tool".to_owned(),
+                source: None,
+                manual_section: Some("1".to_owned()),
+            },
+            view: QueryView::Full {},
+        };
+
+        let result = query_with(&request, QueryPolicy::Combined, &host)
+            .expect("section-qualified combined query");
+
+        assert_eq!(result.tldr.expect("attached tldr").title, "tool");
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["locate", "parse", "tldr"]
+        );
+    }
+
+    #[test]
+    fn tldr_only_accepts_command_sections_and_rejects_other_categories() {
+        let mut host = host(Err("manual must not be read".to_owned()));
+        host.tldr = Ok(Some(tldr()));
+        let request_for = |section: &str| QueryRequest {
+            schema: RequestSchema::V7,
+            input: QueryInput::Document {
+                selector: "tool".to_owned(),
+                source: None,
+                manual_section: Some(section.to_owned()),
+            },
+            view: QueryView::Full {},
+        };
+
+        let result = query_with(&request_for("1"), QueryPolicy::TldrOnly, &host)
+            .expect("section 1 identifies a command topic");
+        assert_eq!(result.tldr.expect("tldr").title, "tool");
+
+        assert_eq!(
+            query_with(&request_for("5"), QueryPolicy::TldrOnly, &host),
+            Err(QueryError::TldrManualSection {
+                section: "5".to_owned(),
+            })
         );
     }
 
@@ -1775,7 +1891,10 @@ Full documentation.
                 manual_section: "1".to_owned(),
             })
         );
-        assert_eq!(*manual.calls.lock().expect("calls"), ["locate", "parse"]);
+        assert_eq!(
+            *manual.calls.lock().expect("calls"),
+            ["locate", "parse", "tldr"]
+        );
     }
 
     #[test]

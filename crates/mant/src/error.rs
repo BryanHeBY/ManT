@@ -45,6 +45,7 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
     match error {
         QueryError::EmptyName
         | QueryError::InvalidManualSection
+        | QueryError::TldrManualSection { .. }
         | QueryError::InvalidSource
         | QueryError::ConflictingSourceSelectors
         | QueryError::EmptyMarkdownPath

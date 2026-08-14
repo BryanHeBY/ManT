@@ -207,12 +207,15 @@ available on Linux, macOS, and Windows through the same owned IR boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
 with the same name and requires only readable native manual content, without an
-attached tldr quick reference. `--man-section` has the same exclusivity, while
-`--tldr` selects the reserved `tldr` node through the document priority chain
-and explicitly permits an embedded or cached tldr-only result. A request JSON
-client can select the same manual source unambiguously by supplying its
-discovered `manualSection`; manual sections
-apply only to native manuals and therefore bypass registered Markdown.
+attached tldr quick reference. A `manualSection` selects the full document from
+one exact native category and bypasses registered Markdown, but the default
+combined policy may still attach a quick reference when that category belongs
+to command family `1` or `8`. `--tldr` selects the reserved `tldr` channel
+through the document priority chain and explicitly permits an embedded or
+cached tldr-only result. A section `1` or `8` qualifier may validate such a
+command query without becoming part of the tldr topic; other categories are a
+usage error. A request JSON client uses the same rules by supplying its
+discovered `manualSection`.
 
 ## Request Contract
 

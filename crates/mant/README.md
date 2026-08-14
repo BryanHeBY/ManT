@@ -131,10 +131,13 @@ positive sources win, manuals win a zero tie, and non-positive sources are
 fallbacks. Omitted source priority defaults to one. See the
 complete [document-source guide](https://github.com/BryanHeBY/ManT/blob/main/docs/sources.md).
 
-When compatible local tldr data exists, an unqualified query prepends it as
-reserved outline node `0`. `--tldr` selects only that node, while `--manual`
-and `--man-section` select only native manual content. Explicit tldr lookup
-compares embedded Markdown quick references using their document priority;
+When compatible local tldr data exists, a combined query that selects a native
+section `1` or `8` family page prepends it as reserved outline node `0`.
+`--tldr` selects only that node, while `--manual` selects only native manual
+content and excludes the quick reference. `--man-section` selects an exact
+native full document without disabling a compatible command quick reference.
+Explicit tldr lookup compares embedded Markdown quick references using their
+document priority;
 cached tldr and native manuals share the built-in priority-zero baseline.
 Markdown without an embedded quick reference is skipped. Reads prefer
 installed-client caches and then `ManT`'s private cache; `mant --update-tldr`
@@ -145,7 +148,8 @@ hint instead of opening a tldr-only reader.
 One-off physical input uses `mant --input PATH`; Markdown and plain/gzip/zstd
 roff files are supported. Standard input additionally requires
 `--input-format markdown|roff`. Manual selectors accept `mant 1 git`,
-`mant 'git(1)'`, and `mant manual/1/git`.
+`mant 'git(1)'`, and `mant manual/1/git`. A dotted selector such as `git.1`
+remains an exact logical name and is never guessed to be a manual shorthand.
 
 ## Crate architecture
 

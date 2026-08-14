@@ -11,7 +11,9 @@ use clap::{
     builder::styling::{AnsiColor, Styles},
     error::ErrorKind,
 };
-use mant_engine::QueryPolicy;
+use mant_engine::{
+    QueryPolicy, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
+};
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, InputFormat, NodeSelector, OutlineDetail, QueryInput,
     QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
@@ -237,7 +239,7 @@ const CLI_STYLES: Styles = Styles::styled()
     disable_help_flag = true,
     version,
     override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --update-docs\n  mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant 1 tar --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --update-docs\n  mant --mcp",
     group = ArgGroup::new("action")
         .args(["selector", "input", "list", "find", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
@@ -274,7 +276,7 @@ struct Cli {
     #[arg(long, value_name = "KIND", value_enum, help_heading = "Discovery")]
     kind: Option<CatalogKindMode>,
 
-    /// Print only a native manual category such as 1 or 3p.
+    /// Select the full document from a native manual category such as 1 or 3p.
     #[arg(
         long = "man-section",
         value_name = "MAN_SECTION",
@@ -307,7 +309,7 @@ struct Cli {
     #[arg(
         long,
         requires = "selector",
-        conflicts_with_all = ["man_section", "manual", "outline", "node", "explain", "search", "ui", "input"],
+        conflicts_with_all = ["manual", "outline", "node", "explain", "search", "ui", "input"],
         help_heading = "Document selection"
     )]
     tldr: bool,
@@ -993,6 +995,11 @@ struct QuerySourceOptions {
     tldr: bool,
 }
 
+struct NormalizedDocumentSelector {
+    name: String,
+    manual_section: Option<String>,
+}
+
 fn normalize_query_source(
     options: QuerySourceOptions,
     view: QueryView,
@@ -1019,7 +1026,7 @@ fn normalize_query_source(
             })
         }
     } else {
-        let (selector, manual_section) = normalize_document_operands(
+        let normalized = normalize_document_operands(
             &options.selectors,
             options.manual_section,
             options.tldr,
@@ -1028,9 +1035,9 @@ fn normalize_query_source(
         QuerySource::Arguments(QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
-                selector,
+                selector: normalized.name,
                 source: options.configured_source,
-                manual_section,
+                manual_section: normalized.manual_section,
             },
             view,
         })
@@ -1043,56 +1050,50 @@ fn normalize_document_operands(
     explicit_manual_section: Option<String>,
     tldr: bool,
     color: ColorMode,
-) -> Result<(String, Option<String>), clap::Error> {
-    if tldr {
-        if operands.is_empty() {
-            return Err(command_error(
-                ErrorKind::MissingRequiredArgument,
-                "--tldr requires a page name",
-                color,
-            ));
-        }
-        if matches!(operands, [selector] if manual_reference(selector).is_some())
-            || matches!(operands, [section, _] if likely_manual_section(section))
-        {
-            return Err(command_error(
-                ErrorKind::ArgumentConflict,
-                "--tldr cannot be combined with a man-style section selector; use `mant NAME --tldr`",
-                color,
-            ));
-        }
-        return Ok((operands.join("-").to_lowercase(), None));
+) -> Result<NormalizedDocumentSelector, clap::Error> {
+    if operands.is_empty() {
+        return Err(command_error(
+            ErrorKind::MissingRequiredArgument,
+            if tldr {
+                "--tldr requires a page name"
+            } else {
+                "a document selector or --input is required"
+            },
+            color,
+        ));
     }
+
+    if tldr {
+        let inline_manual = match operands {
+            [section, name] if is_manual_section(section) => {
+                Some((name.as_str(), section.as_str()))
+            }
+            [selector] => parenthesized_manual_reference(selector),
+            _ => None,
+        };
+        if let Some((name, section)) = inline_manual {
+            return merge_manual_section(name, section, explicit_manual_section.is_some(), color);
+        }
+        return Ok(NormalizedDocumentSelector {
+            name: normalize_tldr_topic(&operands.join(" ")),
+            manual_section: explicit_manual_section,
+        });
+    }
+
     match operands {
         [selector] => {
-            if let Some((name, section)) = manual_reference(selector) {
-                if explicit_manual_section.is_some() {
-                    return Err(command_error(
-                        ErrorKind::ArgumentConflict,
-                        "a name(section) selector cannot be combined with --man-section",
-                        color,
-                    ));
-                }
-                Ok((name, Some(section)))
+            if let Some((name, section)) = parenthesized_manual_reference(selector) {
+                merge_manual_section(name, section, explicit_manual_section.is_some(), color)
             } else {
-                Ok((selector.clone(), explicit_manual_section))
+                Ok(NormalizedDocumentSelector {
+                    name: selector.clone(),
+                    manual_section: explicit_manual_section,
+                })
             }
         }
-        [section, name] if likely_manual_section(section) => {
-            if explicit_manual_section.is_some() {
-                return Err(command_error(
-                    ErrorKind::ArgumentConflict,
-                    "MAN_SECTION NAME cannot be combined with --man-section",
-                    color,
-                ));
-            }
-            Ok((name.clone(), Some(section.clone())))
+        [section, name] if is_manual_section(section) => {
+            merge_manual_section(name, section, explicit_manual_section.is_some(), color)
         }
-        [] => Err(command_error(
-            ErrorKind::MissingRequiredArgument,
-            "a document selector or --input is required",
-            color,
-        )),
         _ => Err(command_error(
             ErrorKind::TooManyValues,
             "use one document selector, or SECTION NAME for a native manual",
@@ -1101,32 +1102,23 @@ fn normalize_document_operands(
     }
 }
 
-fn manual_reference(selector: &str) -> Option<(String, String)> {
-    if selector.contains('/') || !selector.ends_with(')') {
-        return None;
+fn merge_manual_section(
+    name: &str,
+    inline_section: &str,
+    has_explicit_section: bool,
+    color: ColorMode,
+) -> Result<NormalizedDocumentSelector, clap::Error> {
+    if has_explicit_section {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "a man-style section selector cannot be combined with --man-section",
+            color,
+        ));
     }
-    let open = selector.rfind('(')?;
-    let name = &selector[..open];
-    let section = &selector[open + 1..selector.len() - 1];
-    (!name.is_empty()
-        && !section.is_empty()
-        && section.len() <= 16
-        && section
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric()))
-    .then(|| (name.to_owned(), section.to_owned()))
-}
-
-fn likely_manual_section(value: &str) -> bool {
-    value.len() <= 16
-        && (value
-            .chars()
-            .next()
-            .is_some_and(|first| first.is_ascii_digit())
-            && value
-                .chars()
-                .all(|character| character.is_ascii_alphanumeric())
-            || matches!(value, "l" | "n"))
+    Ok(NormalizedDocumentSelector {
+        name: name.to_owned(),
+        manual_section: Some(inline_section.to_owned()),
+    })
 }
 
 fn non_empty(value: &str) -> Result<String, String> {
@@ -1482,6 +1474,20 @@ mod tests {
                 ..
             } if selector == "manual/1/git"
         ));
+        assert!(matches!(
+            parse(&args(&["git.1"])).expect("dotted logical name"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    input: QueryInput::Document {
+                        ref selector,
+                        manual_section: None,
+                        ..
+                    },
+                    ..
+                }),
+                ..
+            } if selector == "git.1"
+        ));
     }
 
     #[test]
@@ -1505,13 +1511,44 @@ mod tests {
             }
         ));
 
-        for values in [vec!["1", "tar", "--tldr"], vec!["tar(1)", "--tldr"]] {
-            let diagnostic = parse(&args(&values))
-                .expect_err("manual sections do not identify tldr pages")
-                .to_string();
-            assert!(diagnostic.contains("--tldr cannot be combined"));
-            assert!(diagnostic.contains("mant NAME --tldr"));
+        for values in [
+            vec!["1", "tar", "--tldr"],
+            vec!["tar(1)", "--tldr"],
+            vec!["tar", "--man-section", "1", "--tldr"],
+        ] {
+            assert!(matches!(
+                parse(&args(&values)).expect("command section qualifies a tldr topic"),
+                Command::Query {
+                    source: QuerySource::Arguments(QueryRequest {
+                        input: QueryInput::Document {
+                            ref selector,
+                            manual_section: Some(ref manual_section),
+                            ..
+                        },
+                        ..
+                    }),
+                    policy: QueryPolicy::TldrOnly,
+                    ..
+                } if selector == "tar" && manual_section == "1"
+            ));
         }
+
+        assert!(matches!(
+            parse(&args(&["command.1", "--tldr"]))
+                .expect("dots remain part of explicit tldr topics"),
+            Command::Query {
+                source: QuerySource::Arguments(QueryRequest {
+                    input: QueryInput::Document {
+                        ref selector,
+                        manual_section: None,
+                        ..
+                    },
+                    ..
+                }),
+                policy: QueryPolicy::TldrOnly,
+                ..
+            } if selector == "command.1"
+        ));
     }
 
     #[test]
@@ -1787,7 +1824,6 @@ mod tests {
             vec!["git", "--source", "team", "--man-section", "1"],
             vec!["git", "--source", "team", "--manual"],
             vec!["git", "--manual", "--tldr"],
-            vec!["git", "--man-section", "1", "--tldr"],
             vec!["git", "--tldr", "--node", "0"],
             vec!["git", "--tldr", "--ui"],
             vec!["--input", "README.md", "--source", "team"],

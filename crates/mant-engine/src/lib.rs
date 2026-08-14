@@ -7,6 +7,7 @@ mod definitions;
 mod executable;
 mod inline;
 mod mandoc;
+mod manual;
 mod markdown;
 mod output;
 mod projection;
@@ -25,6 +26,7 @@ pub use mandoc::{
     parse_manual_page, parse_manual_source,
 };
 pub use mant_ir::ResolvedContent;
+pub use manual::{is_command_manual_section, is_manual_section, parenthesized_manual_reference};
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
     MarkdownOptions, render_excerpt_json, render_excerpt_markdown,

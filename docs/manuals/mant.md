@@ -125,9 +125,11 @@ documents always win; source priority, the native-manual zero baseline, and
 source name resolve remaining duplicates in the order above; `.md` wins over
 `.markdown` for one logical path.
 `--source NAME` selects exactly one configured Git or archive source.
-`--manual` or `--man-section` selects only native manual content and cannot be
-combined with `--source`. A manual category is distinct from a heading or
-other node inside the loaded document, which is selected with `--node`.
+`--manual` or `--man-section` selects the full document from native manuals and
+cannot be combined with `--source`. `--manual` also excludes the independent
+quick-reference channel; `--man-section` alone does not. A manual category is
+distinct from a heading or other node inside the loaded document, which is
+selected with `--node`.
 
 `--input-format auto|markdown|roff` defaults to `auto` for files and infers the
 parser from the filename suffix. The roff loader accepts plain, gzip, and zstd
@@ -160,11 +162,26 @@ from that list follow in lexical order. An explicit `--man-section`, leading
 section argument, or `manual/SECTION/NAME` catalog path always selects exactly
 that category.
 
+The accepted section spellings are deliberately unambiguous:
+
+```sh
+mant 8 btrfs
+mant 'btrfs(8)'
+mant btrfs --man-section 8
+mant manual/8/btrfs
+```
+
+A dotted selector such as `btrfs.8` is an exact logical document name, not a
+manual shorthand. This preserves Markdown names, dotted executable names, and
+tldr collision pages such as `command.1` without a context-dependent guess.
+Use `--input PATH` for a physical roff file.
+
 Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
 and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 
-- `--man-section MAN_SECTION`: Select only a native manual category such as `1`
-  or `3p`.
+- `--man-section MAN_SECTION`: Select the full document from one exact native
+  manual category such as `1` or `3p`. In an ordinary combined query, a selected
+  section `1` or `8` family page may still receive its command quick reference.
 - `--manual`: Require only a native manual instead of registered Markdown with
   the same name or an attached quick reference.
 - `--tldr`: Print only the highest-precedence embedded or cached quick
@@ -176,16 +193,21 @@ and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
   `--color always|never` or an explicit `--format` to override it. A cached
   tldr entry alone does not satisfy an ordinary document query: ManT reports
   the missing document and suggests this explicit command.
+  When combined with `--tldr`, a section qualifier written as `1 NAME`,
+  `8 NAME`, `NAME(1)`, `NAME(8)`, or `--man-section` is accepted only for
+  command-section families `1` and `8`; it validates the kind of page but is
+  not joined into the tldr topic.
 - `--source SOURCE`: Require one configured installed Markdown source.
 
 Recoverable parser findings remain structured in JSON output. ManT does not
 invoke a host renderer or maintain an alternate HTML parsing path.
 
-For an ordinary unqualified native-manual query, ManT automatically attaches a
+For an ordinary combined native-manual query, ManT automatically attaches a
 cached tldr page only when the selected manual belongs to section family `1` or
-`8`. Those categories represent user and administration commands; other native
-categories do not inherit a same-named command quick reference. Explicit
-`--tldr` lookup remains independent of this attachment rule.
+`8`. This rule is identical for an unqualified lookup and an explicitly selected
+manual category. Those categories represent user and administration commands;
+other native categories do not inherit a same-named command quick reference.
+Explicit `--tldr` accepts only those command-family qualifiers.
 
 ### Local Roff Trees
 

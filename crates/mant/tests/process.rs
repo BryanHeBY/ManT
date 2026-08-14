@@ -167,23 +167,70 @@ fn explicit_ui_requires_a_real_terminal_before_loading_a_document() {
 }
 
 #[test]
-fn man_style_sections_do_not_turn_into_hyphenated_tldr_topics() {
+fn command_sections_qualify_tldr_topics_without_becoming_part_of_the_name() {
+    let root =
+        std::env::temp_dir().join(format!("mant-section-tldr-process-{}", std::process::id()));
+    let tldr_root = root.join("tldr");
+    fs::create_dir_all(tldr_root.join("pages/common")).expect("create tldr root");
+    fs::write(
+        tldr_root.join("pages/common/tar.md"),
+        "# tar\n\n> Archive files.\n\n- List an archive:\n\n`tar tf {{archive.tar}}`\n",
+    )
+    .expect("write tldr page");
+    fs::write(
+        tldr_root.join("pages/common/command.1.md"),
+        "# command.1\n\n> Dotted exact topic.\n\n- Run it:\n\n`command.1`\n",
+    )
+    .expect("write dotted tldr page");
+
     for arguments in [
         ["1", "tar", "--tldr"].as_slice(),
         ["tar(1)", "--tldr"].as_slice(),
+        ["manual/1/tar", "--tldr"].as_slice(),
     ] {
-        let output = Command::new(executable())
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &root);
+        let output = command
             .args(arguments)
+            .env("MANT_TLDR_DIR", &tldr_root)
             .output()
-            .expect("run conflicting man-style tldr query");
+            .expect("run section-qualified tldr query");
 
-        assert_eq!(output.status.code(), Some(2));
-        assert!(output.stdout.is_empty());
-        let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
-        assert!(diagnostic.contains("--tldr cannot be combined"));
-        assert!(diagnostic.contains("mant NAME --tldr"));
-        assert!(!diagnostic.contains("1-tar"));
+        assert!(output.status.success(), "{output:?}");
+        assert!(output.stderr.is_empty());
+        let text = String::from_utf8(output.stdout).expect("UTF-8 tldr output");
+        assert!(text.contains("Archive files."));
+        assert!(!text.contains("1-tar"));
     }
+
+    let mut non_command = Command::new(executable());
+    configure_registered_documents(&mut non_command, &root);
+    let output = non_command
+        .args(["5", "tar", "--tldr"])
+        .env("MANT_TLDR_DIR", &tldr_root)
+        .output()
+        .expect("run non-command section tldr query");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let diagnostic = String::from_utf8(output.stderr).expect("UTF-8 diagnostic");
+    assert!(diagnostic.contains("section '5'"), "{diagnostic}");
+    assert!(
+        diagnostic.contains("section families 1 and 8"),
+        "{diagnostic}"
+    );
+
+    let mut dotted = Command::new(executable());
+    configure_registered_documents(&mut dotted, &root);
+    let output = dotted
+        .args(["command.1", "--tldr"])
+        .env("MANT_TLDR_DIR", &tldr_root)
+        .output()
+        .expect("run exact dotted tldr query");
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8(output.stdout).expect("UTF-8 tldr output");
+    assert!(text.contains("Dotted exact topic."), "{text}");
+
+    fs::remove_dir_all(root).expect("remove section tldr fixture");
 }
 
 #[test]
@@ -1246,7 +1293,7 @@ fn manual_option_bypasses_registered_markdown_with_the_same_name() {
 }
 
 #[test]
-fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
+fn document_and_quick_reference_policies_remain_orthogonal() {
     let root = std::env::temp_dir().join(format!(
         "mant-explicit-content-process-{}",
         std::process::id()
@@ -1284,19 +1331,19 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
     assert_eq!(combined["document"]["source"]["format"], "man");
     assert!(!combined["tldr"].is_null());
 
-    for selector in ["--manual", "--man-section"] {
-        let arguments = if selector == "--manual" {
-            vec![selector, "--format", "json", "--compact"]
-        } else {
-            vec![selector, "1", "--format", "json", "--compact"]
-        };
-        let manual = run(&arguments);
-        assert!(manual.status.success(), "{manual:?}");
-        let manual: serde_json::Value =
-            serde_json::from_slice(&manual.stdout).expect("manual-only JSON");
-        assert_eq!(manual["document"]["source"]["format"], "man");
-        assert!(manual["tldr"].is_null());
-    }
+    let manual_only = run(&["--manual", "--format", "json", "--compact"]);
+    assert!(manual_only.status.success(), "{manual_only:?}");
+    let manual_only: serde_json::Value =
+        serde_json::from_slice(&manual_only.stdout).expect("manual-only JSON");
+    assert_eq!(manual_only["document"]["source"]["format"], "man");
+    assert!(manual_only["tldr"].is_null());
+
+    let selected_section = run(&["--man-section", "1", "--format", "json", "--compact"]);
+    assert!(selected_section.status.success(), "{selected_section:?}");
+    let selected_section: serde_json::Value =
+        serde_json::from_slice(&selected_section.stdout).expect("section-qualified JSON");
+    assert_eq!(selected_section["document"]["meta"]["manualSection"], "1");
+    assert!(!selected_section["tldr"].is_null());
 
     let removed = run(&["--section", "1"]);
     assert_eq!(removed.status.code(), Some(2));
@@ -1306,11 +1353,9 @@ fn explicit_manual_and_tldr_queries_select_only_the_requested_content() {
     assert!(diagnostic.contains("--node <SELECTOR>"));
 
     let unavailable = run(&["--man-section", "DESCRIPTION"]);
-    assert_eq!(unavailable.status.code(), Some(1));
+    assert_eq!(unavailable.status.code(), Some(2));
     let diagnostic = String::from_utf8(unavailable.stderr).expect("section diagnostic");
-    assert!(diagnostic.contains("requested manual section 'DESCRIPTION' is unavailable"));
-    assert!(diagnostic.contains("available manual sections: 1"));
-    assert!(diagnostic.contains("--node selects a document section"));
+    assert!(diagnostic.contains("manual section must be a conventional number"));
 
     let tldr = run(&["--tldr"]);
     assert!(tldr.status.success(), "{tldr:?}");
