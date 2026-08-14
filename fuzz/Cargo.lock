@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "libmandoc-rs"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "cc",
  "flate2",
@@ -193,7 +193,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "mant-engine"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "flate2",
  "grep-matcher",
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ir"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "schemars",
  "serde",
@@ -227,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "mant-protocol"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "mant-ir",
  "schemars",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "mant-sources"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "serde",
  "toml",

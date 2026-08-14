@@ -474,7 +474,7 @@ An abbreviated but structurally valid Markdown result is:
     "schema": "mant.document/v7",
     "producer": {
       "name": "mant",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "engine": {
         "name": "pulldown-cmark",
         "version": "0.13"
@@ -890,7 +890,7 @@ With the current runtime, a client requesting `2025-11-25` receives:
   },
   "serverInfo": {
     "name": "mant",
-    "version": "0.7.0"
+    "version": "0.7.1"
   },
   "instructions": "Read locally installed Markdown documents and manual pages by name. Use mant_documents_list for discovery, optionally select a configured source, then call mant_document_outline before retrieving IDs, paths, or aliases. Files may change between calls; this server does not update sources."
 }

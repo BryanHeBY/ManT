@@ -30,11 +30,11 @@ pkg-fmt = "zip"
 
 [dependencies]
 clap.workspace = true
-mant-ir = { path = "../mant-ir", version = "=0.7.0" }
-mant-protocol = { path = "../mant-protocol", version = "=0.7.0" }
-mant-engine = { path = "../mant-engine", version = "=0.7.0" }
-mant-sources = { path = "../mant-sources", version = "=0.7.0", features = ["update"] }
-mant-ui = { path = "../mant-ui", version = "=0.7.0" }
+mant-ir = { path = "../mant-ir", version = "=0.7.1" }
+mant-protocol = { path = "../mant-protocol", version = "=0.7.1" }
+mant-engine = { path = "../mant-engine", version = "=0.7.1" }
+mant-sources = { path = "../mant-sources", version = "=0.7.1", features = ["update"] }
+mant-ui = { path = "../mant-ui", version = "=0.7.1" }
 rmcp.workspace = true
 rmcp-macros.workspace = true
 schemars.workspace = true
