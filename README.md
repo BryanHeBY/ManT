@@ -270,19 +270,21 @@ cat guide.md | mant --input - --input-format markdown
 cat widget.1 | mant --input - --input-format roff
 ```
 
-When compatible local tldr data exists, an ordinary query places its quick
-reference before the full document as reserved node `0`. `mant git --tldr`
-selects only that presentation, while `--manual` and `--man-section` select only
-native manual content. For `--tldr`, a Markdown candidate participates only
-when it actually embeds a quick reference: personal documents win, positive
-source priorities precede the cached tldr baseline at `0`, and zero or negative
-sources follow it. `--source NAME` restricts this lookup to the selected
-Markdown source. A cached tldr entry does not make a missing ordinary document
-query succeed: ManT reports the failed lookup and suggests the explicit
-`mant NAME --tldr` command instead. ManT reads installed-client caches or its
-private cache, which `mant --update-tldr` can update. Markdown authors may also
-embed a document-owned quick reference using the format described in the
-[mant manual](docs/manuals/mant.md).
+When compatible local tldr data exists, an ordinary unqualified query for a
+native section `1` or `8` family page places its quick reference before the full
+document as reserved node `0`. Other native categories do not acquire an
+unrelated command quick reference. `mant git --tldr` selects only that
+presentation regardless of native category, while `--manual` and
+`--man-section` select only native manual content. For `--tldr`, a Markdown
+candidate participates only when it actually embeds a quick reference: personal
+documents win, positive source priorities precede the cached tldr baseline at
+`0`, and zero or negative sources follow it. `--source NAME` restricts this
+lookup to the selected Markdown source. A cached tldr entry does not make a
+missing ordinary document query succeed: ManT reports the failed lookup and
+suggests the explicit `mant NAME --tldr` command instead. ManT reads
+installed-client caches or its private cache, which `mant --update-tldr` can
+update. Markdown authors may also embed a document-owned quick reference using
+the format described in the [mant manual](docs/manuals/mant.md).
 
 ## MCP
 

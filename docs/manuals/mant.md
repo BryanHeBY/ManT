@@ -181,6 +181,12 @@ and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
 Recoverable parser findings remain structured in JSON output. ManT does not
 invoke a host renderer or maintain an alternate HTML parsing path.
 
+For an ordinary unqualified native-manual query, ManT automatically attaches a
+cached tldr page only when the selected manual belongs to section family `1` or
+`8`. Those categories represent user and administration commands; other native
+categories do not inherit a same-named command quick reference. Explicit
+`--tldr` lookup remains independent of this attachment rule.
+
 ### Local Roff Trees
 
 Use `MANT_MANPATH` or `MANPATH` to make project-local man or mdoc sources

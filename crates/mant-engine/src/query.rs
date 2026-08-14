@@ -1008,15 +1008,6 @@ fn query_named_document(
         }
     }
 
-    // Explicit manual selection is exclusive: --manual and --man-section must not
-    // appear to resolve to tldr just because the quick reference is rendered
-    // before the requested page. Unqualified queries retain tldr as an
-    // optional augmentation and never update it during a read.
-    let tldr = if require_manual {
-        None
-    } else {
-        host.read_tldr(name).ok().flatten()
-    };
     let mut manual = load_manual(name, &candidates, section.as_deref(), host);
 
     // A malformed page may omit its own section metadata. Preserve the
@@ -1035,13 +1026,34 @@ fn query_named_document(
                 address: Some(manual.address),
                 label: name.to_owned(),
                 document: Some(manual.document),
-                tldr,
+                tldr: None,
             }),
             Err(error) => Err(QueryError::Manual(error)),
         };
     }
 
+    // tldr pages describe command-line tools rather than arbitrary manual
+    // categories. Attach one automatically only to an unqualified native
+    // command or administration page (section families 1 and 8). A failed
+    // ordinary lookup still probes tldr so its diagnostic can suggest the
+    // explicit `--tldr` query without turning that entry into a successful
+    // document result.
+    let tldr = match &manual {
+        Ok(manual) if manual_accepts_tldr(manual) => host.read_tldr(name).ok().flatten(),
+        Ok(_) => None,
+        Err(_) => host.read_tldr(name).ok().flatten(),
+    };
+
     finish_unqualified_manual(name, &candidates, manual, tldr, host)
+}
+
+fn manual_accepts_tldr(manual: &LoadedManual) -> bool {
+    let DocumentAddress::Manual { manual_section, .. } = &manual.address else {
+        return false;
+    };
+    let mut characters = manual_section.chars();
+    matches!(characters.next(), Some('1' | '8'))
+        && characters.all(|character| character.is_ascii_alphabetic())
 }
 
 fn query_catalog_address(
@@ -1604,7 +1616,41 @@ Full documentation.
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["name", "tldr", "locate", "parse"]
+            ["name", "locate", "parse", "tldr"]
+        );
+    }
+
+    #[test]
+    fn ordinary_command_manuals_can_attach_cached_tldr() {
+        for section in ["1", "1p", "8", "8x"] {
+            let mut host = host(Ok(document(SourceFormat::Man, false, true)));
+            host.locate.as_mut().expect("manual page").section = section.to_owned();
+            host.tldr = Ok(Some(tldr()));
+
+            let result = query_with(&request(), QueryPolicy::default(), &host)
+                .expect("command manual query");
+
+            assert_eq!(result.tldr.expect("attached tldr").title, "tool");
+            assert_eq!(
+                *host.calls.lock().expect("calls lock"),
+                ["name", "locate", "parse", "tldr"]
+            );
+        }
+    }
+
+    #[test]
+    fn non_command_manuals_do_not_attach_or_probe_cached_tldr() {
+        let mut host = host(Ok(document(SourceFormat::Man, false, true)));
+        host.locate.as_mut().expect("manual page").section = "5".to_owned();
+        host.tldr = Ok(Some(tldr()));
+
+        let result =
+            query_with(&request(), QueryPolicy::default(), &host).expect("file format manual");
+
+        assert!(result.tldr.is_none());
+        assert_eq!(
+            *host.calls.lock().expect("calls lock"),
+            ["name", "locate", "parse"]
         );
     }
 
@@ -1743,7 +1789,7 @@ Full documentation.
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["name", "tldr", "locate", "parse"]
+            ["name", "locate", "parse", "tldr"]
         );
     }
 
@@ -2041,7 +2087,7 @@ Full documentation.
         );
         assert_eq!(
             *host.calls.lock().expect("calls"),
-            ["name", "tldr", "locate", "parse"]
+            ["name", "locate", "parse", "tldr"]
         );
     }
 
@@ -2062,7 +2108,7 @@ Full documentation.
         );
         assert_eq!(
             *host.calls.lock().expect("calls"),
-            ["name", "tldr", "locate", "fallback", "markdown"]
+            ["name", "locate", "tldr", "fallback", "markdown"]
         );
     }
 
@@ -2110,7 +2156,7 @@ Full documentation.
         );
         assert_eq!(
             *host.calls.lock().expect("calls lock"),
-            ["name", "tldr", "locate", "locate", "parse"]
+            ["name", "locate", "locate", "parse", "tldr"]
         );
     }
 
