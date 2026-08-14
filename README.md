@@ -110,6 +110,11 @@ cross-document, and web/email links, scroll both panes, drag scrollbars, and
 resize the Outline sidebar. Markdown links stay inside their registered source; man
 and mdoc references select an exact manual section.
 
+Human-facing help, usage diagnostics, and tldr output use terminal-aware
+colour. `--color auto|always|never` controls the shared policy; automatic mode
+honours terminal capabilities, `NO_COLOR`, and `TERM=dumb`. Structured formats
+and redirected automatic output never gain presentation escape sequences.
+
 ## Structured discovery and queries
 
 Discover installed Markdown and native manuals without opening each document:

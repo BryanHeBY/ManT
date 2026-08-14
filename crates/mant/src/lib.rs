@@ -18,6 +18,7 @@ use arguments::{
 };
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
+    report_process_argument_error,
 };
 use mant_engine::QueryPolicy;
 use mant_ir::ResolvedContent;
@@ -163,9 +164,9 @@ pub fn run(
 /// owns operating-system stdio because the protocol reserves it exclusively
 /// for newline-delimited JSON-RPC messages.
 pub async fn run_process(arguments: &[String]) -> u8 {
-    let mut command = match arguments::parse(arguments) {
+    let mut command = match arguments::parse_process(arguments) {
         Ok(command) => command,
-        Err(error) => return report_argument_error(&error, &mut io::stderr().lock()),
+        Err(error) => return report_process_argument_error(&error),
     };
 
     if matches!(command, Command::Mcp) {

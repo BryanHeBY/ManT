@@ -61,6 +61,10 @@ optional tldr quick references before the full document. `Ctrl+O` opens the
 shared Markdown and native-manual catalog. Redirected output stays
 deterministic instead of emitting terminal control sequences.
 
+Help, usage diagnostics, and tldr output share a terminal-aware colour policy.
+Use `--color auto|always|never`; automatic mode respects terminal capability,
+`NO_COLOR`, and `TERM=dumb`, while structured formats stay undecorated.
+
 Document discovery follows the same rule: long terminal text is pageable,
 while short, redirected, JSON, and explicit `--no-pager` output stays direct.
 

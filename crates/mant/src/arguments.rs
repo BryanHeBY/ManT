@@ -6,7 +6,11 @@
 
 use std::iter;
 
-use clap::{ArgAction, ArgGroup, CommandFactory, Parser, ValueEnum, error::ErrorKind};
+use clap::{
+    ArgAction, ArgGroup, CommandFactory, FromArgMatches, ValueEnum,
+    builder::styling::{AnsiColor, Styles},
+    error::ErrorKind,
+};
 use mant_engine::QueryPolicy;
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, InputFormat, NodeSelector, OutlineDetail, QueryInput,
@@ -69,6 +73,16 @@ pub(crate) enum ColorMode {
     Auto,
     Always,
     Never,
+}
+
+impl From<ColorMode> for clap::ColorChoice {
+    fn from(value: ColorMode) -> Self {
+        match value {
+            ColorMode::Auto => Self::Auto,
+            ColorMode::Always => Self::Always,
+            ColorMode::Never => Self::Never,
+        }
+    }
 }
 
 /// A discoverable JSON Schema exposed by the native process boundary.
@@ -203,13 +217,23 @@ pub(crate) enum Command {
 
 // ── Declarative command line ───────────────────────────────────────────────
 
-#[derive(Debug, Parser)]
+const CLI_STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Green.on_default().bold())
+    .usage(AnsiColor::Green.on_default().bold())
+    .literal(AnsiColor::Cyan.on_default().bold())
+    .placeholder(AnsiColor::Cyan.on_default())
+    .error(AnsiColor::Red.on_default().bold())
+    .valid(AnsiColor::Green.on_default())
+    .invalid(AnsiColor::Yellow.on_default());
+
+#[derive(Debug, clap::Parser)]
 // These booleans are declarative CLI switches, not coupled domain state; clap
 // validates their relationships before `Cli` is normalized into `Command`.
 #[allow(clippy::struct_excessive_bools)]
 #[command(
     name = "mant",
     about = "Read or query structured local manuals and Markdown",
+    styles = CLI_STYLES,
     disable_help_flag = true,
     version,
     override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
@@ -507,14 +531,8 @@ struct Cli {
     #[arg(long, value_name = "FORMAT", value_enum, help_heading = "Output")]
     format: Option<QueryFormat>,
 
-    /// Control ANSI colors for the default `--tldr` terminal presentation.
-    #[arg(
-        long,
-        value_enum,
-        requires = "tldr",
-        conflicts_with = "format",
-        help_heading = "Output"
-    )]
+    /// Control colors in human-readable terminal output.
+    #[arg(long, value_enum, help_heading = "Output")]
     color: Option<ColorMode>,
 
     /// Omit JSON indentation. Query output also requires `--format json`.
@@ -541,27 +559,82 @@ struct Cli {
 // ── Normalization and semantic validation ─────────────────────────────────
 
 pub(crate) fn parse(arguments: &[String]) -> Result<Command, clap::Error> {
+    parse_with_help(arguments, HelpBehavior::Capture)
+}
+
+/// Parse one native process invocation while preserving clap's styled help or
+/// diagnostic for its terminal-aware stdout/stderr printer.
+pub(crate) fn parse_process(arguments: &[String]) -> Result<Command, clap::Error> {
+    parse_with_help(arguments, HelpBehavior::Return)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HelpBehavior {
+    Capture,
+    Return,
+}
+
+fn parse_with_help(
+    arguments: &[String],
+    help_behavior: HelpBehavior,
+) -> Result<Command, clap::Error> {
+    let color = requested_color(arguments);
     if uses_removed_section_option(arguments) {
         return Err(command_error(
             ErrorKind::UnknownArgument,
             "--section was removed in ManT 0.7.0 because \"section\" is ambiguous\n\n  select a Unix manual category:\n    mant <NAME> --man-section <MAN_SECTION>\n\n  select a document heading or outline node:\n    mant <NAME> --node <SELECTOR>\n\n  inspect available outline nodes:\n    mant <NAME> --outline",
+            color,
         ));
     }
-    let parsed =
-        match Cli::try_parse_from(iter::once("mant").chain(arguments.iter().map(String::as_str))) {
-            Ok(parsed) => parsed,
-            Err(error)
-                if matches!(
+    let parsed = match parse_cli(arguments, color) {
+        Ok(parsed) => parsed,
+        Err(error)
+            if help_behavior == HelpBehavior::Capture
+                && matches!(
                     error.kind(),
                     ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
                 ) =>
-            {
-                return Ok(Command::Help(error.to_string()));
-            }
-            Err(error) => return Err(error),
-        };
+        {
+            return Ok(Command::Help(error.to_string()));
+        }
+        Err(error) => return Err(error),
+    };
 
-    normalize(parsed)
+    normalize(parsed, color)
+}
+
+fn parse_cli(arguments: &[String], color: ColorMode) -> Result<Cli, clap::Error> {
+    let mut command = Cli::command().color(color.into());
+    let mut matches = command
+        .try_get_matches_from_mut(iter::once("mant").chain(arguments.iter().map(String::as_str)))?;
+    Cli::from_arg_matches_mut(&mut matches).map_err(|error| error.format(&mut command))
+}
+
+fn requested_color(arguments: &[String]) -> ColorMode {
+    let mut arguments = arguments.iter();
+    let mut color = ColorMode::Auto;
+    while let Some(argument) = arguments.next() {
+        if argument == "--" {
+            break;
+        }
+        if argument == "--color" {
+            if let Some(value) = arguments.next() {
+                color = color_value(value).unwrap_or(ColorMode::Auto);
+            }
+        } else if let Some(value) = argument.strip_prefix("--color=") {
+            color = color_value(value).unwrap_or(ColorMode::Auto);
+        }
+    }
+    color
+}
+
+fn color_value(value: &str) -> Option<ColorMode> {
+    match value {
+        "auto" => Some(ColorMode::Auto),
+        "always" => Some(ColorMode::Always),
+        "never" => Some(ColorMode::Never),
+        _ => None,
+    }
 }
 
 fn uses_removed_section_option(arguments: &[String]) -> bool {
@@ -585,11 +658,12 @@ fn uses_removed_section_option(arguments: &[String]) -> bool {
     false
 }
 
-fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
+fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
     if parsed.no_pager && !parsed.list && parsed.find.is_none() {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--no-pager applies only to --list and --find",
+            color,
         ));
     }
     if parsed.mcp {
@@ -623,9 +697,9 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
         });
     }
     if parsed.list || parsed.find.is_some() {
-        return normalize_catalog(parsed);
+        return normalize_catalog(parsed, color);
     }
-    validate_query_search_options(&parsed)?;
+    validate_query_search_options(&parsed, color)?;
 
     let view = normalize_query_view(&mut parsed);
     validate_output_options(
@@ -633,6 +707,7 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
         parsed.format,
         parsed.preserve_anchors,
         &view,
+        color,
     )?;
     let source = normalize_query_source(
         QuerySourceOptions {
@@ -645,8 +720,9 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
             tldr: parsed.tldr,
         },
         view,
+        color,
     )?;
-    validate_manual_source(parsed.manual, &source)?;
+    validate_manual_source(parsed.manual, &source, color)?;
     let presentation = normalize_presentation(
         parsed.ui,
         parsed.format,
@@ -671,23 +747,26 @@ fn normalize(mut parsed: Cli) -> Result<Command, clap::Error> {
     })
 }
 
-fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
+fn normalize_catalog(parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
     if parsed.list && (parsed.regex || parsed.search_case.is_some()) {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--regex and --case require --find",
+            color,
         ));
     }
     if parsed.word || parsed.search_scope.is_some() || parsed.context.is_some() {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--word, --scope, and --context apply only to document-content search",
+            color,
         ));
     }
     if parsed.preserve_anchors {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--preserve-anchors does not apply to document discovery",
+            color,
         ));
     }
     if parsed.source.is_some() && parsed.kind == Some(CatalogKindMode::Manual)
@@ -696,6 +775,7 @@ fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--source selects Markdown while --man-section selects native manuals",
+            color,
         ));
     }
     let format = parsed.format.unwrap_or(QueryFormat::Text);
@@ -703,12 +783,14 @@ fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
         return Err(command_error(
             ErrorKind::InvalidValue,
             "document discovery supports only text and json formats",
+            color,
         ));
     }
     if parsed.compact && format != QueryFormat::Json {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--compact requires --format json",
+            color,
         ));
     }
     Ok(Command::Catalog {
@@ -739,7 +821,7 @@ fn normalize_catalog(parsed: Cli) -> Result<Command, clap::Error> {
     })
 }
 
-fn validate_query_search_options(parsed: &Cli) -> Result<(), clap::Error> {
+fn validate_query_search_options(parsed: &Cli, color: ColorMode) -> Result<(), clap::Error> {
     if parsed.search.is_none()
         && (parsed.regex
             || parsed.search_case.is_some()
@@ -749,12 +831,14 @@ fn validate_query_search_options(parsed: &Cli) -> Result<(), clap::Error> {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--regex, --case, --limit, and --offset require --search or --find",
+            color,
         ));
     }
     if parsed.kind.is_some() {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--kind requires --list or --find",
+            color,
         ));
     }
     Ok(())
@@ -809,29 +893,37 @@ fn validate_output_options(
     format: Option<QueryFormat>,
     preserve_anchors: bool,
     view: &QueryView,
+    color: ColorMode,
 ) -> Result<(), clap::Error> {
     if compact && format != Some(QueryFormat::Json) {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--compact requires --format json for manual queries",
+            color,
         ));
     }
     if preserve_anchors && format.is_some_and(|format| format != QueryFormat::Markdown) {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--preserve-anchors requires Markdown output",
+            color,
         ));
     }
     if preserve_anchors && matches!(view, QueryView::Outline { .. } | QueryView::Search { .. }) {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--preserve-anchors applies only to full documents and excerpts",
+            color,
         ));
     }
     Ok(())
 }
 
-fn validate_manual_source(manual: bool, source: &QuerySource) -> Result<(), clap::Error> {
+fn validate_manual_source(
+    manual: bool,
+    source: &QuerySource,
+    color: ColorMode,
+) -> Result<(), clap::Error> {
     if manual
         && !matches!(
             source,
@@ -844,6 +936,7 @@ fn validate_manual_source(manual: bool, source: &QuerySource) -> Result<(), clap
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--manual requires a document name rather than Markdown input",
+            color,
         ));
     }
     Ok(())
@@ -903,6 +996,7 @@ struct QuerySourceOptions {
 fn normalize_query_source(
     options: QuerySourceOptions,
     view: QueryView,
+    color: ColorMode,
 ) -> Result<QuerySource, clap::Error> {
     let source = if options.request_json {
         QuerySource::StdinJson
@@ -913,6 +1007,7 @@ fn normalize_query_source(
                 return Err(command_error(
                     ErrorKind::MissingRequiredArgument,
                     "--input - requires --input-format markdown or roff",
+                    color,
                 ));
             }
             QuerySource::InputStdin { format, view }
@@ -924,8 +1019,12 @@ fn normalize_query_source(
             })
         }
     } else {
-        let (selector, manual_section) =
-            normalize_document_operands(&options.selectors, options.manual_section, options.tldr)?;
+        let (selector, manual_section) = normalize_document_operands(
+            &options.selectors,
+            options.manual_section,
+            options.tldr,
+            color,
+        )?;
         QuerySource::Arguments(QueryRequest {
             schema: RequestSchema::V7,
             input: QueryInput::Document {
@@ -943,12 +1042,14 @@ fn normalize_document_operands(
     operands: &[String],
     explicit_manual_section: Option<String>,
     tldr: bool,
+    color: ColorMode,
 ) -> Result<(String, Option<String>), clap::Error> {
     if tldr {
         if operands.is_empty() {
             return Err(command_error(
                 ErrorKind::MissingRequiredArgument,
                 "--tldr requires a page name",
+                color,
             ));
         }
         if matches!(operands, [selector] if manual_reference(selector).is_some())
@@ -957,6 +1058,7 @@ fn normalize_document_operands(
             return Err(command_error(
                 ErrorKind::ArgumentConflict,
                 "--tldr cannot be combined with a man-style section selector; use `mant NAME --tldr`",
+                color,
             ));
         }
         return Ok((operands.join("-").to_lowercase(), None));
@@ -968,6 +1070,7 @@ fn normalize_document_operands(
                     return Err(command_error(
                         ErrorKind::ArgumentConflict,
                         "a name(section) selector cannot be combined with --man-section",
+                        color,
                     ));
                 }
                 Ok((name, Some(section)))
@@ -980,6 +1083,7 @@ fn normalize_document_operands(
                 return Err(command_error(
                     ErrorKind::ArgumentConflict,
                     "MAN_SECTION NAME cannot be combined with --man-section",
+                    color,
                 ));
             }
             Ok((name.clone(), Some(section.clone())))
@@ -987,10 +1091,12 @@ fn normalize_document_operands(
         [] => Err(command_error(
             ErrorKind::MissingRequiredArgument,
             "a document selector or --input is required",
+            color,
         )),
         _ => Err(command_error(
             ErrorKind::TooManyValues,
             "use one document selector, or SECTION NAME for a native manual",
+            color,
         )),
     }
 }
@@ -1032,8 +1138,12 @@ fn non_empty(value: &str) -> Result<String, String> {
     }
 }
 
-fn command_error(kind: ErrorKind, message: impl std::fmt::Display) -> clap::Error {
-    Cli::command().error(kind, message)
+fn command_error(
+    kind: ErrorKind,
+    message: impl std::fmt::Display,
+    color: ColorMode,
+) -> clap::Error {
+    Cli::command().color(color.into()).error(kind, message)
 }
 
 #[cfg(test)]
@@ -1045,7 +1155,7 @@ mod tests {
 
     use super::{
         CatalogPaging, ColorMode, Command, QueryFormat, QueryPolicy, QueryPresentation,
-        QuerySource, SchemaContract, parse,
+        QuerySource, SchemaContract, parse, parse_process, requested_color,
     };
 
     fn args(values: &[&str]) -> Vec<String> {
@@ -1297,6 +1407,51 @@ mod tests {
             "--explain",
             "--section",
         ])));
+    }
+
+    #[test]
+    fn process_help_retains_styles_while_injected_help_stays_plain() {
+        let arguments = args(&["--help", "--color", "always"]);
+        let Command::Help(help) = parse(&arguments).expect("captured help") else {
+            panic!("expected captured help")
+        };
+        assert!(!help.contains('\u{1b}'));
+
+        let styled = parse_process(&arguments).expect_err("process help remains a clap display");
+        assert_eq!(styled.kind(), clap::error::ErrorKind::DisplayHelp);
+        assert!(styled.render().ansi().to_string().contains('\u{1b}'));
+    }
+
+    #[test]
+    fn color_policy_is_global_without_changing_deterministic_presentations() {
+        assert!(matches!(
+            parse(&args(&["git", "--format", "json", "--color", "always"]))
+                .expect("JSON query with terminal color policy"),
+            Command::Query {
+                presentation: QueryPresentation::Output(QueryFormat::Json),
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&args(&["git", "--tldr", "--color", "never"])).expect("plain tldr query"),
+            Command::Query {
+                presentation: QueryPresentation::Tldr(ColorMode::Never),
+                ..
+            }
+        ));
+
+        assert_eq!(
+            requested_color(&args(&["git", "--color=always"])),
+            ColorMode::Always
+        );
+        assert_eq!(
+            requested_color(&args(&["git", "--color", "never"])),
+            ColorMode::Never
+        );
+        assert_eq!(
+            requested_color(&args(&["--", "--color=always"])),
+            ColorMode::Auto
+        );
     }
 
     #[test]
@@ -1633,7 +1788,6 @@ mod tests {
             vec!["git", "--source", "team", "--manual"],
             vec!["git", "--manual", "--tldr"],
             vec!["git", "--man-section", "1", "--tldr"],
-            vec!["git", "--tldr", "--color", "always", "--format", "json"],
             vec!["git", "--tldr", "--node", "0"],
             vec!["git", "--tldr", "--ui"],
             vec!["--input", "README.md", "--source", "team"],

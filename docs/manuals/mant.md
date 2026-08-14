@@ -552,6 +552,7 @@ mant tar --explain=--exclude
 ## Output
 
 - `--format FORMAT`: Select `markdown`, `text`, `man`, or `json`.
+- `--color WHEN`: Select `auto`, `always`, or `never` for human-readable terminal output.
 - `--compact`: Omit JSON indentation.
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
 
@@ -562,6 +563,13 @@ for plain projections. Explicit output for full documents and excerpts defaults
 to Markdown; outlines and command-line search default to text. JSON must be
 selected explicitly for document queries. `--compact` removes indentation from
 JSON queries, schemas, protocol descriptions, and update reports.
+
+Help, usage diagnostics, and the default tldr presentation share the colour
+policy. `auto` emits styling only to a capable terminal and respects
+`NO_COLOR`, `CLICOLOR`, and `TERM=dumb`; `always` and `never` explicitly
+override automatic detection. JSON, Markdown, man-format, MCP, and native
+protocol results remain deterministic data rather than decorated terminal
+output.
 
 ## Integration
 
@@ -661,6 +669,11 @@ for the schema and update lifecycle.
   and translated tldr pages before English fallback.
 - `PATHEXT`: On Windows, order executable suffix fallback for extensionless
   registered-document and native-manual queries.
+- `NO_COLOR`: Disable automatic colour in human-readable terminal output.
+- `CLICOLOR`: Set to `0` to disable automatic colour or a nonzero value to
+  request it on a terminal.
+- `CLICOLOR_FORCE`: Request colour even when automatic terminal detection
+  would disable it; an explicit `--color` remains authoritative.
 - `HOME`: On Unix, supply conventional document, manual, and cache locations
   when their XDG overrides are absent.
 - `APPDATA`: Select the per-user ManT data root on Windows.

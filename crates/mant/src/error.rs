@@ -106,3 +106,12 @@ pub(super) fn report_argument_error(error: &clap::Error, diagnostics: &mut dyn W
     }
     2
 }
+
+/// Let clap choose the native stdout/stderr stream and apply its configured
+/// terminal color policy. Help and version are successful display results;
+/// every other parser diagnostic retains the conventional usage status.
+pub(super) fn report_process_argument_error(error: &clap::Error) -> u8 {
+    let status = u8::try_from(error.exit_code()).unwrap_or(2);
+    let _ = error.print();
+    status
+}

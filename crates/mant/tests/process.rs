@@ -62,6 +62,7 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("-V, --version"));
     assert!(help.contains("--format <FORMAT>"));
     assert!(help.contains("--preserve-anchors"));
+    assert!(help.contains("--color <COLOR>"));
     assert!(help.contains("--update-tldr"));
     assert!(help.contains("--update-docs"));
     assert!(help.contains("--prune-docs"));
@@ -78,6 +79,44 @@ fn help_groups_the_public_query_surface() {
     assert!(!help.contains("--force-groff"));
     assert!(!help.contains("--json"));
     assert!(!help.contains("update tldr"));
+}
+
+#[test]
+fn clap_color_is_terminal_aware_and_explicitly_controllable() {
+    let run = |arguments: &[&str]| {
+        Command::new(executable())
+            .args(arguments)
+            .output()
+            .expect("run mant color fixture")
+    };
+
+    let automatic = run(&["--help"]);
+    assert!(automatic.status.success());
+    assert!(!automatic.stdout.contains(&0x1b));
+
+    let colored_help = run(&["--help", "--color", "always"]);
+    assert!(colored_help.status.success());
+    assert!(colored_help.stderr.is_empty());
+    assert!(colored_help.stdout.contains(&0x1b));
+
+    let plain_help = run(&["--help", "--color", "never"]);
+    assert!(plain_help.status.success());
+    assert!(!plain_help.stdout.contains(&0x1b));
+
+    let colored_error = run(&["--color", "always"]);
+    assert_eq!(colored_error.status.code(), Some(2));
+    assert!(colored_error.stdout.is_empty());
+    assert!(colored_error.stderr.contains(&0x1b));
+
+    let colored_semantic_error = run(&["git", "--no-pager", "--color", "always"]);
+    assert_eq!(colored_semantic_error.status.code(), Some(2));
+    assert!(colored_semantic_error.stdout.is_empty());
+    assert!(colored_semantic_error.stderr.contains(&0x1b));
+
+    let protocol = run(&["--protocol-version", "--compact", "--color", "always"]);
+    assert!(protocol.status.success());
+    assert!(!protocol.stdout.contains(&0x1b));
+    serde_json::from_slice::<serde_json::Value>(&protocol.stdout).expect("plain protocol JSON");
 }
 
 #[test]
