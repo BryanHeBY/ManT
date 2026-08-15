@@ -15,6 +15,13 @@ fn executable() -> &'static str {
     env!("CARGO_BIN_EXE_mant")
 }
 
+fn registered_data_root(home: &std::path::Path) -> PathBuf {
+    registered_documents_dir(home)
+        .parent()
+        .expect("registered documents always have an application data root")
+        .to_owned()
+}
+
 fn run_git(directory: &std::path::Path, arguments: &[&str]) {
     let output = Command::new("git")
         .arg("-C")
@@ -160,6 +167,7 @@ fn doctor_is_offline_read_only_and_supports_stable_json() {
     let home = std::env::temp_dir().join(format!("mant-doctor-process-{}", std::process::id()));
     let _ = fs::remove_dir_all(&home);
     fs::create_dir_all(&home).expect("doctor home");
+    let data_root = registered_data_root(&home);
     let manual_root = home.join("manuals");
     let tldr_root = home.join("tldr");
 
@@ -200,17 +208,45 @@ fn doctor_is_offline_read_only_and_supports_stable_json() {
     assert_eq!(report["schema"], "mant.doctor/v1");
     assert_eq!(
         report["environment"]["dataRoot"],
-        home.join("data/mant").to_string_lossy().as_ref()
+        data_root.to_string_lossy().as_ref()
     );
-    assert!(
-        report["checks"]
-            .as_array()
-            .is_some_and(|checks| !checks.is_empty())
+    assert_eq!(
+        report["environment"]["configPath"],
+        data_root.join("sources.toml").to_string_lossy().as_ref()
     );
-    assert!(
-        !home.join("data/mant").exists(),
-        "doctor must not create the data root"
+    assert_eq!(
+        report["environment"]["documentsRoot"],
+        registered_documents_dir(&home).to_string_lossy().as_ref()
     );
+    assert_eq!(
+        report["environment"]["sourcesRoot"],
+        data_root.join("sources").to_string_lossy().as_ref()
+    );
+    assert_eq!(
+        report["environment"]["manualRoots"],
+        serde_json::json!([manual_root.to_string_lossy()])
+    );
+    assert_eq!(
+        report["environment"]["tldrRoots"],
+        serde_json::json!([tldr_root.to_string_lossy()])
+    );
+    let checks = report["checks"].as_array().expect("doctor checks");
+    let status = |code: &str| {
+        checks
+            .iter()
+            .find(|check| check["code"] == code)
+            .unwrap_or_else(|| panic!("missing doctor check {code}"))["status"]
+            .as_str()
+            .expect("doctor status")
+    };
+    assert_eq!(status("paths.data-root"), "info");
+    assert_eq!(status("sources.configuration"), "info");
+    assert_eq!(
+        status("manuals.index"),
+        if cfg!(windows) { "info" } else { "warning" }
+    );
+    assert_eq!(status("tldr.cache"), "warning");
+    assert!(!data_root.exists(), "doctor must not create the data root");
 
     let schema = run(&["--schema", "doctor", "--compact"]);
     assert!(schema.status.success());
@@ -375,10 +411,7 @@ fn explicit_tldr_queries_follow_document_source_priority() {
     let root =
         std::env::temp_dir().join(format!("mant-tldr-priority-process-{}", std::process::id()));
     let documents = registered_documents_dir(&root);
-    let data_root = documents
-        .parent()
-        .expect("application data root")
-        .to_owned();
+    let data_root = registered_data_root(&root);
     let preferred = data_root.join("sources/preferred");
     let fallback = data_root.join("sources/fallback");
     let tldr_root = root.join("tldr");
@@ -664,10 +697,7 @@ fn document_sources_update_on_demand_and_support_explicit_selection() {
         std::process::id()
     ));
     let repository = fixture_root.join("repository");
-    let data_root = registered_documents_dir(&fixture_root)
-        .parent()
-        .expect("application data root")
-        .to_owned();
+    let data_root = registered_data_root(&fixture_root);
     fs::create_dir_all(repository.join("docs/reference")).expect("create repository fixture");
     fs::write(
         repository.join("docs/reference/source-tool.md"),
@@ -775,10 +805,7 @@ fn document_source_pruning_is_explicit_and_preserves_personal_documents() {
         std::process::id()
     ));
     let documents = registered_documents_dir(&fixture_root);
-    let data_root = documents
-        .parent()
-        .expect("application data root")
-        .to_owned();
+    let data_root = registered_data_root(&fixture_root);
     let installed = data_root.join("sources/removed");
     fs::create_dir_all(&installed).expect("create installed source fixture");
     fs::create_dir_all(&documents).expect("create personal documents fixture");
@@ -828,10 +855,7 @@ fn document_source_failures_keep_a_complete_json_report() {
         "mant-document-source-failure-process-{}",
         std::process::id()
     ));
-    let data_root = registered_documents_dir(&fixture_root)
-        .parent()
-        .expect("application data root")
-        .to_owned();
+    let data_root = registered_data_root(&fixture_root);
     fs::create_dir_all(&data_root).expect("create application data root");
     fs::write(
         data_root.join("sources.toml"),
@@ -1144,10 +1168,7 @@ fn windows_suffix_fixture() -> PathBuf {
         std::process::id()
     ));
     let documents = registered_documents_dir(&fixture_root);
-    let data_root = documents
-        .parent()
-        .expect("application data root")
-        .to_owned();
+    let data_root = registered_data_root(&fixture_root);
     let sources = data_root.join("sources");
     let alpha = sources.join("alpha");
     let beta = sources.join("beta");
