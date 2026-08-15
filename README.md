@@ -178,11 +178,19 @@ Discover machine contracts from the installed binary rather than copying
 request shapes from documentation:
 
 ```sh
+mant --doctor
+mant --doctor --format json --compact
 mant --schema request
 mant --schema all --compact
 mant --protocol-version
 mant --version
 ```
+
+`mant --doctor` performs an offline, read-only check of the effective data
+paths, registered documents, installed sources, bundled libmandoc, native
+manual index, optional Git requirement, and tldr caches. It suggests the
+existing explicit maintenance commands without running them. Warnings keep a
+successful status; a broken promised capability returns status `1`.
 
 The [structured protocol and Schema reference](docs/manuals/mant-protocol.md) documents every
 versioned request and response projection, coordinate rule, and MCP tool. The

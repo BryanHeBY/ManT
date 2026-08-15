@@ -34,6 +34,10 @@
 - Preview removal of sources absent from the configuration:
 
 `mant --prune-docs --dry-run`
+
+- Diagnose the local installation without changing it:
+
+`mant --doctor`
 <!-- mant:tldr:end -->
 
 # mant
@@ -51,6 +55,7 @@ mant --input <PATH|-> [--input-format FORMAT] [OPTIONS]
 mant --list [FILTERS]
 mant --find PATTERN [FILTERS]
 mant --request-json [--format FORMAT] [--compact]
+mant --doctor [--format text|json] [--compact]
 mant --schema CONTRACT [--compact]
 mant --update-docs [--compact]
 mant --prune-docs [--dry-run] [--compact]
@@ -598,7 +603,7 @@ an external tldr preface; it rejects a complete Markdown document. Use `text`
 for plain projections. Explicit output for full documents and excerpts defaults
 to Markdown; outlines and command-line search default to text. JSON must be
 selected explicitly for document queries. `--compact` removes indentation from
-JSON queries, schemas, protocol descriptions, and update reports.
+JSON queries, schemas, protocol descriptions, doctor reports, and update reports.
 
 Help, diagnostics, and the default tldr presentation share the colour
 policy. `auto` emits styling only to a capable terminal and respects
@@ -607,10 +612,29 @@ override automatic detection. JSON, Markdown, man-format, MCP, and native
 protocol results remain deterministic data rather than decorated terminal
 output.
 
+## Diagnostics
+
+`--doctor` performs an offline, read-only inspection of the effective data root,
+source configuration and installations, registered documents, bundled
+libmandoc, native manual index, conditional Git requirement, and tldr roots. It
+does not create directories or lock files, invoke external programs, access the
+network, update caches, or remove orphaned sources. Suggested repairs name the
+existing explicit maintenance command instead of running it.
+
+Human-readable text is the default. `--format json` returns the independent
+`mant.doctor/v1` contract; add `--compact` for one-line JSON, and inspect its
+authoritative schema with `mant --schema doctor`. Warnings describe degraded or
+actionable local state and exit successfully. An error means a promised runtime
+capability is broken and exits with status `1`; invalid usage exits with status
+`2`.
+
+Doctor JSON intentionally includes local filesystem paths for diagnosis. It is
+a native CLI interface and is not exposed through the read-only MCP server.
+
 ## Integration
 
 - `--request-json`: Read one closed `mant.request/v7` object from standard input.
-- `--schema CONTRACT`: Print a generated JSON Schema for `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`.
+- `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
   diagnostics are omitted; an incomplete entry outline retains only

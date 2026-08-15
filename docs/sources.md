@@ -110,6 +110,19 @@ leaves the previous installation in place.
 Selecting no Markdown files is also an error, which protects an existing source
 from being replaced after a mistyped `path`, `include`, or `exclude` value.
 
+## Diagnosing local state
+
+Run `mant --doctor` to inspect the effective data paths, source configuration,
+installed source identities, registered documents, native manual index, bundled
+libmandoc, optional Git requirement, and tldr caches. The command is offline and
+read-only: it does not create directories or locks, invoke Git, download
+archives, update caches, or remove orphaned sources. It reports the existing
+maintenance command to use when action is required.
+
+Use `mant --doctor --format json` for the versioned `mant.doctor/v1` report.
+Physical paths are included deliberately because this is a local diagnostic
+interface; doctor is not exposed through MCP.
+
 ## Updating
 
 Run:

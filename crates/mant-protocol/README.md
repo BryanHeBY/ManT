@@ -4,8 +4,8 @@
 defines the request and response DTOs shared by in-process hosts, CLI JSON,
 request JSON, and MCP without owning any transport. It owns schema markers,
 logical catalog addresses, pagination, outline, excerpt, search, tldr-update
-results, and JSON Schema generation. The `mant` crate separately composes host
-callbacks, process framing, and MCP transport.
+results, local doctor reports, and JSON Schema generation. The `mant` crate
+separately composes host callbacks, process framing, and MCP transport.
 
 Use this crate whenever a Rust host or process consumer needs stable structured
 inputs and projections. The same DTO may cross an in-memory callback or a
@@ -22,6 +22,8 @@ QueryRequest ──> host / mant-engine ──┬─> QueryBundle
                                      └─> QuerySearch
 
 CatalogQuery ──> host ──────────────────> DocumentCatalog
+
+local inspection ───────────────────────> DoctorReport
 ```
 
 | Family | Current discriminator | Purpose |
@@ -32,6 +34,7 @@ CatalogQuery ──> host ──────────────────
 | Document | `mant.document/v7` | Versioned projection of the normalized document |
 | Catalog | `mant.catalog/v7` | Registered Markdown and native-manual discovery |
 | Outline, excerpt, search | `mant.outline/v7`, `mant.excerpt/v7`, `mant.search/v7` | Focused query projections |
+| Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
 
 The schemas generated from the Rust types are authoritative. Request schemas
 are generated for deserialization so closed-object and default behavior match

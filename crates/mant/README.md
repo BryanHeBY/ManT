@@ -94,10 +94,18 @@ coordinates. Machine consumers can discover the authoritative contracts from
 the installed executable:
 
 ```sh
+mant --doctor
+mant --doctor --format json --compact
 mant --schema request
 mant --schema all --compact
 mant --protocol-version
 ```
+
+`mant --doctor` checks the effective local installation without network access,
+external processes, or mutations. Text is intended for people; JSON uses the
+independent `mant.doctor/v1` report contract, discoverable with
+`mant --schema doctor`. Warnings keep a successful exit status, while a broken
+promised capability exits with status `1`.
 
 `mant --mcp` exposes the same read-only document discovery, outline, excerpt,
 explanation, and search capabilities over stdio JSON-RPC. MCP stdout contains

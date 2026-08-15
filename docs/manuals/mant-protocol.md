@@ -65,6 +65,7 @@ query the manual database, read tldr data, or start the TUI.
 | `mant.search/v7` | Search results and pagination | Search response `schema` |
 | `mant.catalog/v7` | Local Markdown and manual-page discovery | Catalog response `schema` |
 | `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
+| `mant.doctor/v1` | Read-only local installation diagnostics | Doctor report `schema` |
 
 The suffixes are contract versions, not the ManT release number. The process
 request and response contracts are v7; the independent Markdown coordinate
@@ -107,14 +108,16 @@ mant --schema outline
 mant --schema excerpt
 mant --schema search
 mant --schema catalog
+mant --schema doctor
 mant --schema all
 ```
 
 `--schema all` returns an object with the stable keys `request`, `query`,
-`outline`, `excerpt`, `search`, and `catalog`. `--compact` is accepted by all schema
-commands.
+`outline`, `excerpt`, `search`, and `catalog`. The independent doctor schema is
+requested explicitly and does not alter that v7 schema catalog. `--compact` is
+accepted by all schema commands.
 
-| Catalog key | Root title | Root `$id` |
+| `--schema` value | Root title | Root `$id` |
 | --- | --- | --- |
 | `request` | `QueryRequest` | `urn:mant:request:v7` |
 | `query` | `QueryBundle` | `urn:mant:query:v7` |
@@ -122,6 +125,7 @@ commands.
 | `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v7` |
 | `search` | `QuerySearch` | `urn:mant:search:v7` |
 | `catalog` | `DocumentCatalog` | `urn:mant:catalog:v7` |
+| `doctor` | `DoctorReport` | `urn:mant:doctor:v1` |
 
 The request schema is generated for deserialization, while response schemas
 are generated for serialization. This distinction matters because input
@@ -139,6 +143,22 @@ checkout:
 mant --schema request > mant-request.schema.json
 mant --schema all --compact > mant-schemas.json
 ```
+
+## Doctor Report
+
+`mant --doctor --format json` emits `mant.doctor/v1`, a native, offline snapshot
+of the effective local installation. The report contains a platform/version
+environment, an overall `healthy`, `warning`, or `error` outcome, ordered checks,
+and an aggregate summary. Each check has a stable ID, `ok`, `info`, `warning`, or
+`error` status, a concise message, optional details, and an optional suggested
+command. Warnings retain exit status `0`; any error produces exit status `1`.
+
+Doctor may expose physical filesystem paths because local provenance is needed
+to repair an installation. It omits configured repository and archive URLs and
+is not an MCP tool, so MCP consumers continue to see logical document identities
+rather than host filesystem layout. The command never creates directories or
+locks, invokes external programs, contacts the network, updates caches, or
+removes data.
 
 ## Document Catalog
 
