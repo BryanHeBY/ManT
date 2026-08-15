@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 mod catalog;
+mod doctor;
 mod document;
 mod outline;
 mod query;
@@ -11,6 +12,7 @@ mod selector;
 mod update;
 
 pub use catalog::*;
+pub use doctor::*;
 pub use document::*;
 pub use outline::*;
 pub use query::*;

@@ -4,7 +4,16 @@ use std::collections::BTreeMap;
 
 use schemars::{JsonSchema, Schema, generate::SchemaSettings};
 
-use crate::{DocumentCatalog, QueryBundle, QueryExcerpt, QueryOutline, QueryRequest, QuerySearch};
+use crate::{
+    DoctorReport, DocumentCatalog, QueryBundle, QueryExcerpt, QueryOutline, QueryRequest,
+    QuerySearch,
+};
+
+/// Generate the read-only installation health report schema.
+#[must_use]
+pub fn doctor_report_json_schema() -> Schema {
+    serialize_schema::<DoctorReport>()
+}
 
 /// Generate the local document-catalog JSON representation.
 #[must_use]

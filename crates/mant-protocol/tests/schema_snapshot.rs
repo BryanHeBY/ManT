@@ -1,6 +1,6 @@
 //! Locks the structural wire contract independently from `mant-ir` evolution.
 
-use mant_protocol::{NATIVE_API_VERSION, query_json_schema_catalog};
+use mant_protocol::{NATIVE_API_VERSION, doctor_report_json_schema, query_json_schema_catalog};
 use serde_json::Value;
 
 const V7_SNAPSHOT: &str = include_str!("../../../tests/contracts/protocol-schemas-v7.json");
@@ -47,5 +47,30 @@ fn v7_catalog_exposes_only_logical_document_identities() {
     assert_eq!(
         summary["required"],
         serde_json::json!(["address", "catalogPath"])
+    );
+}
+
+#[test]
+fn doctor_v1_has_an_independent_discriminator_and_stable_result_fields() {
+    let schema = serde_json::to_value(doctor_report_json_schema()).expect("doctor schema");
+    assert_eq!(schema["$id"], "urn:mant:doctor:v1");
+    assert_eq!(
+        schema["properties"]["schema"]["$ref"],
+        "#/$defs/DoctorSchema"
+    );
+    assert_eq!(
+        schema["$defs"]["DoctorSchema"]["oneOf"][0]["const"],
+        "mant.doctor/v1"
+    );
+    assert_eq!(
+        schema["required"],
+        serde_json::json!([
+            "schema",
+            "producer",
+            "outcome",
+            "environment",
+            "checks",
+            "summary"
+        ])
     );
 }
