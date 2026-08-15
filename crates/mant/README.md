@@ -90,6 +90,8 @@ mant tar --search=--acls --context 1
 Partial document queries default to text and can explicitly select Markdown or
 JSON. A complete native roff manual also supports `--format man` for manual-only
 plain text without tldr content.
+Text projections use semantic ANSI styles on capable terminals and remain plain
+under redirection; Markdown, JSON, man, request JSON, and MCP never contain ANSI.
 Search results carry reusable outline selectors and exact generated-Markdown
 coordinates. Machine consumers can discover the authoritative contracts from
 the installed executable:

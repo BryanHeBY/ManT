@@ -56,8 +56,14 @@ pub(crate) enum QueryPresentation {
     Auto,
     /// Require the Ratatui reader and a usable terminal.
     Interactive,
-    /// Render a deterministic representation to standard output.
-    Output(QueryFormat),
+    /// Render a deterministic representation to standard output, with
+    /// terminal styling enabled only for human-readable text.
+    Output {
+        /// Selected serialization or text format.
+        format: QueryFormat,
+        /// Requested terminal colour policy.
+        color: ColorMode,
+    },
     /// Render the tldr semantic layout directly to a terminal.
     Tldr(ColorMode),
 }
@@ -1052,11 +1058,17 @@ fn normalize_presentation(
     if ui {
         QueryPresentation::Interactive
     } else if let Some(format) = format {
-        QueryPresentation::Output(format)
+        QueryPresentation::Output {
+            format,
+            color: color.unwrap_or_default(),
+        }
     } else if tldr {
         QueryPresentation::Tldr(color.unwrap_or_default())
     } else if preserve_anchors {
-        QueryPresentation::Output(QueryFormat::Markdown)
+        QueryPresentation::Output {
+            format: QueryFormat::Markdown,
+            color: color.unwrap_or_default(),
+        }
     } else if matches!(
         source,
         QuerySource::Arguments(QueryRequest {
@@ -1066,7 +1078,10 @@ fn normalize_presentation(
     ) {
         QueryPresentation::Auto
     } else {
-        QueryPresentation::Output(default_format)
+        QueryPresentation::Output {
+            format: default_format,
+            color: color.unwrap_or_default(),
+        }
     }
 }
 
@@ -1394,7 +1409,10 @@ mod tests {
                         detail: OutlineDetail::Entries
                     }
                 },
-                presentation: QueryPresentation::Output(QueryFormat::Text),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Text,
+                    color: ColorMode::Auto
+                },
                 ..
             }
         ));
@@ -1411,7 +1429,10 @@ mod tests {
         assert!(matches!(
             parse(&args(&["git", "--preserve-anchors"])).expect("addressable Markdown"),
             Command::Query {
-                presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Markdown,
+                    color: ColorMode::Auto
+                },
                 preserve_anchors: true,
                 ..
             }
@@ -1440,7 +1461,10 @@ mod tests {
                     },
                     view: QueryView::Full {},
                 }),
-                presentation: QueryPresentation::Output(QueryFormat::Json),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Json,
+                    color: ColorMode::Auto
+                },
                 pretty: false,
                 policy: QueryPolicy::Combined,
                 preserve_anchors: false,
@@ -1509,7 +1533,10 @@ mod tests {
             parse(&args(&["git", "--format", "json", "--color", "always"]))
                 .expect("JSON query with terminal color policy"),
             Command::Query {
-                presentation: QueryPresentation::Output(QueryFormat::Json),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Json,
+                    color: ColorMode::Always
+                },
                 ..
             }
         ));
@@ -1595,7 +1622,10 @@ mod tests {
         assert!(matches!(
             parse(&args(&["git", "--tldr", "--format", "json"])).expect("structured tldr output"),
             Command::Query {
-                presentation: QueryPresentation::Output(QueryFormat::Json),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Json,
+                    color: ColorMode::Auto
+                },
                 ..
             }
         ));
@@ -1647,7 +1677,10 @@ mod tests {
                 .expect("stdin query"),
             Command::Query {
                 source: QuerySource::StdinJson,
-                presentation: QueryPresentation::Output(QueryFormat::Json),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Json,
+                    color: ColorMode::Auto
+                },
                 pretty: false,
                 policy: QueryPolicy::Combined,
                 preserve_anchors: false,
@@ -1694,7 +1727,10 @@ mod tests {
                         detail: OutlineDetail::Entries,
                     },
                 }),
-                presentation: QueryPresentation::Output(QueryFormat::Text),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Text,
+                    color: ColorMode::Auto
+                },
                 pretty: true,
                 policy: QueryPolicy::Combined,
                 preserve_anchors: false,
@@ -1715,7 +1751,10 @@ mod tests {
                         detail: OutlineDetail::Entries,
                     },
                 }),
-                presentation: QueryPresentation::Output(QueryFormat::Json),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Json,
+                    color: ColorMode::Auto
+                },
                 pretty: true,
                 policy: QueryPolicy::Combined,
                 preserve_anchors: false,
@@ -1738,7 +1777,10 @@ mod tests {
                         selectors: vec!["4.2".into(), "files-8".into()],
                     },
                 }),
-                presentation: QueryPresentation::Output(QueryFormat::Text),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Text,
+                    color: ColorMode::Auto
+                },
                 pretty: true,
                 policy: QueryPolicy::Combined,
                 preserve_anchors: false,
@@ -1767,7 +1809,10 @@ mod tests {
                             entry: selector.to_owned(),
                         },
                     }),
-                    presentation: QueryPresentation::Output(QueryFormat::Text),
+                    presentation: QueryPresentation::Output {
+                        format: QueryFormat::Text,
+                        color: ColorMode::Auto
+                    },
                     pretty: true,
                     policy: QueryPolicy::Combined,
                     preserve_anchors: false,
@@ -1786,7 +1831,10 @@ mod tests {
             assert!(matches!(
                 parse(&args(&values)).expect("partial document query"),
                 Command::Query {
-                    presentation: QueryPresentation::Output(QueryFormat::Text),
+                    presentation: QueryPresentation::Output {
+                        format: QueryFormat::Text,
+                        color: ColorMode::Auto
+                    },
                     ..
                 }
             ));
@@ -1816,7 +1864,10 @@ mod tests {
                         offset: 0,
                     },
                 }),
-                presentation: QueryPresentation::Output(QueryFormat::Text),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Text,
+                    color: ColorMode::Auto
+                },
                 pretty: true,
                 policy: QueryPolicy::Combined,
                 preserve_anchors: false,
@@ -1862,7 +1913,10 @@ mod tests {
                         offset: 5,
                     },
                 }),
-                presentation: QueryPresentation::Output(QueryFormat::Json),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Json,
+                    color: ColorMode::Auto
+                },
                 pretty: true,
                 policy: QueryPolicy::Combined,
                 preserve_anchors: false,

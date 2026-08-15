@@ -148,6 +148,54 @@ fn clap_color_is_terminal_aware_and_explicitly_controllable() {
 }
 
 #[test]
+fn partial_query_text_is_colored_only_when_the_stream_policy_allows_it() {
+    let path = std::env::temp_dir().join(format!(
+        "mant-colored-query-process-{}.md",
+        std::process::id()
+    ));
+    fs::write(
+        &path,
+        "# demo\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--color WHEN`: Select terminal color.\n",
+    )
+    .expect("write colored query fixture");
+    let run = |arguments: &[&str]| {
+        Command::new(executable())
+            .arg("--input")
+            .arg(&path)
+            .args(arguments)
+            .output()
+            .expect("run colored query fixture")
+    };
+
+    let automatic = run(&["--explain=--color"]);
+    assert!(automatic.status.success(), "{automatic:?}");
+    assert!(!automatic.stdout.contains(&0x1b));
+
+    let colored = run(&["--explain=--color", "--color", "always"]);
+    assert!(colored.status.success(), "{colored:?}");
+    assert!(colored.stdout.contains(&0x1b));
+
+    let plain = run(&["--search", "color", "--color", "never"]);
+    assert!(plain.status.success(), "{plain:?}");
+    assert!(!plain.stdout.contains(&0x1b));
+
+    let json = run(&[
+        "--search",
+        "color",
+        "--format",
+        "json",
+        "--compact",
+        "--color",
+        "always",
+    ]);
+    assert!(json.status.success(), "{json:?}");
+    assert!(!json.stdout.contains(&0x1b));
+    serde_json::from_slice::<serde_json::Value>(&json.stdout).expect("plain search JSON");
+
+    fs::remove_file(path).expect("remove colored query fixture");
+}
+
+#[test]
 fn version_uses_the_standard_successful_clap_boundary() {
     let output = Command::new(executable())
         .arg("--version")

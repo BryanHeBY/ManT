@@ -151,8 +151,8 @@ mant tar --explain=--exclude
 Heading paths are one-based. Path `0` and selector `tldr` are reserved for an
 available quick reference. `--tldr` selects that node across embedded Markdown
 and cached tldr candidates, and permits a quick reference even when no full
-document exists. On a color terminal
-its default output uses the same semantic styles as the TUI; pipes, `NO_COLOR`,
+document exists. On a color terminal, tldr and text projections such as
+outline, node, explanation, and search use semantic styles; pipes, `NO_COLOR`,
 and `TERM=dumb` receive plain text.
 `--color always|never` overrides detection, while an explicit `--format`
 continues to select Markdown, text, or JSON.

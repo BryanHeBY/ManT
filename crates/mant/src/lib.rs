@@ -282,7 +282,10 @@ fn resolve_process_presentation(
             *presentation = QueryPresentation::Interactive;
         }
         QueryPresentation::Auto => {
-            *presentation = QueryPresentation::Output(QueryFormat::Markdown);
+            *presentation = QueryPresentation::Output {
+                format: QueryFormat::Markdown,
+                color: ColorMode::Never,
+            };
         }
         QueryPresentation::Interactive if !terminal.input || !terminal.output => {
             return Err(Failure::usage(
@@ -296,8 +299,24 @@ fn resolve_process_presentation(
                 ColorMode::Never
             });
         }
+        QueryPresentation::Output {
+            format,
+            color: ColorMode::Auto,
+        } => {
+            *presentation = QueryPresentation::Output {
+                format,
+                color: if terminal.output && terminal.color {
+                    ColorMode::Always
+                } else {
+                    ColorMode::Never
+                },
+            };
+        }
         QueryPresentation::Interactive
-        | QueryPresentation::Output(_)
+        | QueryPresentation::Output {
+            color: ColorMode::Always | ColorMode::Never,
+            ..
+        }
         | QueryPresentation::Tldr(ColorMode::Always | ColorMode::Never) => {}
     }
     Ok(())
@@ -611,9 +630,9 @@ fn execute_query(
             },
         );
     }
-    let format = match command.presentation {
-        QueryPresentation::Auto => QueryFormat::Markdown,
-        QueryPresentation::Output(format) => format,
+    let (format, color) = match command.presentation {
+        QueryPresentation::Auto => (QueryFormat::Markdown, ColorMode::Never),
+        QueryPresentation::Output { format, color } => (format, color),
         QueryPresentation::Interactive => {
             return Err(Failure::usage(
                 "interactive mode requires the native terminal process boundary",
@@ -621,7 +640,13 @@ fn execute_query(
         }
         QueryPresentation::Tldr(_) => unreachable!("tldr presentation returned above"),
     };
-    render_query_result(&result, format, command.pretty, command.preserve_anchors)
+    render_query_result(
+        &result,
+        format,
+        command.pretty,
+        command.preserve_anchors,
+        color == ColorMode::Always,
+    )
 }
 
 /// Load one full query and hand the normalized document directly to Ratatui.
@@ -867,7 +892,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_capabilities_resolve_only_automatic_full_queries() {
+    fn terminal_capabilities_resolve_interactivity_and_text_colour() {
         let mut terminal_query = arguments::parse(&["git".to_owned()]).expect("automatic query");
         resolve_process_presentation(
             &mut terminal_query,
@@ -901,7 +926,10 @@ mod tests {
         assert!(matches!(
             redirected_query,
             Command::Query {
-                presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Markdown,
+                    color: ColorMode::Never
+                },
                 ..
             }
         ));
@@ -921,7 +949,10 @@ mod tests {
         assert!(matches!(
             outline,
             Command::Query {
-                presentation: QueryPresentation::Output(QueryFormat::Text),
+                presentation: QueryPresentation::Output {
+                    format: QueryFormat::Text,
+                    color: ColorMode::Always
+                },
                 ..
             }
         ));
@@ -1452,7 +1483,7 @@ mod tests {
         let (status, output, diagnostics) = invoke(&["demo", "--explain", "--exclude"], b"", &host);
 
         assert_eq!(status, 0);
-        assert!(output.contains("Outline `2/e1`: OPTIONS → --exclude"));
+        assert!(output.contains("Outline 2/e1: OPTIONS > --exclude"));
         assert!(output.contains("--exclude=PATTERN"));
         assert!(output.contains("Exclude matching files from the archive."));
         assert!(diagnostics.is_empty());
