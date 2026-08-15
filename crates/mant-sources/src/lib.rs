@@ -7,6 +7,8 @@ mod bounded;
 mod config;
 #[cfg(feature = "update")]
 mod download;
+mod inspection;
+mod metadata;
 mod registry;
 #[cfg(feature = "update")]
 mod update;
@@ -14,6 +16,10 @@ mod update;
 pub use config::{
     ConfiguredSource, DocumentPaths, SourceConfig, SourceConfigError, SourceLocation,
     document_paths, load_source_config,
+};
+pub use inspection::{
+    ConfiguredSourceInspection, DocumentSourcesInspection, OrphanedSourceInspection,
+    SourceInstallationStatus, SourceTransport, inspect_document_sources,
 };
 pub use registry::{
     BUILTIN_CONTENT_PRIORITY, RegisteredDocument, RegisteredDocumentIndex, RegisteredDocumentMatch,

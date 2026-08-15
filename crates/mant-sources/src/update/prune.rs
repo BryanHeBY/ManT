@@ -2,12 +2,16 @@
 
 use std::{fs, path::Path};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use super::{MAX_METADATA_BYTES, UpdateLock, sync_parent_directory};
+use super::{UpdateLock, sync_parent_directory};
 use crate::config::DocumentPaths;
 use crate::{
-    SOURCE_METADATA_FILE, SourceConfig, SourceConfigError, is_source_name, load_source_config,
+    SourceConfig, SourceConfigError,
+    inspection::{
+        OrphanedSourceInspection, inspect_installed_identity, inspect_unconfigured_sources,
+    },
+    load_source_config,
 };
 
 /// One updater-owned source directory absent from the active configuration.
@@ -140,102 +144,33 @@ pub(super) fn prune_document_sources_from(
     })
 }
 
-#[derive(Deserialize)]
-struct InstalledSourceIdentity {
-    source: String,
-    revision: String,
-    documents: u32,
-}
-
 pub(super) fn discover_orphaned_sources(
     paths: &DocumentPaths,
     config: &SourceConfig,
 ) -> Result<Vec<OrphanedSource>, SourceConfigError> {
-    let mut entries = fs::read_dir(&paths.sources)
-        .map_err(|error| {
-            SourceConfigError::new(format!(
-                "could not read document source directory '{}': {error}",
-                paths.sources.display()
-            ))
-        })?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| SourceConfigError::new(format!("could not read source entry: {error}")))?;
-    entries.sort_unstable_by_key(fs::DirEntry::file_name);
-
-    let mut orphaned = Vec::new();
-    for entry in entries {
-        let name_os = entry.file_name();
-        let name = name_os.to_string_lossy().into_owned();
-        if name == ".update.lock" {
-            continue;
-        }
-        if name_os
-            .to_str()
-            .is_some_and(|name| config.get(name).is_some())
-        {
-            continue;
-        }
-        let path = entry.path();
-        let inspected = name_os
-            .to_str()
-            .ok_or_else(|| "source directory name is not UTF-8".to_owned())
-            .and_then(|name| inspect_orphan(&path, name));
-        match inspected {
-            Ok(identity) => orphaned.push(OrphanedSource {
-                source: name,
-                path: path.to_string_lossy().into_owned(),
-                removable: true,
-                revision: Some(identity.revision),
-                documents: Some(identity.documents),
-                error: None,
-            }),
-            Err(error) => orphaned.push(OrphanedSource {
-                source: name,
-                path: path.to_string_lossy().into_owned(),
-                removable: false,
-                revision: None,
-                documents: None,
-                error: Some(error),
-            }),
-        }
-    }
-    Ok(orphaned)
-}
-
-fn inspect_orphan(path: &Path, name: &str) -> Result<InstalledSourceIdentity, String> {
-    if name.starts_with(".prune-") {
-        return Err(
-            "incomplete prune transaction; inspect and remove it manually after verifying its contents"
-                .to_owned(),
-        );
-    }
-    if !is_source_name(name) {
-        return Err("source directory name is invalid".to_owned());
-    }
-    let directory = fs::symlink_metadata(path)
-        .map_err(|error| format!("could not inspect source directory: {error}"))?;
-    if directory.file_type().is_symlink() || !directory.file_type().is_dir() {
-        return Err("source entry is not a regular directory".to_owned());
-    }
-    let metadata_path = path.join(SOURCE_METADATA_FILE);
-    let metadata = fs::symlink_metadata(&metadata_path)
-        .map_err(|error| format!("could not inspect source metadata: {error}"))?;
-    if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
-        return Err("source metadata is not a regular file".to_owned());
-    }
-    let file = fs::File::open(&metadata_path)
-        .map_err(|error| format!("could not open source metadata: {error}"))?;
-    let text = crate::bounded::read_utf8(file, MAX_METADATA_BYTES, "source metadata")
-        .map_err(|error| error.to_string())?;
-    let identity = toml::from_str::<InstalledSourceIdentity>(&text)
-        .map_err(|error| format!("source metadata identity is invalid: {error}"))?;
-    if identity.source != name {
-        return Err(format!(
-            "source metadata names '{}' instead of '{name}'",
-            identity.source
-        ));
-    }
-    Ok(identity)
+    inspect_unconfigured_sources(paths, config).map(|sources| {
+        sources
+            .into_iter()
+            .map(|source| {
+                let OrphanedSourceInspection {
+                    source,
+                    path,
+                    removable,
+                    revision,
+                    documents,
+                    error,
+                } = source;
+                OrphanedSource {
+                    source,
+                    path,
+                    removable,
+                    revision,
+                    documents,
+                    error,
+                }
+            })
+            .collect()
+    })
 }
 
 fn prune_orphan(paths: &DocumentPaths, orphan: OrphanedSource, dry_run: bool) -> SourcePruneResult {
@@ -256,7 +191,7 @@ fn prune_orphan(paths: &DocumentPaths, orphan: OrphanedSource, dry_run: bool) ->
     }
 
     let target = paths.sources.join(&orphan.source);
-    if let Err(error) = inspect_orphan(&target, &orphan.source) {
+    if let Err(error) = inspect_installed_identity(&target, &orphan.source) {
         result.action = SourcePruneAction::Failed;
         result.error = Some(format!("source changed before removal: {error}"));
         return result;
@@ -287,7 +222,7 @@ fn prune_orphan(paths: &DocumentPaths, orphan: OrphanedSource, dry_run: bool) ->
         ));
         return result;
     }
-    if let Err(error) = inspect_orphan(&tombstone, &orphan.source) {
+    if let Err(error) = inspect_installed_identity(&tombstone, &orphan.source) {
         result.action = SourcePruneAction::Failed;
         result.error = Some(failed_prune_with_recovery(
             "source changed while being isolated",

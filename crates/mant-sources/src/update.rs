@@ -11,11 +11,10 @@ use serde::Serialize;
 
 mod archive;
 mod git;
-mod metadata;
 mod prune;
 mod workspace;
 
-use metadata::SourceMetadata;
+use crate::metadata::{SourceMetadata, read_source_metadata, source_fingerprint};
 use prune::discover_orphaned_sources;
 #[cfg(test)]
 use prune::prune_document_sources_from;
@@ -30,7 +29,6 @@ use super::config::{
     load_source_config,
 };
 
-const MAX_METADATA_BYTES: u64 = 64 * 1024;
 const MAX_SOURCE_DOCUMENTS: usize = 10_000;
 const MAX_SOURCE_DEPTH: usize = 32;
 
@@ -128,49 +126,6 @@ pub fn update_document_sources() -> Result<DocumentSourcesUpdate, SourceConfigEr
     })
 }
 
-fn source_fingerprint(source: &ConfiguredSource) -> String {
-    let mut include = source
-        .include
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let mut exclude = source
-        .exclude
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    include.sort_unstable();
-    exclude.sort_unstable();
-    include.dedup();
-    exclude.dedup();
-    let mut state = 0xcbf2_9ce4_8422_2325_u64;
-    let location = match &source.location {
-        SourceLocation::Git { repo, branch } => format!("git\0{repo}\0{branch}"),
-        SourceLocation::Archive { url } => format!("archive\0{url}"),
-    };
-    for byte in location
-        .bytes()
-        .chain([0])
-        .chain(source.path.bytes())
-        .chain([0])
-        .chain(
-            include
-                .into_iter()
-                .flat_map(|value| value.bytes().chain([0])),
-        )
-        .chain([0xff])
-        .chain(
-            exclude
-                .into_iter()
-                .flat_map(|value| value.bytes().chain([0])),
-        )
-    {
-        state ^= u64::from(byte);
-        state = state.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("{state:016x}")
-}
-
 fn update_one_source(
     paths: &DocumentPaths,
     name: &str,
@@ -206,7 +161,8 @@ impl<'a> SourceUpdateContext<'a> {
         let target = paths.sources.join(name);
         recover_directory(&target)?;
         let fingerprint = source_fingerprint(configured);
-        let metadata = read_metadata(&target)
+        let metadata = read_source_metadata(&target)
+            .ok()
             .filter(|metadata| metadata.matches(name, configured, &fingerprint));
         Ok(Self {
             paths,
@@ -446,13 +402,6 @@ fn markdown_extension_priority(path: &Path) -> Option<u8> {
 fn selector_matches(relative: &Path, selector: &str) -> bool {
     let selector = Path::new(selector);
     relative == selector || relative.starts_with(selector)
-}
-
-fn read_metadata(directory: &Path) -> Option<SourceMetadata> {
-    let path = directory.join(SOURCE_METADATA_FILE);
-    let file = fs::File::open(path).ok()?;
-    let text = crate::bounded::read_utf8(file, MAX_METADATA_BYTES, "source metadata").ok()?;
-    toml::from_str(&text).ok()
 }
 
 fn replace_directory(staging: &Path, target: &Path) -> Result<(), String> {
