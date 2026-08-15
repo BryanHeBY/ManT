@@ -165,8 +165,10 @@ mant tar --search=--acls --context 1
 mant gcc --search 'worktree|branch' --regex --case smart
 ```
 
-Full output supports Markdown, text, and JSON. Native roff manuals additionally
-support `--format man`, which emits manual-only plain text without tldr content:
+Partial document queries default to text; Markdown and JSON remain explicit
+alternatives. Full output supports Markdown, text, and JSON. Native roff manuals
+additionally support `--format man`, which emits manual-only plain text without
+tldr content:
 
 ```sh
 mant git --format markdown

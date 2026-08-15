@@ -598,10 +598,10 @@ mant tar --explain=--exclude
 - `--preserve-anchors`: Retain addressable HTML anchors in full-document or excerpt Markdown output.
 
 Clean Markdown output omits internal HTML anchors by default. The `man` format
-applies to a complete native roff manual and emits plain manual content without
-an external tldr preface; it rejects a complete Markdown document. Use `text`
-for plain projections. Explicit output for full documents and excerpts defaults
-to Markdown; outlines and command-line search default to text. JSON must be
+applies only to a complete native roff manual and emits plain manual content
+without an external tldr preface; it rejects Markdown documents and partial
+document views. Outline, node, explanation, and search projections default to
+text; request Markdown explicitly when its structure is useful. JSON must be
 selected explicitly for document queries. `--compact` removes indentation from
 JSON queries, schemas, protocol descriptions, doctor reports, and update reports.
 

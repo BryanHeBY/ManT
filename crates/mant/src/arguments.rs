@@ -996,6 +996,13 @@ fn validate_output_options(
             color,
         ));
     }
+    if format == Some(QueryFormat::Man) && !matches!(view, QueryView::Full {}) {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--format man applies only to full documents",
+            color,
+        ));
+    }
     Ok(())
 }
 
@@ -1035,13 +1042,13 @@ fn normalize_presentation(
         QuerySource::InputStdin { view, .. } => Some(view),
         QuerySource::StdinJson => None,
     };
-    let default_format = if view
-        .is_some_and(|view| matches!(view, QueryView::Outline { .. } | QueryView::Search { .. }))
-    {
-        QueryFormat::Text
-    } else {
-        QueryFormat::Markdown
-    };
+    let default_format = view.map_or(QueryFormat::Markdown, |view| {
+        if matches!(view, QueryView::Full {}) {
+            QueryFormat::Markdown
+        } else {
+            QueryFormat::Text
+        }
+    });
     if ui {
         QueryPresentation::Interactive
     } else if let Some(format) = format {
@@ -1321,6 +1328,10 @@ mod tests {
             vec!["git", "--limit", "2"],
             vec!["git", "--kind", "manual"],
             vec!["git", "--no-pager"],
+            vec!["git", "--outline", "--format", "man"],
+            vec!["git", "--node", "1", "--format", "man"],
+            vec!["git", "--explain", "branch", "--format", "man"],
+            vec!["git", "--search", "branch", "--format", "man"],
         ] {
             assert!(parse(&args(&invalid)).is_err(), "accepted {invalid:?}");
         }
@@ -1756,12 +1767,29 @@ mod tests {
                             entry: selector.to_owned(),
                         },
                     }),
-                    presentation: QueryPresentation::Output(QueryFormat::Markdown),
+                    presentation: QueryPresentation::Output(QueryFormat::Text),
                     pretty: true,
                     policy: QueryPolicy::Combined,
                     preserve_anchors: false,
                 }
             );
+        }
+    }
+
+    #[test]
+    fn defaults_all_partial_document_views_to_text() {
+        for values in [
+            vec!["gcc", "--node", "4.2"],
+            vec!["gcc", "--outline"],
+            vec!["gcc", "--search", "link"],
+        ] {
+            assert!(matches!(
+                parse(&args(&values)).expect("partial document query"),
+                Command::Query {
+                    presentation: QueryPresentation::Output(QueryFormat::Text),
+                    ..
+                }
+            ));
         }
     }
 
