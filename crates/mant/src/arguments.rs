@@ -100,6 +100,7 @@ impl From<ColorMode> for anstream::ColorChoice {
 /// A discoverable JSON Schema exposed by the native process boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum SchemaContract {
+    Doctor,
     Request,
     Query,
     Outline,
@@ -206,6 +207,11 @@ pub(crate) enum Command {
         pretty: bool,
         paging: CatalogPaging,
     },
+    Doctor {
+        format: QueryFormat,
+        pretty: bool,
+        color: ColorMode,
+    },
     UpdateTldr {
         pretty: bool,
     },
@@ -248,10 +254,10 @@ const CLI_STYLES: Styles = Styles::styled()
     styles = CLI_STYLES,
     disable_help_flag = true,
     version,
-    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant 1 tar --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --update-docs\n  mant --mcp",
+    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --doctor [--format <text|json>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant 1 tar --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --doctor\n  mant --update-docs\n  mant --mcp",
     group = ArgGroup::new("action")
-        .args(["selector", "input", "list", "find", "request_json", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
+        .args(["selector", "input", "list", "find", "request_json", "doctor", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
@@ -456,6 +462,41 @@ struct Cli {
     )]
     ui: bool,
 
+    /// Diagnose local paths, sources, manuals, and tldr caches without changing them.
+    #[arg(
+        long,
+        conflicts_with_all = [
+            "selector",
+            "input",
+            "input_format",
+            "list",
+            "find",
+            "kind",
+            "man_section",
+            "source",
+            "manual",
+            "tldr",
+            "outline",
+            "node",
+            "explain",
+            "search",
+            "regex",
+            "search_case",
+            "word",
+            "search_scope",
+            "context",
+            "limit",
+            "offset",
+            "request_json",
+            "ui",
+            "dry_run",
+            "preserve_anchors",
+            "no_pager"
+        ],
+        help_heading = "Diagnostics"
+    )]
+    doctor: bool,
+
     /// Update tldr data through the installed client or `ManT` cache.
     #[arg(
         long,
@@ -492,7 +533,7 @@ struct Cli {
     )]
     protocol_version: bool,
 
-    /// Print a generated JSON Schema contract (`request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`).
+    /// Print a generated JSON Schema contract (`doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`).
     #[arg(
         long,
         value_name = "CONTRACT",
@@ -528,6 +569,7 @@ struct Cli {
             "update_tldr",
             "update_docs",
             "prune_docs",
+            "doctor",
             "dry_run",
             "protocol_version",
             "schema",
@@ -681,6 +723,9 @@ fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> 
     if parsed.mcp {
         return Ok(Command::Mcp);
     }
+    if parsed.doctor {
+        return normalize_doctor(&parsed, color);
+    }
     if parsed.update_docs {
         return Ok(Command::UpdateDocs {
             pretty: !parsed.compact,
@@ -756,6 +801,29 @@ fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> 
             QueryPolicy::Combined
         },
         preserve_anchors: parsed.preserve_anchors,
+    })
+}
+
+fn normalize_doctor(parsed: &Cli, color: ColorMode) -> Result<Command, clap::Error> {
+    let format = parsed.format.unwrap_or(QueryFormat::Text);
+    if !matches!(format, QueryFormat::Text | QueryFormat::Json) {
+        return Err(command_error(
+            ErrorKind::InvalidValue,
+            "doctor supports only text and json formats",
+            color,
+        ));
+    }
+    if parsed.compact && format != QueryFormat::Json {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--compact requires --format json",
+            color,
+        ));
+    }
+    Ok(Command::Doctor {
+        format,
+        pretty: !parsed.compact,
+        color: parsed.color.unwrap_or_default(),
     })
 }
 
@@ -1777,6 +1845,30 @@ mod tests {
     #[test]
     fn parses_long_option_actions_without_ad_hoc_subcommands() {
         assert_eq!(
+            parse(&args(&["--doctor"])).expect("doctor"),
+            Command::Doctor {
+                format: QueryFormat::Text,
+                pretty: true,
+                color: ColorMode::Auto,
+            }
+        );
+        assert_eq!(
+            parse(&args(&[
+                "--doctor",
+                "--format",
+                "json",
+                "--compact",
+                "--color",
+                "always",
+            ]))
+            .expect("compact doctor JSON"),
+            Command::Doctor {
+                format: QueryFormat::Json,
+                pretty: false,
+                color: ColorMode::Always,
+            }
+        );
+        assert_eq!(
             parse(&args(&["--update-docs", "--compact"])).expect("document update"),
             Command::UpdateDocs { pretty: false }
         );
@@ -1801,6 +1893,13 @@ mod tests {
             Command::Schema {
                 contract: SchemaContract::Request,
                 pretty: false,
+            }
+        );
+        assert_eq!(
+            parse(&args(&["--schema", "doctor"])).expect("doctor schema"),
+            Command::Schema {
+                contract: SchemaContract::Doctor,
+                pretty: true,
             }
         );
         assert_eq!(parse(&args(&["--mcp"])).expect("MCP"), Command::Mcp);
@@ -1830,6 +1929,9 @@ mod tests {
             vec!["--update-tldr", "--format", "json"],
             vec!["--update-docs", "--format", "json"],
             vec!["--prune-docs", "--format", "json"],
+            vec!["--doctor", "--format", "markdown"],
+            vec!["--doctor", "--compact"],
+            vec!["--doctor", "--source", "team"],
             vec!["--dry-run"],
             vec!["git", "--source", "team", "--man-section", "1"],
             vec!["git", "--source", "team", "--manual"],

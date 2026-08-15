@@ -40,6 +40,14 @@ pub(crate) fn find_executable(
         .find(|candidate| is_executable(candidate))
 }
 
+/// Locate one directly runnable program using the current host's `PATH` and
+/// native executable-suffix rules without spawning it.
+#[must_use]
+pub fn find_host_executable(name: &str) -> Option<PathBuf> {
+    let environment = env::vars().collect::<BTreeMap<_, _>>();
+    find_executable(name, &environment)
+}
+
 #[cfg(unix)]
 fn executable_names(name: &str, _environment: &BTreeMap<String, String>) -> Vec<String> {
     vec![name.to_owned()]

@@ -56,6 +56,7 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("Document selection:"));
     assert!(help.contains("Search:"));
     assert!(help.contains("Integration:"));
+    assert!(help.contains("Diagnostics:"));
     assert!(help.contains("Reading:"));
     assert!(help.contains("-h, --help"));
     assert!(help.contains("--ui"));
@@ -66,6 +67,7 @@ fn help_groups_the_public_query_surface() {
     assert!(help.contains("--update-tldr"));
     assert!(help.contains("--update-docs"));
     assert!(help.contains("--prune-docs"));
+    assert!(help.contains("--doctor"));
     assert!(help.contains("--dry-run"));
     assert!(help.contains("--source <SOURCE>"));
     assert!(help.contains("--protocol-version"));
@@ -151,6 +153,71 @@ fn version_uses_the_standard_successful_clap_boundary() {
         String::from_utf8(output.stdout).expect("UTF-8 version"),
         format!("mant {}\n", env!("CARGO_PKG_VERSION"))
     );
+}
+
+#[test]
+fn doctor_is_offline_read_only_and_supports_stable_json() {
+    let home = std::env::temp_dir().join(format!("mant-doctor-process-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&home);
+    fs::create_dir_all(&home).expect("doctor home");
+    let manual_root = home.join("manuals");
+    let tldr_root = home.join("tldr");
+
+    let run = |arguments: &[&str]| {
+        let mut command = Command::new(executable());
+        configure_registered_documents(&mut command, &home);
+        command
+            .env("MANT_MANPATH", &manual_root)
+            .env("MANT_TLDR_DIR", &tldr_root)
+            .args(arguments)
+            .output()
+            .expect("run isolated doctor")
+    };
+
+    let text = run(&["--doctor", "--color", "never"]);
+    assert!(text.status.success());
+    assert!(text.stderr.is_empty());
+    assert!(!text.stdout.contains(&0x1b));
+    let text = String::from_utf8(text.stdout).expect("doctor text");
+    assert!(text.starts_with("ManT doctor\n\n"));
+    assert!(text.contains("runtime.libmandoc"));
+    assert!(text.contains("sources.configuration"));
+    assert!(text.contains("manuals.index"));
+    assert!(text.contains("tldr.cache"));
+
+    let json = run(&[
+        "--doctor",
+        "--format",
+        "json",
+        "--compact",
+        "--color",
+        "always",
+    ]);
+    assert!(json.status.success());
+    assert!(json.stderr.is_empty());
+    assert!(!json.stdout.contains(&0x1b));
+    let report: serde_json::Value = serde_json::from_slice(&json.stdout).expect("doctor JSON");
+    assert_eq!(report["schema"], "mant.doctor/v1");
+    assert_eq!(
+        report["environment"]["dataRoot"],
+        home.join("data/mant").to_string_lossy().as_ref()
+    );
+    assert!(
+        report["checks"]
+            .as_array()
+            .is_some_and(|checks| !checks.is_empty())
+    );
+    assert!(
+        !home.join("data/mant").exists(),
+        "doctor must not create the data root"
+    );
+
+    let schema = run(&["--schema", "doctor", "--compact"]);
+    assert!(schema.status.success());
+    let schema: serde_json::Value = serde_json::from_slice(&schema.stdout).expect("doctor schema");
+    assert_eq!(schema["$id"], "urn:mant:doctor:v1");
+
+    fs::remove_dir_all(home).expect("doctor cleanup");
 }
 
 #[test]

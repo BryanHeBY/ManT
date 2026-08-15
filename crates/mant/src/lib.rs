@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 mod arguments;
+mod doctor;
 mod error;
 mod mcp;
 mod presentation;
@@ -23,8 +24,8 @@ use error::{
 use mant_engine::QueryPolicy;
 use mant_ir::ResolvedContent;
 use mant_protocol::{
-    CatalogQuery, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin, QueryInput,
-    QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
+    CatalogQuery, DoctorReport, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin,
+    QueryInput, QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
@@ -81,6 +82,7 @@ enum TerminalKind {
 // ── Host boundary ─────────────────────────────────────────────────────────
 
 trait CliHost {
+    fn doctor(&self) -> Result<DoctorReport, Failure>;
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
     fn query(
         &self,
@@ -106,6 +108,10 @@ impl Default for SystemHost {
 }
 
 impl CliHost for SystemHost {
+    fn doctor(&self) -> Result<DoctorReport, Failure> {
+        Ok(doctor::inspect_system())
+    }
+
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
         self.resolver.discover(query).map_err(Failure::operational)
     }
@@ -258,6 +264,16 @@ fn resolve_process_presentation(
     command: &mut Command,
     terminal: TerminalCapabilities,
 ) -> Result<(), Failure> {
+    if let Command::Doctor { color, .. } = command {
+        if *color == ColorMode::Auto {
+            *color = if terminal.output && terminal.color {
+                ColorMode::Always
+            } else {
+                ColorMode::Never
+            };
+        }
+        return Ok(());
+    }
     let Command::Query { presentation, .. } = command else {
         return Ok(());
     };
@@ -357,6 +373,30 @@ fn run_command(
             };
             (rendered, status)
         }
+        Command::Doctor {
+            format,
+            pretty,
+            color,
+        } => {
+            let report = match host.doctor() {
+                Ok(report) => report,
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
+            };
+            let status = u8::from(report.has_errors());
+            let rendered = match format {
+                QueryFormat::Text => doctor::render_text(&report, color == ColorMode::Always),
+                QueryFormat::Json => match render_json(&report, pretty) {
+                    Ok(rendered) => rendered,
+                    Err(error) => {
+                        return report_failure(&error, diagnostics, diagnostics_color);
+                    }
+                },
+                QueryFormat::Markdown | QueryFormat::Man => {
+                    unreachable!("argument validation limits doctor formats")
+                }
+            };
+            (rendered, status)
+        }
         command => match execute(command, input, host) {
             Ok(rendered) => (rendered, 0),
             Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
@@ -388,6 +428,9 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             pretty,
         ),
         Command::Schema { contract, pretty } => match contract {
+            SchemaContract::Doctor => {
+                render_json(&mant_protocol::doctor_report_json_schema(), pretty)
+            }
             SchemaContract::Request => {
                 render_json(&mant_protocol::query_request_json_schema(), pretty)
             }
@@ -425,6 +468,9 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             }
         }
         Command::Mcp => unreachable!("MCP mode is dispatched before normal CLI execution"),
+        Command::Doctor { .. } => {
+            unreachable!("doctor is dispatched before normal execution")
+        }
         Command::UpdateDocs { .. } => {
             unreachable!("document updates are dispatched before normal execution")
         }
@@ -767,7 +813,8 @@ mod tests {
         TldrOrigin,
     };
     use mant_protocol::{
-        CatalogSchema, DocumentSummary, QueryInput, QueryRequest, TldrCacheAction, TldrCacheUpdate,
+        CatalogSchema, DoctorCheck, DoctorCheckStatus, DoctorEnvironment, DoctorReport,
+        DocumentSummary, Producer, QueryInput, QueryRequest, TldrCacheAction, TldrCacheUpdate,
     };
 
     use super::{
@@ -783,6 +830,7 @@ mod tests {
         last_policy: Cell<QueryPolicy>,
         document: Option<Document>,
         tldr: Option<TldrDocument>,
+        doctor_error: bool,
     }
 
     #[test]
@@ -970,6 +1018,14 @@ mod tests {
                 last_policy: Cell::new(QueryPolicy::default()),
                 document: None,
                 tldr: None,
+                doctor_error: false,
+            }
+        }
+
+        fn with_doctor_error() -> Self {
+            Self {
+                doctor_error: true,
+                ..Self::new()
             }
         }
 
@@ -1011,6 +1067,38 @@ mod tests {
     }
 
     impl CliHost for FakeHost {
+        fn doctor(&self) -> Result<DoctorReport, Failure> {
+            Ok(DoctorReport::new(
+                Producer {
+                    name: "mant".to_owned(),
+                    version: "0.7.1".to_owned(),
+                    engine: None,
+                },
+                DoctorEnvironment {
+                    os: "linux".to_owned(),
+                    arch: "x86_64".to_owned(),
+                    data_root: Some("/data/mant".to_owned()),
+                    config_path: Some("/data/mant/sources.toml".to_owned()),
+                    documents_root: Some("/data/mant/documents".to_owned()),
+                    sources_root: Some("/data/mant/sources".to_owned()),
+                    manual_roots: Vec::new(),
+                    tldr_roots: Vec::new(),
+                },
+                vec![DoctorCheck {
+                    code: "runtime.fixture".to_owned(),
+                    subject: None,
+                    status: if self.doctor_error {
+                        DoctorCheckStatus::Error
+                    } else {
+                        DoctorCheckStatus::Ok
+                    },
+                    message: "fixture result".to_owned(),
+                    details: Vec::new(),
+                    remediation: None,
+                }],
+            ))
+        }
+
         fn discover(&self, _query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
             Ok(DocumentCatalog {
                 schema: CatalogSchema::V7,
@@ -1607,6 +1695,28 @@ mod tests {
         assert_eq!(value["excerptSchema"], "mant.excerpt/v7");
         assert_eq!(value["searchSchema"], "mant.search/v7");
         assert_eq!(value["catalogSchema"], "mant.catalog/v7");
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn doctor_supports_copy_friendly_text_and_stable_json_exit_statuses() {
+        let host = FakeHost::new();
+        let (status, output, diagnostics) = invoke(&["--doctor"], b"", &host);
+        assert_eq!(status, 0);
+        assert!(output.starts_with("ManT doctor\n\n[ok] runtime.fixture"));
+        assert!(output.ends_with("1 ok, 0 info, 0 warning(s), 0 error(s)\n"));
+        assert!(diagnostics.is_empty());
+
+        let (status, output, diagnostics) = invoke(
+            &["--doctor", "--format", "json", "--compact"],
+            b"",
+            &FakeHost::with_doctor_error(),
+        );
+        assert_eq!(status, 1);
+        let value: serde_json::Value = serde_json::from_str(&output).expect("doctor JSON");
+        assert_eq!(value["schema"], "mant.doctor/v1");
+        assert_eq!(value["outcome"], "error");
+        assert_eq!(value["summary"]["errors"], 1);
         assert!(diagnostics.is_empty());
     }
 

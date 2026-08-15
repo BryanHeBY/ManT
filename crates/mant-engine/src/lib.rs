@@ -21,6 +21,7 @@ pub use catalog::{
     AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, CatalogError,
     discover_documents, list_available_documents, query_available_documents,
 };
+pub use executable::find_host_executable;
 pub use mandoc::{
     MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_bytes,
     parse_manual_page, parse_manual_source,
