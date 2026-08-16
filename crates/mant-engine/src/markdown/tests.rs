@@ -5,8 +5,8 @@ use mant_ir::{
     TldrOrigin,
 };
 use mant_protocol::{
-    ExcerptSelection, OutlineDetail, OutlineNode, SearchCase, SearchNode, SearchQuery, SearchScope,
-    SearchSyntax,
+    ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference, SearchCase, SearchQuery,
+    SearchScope, SearchSyntax,
 };
 
 use crate::{
@@ -329,8 +329,8 @@ Gamma.
     .expect("search colliding section");
     assert_eq!(result.total, 1);
     assert!(matches!(
-        &result.matches[0].node,
-        SearchNode::DocumentSection { path, id, .. }
+        &result.matches[0].outline.node,
+        OutlineNodeReference::DocumentSection { path, id, .. }
             if path == "2" && id == "foo-2-2"
     ));
 }
@@ -486,12 +486,14 @@ Root body.
     let entry = select_excerpt(&query, &["1/e1".to_owned()]).expect("entry path");
     assert!(matches!(
         entry.selections.as_slice(),
-        [ExcerptSelection::DocumentEntry { title, .. }] if title.contains("--help")
+        [selection @ ExcerptSelection::DocumentEntry { .. }]
+            if selection.outline().title().contains("--help")
     ));
     let child = select_excerpt(&query, &["3.1".to_owned()]).expect("child path");
     assert!(matches!(
         child.selections.as_slice(),
-        [ExcerptSelection::DocumentSection { title, .. }] if title == "Child"
+        [selection @ ExcerptSelection::DocumentSection { .. }]
+            if selection.outline().title() == "Child"
     ));
 }
 

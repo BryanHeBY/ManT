@@ -1,6 +1,6 @@
 {
   "catalog": {
-    "$id": "urn:mant:catalog:v7",
+    "$id": "urn:mant:catalog:v0.8",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "DocumentCatalog",
     "description": "Deterministically ordered page of discoverable local documents.",
@@ -62,9 +62,9 @@
         "description": "Exact schema marker for a local document catalog.",
         "oneOf": [
           {
-            "description": "Version 7 of the document-catalog protocol.",
+            "description": "Version 0.8 of the pre-stable document-catalog protocol.",
             "type": "string",
-            "const": "mant.catalog/v7"
+            "const": "mant.catalog/v0.8"
           }
         ]
       },
@@ -176,7 +176,7 @@
     }
   },
   "excerpt": {
-    "$id": "urn:mant:excerpt:v7",
+    "$id": "urn:mant:excerpt:v0.8",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "QueryExcerpt",
     "description": "One or more independently selected nodes from a complete query.",
@@ -879,9 +879,9 @@
         "description": "Exact schema marker for selected query content.",
         "oneOf": [
           {
-            "description": "Version 7 of the excerpt protocol.",
+            "description": "Version 0.8 of the pre-stable excerpt protocol.",
             "type": "string",
-            "const": "mant.excerpt/v7"
+            "const": "mant.excerpt/v0.8"
           }
         ]
       },
@@ -896,28 +896,18 @@
                 "description": "Complete quick-reference content.",
                 "$ref": "#/$defs/TldrDocument"
               },
-              "id": {
-                "description": "Stable document-local identity.",
-                "$ref": "#/$defs/NodeId"
-              },
               "kind": {
                 "type": "string",
                 "const": "tldr"
               },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
-              },
-              "title": {
-                "description": "Display title.",
-                "type": "string"
+              "outline": {
+                "description": "Complete logical location in the document outline.",
+                "$ref": "#/$defs/OutlineTrail"
               }
             },
             "required": [
               "kind",
-              "path",
-              "id",
-              "title",
+              "outline",
               "document"
             ]
           },
@@ -932,28 +922,18 @@
                   "$ref": "#/$defs/Block"
                 }
               },
-              "id": {
-                "description": "Virtual document-root identity.",
-                "$ref": "#/$defs/NodeId"
-              },
               "kind": {
                 "type": "string",
                 "const": "document-root"
               },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
-              },
-              "title": {
-                "description": "Display title for the leading content.",
-                "type": "string"
+              "outline": {
+                "description": "Complete logical location in the document outline.",
+                "$ref": "#/$defs/OutlineTrail"
               }
             },
             "required": [
               "kind",
-              "path",
-              "id",
-              "title",
+              "outline",
               "blocks"
             ]
           },
@@ -961,39 +941,22 @@
             "description": "Complete selected document node, including all descendant sections.",
             "type": "object",
             "properties": {
-              "breadcrumbs": {
-                "description": "Ordered ancestors from the document root to the parent section.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/OutlineReference"
-                }
-              },
-              "id": {
-                "description": "Stable document-local section identity.",
-                "$ref": "#/$defs/NodeId"
-              },
               "kind": {
                 "type": "string",
                 "const": "document-section"
               },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
+              "outline": {
+                "description": "Complete logical location in the document outline.",
+                "$ref": "#/$defs/OutlineTrail"
               },
               "section": {
                 "description": "Complete selected section including descendants.",
                 "$ref": "#/$defs/Section"
-              },
-              "title": {
-                "description": "Section heading text.",
-                "type": "string"
               }
             },
             "required": [
               "kind",
-              "path",
-              "id",
-              "title",
+              "outline",
               "section"
             ]
           },
@@ -1001,39 +964,22 @@
             "description": "One addressable semantic definition and its complete description.",
             "type": "object",
             "properties": {
-              "breadcrumbs": {
-                "description": "Ordered containing sections from outermost to innermost.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/$defs/OutlineReference"
-                }
-              },
               "entry": {
                 "description": "Complete semantic definition.",
                 "$ref": "#/$defs/DefinitionItem"
-              },
-              "id": {
-                "description": "Stable document-local entry identity.",
-                "$ref": "#/$defs/NodeId"
               },
               "kind": {
                 "type": "string",
                 "const": "document-entry"
               },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
-              },
-              "title": {
-                "description": "Primary display term.",
-                "type": "string"
+              "outline": {
+                "description": "Complete logical location in the document outline.",
+                "$ref": "#/$defs/OutlineTrail"
               }
             },
             "required": [
               "kind",
-              "path",
-              "id",
-              "title",
+              "outline",
               "entry"
             ]
           }
@@ -1359,6 +1305,141 @@
         "description": "Canonical structural address emitted for a node in a projected outline.",
         "type": "string"
       },
+      "OutlineNodeReference": {
+        "description": "Compact typed identity for the terminal node in an [`OutlineTrail`].",
+        "oneOf": [
+          {
+            "description": "Optional quick-reference node.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "tldr"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "Addressable content before the first heading.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Virtual document-root identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-root"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "One semantic document section.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-section"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Section heading text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "One semantic command, option, or variable definition.",
+            "type": "object",
+            "properties": {
+              "case": {
+                "description": "Alias case-matching policy.",
+                "$ref": "#/$defs/DefinitionCase"
+              },
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-entry"
+              },
+              "names": {
+                "description": "Normalized selectable aliases.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "role": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/DefinitionRole"
+              },
+              "title": {
+                "description": "Primary display term.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "role",
+              "case",
+              "names"
+            ]
+          }
+        ]
+      },
       "OutlineReference": {
         "description": "Compact ancestor identity attached to an excerpt selection.",
         "type": "object",
@@ -1380,6 +1461,26 @@
           "path",
           "id",
           "title"
+        ]
+      },
+      "OutlineTrail": {
+        "description": "Complete logical location of one addressable document node.",
+        "type": "object",
+        "properties": {
+          "ancestors": {
+            "description": "Ordered ancestors from the document root to the direct parent.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/OutlineReference"
+            }
+          },
+          "node": {
+            "description": "Selected or matching node at the end of the trail.",
+            "$ref": "#/$defs/OutlineNodeReference"
+          }
+        },
+        "required": [
+          "node"
         ]
       },
       "Producer": {
@@ -1774,7 +1875,7 @@
     }
   },
   "outline": {
-    "$id": "urn:mant:outline:v7",
+    "$id": "urn:mant:outline:v0.8",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "QueryOutline",
     "description": "A block-free tree used to discover selectable query content.",
@@ -2193,9 +2294,9 @@
         "description": "Exact schema marker for a query outline response.",
         "oneOf": [
           {
-            "description": "Version 7 of the outline protocol.",
+            "description": "Version 0.8 of the pre-stable outline protocol.",
             "type": "string",
-            "const": "mant.outline/v7"
+            "const": "mant.outline/v0.8"
           }
         ]
       },
@@ -2297,7 +2398,7 @@
     }
   },
   "query": {
-    "$id": "urn:mant:query:v7",
+    "$id": "urn:mant:query:v0.8",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "QueryBundle",
     "description": "Versioned full-query result emitted at JSON and MCP boundaries.",
@@ -2995,7 +3096,7 @@
         }
       },
       "DocumentResponse": {
-        "description": "Serializable v7 envelope around `ManT`'s protocol-independent document IR.",
+        "description": "Serializable v0.8 envelope around `ManT`'s protocol-independent document IR.",
         "type": "object",
         "properties": {
           "blocks": {
@@ -3048,9 +3149,9 @@
         "description": "Exact schema marker for a normalized structured document response.",
         "oneOf": [
           {
-            "description": "Version 7 of the structured-document protocol.",
+            "description": "Version 0.8 of the pre-stable structured-document protocol.",
             "type": "string",
-            "const": "mant.document/v7"
+            "const": "mant.document/v0.8"
           }
         ]
       },
@@ -3477,9 +3578,9 @@
         "description": "Exact schema marker for a complete `ManT` query result.",
         "oneOf": [
           {
-            "description": "Query envelope built around `mant.document/v7`.",
+            "description": "Query envelope built around `mant.document/v0.8`.",
             "type": "string",
-            "const": "mant.query/v7"
+            "const": "mant.query/v0.8"
           }
         ]
       },
@@ -3846,7 +3947,7 @@
     }
   },
   "request": {
-    "$id": "urn:mant:request:v7",
+    "$id": "urn:mant:request:v0.8",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "QueryRequest",
     "description": "Native use-case input. The engine validates semantic constraints before I/O.",
@@ -4124,7 +4225,7 @@
           {
             "description": "Query and projection request accepted through `--request-json`.",
             "type": "string",
-            "const": "mant.request/v7"
+            "const": "mant.request/v0.8"
           }
         ]
       },
@@ -4181,7 +4282,7 @@
     }
   },
   "search": {
-    "$id": "urn:mant:search:v7",
+    "$id": "urn:mant:search:v0.8",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "QuerySearch",
     "description": "Complete, paginatable search result returned to agents and scripts.",
@@ -4416,6 +4517,184 @@
         "description": "Canonical structural address emitted for a node in a projected outline.",
         "type": "string"
       },
+      "OutlineNodeReference": {
+        "description": "Compact typed identity for the terminal node in an [`OutlineTrail`].",
+        "oneOf": [
+          {
+            "description": "Optional quick-reference node.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "tldr"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "Addressable content before the first heading.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Virtual document-root identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-root"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Display title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "One semantic document section.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-section"
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "title": {
+                "description": "Section heading text.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title"
+            ]
+          },
+          {
+            "description": "One semantic command, option, or variable definition.",
+            "type": "object",
+            "properties": {
+              "case": {
+                "description": "Alias case-matching policy.",
+                "$ref": "#/$defs/DefinitionCase"
+              },
+              "id": {
+                "description": "Stable document-local identity.",
+                "$ref": "#/$defs/NodeId"
+              },
+              "kind": {
+                "type": "string",
+                "const": "document-entry"
+              },
+              "names": {
+                "description": "Normalized selectable aliases.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "path": {
+                "description": "Canonical structural outline path.",
+                "$ref": "#/$defs/NodePath"
+              },
+              "role": {
+                "description": "Semantic category of the definition.",
+                "$ref": "#/$defs/DefinitionRole"
+              },
+              "title": {
+                "description": "Primary display term.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "id",
+              "title",
+              "role",
+              "case",
+              "names"
+            ]
+          }
+        ]
+      },
+      "OutlineReference": {
+        "description": "Compact ancestor identity attached to an excerpt selection.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Stable document-local identity.",
+            "$ref": "#/$defs/NodeId"
+          },
+          "path": {
+            "description": "Canonical structural outline path.",
+            "$ref": "#/$defs/NodePath"
+          },
+          "title": {
+            "description": "Display title.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "id",
+          "title"
+        ]
+      },
+      "OutlineTrail": {
+        "description": "Complete logical location of one addressable document node.",
+        "type": "object",
+        "properties": {
+          "ancestors": {
+            "description": "Ordered ancestors from the document root to the direct parent.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/OutlineReference"
+            }
+          },
+          "node": {
+            "description": "Selected or matching node at the end of the trail.",
+            "$ref": "#/$defs/OutlineNodeReference"
+          }
+        },
+        "required": [
+          "node"
+        ]
+      },
       "SearchCase": {
         "description": "Case-folding policy applied when compiling the matcher.",
         "oneOf": [
@@ -4530,30 +4809,19 @@
             "description": "Exact text consumed by the matcher.",
             "type": "string"
           },
-          "node": {
-            "description": "Nearest structurally addressable node.",
-            "$ref": "#/$defs/SearchNode"
-          },
           "ordinal": {
             "description": "One-based occurrence number in the unpaginated result set.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
           },
+          "outline": {
+            "description": "Complete logical location of the nearest addressable node.",
+            "$ref": "#/$defs/OutlineTrail"
+          },
           "preview": {
             "description": "Compact single-string presentation of the match.",
             "type": "string"
-          },
-          "section": {
-            "description": "Containing document section, when applicable.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/SearchSectionReference"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "source": {
             "description": "Original-source location, when the parser retained one.",
@@ -4569,145 +4837,10 @@
         },
         "required": [
           "ordinal",
-          "node",
+          "outline",
           "matchedText",
           "markdown",
           "preview"
-        ]
-      },
-      "SearchNode": {
-        "description": "Nearest node accepted by `mant --node` for a matching occurrence.",
-        "oneOf": [
-          {
-            "description": "Match in optional quick-reference content.",
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Stable document-local identity.",
-                "$ref": "#/$defs/NodeId"
-              },
-              "kind": {
-                "type": "string",
-                "const": "tldr"
-              },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
-              },
-              "title": {
-                "description": "Display title.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "path",
-              "id",
-              "title"
-            ]
-          },
-          {
-            "description": "Match in content preceding the first heading.",
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Virtual document-root identity.",
-                "$ref": "#/$defs/NodeId"
-              },
-              "kind": {
-                "type": "string",
-                "const": "document-root"
-              },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
-              },
-              "title": {
-                "description": "Display title.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "path",
-              "id",
-              "title"
-            ]
-          },
-          {
-            "description": "Match in an ordinary semantic section.",
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Stable document-local section identity.",
-                "$ref": "#/$defs/NodeId"
-              },
-              "kind": {
-                "type": "string",
-                "const": "document-section"
-              },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
-              },
-              "title": {
-                "description": "Section heading text.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "path",
-              "id",
-              "title"
-            ]
-          },
-          {
-            "description": "Match within a semantic definition.",
-            "type": "object",
-            "properties": {
-              "case": {
-                "description": "Alias case-matching policy.",
-                "$ref": "#/$defs/DefinitionCase"
-              },
-              "id": {
-                "description": "Stable document-local entry identity.",
-                "$ref": "#/$defs/NodeId"
-              },
-              "kind": {
-                "type": "string",
-                "const": "document-entry"
-              },
-              "names": {
-                "description": "Normalized selectable aliases.",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "path": {
-                "description": "Canonical structural outline path.",
-                "$ref": "#/$defs/NodePath"
-              },
-              "role": {
-                "description": "Semantic category of the definition.",
-                "$ref": "#/$defs/DefinitionRole"
-              },
-              "title": {
-                "description": "Primary display term.",
-                "type": "string"
-              }
-            },
-            "required": [
-              "kind",
-              "path",
-              "id",
-              "title",
-              "role",
-              "case",
-              "names"
-            ]
-          }
         ]
       },
       "SearchQuery": {
@@ -4846,9 +4979,9 @@
         "description": "Exact schema marker for structure-aware search results.",
         "oneOf": [
           {
-            "description": "Version 7 of the search protocol.",
+            "description": "Version 0.8 of the pre-stable search protocol.",
             "type": "string",
-            "const": "mant.search/v7"
+            "const": "mant.search/v0.8"
           }
         ]
       },
@@ -4865,29 +4998,6 @@
             "type": "string",
             "const": "markdown"
           }
-        ]
-      },
-      "SearchSectionReference": {
-        "description": "Addressable containing section for a non-tldr match.",
-        "type": "object",
-        "properties": {
-          "id": {
-            "description": "Stable document-local section identity.",
-            "$ref": "#/$defs/NodeId"
-          },
-          "path": {
-            "description": "Canonical structural outline path.",
-            "$ref": "#/$defs/NodePath"
-          },
-          "title": {
-            "description": "Section heading text.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "id",
-          "title"
         ]
       },
       "SearchSyntax": {

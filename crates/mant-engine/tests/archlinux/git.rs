@@ -126,16 +126,13 @@ fn supports_outline_discovery_and_targeted_excerpts() {
         .expect("Git Diffs excerpt");
     assert_eq!(excerpt.selections.len(), 1);
     let ExcerptSelection::DocumentSection {
-        path,
-        breadcrumbs,
-        section,
-        ..
+        outline, section, ..
     } = &excerpt.selections[0]
     else {
         panic!("expected Git Diffs manual section");
     };
-    assert_eq!(path, "16.4");
-    assert_eq!(breadcrumbs[0].title, "ENVIRONMENT VARIABLES");
+    assert_eq!(outline.path(), "16.4");
+    assert_eq!(outline.ancestors[0].title, "ENVIRONMENT VARIABLES");
     assert!(common::block_slice_text(&section.blocks).contains("GIT_EXTERNAL_DIFF"));
 }
 

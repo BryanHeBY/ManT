@@ -215,7 +215,7 @@ impl App {
         Self::with_catalog(
             bundle,
             DocumentCatalog {
-                schema: mant_protocol::CatalogSchema::V7,
+                schema: mant_protocol::CatalogSchema::V0Dot8,
                 total: 0,
                 returned: 0,
                 offset: 0,

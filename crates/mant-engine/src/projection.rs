@@ -11,8 +11,8 @@ use mant_ir::{
     DiagnosticLevel, OutlinePath, Section, SourceSpan,
 };
 use mant_protocol::{
-    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference, OutlineSchema,
-    QueryExcerpt, QueryOutline,
+    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference,
+    OutlineReference, OutlineSchema, OutlineTrail, QueryExcerpt, QueryOutline,
 };
 
 use crate::{ResolvedContent, definitions::definition_entries};
@@ -190,7 +190,7 @@ pub fn build_outline_with_detail(
         nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V7,
+        schema: OutlineSchema::V0Dot8,
         detail,
         label: query.label.clone(),
         source: query
@@ -233,35 +233,8 @@ pub fn select_excerpt<S: AsRef<str>>(
         collect_sections(&manual.sections, &[], &[], &mut located);
     }
 
-    let mut tldr_selected = false;
-    let mut document_root_selected = false;
-    let mut selected_ids = HashSet::new();
-    let mut selected = Vec::new();
-    for raw_selector in selectors {
-        let selector = raw_selector.as_ref().trim();
-        if selector.is_empty() {
-            return Err(ProjectionError::EmptySelector);
-        }
-        if (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr))
-            && query.tldr.is_some()
-        {
-            tldr_selected = true;
-            continue;
-        }
-        if (selector == DOCUMENT_ROOT_ID || selector.parse() == Ok(OutlinePath::DocumentRoot))
-            && query
-                .document
-                .as_ref()
-                .is_some_and(|document| !document.blocks.is_empty())
-        {
-            document_root_selected = true;
-            continue;
-        }
-        let candidate = resolve_candidate(query, &located, selector)?;
-        if selected_ids.insert(candidate.id()) {
-            selected.push(candidate);
-        }
-    }
+    let (tldr_selected, document_root_selected, mut selected) =
+        resolve_excerpt_candidates(query, selectors, &located)?;
     let selected_sections = selected
         .iter()
         .filter(|candidate| candidate.is_section())
@@ -291,24 +264,34 @@ pub fn select_excerpt<S: AsRef<str>>(
     let mut selections = Vec::new();
     if let (true, Some(document)) = (tldr_selected, query.tldr.clone()) {
         selections.push(ExcerptSelection::Tldr {
-            path: OutlinePath::Tldr.to_string().into(),
-            id: TLDR_ID.into(),
-            title: TLDR_TITLE.to_owned(),
+            outline: OutlineTrail {
+                ancestors: Vec::new(),
+                node: OutlineNodeReference::Tldr {
+                    path: OutlinePath::Tldr.to_string().into(),
+                    id: TLDR_ID.into(),
+                    title: TLDR_TITLE.to_owned(),
+                },
+            },
             document,
         });
     }
     if let (true, Some(document)) = (document_root_selected, query.document.as_ref()) {
         selections.push(ExcerptSelection::DocumentRoot {
-            path: OutlinePath::DocumentRoot.to_string().into(),
-            id: DOCUMENT_ROOT_ID.into(),
-            title: DOCUMENT_ROOT_TITLE.to_owned(),
+            outline: OutlineTrail {
+                ancestors: Vec::new(),
+                node: OutlineNodeReference::DocumentRoot {
+                    path: OutlinePath::DocumentRoot.to_string().into(),
+                    id: DOCUMENT_ROOT_ID.into(),
+                    title: DOCUMENT_ROOT_TITLE.to_owned(),
+                },
+            },
             blocks: document.blocks.clone(),
         });
     }
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V7,
+        schema: ExcerptSchema::V0Dot8,
         label: query.label.clone(),
         producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),
@@ -318,6 +301,43 @@ pub fn select_excerpt<S: AsRef<str>>(
             .unwrap_or_default(),
         selections,
     })
+}
+
+fn resolve_excerpt_candidates<'a, S: AsRef<str>>(
+    query: &ResolvedContent,
+    selectors: &[S],
+    located: &'a [LocatedNode<'a>],
+) -> Result<(bool, bool, Vec<&'a LocatedNode<'a>>), ProjectionError> {
+    let mut tldr_selected = false;
+    let mut document_root_selected = false;
+    let mut selected_ids = HashSet::new();
+    let mut selected = Vec::new();
+    for raw_selector in selectors {
+        let selector = raw_selector.as_ref().trim();
+        if selector.is_empty() {
+            return Err(ProjectionError::EmptySelector);
+        }
+        if (selector == TLDR_ID || selector.parse() == Ok(OutlinePath::Tldr))
+            && query.tldr.is_some()
+        {
+            tldr_selected = true;
+            continue;
+        }
+        if (selector == DOCUMENT_ROOT_ID || selector.parse() == Ok(OutlinePath::DocumentRoot))
+            && query
+                .document
+                .as_ref()
+                .is_some_and(|document| !document.blocks.is_empty())
+        {
+            document_root_selected = true;
+            continue;
+        }
+        let candidate = resolve_candidate(query, located, selector)?;
+        if selected_ids.insert(candidate.id()) {
+            selected.push(candidate);
+        }
+    }
+    Ok((tldr_selected, document_root_selected, selected))
 }
 
 /// Select exactly one semantic entry by stable path, ID, or alias.
@@ -593,10 +613,14 @@ impl LocatedNode<'_> {
                 section,
                 ..
             } => ExcerptSelection::DocumentSection {
-                path: path.to_string().into(),
-                id: section.id.clone(),
-                title: section.title.clone(),
-                breadcrumbs: breadcrumbs.clone(),
+                outline: OutlineTrail {
+                    ancestors: breadcrumbs.clone(),
+                    node: OutlineNodeReference::DocumentSection {
+                        path: path.to_string().into(),
+                        id: section.id.clone(),
+                        title: section.title.clone(),
+                    },
+                },
                 section: (*section).clone(),
             },
             Self::Entry {
@@ -606,15 +630,23 @@ impl LocatedNode<'_> {
                 entry,
                 ..
             } => ExcerptSelection::DocumentEntry {
-                path: path.to_string().into(),
-                id: entry
-                    .identity
-                    .as_ref()
-                    .expect("located entries have identities")
-                    .id
-                    .clone(),
-                title: title.clone(),
-                breadcrumbs: breadcrumbs.clone(),
+                outline: OutlineTrail {
+                    ancestors: breadcrumbs.clone(),
+                    node: {
+                        let identity = entry
+                            .identity
+                            .as_ref()
+                            .expect("located entries have identities");
+                        OutlineNodeReference::DocumentEntry {
+                            path: path.to_string().into(),
+                            id: identity.id.clone(),
+                            title: title.clone(),
+                            role: identity.role,
+                            case: identity.case,
+                            names: identity.names.clone(),
+                        }
+                    },
+                },
                 entry: (*entry).clone(),
             },
         }
@@ -931,8 +963,8 @@ mod tests {
             .expect("root excerpt");
         assert!(matches!(
             excerpt.selections.as_slice(),
-            [ExcerptSelection::DocumentRoot { path, blocks, .. }]
-                if path == "root" && blocks.len() == 1
+            [ExcerptSelection::DocumentRoot { outline, blocks, .. }]
+                if outline.path() == "root" && blocks.len() == 1
         ));
         assert_eq!(
             excerpt.source.as_ref().map(|source| source.format),
@@ -956,39 +988,29 @@ mod tests {
         let paths = excerpt
             .selections
             .iter()
-            .map(|selection| match selection {
-                ExcerptSelection::Tldr { path, .. }
-                | ExcerptSelection::DocumentRoot { path, .. }
-                | ExcerptSelection::DocumentSection { path, .. }
-                | ExcerptSelection::DocumentEntry { path, .. } => path.as_str(),
-            })
+            .map(|selection| selection.outline().path())
             .collect::<Vec<_>>();
         assert_eq!(paths, ["2", "3"]);
         let ExcerptSelection::DocumentSection {
-            section,
-            breadcrumbs,
-            ..
+            section, outline, ..
         } = &excerpt.selections[0]
         else {
             panic!("expected manual selection");
         };
         assert_eq!(section.children.len(), 2);
-        assert!(breadcrumbs.is_empty());
+        assert!(outline.ancestors.is_empty());
     }
 
     #[test]
     fn child_selection_retains_ancestor_breadcrumbs() {
         let excerpt = select_excerpt(&query(), &["2.2".to_owned()]).expect("excerpt");
 
-        let ExcerptSelection::DocumentSection {
-            title, breadcrumbs, ..
-        } = &excerpt.selections[0]
-        else {
+        let ExcerptSelection::DocumentSection { outline, .. } = &excerpt.selections[0] else {
             panic!("expected manual selection");
         };
-        assert_eq!(title, "Other options");
-        assert_eq!(breadcrumbs[0].path, "2");
-        assert_eq!(breadcrumbs[0].title, "OPTIONS");
+        assert_eq!(outline.title(), "Other options");
+        assert_eq!(outline.ancestors[0].path, "2");
+        assert_eq!(outline.ancestors[0].title, "OPTIONS");
     }
 
     #[test]
@@ -1002,8 +1024,8 @@ mod tests {
         .expect("combined excerpt");
         assert!(matches!(
             excerpt.selections.as_slice(),
-            [ExcerptSelection::Tldr { path, .. }, ExcerptSelection::DocumentSection { .. }]
-                if path == "0"
+            [ExcerptSelection::Tldr { outline, .. }, ExcerptSelection::DocumentSection { .. }]
+                if outline.path() == "0"
         ));
 
         let mut tldr_only = combined;

@@ -90,56 +90,33 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Vec<St
 }
 
 fn render_selection(selection: &ExcerptSelection) -> String {
+    let context = render_outline_trail(selection.outline());
     match selection {
-        ExcerptSelection::Tldr { document, .. } => render_tldr_text(document),
-        ExcerptSelection::DocumentRoot {
-            path,
-            title,
-            blocks,
-            ..
-        } => join_parts(vec![
-            format!("Outline {path}: {title}"),
-            render_blocks(blocks, 0),
+        ExcerptSelection::Tldr { document, .. } => {
+            join_parts(vec![context, render_tldr_text(document)])
+        }
+        ExcerptSelection::DocumentRoot { blocks, .. } => {
+            join_parts(vec![context, render_blocks(blocks, 0)])
+        }
+        ExcerptSelection::DocumentSection { section, .. } => {
+            join_parts(vec![context, render_section(section, 0)])
+        }
+        ExcerptSelection::DocumentEntry { entry, .. } => join_parts(vec![
+            context,
+            render_definitions(std::slice::from_ref(entry), true, 0),
         ]),
-        ExcerptSelection::DocumentSection {
-            path,
-            title,
-            breadcrumbs,
-            section,
-            ..
-        } => {
-            let mut parts = Vec::new();
-            if !breadcrumbs.is_empty() {
-                let breadcrumb = breadcrumbs
-                    .iter()
-                    .map(|ancestor| ancestor.title.as_str())
-                    .chain(std::iter::once(title.as_str()))
-                    .collect::<Vec<_>>()
-                    .join(" > ");
-                parts.push(format!("Outline {path}: {breadcrumb}"));
-            }
-            parts.push(render_section(section, 0));
-            join_parts(parts)
-        }
-        ExcerptSelection::DocumentEntry {
-            path,
-            title,
-            breadcrumbs,
-            entry,
-            ..
-        } => {
-            let breadcrumb = breadcrumbs
-                .iter()
-                .map(|ancestor| ancestor.title.as_str())
-                .chain(std::iter::once(title.as_str()))
-                .collect::<Vec<_>>()
-                .join(" > ");
-            join_parts(vec![
-                format!("Outline {path}: {breadcrumb}"),
-                render_definitions(std::slice::from_ref(entry), true, 0),
-            ])
-        }
     }
+}
+
+fn render_outline_trail(trail: &mant_protocol::OutlineTrail) -> String {
+    let breadcrumb = trail
+        .ancestors
+        .iter()
+        .map(|ancestor| ancestor.title.as_str())
+        .chain(std::iter::once(trail.title()))
+        .collect::<Vec<_>>()
+        .join(" > ");
+    format!("Outline {}: {breadcrumb}", trail.path())
 }
 
 fn render_tldr_text(tldr: &TldrDocument) -> String {
@@ -524,7 +501,7 @@ mod tests {
         let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("tldr excerpt");
         assert_eq!(
             render_excerpt_text(&excerpt),
-            "demo\n\nTLDR\n\nA small demonstration."
+            "demo\n\nOutline 0: TLDR QUICK REFERENCE\n\nTLDR\n\nA small demonstration."
         );
     }
 

@@ -9,7 +9,7 @@ use mant_ir::{
     Block, DefinitionCase, DefinitionRole, LayoutHint, NodeId, OutlinePath, Section, SourceSpan,
     TldrCommandPart, TldrDocument, TldrOrigin,
 };
-use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
+use mant_protocol::{ExcerptSelection, OutlineNode, OutlineReference, QueryExcerpt, QueryOutline};
 
 use self::{
     blocks::{RenderedBlocks, render_blocks, render_blocks_with_entries},
@@ -59,6 +59,7 @@ pub(crate) struct MarkdownSection {
     pub(crate) path: OutlinePath,
     pub(crate) id: NodeId,
     pub(crate) title: String,
+    pub(crate) ancestors: Vec<OutlineReference>,
 }
 
 #[derive(Clone)]
@@ -112,7 +113,7 @@ fn render_markdown_artifact(query: &ResolvedContent, options: MarkdownOptions) -
             let rendered = render_blocks_with_entries(&document.blocks, options);
             output.push_scope(rendered, None, None);
         }
-        render_artifact_sections(&mut output, &document.sections, &[], 2, options);
+        render_artifact_sections(&mut output, &document.sections, &[], &[], 2, options);
     }
     output.finish()
 }
@@ -233,6 +234,7 @@ fn render_artifact_sections(
     output: &mut ArtifactBuilder,
     sections: &[Section],
     parent: &[usize],
+    ancestors: &[OutlineReference],
     depth: usize,
     options: MarkdownOptions,
 ) {
@@ -252,9 +254,10 @@ fn render_artifact_sections(
         };
         let range = output.push(&rendered_heading);
         let reference = MarkdownSection {
-            path,
+            path: path.clone(),
             id: section.id.clone(),
             title: section.title.clone(),
+            ancestors: ancestors.to_vec(),
         };
         output.begin_section(range.start, reference.clone(), section.source);
         output.push_scope(
@@ -262,10 +265,17 @@ fn render_artifact_sections(
             Some(&reference),
             Some(&coordinates),
         );
+        let mut child_ancestors = ancestors.to_vec();
+        child_ancestors.push(OutlineReference {
+            path: path.to_string().into(),
+            id: section.id.clone(),
+            title: section.title.clone(),
+        });
         render_artifact_sections(
             output,
             &section.children,
             &coordinates,
+            &child_ancestors,
             depth.saturating_add(1),
             options,
         );
@@ -363,40 +373,15 @@ fn outline_list(nodes: &[OutlineNode], depth: usize) -> String {
 }
 
 fn selection_context(selection: &ExcerptSelection) -> String {
-    match selection {
-        ExcerptSelection::Tldr { path, title, .. }
-        | ExcerptSelection::DocumentRoot { path, title, .. } => {
-            format!("*Outline {}: {}*", code_span(path), escape_text(title))
-        }
-        ExcerptSelection::DocumentSection {
-            path,
-            title,
-            breadcrumbs,
-            ..
-        } => {
-            let breadcrumb = breadcrumbs
-                .iter()
-                .map(|ancestor| escape_text(&ancestor.title))
-                .chain(std::iter::once(escape_text(title)))
-                .collect::<Vec<_>>()
-                .join(" → ");
-            format!("*Outline {}: {breadcrumb}*", code_span(path))
-        }
-        ExcerptSelection::DocumentEntry {
-            path,
-            title,
-            breadcrumbs,
-            ..
-        } => {
-            let breadcrumb = breadcrumbs
-                .iter()
-                .map(|ancestor| escape_text(&ancestor.title))
-                .chain(std::iter::once(escape_text(title)))
-                .collect::<Vec<_>>()
-                .join(" → ");
-            format!("*Outline {}: {breadcrumb}*", code_span(path))
-        }
-    }
+    let trail = selection.outline();
+    let breadcrumb = trail
+        .ancestors
+        .iter()
+        .map(|ancestor| escape_text(&ancestor.title))
+        .chain(std::iter::once(escape_text(trail.title())))
+        .collect::<Vec<_>>()
+        .join(" → ");
+    format!("*Outline {}: {breadcrumb}*", code_span(trail.path()))
 }
 
 fn render_sections(

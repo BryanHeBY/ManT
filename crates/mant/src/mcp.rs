@@ -540,7 +540,7 @@ fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
         manual_section: selector.manual_section,
     };
     QueryRequest {
-        schema: mant_protocol::RequestSchema::V7,
+        schema: mant_protocol::RequestSchema::V0Dot8,
         input,
         view,
     }
@@ -786,7 +786,10 @@ mod tests {
             Diagnostic, DiagnosticLevel, DocumentSource, NodeId, SourceFormat, TldrDocument,
             TldrOrigin,
         };
-        use mant_protocol::{ExcerptSchema, ExcerptSelection, NodePath, QueryExcerpt};
+        use mant_protocol::{
+            ExcerptSchema, ExcerptSelection, NodePath, OutlineNodeReference, OutlineTrail,
+            QueryExcerpt,
+        };
 
         let diagnostic = |level| Diagnostic {
             level,
@@ -795,7 +798,7 @@ mod tests {
             source: None,
         };
         let mut excerpt = QueryExcerpt {
-            schema: ExcerptSchema::V7,
+            schema: ExcerptSchema::V0Dot8,
             label: "demo".to_owned(),
             producer: None,
             source: Some(DocumentSource {
@@ -810,9 +813,14 @@ mod tests {
                 diagnostic(DiagnosticLevel::Unsupported),
             ],
             selections: vec![ExcerptSelection::Tldr {
-                path: NodePath::new("0"),
-                id: NodeId::new("tldr"),
-                title: "demo".to_owned(),
+                outline: OutlineTrail {
+                    ancestors: Vec::new(),
+                    node: OutlineNodeReference::Tldr {
+                        path: NodePath::new("0"),
+                        id: NodeId::new("tldr"),
+                        title: "demo".to_owned(),
+                    },
+                },
                 document: TldrDocument {
                     title: "demo".to_owned(),
                     description: Vec::new(),
@@ -847,7 +855,7 @@ mod tests {
         use mant_protocol::{OutlineDetail, OutlineSchema, QueryOutline};
 
         let mut outline = QueryOutline {
-            schema: OutlineSchema::V7,
+            schema: OutlineSchema::V0Dot8,
             detail: OutlineDetail::Entries,
             label: "demo".to_owned(),
             source: Some(DocumentSource {

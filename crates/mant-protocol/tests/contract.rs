@@ -7,13 +7,13 @@ use mant_protocol::{
 };
 use serde_json::Value;
 
-const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query-v7.json");
+const MINIMAL_QUERY: &str = include_str!("../../../tests/contracts/minimal-query-v0.8.json");
 
 #[test]
 fn shared_query_fixture_round_trips_without_shape_changes() {
     let query: QueryBundle = serde_json::from_str(MINIMAL_QUERY).expect("valid shared fixture");
 
-    assert_eq!(query.schema, QuerySchema::V7);
+    assert_eq!(query.schema, QuerySchema::V0Dot8);
     assert_eq!(query.label, "ls");
     let manual = query.document.as_ref().expect("manual document");
     assert_eq!(manual.source.format, SourceFormat::Man);
@@ -49,7 +49,7 @@ fn shared_query_fixture_round_trips_without_shape_changes() {
 
 #[test]
 fn unknown_query_schema_is_rejected() {
-    let incompatible = MINIMAL_QUERY.replace("mant.query/v7", "mant.query/v1");
+    let incompatible = MINIMAL_QUERY.replace("mant.query/v0.8", "mant.query/v1");
     let error = serde_json::from_str::<QueryBundle>(&incompatible).expect_err("unknown schema");
 
     assert!(error.to_string().contains("unknown variant"));
@@ -58,10 +58,10 @@ fn unknown_query_schema_is_rejected() {
 #[test]
 fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     let request: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"printf","manualSection":"3"},"view":{"kind":"full"}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"printf","manualSection":"3"},"view":{"kind":"full"}}"#,
     )
     .expect("valid full query request");
-    assert_eq!(request.schema, RequestSchema::V7);
+    assert_eq!(request.schema, RequestSchema::V0Dot8);
     assert_eq!(
         request.input,
         QueryInput::Document {
@@ -73,7 +73,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     assert_eq!(request.view, QueryView::Full {});
 
     let outline: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"entries"}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"entries"}}"#,
     )
     .expect("valid outline request");
     assert_eq!(
@@ -84,7 +84,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let excerpt: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"excerpt","selectors":["acls"]}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"tar"},"view":{"kind":"excerpt","selectors":["acls"]}}"#,
     )
     .expect("valid excerpt request");
     assert_eq!(
@@ -95,7 +95,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let explain: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"explain","entry":"--exclude"}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"tar"},"view":{"kind":"explain","entry":"--exclude"}}"#,
     )
     .expect("valid explanation request");
     assert_eq!(
@@ -106,7 +106,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let search: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"--acls","syntax":"literal","case":"insensitive","scope":"visible","word":false,"contextLines":2,"limit":20,"offset":0}}"#,
     )
     .expect("valid search request");
     assert_eq!(
@@ -124,7 +124,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let search_defaults: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"acls"}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"tar"},"view":{"kind":"search","pattern":"acls"}}"#,
     )
     .expect("search defaults");
     assert_eq!(
@@ -142,7 +142,7 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     );
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"ls"},"view":{"kind":"full"},"mode":"html"}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"ls"},"view":{"kind":"full"},"mode":"html"}"#,
     )
     .expect_err("unknown request field");
     assert!(error.to_string().contains("unknown field"));
@@ -160,25 +160,25 @@ fn native_query_request_covers_every_projection_and_rejects_unknown_fields() {
     assert!(error.to_string().contains("unknown variant"));
 
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"ls"},"view":{"kind":"full","future":true}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"ls"},"view":{"kind":"full","future":true}}"#,
     )
     .expect_err("unknown view field");
     assert!(error.to_string().contains("unknown field"));
 }
 
 #[test]
-fn request_v7_rejects_the_obsolete_options_outline_detail() {
+fn request_v0_8_rejects_the_obsolete_options_outline_detail() {
     let error = serde_json::from_str::<QueryRequest>(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"options"}}"#,
     )
-    .expect_err("request v7 uses the canonical entries spelling");
+    .expect_err("request v0.8 uses the canonical entries spelling");
     assert!(error.to_string().contains("unknown variant `options`"));
 }
 
 #[test]
-fn request_v7_selects_one_configured_source_without_accepting_v4() {
+fn request_v0_8_selects_one_configured_source_without_accepting_v4() {
     let selected: QueryRequest = serde_json::from_str(
-        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"printf","source":"team"},"view":{"kind":"full"}}"#,
+        r#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"printf","source":"team"},"view":{"kind":"full"}}"#,
     )
     .expect("valid explicit source request");
     assert!(matches!(
@@ -194,5 +194,11 @@ fn request_v7_selects_one_configured_source_without_accepting_v4() {
         r#"{"schema":"mant.request/v4","input":{"kind":"document","selector":"ls"},"view":{"kind":"full"}}"#,
     )
     .expect_err("old request schema is intentionally unsupported");
+    assert!(error.to_string().contains("unknown variant"));
+
+    let error = serde_json::from_str::<QueryRequest>(
+        r#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"ls"},"view":{"kind":"full"}}"#,
+    )
+    .expect_err("the last experimental request schema is intentionally unsupported");
     assert!(error.to_string().contains("unknown variant"));
 }

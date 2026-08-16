@@ -22,7 +22,7 @@ pub fn run(bundle: &ResolvedContent) -> io::Result<()> {
     run_with_catalog(
         bundle,
         DocumentCatalog {
-            schema: mant_protocol::CatalogSchema::V7,
+            schema: mant_protocol::CatalogSchema::V0Dot8,
             total: 0,
             returned: 0,
             offset: 0,
@@ -231,7 +231,7 @@ mod tests {
             offsets.push(query.offset);
             let next_offset = (query.offset == 0).then_some(1);
             Ok(DocumentCatalog {
-                schema: CatalogSchema::V7,
+                schema: CatalogSchema::V0Dot8,
                 total: 2,
                 returned: 1,
                 offset: query.offset,
@@ -269,7 +269,7 @@ mod tests {
         let catalog = discover_catalog_pages(&query, &mut |_| {
             calls += 1;
             Ok(DocumentCatalog {
-                schema: CatalogSchema::V7,
+                schema: CatalogSchema::V0Dot8,
                 total: 20_000,
                 returned: 1,
                 offset: 0,

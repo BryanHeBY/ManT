@@ -3,9 +3,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use mant_ir::{DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, NodeId, SourceSpan};
+use mant_ir::{DocumentMeta, DocumentSource, SourceSpan};
 
-use crate::NodePath;
+use crate::OutlineTrail;
 
 /// Default maximum number of search matches returned in one page.
 pub const DEFAULT_SEARCH_LIMIT: u32 = 100;
@@ -86,9 +86,9 @@ pub const fn default_search_limit() -> u32 {
 /// Exact schema marker for structure-aware search results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum SearchSchema {
-    /// Version 7 of the search protocol.
-    #[serde(rename = "mant.search/v7")]
-    V7,
+    /// Version 0.8 of the pre-stable search protocol.
+    #[serde(rename = "mant.search/v0.8")]
+    V0Dot8,
 }
 
 /// Markdown contract used as the coordinate space for every search format.
@@ -136,7 +136,7 @@ pub struct SearchRender {
 /// Complete, paginatable search result returned to agents and scripts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:search:v7"))]
+#[schemars(extend("$id" = "urn:mant:search:v0.8"))]
 pub struct QuerySearch {
     /// Exact response schema discriminator.
     pub schema: SearchSchema,
@@ -173,11 +173,8 @@ pub struct QuerySearch {
 pub struct SearchMatch {
     /// One-based occurrence number in the unpaginated result set.
     pub ordinal: u32,
-    /// Nearest structurally addressable node.
-    pub node: SearchNode,
-    /// Containing document section, when applicable.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub section: Option<SearchSectionReference>,
+    /// Complete logical location of the nearest addressable node.
+    pub outline: OutlineTrail,
     /// Exact text consumed by the matcher.
     pub matched_text: String,
     /// Location in the deterministic full Markdown render.
@@ -190,94 +187,6 @@ pub struct SearchMatch {
     /// Optional rendered lines surrounding the match.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub context: Vec<SearchContextLine>,
-}
-
-/// Nearest node accepted by `mant --node` for a matching occurrence.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
-)]
-pub enum SearchNode {
-    /// Match in optional quick-reference content.
-    Tldr {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Stable document-local identity.
-        id: NodeId,
-        /// Display title.
-        title: String,
-    },
-    /// Match in content preceding the first heading.
-    DocumentRoot {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Virtual document-root identity.
-        id: NodeId,
-        /// Display title.
-        title: String,
-    },
-    /// Match in an ordinary semantic section.
-    DocumentSection {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Stable document-local section identity.
-        id: NodeId,
-        /// Section heading text.
-        title: String,
-    },
-    /// Match within a semantic definition.
-    DocumentEntry {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Stable document-local entry identity.
-        id: NodeId,
-        /// Primary display term.
-        title: String,
-        /// Semantic category of the definition.
-        role: DefinitionRole,
-        /// Alias case-matching policy.
-        case: DefinitionCase,
-        /// Normalized selectable aliases.
-        names: Vec<String>,
-    },
-}
-
-impl SearchNode {
-    /// Return the canonical structural outline path.
-    #[must_use]
-    pub fn path(&self) -> &str {
-        match self {
-            Self::Tldr { path, .. }
-            | Self::DocumentRoot { path, .. }
-            | Self::DocumentSection { path, .. }
-            | Self::DocumentEntry { path, .. } => path,
-        }
-    }
-
-    /// Return the node's display title.
-    #[must_use]
-    pub fn title(&self) -> &str {
-        match self {
-            Self::Tldr { title, .. }
-            | Self::DocumentRoot { title, .. }
-            | Self::DocumentSection { title, .. }
-            | Self::DocumentEntry { title, .. } => title,
-        }
-    }
-}
-
-/// Addressable containing section for a non-tldr match.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchSectionReference {
-    /// Canonical structural outline path.
-    pub path: NodePath,
-    /// Stable document-local section identity.
-    pub id: NodeId,
-    /// Section heading text.
-    pub title: String,
 }
 
 /// Half-open byte range plus one-based human coordinates in full Markdown.

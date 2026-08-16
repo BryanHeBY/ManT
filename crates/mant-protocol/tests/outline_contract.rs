@@ -5,8 +5,8 @@ use mant_ir::{
     DocumentSource, Inline, LayoutHint, Section, SourceFormat, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{
-    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineReference, OutlineSchema,
-    Producer, QueryExcerpt, QueryOutline,
+    ExcerptSchema, ExcerptSelection, OutlineDetail, OutlineNode, OutlineNodeReference,
+    OutlineReference, OutlineSchema, OutlineTrail, Producer, QueryExcerpt, QueryOutline,
 };
 
 fn source() -> DocumentSource {
@@ -19,7 +19,7 @@ fn source() -> DocumentSource {
 #[test]
 fn outline_contract_exposes_both_human_paths_and_document_ids() {
     let outline = QueryOutline {
-        schema: OutlineSchema::V7,
+        schema: OutlineSchema::V0Dot8,
         detail: OutlineDetail::Entries,
         label: "demo(1)".to_owned(),
         source: Some(source()),
@@ -42,7 +42,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
     };
 
     let value = serde_json::to_value(outline).expect("outline JSON");
-    assert_eq!(value["schema"], "mant.outline/v7");
+    assert_eq!(value["schema"], "mant.outline/v0.8");
     assert_eq!(value["detail"], "entries");
     assert_eq!(value["label"], "demo(1)");
     assert_eq!(value["nodes"][0]["kind"], "document-section");
@@ -56,7 +56,7 @@ fn outline_contract_exposes_both_human_paths_and_document_ids() {
 #[test]
 fn outline_optional_diagnostic_fields_default_to_a_complete_result() {
     let outline: QueryOutline = serde_json::from_value(serde_json::json!({
-        "schema": "mant.outline/v7",
+        "schema": "mant.outline/v0.8",
         "detail": "entries",
         "label": "demo",
         "nodes": [],
@@ -78,7 +78,7 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         source: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V7,
+        schema: ExcerptSchema::V0Dot8,
         label: "demo(1)".to_owned(),
         producer: Some(Producer {
             name: "mant".to_owned(),
@@ -89,22 +89,30 @@ fn excerpt_contract_keeps_breadcrumbs_separate_from_complete_sections() {
         meta: Some(DocumentMeta::default()),
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentSection {
-            path: "2.1".to_owned().into(),
-            id: section.id.clone(),
-            title: section.title.clone(),
-            breadcrumbs: vec![OutlineReference {
-                path: "2".to_owned().into(),
-                id: "options-2".to_owned().into(),
-                title: "OPTIONS".to_owned(),
-            }],
+            outline: OutlineTrail {
+                ancestors: vec![OutlineReference {
+                    path: "2".to_owned().into(),
+                    id: "options-2".to_owned().into(),
+                    title: "OPTIONS".to_owned(),
+                }],
+                node: OutlineNodeReference::DocumentSection {
+                    path: "2.1".to_owned().into(),
+                    id: section.id.clone(),
+                    title: section.title.clone(),
+                },
+            },
             section,
         }],
     };
 
     let value = serde_json::to_value(excerpt).expect("excerpt JSON");
-    assert_eq!(value["schema"], "mant.excerpt/v7");
+    assert_eq!(value["schema"], "mant.excerpt/v0.8");
     assert_eq!(value["selections"][0]["kind"], "document-section");
-    assert_eq!(value["selections"][0]["breadcrumbs"][0]["path"], "2");
+    assert_eq!(
+        value["selections"][0]["outline"]["ancestors"][0]["path"],
+        "2"
+    );
+    assert_eq!(value["selections"][0]["outline"]["node"]["path"], "2.1");
     assert_eq!(value["selections"][0]["section"]["id"], "common-3");
     assert!(value.get("diagnostics").is_none());
 }
@@ -124,17 +132,24 @@ fn excerpt_contract_can_return_one_semantic_definition() {
         spacing_before_lines: None,
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V7,
+        schema: ExcerptSchema::V0Dot8,
         label: "demo(1)".to_owned(),
         producer: None,
         source: Some(source()),
         meta: None,
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentEntry {
-            path: "2/e1".to_owned().into(),
-            id: "all".to_owned().into(),
-            title: "-a, --all".to_owned(),
-            breadcrumbs: Vec::new(),
+            outline: OutlineTrail {
+                ancestors: Vec::new(),
+                node: OutlineNodeReference::DocumentEntry {
+                    path: "2/e1".to_owned().into(),
+                    id: "all".to_owned().into(),
+                    title: "-a, --all".to_owned(),
+                    role: DefinitionRole::Option,
+                    case: DefinitionCase::Sensitive,
+                    names: vec!["-a".to_owned(), "--all".to_owned()],
+                },
+            },
             entry,
         }],
     };
@@ -157,7 +172,7 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         source: None,
     }];
     let outline = QueryOutline {
-        schema: OutlineSchema::V7,
+        schema: OutlineSchema::V0Dot8,
         detail: OutlineDetail::Sections,
         label: "guide.md".to_owned(),
         source: Some(DocumentSource {
@@ -174,16 +189,21 @@ fn document_root_contract_addresses_content_before_the_first_heading() {
         }],
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V7,
+        schema: ExcerptSchema::V0Dot8,
         label: "guide.md".to_owned(),
         producer: None,
         source: outline.source.clone(),
         meta: outline.meta.clone(),
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::DocumentRoot {
-            path: "root".to_owned().into(),
-            id: "document-overview".to_owned().into(),
-            title: "OVERVIEW".to_owned(),
+            outline: OutlineTrail {
+                ancestors: Vec::new(),
+                node: OutlineNodeReference::DocumentRoot {
+                    path: "root".to_owned().into(),
+                    id: "document-overview".to_owned().into(),
+                    title: "OVERVIEW".to_owned(),
+                },
+            },
             blocks,
         }],
     };
@@ -212,7 +232,7 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         origin: TldrOrigin::TldrPages,
     };
     let outline = QueryOutline {
-        schema: OutlineSchema::V7,
+        schema: OutlineSchema::V0Dot8,
         detail: OutlineDetail::Sections,
         label: "demo".to_owned(),
         source: None,
@@ -226,16 +246,21 @@ fn tldr_uses_the_reserved_zero_path_in_outline_and_excerpt_contracts() {
         }],
     };
     let excerpt = QueryExcerpt {
-        schema: ExcerptSchema::V7,
+        schema: ExcerptSchema::V0Dot8,
         label: "demo".to_owned(),
         producer: None,
         source: None,
         meta: None,
         diagnostics: Vec::new(),
         selections: vec![ExcerptSelection::Tldr {
-            path: "0".to_owned().into(),
-            id: "tldr".to_owned().into(),
-            title: "TLDR QUICK REFERENCE".to_owned(),
+            outline: OutlineTrail {
+                ancestors: Vec::new(),
+                node: OutlineNodeReference::Tldr {
+                    path: "0".to_owned().into(),
+                    id: "tldr".to_owned().into(),
+                    title: "TLDR QUICK REFERENCE".to_owned(),
+                },
+            },
             document,
         }],
     };

@@ -36,15 +36,15 @@ The current descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v7",
-  "nativeApiVersion": "7",
-  "requestSchema": "mant.request/v7",
-  "querySchema": "mant.query/v7",
-  "documentSchema": "mant.document/v7",
-  "outlineSchema": "mant.outline/v7",
-  "excerptSchema": "mant.excerpt/v7",
-  "searchSchema": "mant.search/v7",
-  "catalogSchema": "mant.catalog/v7"
+  "protocol": "mant.cli/v0.8",
+  "nativeApiVersion": "0.8",
+  "requestSchema": "mant.request/v0.8",
+  "querySchema": "mant.query/v0.8",
+  "documentSchema": "mant.document/v0.8",
+  "outlineSchema": "mant.outline/v0.8",
+  "excerptSchema": "mant.excerpt/v0.8",
+  "searchSchema": "mant.search/v0.8",
+  "catalogSchema": "mant.catalog/v0.8"
 }
 ```
 
@@ -55,27 +55,36 @@ query the manual database, read tldr data, or start the TUI.
 
 | Identifier | Scope | Where it appears |
 | --- | --- | --- |
-| `mant.cli/v7` | One-shot process invocation and stream behavior | `--protocol-version` |
-| `7` | Native API generation negotiated by process clients | `nativeApiVersion` |
-| `mant.request/v7` | Closed request accepted by `--request-json` | Request `schema` |
-| `mant.query/v7` | Complete document plus optional quick reference | Full response `schema` |
-| `mant.document/v7` | Source-neutral document response | `QueryBundle.document.schema` |
-| `mant.outline/v7` | Block-free addressable tree | Outline response `schema` |
-| `mant.excerpt/v7` | One or more selected nodes | Excerpt response `schema` |
-| `mant.search/v7` | Search results and pagination | Search response `schema` |
-| `mant.catalog/v7` | Local Markdown and manual-page discovery | Catalog response `schema` |
+| `mant.cli/v0.8` | One-shot process invocation and stream behavior | `--protocol-version` |
+| `0.8` | Native API release line negotiated by process clients | `nativeApiVersion` |
+| `mant.request/v0.8` | Closed request accepted by `--request-json` | Request `schema` |
+| `mant.query/v0.8` | Complete document plus optional quick reference | Full response `schema` |
+| `mant.document/v0.8` | Source-neutral document response | `QueryBundle.document.schema` |
+| `mant.outline/v0.8` | Block-free addressable tree | Outline response `schema` |
+| `mant.excerpt/v0.8` | One or more selected nodes | Excerpt response `schema` |
+| `mant.search/v0.8` | Search results and pagination | Search response `schema` |
+| `mant.catalog/v0.8` | Local Markdown and manual-page discovery | Catalog response `schema` |
 | `mant.markdown/v1` | Canonical Markdown coordinate space | Search `render.schema` |
 | `mant.doctor/v1` | Read-only local installation diagnostics | Doctor report `schema` |
 
-The suffixes are contract versions, not the ManT release number. The process
-request and response contracts are v7; the independent Markdown coordinate
-contract remains `mant.markdown/v1`. Clients must compare every complete
-identifier rather than infer one contract from another. Version 7 adds a
-shared local-document catalog with exact addresses for every Markdown and
-manual-page candidate. It also separates producer metadata from the in-memory
-IR, gives selectors typed `NodePath` semantics, uses typed node IDs and exact
-byte ranges, and represents every link through one tagged target union. These
-changes are not wire-compatible with v6 consumers.
+The native query family follows ManT's pre-stable minor release line:
+ManT 0.8.x uses `v0.8`, and patch releases do not change its wire shape. The
+independent Markdown coordinate and doctor contracts remain
+`mant.markdown/v1` and `mant.doctor/v1`. Clients must still compare complete
+identifiers rather than infer compatibility between independent families.
+
+The former bare `v1` through `v7` query schemas were experimental pre-stable
+contracts. ManT 0.8 removes them rather than carrying compatibility code; a
+request using one is rejected as an unknown schema. Their definitions remain
+available from the corresponding historical releases and tags. Once the
+native protocol is stable, its first stable release line will be named
+`v1.0`.
+
+Version 0.8 adds a shared local-document catalog with exact addresses for
+every Markdown and manual-page candidate. It also separates producer metadata
+from the in-memory IR, gives selectors typed `NodePath` semantics, uses typed
+node IDs and exact byte ranges, represents every link through one tagged
+target union, and gives excerpt and search results one common `OutlineTrail`.
 
 ### Compatibility Rules
 
@@ -114,17 +123,17 @@ mant --schema all
 
 `--schema all` returns an object with the stable keys `request`, `query`,
 `outline`, `excerpt`, `search`, and `catalog`. The independent doctor schema is
-requested explicitly and does not alter that v7 schema catalog. `--compact` is
+requested explicitly and does not alter that v0.8 schema catalog. `--compact` is
 accepted by all schema commands.
 
 | `--schema` value | Root title | Root `$id` |
 | --- | --- | --- |
-| `request` | `QueryRequest` | `urn:mant:request:v7` |
-| `query` | `QueryBundle` | `urn:mant:query:v7` |
-| `outline` | `QueryOutline` | `urn:mant:outline:v7` |
-| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v7` |
-| `search` | `QuerySearch` | `urn:mant:search:v7` |
-| `catalog` | `DocumentCatalog` | `urn:mant:catalog:v7` |
+| `request` | `QueryRequest` | `urn:mant:request:v0.8` |
+| `query` | `QueryBundle` | `urn:mant:query:v0.8` |
+| `outline` | `QueryOutline` | `urn:mant:outline:v0.8` |
+| `excerpt` | `QueryExcerpt` | `urn:mant:excerpt:v0.8` |
+| `search` | `QuerySearch` | `urn:mant:search:v0.8` |
+| `catalog` | `DocumentCatalog` | `urn:mant:catalog:v0.8` |
 | `doctor` | `DoctorReport` | `urn:mant:doctor:v1` |
 
 The request schema is generated for deserialization, while response schemas
@@ -162,7 +171,7 @@ removes data.
 
 ## Document Catalog
 
-The native CLI and MCP server use one `mant.catalog/v7` discovery contract:
+The native CLI and MCP server use one `mant.catalog/v0.8` discovery contract:
 
 ```sh
 mant --list
@@ -222,7 +231,7 @@ findings belong to `document.diagnostics`, `outline.diagnostics`, or
 Manual pages have one parser path: ManT performs bounded reads, decompression,
 and constrained redirect-only `.so` alias resolution, then gives plain roff
 bytes to `libmandoc-rs` with includes denied. Renderer selection is
-deliberately absent from `mant.request/v7`. This native-manual source family is
+deliberately absent from `mant.request/v0.8`. This native-manual source family is
 available on Linux, macOS, and Windows through the same owned IR boundary.
 
 For ordinary CLI arguments, `mant NAME --manual` bypasses registered Markdown
@@ -243,7 +252,7 @@ Every request has three required fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema` | Exact string | Must be `mant.request/v7` |
+| `schema` | Exact string | Must be `mant.request/v0.8` |
 | `input` | `QueryInput` union | Logical document selector or explicit local input file |
 | `view` | `QueryView` union | Full, outline, excerpt, explain, or search projection |
 
@@ -332,15 +341,15 @@ does not follow redirect-only `.so` pages.
 
 | `kind` | Additional fields | Defaults and bounds | Response |
 | --- | --- | --- | --- |
-| `full` | None | None | `mant.query/v7` |
-| `outline` | `detail` | Required: `sections` or `entries` | `mant.outline/v7` |
-| `excerpt` | `selectors` | Non-empty node-selector array | `mant.excerpt/v7` |
-| `explain` | `entry` | One non-empty semantic path, ID, or alias | `mant.excerpt/v7` |
-| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v7` |
+| `full` | None | None | `mant.query/v0.8` |
+| `outline` | `detail` | Required: `sections` or `entries` | `mant.outline/v0.8` |
+| `excerpt` | `selectors` | Non-empty node-selector array | `mant.excerpt/v0.8` |
+| `explain` | `entry` | One non-empty semantic path, ID, or alias | `mant.excerpt/v0.8` |
+| `search` | Search fields below | Defaults are applied while decoding | `mant.search/v0.8` |
 
-Request JSON uses only the canonical outline detail `"entries"`; v7 rejects
+Request JSON uses only the canonical outline detail `"entries"`; v0.8 rejects
 `"options"`. The command-line parser alone retains `--outline=options` as a
-human-facing alias for `--outline=entries`. Outline v7 responses always emit
+human-facing alias for `--outline=entries`. Outline v0.8 responses always emit
 `"detail":"entries"` for the semantic-entry form.
 
 Search view fields are:
@@ -367,7 +376,7 @@ Request a full manual:
 
 ```json
 {
-  "schema": "mant.request/v7",
+  "schema": "mant.request/v0.8",
   "input": {
     "kind": "document",
     "selector": "printf",
@@ -383,7 +392,7 @@ Discover all sections and semantic entries:
 
 ```json
 {
-  "schema": "mant.request/v7",
+  "schema": "mant.request/v0.8",
   "input": {
     "kind": "document",
     "selector": "tar"
@@ -399,7 +408,7 @@ Explain one semantic entry directly (sections with the same name are ignored):
 
 ```json
 {
-  "schema": "mant.request/v7",
+  "schema": "mant.request/v0.8",
   "input": {
     "kind": "document",
     "selector": "tar"
@@ -415,7 +424,7 @@ Retrieve a section and one option by selectors returned from an outline:
 
 ```json
 {
-  "schema": "mant.request/v7",
+  "schema": "mant.request/v0.8",
   "input": {
     "kind": "document",
     "selector": "tar"
@@ -434,7 +443,7 @@ Search a Markdown document:
 
 ```json
 {
-  "schema": "mant.request/v7",
+  "schema": "mant.request/v0.8",
   "input": {
     "kind": "file",
     "path": "README.md",
@@ -458,7 +467,7 @@ A shell client can send a request without a temporary file:
 
 ```sh
 printf '%s\n' \
-  '{"schema":"mant.request/v7","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"entries"}}' \
+  '{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"tar"},"view":{"kind":"outline","detail":"entries"}}' \
   | mant --request-json --format json --compact
 ```
 
@@ -468,10 +477,10 @@ printf '%s\n' \
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `schema` | Yes | `mant.query/v7` |
+| `schema` | Yes | `mant.query/v0.8` |
 | `label` | Yes | Human-readable source label |
 | `address` | No | Exact registered Markdown source or manual name and section |
-| `document` | No | Normalized `mant.document/v7` document |
+| `document` | No | Normalized `mant.document/v0.8` document |
 | `tldr` | No | Normalized external or embedded quick reference |
 
 A successful runtime result contains useful `document`, `tldr`, or both. The
@@ -493,13 +502,13 @@ An abbreviated but structurally valid Markdown result is:
 
 ```json
 {
-  "schema": "mant.query/v7",
+  "schema": "mant.query/v0.8",
   "label": "guide.md",
   "document": {
-    "schema": "mant.document/v7",
+    "schema": "mant.document/v0.8",
     "producer": {
       "name": "mant",
-      "version": "0.7.1",
+      "version": "0.8.0",
       "engine": {
         "name": "pulldown-cmark",
         "version": "0.13"
@@ -522,7 +531,7 @@ hard-code the illustrative value above.
 
 ## Document Response and IR Projection
 
-`DocumentResponse` is the v7 wire projection of ManT's renderer-neutral
+`DocumentResponse` is the v0.8 wire projection of ManT's renderer-neutral
 `mant-ir::Document`. It describes semantics and normalized layout without
 exposing libmandoc pointers, roff macro nodes, internal indexes, HTML, or TUI
 components. Schema and producer metadata belong to the response envelope, not
@@ -532,7 +541,7 @@ to the reusable in-memory IR.
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | Exact `mant.document/v7` marker |
+| `schema` | Exact `mant.document/v0.8` marker |
 | `producer` | ManT version and parser engine |
 | `source` | Original source format and path |
 | `meta` | Normalized title, section, date, volume, OS, architecture, names, and alias target |
@@ -683,7 +692,7 @@ before an agent requests content:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.outline/v7` |
+| `schema` | `mant.outline/v0.8` |
 | `detail` | Echoed `sections` or `entries` mode |
 | `label` | Query label |
 | `source`, `meta` | Optional document identity |
@@ -713,7 +722,7 @@ An illustrative response is:
 
 ```json
 {
-  "schema": "mant.outline/v7",
+  "schema": "mant.outline/v0.8",
   "detail": "entries",
   "label": "tool.md",
   "source": {
@@ -756,12 +765,12 @@ An illustrative response is:
 
 ## Excerpt Projection
 
-`mant.excerpt/v7` returns complete selected content without returning unrelated
+`mant.excerpt/v0.8` returns complete selected content without returning unrelated
 sections:
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.excerpt/v7` |
+| `schema` | `mant.excerpt/v0.8` |
 | `label` | Query label |
 | `producer`, `source`, `meta` | Optional document identity |
 | `diagnostics` | Relevant recoverable findings |
@@ -771,13 +780,19 @@ Selection kinds are:
 
 - `tldr`, containing one complete `TldrDocument`;
 - `document-root`, containing root `blocks`;
-- `document-section`, containing a complete section subtree and breadcrumbs;
-- `document-entry`, containing one complete definition item and breadcrumbs.
+- `document-section`, containing a complete section subtree;
+- `document-entry`, containing one complete definition item.
+
+Every selection has an `outline` trail. Its `ancestors` array contains compact
+`path`, `id`, and `title` references from the outermost section to the direct
+parent. Its typed terminal `node` contains the selected node's `kind`, `path`,
+`id`, and `title`; a `document-entry` node additionally retains `role`, `case`,
+and normalized `names`. Empty ancestor arrays are omitted.
 
 Selectors may be outline paths, document IDs, or semantic aliases. Overlapping
 selections are deduplicated, and source order is preserved. Selecting a
-section includes its descendants. Breadcrumbs identify ancestors without
-copying their blocks.
+section includes its descendants. The outline trail identifies ancestors
+without copying their blocks.
 
 The `excerpt` view and `--node` first recognize reserved root and tldr
 selectors, then resolve exact paths or IDs across all sections and entries,
@@ -796,14 +811,14 @@ There is intentionally no separate explanation response schema.
 
 ## Search Projection
 
-`mant.search/v7` searches one canonical full CommonMark render and returns
+`mant.search/v0.8` searches one canonical full CommonMark render and returns
 both structural locations and rendered coordinates.
 
 ### Result Envelope
 
 | Field | Meaning |
 | --- | --- |
-| `schema` | `mant.search/v7` |
+| `schema` | `mant.search/v0.8` |
 | `label`, `source`, `meta` | Source identity |
 | `query` | Fully normalized search settings |
 | `render` | Coordinate-space descriptor |
@@ -844,22 +859,25 @@ the canonical Markdown. `scope = "markdown"` also allows matches in markup.
 Each match includes:
 
 - a one-based global `ordinal` that is not reset by pagination;
-- the nearest reusable `node` accepted by excerpt selection;
-- an optional containing `section`;
+- an `outline` trail ending at the nearest reusable node accepted by excerpt
+  selection;
 - exact `matchedText`;
 - its Markdown range;
 - an optional original `source` span;
 - a human-readable `preview`;
 - optional full Markdown context lines.
 
-The node union uses the same `tldr`, `document-root`, `document-section`, and
-`document-entry` identities as outlines.
+The trail has the same `ancestors` and typed terminal `node` shape used by
+excerpt selections. The node union uses the same `tldr`, `document-root`,
+`document-section`, and `document-entry` identities as outlines. Consequently,
+search and explain consumers can render one complete tree chain without
+reconstructing ancestry from separate fields.
 
 A complete no-match response is:
 
 ```json
 {
-  "schema": "mant.search/v7",
+  "schema": "mant.search/v0.8",
   "label": "tar",
   "query": {
     "pattern": "definitely-not-present",
@@ -891,7 +909,7 @@ A complete no-match response is:
 
 `mant --mcp` is a long-running Model Context Protocol server over standard
 input and output. It is an alternate transport over the same `mant-engine`
-queries, not `mant.cli/v7` framing and not a separate document model.
+queries, not `mant.cli/v0.8` framing and not a separate document model.
 
 The server uses JSON-RPC 2.0 newline-delimited MCP stdio messages. One input
 line is limited to 8 MiB. Standard output is exclusively MCP traffic;
@@ -915,7 +933,7 @@ With the current runtime, a client requesting `2025-11-25` receives:
   },
   "serverInfo": {
     "name": "mant",
-    "version": "0.7.1"
+    "version": "0.8.0"
   },
   "instructions": "Read locally installed Markdown documents and manual pages by name. Use mant_documents_list for discovery, optionally select a configured source, then call mant_document_outline before retrieving IDs, paths, or aliases. Files may change between calls; this server does not update sources."
 }
@@ -933,10 +951,10 @@ read-only tools:
 | Tool | Required input | Optional input | Output |
 | --- | --- | --- | --- |
 | `mant_documents_list` | None | `query`, `kind`, `source`, `manualSection`, `limit`, `offset` | Paginated document catalog |
-| `mant_document_outline` | `name` | `source` or `manualSection`; `detail`, default `entries` | `mant.outline/v7` |
-| `mant_document_get` | `name`, non-empty `selectors` | `source` or `manualSection` | `mant.excerpt/v7` |
-| `mant_document_explain` | `name`, `entry` | `source` or `manualSection` | `mant.excerpt/v7` |
-| `mant_document_search` | `name`, `pattern` | `source` or `manualSection`, plus search settings | `mant.search/v7` |
+| `mant_document_outline` | `name` | `source` or `manualSection`; `detail`, default `entries` | `mant.outline/v0.8` |
+| `mant_document_get` | `name`, non-empty `selectors` | `source` or `manualSection` | `mant.excerpt/v0.8` |
+| `mant_document_explain` | `name`, `entry` | `source` or `manualSection` | `mant.excerpt/v0.8` |
+| `mant_document_search` | `name`, `pattern` | `source` or `manualSection`, plus search settings | `mant.search/v0.8` |
 
 Every tool is annotated read-only, non-destructive, and
 closed-world. Document tools resolve one name through root Markdown,
@@ -1050,7 +1068,7 @@ than inventing a ManT error schema.
 2. Run `mant --protocol-version --compact` and require compatible identifiers.
 3. Obtain `mant --schema request` and the expected response schema, or use a
    schema catalog pinned with the executable.
-4. Construct a closed `mant.request/v7` object.
+4. Construct a closed `mant.request/v0.8` object.
 5. Spawn `mant --request-json --format json --compact`.
 6. Write one UTF-8 request and close stdin.
 7. Drain stdout and stderr concurrently and apply a timeout.

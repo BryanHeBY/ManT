@@ -187,7 +187,7 @@ pub fn query_available_documents(
         .map(document_summary)
         .collect::<Vec<_>>();
     Ok(DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: u32::try_from(total).unwrap_or(u32::MAX),
         returned: u32::try_from(documents.len()).unwrap_or(u32::MAX),
         offset: u32::try_from(offset).unwrap_or(u32::MAX),

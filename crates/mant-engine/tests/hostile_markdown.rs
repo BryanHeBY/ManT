@@ -168,7 +168,7 @@ fn verify_search_result(
             found.markdown.start_line >= 1 && found.markdown.start_line <= result.render.line_count,
             "{label}: match line must exist in the render"
         );
-        let selector = vec![found.node.path().to_owned()];
+        let selector = vec![found.outline.node.path().to_owned()];
         select_excerpt(query, &selector).unwrap_or_else(|error| {
             panic!("{label}: match node {selector:?} must be selectable: {error}")
         });

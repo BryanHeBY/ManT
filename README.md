@@ -157,8 +157,9 @@ and `TERM=dumb` receive plain text.
 `--color always|never` overrides detection, while an explicit `--format`
 continues to select Markdown, text, or JSON.
 
-Search returns the nearest reusable outline node and exact generated-Markdown
-coordinates:
+Search returns a complete outline trail to the nearest reusable node together
+with exact generated-Markdown coordinates. Text output presents the same
+ancestor chain used by `--explain`:
 
 ```sh
 mant tar --search=--acls --context 1

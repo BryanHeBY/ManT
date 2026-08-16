@@ -93,7 +93,7 @@ Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
 pagination. Plain `--find` output is tab-separated as
 the canonical catalog path and `kind`, while `--format json` returns
-`mant.catalog/v7`. `--list` groups the same hierarchy beneath `documents`,
+`mant.catalog/v0.8`. `--list` groups the same hierarchy beneath `documents`,
 `sources/SOURCE`, or `manual/SECTION`.
 
 When stdin and stdout are terminals, discovery text longer than the terminal
@@ -635,7 +635,7 @@ a native CLI interface and is not exposed through the read-only MCP server.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v7` object from standard input.
+- `--request-json`: Read one closed `mant.request/v0.8` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
@@ -648,25 +648,27 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v7",
-  "nativeApiVersion": "7",
-  "requestSchema": "mant.request/v7",
-  "querySchema": "mant.query/v7",
-  "documentSchema": "mant.document/v7",
-  "outlineSchema": "mant.outline/v7",
-  "excerptSchema": "mant.excerpt/v7",
-  "searchSchema": "mant.search/v7",
-  "catalogSchema": "mant.catalog/v7"
+  "protocol": "mant.cli/v0.8",
+  "nativeApiVersion": "0.8",
+  "requestSchema": "mant.request/v0.8",
+  "querySchema": "mant.query/v0.8",
+  "documentSchema": "mant.document/v0.8",
+  "outlineSchema": "mant.outline/v0.8",
+  "excerptSchema": "mant.excerpt/v0.8",
+  "searchSchema": "mant.search/v0.8",
+  "catalogSchema": "mant.catalog/v0.8"
 }
 ```
 
-Request and response contracts advanced to v7 for shared document discovery
-and exact catalog addresses. The independent
-`mant.markdown/v1` search-coordinate contract remains unchanged.
-Future revisions may advance individual contracts only when their wire shapes
-change, so consumers must compare every exact schema identifier. Generated
-schemas use JSON Schema Draft 2020-12 and remain the authoritative field-level
-definition.
+The native request and response family follows ManT's pre-stable minor release
+line: ManT 0.8.x uses v0.8, and patch releases keep the same wire shape. The
+former experimental bare v1 through v7 query schemas are no longer accepted.
+Excerpt and search results now share a complete outline trail, so both human
+output and structured consumers receive the same ancestor chain and terminal
+node. Independent contracts such as the unchanged `mant.markdown/v1`
+search-coordinate schema keep their own identifiers. Consumers must compare
+every exact schema identifier; generated JSON Schema Draft 2020-12 definitions
+remain authoritative.
 The bundled [mant-protocol(5)](mant-protocol.md)
 supplies the complete field reference, examples, compatibility policy,
 coordinate rules, and MCP tool contracts.

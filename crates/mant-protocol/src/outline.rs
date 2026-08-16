@@ -13,9 +13,9 @@ use crate::{NodePath, Producer};
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum OutlineSchema {
-    /// Version 7 of the outline protocol.
-    #[serde(rename = "mant.outline/v7")]
-    V7,
+    /// Version 0.8 of the pre-stable outline protocol.
+    #[serde(rename = "mant.outline/v0.8")]
+    V0Dot8,
 }
 
 /// Amount of semantic detail included in an outline projection.
@@ -31,7 +31,7 @@ pub enum OutlineDetail {
 /// A block-free tree used to discover selectable query content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:outline:v7"))]
+#[schemars(extend("$id" = "urn:mant:outline:v0.8"))]
 pub struct QueryOutline {
     /// Exact response schema discriminator.
     pub schema: OutlineSchema,
@@ -169,15 +169,15 @@ impl OutlineNode {
 /// Exact schema marker for selected query content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExcerptSchema {
-    /// Version 7 of the excerpt protocol.
-    #[serde(rename = "mant.excerpt/v7")]
-    V7,
+    /// Version 0.8 of the pre-stable excerpt protocol.
+    #[serde(rename = "mant.excerpt/v0.8")]
+    V0Dot8,
 }
 
 /// One or more independently selected nodes from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:excerpt:v7"))]
+#[schemars(extend("$id" = "urn:mant:excerpt:v0.8"))]
 pub struct QueryExcerpt {
     /// Exact response schema discriminator.
     pub schema: ExcerptSchema,
@@ -209,54 +209,70 @@ pub struct QueryExcerpt {
 pub enum ExcerptSelection {
     /// Optional quick-reference content preceding the primary document.
     Tldr {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Stable document-local identity.
-        id: NodeId,
-        /// Display title.
-        title: String,
+        /// Complete logical location in the document outline.
+        outline: OutlineTrail,
         /// Complete quick-reference content.
         document: TldrDocument,
     },
     /// Complete document content that appears before the first heading.
     DocumentRoot {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Virtual document-root identity.
-        id: NodeId,
-        /// Display title for the leading content.
-        title: String,
+        /// Complete logical location in the document outline.
+        outline: OutlineTrail,
         /// Complete leading blocks.
         blocks: Vec<Block>,
     },
     /// Complete selected document node, including all descendant sections.
     DocumentSection {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Stable document-local section identity.
-        id: NodeId,
-        /// Section heading text.
-        title: String,
-        /// Ordered ancestors from the document root to the parent section.
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        breadcrumbs: Vec<OutlineReference>,
+        /// Complete logical location in the document outline.
+        outline: OutlineTrail,
         /// Complete selected section including descendants.
         section: Section,
     },
     /// One addressable semantic definition and its complete description.
     DocumentEntry {
-        /// Canonical structural outline path.
-        path: NodePath,
-        /// Stable document-local entry identity.
-        id: NodeId,
-        /// Primary display term.
-        title: String,
-        /// Ordered containing sections from outermost to innermost.
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        breadcrumbs: Vec<OutlineReference>,
+        /// Complete logical location in the document outline.
+        outline: OutlineTrail,
         /// Complete semantic definition.
         entry: DefinitionItem,
     },
+}
+
+impl ExcerptSelection {
+    /// Return the complete logical location of this selection.
+    #[must_use]
+    pub const fn outline(&self) -> &OutlineTrail {
+        match self {
+            Self::Tldr { outline, .. }
+            | Self::DocumentRoot { outline, .. }
+            | Self::DocumentSection { outline, .. }
+            | Self::DocumentEntry { outline, .. } => outline,
+        }
+    }
+}
+
+/// Complete logical location of one addressable document node.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OutlineTrail {
+    /// Ordered ancestors from the document root to the direct parent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ancestors: Vec<OutlineReference>,
+    /// Selected or matching node at the end of the trail.
+    pub node: OutlineNodeReference,
+}
+
+impl OutlineTrail {
+    /// Return the canonical structural path of the terminal node.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        self.node.path()
+    }
+
+    /// Return the display title of the terminal node.
+    #[must_use]
+    pub fn title(&self) -> &str {
+        self.node.title()
+    }
 }
 
 /// Compact ancestor identity attached to an excerpt selection.
@@ -269,4 +285,91 @@ pub struct OutlineReference {
     pub id: NodeId,
     /// Display title.
     pub title: String,
+}
+
+/// Compact typed identity for the terminal node in an [`OutlineTrail`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum OutlineNodeReference {
+    /// Optional quick-reference node.
+    Tldr {
+        /// Canonical structural outline path.
+        path: NodePath,
+        /// Stable document-local identity.
+        id: NodeId,
+        /// Display title.
+        title: String,
+    },
+    /// Addressable content before the first heading.
+    DocumentRoot {
+        /// Canonical structural outline path.
+        path: NodePath,
+        /// Virtual document-root identity.
+        id: NodeId,
+        /// Display title.
+        title: String,
+    },
+    /// One semantic document section.
+    DocumentSection {
+        /// Canonical structural outline path.
+        path: NodePath,
+        /// Stable document-local identity.
+        id: NodeId,
+        /// Section heading text.
+        title: String,
+    },
+    /// One semantic command, option, or variable definition.
+    DocumentEntry {
+        /// Canonical structural outline path.
+        path: NodePath,
+        /// Stable document-local identity.
+        id: NodeId,
+        /// Primary display term.
+        title: String,
+        /// Semantic category of the definition.
+        role: DefinitionRole,
+        /// Alias case-matching policy.
+        case: DefinitionCase,
+        /// Normalized selectable aliases.
+        names: Vec<String>,
+    },
+}
+
+impl OutlineNodeReference {
+    /// Return the canonical structural path.
+    #[must_use]
+    pub fn path(&self) -> &str {
+        match self {
+            Self::Tldr { path, .. }
+            | Self::DocumentRoot { path, .. }
+            | Self::DocumentSection { path, .. }
+            | Self::DocumentEntry { path, .. } => path,
+        }
+    }
+
+    /// Return the stable document-local identity.
+    #[must_use]
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Tldr { id, .. }
+            | Self::DocumentRoot { id, .. }
+            | Self::DocumentSection { id, .. }
+            | Self::DocumentEntry { id, .. } => id,
+        }
+    }
+
+    /// Return the display title.
+    #[must_use]
+    pub fn title(&self) -> &str {
+        match self {
+            Self::Tldr { title, .. }
+            | Self::DocumentRoot { title, .. }
+            | Self::DocumentSection { title, .. }
+            | Self::DocumentEntry { title, .. } => title,
+        }
+    }
 }

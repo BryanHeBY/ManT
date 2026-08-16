@@ -28,10 +28,10 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/tar");
 }
 
-/// `--acls` option is addressable through a v7 outline and
+/// `--acls` option is addressable through a v0.8 outline and
 /// `select_excerpt` returns its identity.
 #[test]
-fn options_are_addressable_in_v7_outlines_and_excerpts() {
+fn options_are_addressable_in_v0_8_outlines_and_excerpts() {
     let document = fedora44_manual("tar");
     let query = query_for_document("tar", document);
     let acls = semantic_definition_items(document)
@@ -83,17 +83,17 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
         .matches
         .iter()
         .find(|found| {
-            matches!(&found.node,
-                mant_protocol::SearchNode::DocumentEntry { names, .. }
+            matches!(&found.outline.node,
+                mant_protocol::OutlineNodeReference::DocumentEntry { names, .. }
                 if names.iter().any(|name| name == "--acls"))
         })
         .expect("--acls option match");
-    assert!(option.node.path().contains("/e"));
+    assert!(option.outline.node.path().contains("/e"));
     assert!(option.markdown.start_line > 1);
     assert!(option.markdown.start_column > 0);
     assert!(option.preview.contains("--acls"));
 
-    let excerpt = select_excerpt(&query, &[option.node.path().to_owned()])
+    let excerpt = select_excerpt(&query, &[option.outline.node.path().to_owned()])
         .expect("search node can be passed directly to --node");
     assert!(matches!(
         excerpt.selections.as_slice(),

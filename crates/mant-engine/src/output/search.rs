@@ -1,7 +1,7 @@
 //! Presents structure-aware search results for terminals and language models.
 
 use mant_ir::DefinitionRole;
-use mant_protocol::{QuerySearch, SearchNode};
+use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch};
 use pulldown_cmark::{Event, Parser};
 
 /// Semantic roles in the grep-like search presentation.
@@ -101,10 +101,8 @@ pub fn render_search_text_with(
                 found.markdown.start_line, found.markdown.start_column
             ),
         );
-        output.push(SearchTextRole::Muted, " [");
-        output.push(SearchTextRole::Path, found.node.path());
-        output.push(SearchTextRole::Muted, "] ");
-        output.push(search_node_role(&found.node), found.node.title());
+        output.plain("  ");
+        render_outline_trail(&mut output, &found.outline);
         output.line();
         if found.context.is_empty() {
             output.plain("  ");
@@ -206,12 +204,31 @@ where
     }
 }
 
-const fn search_node_role(node: &SearchNode) -> SearchTextRole {
+fn render_outline_trail<F>(output: &mut SearchTextRenderer<F>, trail: &OutlineTrail)
+where
+    F: FnMut(SearchTextRole, &str) -> String,
+{
+    output.push(SearchTextRole::Muted, "Outline ");
+    output.push(SearchTextRole::Path, trail.path());
+    output.push(SearchTextRole::Muted, ": ");
+    for (index, ancestor) in trail.ancestors.iter().enumerate() {
+        if index > 0 {
+            output.push(SearchTextRole::Muted, " > ");
+        }
+        output.push(SearchTextRole::Heading, &ancestor.title);
+    }
+    if !trail.ancestors.is_empty() {
+        output.push(SearchTextRole::Muted, " > ");
+    }
+    output.push(search_node_role(&trail.node), trail.title());
+}
+
+const fn search_node_role(node: &OutlineNodeReference) -> SearchTextRole {
     match node {
-        SearchNode::DocumentEntry { role, .. } => SearchTextRole::Definition(*role),
-        SearchNode::Tldr { .. }
-        | SearchNode::DocumentRoot { .. }
-        | SearchNode::DocumentSection { .. } => SearchTextRole::Heading,
+        OutlineNodeReference::DocumentEntry { role, .. } => SearchTextRole::Definition(*role),
+        OutlineNodeReference::Tldr { .. }
+        | OutlineNodeReference::DocumentRoot { .. }
+        | OutlineNodeReference::DocumentSection { .. } => SearchTextRole::Heading,
     }
 }
 
@@ -255,22 +272,26 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
         blocks.push(format!(
             "## {}. {}",
             found.ordinal,
-            code_span(found.node.title())
+            code_span(found.outline.title())
         ));
         let mut details = vec![
-            format!("- Node: {}", code_span(found.node.path())),
+            format!("- Outline: {}", code_span(found.outline.path())),
+            format!(
+                "- Trail: {}",
+                found
+                    .outline
+                    .ancestors
+                    .iter()
+                    .map(|ancestor| code_span(&ancestor.title))
+                    .chain(std::iter::once(code_span(found.outline.title())))
+                    .collect::<Vec<_>>()
+                    .join(" → ")
+            ),
             format!(
                 "- Markdown: line {}, column {}",
                 found.markdown.start_line, found.markdown.start_column
             ),
         ];
-        if let Some(section) = &found.section {
-            details.push(format!(
-                "- Section: {} ({})",
-                code_span(&section.title),
-                code_span(&section.path)
-            ));
-        }
         if let Some(source) = found.source {
             details.push(format!(
                 "- Source: line {}, column {}",
@@ -318,9 +339,9 @@ fn escape_text(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use mant_protocol::{
-        MarkdownSchema, QuerySearch, SearchCase, SearchMarkdownRange, SearchMatch, SearchNode,
-        SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSchema,
-        SearchScope, SearchSyntax,
+        MarkdownSchema, OutlineNodeReference, OutlineReference, OutlineTrail, QuerySearch,
+        SearchCase, SearchMarkdownRange, SearchMatch, SearchQuery, SearchRender,
+        SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope, SearchSyntax,
     };
 
     use super::{
@@ -330,7 +351,7 @@ mod tests {
 
     fn result() -> QuerySearch {
         QuerySearch {
-            schema: SearchSchema::V7,
+            schema: SearchSchema::V0Dot8,
             label: "tar".to_owned(),
             source: None,
             meta: Some(mant_ir::DocumentMeta {
@@ -362,15 +383,21 @@ mod tests {
             next_offset: None,
             matches: vec![SearchMatch {
                 ordinal: 1,
-                node: SearchNode::DocumentEntry {
-                    path: "5.3/e17".to_owned().into(),
-                    id: "acls-option".to_owned().into(),
-                    title: "--acls".to_owned(),
-                    role: mant_ir::DefinitionRole::Option,
-                    case: mant_ir::DefinitionCase::Sensitive,
-                    names: vec!["--acls".to_owned()],
+                outline: OutlineTrail {
+                    ancestors: vec![OutlineReference {
+                        path: "5.3".to_owned().into(),
+                        id: "archive-options".to_owned().into(),
+                        title: "Archive options".to_owned(),
+                    }],
+                    node: OutlineNodeReference::DocumentEntry {
+                        path: "5.3/e17".to_owned().into(),
+                        id: "acls-option".to_owned().into(),
+                        title: "--acls".to_owned(),
+                        role: mant_ir::DefinitionRole::Option,
+                        case: mant_ir::DefinitionCase::Sensitive,
+                        names: vec!["--acls".to_owned()],
+                    },
                 },
-                section: None,
                 matched_text: "--acls".to_owned(),
                 markdown: SearchMarkdownRange {
                     start_byte: 10,
@@ -390,12 +417,16 @@ mod tests {
     #[test]
     fn search_reports_are_human_readable_but_keep_machine_node_paths() {
         let result = result();
-        assert!(render_search_text(&result).contains("tar(1):824:3 [5.3/e17] --acls"));
+        assert!(
+            render_search_text(&result)
+                .contains("tar(1):824:3  Outline 5.3/e17: Archive options > --acls")
+        );
         assert!(render_search_text(&result).contains("  --acls"));
         assert!(!render_search_text(&result).contains("`--acls`"));
         let markdown = render_search_markdown(&result);
         assert!(markdown.contains("# Search results for `--acls` in tar(1)"));
-        assert!(markdown.contains("- Node: `5.3/e17`"));
+        assert!(markdown.contains("- Outline: `5.3/e17`"));
+        assert!(markdown.contains("- Trail: `Archive options` → `--acls`"));
     }
 
     #[test]

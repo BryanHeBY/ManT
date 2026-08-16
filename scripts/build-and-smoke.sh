@@ -41,8 +41,8 @@ grep -Fq 'mant --input README.md' <<<"$help"
 grep -Fq -- '--ui' <<<"$help"
 
 query=$("$mant" --input README.md --format json --compact)
-grep -Fq '"schema":"mant.query/v7"' <<<"$query"
-grep -Fq '"schema":"mant.document/v7"' <<<"$query"
+grep -Fq '"schema":"mant.query/v0.8"' <<<"$query"
+grep -Fq '"schema":"mant.document/v0.8"' <<<"$query"
 
 printf '\nproduct build succeeded\n'
 printf '  executable: %s\n' "$mant"

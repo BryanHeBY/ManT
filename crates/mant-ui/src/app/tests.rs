@@ -135,7 +135,7 @@ fn document_catalog() -> DocumentCatalog {
         },
     ];
     DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: 2,
         returned: 2,
         offset: 0,
@@ -159,7 +159,7 @@ fn overflowing_document_catalog() -> DocumentCatalog {
         })
         .collect::<Vec<_>>();
     DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: u32::try_from(documents.len()).expect("fixture length"),
         returned: u32::try_from(documents.len()).expect("fixture length"),
         offset: 0,
@@ -216,7 +216,7 @@ fn document_finder_tree_collapses_expands_and_opens_a_nested_document() {
         origin: MarkdownOrigin::Documents,
     };
     let catalog = DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: 1,
         returned: 1,
         offset: 0,
@@ -375,7 +375,7 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
         })
         .collect::<Vec<_>>();
     let catalog = DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: 4,
         returned: 4,
         offset: 0,
@@ -401,7 +401,7 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
 #[test]
 fn document_finder_keeps_matches_found_only_in_a_hierarchical_path() {
     let catalog = DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: 1,
         returned: 1,
         offset: 0,
@@ -427,7 +427,7 @@ fn document_finder_keeps_matches_found_only_in_a_hierarchical_path() {
 #[test]
 fn document_finder_queries_beyond_the_initial_catalog_page() {
     let initial = DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: 20_000,
         returned: 1,
         offset: 0,
@@ -457,7 +457,7 @@ fn document_finder_queries_beyond_the_initial_catalog_page() {
     );
 
     app.complete_discovery(DocumentCatalog {
-        schema: CatalogSchema::V7,
+        schema: CatalogSchema::V0Dot8,
         total: 2,
         returned: 2,
         offset: 0,

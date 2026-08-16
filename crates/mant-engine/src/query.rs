@@ -1657,7 +1657,7 @@ Full documentation.
 
     fn request() -> QueryRequest {
         QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: " tool ".to_owned(),
                 source: None,
@@ -1723,7 +1723,7 @@ Full documentation.
         host.locate.as_mut().expect("manual page").section = "3".to_owned();
         host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: None,
@@ -1767,7 +1767,7 @@ Full documentation.
         let mut host = host(Ok(document(SourceFormat::Man, false, true)));
         host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: None,
@@ -1791,7 +1791,7 @@ Full documentation.
         let mut host = host(Err("manual must not be read".to_owned()));
         host.tldr = Ok(Some(tldr()));
         let request_for = |section: &str| QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: None,
@@ -1818,7 +1818,7 @@ Full documentation.
         host.registered_document = Some(PathBuf::from("/documents/tool.md"));
         host.markdown = Ok("# Tool\n\nSource body.\n".to_owned());
         let request = QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: Some("team".to_owned()),
@@ -1852,7 +1852,7 @@ Full documentation.
         markdown.registered_document = Some(PathBuf::from("/documents/en/tool.md"));
         markdown.markdown = Ok("# Tool\n\nBody.\n".to_owned());
         let request = QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: "documents/en/tool".to_owned(),
                 source: None,
@@ -1875,7 +1875,7 @@ Full documentation.
 
         let manual = host(Ok(document(SourceFormat::Man, false, true)));
         let request = QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: "manual/1/tool".to_owned(),
                 source: None,
@@ -1959,7 +1959,7 @@ Full documentation.
         host.locate = Err("section not found".to_owned());
         host.tldr = Ok(Some(tldr()));
         let request = QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: "tool".to_owned(),
                 source: None,
@@ -2137,7 +2137,7 @@ Full documentation.
         assert_eq!(
             query_with(
                 &QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: " ".to_owned(),
                         source: None,
@@ -2305,7 +2305,7 @@ Full documentation.
         host.markdown = Ok("# Tool\n\n## Options\n\n- `--help`: Show help.\n".to_owned());
         let result = query_with(
             &QueryRequest {
-                schema: RequestSchema::V7,
+                schema: RequestSchema::V0Dot8,
                 input: QueryInput::File {
                     path: "docs/tool.md".to_owned(),
                     format: InputFormat::Markdown,

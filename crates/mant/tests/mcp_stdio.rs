@@ -112,7 +112,7 @@ fn assert_tool_replies(replies: &[Value]) {
         "MCP search must omit host paths"
     );
     assert_eq!(
-        search["result"]["structuredContent"]["matches"][0]["node"]["kind"],
+        search["result"]["structuredContent"]["matches"][0]["outline"]["node"]["kind"],
         "document-root"
     );
 
@@ -127,7 +127,7 @@ fn assert_tool_replies(replies: &[Value]) {
         "document-root"
     );
     assert_eq!(
-        excerpt["result"]["structuredContent"]["selections"][0]["path"],
+        excerpt["result"]["structuredContent"]["selections"][0]["outline"]["node"]["path"],
         "root"
     );
     assert!(
@@ -188,7 +188,7 @@ fn assert_semantic_replies(replies: &[Value]) {
         .expect("semantic outline reply");
     assert_eq!(
         outline["result"]["structuredContent"]["schema"],
-        "mant.outline/v7"
+        "mant.outline/v0.8"
     );
     let encoded = outline["result"]["structuredContent"].to_string();
     for role in ["option", "command", "environment-variable"] {

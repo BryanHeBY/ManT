@@ -121,7 +121,7 @@ pub fn search_query(
     let truncated = consumed < total;
 
     Ok(QuerySearch {
-        schema: SearchSchema::V7,
+        schema: SearchSchema::V0Dot8,
         label: query.label.clone(),
         source: query
             .document
@@ -242,8 +242,7 @@ fn build_match(
 
     SearchMatch {
         ordinal: u32::try_from(index.saturating_add(1)).unwrap_or(u32::MAX),
-        node: found.owner.node.clone(),
-        section: found.owner.section.clone(),
+        outline: found.owner.outline.clone(),
         matched_text: searchable[found.searchable.clone()].to_owned(),
         markdown: SearchMarkdownRange {
             start_byte: u64::try_from(found.markdown.start).unwrap_or(u64::MAX),
@@ -593,7 +592,7 @@ mod tests {
         let result = search_query(&query(), &request("access control")).expect("search");
 
         assert_eq!(result.total, 1);
-        assert_eq!(result.matches[0].node.path(), "1/e1");
+        assert_eq!(result.matches[0].outline.node.path(), "1/e1");
         assert_eq!(result.matches[0].matched_text, "access control");
         assert!(result.matches[0].markdown.start_line > 1);
         assert!(result.matches[0].preview.contains("**access control**"));
@@ -616,8 +615,8 @@ mod tests {
 
         let result = search_query(&query, &request("section tail")).expect("search");
         assert!(matches!(
-            &result.matches[0].node,
-            mant_protocol::SearchNode::DocumentSection { path, .. } if path == "1"
+            &result.matches[0].outline.node,
+            mant_protocol::OutlineNodeReference::DocumentSection { path, .. } if path == "1"
         ));
     }
 
@@ -638,11 +637,11 @@ mod tests {
 
         assert_eq!(result.total, 1);
         assert!(matches!(
-            &result.matches[0].node,
-            mant_protocol::SearchNode::DocumentRoot { path, id, .. }
+            &result.matches[0].outline.node,
+            mant_protocol::OutlineNodeReference::DocumentRoot { path, id, .. }
                 if path == "root" && id == "document-overview"
         ));
-        assert!(result.matches[0].section.is_none());
+        assert!(result.matches[0].outline.ancestors.is_empty());
         assert!(result.matches[0].preview.contains("preface needle"));
     }
 
@@ -674,21 +673,21 @@ Manual needle.
 
         let quick = search_query(&query, &request("quick needle")).expect("tldr search");
         assert!(matches!(
-            &quick.matches[0].node,
-            mant_protocol::SearchNode::Tldr { path, id, .. }
+            &quick.matches[0].outline.node,
+            mant_protocol::OutlineNodeReference::Tldr { path, id, .. }
                 if path == "0" && id == "tldr"
         ));
 
         let overview = search_query(&query, &request("overview needle")).expect("root search");
         assert!(matches!(
-            &overview.matches[0].node,
-            mant_protocol::SearchNode::DocumentRoot { path, .. } if path == "root"
+            &overview.matches[0].outline.node,
+            mant_protocol::OutlineNodeReference::DocumentRoot { path, .. } if path == "root"
         ));
 
         let manual = search_query(&query, &request("manual needle")).expect("section search");
         assert!(matches!(
-            &manual.matches[0].node,
-            mant_protocol::SearchNode::DocumentSection { path, id, .. }
+            &manual.matches[0].outline.node,
+            mant_protocol::OutlineNodeReference::DocumentSection { path, id, .. }
                 if path == "1" && id == "synopsis"
         ));
     }

@@ -34,7 +34,7 @@ use serde::Serialize;
 // ── Stable process protocol ────────────────────────────────────────────────
 
 /// Exact stdio protocol exposed to external process clients.
-pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v7";
+pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v0.8";
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 
@@ -436,13 +436,13 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_engine::native_api_version(),
-                request_schema: "mant.request/v7",
-                query_schema: "mant.query/v7",
-                document_schema: "mant.document/v7",
-                outline_schema: "mant.outline/v7",
-                excerpt_schema: "mant.excerpt/v7",
-                search_schema: "mant.search/v7",
-                catalog_schema: "mant.catalog/v7",
+                request_schema: "mant.request/v0.8",
+                query_schema: "mant.query/v0.8",
+                document_schema: "mant.document/v0.8",
+                outline_schema: "mant.outline/v0.8",
+                excerpt_schema: "mant.excerpt/v0.8",
+                search_schema: "mant.search/v0.8",
+                catalog_schema: "mant.catalog/v0.8",
             },
             pretty,
         ),
@@ -759,7 +759,7 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
     };
     (
         QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: name,
                 source,
@@ -1102,7 +1102,7 @@ mod tests {
             Ok(DoctorReport::new(
                 Producer {
                     name: "mant".to_owned(),
-                    version: "0.7.1".to_owned(),
+                    version: "0.8.0".to_owned(),
                     engine: None,
                 },
                 DoctorEnvironment {
@@ -1132,7 +1132,7 @@ mod tests {
 
         fn discover(&self, _query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
             Ok(DocumentCatalog {
-                schema: CatalogSchema::V7,
+                schema: CatalogSchema::V0Dot8,
                 total: 2,
                 returned: 2,
                 offset: 0,
@@ -1343,12 +1343,15 @@ mod tests {
         let host = FakeHost::new();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git","manualSection":"1"},"view":{"kind":"full"}}"#,
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"git","manualSection":"1"},"view":{"kind":"full"}}"#,
             &host,
         );
 
         assert_eq!(status, 0);
-        assert_eq!(output, "{\"schema\":\"mant.query/v7\",\"label\":\"git\"}\n");
+        assert_eq!(
+            output,
+            "{\"schema\":\"mant.query/v0.8\",\"label\":\"git\"}\n"
+        );
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 1);
     }
@@ -1357,13 +1360,13 @@ mod tests {
     fn malformed_or_extended_requests_fail_before_querying_the_host() {
         for input in [
             br"not-json".as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"   "},"view":{"kind":"full"}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"git"},"view":{"kind":"full"},"futureField":true}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"   "},"view":{"kind":"full"}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"git"},"view":{"kind":"excerpt","nodes":[]}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"","limit":10}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","limit":0}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"git","contextLines":101}}"#.as_slice(),
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"git"},"view":{"kind":"search","pattern":"[","syntax":"regex"}}"#.as_slice(),
         ] {
             let host = FakeHost::new();
             let (status, output, diagnostics) = invoke(
@@ -1383,24 +1386,24 @@ mod tests {
         let host = FakeHost::with_manual_and_tldr();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"demo"},"view":{"kind":"outline","detail":"sections"}}"#,
             &host,
         );
         assert_eq!(status, 0);
         let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
-        assert_eq!(outline["schema"], "mant.outline/v7");
+        assert_eq!(outline["schema"], "mant.outline/v0.8");
         assert_eq!(outline["detail"], "sections");
         assert!(diagnostics.is_empty());
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","selectors":["2.1"]}}"#,
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"demo"},"view":{"kind":"excerpt","selectors":["2.1"]}}"#,
             &host,
         );
         assert_eq!(status, 0);
         let excerpt: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(excerpt["schema"], "mant.excerpt/v7");
-        assert_eq!(excerpt["selections"][0]["path"], "2.1");
+        assert_eq!(excerpt["schema"], "mant.excerpt/v0.8");
+        assert_eq!(excerpt["selections"][0]["outline"]["node"]["path"], "2.1");
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 2);
     }
@@ -1423,8 +1426,8 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(value["schema"], "mant.excerpt/v7");
-        assert_eq!(value["selections"][0]["path"], "2.1");
+        assert_eq!(value["schema"], "mant.excerpt/v0.8");
+        assert_eq!(value["selections"][0]["outline"]["node"]["path"], "2.1");
         assert_eq!(value["selections"][0]["section"]["title"], "Common options");
         assert!(diagnostics.is_empty());
 
@@ -1436,7 +1439,7 @@ mod tests {
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("tldr excerpt JSON");
         assert_eq!(value["selections"][0]["kind"], "tldr");
-        assert_eq!(value["selections"][0]["path"], "0");
+        assert_eq!(value["selections"][0]["outline"]["node"]["path"], "0");
         assert_eq!(value["selections"][0]["document"]["title"], "demo");
         assert!(value.get("producer").is_none());
         assert!(value.get("diagnostics").is_none());
@@ -1501,9 +1504,9 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("excerpt JSON");
-        assert_eq!(value["schema"], "mant.excerpt/v7");
+        assert_eq!(value["schema"], "mant.excerpt/v0.8");
         assert_eq!(value["selections"][0]["kind"], "document-entry");
-        assert_eq!(value["selections"][0]["id"], "exclude");
+        assert_eq!(value["selections"][0]["outline"]["node"]["id"], "exclude");
         assert!(diagnostics.is_empty());
 
         let (status, output, diagnostics) = invoke(&["demo", "--explain=2"], b"", &host);
@@ -1522,7 +1525,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let outline: serde_json::Value = serde_json::from_str(&output).expect("outline JSON");
-        assert_eq!(outline["schema"], "mant.outline/v7");
+        assert_eq!(outline["schema"], "mant.outline/v0.8");
         let encoded = outline.to_string();
         for role in ["option", "command", "environment-variable"] {
             assert!(encoded.contains(&format!("\"role\":\"{role}\"")));
@@ -1561,7 +1564,7 @@ mod tests {
         assert_eq!(status, 0);
         let excerpt: serde_json::Value = serde_json::from_str(&output).expect("section excerpt");
         assert_eq!(excerpt["selections"][0]["kind"], "document-section");
-        assert_eq!(excerpt["selections"][0]["id"], "query");
+        assert_eq!(excerpt["selections"][0]["outline"]["node"]["id"], "query");
         assert!(diagnostics.is_empty());
 
         for (selector, role) in [("/s", "option"), ("$ENV:PATH", "environment-variable")] {
@@ -1580,7 +1583,7 @@ mod tests {
 
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"explain","entry":"query"}}"#,
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"demo"},"view":{"kind":"explain","entry":"query"}}"#,
             &host,
         );
         assert_eq!(status, 0);
@@ -1647,10 +1650,10 @@ mod tests {
 
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-        assert_eq!(value["schema"], "mant.search/v7");
+        assert_eq!(value["schema"], "mant.search/v0.8");
         assert_eq!(value["total"], 1);
-        assert_eq!(value["matches"][0]["node"]["path"], "2.1");
-        assert_eq!(value["matches"][0]["section"]["id"], "common-3");
+        assert_eq!(value["matches"][0]["outline"]["node"]["path"], "2.1");
+        assert_eq!(value["matches"][0]["outline"]["node"]["id"], "common-3");
         assert!(value["matches"][0]["markdown"]["startLine"].as_u64() > Some(1));
         assert!(diagnostics.is_empty());
 
@@ -1665,13 +1668,13 @@ mod tests {
         let host = FakeHost::with_manual();
         let (status, output, diagnostics) = invoke(
             &["--request-json", "--format", "json", "--compact"],
-            br#"{"schema":"mant.request/v7","input":{"kind":"document","selector":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
+            br#"{"schema":"mant.request/v0.8","input":{"kind":"document","selector":"demo"},"view":{"kind":"search","pattern":"options","limit":10}}"#,
             &host,
         );
 
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("search JSON");
-        assert_eq!(value["schema"], "mant.search/v7");
+        assert_eq!(value["schema"], "mant.search/v0.8");
         assert_eq!(value["query"]["syntax"], "literal");
         assert_eq!(value["query"]["scope"], "visible");
         assert!(
@@ -1720,12 +1723,12 @@ mod tests {
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("protocol JSON");
         assert_eq!(value["protocol"], CLI_PROTOCOL_VERSION);
-        assert_eq!(value["nativeApiVersion"], "7");
-        assert_eq!(value["requestSchema"], "mant.request/v7");
-        assert_eq!(value["outlineSchema"], "mant.outline/v7");
-        assert_eq!(value["excerptSchema"], "mant.excerpt/v7");
-        assert_eq!(value["searchSchema"], "mant.search/v7");
-        assert_eq!(value["catalogSchema"], "mant.catalog/v7");
+        assert_eq!(value["nativeApiVersion"], "0.8");
+        assert_eq!(value["requestSchema"], "mant.request/v0.8");
+        assert_eq!(value["outlineSchema"], "mant.outline/v0.8");
+        assert_eq!(value["excerptSchema"], "mant.excerpt/v0.8");
+        assert_eq!(value["searchSchema"], "mant.search/v0.8");
+        assert_eq!(value["catalogSchema"], "mant.catalog/v0.8");
         assert!(diagnostics.is_empty());
     }
 
@@ -1774,7 +1777,7 @@ mod tests {
         );
         assert_eq!(status, 0);
         let value: serde_json::Value = serde_json::from_str(&output).expect("catalog JSON");
-        assert_eq!(value["schema"], "mant.catalog/v7");
+        assert_eq!(value["schema"], "mant.catalog/v0.8");
         assert_eq!(value["documents"][0]["address"]["path"], "guide");
         assert!(value["documents"][0].get("sourcePath").is_none());
         assert!(diagnostics.is_empty());
@@ -1806,7 +1809,7 @@ mod tests {
             "https://json-schema.org/draft/2020-12/schema"
         );
         assert_eq!(value["additionalProperties"], false);
-        assert!(output.contains("mant.request/v7"));
+        assert!(output.contains("mant.request/v0.8"));
         assert!(diagnostics.is_empty());
         assert_eq!(host.query_calls.get(), 0);
         assert_eq!(host.update_calls.get(), 0);

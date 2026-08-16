@@ -10,7 +10,7 @@ pub use json::{
     render_update_json,
 };
 pub(crate) use markdown::{
-    MarkdownArtifact, MarkdownNode, MarkdownSection, render_addressable_markdown,
+    MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection, render_addressable_markdown,
 };
 pub use markdown::{
     MarkdownOptions, render_excerpt_markdown, render_excerpt_markdown_with_options,

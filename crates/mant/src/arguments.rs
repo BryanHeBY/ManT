@@ -1120,7 +1120,7 @@ fn normalize_query_source(
             QuerySource::InputStdin { format, view }
         } else {
             QuerySource::Arguments(QueryRequest {
-                schema: RequestSchema::V7,
+                schema: RequestSchema::V0Dot8,
                 input: QueryInput::File { path, format },
                 view,
             })
@@ -1133,7 +1133,7 @@ fn normalize_query_source(
             color,
         )?;
         QuerySource::Arguments(QueryRequest {
-            schema: RequestSchema::V7,
+            schema: RequestSchema::V0Dot8,
             input: QueryInput::Document {
                 selector: normalized.name,
                 source: options.configured_source,
@@ -1260,7 +1260,7 @@ mod tests {
             parse(&args(&["git"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "git".to_owned(),
                         source: None,
@@ -1453,7 +1453,7 @@ mod tests {
             .expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "printf".to_owned(),
                         source: None,
@@ -1717,7 +1717,7 @@ mod tests {
             parse(&args(&["gcc", "--outline"])).expect("outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "gcc".to_owned(),
                         source: None,
@@ -1741,7 +1741,7 @@ mod tests {
                 .expect("option outline"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "tar".to_owned(),
                         source: None,
@@ -1767,7 +1767,7 @@ mod tests {
             .expect("excerpt"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "gcc".to_owned(),
                         source: None,
@@ -1799,7 +1799,7 @@ mod tests {
                 parse(&args(&values)).expect("explain query"),
                 Command::Query {
                     source: QuerySource::Arguments(QueryRequest {
-                        schema: RequestSchema::V7,
+                        schema: RequestSchema::V0Dot8,
                         input: QueryInput::Document {
                             selector: "tar".to_owned(),
                             source: None,
@@ -1847,7 +1847,7 @@ mod tests {
             parse(&args(&["tar", "--search=--acls"])).expect("literal search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "tar".to_owned(),
                         source: None,
@@ -1896,7 +1896,7 @@ mod tests {
             .expect("regex search"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "git".to_owned(),
                         source: None,
@@ -2056,7 +2056,7 @@ mod tests {
             parse(&args(&["--", "--help"])).expect("query"),
             Command::Query {
                 source: QuerySource::Arguments(QueryRequest {
-                    schema: RequestSchema::V7,
+                    schema: RequestSchema::V0Dot8,
                     input: QueryInput::Document {
                         selector: "--help".to_owned(),
                         source: None,

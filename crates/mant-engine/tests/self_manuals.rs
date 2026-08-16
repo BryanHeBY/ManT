@@ -73,8 +73,8 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
     let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("TLDR alias");
     assert!(matches!(
         excerpt.selections.as_slice(),
-        [ExcerptSelection::Tldr { path, document, .. }]
-            if path == "0" && document.origin == TldrOrigin::Embedded
+        [ExcerptSelection::Tldr { outline, document, .. }]
+            if outline.path() == "0" && document.origin == TldrOrigin::Embedded
     ));
     let markdown = render_markdown(&query);
     assert!(!markdown.contains("<a "));

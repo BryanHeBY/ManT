@@ -21,8 +21,8 @@ pub use search::*;
 pub use selector::*;
 pub use update::*;
 
-/// Native API version negotiated independently from document schema versions.
-pub const NATIVE_API_VERSION: &str = "7";
+/// Pre-stable native API release line shared by the query protocol family.
+pub const NATIVE_API_VERSION: &str = "0.8";
 
 #[cfg(test)]
 mod tests {
@@ -30,6 +30,6 @@ mod tests {
 
     #[test]
     fn native_api_version_is_explicit() {
-        assert_eq!(NATIVE_API_VERSION, "7");
+        assert_eq!(NATIVE_API_VERSION, "0.8");
     }
 }

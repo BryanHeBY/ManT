@@ -508,7 +508,7 @@ mod tests {
         DoctorReport::new(
             Producer {
                 name: "mant".to_owned(),
-                version: "0.7.1".to_owned(),
+                version: "0.8.0".to_owned(),
                 engine: None,
             },
             DoctorEnvironment {

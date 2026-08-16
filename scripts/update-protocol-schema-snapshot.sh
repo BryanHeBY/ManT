@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 
-snapshot=tests/contracts/protocol-schemas-v7.json
+snapshot=tests/contracts/protocol-schemas-v0.8.json
 temporary=$(mktemp "${TMPDIR:-/tmp}/mant-protocol-schema.XXXXXX")
 trap 'rm -f "$temporary"' EXIT
 

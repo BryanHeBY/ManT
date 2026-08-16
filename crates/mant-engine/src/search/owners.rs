@@ -1,16 +1,15 @@
 //! Maps canonical Markdown offsets to renderer-supplied semantic node ranges.
 
 use mant_ir::SourceSpan;
-use mant_protocol::{SearchNode, SearchSectionReference};
+use mant_protocol::{OutlineNodeReference, OutlineTrail};
 
-use crate::output::{MarkdownArtifact, MarkdownNode, MarkdownSection};
+use crate::output::{MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownSection};
 
 #[derive(Clone)]
 pub(super) struct Owner {
     pub(super) start: usize,
     pub(super) end: usize,
-    pub(super) node: SearchNode,
-    pub(super) section: Option<SearchSectionReference>,
+    pub(super) outline: OutlineTrail,
     pub(super) source: Option<SourceSpan>,
 }
 
@@ -31,65 +30,7 @@ impl OwnerIndex {
         let mut tldr = None;
 
         for mapped in &artifact.nodes {
-            let range = mapped.range.clone();
-            let owner = match &mapped.node {
-                MarkdownNode::Tldr => Owner {
-                    start: range.start,
-                    end: range.end,
-                    node: SearchNode::Tldr {
-                        path: "0".to_owned().into(),
-                        id: "tldr".into(),
-                        title: "TLDR QUICK REFERENCE".to_owned(),
-                    },
-                    section: None,
-                    source: None,
-                },
-                MarkdownNode::DocumentRoot => Owner {
-                    start: range.start,
-                    end: range.end,
-                    node: SearchNode::DocumentRoot {
-                        path: "root".to_owned().into(),
-                        id: mant_ir::DOCUMENT_ROOT_ID.into(),
-                        title: "OVERVIEW".to_owned(),
-                    },
-                    section: None,
-                    source: None,
-                },
-                MarkdownNode::DocumentSection { section, source } => Owner {
-                    start: range.start,
-                    end: range.end,
-                    node: SearchNode::DocumentSection {
-                        path: section.path.to_string().into(),
-                        id: section.id.clone(),
-                        title: section.title.clone(),
-                    },
-                    section: Some(section_reference(section)),
-                    source: *source,
-                },
-                MarkdownNode::DocumentEntry {
-                    path,
-                    id,
-                    title,
-                    role,
-                    case,
-                    names,
-                    section,
-                    source,
-                } => Owner {
-                    start: range.start,
-                    end: range.end,
-                    node: SearchNode::DocumentEntry {
-                        path: path.to_string().into(),
-                        id: id.clone(),
-                        title: title.clone(),
-                        role: *role,
-                        case: *case,
-                        names: names.clone(),
-                    },
-                    section: section.as_ref().map(section_reference),
-                    source: *source,
-                },
-            };
+            let owner = owner_from_range(mapped);
             match mapped.node {
                 MarkdownNode::Tldr => tldr = Some(owner),
                 MarkdownNode::DocumentRoot => root = Some(owner),
@@ -157,8 +98,96 @@ impl OwnerIndex {
     }
 }
 
-fn section_reference(section: &MarkdownSection) -> SearchSectionReference {
-    SearchSectionReference {
+fn owner_from_range(mapped: &MarkdownNodeRange) -> Owner {
+    let range = mapped.range.clone();
+    let (outline, source) = match &mapped.node {
+        MarkdownNode::Tldr => (
+            OutlineTrail {
+                ancestors: Vec::new(),
+                node: OutlineNodeReference::Tldr {
+                    path: "0".to_owned().into(),
+                    id: "tldr".into(),
+                    title: "TLDR QUICK REFERENCE".to_owned(),
+                },
+            },
+            None,
+        ),
+        MarkdownNode::DocumentRoot => (
+            OutlineTrail {
+                ancestors: Vec::new(),
+                node: OutlineNodeReference::DocumentRoot {
+                    path: "root".to_owned().into(),
+                    id: mant_ir::DOCUMENT_ROOT_ID.into(),
+                    title: "OVERVIEW".to_owned(),
+                },
+            },
+            None,
+        ),
+        MarkdownNode::DocumentSection { section, source } => (
+            OutlineTrail {
+                ancestors: section.ancestors.clone(),
+                node: OutlineNodeReference::DocumentSection {
+                    path: section.path.to_string().into(),
+                    id: section.id.clone(),
+                    title: section.title.clone(),
+                },
+            },
+            *source,
+        ),
+        MarkdownNode::DocumentEntry {
+            path,
+            id,
+            title,
+            role,
+            case,
+            names,
+            section,
+            source,
+        } => (
+            OutlineTrail {
+                ancestors: entry_ancestors(section.as_ref()),
+                node: OutlineNodeReference::DocumentEntry {
+                    path: path.to_string().into(),
+                    id: id.clone(),
+                    title: title.clone(),
+                    role: *role,
+                    case: *case,
+                    names: names.clone(),
+                },
+            },
+            *source,
+        ),
+    };
+    Owner {
+        start: range.start,
+        end: range.end,
+        outline,
+        source,
+    }
+}
+
+fn entry_ancestors(section: Option<&MarkdownSection>) -> Vec<mant_protocol::OutlineReference> {
+    section.map_or_else(
+        || {
+            vec![mant_protocol::OutlineReference {
+                path: "root".to_owned().into(),
+                id: mant_ir::DOCUMENT_ROOT_ID.into(),
+                title: "OVERVIEW".to_owned(),
+            }]
+        },
+        |section| {
+            section
+                .ancestors
+                .iter()
+                .cloned()
+                .chain(std::iter::once(section_reference(section)))
+                .collect()
+        },
+    )
+}
+
+fn section_reference(section: &MarkdownSection) -> mant_protocol::OutlineReference {
+    mant_protocol::OutlineReference {
         path: section.path.to_string().into(),
         id: section.id.clone(),
         title: section.title.clone(),
