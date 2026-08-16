@@ -5,9 +5,7 @@ use std::fmt::Write as _;
 use anstyle::{AnsiColor, Style};
 use mant_engine::QueryViewResult;
 use mant_ir::{Block, DefinitionRole, Inline, ResolvedContent, Section, SourceFormat};
-use mant_protocol::{
-    ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, SearchNode,
-};
+use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch};
 use serde::Serialize;
 
 use crate::{arguments::QueryFormat, error::Failure};
@@ -133,97 +131,20 @@ fn render_terminal_search(search: &QuerySearch, color: bool) -> String {
     if !color {
         return mant_engine::render_search_text(search);
     }
-    let label = document_label(
-        &search.label,
-        search
-            .meta
-            .as_ref()
-            .and_then(|meta| meta.manual_section.as_deref()),
-    );
-    let mut output = TerminalText::new(true);
-    if search.total == 0 {
-        output.plain("No matches for \"");
-        output.styled(TerminalRole::Match, &search.query.pattern);
-        output.plain("\" in ");
-        output.styled(TerminalRole::Document, &label);
-        output.plain(".");
-        return output.finish();
-    }
-    if search.matches.is_empty() {
-        output.plain("No matches returned at offset ");
-        output.styled(TerminalRole::Coordinate, &search.offset.to_string());
-        output.plain(" for \"");
-        output.styled(TerminalRole::Match, &search.query.pattern);
-        output.plain("\" in ");
-        output.styled(TerminalRole::Document, &label);
-        output.plain(" (");
-        output.styled(TerminalRole::Coordinate, &search.total.to_string());
-        output.plain(" total).");
-        return output.finish();
-    }
-
-    for (index, found) in search.matches.iter().enumerate() {
-        if index > 0 {
-            output.line();
-            output.line();
-        }
-        output.styled(TerminalRole::Document, &label);
-        output.plain(":");
-        output.styled(
-            TerminalRole::Coordinate,
-            &format!(
-                "{}:{}",
-                found.markdown.start_line, found.markdown.start_column
-            ),
-        );
-        output.styled(TerminalRole::TreeGuide, " [");
-        output.styled(TerminalRole::Path, found.node.path());
-        output.styled(TerminalRole::TreeGuide, "] ");
-        output.styled(search_node_role(&found.node), found.node.title());
-        output.line();
-        if found.context.is_empty() {
-            output.plain("  ");
-            // The stable search contract identifies intersecting rendered
-            // lines, while generated anchors can shift display columns. Mark
-            // the complete matching line instead of implying a false exact
-            // terminal range.
-            output.styled(TerminalRole::Match, &found.preview);
-        } else {
-            for (line_index, line) in found.context.iter().enumerate() {
-                if line_index > 0 {
-                    output.line();
-                }
-                output.plain("  ");
-                output.styled(
-                    if line.matched {
-                        TerminalRole::Match
-                    } else {
-                        TerminalRole::Muted
-                    },
-                    if line.matched { ">" } else { " " },
-                );
-                output.plain(" ");
-                output.styled(TerminalRole::Coordinate, &line.line.to_string());
-                output.plain(" ");
-                if line.matched {
-                    output.styled(TerminalRole::Match, &line.text);
-                } else {
-                    output.plain(&line.text);
-                }
-            }
-        }
-    }
-    if let Some(next_offset) = search.next_offset {
-        output.line();
-        output.line();
-        output.styled(TerminalRole::Coordinate, &search.total.to_string());
-        output.plain(" total matches; continue with ");
-        output.styled(TerminalRole::Heading, "--offset");
-        output.plain(" ");
-        output.styled(TerminalRole::Coordinate, &next_offset.to_string());
-        output.plain(".");
-    }
-    output.finish()
+    mant_engine::render_search_text_with(search, |role, value| {
+        let role = match role {
+            mant_engine::SearchTextRole::Plain => return value.to_owned(),
+            mant_engine::SearchTextRole::Document => TerminalRole::Document,
+            mant_engine::SearchTextRole::Coordinate => TerminalRole::Coordinate,
+            mant_engine::SearchTextRole::Path => TerminalRole::Path,
+            mant_engine::SearchTextRole::Heading => TerminalRole::Heading,
+            mant_engine::SearchTextRole::Definition(role) => definition_role(role),
+            mant_engine::SearchTextRole::Match => TerminalRole::Match,
+            mant_engine::SearchTextRole::Muted => TerminalRole::Muted,
+        };
+        let style = terminal_style(role);
+        format!("{style}{value}{style:#}")
+    })
 }
 
 fn render_excerpt_line(
@@ -362,15 +283,6 @@ const fn outline_node_role(node: &OutlineNode) -> TerminalRole {
         OutlineNode::Tldr { .. }
         | OutlineNode::DocumentRoot { .. }
         | OutlineNode::DocumentSection { .. } => TerminalRole::Heading,
-    }
-}
-
-const fn search_node_role(node: &SearchNode) -> TerminalRole {
-    match node {
-        SearchNode::DocumentEntry { role, .. } => definition_role(*role),
-        SearchNode::Tldr { .. }
-        | SearchNode::DocumentRoot { .. }
-        | SearchNode::DocumentSection { .. } => TerminalRole::Heading,
     }
 }
 
