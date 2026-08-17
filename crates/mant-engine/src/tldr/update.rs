@@ -327,6 +327,7 @@ fn clone_cache(
             OsString::from("--single-branch"),
             OsString::from("--branch"),
             OsString::from("main"),
+            OsString::from("--"),
             OsString::from(repository),
             temporary.as_os_str().to_owned(),
         ],
@@ -601,7 +602,8 @@ mod tests {
         );
         let calls = host.calls.lock().expect("calls lock");
         assert_eq!(calls[0].1[0], "clone");
-        assert_eq!(calls[0].1[5], "https://example.test/tldr.git");
+        assert_eq!(calls[0].1[5], "--");
+        assert_eq!(calls[0].1[6], "https://example.test/tldr.git");
     }
 
     #[test]
