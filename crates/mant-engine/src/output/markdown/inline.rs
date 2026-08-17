@@ -227,15 +227,13 @@ fn escape_html_attribute(value: &str) -> String {
 
 fn escape_plain_text(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
-    let characters = value.chars().collect::<Vec<_>>();
-    for (index, character) in characters.iter().copied().enumerate() {
+    let mut characters = value.chars().peekable();
+    let mut previous = None;
+    while let Some(character) = characters.next() {
         let intraword_underscore = character == '_'
-            && index
-                .checked_sub(1)
-                .and_then(|previous| characters.get(previous))
-                .is_some_and(|character| character.is_alphanumeric())
+            && previous.is_some_and(char::is_alphanumeric)
             && characters
-                .get(index + 1)
+                .peek()
                 .is_some_and(|character| character.is_alphanumeric());
         if matches!(character, '\\' | '*' | '[' | ']' | '<' | '>')
             || (character == '_' && !intraword_underscore)
@@ -243,6 +241,7 @@ fn escape_plain_text(value: &str) -> String {
             output.push('\\');
         }
         output.push(character);
+        previous = Some(character);
     }
     output
 }
@@ -285,6 +284,25 @@ fn find_angle_url(value: &str) -> Option<(usize, usize)> {
     .into_iter()
     .filter_map(|(needle, width)| value.find(needle).map(|index| (index, width)))
     .min_by_key(|(index, width)| (*index, usize::MAX - *width))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_plain_text;
+
+    #[test]
+    fn plain_text_escapes_only_delimiter_capable_underscores() {
+        for (source, expected) in [
+            ("PATH_SCRIPT", "PATH_SCRIPT"),
+            ("a_b", "a_b"),
+            ("路径_脚本", "路径_脚本"),
+            ("_leading", "\\_leading"),
+            ("trailing_", "trailing\\_"),
+            ("a__b", "a\\_\\_b"),
+        ] {
+            assert_eq!(escape_plain_text(source), expected, "{source}");
+        }
+    }
 }
 
 fn longest_backtick_run(value: &str) -> usize {
