@@ -279,7 +279,9 @@ fn resolve_process_presentation(
         return Ok(());
     };
     match *presentation {
-        QueryPresentation::Auto if terminal.input && terminal.output => {
+        QueryPresentation::Auto
+            if terminal.input && terminal.output && terminal.kind == TerminalKind::Capable =>
+        {
             *presentation = QueryPresentation::Interactive;
         }
         QueryPresentation::Auto => {
@@ -288,9 +290,11 @@ fn resolve_process_presentation(
                 color: ColorMode::Never,
             };
         }
-        QueryPresentation::Interactive if !terminal.input || !terminal.output => {
+        QueryPresentation::Interactive
+            if !terminal.input || !terminal.output || terminal.kind == TerminalKind::Dumb =>
+        {
             return Err(Failure::usage(
-                "interactive view requires an input and output terminal; omit --ui or select --format",
+                "interactive view requires a capable input and output terminal; omit --ui or select --format",
             ));
         }
         QueryPresentation::Tldr(ColorMode::Auto) => {

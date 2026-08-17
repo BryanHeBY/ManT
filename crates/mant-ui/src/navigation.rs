@@ -15,7 +15,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use mant_ir::DefinitionRole;
 
-use crate::{NavKind, NavNode, theme};
+use crate::{NavKind, NavNode, text::sanitize_terminal_text, theme};
 
 const NODE_LEFT_PADDING: &str = " ";
 const TRUNCATION_MARKER: &str = "...";
@@ -106,14 +106,15 @@ fn node_lines(
         style = style.add_modifier(Modifier::BOLD);
     }
 
+    let title = sanitize_terminal_text(&node.title);
     let first_title_width = width.saturating_sub(prefix.width()).max(1);
     let wrapped_title_width = width
         .saturating_sub(prefix.width().max(continuation_prefix.width()))
         .max(1);
     let titles = if selected {
-        wrap_to_width(&node.title, wrapped_title_width)
+        wrap_to_width(&title, wrapped_title_width)
     } else {
-        vec![truncate_middle(&node.title, first_title_width)]
+        vec![truncate_middle(&title, first_title_width)]
     };
 
     titles
@@ -377,6 +378,19 @@ mod tests {
         assert!(text[0].starts_with(" › │ ╰─· "));
         assert!(text[1].starts_with("   │     "));
         assert!(!text[1].starts_with("   │ │   "));
+    }
+
+    #[test]
+    fn navigation_titles_cannot_emit_terminal_controls() {
+        let rows = node_lines(&node("unsafe\u{1b}[31m\nname"), 0, true, false, 31);
+        let text = rows
+            .iter()
+            .map(|row| row.line.to_string())
+            .collect::<String>();
+
+        assert!(!text.contains('\u{1b}'));
+        assert!(!text.contains('\n'));
+        assert!(text.contains('�'));
     }
 
     #[test]

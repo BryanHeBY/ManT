@@ -167,6 +167,12 @@ fn explicit_interactive_queries_require_both_terminal_streams() {
             color: true,
             kind: TerminalKind::Capable,
         },
+        TerminalCapabilities {
+            input: true,
+            output: true,
+            color: false,
+            kind: TerminalKind::Dumb,
+        },
     ] {
         let mut command =
             arguments::parse(&["git".to_owned(), "--ui".to_owned()]).expect("UI query");
@@ -174,6 +180,32 @@ fn explicit_interactive_queries_require_both_terminal_streams() {
             .expect_err("incomplete terminal must fail");
         assert!(error.message().contains("interactive view requires"));
     }
+}
+
+#[test]
+fn dumb_term_uses_copyable_output_for_automatic_queries() {
+    let mut command = arguments::parse(&["git".to_owned()]).expect("automatic query");
+    resolve_process_presentation(
+        &mut command,
+        TerminalCapabilities {
+            input: true,
+            output: true,
+            color: false,
+            kind: TerminalKind::Dumb,
+        },
+    )
+    .expect("dumb terminal falls back to output");
+
+    assert!(matches!(
+        command,
+        Command::Query {
+            presentation: QueryPresentation::Output {
+                format: QueryFormat::Markdown,
+                color: ColorMode::Never,
+            },
+            ..
+        }
+    ));
 }
 
 #[test]

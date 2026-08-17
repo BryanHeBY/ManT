@@ -465,7 +465,7 @@ fn push_history(history: &mut Vec<HistoryLocation>, location: HistoryLocation) {
 fn fit_to_width(value: &str, width: usize) -> String {
     let mut result = String::new();
     let mut used = 0;
-    for character in value.chars() {
+    for character in crate::text::sanitize_terminal_text(value).chars() {
         let character_width = character.width().unwrap_or(0);
         if used + character_width > width {
             break;

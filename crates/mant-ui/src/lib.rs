@@ -9,6 +9,7 @@ mod navigation;
 mod pager;
 mod scrollbar;
 mod terminal;
+mod text;
 mod theme;
 mod tldr;
 

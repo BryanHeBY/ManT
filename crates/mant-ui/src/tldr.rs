@@ -111,7 +111,7 @@ pub fn render_tldr_terminal(document: &TldrDocument, color: bool) -> String {
             if color {
                 output.push_str(ansi_style(span.role));
             }
-            output.push_str(&span.text);
+            output.push_str(&crate::text::sanitize_terminal_text(&span.text));
             if color {
                 output.push_str("\x1b[0m");
             }

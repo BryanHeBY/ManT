@@ -21,6 +21,7 @@ use crate::{
     },
     navigation,
     scrollbar::VerticalScrollbar,
+    text::sanitize_terminal_text,
     theme,
 };
 
@@ -107,8 +108,8 @@ impl App {
                 Line::from(Span::styled(
                     format!(
                         " {} · {}",
-                        self.document.source_label(),
-                        self.document.label()
+                        sanitize_terminal_text(self.document.source_label()),
+                        sanitize_terminal_text(self.document.label())
                     ),
                     Style::default().fg(theme::SUBTEXT_BRIGHT),
                 )),
@@ -277,6 +278,7 @@ impl App {
             .navigation()
             .get(self.selected)
             .map_or("document", |item| item.title.as_str());
+        let current = sanitize_terminal_text(current);
         let visible = self.visible_navigation_indices();
         let selected_position = visible
             .iter()
@@ -490,7 +492,7 @@ impl App {
                     continue;
                 };
                 let category = document_category(&document.address);
-                let name = &document.catalog_path;
+                let name = sanitize_terminal_text(&document.catalog_path);
                 let gap = usize::from(row.width)
                     .saturating_sub(name.width())
                     .saturating_sub(category.width())
