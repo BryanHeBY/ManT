@@ -14,6 +14,10 @@ mod git;
 mod prune;
 mod workspace;
 
+use crate::limits::{
+    MAX_DOCUMENT_BYTES, MAX_SOURCE_BYTES, MAX_SOURCE_DEPTH, MAX_SOURCE_DOCUMENTS,
+    MAX_SOURCE_ENTRIES,
+};
 use crate::metadata::{SourceMetadata, read_source_metadata, source_fingerprint};
 use prune::discover_orphaned_sources;
 #[cfg(test)]
@@ -28,9 +32,6 @@ use super::config::{
     ConfiguredSource, DocumentPaths, SOURCE_METADATA_FILE, SourceConfigError, SourceLocation,
     load_source_config,
 };
-
-const MAX_SOURCE_DOCUMENTS: usize = 10_000;
-const MAX_SOURCE_DEPTH: usize = 32;
 
 /// Outcome for one configured repository.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -261,7 +262,8 @@ pub(in crate::update) fn install_selected_documents(
         ));
     }
     let mut candidates = Vec::new();
-    collect_markdown(&root, &root, 0, &mut candidates)?;
+    let mut budget = SourceTreeBudget::default();
+    collect_markdown(&root, &root, 0, &mut budget, &mut candidates)?;
     candidates.retain(|(relative, _)| source_selects_path(source, relative));
     candidates.sort_unstable_by(|left, right| left.0.cmp(&right.0));
     if candidates.is_empty() {
@@ -289,7 +291,26 @@ pub(in crate::update) fn install_selected_documents(
             }
         }
     }
+    let mut installed_bytes = 0_u64;
     for (_, _, relative, path) in selected.values() {
+        let size = fs::metadata(path)
+            .map_err(|error| format!("could not inspect '{}': {error}", relative.display()))?
+            .len();
+        if size > MAX_DOCUMENT_BYTES {
+            return Err(format!(
+                "Markdown document '{}' exceeds the {MAX_DOCUMENT_BYTES}-byte limit",
+                relative.display()
+            ));
+        }
+        installed_bytes = installed_bytes
+            .checked_add(size)
+            .ok_or_else(|| "selected document size budget overflow".to_owned())?;
+        if installed_bytes > MAX_SOURCE_BYTES {
+            return Err(format!(
+                "selected documents exceed the {MAX_SOURCE_BYTES}-byte limit at '{}'",
+                relative.display()
+            ));
+        }
         let installed = staging.join(relative);
         let parent = installed
             .parent()
@@ -300,8 +321,14 @@ pub(in crate::update) fn install_selected_documents(
                 parent.display()
             )
         })?;
-        fs::copy(path, &installed)
+        let copied = fs::copy(path, &installed)
             .map_err(|error| format!("could not install '{}': {error}", relative.display()))?;
+        if copied != size {
+            return Err(format!(
+                "source document '{}' changed while it was being installed",
+                relative.display()
+            ));
+        }
         sync_file(&installed, "installed document")?;
         #[cfg(unix)]
         sync_directory(parent)?;
@@ -328,6 +355,7 @@ fn collect_markdown(
     root: &Path,
     directory: &Path,
     depth: usize,
+    budget: &mut SourceTreeBudget,
     output: &mut Vec<(PathBuf, PathBuf)>,
 ) -> Result<(), String> {
     if depth > MAX_SOURCE_DEPTH {
@@ -344,28 +372,59 @@ fn collect_markdown(
         let file_type = entry
             .file_type()
             .map_err(|error| format!("could not inspect '{}': {error}", entry.path().display()))?;
+        if entry.file_name() == OsStr::new(".git") && file_type.is_dir() {
+            continue;
+        }
+        budget.entries += 1;
+        if budget.entries > MAX_SOURCE_ENTRIES {
+            return Err(format!(
+                "source tree contains more than {MAX_SOURCE_ENTRIES} entries"
+            ));
+        }
         if file_type.is_symlink() {
             continue;
         }
         if file_type.is_dir() {
-            if entry.file_name() != OsStr::new(".git") {
-                collect_markdown(root, &entry.path(), depth + 1, output)?;
-            }
-        } else if file_type.is_file() && is_markdown_file(&entry.path()) {
-            if output.len() >= MAX_SOURCE_DOCUMENTS {
+            collect_markdown(root, &entry.path(), depth + 1, budget, output)?;
+        } else if file_type.is_file() {
+            let size = entry
+                .metadata()
+                .map_err(|error| {
+                    format!("could not inspect '{}': {error}", entry.path().display())
+                })?
+                .len();
+            budget.bytes = budget
+                .bytes
+                .checked_add(size)
+                .ok_or_else(|| "source tree size budget overflow".to_owned())?;
+            if budget.bytes > MAX_SOURCE_BYTES {
                 return Err(format!(
-                    "source contains more than {MAX_SOURCE_DOCUMENTS} Markdown files"
+                    "source tree exceeds the {MAX_SOURCE_BYTES}-byte limit at '{}'",
+                    entry.path().display()
                 ));
             }
-            let relative = entry
-                .path()
-                .strip_prefix(root)
-                .expect("walk remains below source root")
-                .to_owned();
-            output.push((relative, entry.path()));
+            if is_markdown_file(&entry.path()) {
+                if output.len() >= MAX_SOURCE_DOCUMENTS {
+                    return Err(format!(
+                        "source contains more than {MAX_SOURCE_DOCUMENTS} Markdown files"
+                    ));
+                }
+                let relative = entry
+                    .path()
+                    .strip_prefix(root)
+                    .expect("walk remains below source root")
+                    .to_owned();
+                output.push((relative, entry.path()));
+            }
         }
     }
     Ok(())
+}
+
+#[derive(Default)]
+struct SourceTreeBudget {
+    entries: usize,
+    bytes: u64,
 }
 
 fn is_markdown_file(path: &Path) -> bool {
@@ -517,6 +576,7 @@ mod tests {
         fs,
         io::{Cursor, Read as _, Write as _},
         net::{Shutdown, TcpListener},
+        process::Command,
         thread,
     };
 
@@ -712,6 +772,46 @@ mod tests {
     }
 
     #[test]
+    fn install_rejects_oversized_documents_before_copying() {
+        let root = temp("oversized-document");
+        let checkout = root.join("checkout");
+        let staging = root.join("staging");
+        fs::create_dir_all(&checkout).expect("create checkout");
+        fs::create_dir_all(&staging).expect("create staging");
+        fs::File::create(checkout.join("tool.md"))
+            .and_then(|file| file.set_len(crate::limits::MAX_DOCUMENT_BYTES + 1))
+            .expect("create sparse oversized document");
+
+        let error = install_selected_documents(&checkout, &staging, &source("."))
+            .expect_err("oversized document must fail");
+        assert!(
+            error.contains("Markdown document 'tool.md' exceeds"),
+            "{error}"
+        );
+        assert!(!staging.join("tool.md").exists());
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn install_rejects_oversized_materialized_source_trees() {
+        let root = temp("oversized-source-tree");
+        let checkout = root.join("checkout");
+        let staging = root.join("staging");
+        fs::create_dir_all(&checkout).expect("create checkout");
+        fs::create_dir_all(&staging).expect("create staging");
+        fs::write(checkout.join("tool.md"), "# tool").expect("write document");
+        fs::File::create(checkout.join("payload.bin"))
+            .and_then(|file| file.set_len(crate::limits::MAX_SOURCE_BYTES + 1))
+            .expect("create sparse oversized payload");
+
+        let error = install_selected_documents(&checkout, &staging, &source("."))
+            .expect_err("oversized source tree must fail");
+        assert!(error.contains("source tree exceeds"), "{error}");
+        assert!(!staging.join("tool.md").exists());
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
     fn empty_selection_fails_before_replacing_an_installed_source() {
         let root = temp("empty-selection");
         let checkout = root.join("checkout");
@@ -881,6 +981,54 @@ mod tests {
                 .to_ascii_lowercase()
                 .contains("if-none-match: \"v1\"")
         );
+        fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn git_source_materializes_and_installs_only_its_configured_path() {
+        let root = temp("git-path-update");
+        let repository = root.join("repository");
+        let data = root.join("data");
+        fs::create_dir_all(repository.join("docs")).expect("create document directory");
+        fs::create_dir_all(repository.join("website")).expect("create unrelated directory");
+        fs::write(repository.join("docs/tool.md"), "# tool").expect("write document");
+        fs::write(repository.join("website/index.md"), "# website")
+            .expect("write unrelated document");
+        for arguments in [
+            vec!["init", "--quiet", "--initial-branch=main"],
+            vec!["config", "user.name", "ManT tests"],
+            vec!["config", "user.email", "mant-tests@example.invalid"],
+            vec!["add", "--", "."],
+            vec!["commit", "--quiet", "-m", "fixture"],
+        ] {
+            let status = Command::new("git")
+                .args(arguments)
+                .current_dir(&repository)
+                .status()
+                .expect("run fixture git command");
+            assert!(status.success(), "fixture git command failed");
+        }
+        let paths = paths(&data);
+        fs::create_dir_all(&paths.sources).expect("create source store");
+        let configured = ConfiguredSource {
+            location: SourceLocation::Git {
+                repo: repository.to_string_lossy().into_owned(),
+                branch: "main".to_owned(),
+            },
+            path: "docs".to_owned(),
+            include: Vec::new(),
+            exclude: Vec::new(),
+            priority: 1,
+        };
+
+        let result = try_update_one_source(&paths, "team", &configured)
+            .expect("install configured Git path");
+        assert_eq!(result.action, SourceUpdateAction::Updated);
+        assert_eq!(
+            fs::read_to_string(paths.sources.join("team/tool.md")).expect("read installed doc"),
+            "# tool"
+        );
+        assert!(!paths.sources.join("team/index.md").exists());
         fs::remove_dir_all(root).expect("remove fixture");
     }
 

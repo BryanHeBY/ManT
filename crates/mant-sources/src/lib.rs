@@ -8,6 +8,8 @@ mod config;
 #[cfg(feature = "update")]
 mod download;
 mod inspection;
+#[cfg(feature = "update")]
+mod limits;
 mod metadata;
 mod registry;
 #[cfg(feature = "update")]

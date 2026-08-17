@@ -9,12 +9,12 @@ use std::{
 
 use flate2::read::MultiGzDecoder;
 
+use crate::limits::{
+    MAX_DOCUMENT_BYTES, MAX_SOURCE_BYTES, MAX_SOURCE_DEPTH, MAX_SOURCE_DOCUMENTS,
+    MAX_SOURCE_ENTRIES,
+};
+
 pub(crate) const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_ARCHIVE_ENTRIES: usize = 20_000;
-const MAX_EXPANDED_BYTES: u64 = 256 * 1024 * 1024;
-const MAX_DOCUMENT_BYTES: u64 = 16 * 1024 * 1024;
-const MAX_DOCUMENTS: usize = 10_000;
-const MAX_ARCHIVE_DEPTH: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ArchiveFormat {
@@ -77,9 +77,9 @@ fn extract_zip(path: &Path, destination: &Path) -> Result<(), String> {
         .map_err(|error| format!("could not open downloaded ZIP archive: {error}"))?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|error| format!("could not read ZIP archive: {error}"))?;
-    if archive.len() > MAX_ARCHIVE_ENTRIES {
+    if archive.len() > MAX_SOURCE_ENTRIES {
         return Err(format!(
-            "archive contains more than {MAX_ARCHIVE_ENTRIES} entries"
+            "archive contains more than {MAX_SOURCE_ENTRIES} entries"
         ));
     }
 
@@ -149,9 +149,9 @@ fn extract_tar(reader: impl Read, destination: &Path) -> Result<(), String> {
     let mut paths = BTreeSet::new();
     for entry in entries {
         count += 1;
-        if count > MAX_ARCHIVE_ENTRIES {
+        if count > MAX_SOURCE_ENTRIES {
             return Err(format!(
-                "archive contains more than {MAX_ARCHIVE_ENTRIES} entries"
+                "archive contains more than {MAX_SOURCE_ENTRIES} entries"
             ));
         }
         let mut entry = entry.map_err(|error| format!("could not read tar entry: {error}"))?;
@@ -198,9 +198,9 @@ fn validate_archive_path(path: &Path) -> Result<(), String> {
         })?;
         depth += 1;
     }
-    if depth == 0 || depth > MAX_ARCHIVE_DEPTH {
+    if depth == 0 || depth > MAX_SOURCE_DEPTH {
         return Err(format!(
-            "archive entry '{}' exceeds the maximum path depth of {MAX_ARCHIVE_DEPTH}",
+            "archive entry '{}' exceeds the maximum path depth of {MAX_SOURCE_DEPTH}",
             path.display()
         ));
     }
@@ -211,9 +211,9 @@ fn charge_expanded(current: u64, size: u64, path: &Path) -> Result<u64, String> 
     let next = current
         .checked_add(size)
         .ok_or_else(|| "archive expanded-size budget overflow".to_owned())?;
-    if next > MAX_EXPANDED_BYTES {
+    if next > MAX_SOURCE_BYTES {
         return Err(format!(
-            "archive exceeds the {MAX_EXPANDED_BYTES}-byte expanded-size limit at '{}'",
+            "archive exceeds the {MAX_SOURCE_BYTES}-byte expanded-size limit at '{}'",
             path.display()
         ));
     }
@@ -228,9 +228,9 @@ fn charge_document(current: usize, size: u64, path: &Path) -> Result<usize, Stri
         ));
     }
     let next = current + 1;
-    if next > MAX_DOCUMENTS {
+    if next > MAX_SOURCE_DOCUMENTS {
         return Err(format!(
-            "archive contains more than {MAX_DOCUMENTS} Markdown documents"
+            "archive contains more than {MAX_SOURCE_DOCUMENTS} Markdown documents"
         ));
     }
     Ok(next)

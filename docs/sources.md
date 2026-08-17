@@ -140,11 +140,12 @@ below `sources/` whose names are absent from the current
 configuration. Ordinary updates never delete them.
 
 For a Git source, ManT reads the branch head with `git ls-remote`. It skips an
-unchanged source or performs a depth-one, single-branch clone without tags,
-local hardlinks, or submodule initialization. Git transport is restricted to
-HTTPS, SSH, and local paths; remote-helper syntax and other protocols are
-rejected. The `git` executable must be installed and available on `PATH` for
-Git-backed sources.
+unchanged source or performs a depth-one, single-branch, blob-filtered clone
+without tags, an initial checkout, local hardlinks, or submodule
+initialization. It validates Git tree modes and then materializes only the
+configured `path`. Git transport is restricted to HTTPS, SSH, and local paths;
+remote-helper syntax and other protocols are rejected. The `git` executable
+must be installed and available on `PATH` for Git-backed sources.
 
 For an archive source, ManT sends saved `ETag` and `Last-Modified` validators
 when available. A `304 Not Modified` response avoids downloading and
@@ -169,12 +170,17 @@ configured `path` also cannot traverse a Git link. Unrelated and unselected Git
 links do not affect the source. Source authors should publish regular Markdown
 files instead of filesystem aliases.
 
-Archive processing is intentionally bounded: downloads are limited to 64 MiB,
-archives to 20,000 entries and 256 MiB of declared expanded regular-file data,
-individual Markdown files to 16 MiB, selected Markdown files to 10,000, and
-paths to 32 components. Absolute, parent-relative, non-UTF-8, duplicate, link,
-and special-file entries are rejected. These checks apply before activation,
-so malformed or hostile input leaves the previous source installed.
+Acquired snapshots are intentionally bounded to 20,000 entries, 256 MiB of
+materialized regular-file data, 16 MiB per selected Markdown file, 10,000
+Markdown files, and paths 32 components deep. Archive downloads have an
+additional 64 MiB compressed-size limit, and archive entry metadata is charged
+before extraction. Git command output is bounded too; Git checkout contents
+are measured before staging. A server may ignore Git's partial-clone filter,
+so unlike the streaming archive path this cannot strictly cap transient Git
+pack traffic or storage before checkout validation. Absolute,
+parent-relative, non-UTF-8, duplicate, link, and special archive entries are
+rejected. These checks apply before activation, so malformed or hostile input
+leaves the previous source installed.
 
 An update lock prevents two native CLI updates from writing the source store
 at once. A failed source leaves its prior installed directory untouched. If a

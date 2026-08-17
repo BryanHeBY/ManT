@@ -1,11 +1,18 @@
 //! Single-commit Git acquisition for one configured source.
 
-use std::{ffi::OsStr, path::Path, process::Command};
+use std::{
+    ffi::OsStr,
+    path::Path,
+    process::{Command, Stdio},
+    thread,
+};
 
 use super::{
     SourceMetadata, SourceUpdateContext, SourceUpdateResult, UpdateWorkspace, activate_source,
     install_selected_documents, source_selects_markdown_path,
 };
+
+const MAX_GIT_OUTPUT_BYTES: u64 = 64 * 1024 * 1024;
 
 pub(super) fn update(
     context: &SourceUpdateContext<'_>,
@@ -29,6 +36,8 @@ pub(super) fn update(
             OsStr::new("--single-branch"),
             OsStr::new("--no-local"),
             OsStr::new("--no-tags"),
+            OsStr::new("--filter=blob:none"),
+            OsStr::new("--no-checkout"),
             OsStr::new("--branch"),
             OsStr::new(branch),
             OsStr::new("--"),
@@ -60,6 +69,11 @@ pub(super) fn update(
         &workspace.checkout,
         context.configured,
     )?;
+    materialize_configured_path(
+        &context.paths.root,
+        &workspace.checkout,
+        &context.configured.path,
+    )?;
     workspace.create_staging()?;
     let documents =
         install_selected_documents(&workspace.checkout, &workspace.staging, context.configured)?;
@@ -74,6 +88,31 @@ pub(super) fn update(
     );
     activate_source(&workspace.staging, &context.target, &metadata)?;
     Ok(context.updated(revision, document_count))
+}
+
+fn materialize_configured_path(
+    working_directory: &Path,
+    checkout: &Path,
+    configured_path: &str,
+) -> Result<(), String> {
+    let pathspec = if configured_path == "." {
+        ".".to_owned()
+    } else {
+        format!(":(literal){configured_path}")
+    };
+    run_git(
+        working_directory,
+        [
+            OsStr::new("-C"),
+            checkout.as_os_str(),
+            OsStr::new("checkout"),
+            OsStr::new("--force"),
+            OsStr::new("HEAD"),
+            OsStr::new("--"),
+            OsStr::new(&pathspec),
+        ],
+    )?;
+    Ok(())
 }
 
 fn reject_selected_symlink_documents(
@@ -189,7 +228,8 @@ fn run_git_bytes<'a>(
     working_directory: &Path,
     arguments: impl IntoIterator<Item = &'a OsStr>,
 ) -> Result<Vec<u8>, String> {
-    let output = Command::new("git")
+    let mut command = Command::new("git");
+    command
         .args([
             "-c",
             "protocol.allow=never",
@@ -205,17 +245,45 @@ fn run_git_bytes<'a>(
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_PROTOCOL_FROM_USER", "0")
         .env("GIT_ALLOW_PROTOCOL", "https:ssh:file")
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
         .map_err(|error| format!("could not run git: {error}"))?;
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "could not capture git stdout".to_owned())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "could not capture git stderr".to_owned())?;
+    let stdout_reader = thread::spawn(move || {
+        crate::bounded::read_bytes(stdout, MAX_GIT_OUTPUT_BYTES, "git stdout")
+    });
+    let stderr_reader = thread::spawn(move || {
+        crate::bounded::read_bytes(stderr, MAX_GIT_OUTPUT_BYTES, "git stderr")
+    });
+    let status = child
+        .wait()
+        .map_err(|error| format!("could not wait for git: {error}"))?;
+    let stdout = stdout_reader
+        .join()
+        .map_err(|_| "git stdout reader panicked".to_owned())?
+        .map_err(|error| format!("could not read git stdout: {error}"))?;
+    let stderr = stderr_reader
+        .join()
+        .map_err(|_| "git stderr reader panicked".to_owned())?
+        .map_err(|error| format!("could not read git stderr: {error}"))?;
+    if !status.success() {
+        let detail = String::from_utf8_lossy(&stderr).trim().to_owned();
         return Err(if detail.is_empty() {
-            format!("git exited with {}", output.status)
+            format!("git exited with {status}")
         } else {
             format!("git failed: {detail}")
         });
     }
-    Ok(output.stdout)
+    Ok(stdout)
 }
 
 #[cfg(test)]
