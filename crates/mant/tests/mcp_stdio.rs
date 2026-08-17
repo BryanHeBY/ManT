@@ -194,7 +194,7 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(ambiguity.contains("option-f-2"));
 
     #[cfg(windows)]
-    assert!(successful_text(reply(replies, 9)).contains("MCP suffixed executable"));
+    assert!(successful_text(reply(replies, 9)).contains("Suffix details"));
 
     for response in replies {
         assert!(response["result"].get("structuredContent").is_none());
@@ -312,7 +312,7 @@ fn registered_document_fixture() -> PathBuf {
     .expect("write registered document");
     fs::write(
         documents.join("mcp-suffix.exe.md"),
-        "# MCP suffixed executable\n\nWindows suffix fallback.\n",
+        "# MCP suffixed executable\n\n## Suffix details\n\nWindows suffix fallback.\n",
     )
     .expect("write suffixed registered document");
     let manual_section = fixture_root.join("manuals/man1");
