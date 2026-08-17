@@ -1143,6 +1143,145 @@ mod tests {
         }
     }
 
+    fn geometry_bundle() -> ResolvedContent {
+        let mut bundle = bundle();
+        bundle.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["A compact 多语言 reference.".to_owned()],
+            more_information: None,
+            examples: vec![TldrExample {
+                description: "Inspect the working tree.".to_owned(),
+                command: "git status --short".to_owned(),
+                command_parts: Vec::new(),
+            }],
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: String::new(),
+            origin: TldrOrigin::Embedded,
+        });
+        let document = bundle.document.as_mut().expect("document");
+        document.sections[0].blocks = vec![
+            Block::Paragraph {
+                children: vec![
+                    Inline::Text {
+                        value: "Read 多语言 documentation in ".to_owned(),
+                    },
+                    Inline::Link {
+                        target: mant_ir::LinkTarget::Section {
+                            id: "details".into(),
+                        },
+                        title: None,
+                        children: vec![Inline::Text {
+                            value: "the detailed section".to_owned(),
+                        }],
+                    },
+                    Inline::Text {
+                        value: ".".to_owned(),
+                    },
+                ],
+                layout: LayoutHint::default(),
+                source: None,
+            },
+            Block::Preformatted {
+                children: vec![Inline::Text {
+                    value: "git status --short\n路径/with spaces".to_owned(),
+                }],
+                language: Some("sh".to_owned()),
+                layout: LayoutHint::default(),
+                source: None,
+            },
+            Block::Table {
+                rows: vec![TableRow {
+                    cells: vec![
+                        TableCell {
+                            blocks: vec![paragraph("alpha beta gamma")],
+                            column_span: 1,
+                            row_span: 1,
+                            alignment: None,
+                        },
+                        TableCell {
+                            blocks: vec![paragraph("right hand value")],
+                            column_span: 1,
+                            row_span: 1,
+                            alignment: None,
+                        },
+                    ],
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            },
+        ];
+        document.sections[0].children.push(Section {
+            id: "details".to_owned().into(),
+            title: "Details".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![paragraph("Nothing is lost after resizing.")],
+            children: Vec::new(),
+            source: None,
+        });
+        bundle
+    }
+
+    fn paragraph(value: &str) -> Block {
+        Block::Paragraph {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }
+    }
+
+    #[test]
+    fn width_matrix_keeps_rows_anchors_links_and_search_inside_the_rendered_geometry() {
+        let view = DocumentView::new(&geometry_bundle());
+
+        for width in [1, 2, 3, 4, 7, 12, 24, 40, 80, 160] {
+            let rendered = view.render(width);
+            let width = usize::from(width);
+            assert_eq!(rendered.text.lines.len(), rendered.row_count);
+            assert_eq!(rendered.logical_rows.len(), view.lines.len() + 1);
+            assert_eq!(rendered.logical_rows.last(), Some(&rendered.row_count));
+            assert!(
+                rendered
+                    .logical_rows
+                    .windows(2)
+                    .all(|rows| rows[0] <= rows[1])
+            );
+            for line in &rendered.text.lines {
+                let visible = line.to_string();
+                assert!(
+                    UnicodeWidthStr::width(visible.as_str()) <= width,
+                    "rendered row exceeds width {width}: {visible:?}"
+                );
+            }
+            assert!(
+                rendered
+                    .anchor_rows
+                    .values()
+                    .all(|row| *row <= rendered.row_count)
+            );
+
+            for link in &rendered.links {
+                assert!(link.row < rendered.row_count);
+                assert!(link.start_column < link.end_column);
+                assert!(link.end_column <= width);
+                assert_eq!(
+                    rendered.link_target_at(link.row, link.start_column),
+                    Some(&link.target)
+                );
+            }
+            for row in 0..rendered.row_count {
+                let anchor = rendered.viewport_anchor(row).expect("row anchor");
+                assert_eq!(rendered.row_for_viewport_anchor(anchor), Some(row));
+            }
+
+            assert_eq!(rendered.search("多语言 documentation").len(), 1);
+            assert!(!rendered.search("git status --short").is_empty());
+            assert_eq!(rendered.search("alpha beta gamma").len(), 1);
+        }
+    }
+
     #[test]
     fn records_section_rows_after_wrapping() {
         let view = DocumentView::new(&bundle());

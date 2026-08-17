@@ -208,4 +208,33 @@ mod tests {
         assert_ne!(theme::SCROLLBAR_THUMB, theme::SCROLLBAR_TRACK);
         assert_ne!(theme::SCROLLBAR_TRACK, theme::BASE);
     }
+
+    #[test]
+    fn geometry_matrix_keeps_the_thumb_and_every_pointer_position_in_bounds() {
+        for height in 1..=25 {
+            let viewport = Rect::new(3, 7, 40, height);
+            for content_length in [2, 3, 10, 100, 10_000] {
+                let viewport_length = usize::from(height).min(content_length - 1);
+                let maximum = content_length - viewport_length;
+                for position in [0, maximum / 2, maximum] {
+                    let scrollbar =
+                        VerticalScrollbar::new(viewport, content_length, viewport_length, position)
+                            .expect("overflowing content has a scrollbar");
+                    let (thumb_start, thumb_length) = scrollbar.thumb_geometry();
+                    assert!(thumb_length >= 1);
+                    assert!(thumb_start.saturating_add(thumb_length) <= height);
+
+                    let mut previous = 0;
+                    for row in viewport.y..=viewport.bottom() {
+                        let (drag, initial) = scrollbar.begin_drag(row);
+                        let resolved = scrollbar.position_for_pointer(row, drag);
+                        assert!(initial <= maximum);
+                        assert!(resolved <= maximum);
+                        assert!(resolved >= previous);
+                        previous = resolved;
+                    }
+                }
+            }
+        }
+    }
 }

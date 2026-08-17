@@ -20,6 +20,7 @@ const TABLE_COLUMN_GAP: usize = 2;
 #[derive(Clone, Copy)]
 struct StyledCell {
     character: char,
+    display_character: char,
     width: usize,
     style: Style,
     link_index: Option<usize>,
@@ -101,7 +102,7 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
         LineSurface::Normal | LineSurface::Code | LineSurface::Tldr => {}
     }
 
-    let decoration_width = usize::from(line.surface == LineSurface::Tldr) * 4;
+    let decoration_width = tldr_decoration_width(line, width);
     let mut cells = styled_cells(line);
 
     if cells.is_empty() {
@@ -128,6 +129,15 @@ pub(super) fn wrap_line_with_links(line: &LogicalLine, width: usize) -> Vec<Wrap
             .saturating_sub(indent)
             .saturating_sub(decoration_width)
             .max(1);
+        if let Some(first) = cells.first_mut()
+            && first.width > available
+        {
+            // A double-width glyph cannot occupy a one-column viewport.
+            // Preserve its semantic search cell while rendering one bounded
+            // replacement cell, just as control characters are sanitized.
+            first.display_character = '\u{fffd}';
+            first.width = 1;
+        }
         let fit = fitting_prefix(&cells, available);
         if fit == cells.len() {
             result.push(wrapped_cells_to_line(
@@ -208,6 +218,7 @@ fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
                 let spaces = TAB_STOP - column % TAB_STOP;
                 cells.extend((0..spaces).map(|_| StyledCell {
                     character: ' ',
+                    display_character: ' ',
                     width: 1,
                     style: span.style,
                     link_index,
@@ -224,6 +235,7 @@ fn styled_cells(line: &LogicalLine) -> Vec<StyledCell> {
             let cell_width = character.width().unwrap_or(0);
             cells.push(StyledCell {
                 character,
+                display_character: character,
                 width: cell_width,
                 style: span.style,
                 link_index,
@@ -449,7 +461,8 @@ fn cells_to_line(
         | LineSurface::Rule => None,
     };
 
-    if line.surface == LineSurface::Tldr {
+    let framed_tldr = tldr_decoration_width(line, width) != 0;
+    if framed_tldr {
         spans.push(Span::styled(
             "│ ",
             Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE),
@@ -476,7 +489,7 @@ fn cells_to_line(
                 spans.push(Span::styled(std::mem::take(&mut value), current_style));
                 current_style = style;
             }
-            value.push(cell.character);
+            value.push(cell.display_character);
         }
         spans.push(Span::styled(value, current_style));
     }
@@ -487,7 +500,7 @@ fn cells_to_line(
             LineSurface::Code => width.saturating_sub(indent).saturating_sub(content_width),
             LineSurface::Tldr => width
                 .saturating_sub(indent + content_width)
-                .saturating_sub(4),
+                .saturating_sub(tldr_decoration_width(line, width)),
             LineSurface::Normal
             | LineSurface::TldrTop
             | LineSurface::TldrBottom
@@ -496,7 +509,7 @@ fn cells_to_line(
         };
         spans.push(Span::styled(" ".repeat(fill), Style::default().bg(color)));
     }
-    if line.surface == LineSurface::Tldr {
+    if framed_tldr {
         spans.push(Span::styled(
             " │",
             Style::default().fg(theme::MAUVE).bg(theme::TLDR_SURFACE),
@@ -514,7 +527,7 @@ fn wrapped_cells_to_line(
 ) -> WrappedLine {
     let mut links = Vec::new();
     let mut search_cells = Vec::with_capacity(cells.len());
-    let mut column = indent + usize::from(line.surface == LineSurface::Tldr) * 2;
+    let mut column = indent + tldr_decoration_width(line, width) / 2;
     let mut active: Option<(usize, usize, usize)> = None;
     for (index, cell) in cells.iter().enumerate() {
         let next_column = column + cell.width;
@@ -558,6 +571,14 @@ fn wrapped_cells_to_line(
 
 fn with_background(style: Style, background: Option<ratatui::style::Color>) -> Style {
     background.map_or(style, |color| style.bg(color))
+}
+
+const fn tldr_decoration_width(line: &LogicalLine, width: usize) -> usize {
+    if matches!(line.surface, LineSurface::Tldr) && width >= 6 {
+        4
+    } else {
+        0
+    }
 }
 
 fn panel_border(width: usize, left: char, right: char) -> Line<'static> {
