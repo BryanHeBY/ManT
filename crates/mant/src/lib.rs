@@ -8,11 +8,7 @@ mod mcp;
 mod presentation;
 mod terminal;
 
-use std::{
-    collections::BTreeMap,
-    fmt::Write as _,
-    io::{self, IsTerminal, Read, Write},
-};
+use std::io::{self, IsTerminal, Read, Write};
 
 use arguments::{
     CatalogPaging, ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract,
@@ -26,7 +22,7 @@ use mant_ir::ResolvedContent;
 use mant_protocol::{
     CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
     ExcerptSchema, InputFormat, MarkdownOrigin, OutlineSchema, QueryInput, QueryRequest,
-    QuerySchema, QueryView, RequestSchema, SearchSchema, TldrCacheUpdate,
+    QuerySchema, QueryView, RequestSchema, SearchSchema, TldrCacheUpdate, render_catalog_text,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
@@ -522,60 +518,6 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             input,
             host,
         ),
-    }
-}
-
-fn render_catalog_text(catalog: &DocumentCatalog, grouped: bool) -> String {
-    if !grouped {
-        let mut output = String::new();
-        for document in &catalog.documents {
-            let (_, kind) = catalog_category(&document.address);
-            writeln!(output, "{}\t{kind}", document.catalog_path)
-                .expect("writing to String cannot fail");
-        }
-        return output;
-    }
-
-    let mut categories = BTreeMap::<String, Vec<&str>>::new();
-    for document in &catalog.documents {
-        let (category, _) = catalog_category(&document.address);
-        categories
-            .entry(category)
-            .or_default()
-            .push(match &document.address {
-                DocumentAddress::Markdown { path, .. } => path,
-                DocumentAddress::Manual { name, .. } => name,
-            });
-    }
-    let mut output = String::new();
-    for (index, (category, names)) in categories.into_iter().enumerate() {
-        if index > 0 {
-            output.push('\n');
-        }
-        output.push_str(&category);
-        output.push('\n');
-        for name in names {
-            output.push_str("  ");
-            output.push_str(name);
-            output.push('\n');
-        }
-    }
-    output
-}
-
-fn catalog_category(address: &DocumentAddress) -> (String, &'static str) {
-    match address {
-        DocumentAddress::Markdown {
-            origin: MarkdownOrigin::Documents,
-            ..
-        } => ("documents".to_owned(), "markdown"),
-        DocumentAddress::Markdown {
-            origin: MarkdownOrigin::Source { name },
-            ..
-        } => (format!("sources/{name}"), "markdown"),
-        DocumentAddress::Manual { manual_section, .. } => {
-            (format!("manual/{manual_section}"), "manual")
-        }
     }
 }
 

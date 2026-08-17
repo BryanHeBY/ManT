@@ -45,6 +45,44 @@ pub enum DocumentAddress {
 }
 
 impl DocumentAddress {
+    /// Parse one complete catalog path into its logical document address.
+    ///
+    /// Accepted paths are `documents/<path>`, `sources/<source>/<path>`, and
+    /// `manual/<section>/<name>`. Physical filesystem paths are never
+    /// interpreted here.
+    #[must_use]
+    pub fn parse_catalog_path(value: &str) -> Option<Self> {
+        if let Some(path) = value.strip_prefix("documents/")
+            && !path.is_empty()
+        {
+            return Some(Self::Markdown {
+                path: path.to_owned(),
+                origin: MarkdownOrigin::Documents,
+            });
+        }
+        if let Some(rest) = value.strip_prefix("sources/") {
+            let (source, path) = rest.split_once('/')?;
+            if !source.is_empty() && !path.is_empty() {
+                return Some(Self::Markdown {
+                    path: path.to_owned(),
+                    origin: MarkdownOrigin::Source {
+                        name: source.to_owned(),
+                    },
+                });
+            }
+        }
+        if let Some(rest) = value.strip_prefix("manual/") {
+            let (manual_section, name) = rest.split_once('/')?;
+            if !manual_section.is_empty() && !name.is_empty() && !name.contains('/') {
+                return Some(Self::Manual {
+                    name: name.to_owned(),
+                    manual_section: manual_section.to_owned(),
+                });
+            }
+        }
+        None
+    }
+
     /// Return the basename used as the document's short lookup name.
     #[must_use]
     pub fn name(&self) -> &str {
@@ -82,6 +120,51 @@ impl DocumentAddress {
                 name,
                 manual_section,
             } => format!("manual/{manual_section}/{name}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DocumentAddress, MarkdownOrigin};
+
+    #[test]
+    fn catalog_paths_round_trip_through_logical_addresses() {
+        for address in [
+            DocumentAddress::Markdown {
+                path: "guides/mant".to_owned(),
+                origin: MarkdownOrigin::Documents,
+            },
+            DocumentAddress::Markdown {
+                path: "Get-Item".to_owned(),
+                origin: MarkdownOrigin::Source {
+                    name: "pwsh".to_owned(),
+                },
+            },
+            DocumentAddress::Manual {
+                name: "git".to_owned(),
+                manual_section: "1".to_owned(),
+            },
+        ] {
+            assert_eq!(
+                DocumentAddress::parse_catalog_path(&address.catalog_path()),
+                Some(address)
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_catalog_paths_are_not_interpreted_as_addresses() {
+        for value in [
+            "git",
+            "documents/",
+            "sources/pwsh",
+            "sources//Get-Item",
+            "manual/1",
+            "manual//git",
+            "manual/1/git/add",
+        ] {
+            assert_eq!(DocumentAddress::parse_catalog_path(value), None, "{value}");
         }
     }
 }

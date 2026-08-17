@@ -1,10 +1,9 @@
 //! Resolves logical document names across registered sources, manuals, and tldr.
 
 use super::{
-    DocumentAddress, FullDocumentMode, LoadedManual, ManualLoadError, ManualRequest,
-    MarkdownOrigin, QueryError, QueryHost, QueryPolicy, QuickReferenceMode, RegisteredLookupPhase,
-    RegisteredSelection, RegisteredSelectionGroup, ResolvedContent, TldrDocument,
-    query_markdown_text,
+    DocumentAddress, FullDocumentMode, LoadedManual, ManualLoadError, ManualRequest, QueryError,
+    QueryHost, QueryPolicy, QuickReferenceMode, RegisteredLookupPhase, RegisteredSelection,
+    RegisteredSelectionGroup, ResolvedContent, TldrDocument, query_markdown_text,
 };
 
 pub(super) fn query_named_document(
@@ -18,7 +17,7 @@ pub(super) fn query_named_document(
     if name.is_empty() {
         return Err(QueryError::EmptyName);
     }
-    if let Some(address) = parse_catalog_address(name) {
+    if let Some(address) = DocumentAddress::parse_catalog_path(name) {
         if requested_source.is_some() || requested_manual_section.is_some() {
             return Err(QueryError::ConflictingSourceSelectors);
         }
@@ -287,38 +286,6 @@ fn finish_unqualified_manual(
             }
         }
     }
-}
-
-fn parse_catalog_address(selector: &str) -> Option<DocumentAddress> {
-    if let Some(path) = selector.strip_prefix("documents/")
-        && !path.is_empty()
-    {
-        return Some(DocumentAddress::Markdown {
-            path: path.to_owned(),
-            origin: MarkdownOrigin::Documents,
-        });
-    }
-    if let Some(rest) = selector.strip_prefix("sources/") {
-        let (source, path) = rest.split_once('/')?;
-        if !source.is_empty() && !path.is_empty() {
-            return Some(DocumentAddress::Markdown {
-                path: path.to_owned(),
-                origin: MarkdownOrigin::Source {
-                    name: source.to_owned(),
-                },
-            });
-        }
-    }
-    if let Some(rest) = selector.strip_prefix("manual/") {
-        let (manual_section, name) = rest.split_once('/')?;
-        if !manual_section.is_empty() && !name.is_empty() && !name.contains('/') {
-            return Some(DocumentAddress::Manual {
-                name: name.to_owned(),
-                manual_section: manual_section.to_owned(),
-            });
-        }
-    }
-    None
 }
 
 fn query_registered_document(
