@@ -73,12 +73,11 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
             QueryExecutionError::Projection(ProjectionError::SelectorFoundOnlyInText {
                 document,
                 selector,
-                location,
+                path,
+                title,
                 line,
             }) => format!(
-                "document '{document}' has no semantic entry '{selector}', but that text appears in outline node {} ({}) at line {line}; call mant_search with the same literal pattern",
-                location.path(),
-                location.title()
+                "document '{document}' has no semantic entry '{selector}', but that text appears in outline node {path} ({title}) at line {line}; call mant_search with the same literal pattern"
             ),
             QueryExecutionError::Projection(ProjectionError::ExplanationRequiresEntry {
                 document,

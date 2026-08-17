@@ -469,7 +469,8 @@ fn select_explanation_with_text_hint(
                 return Err(ProjectionError::SelectorFoundOnlyInText {
                     document,
                     selector,
-                    location: found.outline,
+                    path: found.outline.path().to_owned(),
+                    title: found.outline.title().to_owned(),
                     line,
                 });
             }

@@ -79,12 +79,11 @@ fn projection_failure(error: ProjectionError) -> Failure {
         ProjectionError::SelectorFoundOnlyInText {
             document,
             selector,
-            location,
+            path,
+            title,
             line,
         } => Failure::usage(format!(
-            "document '{document}' has no semantic entry '{selector}'\nnote: that text appears in outline node {} ({}) at line {line}\nhint: use --search to inspect the matching document text",
-            location.path(),
-            location.title()
+            "document '{document}' has no semantic entry '{selector}'\nnote: that text appears in outline node {path} ({title}) at line {line}\nhint: use --search to inspect the matching document text"
         )),
         ProjectionError::ExplanationRequiresEntry { document, selector } => {
             Failure::usage(format!(

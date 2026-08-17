@@ -59,8 +59,10 @@ pub enum ProjectionError {
         document: String,
         /// Unresolved semantic-entry selector.
         selector: String,
-        /// Nearest addressable node containing the first text occurrence.
-        location: OutlineTrail,
+        /// Canonical path of the nearest addressable node.
+        path: String,
+        /// Display title of the nearest addressable node.
+        title: String,
         /// One-based rendered line containing the first occurrence.
         line: u32,
     },
@@ -106,13 +108,12 @@ impl fmt::Display for ProjectionError {
             Self::SelectorFoundOnlyInText {
                 document,
                 selector,
-                location,
+                path,
+                title,
                 line,
             } => write!(
                 formatter,
-                "document '{document}' has no semantic entry '{selector}', but that text appears in outline node {} ({}) at line {line}",
-                location.path(),
-                location.title()
+                "document '{document}' has no semantic entry '{selector}', but that text appears in outline node {path} ({title}) at line {line}"
             ),
             Self::AmbiguousSelector {
                 document,

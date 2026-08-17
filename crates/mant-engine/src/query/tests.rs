@@ -769,7 +769,8 @@ fn explanation_misses_distinguish_visible_prose_from_absent_text() {
     .expect_err("prose is not a semantic entry");
     let QueryExecutionError::Projection(ProjectionError::SelectorFoundOnlyInText {
         selector,
-        location,
+        path,
+        title,
         line,
         ..
     }) = error
@@ -777,8 +778,8 @@ fn explanation_misses_distinguish_visible_prose_from_absent_text() {
         panic!("expected prose-only selector diagnostic");
     };
     assert_eq!(selector, "-b");
-    assert_eq!(location.path(), "1");
-    assert_eq!(location.title(), "Invocation");
+    assert_eq!(path, "1");
+    assert_eq!(title, "Invocation");
     assert!(line > 0);
 
     assert!(matches!(
