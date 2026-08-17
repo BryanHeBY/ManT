@@ -589,7 +589,7 @@ mod tests {
             catalog
                 .documents
                 .iter()
-                .map(|document| document.catalog_path())
+                .map(mant_protocol::DocumentSummary::catalog_path)
                 .collect::<Vec<_>>(),
             [
                 "documents/languages/en/tool".to_owned(),
@@ -621,7 +621,7 @@ mod tests {
             catalog
                 .documents
                 .iter()
-                .map(|document| document.catalog_path())
+                .map(mant_protocol::DocumentSummary::catalog_path)
                 .collect::<Vec<_>>(),
             [
                 "documents/en/tool".to_owned(),

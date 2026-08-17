@@ -286,6 +286,20 @@ fn find_angle_url(value: &str) -> Option<(usize, usize)> {
     .min_by_key(|(index, width)| (*index, usize::MAX - *width))
 }
 
+fn longest_backtick_run(value: &str) -> usize {
+    let mut longest = 0;
+    let mut current = 0;
+    for character in value.chars() {
+        if character == '`' {
+            current += 1;
+            longest = longest.max(current);
+        } else {
+            current = 0;
+        }
+    }
+    longest
+}
+
 #[cfg(test)]
 mod tests {
     use super::escape_plain_text;
@@ -303,18 +317,4 @@ mod tests {
             assert_eq!(escape_plain_text(source), expected, "{source}");
         }
     }
-}
-
-fn longest_backtick_run(value: &str) -> usize {
-    let mut longest = 0;
-    let mut current = 0;
-    for character in value.chars() {
-        if character == '`' {
-            current += 1;
-            longest = longest.max(current);
-        } else {
-            current = 0;
-        }
-    }
-    longest
 }
