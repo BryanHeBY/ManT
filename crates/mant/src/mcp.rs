@@ -294,10 +294,50 @@ impl MantMcpServer {
         task::spawn_blocking(move || {
             let _permit = permit;
             mant_engine::execute_query(&request, QueryPolicy::default())
-                .map_err(|error| error.to_string())
+                .map_err(query_error_for_mcp)
         })
         .await
         .map_err(|error| format!("MCP query worker failed: {error}"))?
+    }
+}
+
+fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> String {
+    use mant_engine::{ManualLoadError, QueryError, QueryExecutionError};
+
+    fn manual_error_for_mcp(error: &ManualLoadError) -> String {
+        match error {
+            ManualLoadError::NotFound { name, .. } => {
+                format!("manual '{name}' was not found")
+            }
+            ManualLoadError::Parse { name, .. } => {
+                format!("could not parse manual '{name}'")
+            }
+            ManualLoadError::Empty { name, .. } => {
+                format!("manual '{name}' contained no readable sections")
+            }
+        }
+    }
+
+    let QueryExecutionError::Query(error) = error else {
+        return error.to_string();
+    };
+    match error {
+        QueryError::Markdown { .. } => {
+            "could not load or parse the selected Markdown document".to_owned()
+        }
+        QueryError::EmptyMarkdown { .. } => {
+            "the selected Markdown document has no readable content".to_owned()
+        }
+        QueryError::Registry { .. } => "registered document discovery failed".to_owned(),
+        QueryError::Manual(error) => manual_error_for_mcp(&error),
+        QueryError::ManualWithTldr { error, topic } => format!(
+            "{}; a tldr entry is available for '{topic}'",
+            manual_error_for_mcp(&error)
+        ),
+        QueryError::Tldr { topic, .. } => {
+            format!("could not load the tldr entry for '{topic}'")
+        }
+        other => other.to_string(),
     }
 }
 
@@ -566,8 +606,9 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        DocumentListParams, DocumentSelector, GetParams, MantMcpServer, OutlineParams,
-        SearchParams, catalog_query, request_for, validate_document_list,
+        DocumentListParams, DocumentSelector, ExplainParams, GetParams, MantMcpServer,
+        OutlineParams, SearchParams, catalog_query, query_error_for_mcp, request_for,
+        validate_document_list,
     };
 
     #[test]
@@ -650,6 +691,52 @@ mod tests {
         .expect("name selector");
         assert_eq!(parameters.selector.name, "printf");
         assert_eq!(parameters.selector.manual_section.as_deref(), Some("3"));
+    }
+
+    #[test]
+    fn flattened_tool_parameters_reject_unknown_fields() {
+        let value = json!({
+            "name": "ls",
+            "unexpectedScope": "all",
+        });
+        assert!(serde_json::from_value::<OutlineParams>(value.clone()).is_err());
+
+        let mut get = value.clone();
+        get["selectors"] = json!(["1"]);
+        assert!(serde_json::from_value::<GetParams>(get).is_err());
+
+        let mut explain = value.clone();
+        explain["entry"] = json!("--all");
+        assert!(serde_json::from_value::<ExplainParams>(explain).is_err());
+
+        let mut search = value;
+        search["pattern"] = json!("all");
+        assert!(serde_json::from_value::<SearchParams>(search).is_err());
+    }
+
+    #[test]
+    fn mcp_query_errors_do_not_expose_physical_paths() {
+        let errors = [
+            mant_engine::QueryError::Markdown {
+                path: "/home/user/private/document.md".to_owned(),
+                detail: "permission denied".to_owned(),
+            },
+            mant_engine::QueryError::Manual(mant_engine::ManualLoadError::Empty {
+                name: "demo".to_owned(),
+                path: PathBuf::from(r"C:\Users\private\demo.1"),
+                diagnostics: vec!["failure at /secret/parser.cache".to_owned()],
+            }),
+            mant_engine::QueryError::Registry {
+                detail: "invalid /home/user/.config/mant/sources.toml".to_owned(),
+            },
+        ];
+
+        for error in errors {
+            let rendered = query_error_for_mcp(mant_engine::QueryExecutionError::Query(error));
+            assert!(!rendered.contains("/home/"), "{rendered}");
+            assert!(!rendered.contains(r"C:\Users"), "{rendered}");
+            assert!(!rendered.contains("/secret/"), "{rendered}");
+        }
     }
 
     #[test]
