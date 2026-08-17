@@ -855,12 +855,17 @@ The render descriptor is currently:
 ```
 
 `lineCount` is document-dependent. Match `markdown.startByte` and `endByte`
-form a half-open UTF-8 byte range in that exact canonical Markdown.
+form a half-open UTF-8 byte range in that exact canonical Markdown. For a
+visible character normalized from Markdown syntax, this is the smallest known
+covering source span: it can include a backslash escape, code-span padding, or
+the spaces that encode a hard line break.
 `startLine`, `startColumn`, `endLine`, and `endColumn` are one-based human
 coordinates. Columns count Unicode scalar values rather than UTF-8 bytes.
 
 `scope = "visible"` changes what can match, but coordinates still point into
 the canonical Markdown. `scope = "markdown"` also allows matches in markup.
+Regex `^` and `$` anchors apply at every rendered line boundary in either
+scope.
 
 Matches on the same rendered line and in the same outline node form one
 pagination unit. This keeps a regular expression with several matches on one
@@ -873,14 +878,18 @@ line from duplicating its preview or context. Each line group includes:
   repetitive line exceeds that bound, `occurrencesTruncated` is true;
 - each retained occurrence contains exact `matchedText`, its canonical
   Markdown range, and `lineRanges` within the anchor-free Markdown lines used
-  by text presentations;
+  by text presentations; `lineRanges` retain Markdown syntax such as hard-break
+  spaces and can contain several fragments when an internal anchor was removed;
 - an optional original `nodeSource` span for the owning outline node;
 - a human-readable `preview`;
 - optional full Markdown context lines.
 
 Text presentations additionally merge overlapping or touching context windows
 inside one outline node and list all retained columns for a matching line once.
-Structured results report when exact occurrence details were bounded.
+Visible-scope text reports columns in the displayed, markup-free line so its
+coordinates can be checked directly; Markdown-scope text reports canonical
+Markdown columns. Structured results always retain canonical Markdown
+coordinates and report when exact occurrence details were bounded.
 
 The trail has the same `ancestors` and typed terminal `node` shape used by
 excerpt selections. The node union uses the same `tldr`, `document-root`,
@@ -1098,6 +1107,9 @@ cursor convention. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
 Occurrences on one rendered line share a result and list their columns once;
 overlapping context windows owned by the same exact outline node are merged.
+Regex `^` and `$` match visible line boundaries. The MCP surface intentionally
+uses an opaque continuation cursor instead of exposing protocol offsets or the
+raw-Markdown search scope.
 This keeps model-visible results aligned with the CLI's human presentations
 without ANSI escapes, duplicated JSON, schema markers, producer metadata,
 physical source paths, or non-fatal diagnostics. Protocol-level and validation

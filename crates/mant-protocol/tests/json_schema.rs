@@ -97,6 +97,27 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
     assert!(search.contains("startLine"));
     assert!(search.contains("document-entry"));
     assert!(search.contains("nextOffset"));
+
+    let search = value(query_search_json_schema());
+    for base in ["lineBase", "columnBase"] {
+        let field = &search["$defs"]["SearchRender"]["properties"][base];
+        assert_eq!(field["minimum"], 1);
+        assert_eq!(field["maximum"], 1);
+    }
+    assert_eq!(
+        search["$defs"]["SearchHit"]["properties"]["ordinal"]["minimum"],
+        1
+    );
+    assert_eq!(
+        search["$defs"]["SearchLineRange"]["properties"]["line"]["minimum"],
+        1
+    );
+    for coordinate in ["startLine", "startColumn", "endLine", "endColumn"] {
+        assert_eq!(
+            search["$defs"]["SearchMarkdownRange"]["properties"][coordinate]["minimum"],
+            1
+        );
+    }
 }
 
 #[test]

@@ -4718,7 +4718,7 @@
             "description": "One-based line number in the deterministic Markdown render.",
             "type": "integer",
             "format": "uint32",
-            "minimum": 0
+            "minimum": 1
           },
           "matched": {
             "description": "Whether this is one of the lines intersecting the match.",
@@ -4780,7 +4780,7 @@
             "description": "One-based line-group number in the unpaginated result set.",
             "type": "integer",
             "format": "uint32",
-            "minimum": 0
+            "minimum": 1
           },
           "outline": {
             "description": "Complete logical location of the nearest addressable node.",
@@ -4814,7 +4814,7 @@
             "description": "One-based line number in the deterministic full Markdown render.",
             "type": "integer",
             "format": "uint32",
-            "minimum": 0
+            "minimum": 1
           },
           "startByte": {
             "description": "Inclusive zero-based UTF-8 byte offset within the presented Markdown line.",
@@ -4843,13 +4843,13 @@
             "description": "One-based exclusive ending column.",
             "type": "integer",
             "format": "uint32",
-            "minimum": 0
+            "minimum": 1
           },
           "endLine": {
             "description": "One-based ending line.",
             "type": "integer",
             "format": "uint32",
-            "minimum": 0
+            "minimum": 1
           },
           "startByte": {
             "description": "Inclusive zero-based UTF-8 byte offset.",
@@ -4861,13 +4861,13 @@
             "description": "One-based starting column.",
             "type": "integer",
             "format": "uint32",
-            "minimum": 0
+            "minimum": 1
           },
           "startLine": {
             "description": "One-based starting line.",
             "type": "integer",
             "format": "uint32",
-            "minimum": 0
+            "minimum": 1
           }
         },
         "required": [
@@ -4979,8 +4979,8 @@
             "description": "First valid human-readable column number.",
             "type": "integer",
             "format": "uint8",
-            "maximum": 255,
-            "minimum": 0
+            "maximum": 1,
+            "minimum": 1
           },
           "format": {
             "description": "Rendered text format.",
@@ -4990,8 +4990,8 @@
             "description": "First valid human-readable line number.",
             "type": "integer",
             "format": "uint8",
-            "maximum": 255,
-            "minimum": 0
+            "maximum": 1,
+            "minimum": 1
           },
           "lineCount": {
             "description": "Total rendered line count.",

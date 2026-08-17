@@ -131,8 +131,10 @@ pub struct SearchRender {
     /// Portion of the query represented by the render.
     pub scope: SearchRenderScope,
     /// First valid human-readable line number.
+    #[schemars(range(min = 1, max = 1))]
     pub line_base: u8,
     /// First valid human-readable column number.
+    #[schemars(range(min = 1, max = 1))]
     pub column_base: u8,
     /// Total rendered line count.
     pub line_count: u32,
@@ -177,6 +179,7 @@ pub struct QuerySearch {
 #[serde(rename_all = "camelCase")]
 pub struct SearchHit {
     /// One-based line-group number in the unpaginated result set.
+    #[schemars(range(min = 1))]
     pub ordinal: u32,
     /// Complete logical location of the nearest addressable node.
     pub outline: OutlineTrail,
@@ -215,6 +218,7 @@ pub struct SearchOccurrence {
 #[serde(rename_all = "camelCase")]
 pub struct SearchLineRange {
     /// One-based line number in the deterministic full Markdown render.
+    #[schemars(range(min = 1))]
     pub line: u32,
     /// Inclusive zero-based UTF-8 byte offset within the presented Markdown line.
     pub start_byte: u32,
@@ -231,12 +235,16 @@ pub struct SearchMarkdownRange {
     /// Exclusive zero-based UTF-8 byte offset.
     pub end_byte: u64,
     /// One-based starting line.
+    #[schemars(range(min = 1))]
     pub start_line: u32,
     /// One-based starting column.
+    #[schemars(range(min = 1))]
     pub start_column: u32,
     /// One-based ending line.
+    #[schemars(range(min = 1))]
     pub end_line: u32,
     /// One-based exclusive ending column.
+    #[schemars(range(min = 1))]
     pub end_column: u32,
 }
 
@@ -245,6 +253,7 @@ pub struct SearchMarkdownRange {
 #[serde(rename_all = "camelCase")]
 pub struct SearchContextLine {
     /// One-based line number in the deterministic Markdown render.
+    #[schemars(range(min = 1))]
     pub line: u32,
     /// Complete rendered line without its newline terminator.
     pub text: String,
