@@ -7,6 +7,7 @@ use crate::output::{MarkdownArtifact, MarkdownNode, MarkdownNodeRange, MarkdownS
 
 #[derive(Clone)]
 pub(super) struct Owner {
+    pub(super) key: usize,
     pub(super) start: usize,
     pub(super) end: usize,
     pub(super) outline: OutlineTrail,
@@ -29,8 +30,8 @@ impl OwnerIndex {
         let mut root = None;
         let mut tldr = None;
 
-        for mapped in &artifact.nodes {
-            let owner = owner_from_range(mapped);
+        for (key, mapped) in artifact.nodes.iter().enumerate() {
+            let owner = owner_from_range(key, mapped);
             match mapped.node {
                 MarkdownNode::Tldr => tldr = Some(owner),
                 MarkdownNode::DocumentRoot => root = Some(owner),
@@ -98,7 +99,7 @@ impl OwnerIndex {
     }
 }
 
-fn owner_from_range(mapped: &MarkdownNodeRange) -> Owner {
+fn owner_from_range(key: usize, mapped: &MarkdownNodeRange) -> Owner {
     let range = mapped.range.clone();
     let (outline, source) = match &mapped.node {
         MarkdownNode::Tldr => (
@@ -159,6 +160,7 @@ fn owner_from_range(mapped: &MarkdownNodeRange) -> Owner {
         ),
     };
     Owner {
+        key,
         start: range.start,
         end: range.end,
         outline,

@@ -16,6 +16,7 @@ use mant_protocol::{
 use pulldown_cmark::{Event, Parser, TagEnd};
 use regex_syntax::ParserBuilder;
 
+use crate::markdown_mapping::{InlineMappingKind, map_inline_characters};
 use crate::{ResolvedContent, output::render_addressable_markdown};
 
 mod owners;
@@ -196,6 +197,7 @@ fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, Sear
     let mut builder = RegexMatcherBuilder::new();
     builder
         .fixed_strings(request.syntax == SearchSyntax::Literal)
+        .multi_line(true)
         .word(request.word);
     match request.case {
         SearchCase::Insensitive => {
@@ -260,10 +262,23 @@ struct PendingRawMatchGroup {
     ordinal: u32,
     occurrences: Vec<RawOccurrence>,
     occurrence_count: u32,
-    owner: Owner,
+    owner: PendingOwner,
     start_line_index: usize,
     end_line_index: usize,
-    retained: bool,
+}
+
+enum PendingOwner {
+    Retained(Owner),
+    CountOnly(usize),
+}
+
+impl PendingOwner {
+    const fn key(&self) -> usize {
+        match self {
+            Self::Retained(owner) => owner.key,
+            Self::CountOnly(key) => *key,
+        }
+    }
 }
 
 struct SearchCollector<'a> {
@@ -301,10 +316,12 @@ impl<'a> SearchCollector<'a> {
         if let Some(group) = self.current.as_mut().filter(|group| {
             group.start_line_index == start_line_index
                 && group.end_line_index == end_line_index
-                && group.owner.outline == owner.outline
+                && group.owner.key() == owner.key
         }) {
             group.occurrence_count = group.occurrence_count.saturating_add(1);
-            if group.retained && group.occurrences.len() < MAX_OCCURRENCES_PER_MATCH {
+            if matches!(group.owner, PendingOwner::Retained(_))
+                && group.occurrences.len() < MAX_OCCURRENCES_PER_MATCH
+            {
                 group.occurrences.push(occurrence);
             }
             return;
@@ -317,10 +334,13 @@ impl<'a> SearchCollector<'a> {
             ordinal: u32::try_from(self.total.saturating_add(1)).unwrap_or(u32::MAX),
             occurrences,
             occurrence_count: 1,
-            owner: owner.clone(),
+            owner: if retained {
+                PendingOwner::Retained(owner.clone())
+            } else {
+                PendingOwner::CountOnly(owner.key)
+            },
             start_line_index,
             end_line_index,
-            retained,
         });
     }
 
@@ -329,12 +349,12 @@ impl<'a> SearchCollector<'a> {
             return;
         };
         self.total = self.total.saturating_add(1);
-        if group.retained {
+        if let PendingOwner::Retained(owner) = group.owner {
             self.selected.push(RawMatchGroup {
                 ordinal: group.ordinal,
                 occurrences: group.occurrences,
                 occurrence_count: group.occurrence_count,
-                owner: group.owner,
+                owner,
                 start_line_index: group.start_line_index,
                 end_line_index: group.end_line_index,
             });
@@ -427,7 +447,7 @@ fn occurrence_line_ranges(
     (start..=end)
         .flat_map(|line_index| {
             let line_start = lines.start(line_index);
-            let line = lines.line(markdown, line_index).trim_end();
+            let line = lines.line(markdown, line_index);
             let line_end = line_start.saturating_add(line.len());
             let intersection =
                 occurrence.markdown.start.max(line_start)..occurrence.markdown.end.min(line_end);
@@ -465,7 +485,7 @@ impl AnchorStrippedLine {
             let anchor_start = cursor + relative_start;
             push_retained_line_segment(line, cursor..anchor_start, &mut text, &mut segments);
             let anchor = &line[anchor_start..];
-            let Some(relative_end) = anchor.find("</a>") else {
+            let Some(relative_end) = anchor.find("\"></a>") else {
                 push_retained_line_segment(
                     line,
                     anchor_start..line.len(),
@@ -474,7 +494,7 @@ impl AnchorStrippedLine {
                 );
                 return Self { text, segments };
             };
-            cursor = anchor_start + relative_end + "</a>".len();
+            cursor = anchor_start + relative_end + "\"></a>".len();
         }
         push_retained_line_segment(line, cursor..line.len(), &mut text, &mut segments);
         Self { text, segments }
@@ -509,6 +529,7 @@ fn push_retained_line_segment(
     segments.push(OffsetSegment {
         visible: visible_start..text.len(),
         markdown: source,
+        linear: true,
     });
 }
 
@@ -573,6 +594,7 @@ struct SearchableText {
 struct OffsetSegment {
     visible: Range<usize>,
     markdown: Range<usize>,
+    linear: bool,
 }
 
 impl SearchableText {
@@ -588,19 +610,20 @@ impl SearchableText {
         let mut visible = VisibleBuilder::new(markdown);
         for (event, source) in Parser::new(markdown).into_offset_iter() {
             match event {
-                Event::Text(value)
-                | Event::Code(value)
-                | Event::InlineMath(value)
-                | Event::DisplayMath(value) => visible.push_aligned(&value, source),
-                Event::SoftBreak | Event::HardBreak => visible.push_break(source.start),
+                Event::Text(value) | Event::InlineMath(value) | Event::DisplayMath(value) => {
+                    visible.push_mapped(&value, source, InlineMappingKind::Text);
+                }
+                Event::Code(value) => {
+                    visible.push_mapped(&value, source, InlineMappingKind::Code);
+                }
+                Event::SoftBreak | Event::HardBreak | Event::Rule => visible.push_break(source),
                 Event::End(
                     TagEnd::Paragraph
                     | TagEnd::Heading(_)
                     | TagEnd::Item
                     | TagEnd::CodeBlock
                     | TagEnd::TableRow,
-                )
-                | Event::Rule => visible.push_break(source.end),
+                ) => visible.push_break(source.end..source.end),
                 Event::Start(_)
                 | Event::End(_)
                 | Event::Html(_)
@@ -617,7 +640,7 @@ impl SearchableText {
             return offset;
         }
         self.segment_at(offset).map_or(0, |segment| {
-            if segment.visible.len() == segment.markdown.len() {
+            if segment.linear {
                 segment.markdown.start + offset.saturating_sub(segment.visible.start)
             } else {
                 segment.markdown.start
@@ -633,7 +656,7 @@ impl SearchableText {
             return 0;
         }
         self.segment_at(offset - 1).map_or(0, |segment| {
-            if segment.visible.len() == segment.markdown.len() {
+            if segment.linear {
                 segment.markdown.start + offset.saturating_sub(segment.visible.start)
             } else {
                 segment.markdown.end
@@ -651,16 +674,6 @@ impl SearchableText {
     }
 }
 
-/// Largest char boundary not exceeding `offset`; stable stand-in for
-/// `str::floor_char_boundary`.
-fn floor_char_boundary(text: &str, offset: usize) -> usize {
-    let mut offset = offset.min(text.len());
-    while offset > 0 && !text.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
-}
-
 struct VisibleBuilder<'a> {
     markdown: &'a str,
     text: String,
@@ -676,31 +689,20 @@ impl<'a> VisibleBuilder<'a> {
         }
     }
 
-    fn push_aligned(&mut self, value: &str, source: Range<usize>) {
-        let mut markdown_cursor = source.start.min(self.markdown.len());
-        let markdown_end = floor_char_boundary(self.markdown, source.end);
-        for character in value.chars() {
-            let search_start = floor_char_boundary(self.markdown, markdown_cursor);
-            let search_end = markdown_end.max(search_start);
-            let found = self.markdown[search_start..search_end]
-                .find(character)
-                .map_or(search_start, |relative| search_start + relative);
+    fn push_mapped(&mut self, value: &str, source: Range<usize>, kind: InlineMappingKind) {
+        for mapped in map_inline_characters(self.markdown, value, source, kind) {
             let visible_start = self.text.len();
-            self.text.push(character);
+            self.text.push(mapped.value);
             let visible_end = self.text.len();
-            let source_end = floor_char_boundary(
-                self.markdown,
-                found.saturating_add(character.len_utf8()).min(search_end),
-            );
             self.push_segment(OffsetSegment {
                 visible: visible_start..visible_end,
-                markdown: found..source_end,
+                markdown: mapped.source,
+                linear: mapped.linear,
             });
-            markdown_cursor = source_end;
         }
     }
 
-    fn push_break(&mut self, markdown_offset: usize) {
+    fn push_break(&mut self, markdown: Range<usize>) {
         if self.text.ends_with('\n') || self.text.is_empty() {
             return;
         }
@@ -708,7 +710,8 @@ impl<'a> VisibleBuilder<'a> {
         self.text.push('\n');
         self.push_segment(OffsetSegment {
             visible: start..self.text.len(),
-            markdown: markdown_offset..markdown_offset,
+            markdown,
+            linear: false,
         });
     }
 
@@ -716,8 +719,8 @@ impl<'a> VisibleBuilder<'a> {
         if let Some(previous) = self.segments.last_mut() {
             let contiguous = previous.visible.end == segment.visible.start
                 && previous.markdown.end == segment.markdown.start
-                && previous.visible.len() == previous.markdown.len()
-                && segment.visible.len() == segment.markdown.len();
+                && previous.linear
+                && segment.linear;
             if contiguous {
                 previous.visible.end = segment.visible.end;
                 previous.markdown.end = segment.markdown.end;
@@ -745,7 +748,9 @@ mod tests {
     };
     use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
 
-    use super::{MAX_OCCURRENCES_PER_MATCH, search_query};
+    use super::{
+        MAX_OCCURRENCES_PER_MATCH, display_markdown_line, render_addressable_markdown, search_query,
+    };
 
     fn query() -> ResolvedContent {
         ResolvedContent {
@@ -843,6 +848,103 @@ mod tests {
         assert!(result.matches[0].preview.contains("**access control**"));
         assert!(!result.matches[0].preview.contains("<a id="));
         assert!(!result.matches[0].context.is_empty());
+    }
+
+    #[test]
+    fn source_map_stripping_accepts_only_complete_empty_anchors() {
+        assert_eq!(
+            display_markdown_line("before<a id=\"node\"></a>after"),
+            "beforeafter"
+        );
+        assert_eq!(
+            display_markdown_line("before<a id=\"node\">payload</a>after"),
+            "before<a id=\"node\">payload</a>after"
+        );
+        assert_eq!(
+            display_markdown_line("before<a id=\"node\"after"),
+            "before<a id=\"node\"after"
+        );
+    }
+
+    #[test]
+    fn visible_regex_anchors_apply_to_rendered_lines_not_the_whole_document() {
+        for pattern in [r"^--acls", r"lists$"] {
+            let mut request = request(pattern);
+            request.syntax = SearchSyntax::Regex;
+            request.case = SearchCase::Sensitive;
+
+            let result = search_query(&query(), &request).expect("search");
+
+            assert_eq!(result.total, 1, "pattern {pattern:?}");
+            assert_eq!(result.matches[0].outline.node.path(), "1/e1");
+        }
+    }
+
+    #[test]
+    fn visible_search_maps_padded_code_span_content_not_its_delimiters() {
+        for value in ["`x", "x`", " x", "x ", "`x`"] {
+            let mut query = query();
+            let Block::DefinitionList { items, .. } =
+                &mut query.document.as_mut().expect("manual").sections[0].blocks[0]
+            else {
+                panic!("fixture contains a definition list");
+            };
+            items[0].description = vec![Block::Paragraph {
+                children: vec![Inline::Code {
+                    value: value.to_owned(),
+                }],
+                layout: LayoutHint::default(),
+                source: None,
+            }];
+            let markdown = render_addressable_markdown(&query).text;
+
+            let result = search_query(&query, &request(value)).expect("search");
+            let occurrence = &result.matches[0].occurrences[0];
+            let start = usize::try_from(occurrence.markdown.start_byte).expect("small fixture");
+            let end = usize::try_from(occurrence.markdown.end_byte).expect("small fixture");
+
+            assert_eq!(&markdown[start..end], value, "code value {value:?}");
+            assert_eq!(occurrence.line_ranges.len(), 1, "code value {value:?}");
+            let line = &occurrence.line_ranges[0];
+            let line_start = usize::try_from(line.start_byte).expect("small fixture");
+            let line_end = usize::try_from(line.end_byte).expect("small fixture");
+            assert_eq!(
+                &result.matches[0].preview[line_start..line_end],
+                value,
+                "code value {value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn visible_search_maps_an_explicit_line_break_to_its_markdown_byte() {
+        let mut query = query();
+        let Block::DefinitionList { items, .. } =
+            &mut query.document.as_mut().expect("manual").sections[0].blocks[0]
+        else {
+            panic!("fixture contains a definition list");
+        };
+        items[0].description = vec![Block::Paragraph {
+            children: vec![
+                Inline::Text {
+                    value: "alpha".to_owned(),
+                },
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "beta".to_owned(),
+                },
+            ],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+        let markdown = render_addressable_markdown(&query).text;
+
+        let result = search_query(&query, &request("alpha\n")).expect("search");
+        let occurrence = &result.matches[0].occurrences[0];
+        let start = usize::try_from(occurrence.markdown.start_byte).expect("small fixture");
+        let end = usize::try_from(occurrence.markdown.end_byte).expect("small fixture");
+
+        assert_eq!(&markdown[start..end], "alpha  \n");
     }
 
     #[test]

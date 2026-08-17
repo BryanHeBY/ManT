@@ -78,7 +78,8 @@ pub(super) fn fenced_code(value: &str, language: Option<&str>) -> String {
 pub(super) fn code_span(value: &str) -> String {
     let width = longest_backtick_run(value).saturating_add(1).max(1);
     let delimiter = "`".repeat(width);
-    let padding = value.starts_with(['`', ' ']) || value.ends_with(['`', ' ']);
+    let padding = (value.starts_with(['`', ' ']) || value.ends_with(['`', ' ']))
+        && !value.chars().all(|character| character == ' ');
     if padding {
         format!("{delimiter} {value} {delimiter}")
     } else {

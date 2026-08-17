@@ -9,6 +9,7 @@ mod inline;
 mod mandoc;
 mod manual;
 mod markdown;
+mod markdown_mapping;
 mod output;
 mod projection;
 mod query;
