@@ -60,61 +60,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
             .expect("tool list"),
     );
 
-    call_tool(&mut input, 3, "mant_find", json!({ "query": "mcp-" }));
-    call_tool(
-        &mut input,
-        4,
-        "mant_search",
-        json!({
-            "document": "documents/mcp-registered",
-            "pattern": "needle",
-            "word": true,
-            "contextLines": 1
-        }),
-    );
-    call_tool(
-        &mut input,
-        5,
-        "mant_read",
-        json!({
-            "document": "documents/mcp-registered",
-            "selectors": ["root"]
-        }),
-    );
-    call_tool(
-        &mut input,
-        6,
-        "mant_outline",
-        json!({
-            "document": "documents/mcp-registered",
-            "detail": "entries"
-        }),
-    );
-    call_tool(
-        &mut input,
-        7,
-        "mant_explain",
-        json!({
-            "document": "documents/mcp-registered",
-            "entry": "query"
-        }),
-    );
-    call_tool(
-        &mut input,
-        8,
-        "mant_explain",
-        json!({
-            "document": "documents/mcp-registered",
-            "entry": "/f"
-        }),
-    );
-    #[cfg(windows)]
-    call_tool(
-        &mut input,
-        9,
-        "mant_outline",
-        json!({ "document": "mcp-suffix" }),
-    );
+    request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
     let replies = (0..(6 + usize::from(cfg!(windows))))
@@ -123,6 +69,64 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     assert_tool_replies(&replies);
 
     assert_silent_shutdown(child, input, diagnostics, fixture_root);
+}
+
+fn request_document_tools(input: &mut impl Write) {
+    call_tool(input, 3, "mant_find", &json!({ "query": "mcp-" }));
+    call_tool(
+        input,
+        4,
+        "mant_search",
+        &json!({
+            "document": "documents/mcp-registered",
+            "pattern": "needle",
+            "word": true,
+            "contextLines": 1
+        }),
+    );
+    call_tool(
+        input,
+        5,
+        "mant_read",
+        &json!({
+            "document": "documents/mcp-registered",
+            "selectors": ["root"]
+        }),
+    );
+    call_tool(
+        input,
+        6,
+        "mant_outline",
+        &json!({
+            "document": "documents/mcp-registered",
+            "detail": "entries"
+        }),
+    );
+    call_tool(
+        input,
+        7,
+        "mant_explain",
+        &json!({
+            "document": "documents/mcp-registered",
+            "entry": "query"
+        }),
+    );
+    call_tool(
+        input,
+        8,
+        "mant_explain",
+        &json!({
+            "document": "documents/mcp-registered",
+            "entry": "/f"
+        }),
+    );
+    #[cfg(windows)]
+    call_tool(
+        input,
+        9,
+        "mant_outline",
+        &json!({ "document": "mcp-suffix" }),
+    );
 }
 
 fn assert_tool_catalog(tools: &[Value]) {
@@ -198,7 +202,7 @@ fn assert_tool_replies(replies: &[Value]) {
         assert!(!encoded.contains("/home/"));
         assert!(!encoded.contains(r"C:\\Users"));
         assert!(!encoded.contains("sourcePath"));
-        assert!(!encoded.contains("\u{1b}"));
+        assert!(!encoded.contains('\u{1b}'));
     }
 }
 
@@ -257,7 +261,7 @@ fn request_tool_list(input: &mut impl Write) {
     );
 }
 
-fn call_tool(input: &mut impl Write, id: u8, name: &str, arguments: Value) {
+fn call_tool(input: &mut impl Write, id: u8, name: &str, arguments: &Value) {
     write_message(
         input,
         &json!({

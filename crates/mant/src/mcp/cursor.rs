@@ -62,13 +62,14 @@ pub(super) fn decode(
         || !valid_kind
         || fields.next().is_some()
         || fingerprint != Some(expected_fingerprint)
-        || position.is_none()
     {
         return Err(
             "cursor is invalid or belongs to a different request; restart without it".to_owned(),
         );
     }
-    Ok(position.expect("validated cursor position"))
+    position.ok_or_else(|| {
+        "cursor is invalid or belongs to a different request; restart without it".to_owned()
+    })
 }
 
 /// Combine a result offset with a byte position inside its rendered page.
@@ -78,7 +79,11 @@ pub(super) const fn join_position(offset: u32, byte: u32) -> u64 {
 
 /// Recover the result offset and rendered byte position.
 pub(super) const fn split_position(position: u64) -> (u32, u32) {
-    ((position >> 32) as u32, position as u32)
+    let bytes = position.to_be_bytes();
+    (
+        u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
+        u32::from_be_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+    )
 }
 
 #[cfg(test)]

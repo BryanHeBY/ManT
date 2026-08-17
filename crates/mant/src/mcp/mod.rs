@@ -1,4 +1,4 @@
-//! Read-only, text-first Model Context Protocol adapter for ManT.
+//! Read-only, text-first Model Context Protocol adapter for `ManT`.
 //!
 //! The engine and protocol crates own query semantics and deterministic
 //! projections. This module owns only the MCP transport, compact tool schemas,
@@ -85,10 +85,8 @@ impl MantMcpServer {
         let next_offset = catalog.next_offset;
         let page = render_find(&catalog, byte)?;
         let next = continuation_position(page.next_byte, offset, next_offset);
-        Ok(finish_with_cursor(
-            page,
-            next.map(|position| encode(CursorKind::Find, fingerprint, position)),
-        ))
+        let cursor = next.map(|position| encode(CursorKind::Find, fingerprint, position));
+        Ok(finish_with_cursor(page, cursor.as_deref()))
     }
 
     /// Return a selectable hierarchy; sections are the compact default.
@@ -121,7 +119,7 @@ impl MantMcpServer {
         Ok(finish_byte_page(page, CursorKind::Outline, fingerprint))
     }
 
-    /// Read complete content for one or more outline selectors as CommonMark.
+    /// Read complete content for one or more outline selectors as `CommonMark`.
     #[tool(
         name = "mant_read",
         annotations(
@@ -139,7 +137,7 @@ impl MantMcpServer {
         let selector_key = parameters
             .selectors
             .iter()
-            .map(|selector| selector.as_str())
+            .map(mant_protocol::NodeSelector::as_str)
             .collect::<Vec<_>>()
             .join("\u{1f}");
         let fingerprint = fingerprint(&[&document, &selector_key]);
@@ -240,10 +238,8 @@ impl MantMcpServer {
         let next_offset = result.next_offset;
         let page = render_search(&result, byte)?;
         let next = continuation_position(page.next_byte, offset, next_offset);
-        Ok(finish_with_cursor(
-            page,
-            next.map(|position| encode(CursorKind::Search, fingerprint, position)),
-        ))
+        let cursor = next.map(|position| encode(CursorKind::Search, fingerprint, position));
+        Ok(finish_with_cursor(page, cursor.as_deref()))
     }
 }
 
@@ -262,11 +258,11 @@ fn finish_byte_page(page: TextPage, kind: CursorKind, fingerprint: u64) -> Strin
     let cursor = page
         .next_byte
         .map(|byte| encode(kind, fingerprint, u64::from(byte)));
-    finish_with_cursor(page, cursor)
+    finish_with_cursor(page, cursor.as_deref())
 }
 
-fn finish_with_cursor(page: TextPage, cursor: Option<String>) -> String {
-    finish_page(page, cursor.as_deref())
+fn finish_with_cursor(page: TextPage, cursor: Option<&str>) -> String {
+    finish_page(page, cursor)
 }
 
 fn cursor_byte(value: Option<&str>, kind: CursorKind, fingerprint: u64) -> Result<u32, String> {

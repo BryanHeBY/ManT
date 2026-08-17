@@ -112,7 +112,7 @@ promised capability exits with status `1`.
 
 `mant --mcp` exposes read-only discovery, outline, excerpt, explanation, and
 search over stdio JSON-RPC. Its five tools return bounded plain text or
-CommonMark rather than serializing full AST envelopes. MCP stdout contains
+`CommonMark` rather than serializing full AST envelopes. MCP stdout contains
 protocol messages only; use CLI JSON output to inspect lowering diagnostics.
 
 ## Document sources

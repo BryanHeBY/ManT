@@ -43,7 +43,7 @@ are generated for deserialization so closed-object and default behavior match
 what the process accepts; response schemas are generated for serialization.
 These native schema discriminators describe CLI and request JSON. MCP uses its
 own negotiated protocol version and presents the same logical identities and
-focused projections as bounded text or CommonMark instead of serializing the
+focused projections as bounded text or `CommonMark` instead of serializing the
 native response envelopes.
 
 ## Basic use
