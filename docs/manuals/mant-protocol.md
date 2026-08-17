@@ -382,10 +382,12 @@ Search view fields are:
 | `limit` | Integer from 1 through 10,000 | `100` |
 | `offset` | Non-negative integer | `0` |
 
-Regular expressions that match an empty string are rejected. `smart` case
-becomes case-sensitive when the pattern contains an uppercase character.
-JSON Schema `maxLength` counts Unicode scalar values; the runtime additionally
-enforces the documented 4,096-byte UTF-8 pattern limit.
+Regular expressions that match an empty string are rejected. Regex patterns
+must preserve Unicode mode and UTF-8 character boundaries; byte-oriented forms
+that disable Unicode, such as `(?-u:.)`, are rejected before document matching.
+`smart` case becomes case-sensitive when the pattern contains an uppercase
+character. JSON Schema `maxLength` counts Unicode scalar values; the runtime
+additionally enforces the documented 4,096-byte UTF-8 pattern limit.
 
 ### Complete Request Examples
 
@@ -1125,7 +1127,8 @@ cursor convention. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
 Occurrences on one rendered line share a result and list their columns once;
 overlapping context windows owned by the same exact outline node are merged.
-Regex `^` and `$` match visible line boundaries. The MCP surface intentionally
+Regex `^` and `$` match visible line boundaries and the same Unicode/UTF-8
+validation applies before a document is loaded. The MCP surface intentionally
 uses an opaque continuation cursor instead of exposing protocol offsets or the
 raw-Markdown search scope.
 This keeps model-visible results aligned with the CLI's human presentations

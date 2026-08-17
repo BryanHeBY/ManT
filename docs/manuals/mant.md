@@ -593,10 +593,13 @@ Search defaults to a case-insensitive literal over visible text, returns at
 most 100 matching lines, and includes no context lines. Multiple occurrences
 on the same rendered line form one pagination result. `smart` case becomes
 case-sensitive when the pattern contains uppercase text. In regex mode, `^`
-and `$` match the beginning and end of each rendered line. Structured results
-always retain generated Markdown coordinates. Plain-text visible searches show
-columns in the displayed text instead, while Markdown-scope text searches show
-canonical Markdown columns; line numbers are shared by both presentations.
+and `$` match the beginning and end of each rendered line. Regex patterns must
+preserve Unicode mode and UTF-8 character boundaries; byte-oriented forms that
+disable Unicode, such as `(?-u:.)`, are rejected before document matching.
+Structured results always retain generated Markdown coordinates. Plain-text
+visible searches show columns in the displayed text instead, while
+Markdown-scope text searches show canonical Markdown columns; line numbers are
+shared by both presentations.
 
 Use the `=` form when a value begins with a hyphen:
 
