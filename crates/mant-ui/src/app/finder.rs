@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use mant_protocol::{
-    CatalogQuery, DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase,
-    catalog_literal_match_rank,
+    CatalogMatchScore, CatalogQuery, DocumentAddress, DocumentCatalog, DocumentSummary,
+    MarkdownOrigin, SearchCase, catalog_literal_match_score,
 };
 
 use super::{App, Overlay, PointerDrag, UpdateOutcome};
@@ -133,8 +133,8 @@ impl FinderState {
             let right_document = &self.catalog[*right];
             let left = &left_document.address;
             let right = &right_document.address;
-            finder_match_rank(left, &left_document.catalog_path(), &self.draft)
-                .cmp(&finder_match_rank(
+            finder_match_score(left, &left_document.catalog_path(), &self.draft)
+                .cmp(&finder_match_score(
                     right,
                     &right_document.catalog_path(),
                     &self.draft,
@@ -285,11 +285,11 @@ impl FinderState {
     }
 }
 
-fn finder_match_rank(
+fn finder_match_score(
     address: &DocumentAddress,
     catalog_path: &str,
     pattern: &str,
-) -> mant_protocol::CatalogMatchRank {
+) -> CatalogMatchScore {
     let pattern = (!pattern.is_empty()).then_some(pattern);
     let relative_path = address.relative_path();
     [
@@ -301,9 +301,9 @@ fn finder_match_rank(
     ]
     .into_iter()
     .flatten()
-    .map(|candidate| catalog_literal_match_rank(candidate, pattern, SearchCase::Insensitive))
+    .map(|candidate| catalog_literal_match_score(candidate, pattern, SearchCase::Insensitive))
     .min()
-    .unwrap_or(mant_protocol::CatalogMatchRank::Unranked)
+    .unwrap_or_else(|| catalog_literal_match_score("", None, SearchCase::Insensitive))
 }
 
 fn append_tree_rows(

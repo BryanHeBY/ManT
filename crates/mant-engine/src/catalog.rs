@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, error::Error, fmt, path::PathBuf};
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
-    CatalogCoverage, CatalogDocumentKind, CatalogMatchRank, CatalogQuery, CatalogSchema,
+    CatalogCoverage, CatalogDocumentKind, CatalogMatchScore, CatalogQuery, CatalogSchema,
     DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
 };
 
@@ -153,8 +153,8 @@ pub fn query_available_documents(
         })
         .collect::<Vec<_>>();
     filtered.sort_by(|left, right| {
-        match_rank(left, query)
-            .cmp(&match_rank(right, query))
+        match_score(left, query)
+            .cmp(&match_score(right, query))
             .then_with(|| {
                 left.logical_path
                     .to_lowercase()
@@ -291,12 +291,12 @@ fn build_matcher(
         .map_err(|error| CatalogError::InvalidPattern(error.to_string()))
 }
 
-fn match_rank(document: &AvailableDocument, query: &CatalogQuery) -> CatalogMatchRank {
+fn match_score(document: &AvailableDocument, query: &CatalogQuery) -> CatalogMatchScore {
     if query.syntax != SearchSyntax::Literal {
-        return CatalogMatchRank::Unranked;
+        return mant_protocol::catalog_literal_match_score("", None, query.case);
     }
     let Some(pattern) = query.pattern.as_deref() else {
-        return CatalogMatchRank::Unranked;
+        return mant_protocol::catalog_literal_match_score("", None, query.case);
     };
     let catalog_path = available_catalog_path(document);
     [
@@ -307,10 +307,10 @@ fn match_rank(document: &AvailableDocument, query: &CatalogQuery) -> CatalogMatc
     .into_iter()
     .flatten()
     .map(|candidate| {
-        mant_protocol::catalog_literal_match_rank(candidate, Some(pattern), query.case)
+        mant_protocol::catalog_literal_match_score(candidate, Some(pattern), query.case)
     })
     .min()
-    .unwrap_or(CatalogMatchRank::Unranked)
+    .unwrap_or_else(|| mant_protocol::catalog_literal_match_score("", None, query.case))
 }
 
 fn document_summary(document: &AvailableDocument) -> DocumentSummary {
@@ -563,6 +563,39 @@ mod tests {
         assert_eq!(catalog.documents[0].address.name(), "process");
         assert_eq!(catalog.documents[1].address.name(), "process-tree");
         assert_eq!(catalog.documents[2].address.name(), "Start-Process");
+    }
+
+    #[test]
+    fn catalog_prefers_case_faithful_prefixes_before_folded_prefixes() {
+        let documents = ["exec", "execlp", "EXECUTE", "execv", "execve"]
+            .into_iter()
+            .map(|name| AvailableDocument {
+                name: name.to_owned(),
+                logical_path: name.to_owned(),
+                kind: AvailableDocumentKind::Manual,
+                manual_section: Some("1".to_owned()),
+                path: PathBuf::from(format!("/man/{name}.1")),
+                origin: AvailableDocumentOrigin::ManualPath,
+                source_priority: None,
+            })
+            .collect::<Vec<_>>();
+        let catalog = query_available_documents(
+            &documents,
+            &CatalogQuery {
+                pattern: Some("exec".to_owned()),
+                ..CatalogQuery::default()
+            },
+        )
+        .expect("catalog");
+
+        assert_eq!(
+            catalog
+                .documents
+                .iter()
+                .map(|document| document.address.name())
+                .collect::<Vec<_>>(),
+            ["exec", "execlp", "execv", "execve", "EXECUTE"]
+        );
     }
 
     #[test]

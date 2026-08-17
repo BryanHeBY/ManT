@@ -172,6 +172,27 @@ pub enum CatalogMatchRank {
     Unranked,
 }
 
+/// Spelling fidelity inside one catalog relevance tier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CatalogSpellingRank {
+    /// The candidate satisfies its relevance relation with the query's exact
+    /// spelling, including case.
+    Exact,
+    /// The relation holds only after case folding.
+    Folded,
+    /// No literal spelling comparison applies.
+    Unranked,
+}
+
+/// Complete literal relevance score shared by catalog frontends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CatalogMatchScore {
+    /// Structural name/path relevance.
+    pub relevance: CatalogMatchRank,
+    /// Case fidelity within that relevance tier.
+    pub spelling: CatalogSpellingRank,
+}
+
 /// Rank one document name or slash-delimited path using the catalog's
 /// literal-search case policy.
 #[must_use]
@@ -203,6 +224,43 @@ pub fn catalog_literal_match_rank(
     }
 }
 
+/// Rank one literal candidate while preferring case-faithful spellings inside
+/// the same exact, prefix, or substring tier.
+#[must_use]
+pub fn catalog_literal_match_score(
+    name: &str,
+    pattern: Option<&str>,
+    case: SearchCase,
+) -> CatalogMatchScore {
+    let relevance = catalog_literal_match_rank(name, pattern, case);
+    let Some(pattern) = pattern else {
+        return CatalogMatchScore {
+            relevance,
+            spelling: CatalogSpellingRank::Unranked,
+        };
+    };
+    let exact_relation = match relevance {
+        CatalogMatchRank::Exact => name == pattern,
+        CatalogMatchRank::ComponentSuffix => name.ends_with(&format!("/{pattern}")),
+        CatalogMatchRank::Prefix => name.starts_with(pattern),
+        CatalogMatchRank::Substring => name.contains(pattern),
+        CatalogMatchRank::NoMatch | CatalogMatchRank::Unranked => {
+            return CatalogMatchScore {
+                relevance,
+                spelling: CatalogSpellingRank::Unranked,
+            };
+        }
+    };
+    CatalogMatchScore {
+        relevance,
+        spelling: if exact_relation {
+            CatalogSpellingRank::Exact
+        } else {
+            CatalogSpellingRank::Folded
+        },
+    }
+}
+
 #[must_use]
 /// Return the default maximum number of catalog rows.
 pub const fn default_catalog_limit() -> u32 {
@@ -211,7 +269,10 @@ pub const fn default_catalog_limit() -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{CatalogMatchRank, catalog_literal_match_rank};
+    use super::{
+        CatalogMatchRank, CatalogSpellingRank, catalog_literal_match_rank,
+        catalog_literal_match_score,
+    };
     use crate::SearchCase;
 
     #[test]
@@ -228,5 +289,16 @@ mod tests {
             catalog_literal_match_rank("printf", None, SearchCase::Insensitive),
             CatalogMatchRank::Unranked
         );
+    }
+
+    #[test]
+    fn literal_score_prefers_case_faithful_prefixes_inside_one_tier() {
+        let lower = catalog_literal_match_score("execve", Some("exec"), SearchCase::Insensitive);
+        let folded = catalog_literal_match_score("EXECUTE", Some("exec"), SearchCase::Insensitive);
+        assert_eq!(lower.relevance, CatalogMatchRank::Prefix);
+        assert_eq!(folded.relevance, CatalogMatchRank::Prefix);
+        assert_eq!(lower.spelling, CatalogSpellingRank::Exact);
+        assert_eq!(folded.spelling, CatalogSpellingRank::Folded);
+        assert!(lower < folded);
     }
 }

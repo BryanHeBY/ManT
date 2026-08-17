@@ -205,6 +205,8 @@ configured source. Manual addresses contain both name and exact section, so
 shadowed Markdown candidates and multiple manual sections remain independently
 selectable. Literal matching is case-insensitive by default; exact paths or
 leaf names rank before component suffixes, prefixes, and other substrings. A
+case-faithful spelling ranks before a match that reaches the same relevance
+tier only through case folding; matching itself remains case-insensitive. A
 pattern containing `/` additionally matches the complete canonical path.
 Regex and case policies use the same
 values as document-content search. The native process may page long text

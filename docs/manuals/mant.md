@@ -91,7 +91,9 @@ stdout are terminals; redirection falls back to clean Markdown. `--ui` and
 
 Discovery uses a case-insensitive literal substring by default. `--find` also
 accepts `--regex` and `--case`; `--limit` and `--offset` apply deterministic
-pagination. Plain `--find` output is tab-separated as
+pagination. Inside one relevance tier, candidates preserving the query's exact
+case rank before candidates found only through case folding. Plain `--find`
+output is tab-separated as
 the canonical catalog path and `kind`, while `--format json` returns
 `mant.catalog/v0.8`. `--list` groups the same hierarchy beneath `documents`,
 `sources/SOURCE`, or `manual/SECTION`.

@@ -365,7 +365,7 @@ fn document_finder_scrollbar_track_and_drag_control_the_result_viewport() {
 
 #[test]
 fn document_finder_orders_exact_then_prefix_then_substring_matches() {
-    let names = ["woman", "manpath", "man", "man.conf"];
+    let names = ["woman", "MANUAL", "manpath", "man", "man.conf"];
     let documents = names
         .into_iter()
         .map(|name| DocumentSummary {
@@ -379,8 +379,8 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
         schema: CatalogSchema::V0Dot8,
         query: mant_protocol::CatalogQuery::default(),
         coverage: mant_protocol::CatalogCoverage::default(),
-        total: 4,
-        returned: 4,
+        total: 5,
+        returned: 5,
         offset: 0,
         truncated: false,
         next_offset: None,
@@ -398,7 +398,7 @@ fn document_finder_orders_exact_then_prefix_then_substring_matches() {
         .iter()
         .map(|index| app.finder.catalog[*index].address.name())
         .collect::<Vec<_>>();
-    assert_eq!(ordered, ["man", "man.conf", "manpath", "woman"]);
+    assert_eq!(ordered, ["man", "man.conf", "manpath", "MANUAL", "woman"]);
 }
 
 #[test]
