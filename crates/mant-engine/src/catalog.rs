@@ -1,12 +1,12 @@
 //! Unifies registered Markdown and indexed manual pages for discovery clients.
 
-use std::{error::Error, fmt, path::PathBuf};
+use std::{collections::BTreeSet, error::Error, fmt, path::PathBuf};
 
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
-    CatalogDocumentKind, CatalogMatchRank, CatalogQuery, CatalogSchema, DocumentAddress,
-    DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
+    CatalogCoverage, CatalogDocumentKind, CatalogMatchRank, CatalogQuery, CatalogSchema,
+    DocumentAddress, DocumentCatalog, DocumentSummary, MarkdownOrigin, SearchCase, SearchSyntax,
 };
 
 use mant_sources::{
@@ -119,18 +119,11 @@ pub fn query_available_documents(
         .as_deref()
         .map(|pattern| build_matcher(pattern, query.syntax, query.case))
         .transpose()?;
+    let in_scope = |document: &&AvailableDocument| catalog_scope_matches(document, query);
+    let scope_total = documents.iter().filter(in_scope).count();
     let mut filtered = documents
         .iter()
-        .filter(|document| {
-            query.kind.is_none_or(|kind| match kind {
-                CatalogDocumentKind::Markdown => document.kind == AvailableDocumentKind::Markdown,
-                CatalogDocumentKind::Manual => document.kind == AvailableDocumentKind::Manual,
-            }) && query.manual_section.as_ref().is_none_or(|section| {
-                document.manual_section.as_ref().is_some_and(|value| value == section)
-            }) && query.source.as_ref().is_none_or(|source| {
-                matches!(&document.origin, AvailableDocumentOrigin::Source(value) if value == source)
-            })
-        })
+        .filter(in_scope)
         .filter_map(|document| {
             let match_catalog_path = query
                 .pattern
@@ -181,6 +174,7 @@ pub fn query_available_documents(
         .min(total);
     let limit = usize::try_from(query.limit).unwrap_or(usize::MAX);
     let end = offset.saturating_add(limit).min(total);
+    let coverage = catalog_coverage(documents, scope_total);
     let documents = filtered[offset..end]
         .iter()
         .copied()
@@ -188,6 +182,8 @@ pub fn query_available_documents(
         .collect::<Vec<_>>();
     Ok(DocumentCatalog {
         schema: CatalogSchema::V0Dot8,
+        query: query.clone(),
+        coverage,
         total: u32::try_from(total).unwrap_or(u32::MAX),
         returned: u32::try_from(documents.len()).unwrap_or(u32::MAX),
         offset: u32::try_from(offset).unwrap_or(u32::MAX),
@@ -195,6 +191,45 @@ pub fn query_available_documents(
         next_offset: (end < total).then(|| u32::try_from(end).unwrap_or(u32::MAX)),
         documents,
     })
+}
+
+fn catalog_scope_matches(document: &AvailableDocument, query: &CatalogQuery) -> bool {
+    query.kind.is_none_or(|kind| match kind {
+        CatalogDocumentKind::Markdown => document.kind == AvailableDocumentKind::Markdown,
+        CatalogDocumentKind::Manual => document.kind == AvailableDocumentKind::Manual,
+    }) && query.manual_section.as_ref().is_none_or(|section| {
+        document
+            .manual_section
+            .as_ref()
+            .is_some_and(|value| value == section)
+    }) && query.source.as_ref().is_none_or(|source| {
+        matches!(&document.origin, AvailableDocumentOrigin::Source(value) if value == source)
+    })
+}
+
+fn catalog_coverage(documents: &[AvailableDocument], scope_total: usize) -> CatalogCoverage {
+    let mut manual_sections = BTreeSet::new();
+    let mut markdown_sources = BTreeSet::new();
+    let mut personal_documents = false;
+    for document in documents {
+        match &document.origin {
+            AvailableDocumentOrigin::Documents => personal_documents = true,
+            AvailableDocumentOrigin::Source(source) => {
+                markdown_sources.insert(source.clone());
+            }
+            AvailableDocumentOrigin::ManualPath => {
+                if let Some(section) = &document.manual_section {
+                    manual_sections.insert(section.clone());
+                }
+            }
+        }
+    }
+    CatalogCoverage {
+        scope_total: u32::try_from(scope_total).unwrap_or(u32::MAX),
+        manual_sections: manual_sections.into_iter().collect(),
+        markdown_sources: markdown_sources.into_iter().collect(),
+        personal_documents,
+    }
 }
 
 /// Load and query the current local document catalog.
@@ -528,6 +563,50 @@ mod tests {
         assert_eq!(catalog.documents[0].address.name(), "process");
         assert_eq!(catalog.documents[1].address.name(), "process-tree");
         assert_eq!(catalog.documents[2].address.name(), "Start-Process");
+    }
+
+    #[test]
+    fn catalog_distinguishes_unindexed_scopes_from_empty_name_matches() {
+        let documents = ["execve", "EPIOCGPARAMS"]
+            .into_iter()
+            .zip(["2", "2const"])
+            .map(|(name, section)| AvailableDocument {
+                name: name.to_owned(),
+                logical_path: name.to_owned(),
+                kind: AvailableDocumentKind::Manual,
+                manual_section: Some(section.to_owned()),
+                path: PathBuf::from(format!("/man/{name}.{section}")),
+                origin: AvailableDocumentOrigin::ManualPath,
+                source_priority: None,
+            })
+            .collect::<Vec<_>>();
+
+        let unindexed = query_available_documents(
+            &documents,
+            &CatalogQuery {
+                pattern: Some("exec".to_owned()),
+                kind: Some(CatalogDocumentKind::Manual),
+                manual_section: Some("42".to_owned()),
+                ..CatalogQuery::default()
+            },
+        )
+        .expect("unindexed scope remains a valid query");
+        assert_eq!(unindexed.total, 0);
+        assert_eq!(unindexed.coverage.scope_total, 0);
+        assert_eq!(unindexed.coverage.manual_sections, ["2", "2const"]);
+
+        let covered = query_available_documents(
+            &documents,
+            &CatalogQuery {
+                pattern: Some("not-present".to_owned()),
+                kind: Some(CatalogDocumentKind::Manual),
+                manual_section: Some("2".to_owned()),
+                ..CatalogQuery::default()
+            },
+        )
+        .expect("covered scope");
+        assert_eq!(covered.total, 0);
+        assert_eq!(covered.coverage.scope_total, 1);
     }
 
     #[test]

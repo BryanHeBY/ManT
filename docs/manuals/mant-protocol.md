@@ -191,6 +191,15 @@ array; each row has one exact logical `address`. Its canonical catalog path is
 derived from that address rather than duplicated in the wire value. Physical
 paths are intentionally absent from discovery results.
 
+Every response echoes the normalized `query` and carries `coverage` separately
+from the name-match `total`. `coverage.scopeTotal` counts documents after the
+kind, source, and exact manual-section filters but before the name pattern. A
+zero `scopeTotal` therefore means that the requested namespace is not indexed;
+a positive `scopeTotal` with zero matches means that the namespace was searched
+and the name was absent. `manualSections` retains exact categories such as
+`2const`, `2type`, and `3pm`; numeric base sections do not silently include
+their extensions.
+
 Markdown addresses distinguish the root `documents` directory from every
 configured source. Manual addresses contain both name and exact section, so
 shadowed Markdown candidates and multiple manual sections remain independently
@@ -1012,6 +1021,9 @@ The result starts with the total match count and one compact row per document.
 Each row begins with its canonical logical ID; host filesystem paths are not
 exposed. `query` is a case-insensitive literal matched against leaf names and
 relative or canonical paths. Shadowed Markdown candidates remain discoverable.
+When an explicit source or manual section contributes no indexed documents, an
+empty result says so and lists the available namespaces. An indexed scope with
+no name match remains the ordinary compact `0 matches` result.
 Catalog calls fetch 50 records at a time. If more text or records remain, the
 last line is `[more cursor=TOKEN]`; repeat the identical call with that opaque
 `cursor`. A cursor is bound to its tool and all other arguments and must not be

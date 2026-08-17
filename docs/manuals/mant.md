@@ -96,6 +96,13 @@ the canonical catalog path and `kind`, while `--format json` returns
 `mant.catalog/v0.8`. `--list` groups the same hierarchy beneath `documents`,
 `sources/SOURCE`, or `manual/SECTION`.
 
+An empty name match stays silent in ordinary text output. If an explicit source
+or manual section is not indexed at all, text output instead identifies the
+missing scope and lists the available namespaces. JSON callers can make the
+same distinction with `coverage.scopeTotal`: it is counted before applying the
+name pattern. Extended manual categories such as `2const` and `3pm` remain
+independent exact sections rather than being folded into `2` or `3`.
+
 When stdin and stdout are terminals, discovery text longer than the terminal
 height opens in the built-in pager. It supports mouse scrolling, ordinary
 less-style movement, and `/` search. Short results print directly. Pipelines,

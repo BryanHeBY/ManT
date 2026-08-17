@@ -20,6 +20,9 @@ pub(super) fn render_find(catalog: &DocumentCatalog, byte: u32) -> Result<TextPa
     if !records.is_empty() {
         text.push('\n');
         text.push_str(records.trim_end());
+    } else if let Some(coverage) = mant_protocol::render_catalog_coverage_text(catalog) {
+        text.push_str("; ");
+        text.push_str(&coverage.replace('\n', "; "));
     }
     page_text(&text, byte)
 }

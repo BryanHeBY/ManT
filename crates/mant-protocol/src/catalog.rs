@@ -84,6 +84,24 @@ pub struct DocumentSummary {
     pub address: DocumentAddress,
 }
 
+/// Indexed namespaces available to one catalog query.
+///
+/// `scope_total` is counted after applying the document-family, source, and
+/// manual-section selectors but before applying the name pattern. It lets a
+/// consumer distinguish an empty match set from an unindexed query scope.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogCoverage {
+    /// Documents inside the selected scope before name matching.
+    pub scope_total: u32,
+    /// Exact native manual sections present anywhere in the local index.
+    pub manual_sections: Vec<String>,
+    /// Configured Markdown source names that currently contribute documents.
+    pub markdown_sources: Vec<String>,
+    /// Whether the personal documents tree currently contributes documents.
+    pub personal_documents: bool,
+}
+
 impl DocumentSummary {
     /// Derive the stable logical path used by tree and discovery frontends.
     #[must_use]
@@ -99,6 +117,10 @@ impl DocumentSummary {
 pub struct DocumentCatalog {
     /// Exact response schema discriminator.
     pub schema: CatalogSchema,
+    /// Normalized query used to construct this page.
+    pub query: CatalogQuery,
+    /// Coverage of the local catalog independently from the name pattern.
+    pub coverage: CatalogCoverage,
     /// Total rows matching the filters before pagination.
     pub total: u32,
     /// Number of rows present in [`Self::documents`].
@@ -118,6 +140,8 @@ impl Default for DocumentCatalog {
     fn default() -> Self {
         Self {
             schema: CatalogSchema::V0Dot8,
+            query: CatalogQuery::default(),
+            coverage: CatalogCoverage::default(),
             total: 0,
             returned: 0,
             offset: 0,

@@ -224,6 +224,8 @@ mod tests {
             let next_offset = (query.offset == 0).then_some(1);
             Ok(DocumentCatalog {
                 schema: CatalogSchema::V0Dot8,
+                query: query.clone(),
+                coverage: mant_protocol::CatalogCoverage::default(),
                 total: 2,
                 returned: 1,
                 offset: query.offset,
@@ -262,6 +264,8 @@ mod tests {
             calls += 1;
             Ok(DocumentCatalog {
                 schema: CatalogSchema::V0Dot8,
+                query: query.clone(),
+                coverage: mant_protocol::CatalogCoverage::default(),
                 total: 20_000,
                 returned: 1,
                 offset: 0,

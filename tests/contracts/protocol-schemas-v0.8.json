@@ -6,6 +6,10 @@
     "description": "Deterministically ordered page of discoverable local documents.",
     "type": "object",
     "properties": {
+      "coverage": {
+        "description": "Coverage of the local catalog independently from the name pattern.",
+        "$ref": "#/$defs/CatalogCoverage"
+      },
       "documents": {
         "description": "Deterministically ordered page of document summaries.",
         "type": "array",
@@ -27,6 +31,10 @@
         "type": "integer",
         "format": "uint32",
         "minimum": 0
+      },
+      "query": {
+        "description": "Normalized query used to construct this page.",
+        "$ref": "#/$defs/CatalogQuery"
       },
       "returned": {
         "description": "Number of rows present in [`Self::documents`].",
@@ -51,6 +59,8 @@
     },
     "required": [
       "schema",
+      "query",
+      "coverage",
       "total",
       "returned",
       "offset",
@@ -58,6 +68,127 @@
       "documents"
     ],
     "$defs": {
+      "CatalogCoverage": {
+        "description": "Indexed namespaces available to one catalog query.\n\n`scope_total` is counted after applying the document-family, source, and\nmanual-section selectors but before applying the name pattern. It lets a\nconsumer distinguish an empty match set from an unindexed query scope.",
+        "type": "object",
+        "properties": {
+          "manualSections": {
+            "description": "Exact native manual sections present anywhere in the local index.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "markdownSources": {
+            "description": "Configured Markdown source names that currently contribute documents.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "personalDocuments": {
+            "description": "Whether the personal documents tree currently contributes documents.",
+            "type": "boolean"
+          },
+          "scopeTotal": {
+            "description": "Documents inside the selected scope before name matching.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "scopeTotal",
+          "manualSections",
+          "markdownSources",
+          "personalDocuments"
+        ]
+      },
+      "CatalogDocumentKind": {
+        "description": "Optional family filter for catalog discovery.",
+        "oneOf": [
+          {
+            "description": "Registered Markdown documents.",
+            "type": "string",
+            "const": "markdown"
+          },
+          {
+            "description": "Native manual pages.",
+            "type": "string",
+            "const": "manual"
+          }
+        ]
+      },
+      "CatalogQuery": {
+        "description": "Bounded filtering and pagination shared by CLI, TUI, and MCP discovery.",
+        "type": "object",
+        "properties": {
+          "case": {
+            "description": "Case-matching policy.",
+            "$ref": "#/$defs/SearchCase",
+            "default": "insensitive"
+          },
+          "kind": {
+            "description": "Optional document-family restriction.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CatalogDocumentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "description": "Maximum rows returned after filtering.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 100,
+            "maximum": 10000,
+            "minimum": 1
+          },
+          "manualSection": {
+            "description": "Optional native manual category such as `1` or `3p`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "description": "Number of matching rows skipped before collecting results.",
+            "type": "integer",
+            "format": "uint32",
+            "default": 0,
+            "minimum": 0
+          },
+          "pattern": {
+            "description": "Optional name or catalog-path pattern.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "description": "Optional configured Markdown source name.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "syntax": {
+            "description": "Pattern language used by [`Self::pattern`].",
+            "$ref": "#/$defs/SearchSyntax",
+            "default": "literal"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "syntax",
+          "case",
+          "limit",
+          "offset"
+        ]
+      },
       "CatalogSchema": {
         "description": "Exact schema marker for a local document catalog.",
         "oneOf": [
@@ -165,6 +296,41 @@
               "kind",
               "name"
             ]
+          }
+        ]
+      },
+      "SearchCase": {
+        "description": "Case-folding policy applied when compiling the matcher.",
+        "oneOf": [
+          {
+            "description": "Ignore case distinctions.",
+            "type": "string",
+            "const": "insensitive"
+          },
+          {
+            "description": "Preserve case distinctions.",
+            "type": "string",
+            "const": "sensitive"
+          },
+          {
+            "description": "Match case-sensitively only when the pattern contains uppercase text.",
+            "type": "string",
+            "const": "smart"
+          }
+        ]
+      },
+      "SearchSyntax": {
+        "description": "Pattern language used for one search.",
+        "oneOf": [
+          {
+            "description": "Match the pattern as ordinary text.",
+            "type": "string",
+            "const": "literal"
+          },
+          {
+            "description": "Interpret the pattern as a Rust regular expression.",
+            "type": "string",
+            "const": "regex"
           }
         ]
       }

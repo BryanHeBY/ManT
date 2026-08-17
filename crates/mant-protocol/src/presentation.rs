@@ -6,6 +6,40 @@ use mant_ir::{DocumentAddress, MarkdownOrigin};
 
 use crate::DocumentCatalog;
 
+/// Explain why an empty catalog query selected no indexable scope.
+///
+/// A covered scope with no name matches intentionally returns `None`; callers
+/// can retain their ordinary grep-like empty-result behavior.
+#[must_use]
+pub fn render_catalog_coverage_text(catalog: &DocumentCatalog) -> Option<String> {
+    if catalog.total != 0 || catalog.coverage.scope_total != 0 {
+        return None;
+    }
+    if let Some(section) = &catalog.query.manual_section {
+        let mut message = format!("no manuals indexed for section '{section}'");
+        if !catalog.coverage.manual_sections.is_empty() {
+            message.push_str("\nindexed manual sections: ");
+            message.push_str(&catalog.coverage.manual_sections.join(", "));
+        }
+        return Some(message);
+    }
+    if let Some(source) = &catalog.query.source {
+        let mut message = format!("source '{source}' has no indexed Markdown documents");
+        if !catalog.coverage.markdown_sources.is_empty() {
+            message.push_str("\nindexed Markdown sources: ");
+            message.push_str(&catalog.coverage.markdown_sources.join(", "));
+        }
+        return Some(message);
+    }
+    match catalog.query.kind {
+        Some(crate::CatalogDocumentKind::Manual) => Some("no manuals indexed".to_owned()),
+        Some(crate::CatalogDocumentKind::Markdown) => {
+            Some("no Markdown documents indexed".to_owned())
+        }
+        None => Some("no documents indexed".to_owned()),
+    }
+}
+
 /// Render a catalog page as stable, unstyled text.
 ///
 /// Flat output is one `<catalog-path>\t<kind>` row per document. Grouped
@@ -70,9 +104,12 @@ fn catalog_category(address: &DocumentAddress) -> (String, &'static str) {
 mod tests {
     use mant_ir::{DocumentAddress, MarkdownOrigin};
 
-    use crate::{CatalogSchema, DocumentCatalog, DocumentSummary};
+    use crate::{
+        CatalogCoverage, CatalogDocumentKind, CatalogQuery, CatalogSchema, DocumentCatalog,
+        DocumentSummary,
+    };
 
-    use super::render_catalog_text;
+    use super::{render_catalog_coverage_text, render_catalog_text};
 
     fn catalog() -> DocumentCatalog {
         let addresses = [
@@ -87,6 +124,8 @@ mod tests {
         ];
         DocumentCatalog {
             schema: CatalogSchema::V0Dot8,
+            query: crate::CatalogQuery::default(),
+            coverage: crate::CatalogCoverage::default(),
             total: 2,
             returned: 2,
             offset: 0,
@@ -113,5 +152,35 @@ mod tests {
             render_catalog_text(&catalog(), true),
             "documents\n  mant\n\nmanual/1\n  git\n"
         );
+    }
+
+    #[test]
+    fn empty_catalog_explains_only_an_unindexed_scope() {
+        let unindexed = DocumentCatalog {
+            query: CatalogQuery {
+                kind: Some(CatalogDocumentKind::Manual),
+                manual_section: Some("42".to_owned()),
+                ..CatalogQuery::default()
+            },
+            coverage: CatalogCoverage {
+                scope_total: 0,
+                manual_sections: vec!["1".to_owned(), "2".to_owned(), "2const".to_owned()],
+                ..CatalogCoverage::default()
+            },
+            ..DocumentCatalog::default()
+        };
+        assert_eq!(
+            render_catalog_coverage_text(&unindexed).as_deref(),
+            Some("no manuals indexed for section '42'\nindexed manual sections: 1, 2, 2const")
+        );
+
+        let covered = DocumentCatalog {
+            coverage: CatalogCoverage {
+                scope_total: 12,
+                ..CatalogCoverage::default()
+            },
+            ..unindexed
+        };
+        assert_eq!(render_catalog_coverage_text(&covered), None);
     }
 }

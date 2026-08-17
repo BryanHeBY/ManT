@@ -22,7 +22,8 @@ use mant_ir::ResolvedContent;
 use mant_protocol::{
     CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
     ExcerptSchema, InputFormat, MarkdownOrigin, OutlineSchema, QueryInput, QueryRequest,
-    QuerySchema, QueryView, RequestSchema, SearchSchema, TldrCacheUpdate, render_catalog_text,
+    QuerySchema, QueryView, RequestSchema, SearchSchema, TldrCacheUpdate,
+    render_catalog_coverage_text, render_catalog_text,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
@@ -481,7 +482,8 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             let catalog = host.discover(&query)?;
             match format {
                 QueryFormat::Json => render_json(&catalog, pretty),
-                QueryFormat::Text => Ok(render_catalog_text(&catalog, grouped)),
+                QueryFormat::Text => Ok(render_catalog_coverage_text(&catalog)
+                    .unwrap_or_else(|| render_catalog_text(&catalog, grouped))),
                 QueryFormat::Markdown | QueryFormat::Man => {
                     unreachable!("argument validation limits catalog formats")
                 }

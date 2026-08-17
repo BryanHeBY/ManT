@@ -339,6 +339,8 @@ impl CliHost for FakeHost {
     fn discover(&self, _query: &CatalogQuery) -> Result<DocumentCatalog, Failure> {
         Ok(DocumentCatalog {
             schema: CatalogSchema::V0Dot8,
+            query: CatalogQuery::default(),
+            coverage: mant_protocol::CatalogCoverage::default(),
             total: 2,
             returned: 2,
             offset: 0,
