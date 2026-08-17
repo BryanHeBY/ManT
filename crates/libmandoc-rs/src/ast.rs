@@ -90,6 +90,20 @@ pub enum AuthorMode {
     NoSplit,
 }
 
+/// Delimiters selected by the obsolete mdoc `Es`/`En` enclosure pair.
+///
+/// libmandoc resolves the stateful `Es` definition while validating each
+/// `En` invocation. Copying that result keeps downstream renderers from
+/// replaying formatter state or exposing the non-printing `Es` arguments.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NormalizedEnclosure {
+    /// Visible opening delimiter.
+    pub opening: String,
+    /// Visible closing delimiter, when the definition supplied one.
+    pub closing: Option<String>,
+}
+
 /// Horizontal alignment retained for one parsed tbl(7) cell.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -170,6 +184,8 @@ pub struct Node {
     pub font: Option<NormalizedFont>,
     /// Author layout mode selected by an mdoc author macro.
     pub author_mode: Option<AuthorMode>,
+    /// Stateful delimiters resolved for an mdoc `En` invocation.
+    pub enclosure: Option<NormalizedEnclosure>,
     /// Whether the enclosing list requests compact vertical layout.
     pub compact: bool,
     /// Raw normalized display/list offset, including a roff scale suffix.

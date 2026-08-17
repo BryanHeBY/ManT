@@ -51,6 +51,8 @@ struct mant_mandoc_node {
 	int			 compact;
 	char			*offset;
 	char			*width;
+	char			*enclosure_open;
+	char			*enclosure_close;
 	char			*equation;
 	struct mant_mandoc_table_cell *table_cells;
 	struct mant_mandoc_node	*child;
@@ -673,6 +675,8 @@ free_node(struct mant_mandoc_node *node)
 		free(node->tag);
 		free(node->offset);
 		free(node->width);
+		free(node->enclosure_open);
+		free(node->enclosure_close);
 		free(node->equation);
 		free_table_cells(node->table_cells);
 		free(node);
@@ -883,6 +887,13 @@ copy_normalized_data(struct mant_mandoc_node *node,
 		case AUTH__NONE:
 			break;
 		}
+	} else if (source->tok == MDOC_En && source->norm->Es != NULL &&
+	    source->norm->Es->child != NULL) {
+		node->enclosure_open =
+		    copy_string(source->norm->Es->child->string);
+		if (source->norm->Es->child->next != NULL)
+			node->enclosure_close =
+			    copy_string(source->norm->Es->child->next->string);
 	}
 }
 
@@ -1009,6 +1020,18 @@ const char *
 mant_mandoc_node_width(const struct mant_mandoc_node *node)
 {
 	return node == NULL ? NULL : node->width;
+}
+
+const char *
+mant_mandoc_node_enclosure_open(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? NULL : node->enclosure_open;
+}
+
+const char *
+mant_mandoc_node_enclosure_close(const struct mant_mandoc_node *node)
+{
+	return node == NULL ? NULL : node->enclosure_close;
 }
 
 const char *

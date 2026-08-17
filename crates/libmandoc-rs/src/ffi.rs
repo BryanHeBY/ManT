@@ -4,7 +4,8 @@ use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
 
 use super::{
     AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
-    NormalizedFont, NormalizedListKind, RawDocument, TableAlignment, TableCell,
+    NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
+    TableCell,
 };
 
 #[repr(C)]
@@ -65,6 +66,8 @@ unsafe extern "C" {
     fn mant_mandoc_node_compact(node: *const CNode) -> i32;
     fn mant_mandoc_node_offset(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_width(node: *const CNode) -> *const c_char;
+    fn mant_mandoc_node_enclosure_open(node: *const CNode) -> *const c_char;
+    fn mant_mandoc_node_enclosure_close(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_equation(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_table_cells(node: *const CNode) -> *const CTableCell;
     fn mant_mandoc_table_cell_text(cell: *const CTableCell) -> *const c_char;
@@ -256,6 +259,9 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
         child = unsafe { mant_mandoc_node_next(child) };
     }
 
+    let enclosure_open = unsafe { optional_string(mant_mandoc_node_enclosure_open(pointer)) };
+    let enclosure_close = unsafe { optional_string(mant_mandoc_node_enclosure_close(pointer)) };
+
     Ok(Node {
         kind: node_kind(unsafe { mant_mandoc_node_kind(pointer) })?,
         macro_name: unsafe { optional_string(mant_mandoc_node_macro(pointer)) },
@@ -282,6 +288,10 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
         display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,
         font: font_kind(unsafe { mant_mandoc_node_font_kind(pointer) })?,
         author_mode: author_mode(unsafe { mant_mandoc_node_author_mode(pointer) })?,
+        enclosure: enclosure_open.map(|opening| NormalizedEnclosure {
+            opening,
+            closing: enclosure_close,
+        }),
         compact: unsafe { mant_mandoc_node_compact(pointer) } != 0,
         offset: unsafe { optional_string(mant_mandoc_node_offset(pointer)) },
         width: unsafe { optional_string(mant_mandoc_node_width(pointer)) },

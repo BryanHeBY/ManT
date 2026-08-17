@@ -12,7 +12,7 @@ mod parser;
 
 pub use ast::{
     AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
-    NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
+    NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
 };
 pub use diagnostics::{Diagnostic, DiagnosticLevel, SourceLocation};
 pub use parser::{
@@ -714,6 +714,23 @@ mod tests {
         assert!(split.is_some());
         assert!(no_split.is_some());
         assert_eq!(font.font, Some(NormalizedFont::Literal));
+    }
+
+    #[test]
+    fn parser_resolves_stateful_mdoc_enclosures_onto_each_use() {
+        let report = Parser::default()
+            .parse_bytes(
+                "normalized-enclosure.1",
+                b".Dd August 17, 2026\n.Dt ENCLOSURE 1\n.Os\n.Sh DESCRIPTION\n\
+.Es << >>\n.En value\n",
+            )
+            .expect("parse stateful mdoc enclosure");
+
+        let enclosure = find_macro(&report.document.root, "En")
+            .and_then(|node| node.enclosure.as_ref())
+            .expect("resolved En delimiters");
+        assert_eq!(enclosure.opening, "<<");
+        assert_eq!(enclosure.closing.as_deref(), Some(">>"));
     }
 
     #[test]

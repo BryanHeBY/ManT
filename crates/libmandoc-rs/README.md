@@ -8,7 +8,8 @@ to depend on libmandoc's private C structures or parser lifetime.
 ## What this crate provides
 
 - A fully owned AST with source locations, macro roles, display/list metadata,
-  table cells, equations, and validated same-document tags.
+  resolved stateful enclosures, table cells, equations, and validated
+  same-document tags.
 - A `Parser` API whose caller-controlled `.so` policy defaults to denial.
 - Structured non-fatal diagnostics and typed source/decompression failures.
 - Top-level uncompressed, gzip, and zstd manual sources.
@@ -32,7 +33,8 @@ Rust transport and policy ──> private C shim ──> vendored libmandoc 1.14
 ```
 
 The returned tree describes validated roff syntax: macro names, node roles,
-fonts, lists, displays, tables, equations, locations, and tags. It is not
+fonts, lists, displays, stateful enclosure delimiters, tables, equations,
+locations, and tags. It is not
 `ManT`'s source-neutral document IR. Consumers that want normalized sections,
 semantic entries, typed links, or renderers should use `mant-engine` and
 `mant-ir` instead.

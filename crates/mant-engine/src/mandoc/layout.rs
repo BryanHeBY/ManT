@@ -265,6 +265,7 @@ mod tests {
             display_kind: None,
             font: None,
             author_mode: None,
+            enclosure: None,
             compact: false,
             offset: offset.map(ToOwned::to_owned),
             width: None,
