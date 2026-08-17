@@ -47,13 +47,14 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `I` | Emphasized inline content |
 | `BI`, `BR`, `IB`, `IR`, `RB`, `RI` | Alternating inline font runs without inserted spaces |
 | `EX`, `EE` | Preformatted no-fill region through libmandoc's fill state |
+| `SY`, `YS` | Synopsis head plus body; inside `EX` the source lines remain one preformatted block |
 | `UR`, `UE` | External link block |
 | `MT`, `ME` | Email link block |
 | `MR` | Typed manual-page reference |
 
 `br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries.
 
-`OP`, `SY`, `YS`, `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
+`OP`, `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
 
 ## mdoc Structure
 

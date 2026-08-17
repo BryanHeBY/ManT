@@ -464,6 +464,36 @@ mod tests {
     }
 
     #[test]
+    fn keeps_man_synopsis_lines_together_inside_no_fill_examples() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-fill-synopsis.2"),
+            b".TH NO-FILL-SYNOPSIS 2\n\
+.SH DESCRIPTION\n\
+.EX\n\
+.SY #!\\f[I]interpreter\\f[]\n\
+.RI [ optional-arg ]\n\
+.YS\n\
+.EE\n",
+        )
+        .expect("lower synopsis inside example");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "no-fill synopsis must remain one preformatted block: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), "#!interpreter\n[optional-arg]");
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn distinguishes_filled_source_wrapping_from_indented_output_lines() {
         let path = temporary_source(
             "filled-line-boundaries",

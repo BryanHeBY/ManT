@@ -170,10 +170,11 @@ fn lower_blocks(
             });
             continue;
         }
-        if node.flags.no_fill && is_inline(node) {
-            let line = lower_inline_nodes(std::slice::from_ref(node), context.default_name);
-            if !line.is_empty() {
-                state.push_preformatted(line, source_span(node));
+        if let Some(lines) = lower_no_fill_lines(node, context.default_name) {
+            for (line, source) in lines {
+                if !line.is_empty() {
+                    state.push_preformatted(line, source);
+                }
             }
             continue;
         }
@@ -221,6 +222,41 @@ fn lower_blocks(
         }
     }
     state.finish()
+}
+
+/// Lower one source-level no-fill line owner without letting structural macros
+/// split the surrounding preformatted flow into ordinary paragraphs.
+///
+/// Most no-fill input arrives as text or inline elements. GNU man-ext also
+/// permits a complete `.SY` block inside `.EX`; its printable head and body
+/// still represent adjacent source lines and must join the same verbatim block.
+fn lower_no_fill_lines(
+    node: &Node,
+    default_name: Option<&str>,
+) -> Option<Vec<(Vec<Inline>, Option<mant_ir::SourceSpan>)>> {
+    if node.flags.no_fill && is_inline(node) {
+        return Some(vec![(
+            lower_inline_nodes(std::slice::from_ref(node), default_name),
+            source_span(node),
+        )]);
+    }
+    let body = part_children(node, NodeKind::Body);
+    if node.macro_name.as_deref() != Some("SY") || !body.iter().any(|child| child.flags.no_fill) {
+        return None;
+    }
+
+    let mut lines = Vec::new();
+    let head = lower_inline_nodes(part_children(node, NodeKind::Head), default_name);
+    if !head.is_empty() {
+        lines.push((vec![Inline::Strong { children: head }], source_span(node)));
+    }
+    for child in body {
+        let line = lower_inline_nodes(std::slice::from_ref(child), default_name);
+        if !line.is_empty() {
+            lines.push((line, source_span(child)));
+        }
+    }
+    Some(lines)
 }
 
 fn lower_structural_node(
