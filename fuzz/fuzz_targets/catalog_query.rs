@@ -6,7 +6,9 @@ use libfuzzer_sys::fuzz_target;
 use mant_engine::{
     AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin, query_available_documents,
 };
-use mant_protocol::{CatalogDocumentKind, CatalogQuery, SearchCase, SearchSyntax};
+use mant_protocol::{
+    CatalogDocumentKind, CatalogQuery, DocumentAddress, SearchCase, SearchSyntax,
+};
 
 const MAX_INPUT_BYTES: usize = 64 * 1024;
 const MAX_DOCUMENTS: usize = 64;
@@ -69,7 +71,11 @@ fuzz_target!(|data: &[u8]| {
     assert!(result.returned <= result.total);
     assert_eq!(result.truncated, result.next_offset.is_some());
     for summary in &result.documents {
-        assert_eq!(summary.catalog_path, summary.address.catalog_path());
+        assert_eq!(
+            DocumentAddress::parse_catalog_path(&summary.catalog_path()),
+            Some(summary.address.clone()),
+            "derived catalog paths must round-trip to their logical address"
+        );
     }
 });
 
