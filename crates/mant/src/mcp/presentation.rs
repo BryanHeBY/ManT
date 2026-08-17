@@ -79,7 +79,7 @@ fn page_text(text: &str, byte: u32) -> Result<TextPage, String> {
     }
 
     Ok(TextPage {
-        text: text[start..end].trim_end().to_owned(),
+        text: text[start..end].to_owned(),
         next_byte: (end < text.len()).then(|| u32::try_from(end).unwrap_or(u32::MAX)),
     })
 }
@@ -133,6 +133,23 @@ mod tests {
 
         let second = page_text(&source, next).expect("second page");
         assert!(!second.text.is_empty());
+    }
+
+    #[test]
+    fn text_pages_preserve_all_whitespace_across_continuations() {
+        let source = "code  \n\tindented\n\n".repeat(4_000);
+        let mut reconstructed = String::new();
+        let mut byte = 0;
+        loop {
+            let page = page_text(&source, byte).expect("page");
+            reconstructed.push_str(&page.text);
+            let Some(next) = page.next_byte else {
+                break;
+            };
+            byte = next;
+        }
+
+        assert_eq!(reconstructed, source);
     }
 
     #[test]
