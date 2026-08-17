@@ -63,10 +63,11 @@ the memory parser.
 
 `IncludePolicy::Deny` is the default. `SourceTree` preserves ordinary manual
 tree lookup. `Root(path)` resolves `.so` requests against a directory the
-caller explicitly chooses, rejects absolute and lexical parent paths, and
-does not fall back to the process working directory. Native C file inclusion
-is currently Unix-only; Windows callers resolve sources first and use the
-default memory-only policy.
+caller explicitly chooses, rejects absolute and lexical parent paths, refuses
+to traverse symbolic links below that root, and does not fall back to the
+process working directory. The approved root itself may be a symbolic link.
+Native C file inclusion is currently Unix-only; Windows callers resolve
+sources first and use the default memory-only policy.
 
 Parser sessions are serialized because relevant upstream state is
 process-global. A `Parser` value is inexpensive configuration, not an

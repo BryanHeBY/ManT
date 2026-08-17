@@ -124,6 +124,8 @@ static int document_has_body(const struct roff_meta *);
 static void set_source_root_from_path(const char *);
 static void set_source_root_directory(const char *, const char *);
 static int open_under_base(const char *, const char *, int, mode_t);
+static int open_beneath_root(const char *, int, mode_t);
+static int open_beside_source(const char *, int, mode_t);
 static int is_safe_relative_path(const char *);
 #endif
 static void copy_normalized_data(struct mant_mandoc_node *,
@@ -283,6 +285,115 @@ open_under_base(const char *base, const char *path, int flags, mode_t mode)
 	return fd;
 }
 
+/*
+ * Open a relative path without following any link below an explicit root.
+ * The root itself is caller-approved and may be a link; every component after
+ * it is opened relative to the previous directory descriptor with O_NOFOLLOW.
+ */
+static int
+open_beneath_root(const char *path, int flags, mode_t mode)
+{
+	char	*copy, *component, *separator;
+	int	 dirfd, fd, saved_errno;
+
+	if (source_root == NULL || path == NULL || *path == '\0' ||
+	    *path == '/') {
+		errno = EPERM;
+		return -1;
+	}
+	dirfd = openat(AT_FDCWD, source_root,
+	    O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	if (dirfd == -1)
+		return -1;
+	copy = copy_string(path);
+	if (copy == NULL) {
+		close(dirfd);
+		errno = ENOMEM;
+		return -1;
+	}
+	component = copy;
+	fd = -1;
+	for (;;) {
+		while (*component == '/')
+			component++;
+		if (*component == '\0') {
+			errno = EINVAL;
+			break;
+		}
+		separator = strchr(component, '/');
+		if (separator != NULL)
+			*separator = '\0';
+		if (strcmp(component, "..") == 0) {
+			errno = EPERM;
+			break;
+		}
+		if (strcmp(component, ".") == 0) {
+			if (separator == NULL) {
+				errno = EINVAL;
+				break;
+			}
+			component = separator + 1;
+			continue;
+		}
+		if (separator == NULL) {
+			fd = openat(dirfd, component,
+			    flags | O_NOFOLLOW | O_CLOEXEC, mode);
+			break;
+		}
+		fd = openat(dirfd, component,
+		    O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+		if (fd == -1)
+			break;
+		close(dirfd);
+		dirfd = fd;
+		fd = -1;
+		component = separator + 1;
+	}
+	saved_errno = errno;
+	free(copy);
+	close(dirfd);
+	errno = saved_errno;
+	return fd;
+}
+
+/* Resolve a bare include beside the source, still walking from the root. */
+static int
+open_beside_source(const char *path, int flags, mode_t mode)
+{
+	const char	*relative;
+	char		*combined;
+	size_t		 root_length;
+	int		 fd, saved_errno;
+
+	if (source_root == NULL || source_dir == NULL) {
+		errno = ENOENT;
+		return -1;
+	}
+	root_length = strlen(source_root);
+	if (strncmp(source_dir, source_root, root_length) != 0 ||
+	    (root_length != 1 && source_dir[root_length] != '/' &&
+	    source_dir[root_length] != '\0')) {
+		errno = EPERM;
+		return -1;
+	}
+	relative = source_dir + root_length;
+	while (*relative == '/')
+		relative++;
+	if (*relative == '\0')
+		return open_beneath_root(path, flags, mode);
+	combined = malloc(strlen(relative) + strlen(path) + 2);
+	if (combined == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	sprintf(combined, "%s/%s", relative, path);
+	fd = open_beneath_root(combined, flags, mode);
+	saved_errno = errno;
+	free(combined);
+	errno = saved_errno;
+	return fd;
+}
+
 /* Resolve includes against the original source tree without changing cwd. */
 int
 mant_mandoc_source_open(const char *path, int flags, ...)
@@ -318,13 +429,15 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 	 * accepts both spellings, and mparse_open retries each base with a
 	 * `.gz` suffix, so compressed targets resolve without extra handling.
 	 */
-	fd = open_under_base(source_root, path, flags, mode);
+	fd = source_root_strict ? open_beneath_root(path, flags, mode) :
+	    open_under_base(source_root, path, flags, mode);
 	if (fd != -1)
 		return fd;
 	saved_errno = errno;
 	if (source_dir != NULL &&
 	    (source_root == NULL || strcmp(source_dir, source_root) != 0)) {
-		fd = open_under_base(source_dir, path, flags, mode);
+		fd = source_root_strict ? open_beside_source(path, flags, mode) :
+		    open_under_base(source_dir, path, flags, mode);
 		if (fd != -1)
 			return fd;
 		saved_errno = errno;

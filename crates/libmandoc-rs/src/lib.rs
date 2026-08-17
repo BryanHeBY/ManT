@@ -506,6 +506,78 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn explicit_include_root_rejects_linked_target_files() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "libmandoc-rs-linked-include-target-{}",
+            process::id()
+        ));
+        let includes = base.join("includes");
+        fs::create_dir_all(&includes).expect("create explicit include root");
+        let outside = base.join("outside.1");
+        fs::write(
+            &outside,
+            ".TH OUTSIDE 1\n.SH NAME\noutside \\- must not be included\n",
+        )
+        .expect("write outside target");
+        symlink(&outside, includes.join("target.1")).expect("link target outside root");
+        let alias = base.join("alias.1");
+        fs::write(&alias, ".so target.1\n").expect("write alias source");
+
+        let result = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(includes),
+            compression: Compression::Auto,
+        })
+        .parse_file(&alias);
+        fs::remove_dir_all(base).expect("remove temporary manual tree");
+
+        match result {
+            Ok(report) => assert_ne!(report.document.metadata.title.as_deref(), Some("OUTSIDE")),
+            Err(error) => assert_eq!(error.kind, super::ParseErrorKind::Parse),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_include_root_rejects_linked_intermediate_directories() {
+        use std::os::unix::fs::symlink;
+
+        let base = std::env::temp_dir().join(format!(
+            "libmandoc-rs-linked-include-directory-{}",
+            process::id()
+        ));
+        let includes = base.join("includes");
+        let outside = base.join("outside");
+        fs::create_dir_all(&includes).expect("create explicit include root");
+        fs::create_dir_all(&outside).expect("create outside directory");
+        fs::write(
+            outside.join("target.1"),
+            ".TH OUTSIDE-DIR 1\n.SH NAME\noutside-dir \\- must not be included\n",
+        )
+        .expect("write outside target");
+        fs::write(outside.join("alias.1"), ".so target.1\n").expect("write alias source");
+        symlink(&outside, includes.join("linked")).expect("link directory outside root");
+        let alias = includes.join("linked/alias.1");
+
+        let result = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(includes),
+            compression: Compression::Auto,
+        })
+        .parse_file(&alias);
+        fs::remove_dir_all(base).expect("remove temporary manual tree");
+
+        match result {
+            Ok(report) => assert_ne!(
+                report.document.metadata.title.as_deref(),
+                Some("OUTSIDE-DIR")
+            ),
+            Err(error) => assert_eq!(error.kind, super::ParseErrorKind::Parse),
+        }
+    }
+
     #[test]
     fn parser_returns_structured_nonfatal_diagnostics() {
         let report = Parser::default()

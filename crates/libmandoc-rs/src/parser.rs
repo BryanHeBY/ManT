@@ -31,7 +31,8 @@ pub enum IncludePolicy {
     Deny,
     /// Resolve `.so` files using the parsed source's manual tree.
     SourceTree,
-    /// Resolve `.so` files from one caller-approved directory.
+    /// Resolve `.so` files below one caller-approved directory without
+    /// traversing symbolic links beneath that root.
     Root(PathBuf),
 }
 
