@@ -113,7 +113,7 @@ The identity is assigned during lowering, before source-specific macro informati
 | Source Markdown `team/guide/setup` | `sources/team/guide/setup` |
 | Native `printf(3)` | `manual/3/printf` |
 
-`ResolvedContent` is the in-process handoff from the engine. It carries a display label, optional exact address, optional document body, and optional tldr page. The TUI consumes this value directly; process and MCP clients receive a versioned protocol projection.
+`ResolvedContent` is the in-process handoff from the engine. It carries a display label, optional exact address, optional document body, and optional tldr page. The TUI consumes this value directly. Process clients receive versioned protocol projections; MCP tools present focused projections as compact text or CommonMark.
 
 ## Source Coordinates
 

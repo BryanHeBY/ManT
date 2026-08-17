@@ -66,7 +66,7 @@ type directly does not create a stable process protocol. External consumers
 should use `mant-protocol`, whose envelopes carry explicit schema identifiers
 and compatibility rules.
 
-Versioned CLI JSON and MCP contracts live in
+Versioned CLI JSON contracts and compact MCP query projections live in
 [`mant-protocol`](https://crates.io/crates/mant-protocol); parsing and document
 operations live in [`mant-engine`](https://crates.io/crates/mant-engine).
 The complete node and stability reference is

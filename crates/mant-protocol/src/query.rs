@@ -151,7 +151,7 @@ pub struct QueryRequest {
     pub view: QueryView,
 }
 
-/// Versioned full-query result emitted at JSON and MCP boundaries.
+/// Versioned full-query result emitted at CLI and request JSON boundaries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(extend("$id" = "urn:mant:query:v0.8"))]

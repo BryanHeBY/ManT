@@ -133,7 +133,7 @@ docs/installation.md         User installation methods and platform requirements
 docs/sources.md              Markdown source configuration and update behavior
 docs/manuals/mant.md          User command, discovery, TUI, and MCP overview
 docs/manuals/mant-ir.md       In-process normalized model reference
-docs/manuals/mant-protocol.md Versioned process and MCP interface reference
+docs/manuals/mant-protocol.md Process contracts and compact MCP interface reference
 docs/manuals/mant-markdown.md Supported Markdown and semantic extensions
 docs/manuals/mant-roff.md     Native manual compatibility and lowering levels
 docs/releasing.md            Maintainer release procedure
@@ -152,7 +152,7 @@ do not drift between overview pages:
 | Which command, selector, or key should I use? | `mant(1)` in `docs/manuals/mant.md` |
 | Which Markdown or roff constructs are retained? | `mant-markdown(7)` and `mant-roff(7)` |
 | What does an in-process node mean? | `mant-ir(7)` and the `mant-ir` rustdoc |
-| What is stable across JSON or MCP? | `mant-protocol(5)` and generated schemas |
+| Which identities and projections cross host, JSON, or MCP boundaries? | `mant-protocol(5)`; generated schemas cover the structured JSON boundaries |
 | How are document collections configured? | `docs/sources.md` |
 | Which crate owns a behavior? | `docs/architecture/native-engine.md` and that crate's README/rustdoc |
 | How is a release produced and attested? | `docs/releasing.md` |

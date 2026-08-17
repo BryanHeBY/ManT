@@ -90,7 +90,7 @@ without requiring a full document. Dotted names are never split heuristically.
 The engine returns `mant_ir::ResolvedContent` to direct semantic consumers and
 creates `mant-protocol` projections for every structured host or process
 boundary. A projection can stay in memory for a TUI callback or be serialized
-for CLI JSON and MCP. Serializing the IR directly is not a supported substitute
+for CLI JSON and compact MCP presentation. Serializing the IR directly is not a supported substitute
 for those versioned DTOs.
 
 ## Platform behavior

@@ -195,10 +195,11 @@ manual index, optional Git requirement, and tldr caches. It suggests the
 existing explicit maintenance commands without running them. Warnings keep a
 successful status; a broken promised capability returns status `1`.
 
-The [structured protocol and Schema reference](docs/manuals/mant-protocol.md) documents every
-versioned request and response projection, coordinate rule, and MCP tool. The
-separate [IR reference](docs/manuals/mant-ir.md) describes the richer
-in-process model from which those wire types are projected.
+The [structured protocol and Schema reference](docs/manuals/mant-protocol.md)
+documents every versioned request and response projection, coordinate rule,
+and compact MCP tool. The separate [IR reference](docs/manuals/mant-ir.md)
+describes the richer in-process model from which those structured and textual
+presentations are projected.
 
 ## Build a local documentation library
 
@@ -309,23 +310,28 @@ Run the same executable as a read-only MCP server:
 mant --mcp
 ```
 
-Configure the client command as `mant` with arguments `["--mcp"]`. The server
-exposes local discovery, outline, content, semantic explanation, and search
-tools over stdio. Each call reads the files currently visible in `documents/`,
-configured installed sources, and native manual paths. MCP has no update,
-network, or mutation tool and does not promise a session snapshot across
-calls. Lowering diagnostics remain available through ordinary CLI JSON queries.
+Configure the client command as `mant` with arguments `["--mcp"]`. Five
+read-only tools—`mant_find`, `mant_outline`, `mant_read`, `mant_explain`, and
+`mant_search`—return bounded plain text or CommonMark instead of the complete
+document AST. Start with `mant_find`; its canonical document IDs remove
+ambiguity from later calls. Each call reads the files currently visible in
+`documents/`, configured installed sources, and native manual paths. MCP has no
+update, network, or mutation tool and does not promise a session snapshot
+across calls. Detailed lowering diagnostics remain available through ordinary
+CLI JSON queries.
 
 ## Architecture
 
-![ManT architecture: source adapters enter mant-engine around the mant-ir semantic center; the TUI consumes document IR directly and uses mant-protocol host DTOs, while CLI and request JSON and MCP share the same versioned contracts](docs/assets/architecture.svg)
+![ManT architecture: source adapters enter mant-engine around the mant-ir semantic center; the TUI consumes document IR directly, while mant-protocol supplies shared logical projections to host callbacks, CLI and request JSON, and compact MCP presentation](docs/assets/architecture.svg)
 
 `mant-ir` is the semantic center nested inside the `mant-engine` execution
 layer. Interactive use passes its in-memory `ResolvedContent` directly to
 `mant-ui`, and human renderers operate on the same model. Structured host and
-process interactions share the versioned `mant-protocol` contract layer;
-catalog callbacks, CLI JSON, request JSON, and MCP therefore use the same
-logical identities and projections. Git and archive updates are an optional native CLI capability
+process interactions share the `mant-protocol` contract layer. Catalog
+callbacks, CLI JSON, request JSON, and MCP therefore use the same logical
+identities and projections, while each boundary chooses its appropriate
+representation: versioned JSON for processes and compact text for MCP. Git and
+archive updates are an optional native CLI capability
 layered on `mant-sources`, not part of document reads or MCP.
 
 ## Documentation

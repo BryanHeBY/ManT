@@ -110,8 +110,9 @@ independent `mant.doctor/v1` report contract, discoverable with
 `mant --schema doctor`. Warnings keep a successful exit status, while a broken
 promised capability exits with status `1`.
 
-`mant --mcp` exposes the same read-only document discovery, outline, excerpt,
-explanation, and search capabilities over stdio JSON-RPC. MCP stdout contains
+`mant --mcp` exposes read-only discovery, outline, excerpt, explanation, and
+search over stdio JSON-RPC. Its five tools return bounded plain text or
+CommonMark rather than serializing full AST envelopes. MCP stdout contains
 protocol messages only; use CLI JSON output to inspect lowering diagnostics.
 
 ## Document sources
@@ -165,7 +166,7 @@ remains an exact logical name and is never guessed to be a manual shorthand.
 ## Crate architecture
 
 - `mant-ir` defines the source-neutral in-memory document and quick-reference model.
-- `mant-protocol` defines the unified versioned contracts shared by host callbacks, CLI JSON, and MCP.
+- `mant-protocol` defines shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation.
 - `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
 - `mant-sources` owns local Markdown discovery and optional source updates.
 - `mant-engine` performs document lookup, lowering, projections, search, and output.

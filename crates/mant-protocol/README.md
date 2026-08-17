@@ -1,17 +1,19 @@
 # mant-protocol
 
-`mant-protocol` is `ManT`'s versioned structured interaction boundary. It
-defines the request and response DTOs shared by in-process hosts, CLI JSON,
-request JSON, and MCP without owning any transport. It owns schema markers,
-logical catalog addresses, pagination, outline, excerpt, search, tldr-update
-results, local doctor reports, and JSON Schema generation. The `mant` crate
-separately composes host callbacks, process framing, and MCP transport.
+`mant-protocol` is `ManT`'s transport-neutral interaction boundary. It defines
+query contracts and projections shared by in-process hosts, CLI JSON, request
+JSON, and compact MCP presentation without owning any transport. It owns schema
+markers, logical catalog addresses, pagination, outline, excerpt, search,
+tldr-update results, local doctor reports, deterministic catalog presentation,
+and JSON Schema generation. The `mant` crate separately composes host
+callbacks, process framing, terminal policy, and MCP transport.
 
-Use this crate whenever a Rust host or process consumer needs stable structured
-inputs and projections. The same DTO may cross an in-memory callback or a
-serialized transport; serialization is a supported representation, not the
-crate's sole purpose. It contains data contracts only: it performs no document
-discovery, parsing, query execution, rendering, terminal I/O, or MCP transport.
+Use this crate whenever a Rust host or process consumer needs stable inputs,
+projections, or deterministic non-terminal presentation. The same DTO may
+cross an in-memory callback, be serialized by a versioned JSON boundary, or be
+rendered into a compact MCP result; serialization is a supported
+representation, not the crate's sole purpose. It performs no document
+discovery, parsing, query execution, terminal I/O, or MCP transport.
 
 ## Contract families
 
@@ -21,7 +23,7 @@ QueryRequest ──> host / mant-engine ──┬─> QueryBundle
                                      ├─> QueryExcerpt
                                      └─> QuerySearch
 
-CatalogQuery ──> host ──────────────────> DocumentCatalog
+CatalogQuery ──> host ──────────────────> DocumentCatalog ──> compact text
 
 local inspection ───────────────────────> DoctorReport
 ```
@@ -39,6 +41,10 @@ local inspection ─────────────────────
 The schemas generated from the Rust types are authoritative. Request schemas
 are generated for deserialization so closed-object and default behavior match
 what the process accepts; response schemas are generated for serialization.
+These native schema discriminators describe CLI and request JSON. MCP uses its
+own negotiated protocol version and presents the same logical identities and
+focused projections as bounded text or CommonMark instead of serializing the
+native response envelopes.
 
 ## Basic use
 

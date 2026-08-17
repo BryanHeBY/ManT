@@ -628,6 +628,31 @@ fn protocol_version_is_a_clean_json_document() {
             "the protocol reference must document {field}"
         );
     }
+
+    for tool in [
+        "mant_find",
+        "mant_outline",
+        "mant_read",
+        "mant_explain",
+        "mant_search",
+    ] {
+        assert!(
+            PROTOCOL_REFERENCE.contains(&format!("`{tool}`")),
+            "the protocol reference must document MCP tool {tool}"
+        );
+    }
+    for retired in [
+        "mant_documents_list",
+        "mant_document_outline",
+        "mant_document_get",
+        "mant_document_explain",
+        "mant_document_search",
+    ] {
+        assert!(
+            !PROTOCOL_REFERENCE.contains(retired),
+            "the protocol reference must not retain retired MCP tool {retired}"
+        );
+    }
 }
 
 #[test]

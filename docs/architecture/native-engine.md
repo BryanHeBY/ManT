@@ -9,7 +9,8 @@ The architecture follows four constraints:
 
 - parse each source once and share the resulting semantics;
 - keep filesystem and process authority outside renderers;
-- make every structured host and process contract explicit and versioned;
+- make every structured host and process contract explicit and versioned, and
+  keep agent presentation compact and bounded;
 - keep ordinary reading local, bounded, and independent from host manual tools.
 
 ## Layer model
@@ -21,7 +22,8 @@ source adapters
    ├─ libmandoc-rs     owned native parser boundary
    └─ mant-ir           semantic center: ResolvedContent and document IR
       ├───────────────> mant-ui and human renderers (direct semantic use)
-      └─ projection ──> mant-protocol ──> host callbacks, CLI JSON, and MCP
+      └─ projection ──> mant-protocol ──┬─> host callbacks and JSON
+                                       └─> compact MCP presentation
 
 mant                    composes modes, policies, updates, terminal, and stdio
 ```
@@ -54,7 +56,7 @@ The crates have deliberately asymmetric responsibilities:
 | Crate | Owns | Does not own |
 | --- | --- | --- |
 | `mant-ir` | Logical document addresses; source-neutral document and quick-reference IR; typed node IDs and ranges; visitors and derived indexes | Versioned process envelopes, parsing, files, or rendering |
-| `mant-protocol` | Unified versioned structured contracts for host callbacks, CLI JSON, request JSON, and MCP | Parsing, files, rendering, transports, or processes |
+| `mant-protocol` | Shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation | Parsing, files, query execution, terminal policy, transports, or processes |
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, and C build boundary | ManT types, source discovery, or output |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-engine` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
@@ -68,6 +70,9 @@ the in-memory model. They do not serialize through JSON or spawn a child
 process. Structured host and process interactions instead use
 `mant-protocol`: the TUI catalog callbacks, one-shot request JSON, CLI query
 JSON, JSON Schema, and MCP all share its logical identities and projections.
+CLI and request boundaries serialize versioned envelopes; MCP renders focused
+projections as bounded text or CommonMark rather than exposing the complete
+AST.
 Source update and prune commands use their own schema-marked maintenance
 reports owned by `mant-sources`; they do not become document protocol variants.
 
@@ -246,11 +251,13 @@ presentation.
 ### MCP stdio
 
 `mant --mcp` keeps standard output exclusively for JSON-RPC and exposes only
-read-only local discovery and query tools. Tool schemas derive from the same
-Rust contracts. MCP accepts logical document identities rather than arbitrary
-host paths, never invokes Git or HTTP, and reads current local state on each
-call. Concise structured results omit lowering diagnostics; ordinary CLI JSON
-remains the diagnostic inspection surface.
+five read-only local discovery and query tools. Closed input schemas derive
+from Rust parameter types. MCP accepts logical document identities rather than
+arbitrary host paths, never invokes Git or HTTP, and reads current local state
+on each call. Successful results contain one bounded text block, with opaque
+continuation cursors when required; they omit ASTs, schema metadata, physical
+paths, and ordinary lowering diagnostics. CLI JSON remains the structured
+diagnostic inspection surface.
 
 ## Layout ownership
 

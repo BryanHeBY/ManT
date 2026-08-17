@@ -638,9 +638,9 @@ a native CLI interface and is not exposed through the read-only MCP server.
 - `--request-json`: Read one closed `mant.request/v0.8` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
-- `--mcp`: Serve read-only ManT tools over silent MCP stdio. Lowering
-  diagnostics are omitted; an incomplete entry outline retains only
-  `entriesComplete: false`. Inspect details with ordinary CLI or request JSON.
+- `--mcp`: Serve read-only ManT tools over silent MCP stdio. Successful calls
+  return bounded plain text or CommonMark without ordinary lowering
+  diagnostics. Inspect complete structured details with CLI or request JSON.
 
 ### Protocol Discovery
 
@@ -675,13 +675,14 @@ coordinate rules, and MCP tool contracts.
 
 Standard output is reserved for the requested result. Concise diagnostics use
 standard error. `--request-json` accepts the same input and projection model
-used by external process integrations. MCP exposes `mant_documents_list`,
-`mant_document_outline`, `mant_document_get`, `mant_document_explain`, and
-`mant_document_search`. Document tools accept a name and optional source or
-manual section, not an arbitrary local path. `mant_documents_list` merges
-local Markdown candidates with the native manual index and supports `query`,
-`kind`, exact `source` or `manualSection`, and bounded pagination. MCP reads current
-local files only; it has no update tool and no cross-call snapshot guarantee.
+used by external process integrations. MCP exposes `mant_find`, `mant_outline`,
+`mant_read`, `mant_explain`, and `mant_search`. `mant_find` merges local
+Markdown candidates with the native manual index and returns canonical logical
+IDs. Focused tools accept one unqualified selector or canonical ID, never an
+arbitrary local path. Successful calls contain one bounded plain-text or
+CommonMark result rather than a complete AST or schema envelope; opaque cursors
+continue larger results. MCP reads current local files only, has no update
+tool, and makes no cross-call snapshot guarantee.
 
 ## Data
 

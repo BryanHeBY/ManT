@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="740" viewBox="0 0 900 740" role="img" aria-labelledby="title description">
   <title id="title">ManT architecture</title>
-  <desc id="description">Native manuals, Markdown, and tldr enter mant-engine around its mant-ir semantic center. A thin mant-protocol DTO layer serves TUI host interactions, CLI and request JSON, and MCP. Separate direct paths carry document IR to the TUI and human renderers.</desc>
+  <desc id="description">Native manuals, Markdown, and tldr enter mant-engine around its mant-ir semantic center. A thin mant-protocol interaction layer supplies logical projections to TUI host interactions, CLI and request JSON, and compact MCP presentation. Separate direct paths carry document IR to the TUI and human renderers.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
@@ -98,7 +98,7 @@
     <rect x="325" y="520" width="250" height="58" rx="12" class="protocol"/>
   </g>
   <text x="450" y="544" text-anchor="middle" class="protocol-title">mant-protocol</text>
-  <text x="450" y="565" text-anchor="middle" class="detail">versioned logical DTOs</text>
+  <text x="450" y="565" text-anchor="middle" class="detail">projections · presentation</text>
 
   <path d="M 350 578 C 300 610, 210 600, 155 635" class="protocol-connector"/>
   <path d="M 405 578 L 335 635" class="connector"/>
@@ -116,7 +116,8 @@
   <text x="335" y="661" text-anchor="middle" class="interface-title">CLI &amp; request JSON</text>
   <text x="335" y="692" text-anchor="middle" class="detail">queries · schemas</text>
   <text x="550" y="661" text-anchor="middle" class="interface-title">MCP stdio</text>
-  <text x="550" y="692" text-anchor="middle" class="detail">read-only tools</text>
+  <text x="550" y="684" text-anchor="middle" class="detail">read-only tools</text>
+  <text x="550" y="705" text-anchor="middle" class="detail">text · CommonMark</text>
   <text x="765" y="661" text-anchor="middle" class="interface-title">Human renderers</text>
   <text x="765" y="684" text-anchor="middle" class="detail">terminal · text</text>
   <text x="765" y="705" text-anchor="middle" class="detail">Markdown · man</text>
