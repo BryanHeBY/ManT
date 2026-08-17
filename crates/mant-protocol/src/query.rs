@@ -18,12 +18,22 @@ pub enum QuerySchema {
     V0Dot8,
 }
 
+impl QuerySchema {
+    /// Serialized identifier of the current query response contract.
+    pub const ID: &'static str = "mant.query/v0.8";
+}
+
 /// Exact schema marker for a native query request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum RequestSchema {
     /// Query and projection request accepted through `--request-json`.
     #[serde(rename = "mant.request/v0.8")]
     V0Dot8,
+}
+
+impl RequestSchema {
+    /// Serialized identifier of the current request contract.
+    pub const ID: &'static str = "mant.request/v0.8";
 }
 
 /// Source selected by one public query request.

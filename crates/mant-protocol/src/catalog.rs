@@ -15,6 +15,11 @@ pub enum CatalogSchema {
     V0Dot8,
 }
 
+impl CatalogSchema {
+    /// Serialized identifier of the current catalog contract.
+    pub const ID: &'static str = "mant.catalog/v0.8";
+}
+
 /// Optional family filter for catalog discovery.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]

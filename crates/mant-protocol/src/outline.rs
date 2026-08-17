@@ -18,6 +18,11 @@ pub enum OutlineSchema {
     V0Dot8,
 }
 
+impl OutlineSchema {
+    /// Serialized identifier of the current outline contract.
+    pub const ID: &'static str = "mant.outline/v0.8";
+}
+
 /// Amount of semantic detail included in an outline projection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
@@ -172,6 +177,11 @@ pub enum ExcerptSchema {
     /// Version 0.8 of the pre-stable excerpt protocol.
     #[serde(rename = "mant.excerpt/v0.8")]
     V0Dot8,
+}
+
+impl ExcerptSchema {
+    /// Serialized identifier of the current excerpt contract.
+    pub const ID: &'static str = "mant.excerpt/v0.8";
 }
 
 /// One or more independently selected nodes from a complete query.

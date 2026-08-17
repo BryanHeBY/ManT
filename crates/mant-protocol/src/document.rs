@@ -14,6 +14,11 @@ pub enum DocumentSchema {
     V0Dot8,
 }
 
+impl DocumentSchema {
+    /// Serialized identifier of the current document contract.
+    pub const ID: &'static str = "mant.document/v0.8";
+}
+
 /// Identifies `ManT` and the parser used to build a wire document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

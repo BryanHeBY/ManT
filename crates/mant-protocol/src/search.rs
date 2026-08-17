@@ -91,6 +91,11 @@ pub enum SearchSchema {
     V0Dot8,
 }
 
+impl SearchSchema {
+    /// Serialized identifier of the current search contract.
+    pub const ID: &'static str = "mant.search/v0.8";
+}
+
 /// Markdown contract used as the coordinate space for every search format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum MarkdownSchema {

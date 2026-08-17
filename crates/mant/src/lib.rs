@@ -24,8 +24,9 @@ use error::{
 use mant_engine::QueryPolicy;
 use mant_ir::ResolvedContent;
 use mant_protocol::{
-    CatalogQuery, DoctorReport, DocumentAddress, DocumentCatalog, InputFormat, MarkdownOrigin,
-    QueryInput, QueryRequest, QueryView, RequestSchema, TldrCacheUpdate,
+    CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
+    ExcerptSchema, InputFormat, MarkdownOrigin, OutlineSchema, QueryInput, QueryRequest,
+    QuerySchema, QueryView, RequestSchema, SearchSchema, TldrCacheUpdate,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
@@ -34,7 +35,7 @@ use serde::Serialize;
 // ── Stable process protocol ────────────────────────────────────────────────
 
 /// Exact stdio protocol exposed to external process clients.
-pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v0.8";
+pub use mant_protocol::CLI_PROTOCOL_VERSION;
 
 const MAX_REQUEST_BYTES: u64 = 64 * 1024;
 
@@ -436,13 +437,13 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             &ProtocolDescription {
                 protocol: CLI_PROTOCOL_VERSION,
                 native_api_version: mant_engine::native_api_version(),
-                request_schema: "mant.request/v0.8",
-                query_schema: "mant.query/v0.8",
-                document_schema: "mant.document/v0.8",
-                outline_schema: "mant.outline/v0.8",
-                excerpt_schema: "mant.excerpt/v0.8",
-                search_schema: "mant.search/v0.8",
-                catalog_schema: "mant.catalog/v0.8",
+                request_schema: RequestSchema::ID,
+                query_schema: QuerySchema::ID,
+                document_schema: DocumentSchema::ID,
+                outline_schema: OutlineSchema::ID,
+                excerpt_schema: ExcerptSchema::ID,
+                search_schema: SearchSchema::ID,
+                catalog_schema: CatalogSchema::ID,
             },
             pretty,
         ),
