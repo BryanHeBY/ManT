@@ -196,6 +196,28 @@ fn partial_query_text_is_colored_only_when_the_stream_policy_allows_it() {
 }
 
 #[test]
+fn regex_search_rejects_patterns_that_can_split_utf8_characters() {
+    let path =
+        std::env::temp_dir().join(format!("mant-utf8-regex-process-{}.md", std::process::id()));
+    fs::write(&path, "# Unicode\n\nFollow the → arrow.\n").expect("write Unicode fixture");
+
+    let output = Command::new(executable())
+        .arg("--input")
+        .arg(&path)
+        .args(["--search", "(?-u:.)", "--regex", "--color", "never"])
+        .output()
+        .expect("run invalid regex search");
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("UTF-8 character boundaries"),
+        "{output:?}"
+    );
+    fs::remove_file(path).expect("remove Unicode fixture");
+}
+
+#[test]
 fn version_uses_the_standard_successful_clap_boundary() {
     let output = Command::new(executable())
         .arg("--version")

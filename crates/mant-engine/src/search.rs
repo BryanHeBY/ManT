@@ -14,6 +14,7 @@ use mant_protocol::{
     SearchSyntax,
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
+use regex_syntax::ParserBuilder;
 
 use crate::{ResolvedContent, output::render_addressable_markdown};
 
@@ -81,11 +82,24 @@ pub fn search_query(
     let searchable = SearchableText::new(markdown, request.scope);
     let matcher = build_matcher(request)?;
     let mut raw_matches = Vec::new();
+    let mut invalid_utf8_match = false;
 
     matcher
         .find_iter(searchable.text.as_bytes(), |found| {
+            if !searchable.text.is_char_boundary(found.start())
+                || !searchable.text.is_char_boundary(found.end())
+            {
+                invalid_utf8_match = true;
+                return false;
+            }
             let markdown_start = searchable.markdown_start(found.start());
             let markdown_end = searchable.markdown_end(found.end());
+            if !markdown.is_char_boundary(markdown_start)
+                || !markdown.is_char_boundary(markdown_end)
+            {
+                invalid_utf8_match = true;
+                return false;
+            }
             if let Some(owner) = owners.owner(markdown_start) {
                 raw_matches.push(RawMatch {
                     searchable: found.start()..found.end(),
@@ -96,6 +110,9 @@ pub fn search_query(
             true
         })
         .map_err(|error| SearchError::InvalidPattern(error.to_string()))?;
+    if invalid_utf8_match {
+        return Err(non_utf8_pattern_error());
+    }
 
     let total = u32::try_from(raw_matches.len()).unwrap_or(u32::MAX);
     let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
@@ -176,6 +193,7 @@ fn validate_request(request: &SearchQuery) -> Result<(), SearchError> {
 }
 
 fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, SearchError> {
+    validate_utf8_pattern(request)?;
     let mut builder = RegexMatcherBuilder::new();
     builder
         .fixed_strings(request.syntax == SearchSyntax::Literal)
@@ -203,6 +221,26 @@ fn build_matcher(request: &SearchQuery) -> Result<grep_regex::RegexMatcher, Sear
         ));
     }
     Ok(matcher)
+}
+
+fn validate_utf8_pattern(request: &SearchQuery) -> Result<(), SearchError> {
+    if request.syntax == SearchSyntax::Literal {
+        return Ok(());
+    }
+    ParserBuilder::new()
+        .utf8(true)
+        .unicode(true)
+        .build()
+        .parse(&request.pattern)
+        .map(|_| ())
+        .map_err(|_| non_utf8_pattern_error())
+}
+
+fn non_utf8_pattern_error() -> SearchError {
+    SearchError::InvalidPattern(
+        "regular expressions must preserve UTF-8 character boundaries; Unicode mode cannot be disabled"
+            .to_owned(),
+    )
 }
 
 #[derive(Clone)]
@@ -713,5 +751,14 @@ Manual needle.
         request.syntax = SearchSyntax::Regex;
         let error = search_query(&query(), &request).expect_err("empty regex match");
         assert!(error.to_string().contains("must not match empty text"));
+    }
+
+    #[test]
+    fn byte_mode_regexes_are_rejected_before_matching_unicode_text() {
+        let mut request = request("(?-u:.)");
+        request.syntax = SearchSyntax::Regex;
+        let error = search_query(&query(), &request).expect_err("byte-oriented regex");
+
+        assert!(error.to_string().contains("UTF-8 character boundaries"));
     }
 }

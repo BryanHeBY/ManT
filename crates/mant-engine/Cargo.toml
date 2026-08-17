@@ -29,6 +29,7 @@ mant-ir = { path = "../mant-ir", version = "=0.8.0" }
 mant-protocol = { path = "../mant-protocol", version = "=0.8.0" }
 mant-sources = { path = "../mant-sources", version = "=0.8.0" }
 pulldown-cmark.workspace = true
+regex-syntax.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 zstd.workspace = true

@@ -872,6 +872,7 @@ dependencies = [
  "mant-protocol",
  "mant-sources",
  "pulldown-cmark",
+ "regex-syntax",
  "serde",
  "serde_json",
  "zstd",

@@ -560,12 +560,14 @@ mod tests {
     use std::{io, path::PathBuf};
 
     use mant_engine::{AvailableDocument, AvailableDocumentKind, AvailableDocumentOrigin};
-    use mant_protocol::{CatalogDocumentKind, DocumentAddress};
+    use mant_protocol::{
+        CatalogDocumentKind, DocumentAddress, QueryView, SearchCase, SearchScope, SearchSyntax,
+    };
     use serde_json::json;
 
     use super::{
-        DocumentListParams, GetParams, MantMcpServer, OutlineParams, SearchParams, catalog_query,
-        validate_document_list,
+        DocumentListParams, DocumentSelector, GetParams, MantMcpServer, OutlineParams,
+        SearchParams, catalog_query, request_for, validate_document_list,
     };
 
     #[test]
@@ -596,6 +598,31 @@ mod tests {
             assert_eq!(annotations.destructive_hint, Some(false));
             assert_eq!(annotations.open_world_hint, Some(false));
         }
+    }
+
+    #[tokio::test]
+    async fn mcp_search_rejects_byte_mode_regex_before_document_io() {
+        let server = MantMcpServer::new();
+        let request = request_for(
+            DocumentSelector {
+                name: "not-loaded".to_owned(),
+                source: None,
+                manual_section: None,
+            },
+            QueryView::Search {
+                pattern: "(?-u:.)".to_owned(),
+                syntax: SearchSyntax::Regex,
+                case: SearchCase::Sensitive,
+                scope: SearchScope::Visible,
+                word: false,
+                context_lines: 0,
+                limit: 10,
+                offset: 0,
+            },
+        );
+
+        let error = server.query(request).await.expect_err("byte-mode regex");
+        assert!(error.contains("UTF-8 character boundaries"), "{error}");
     }
 
     #[test]

@@ -43,6 +43,7 @@ crossterm_winapi = "0.9.1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
+regex-syntax = "0.8.11"
 minus = { version = "5.7.2", default-features = false, features = ["search", "static_output"] }
 pulldown-cmark = { version = "0.13.4", default-features = false }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
