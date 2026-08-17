@@ -14,6 +14,7 @@ mod source;
 mod tests;
 
 pub use container::TldrDirectiveError;
+pub(crate) use options::is_semantic_entry_rejection_code;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},

@@ -151,7 +151,7 @@ pub fn build_outline_with_detail(
         !diagnostic
             .code
             .as_deref()
-            .is_some_and(|code| code.starts_with("markdown.semantic-entry"))
+            .is_some_and(crate::markdown::is_semantic_entry_rejection_code)
     });
     let mut nodes = Vec::new();
     if query.tldr.is_some() {
@@ -842,8 +842,8 @@ fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
 mod tests {
     use crate::ResolvedContent;
     use mant_ir::{
-        Block, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section, SourceFormat,
-        TldrDocument, TldrOrigin,
+        Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline,
+        LayoutHint, Section, SourceFormat, TldrDocument, TldrOrigin,
     };
     use mant_protocol::{ExcerptSelection, OutlineNode};
 
@@ -935,6 +935,47 @@ mod tests {
         assert_eq!(outline.nodes[0].id(), "tldr");
         assert_eq!(outline.nodes[1].path(), "1");
         assert_eq!(outline.nodes[2].path(), "2");
+    }
+
+    #[test]
+    fn entry_completeness_distinguishes_rejections_from_author_warnings() {
+        let mut query = query();
+        {
+            let document = query.document.as_mut().expect("document");
+            for code in [
+                "markdown.semantic-entry.ambiguous-selector",
+                "markdown.semantic-entry-list",
+            ] {
+                document.diagnostics.push(Diagnostic {
+                    level: DiagnosticLevel::Warning,
+                    code: Some(code.to_owned()),
+                    message: "author warning".to_owned(),
+                    source: None,
+                });
+            }
+        }
+        assert!(
+            build_outline(&query)
+                .expect("complete outline")
+                .entries_complete
+        );
+
+        query
+            .document
+            .as_mut()
+            .expect("document")
+            .diagnostics
+            .push(Diagnostic {
+                level: DiagnosticLevel::Warning,
+                code: Some("markdown.semantic-entry.invalid-entry-name".to_owned()),
+                message: "rejected declaration".to_owned(),
+                source: None,
+            });
+        assert!(
+            !build_outline(&query)
+                .expect("partial outline")
+                .entries_complete
+        );
     }
 
     #[test]

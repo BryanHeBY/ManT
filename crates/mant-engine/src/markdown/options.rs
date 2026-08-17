@@ -378,6 +378,18 @@ enum EntryRejectionReason {
 }
 
 impl EntryRejectionReason {
+    const ALL: [Self; 9] = [
+        Self::MissingLeadingParagraph,
+        Self::MissingLeadingCode,
+        Self::UnsupportedOptionPrefix,
+        Self::InvalidOptionName,
+        Self::InvalidEntryName,
+        Self::InvalidPlaceholder,
+        Self::InvalidAliasSeparator,
+        Self::MissingDescription,
+        Self::UnsupportedInline,
+    ];
+
     const fn code(self) -> &'static str {
         match self {
             Self::MissingLeadingParagraph => "markdown.semantic-entry.missing-leading-paragraph",
@@ -409,6 +421,12 @@ impl EntryRejectionReason {
             Self::UnsupportedInline => "entry term contains an unsupported inline construct",
         }
     }
+}
+
+pub(crate) fn is_semantic_entry_rejection_code(code: &str) -> bool {
+    EntryRejectionReason::ALL
+        .iter()
+        .any(|reason| reason.code() == code)
 }
 
 #[derive(Debug, Clone)]
