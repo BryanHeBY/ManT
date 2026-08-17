@@ -202,6 +202,12 @@ Font names map as follows:
 | `CI`, `VI` | Emphasized code |
 | Other names, `R`, `P`, `1` | Regular |
 
+Adjacent runs with the same effective style are one semantic span in Markdown
+output. For example, `\fB\-\fP\fB\-emulate\fP` becomes
+`**--emulate**`, rather than two neighboring emphasis delimiters. Markdown
+escaping is minimal but lossless: intraword underscores such as the one in
+`PATH_SCRIPT` remain literal, while delimiter-active underscores are escaped.
+
 Color, point size, motion, drawing, overstrike, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 ## Tables

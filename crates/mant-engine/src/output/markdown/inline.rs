@@ -86,16 +86,35 @@ pub(super) fn code_span(value: &str) -> String {
     }
 }
 
-fn render_inline_raw(children: &[Inline], options: MarkdownOptions) -> String {
+fn render_inline_raw(nodes: &[Inline], options: MarkdownOptions) -> String {
     let mut output = String::new();
-    for child in children {
+    let mut index = 0;
+    while let Some(child) = nodes.get(index) {
         match child {
             Inline::Text { value } => output.push_str(&escape_text(value)),
-            Inline::Strong { children } => {
-                output.push_str(&render_styled(children, "**", "__", &output, options));
+            Inline::Strong {
+                children: styled_children,
+            } => {
+                let mut rendered = render_inline_raw(styled_children, options);
+                index += 1;
+                while let Some(Inline::Strong { children }) = nodes.get(index) {
+                    rendered.push_str(&render_inline_raw(children, options));
+                    index += 1;
+                }
+                output.push_str(&render_styled(&rendered, "**", "__", &output));
+                continue;
             }
-            Inline::Emphasis { children } => {
-                output.push_str(&render_styled(children, "*", "_", &output, options));
+            Inline::Emphasis {
+                children: styled_children,
+            } => {
+                let mut rendered = render_inline_raw(styled_children, options);
+                index += 1;
+                while let Some(Inline::Emphasis { children }) = nodes.get(index) {
+                    rendered.push_str(&render_inline_raw(children, options));
+                    index += 1;
+                }
+                output.push_str(&render_styled(&rendered, "*", "_", &output));
+                continue;
             }
             Inline::Code { value } => output.push_str(&code_span(value)),
             Inline::Link {
@@ -138,6 +157,7 @@ fn render_inline_raw(children: &[Inline], options: MarkdownOptions) -> String {
             Inline::Anchor { .. } => {}
             Inline::LineBreak => output.push('\n'),
         }
+        index += 1;
     }
     output
 }
@@ -147,16 +167,14 @@ fn render_inline_raw(children: &[Inline], options: MarkdownOptions) -> String {
 /// run of `*`. This keeps the output pure Markdown while preserving emphasis
 /// within ordinary words, where underscore delimiters are intentionally inert.
 fn render_styled(
-    children: &[Inline],
+    rendered: &str,
     primary_marker: &str,
     alternate_marker: &str,
     preceding: &str,
-    options: MarkdownOptions,
 ) -> String {
-    let rendered = render_inline_raw(children, options);
     let core = rendered.trim_matches([' ', '\t']);
     if core.is_empty() {
-        return rendered;
+        return rendered.to_owned();
     }
     let leading_width = rendered.len() - rendered.trim_start_matches([' ', '\t']).len();
     let trailing_width = rendered.len() - rendered.trim_end_matches([' ', '\t']).len();
@@ -209,8 +227,19 @@ fn escape_html_attribute(value: &str) -> String {
 
 fn escape_plain_text(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
-    for character in value.chars() {
-        if matches!(character, '\\' | '*' | '_' | '[' | ']' | '<' | '>') {
+    let characters = value.chars().collect::<Vec<_>>();
+    for (index, character) in characters.iter().copied().enumerate() {
+        let intraword_underscore = character == '_'
+            && index
+                .checked_sub(1)
+                .and_then(|previous| characters.get(previous))
+                .is_some_and(|character| character.is_alphanumeric())
+            && characters
+                .get(index + 1)
+                .is_some_and(|character| character.is_alphanumeric());
+        if matches!(character, '\\' | '*' | '[' | ']' | '<' | '>')
+            || (character == '_' && !intraword_underscore)
+        {
             output.push('\\');
         }
         output.push(character);

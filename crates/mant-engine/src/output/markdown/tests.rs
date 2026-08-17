@@ -293,6 +293,58 @@ fn keeps_adjacent_bold_and_italic_runs_unambiguous_in_commonmark() {
 }
 
 #[test]
+fn coalesces_adjacent_roff_styles_and_uses_minimal_intraword_escaping() {
+    let query = ResolvedContent {
+        address: None,
+        label: "zsh-style".to_owned(),
+        document: Some(manual(vec![section(
+            "INVOCATION",
+            vec![paragraph(vec![
+                Inline::Text {
+                    value: "The long option `".to_owned(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "-".to_owned(),
+                    }],
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "-emulate".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: "' and ".to_owned(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "PATH_SCRIPT".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: " are literal tokens.".to_owned(),
+                },
+            ])],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("`**--emulate**' and **PATH_SCRIPT**"));
+    assert!(!markdown.contains("**-**__-emulate__"));
+    assert!(!markdown.contains("PATH\\_SCRIPT"));
+
+    let visible = Parser::new(&markdown)
+        .filter_map(|event| match event {
+            Event::Text(value) | Event::Code(value) => Some(value.to_string()),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(visible.contains("The long option `--emulate' and PATH_SCRIPT are literal tokens."));
+}
+
+#[test]
 fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
     let query = ResolvedContent {
         address: None,
