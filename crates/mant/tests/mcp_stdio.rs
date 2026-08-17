@@ -81,7 +81,8 @@ fn request_document_tools(input: &mut impl Write) {
             "document": "documents/mcp-registered",
             "pattern": "needle",
             "word": true,
-            "contextLines": 1
+            "contextLines": 1,
+            "limit": 1
         }),
     );
     call_tool(
@@ -172,7 +173,7 @@ fn assert_tool_replies(replies: &[Value]) {
     let search = successful_text(reply(replies, 4));
     assert!(search.contains("needle"));
     assert_eq!(search.matches("Outline root").count(), 1);
-    assert_eq!(search.matches("needle").count(), 2);
+    assert_eq!(search.matches("needle").count(), 1);
 
     let read = successful_text(reply(replies, 5));
     assert!(read.starts_with("# documents/mcp-registered"), "{read}");

@@ -24,9 +24,9 @@ use rmcp::{
 
 use cursor::{CursorKind, decode, encode, fingerprint, join_position, split_position};
 use params::{
-    ExplainParams, FindParams, OutlineParams, ReadParams, SEARCH_PAGE_SIZE, SearchParams,
-    catalog_query, request_for, validate_context_lines, validate_cursor, validate_document,
-    validate_entry, validate_find, validate_pattern, validate_selectors,
+    ExplainParams, FindParams, OutlineParams, ReadParams, SearchParams, catalog_query, request_for,
+    validate_context_lines, validate_cursor, validate_document, validate_entry, validate_find,
+    validate_pattern, validate_search_limit, validate_selectors,
 };
 use presentation::{
     TextPage, finish_page, prepare_excerpt, prepare_outline, prepare_search, render_excerpt,
@@ -201,6 +201,7 @@ impl MantMcpServer {
         let document = validate_document(&parameters.document)?;
         let pattern = validate_pattern(&parameters.pattern)?;
         validate_context_lines(parameters.context_lines)?;
+        let limit = validate_search_limit(parameters.limit)?;
         validate_cursor(parameters.cursor.as_deref())?;
         let syntax = parameters.syntax.unwrap_or_default();
         let case = parameters.case.unwrap_or_default();
@@ -211,6 +212,7 @@ impl MantMcpServer {
             search_case_key(case),
             if parameters.word { "word" } else { "substring" },
             &parameters.context_lines.to_string(),
+            &limit.to_string(),
         ]);
         let position = decode(
             parameters.cursor.as_deref(),
@@ -227,7 +229,7 @@ impl MantMcpServer {
                 scope: SearchScope::Visible,
                 word: parameters.word,
                 context_lines: parameters.context_lines,
-                limit: SEARCH_PAGE_SIZE,
+                limit,
                 offset,
             },
         );
@@ -368,6 +370,9 @@ mod tests {
     fn focused_tool_limits_are_enforced_at_runtime() {
         assert!(validate_document("\n").is_err());
         assert!(validate_context_lines(6).is_err());
+        assert_eq!(validate_search_limit(None), Ok(DEFAULT_SEARCH_PAGE_SIZE));
+        assert!(validate_search_limit(Some(0)).is_err());
+        assert!(validate_search_limit(Some(MAX_SEARCH_PAGE_SIZE + 1)).is_err());
         assert!(validate_selectors(&[]).is_err());
         assert!(validate_pattern("\u{7}").is_err());
         assert!(validate_cursor(Some(&"x".repeat(MAX_CURSOR_BYTES + 1))).is_err());

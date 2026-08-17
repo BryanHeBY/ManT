@@ -967,7 +967,7 @@ tools. Outputs intentionally remain text-first:
 | `mant_outline` | `document` | `detail`, default `sections`; `cursor` | Selectable plain-text hierarchy |
 | `mant_read` | `document`, 1–16 `selectors` | `cursor` | CommonMark excerpts |
 | `mant_explain` | `document`, `entry` | `cursor` | One CommonMark semantic entry |
-| `mant_search` | `document`, `pattern` | `syntax`, `case`, `word`, `contextLines`, `cursor` | Grep-like visible-text matches |
+| `mant_search` | `document`, `pattern` | `syntax`, `case`, `word`, `contextLines`, `limit`, `cursor` | Grep-like visible-text matches |
 
 Every tool is annotated read-only, non-destructive, and closed-world.
 `mant_find` may filter one configured Markdown `source` or one native
@@ -1086,13 +1086,14 @@ A structure-aware search tool call is:
 }
 ```
 
-Search is deliberately fixed to visible document text, returns 20 matches per
-engine page, and permits zero through five context lines. Every successful
-tool result is capped at 32 KiB of UTF-8 and continues at paragraph or line
-boundaries with the same opaque cursor convention. `mant_read` and
+Search is deliberately fixed to visible document text and permits zero through
+five context lines. `limit` selects 1 through 100 matching line groups per
+engine page and defaults to 20. Every successful tool result is capped at 32
+KiB of UTF-8 and continues at paragraph or line boundaries with the same opaque
+cursor convention. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
-Adjacent search occurrences owned by the same exact outline node share one
-document-and-trail header while retaining an individual line and column.
+Occurrences on one rendered line share a result and list their columns once;
+overlapping context windows owned by the same exact outline node are merged.
 This keeps model-visible results aligned with the CLI's human presentations
 without ANSI escapes, duplicated JSON, schema markers, producer metadata,
 physical source paths, or non-fatal diagnostics. Protocol-level and validation

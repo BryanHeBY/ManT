@@ -15,8 +15,10 @@ pub(super) const MAX_CURSOR_BYTES: usize = 256;
 pub(super) const MAX_SELECTORS: usize = 16;
 /// Fixed catalog page size for agent discovery.
 pub(super) const FIND_PAGE_SIZE: u32 = 50;
-/// Fixed match page size for in-document search.
-pub(super) const SEARCH_PAGE_SIZE: u32 = 20;
+/// Default match-line page size for in-document search.
+pub(super) const DEFAULT_SEARCH_PAGE_SIZE: u32 = 20;
+/// Maximum match-line page size exposed to an MCP client.
+pub(super) const MAX_SEARCH_PAGE_SIZE: u32 = 100;
 
 /// Discover logical document identities in the local catalog.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
@@ -103,6 +105,9 @@ pub(super) struct SearchParams {
     #[serde(default)]
     #[schemars(range(max = 5))]
     pub(super) context_lines: u16,
+    /// Maximum matching line groups returned before a continuation cursor.
+    #[schemars(range(min = 1, max = 100))]
+    pub(super) limit: Option<u32>,
     /// Opaque continuation token returned by an earlier identical call.
     #[schemars(length(min = 1, max = 256))]
     pub(super) cursor: Option<String>,
@@ -160,6 +165,16 @@ pub(super) fn validate_context_lines(value: u16) -> Result<(), String> {
         return Err("contextLines must be between 0 and 5".to_owned());
     }
     Ok(())
+}
+
+pub(super) fn validate_search_limit(value: Option<u32>) -> Result<u32, String> {
+    let value = value.unwrap_or(DEFAULT_SEARCH_PAGE_SIZE);
+    if !(1..=MAX_SEARCH_PAGE_SIZE).contains(&value) {
+        return Err(format!(
+            "limit must be between 1 and {MAX_SEARCH_PAGE_SIZE}"
+        ));
+    }
+    Ok(value)
 }
 
 pub(super) fn catalog_query(parameters: &FindParams, offset: u32) -> CatalogQuery {
