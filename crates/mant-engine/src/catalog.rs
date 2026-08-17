@@ -295,10 +295,7 @@ fn document_summary(document: &AvailableDocument) -> DocumentSummary {
             manual_section: document.manual_section.clone().unwrap_or_default(),
         },
     };
-    DocumentSummary {
-        catalog_path: address.catalog_path(),
-        address,
-    }
+    DocumentSummary { address }
 }
 
 fn available_catalog_path(document: &AvailableDocument) -> String {
@@ -592,13 +589,13 @@ mod tests {
             catalog
                 .documents
                 .iter()
-                .map(|document| document.catalog_path.as_str())
+                .map(|document| document.catalog_path())
                 .collect::<Vec<_>>(),
             [
-                "documents/languages/en/tool",
-                "documents/tool",
-                "documents/toolbox",
-                "documents/guides/mytool",
+                "documents/languages/en/tool".to_owned(),
+                "documents/tool".to_owned(),
+                "documents/toolbox".to_owned(),
+                "documents/guides/mytool".to_owned(),
             ]
         );
 
@@ -624,9 +621,12 @@ mod tests {
             catalog
                 .documents
                 .iter()
-                .map(|document| document.catalog_path.as_str())
+                .map(|document| document.catalog_path())
                 .collect::<Vec<_>>(),
-            ["documents/en/tool", "documents/languages/en/tool"]
+            [
+                "documents/en/tool".to_owned(),
+                "documents/languages/en/tool".to_owned()
+            ]
         );
     }
 

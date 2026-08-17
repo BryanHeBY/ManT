@@ -126,15 +126,10 @@
           "address": {
             "description": "Stable logical document identity.",
             "$ref": "#/$defs/DocumentAddress"
-          },
-          "catalogPath": {
-            "description": "Stable logical path used by tree and discovery frontends.",
-            "type": "string"
           }
         },
         "required": [
-          "address",
-          "catalogPath"
+          "address"
         ]
       },
       "MarkdownOrigin": {
@@ -4296,7 +4291,7 @@
         "description": "Matching line groups in render order.",
         "type": "array",
         "items": {
-          "$ref": "#/$defs/SearchMatch"
+          "$ref": "#/$defs/SearchHit"
         }
       },
       "meta": {
@@ -4740,6 +4735,71 @@
           "matched"
         ]
       },
+      "SearchHit": {
+        "description": "One rendered line or line span containing one or more exact occurrences.",
+        "type": "object",
+        "properties": {
+          "context": {
+            "description": "Optional rendered lines surrounding the match.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchContextLine"
+            }
+          },
+          "nodeSource": {
+            "description": "Original-source location of the owning outline node, when retained.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SourceSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurrenceCount": {
+            "description": "Total exact matcher occurrences represented by this line group.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 1
+          },
+          "occurrences": {
+            "description": "Exact matcher occurrences on this rendered line or line span.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchOccurrence"
+            },
+            "maxItems": 256,
+            "minItems": 1
+          },
+          "occurrencesTruncated": {
+            "description": "Whether [`Self::occurrences`] omits exact ranges to remain bounded.",
+            "type": "boolean"
+          },
+          "ordinal": {
+            "description": "One-based line-group number in the unpaginated result set.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "outline": {
+            "description": "Complete logical location of the nearest addressable node.",
+            "$ref": "#/$defs/OutlineTrail"
+          },
+          "preview": {
+            "description": "Compact single-string presentation of the match.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ordinal",
+          "outline",
+          "occurrences",
+          "occurrenceCount",
+          "occurrencesTruncated",
+          "preview"
+        ]
+      },
       "SearchLineRange": {
         "description": "One exact occurrence fragment within an anchor-free rendered Markdown line.",
         "type": "object",
@@ -4817,69 +4877,6 @@
           "startColumn",
           "endLine",
           "endColumn"
-        ]
-      },
-      "SearchMatch": {
-        "description": "One rendered line or line span containing one or more exact occurrences.",
-        "type": "object",
-        "properties": {
-          "context": {
-            "description": "Optional rendered lines surrounding the match.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchContextLine"
-            }
-          },
-          "occurrenceCount": {
-            "description": "Total exact matcher occurrences represented by this line group.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "occurrences": {
-            "description": "Exact matcher occurrences on this rendered line or line span.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchOccurrence"
-            }
-          },
-          "occurrencesTruncated": {
-            "description": "Whether [`Self::occurrences`] omits exact ranges to remain bounded.",
-            "type": "boolean"
-          },
-          "ordinal": {
-            "description": "One-based line-group number in the unpaginated result set.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "outline": {
-            "description": "Complete logical location of the nearest addressable node.",
-            "$ref": "#/$defs/OutlineTrail"
-          },
-          "preview": {
-            "description": "Compact single-string presentation of the match.",
-            "type": "string"
-          },
-          "source": {
-            "description": "Original-source location, when the parser retained one.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/SourceSpan"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "ordinal",
-          "outline",
-          "occurrences",
-          "occurrenceCount",
-          "occurrencesTruncated",
-          "preview"
         ]
       },
       "SearchOccurrence": {

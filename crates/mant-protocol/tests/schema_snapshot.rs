@@ -44,10 +44,7 @@ fn v0_8_catalog_exposes_only_logical_document_identities() {
         .expect("catalog schema");
     let summary = &catalog["$defs"]["DocumentSummary"];
     assert!(summary["properties"].get("sourcePath").is_none());
-    assert_eq!(
-        summary["required"],
-        serde_json::json!(["address", "catalogPath"])
-    );
+    assert_eq!(summary["required"], serde_json::json!(["address"]));
 }
 
 #[test]

@@ -352,14 +352,12 @@ impl CliHost for FakeHost {
                             name: "team".to_owned(),
                         },
                     },
-                    catalog_path: "sources/team/guide".to_owned(),
                 },
                 DocumentSummary {
                     address: DocumentAddress::Manual {
                         name: "printf".to_owned(),
                         manual_section: "3".to_owned(),
                     },
-                    catalog_path: "manual/3/printf".to_owned(),
                 },
             ],
         })

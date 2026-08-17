@@ -169,26 +169,28 @@ pub struct QuerySearch {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<u32>,
     /// Matching line groups in render order.
-    pub matches: Vec<SearchMatch>,
+    pub matches: Vec<SearchHit>,
 }
 
 /// One rendered line or line span containing one or more exact occurrences.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchMatch {
+pub struct SearchHit {
     /// One-based line-group number in the unpaginated result set.
     pub ordinal: u32,
     /// Complete logical location of the nearest addressable node.
     pub outline: OutlineTrail,
     /// Exact matcher occurrences on this rendered line or line span.
+    #[schemars(length(min = 1, max = 256))]
     pub occurrences: Vec<SearchOccurrence>,
     /// Total exact matcher occurrences represented by this line group.
+    #[schemars(range(min = 1))]
     pub occurrence_count: u32,
     /// Whether [`Self::occurrences`] omits exact ranges to remain bounded.
     pub occurrences_truncated: bool,
-    /// Original-source location, when the parser retained one.
+    /// Original-source location of the owning outline node, when retained.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<SourceSpan>,
+    pub node_source: Option<SourceSpan>,
     /// Compact single-string presentation of the match.
     pub preview: String,
     /// Optional rendered lines surrounding the match.

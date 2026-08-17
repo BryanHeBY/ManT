@@ -9,9 +9,9 @@ use std::{error::Error, fmt, ops::Range};
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
-    MarkdownSchema, QuerySearch, SearchCase, SearchContextLine, SearchLineRange,
-    SearchMarkdownRange, SearchMatch, SearchOccurrence, SearchQuery, SearchRender,
-    SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope, SearchSyntax,
+    MarkdownSchema, QuerySearch, SearchCase, SearchContextLine, SearchHit, SearchLineRange,
+    SearchMarkdownRange, SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat,
+    SearchRenderScope, SearchSchema, SearchScope, SearchSyntax,
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
 use regex_syntax::ParserBuilder;
@@ -359,7 +359,7 @@ fn build_match(
     markdown: &str,
     lines: &LineIndex,
     context_lines: u16,
-) -> SearchMatch {
+) -> SearchHit {
     let first = &found.occurrences[0];
     let start = lines.position(markdown, first.markdown.start);
     let preview = display_markdown_line(lines.line(markdown, start.line_index));
@@ -382,7 +382,7 @@ fn build_match(
             .collect()
     };
 
-    SearchMatch {
+    SearchHit {
         ordinal: found.ordinal,
         outline: found.owner.outline.clone(),
         occurrences: found
@@ -409,7 +409,7 @@ fn build_match(
             .collect(),
         occurrence_count: found.occurrence_count,
         occurrences_truncated: found.occurrences_truncated(),
-        source: found.owner.source,
+        node_source: found.owner.source,
         preview,
         context,
     }

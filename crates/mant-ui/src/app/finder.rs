@@ -124,7 +124,7 @@ impl FinderState {
                         .to_lowercase()
                         .contains(&needle)
                     || needle.contains('/')
-                        && document.catalog_path.to_lowercase().contains(&needle)
+                        && document.catalog_path().to_lowercase().contains(&needle)
             })
             .map(|(index, _)| index)
             .collect();
@@ -133,10 +133,10 @@ impl FinderState {
             let right_document = &self.catalog[*right];
             let left = &left_document.address;
             let right = &right_document.address;
-            finder_match_rank(left, &left_document.catalog_path, &self.draft)
+            finder_match_rank(left, &left_document.catalog_path(), &self.draft)
                 .cmp(&finder_match_rank(
                     right,
-                    &right_document.catalog_path,
+                    &right_document.catalog_path(),
                     &self.draft,
                 ))
                 .then_with(|| left.name().to_lowercase().cmp(&right.name().to_lowercase()))
@@ -244,7 +244,8 @@ impl FinderState {
         let mut folders = BTreeSet::new();
         let mut documents = BTreeMap::<String, Vec<(String, usize)>>::new();
         for (index, document) in self.catalog.iter().enumerate() {
-            let mut components = document.catalog_path.split('/').collect::<Vec<_>>();
+            let catalog_path = document.catalog_path();
+            let mut components = catalog_path.split('/').collect::<Vec<_>>();
             let Some(name) = components.pop() else {
                 continue;
             };

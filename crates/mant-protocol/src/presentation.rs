@@ -17,7 +17,7 @@ pub fn render_catalog_text(catalog: &DocumentCatalog, grouped: bool) -> String {
         let mut output = String::new();
         for document in &catalog.documents {
             let (_, kind) = catalog_category(&document.address);
-            writeln!(output, "{}\t{kind}", document.catalog_path)
+            writeln!(output, "{}\t{kind}", document.catalog_path())
                 .expect("writing to String cannot fail");
         }
         return output;
@@ -94,10 +94,7 @@ mod tests {
             next_offset: None,
             documents: addresses
                 .into_iter()
-                .map(|address| DocumentSummary {
-                    catalog_path: address.catalog_path(),
-                    address,
-                })
+                .map(|address| DocumentSummary { address })
                 .collect(),
         }
     }

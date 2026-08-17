@@ -187,8 +187,9 @@ mant --find '^git' --regex --kind manual --format json
 `--list` renders the hierarchy rooted at `documents`, `sources/<source>`, and
 `manual/<section>`. `--find` emits tab-separated canonical catalog paths and
 document kinds by default. JSON output contains a flat, paginatable `documents`
-array; each row has an exact `address` and stable `catalogPath`. Physical paths
-are intentionally absent from discovery results.
+array; each row has one exact logical `address`. Its canonical catalog path is
+derived from that address rather than duplicated in the wire value. Physical
+paths are intentionally absent from discovery results.
 
 Markdown addresses distinguish the root `documents` directory from every
 configured source. Manual addresses contain both name and exact section, so
@@ -873,7 +874,7 @@ line from duplicating its preview or context. Each line group includes:
 - each retained occurrence contains exact `matchedText`, its canonical
   Markdown range, and `lineRanges` within the anchor-free Markdown lines used
   by text presentations;
-- an optional original `source` span;
+- an optional original `nodeSource` span for the owning outline node;
 - a human-readable `preview`;
 - optional full Markdown context lines.
 

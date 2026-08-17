@@ -3,7 +3,7 @@
 use mant_ir::DefinitionRole;
 use std::{collections::BTreeMap, ops::Range};
 
-use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch, SearchMatch};
+use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch, SearchHit};
 use pulldown_cmark::{Event, Parser};
 
 /// Semantic roles in the grep-like search presentation.
@@ -280,7 +280,7 @@ where
     }
 }
 
-fn occurrence_line_ranges(found: &SearchMatch, line: u32) -> Vec<Range<usize>> {
+fn occurrence_line_ranges(found: &SearchHit, line: u32) -> Vec<Range<usize>> {
     found
         .occurrences
         .iter()
@@ -292,7 +292,7 @@ fn occurrence_line_ranges(found: &SearchMatch, line: u32) -> Vec<Range<usize>> {
         .collect()
 }
 
-fn group_coordinates(matches: &[SearchMatch]) -> String {
+fn group_coordinates(matches: &[SearchHit]) -> String {
     let mut lines: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     for occurrence in matches.iter().flat_map(|found| found.occurrences.iter()) {
         lines
@@ -318,7 +318,7 @@ fn group_coordinates(matches: &[SearchMatch]) -> String {
         .join("; ")
 }
 
-fn truncated_occurrence_summary(matches: &[SearchMatch]) -> Option<String> {
+fn truncated_occurrence_summary(matches: &[SearchHit]) -> Option<String> {
     matches
         .iter()
         .any(|found| found.occurrences_truncated)
@@ -335,7 +335,7 @@ fn truncated_occurrence_summary(matches: &[SearchMatch]) -> Option<String> {
         })
 }
 
-fn context_group_end(matches: &[SearchMatch], start: usize) -> usize {
+fn context_group_end(matches: &[SearchHit], start: usize) -> usize {
     let Some((_, mut last_line)) = context_bounds(&matches[start]) else {
         return start + 1;
     };
@@ -354,13 +354,13 @@ fn context_group_end(matches: &[SearchMatch], start: usize) -> usize {
     end
 }
 
-fn context_bounds(found: &SearchMatch) -> Option<(u32, u32)> {
+fn context_bounds(found: &SearchHit) -> Option<(u32, u32)> {
     Some((found.context.first()?.line, found.context.last()?.line))
 }
 
 type MergedContext<'a> = BTreeMap<u32, (&'a str, bool, Vec<Range<usize>>)>;
 
-fn merged_context(matches: &[SearchMatch]) -> MergedContext<'_> {
+fn merged_context(matches: &[SearchHit]) -> MergedContext<'_> {
     let mut merged: MergedContext<'_> = BTreeMap::new();
     for found in matches {
         for line in &found.context {
@@ -464,7 +464,7 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
                 group_coordinates(std::slice::from_ref(found))
             ),
         ];
-        if let Some(source) = found.source {
+        if let Some(source) = found.node_source {
             details.push(format!(
                 "- Source: line {}, column {}",
                 source.line, source.column
@@ -519,7 +519,7 @@ fn escape_text(value: &str) -> String {
 mod tests {
     use mant_protocol::{
         MarkdownSchema, OutlineNodeReference, OutlineReference, OutlineTrail, QuerySearch,
-        SearchCase, SearchContextLine, SearchLineRange, SearchMarkdownRange, SearchMatch,
+        SearchCase, SearchContextLine, SearchHit, SearchLineRange, SearchMarkdownRange,
         SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope,
         SearchSchema, SearchScope, SearchSyntax,
     };
@@ -561,7 +561,7 @@ mod tests {
             offset: 0,
             truncated: false,
             next_offset: None,
-            matches: vec![SearchMatch {
+            matches: vec![SearchHit {
                 ordinal: 1,
                 outline: OutlineTrail {
                     ancestors: vec![OutlineReference {
@@ -596,7 +596,7 @@ mod tests {
                 }],
                 occurrence_count: 1,
                 occurrences_truncated: false,
-                source: None,
+                node_source: None,
                 preview: "- `--acls`".to_owned(),
                 context: Vec::new(),
             }],

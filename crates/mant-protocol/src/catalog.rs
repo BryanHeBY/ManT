@@ -82,8 +82,14 @@ impl Default for CatalogQuery {
 pub struct DocumentSummary {
     /// Stable logical document identity.
     pub address: DocumentAddress,
-    /// Stable logical path used by tree and discovery frontends.
-    pub catalog_path: String,
+}
+
+impl DocumentSummary {
+    /// Derive the stable logical path used by tree and discovery frontends.
+    #[must_use]
+    pub fn catalog_path(&self) -> String {
+        self.address.catalog_path()
+    }
 }
 
 /// Deterministically ordered page of discoverable local documents.
@@ -136,6 +142,8 @@ pub enum CatalogMatchRank {
     Prefix,
     /// Pattern occurs elsewhere in the name or path.
     Substring,
+    /// A literal pattern was supplied but does not occur in this candidate.
+    NoMatch,
     /// No literal pattern was supplied.
     Unranked,
 }
@@ -164,8 +172,10 @@ pub fn catalog_literal_match_rank(
         CatalogMatchRank::ComponentSuffix
     } else if name.starts_with(&pattern) {
         CatalogMatchRank::Prefix
-    } else {
+    } else if name.contains(&pattern) {
         CatalogMatchRank::Substring
+    } else {
+        CatalogMatchRank::NoMatch
     }
 }
 
@@ -173,4 +183,26 @@ pub fn catalog_literal_match_rank(
 /// Return the default maximum number of catalog rows.
 pub const fn default_catalog_limit() -> u32 {
     100
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CatalogMatchRank, catalog_literal_match_rank};
+    use crate::SearchCase;
+
+    #[test]
+    fn literal_rank_distinguishes_substrings_from_non_matches() {
+        assert_eq!(
+            catalog_literal_match_rank("woman", Some("man"), SearchCase::Insensitive),
+            CatalogMatchRank::Substring
+        );
+        assert_eq!(
+            catalog_literal_match_rank("printf", Some("man"), SearchCase::Insensitive),
+            CatalogMatchRank::NoMatch
+        );
+        assert_eq!(
+            catalog_literal_match_rank("printf", None, SearchCase::Insensitive),
+            CatalogMatchRank::Unranked
+        );
+    }
 }

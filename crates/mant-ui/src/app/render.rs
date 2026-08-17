@@ -492,7 +492,8 @@ impl App {
                     continue;
                 };
                 let category = document_category(&document.address);
-                let name = sanitize_terminal_text(&document.catalog_path);
+                let catalog_path = document.catalog_path();
+                let name = sanitize_terminal_text(&catalog_path);
                 let gap = usize::from(row.width)
                     .saturating_sub(name.width())
                     .saturating_sub(category.width())

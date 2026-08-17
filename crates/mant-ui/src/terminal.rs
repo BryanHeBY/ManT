@@ -283,7 +283,6 @@ mod tests {
                 name: name.to_owned(),
                 manual_section: "1".to_owned(),
             },
-            catalog_path: format!("manual/1/{name}"),
         }
     }
 }

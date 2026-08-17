@@ -1715,10 +1715,9 @@ fn manual_queries_accept_flat_user_man_roots() {
     assert!(catalog.status.success(), "{catalog:?}");
     let catalog: serde_json::Value =
         serde_json::from_slice(&catalog.stdout).expect("manual catalog JSON");
-    assert_eq!(
-        catalog["documents"][0]["catalogPath"],
-        "manual/1/flat-native"
-    );
+    assert_eq!(catalog["documents"][0]["address"]["name"], "flat-native");
+    assert_eq!(catalog["documents"][0]["address"]["manualSection"], "1");
+    assert!(catalog["documents"][0].get("catalogPath").is_none());
     assert!(catalog["documents"][0].get("sourcePath").is_none());
 
     fs::remove_dir_all(root).expect("remove flat manual fixture");
