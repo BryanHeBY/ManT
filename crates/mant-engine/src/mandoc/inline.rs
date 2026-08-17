@@ -132,14 +132,16 @@ pub(super) fn append_inline_node(
         // A roff break ends the current output line, not the paragraph.
         // Keeping it inline lets every renderer preserve the same flow.
         Some("br") => builder.hard_break(),
-        // Formatting requests carry control arguments such as `CW` and
-        // `R`. They change renderer state and are never document text.
+        // Formatting requests carry control arguments such as `CW` and `R`.
+        // `Es` likewise only changes the delimiters later `En` nodes use;
+        // libmandoc resolves those delimiters onto each invocation. These
+        // requests change formatter state and are never document text.
         // Verbatim regions already retain their semantics through
         // libmandoc's no-fill flag, so leaking these arguments would only
         // create phantom paragraphs around preformatted blocks.
         Some(
-            "Sm" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr"
-            | "ta",
+            "Es" | "Sm" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh"
+            | "nr" | "ta",
         ) => {}
         Some("Ap") => {
             builder.suppress_next_space();
@@ -207,18 +209,79 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
             content.extend(lowered);
             content
         }
-        Some("Op" | "Oo" | "Bq" | "Bo") => surround("[", lowered, "]"),
-        Some("Dq" | "Do" | "Qq" | "Qo") => surround("“", lowered, "”"),
-        Some("Sq" | "So" | "Ql") => surround("‘", lowered, "’"),
-        Some("Pq" | "Po") => surround("(", lowered, ")"),
-        Some("Brq" | "Bro") => surround("{", lowered, "}"),
-        Some("Aq" | "Ao") => surround("<", lowered, ">"),
+        Some("Fo") => lower_function_declaration(node, default_name),
+        Some("Eo") => surround_fragments(
+            lower_inline_nodes(part_children(node, NodeKind::Head), default_name),
+            lowered,
+            lower_inline_nodes(part_children(node, NodeKind::Tail), default_name),
+        ),
+        Some("En") => match node.enclosure.as_ref() {
+            Some(enclosure) => surround(
+                &visible_text(&enclosure.opening),
+                lowered,
+                &enclosure
+                    .closing
+                    .as_deref()
+                    .map(visible_text)
+                    .unwrap_or_default(),
+            ),
+            None => lowered,
+        },
+        Some(name) if enclosure_marks(name).is_some() => {
+            let (opening, closing) = enclosure_marks(name).expect("matched enclosure macro");
+            surround(opening, lowered, closing)
+        }
         _ => lowered,
     };
     if let Some(anchor) = anchor {
         output.insert(0, anchor);
     }
     output
+}
+
+fn lower_function_declaration(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
+    let head = lower_inline_nodes(part_children(node, NodeKind::Head), default_name);
+    let body = part_children(node, NodeKind::Body);
+    if head.is_empty() {
+        return lower_inline_nodes(body, default_name);
+    }
+
+    let mut declaration = vec![Inline::Strong { children: head }];
+    declaration.push(Inline::Text { value: "(".into() });
+    for (index, argument) in body.iter().enumerate() {
+        if index > 0 {
+            declaration.push(Inline::Text { value: ", ".into() });
+        }
+        declaration.extend(lower_inline_nodes(
+            std::slice::from_ref(argument),
+            default_name,
+        ));
+    }
+    declaration.push(Inline::Text { value: ")".into() });
+    declaration
+}
+
+/// Whether a semantic macro owns an inline enclosure body.
+///
+/// Both implicit forms such as `Aq` and explicit block forms such as
+/// `Ao`/`Ac` arrive as one opener-owned subtree after libmandoc validation.
+/// `Eo` carries its delimiters in structural head and tail nodes, while the
+/// obsolete `En` carries the state resolved from the preceding `Es` request.
+pub(super) fn is_enclosure_macro(macro_name: Option<&str>) -> bool {
+    macro_name.is_some_and(|name| enclosure_marks(name).is_some())
+        || matches!(macro_name, Some("Eo" | "En"))
+}
+
+fn enclosure_marks(name: &str) -> Option<(&'static str, &'static str)> {
+    match name {
+        "Op" | "Oo" | "Bq" | "Bo" => Some(("[", "]")),
+        "Dq" | "Do" | "Qq" | "Qo" => Some(("“", "”")),
+        "Sq" | "So" | "Ql" => Some(("‘", "’")),
+        "Pq" | "Po" => Some(("(", ")")),
+        "Brq" | "Bro" => Some(("{", "}")),
+        "Aq" | "Ao" => Some(("<", ">")),
+        _ => None,
+    }
 }
 
 /// Convert libmandoc's validated deep-link marker into a zero-width IR node.
@@ -380,6 +443,16 @@ fn surround(open: &str, mut children: Vec<Inline>, close: &str) -> Vec<Inline> {
     result.append(&mut children);
     result.extend(text_node(close));
     result
+}
+
+fn surround_fragments(
+    mut opening: Vec<Inline>,
+    mut children: Vec<Inline>,
+    mut closing: Vec<Inline>,
+) -> Vec<Inline> {
+    opening.append(&mut children);
+    opening.append(&mut closing);
+    opening
 }
 
 fn text_node(value: &str) -> Vec<Inline> {

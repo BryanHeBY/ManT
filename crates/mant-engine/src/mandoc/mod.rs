@@ -10,7 +10,7 @@ mod reference;
 mod roff_escape;
 mod source;
 
-use std::path::Path;
+use std::{cell::RefCell, path::Path};
 
 use libmandoc_rs::{
     Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseOptions,
@@ -121,6 +121,7 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref());
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
+    diagnostics.extend(context.take_diagnostics());
     let explicit_targets = navigation::explicit_targets(&parsed.root);
     let mut retained_targets = explicit_targets.clone();
     let mut root_blocks = Vec::new();
@@ -173,6 +174,7 @@ fn normalize_metadata(value: Option<&str>) -> Option<String> {
 struct LoweringContext<'a> {
     default_name: Option<&'a str>,
     next_section_id: usize,
+    diagnostics: RefCell<Vec<Diagnostic>>,
 }
 
 impl<'a> LoweringContext<'a> {
@@ -180,6 +182,7 @@ impl<'a> LoweringContext<'a> {
         Self {
             default_name,
             next_section_id: 1,
+            diagnostics: RefCell::new(Vec::new()),
         }
     }
 
@@ -207,6 +210,22 @@ impl<'a> LoweringContext<'a> {
             format!("{slug}-{sequence}")
         }
     }
+
+    fn warn_unhandled_structural_parts(&self, node: &Node) {
+        let macro_name = node.macro_name.as_deref().unwrap_or("unknown");
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.unhandled-structural-parts".to_owned()),
+            message: format!(
+                "structural macro '{macro_name}' contains visible head or tail content without a lowering policy"
+            ),
+            source: source_span(node),
+        });
+    }
+
+    fn take_diagnostics(&self) -> Vec<Diagnostic> {
+        self.diagnostics.take()
+    }
 }
 
 fn source_span(node: &Node) -> Option<SourceSpan> {
@@ -232,12 +251,24 @@ mod tests {
 
     use mant_ir::{Block, DiagnosticLevel, Inline, SourceFormat};
 
-    use super::{parse_manual_bytes, parse_manual_source};
+    use super::{Parser, lower_mandoc_document, parse_manual_bytes, parse_manual_source};
 
     fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
         fs::write(&path, source).expect("write temporary roff fixture");
         path
+    }
+
+    fn find_macro_mut<'a>(
+        node: &'a mut libmandoc_rs::Node,
+        name: &str,
+    ) -> Option<&'a mut libmandoc_rs::Node> {
+        if node.macro_name.as_deref() == Some(name) {
+            return Some(node);
+        }
+        node.children
+            .iter_mut()
+            .find_map(|child| find_macro_mut(child, name))
     }
 
     #[test]
@@ -827,6 +858,100 @@ mod tests {
             panic!("expected one special-character paragraph");
         };
         assert_eq!(inline_text(children), "– — ' \" © ® ™ • ^ ~ \\");
+    }
+
+    #[test]
+    fn preserves_explicit_mdoc_function_and_enclosure_structure() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("explicit-mdoc.1"),
+            b".Dd August 17, 2026\n\
+.Dt EXPLICIT-MDOC 1\n\
+.Os\n\
+.Sh NAME\n\
+.Nm explicit-mdoc\n\
+.Nd exercise explicit blocks\n\
+.Sh FUNCTION\n\
+.Ft int\n\
+.Fo audit_open\n\
+.Fa const char *path\n\
+.Fa int flags\n\
+.Fc\n\
+.Sh ENCLOSURES\n\
+.Ao\nangle\n.Ac\n\
+.Bo\nbracket\n.Bc\n\
+.Do\ndouble\n.Dc\n\
+.Po\nparenthesized\n.Pc\n\
+.Qo\nquoted\n.Qc\n\
+.So\nsingle\n.Sc\n\
+.Bro\nbraced\n.Brc\n\
+.Oo\noptional\n.Oc\n\
+.Eo <<\ngeneric\n.Ec >>\n\
+.Es [[ ]]\n\
+.En custom\n",
+        )
+        .expect("lower explicit mdoc blocks");
+
+        let function = &document.sections[1];
+        let [
+            Block::Paragraph {
+                children: return_type,
+                ..
+            },
+            Block::Paragraph {
+                children: declaration,
+                ..
+            },
+        ] = function.blocks.as_slice()
+        else {
+            panic!("expected return type and function declaration paragraphs");
+        };
+        assert_eq!(inline_text(return_type), "int");
+        assert_eq!(
+            inline_text(declaration),
+            "audit_open(const char *path, int flags)"
+        );
+        assert!(matches!(
+            declaration.first(),
+            Some(Inline::Strong { children }) if inline_text(children) == "audit_open"
+        ));
+
+        let [Block::Paragraph { children, .. }] = document.sections[2].blocks.as_slice() else {
+            panic!("expected one enclosure paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "<angle> [bracket] “double” (parenthesized) “quoted” ‘single’ {braced} \
+             [optional] <<generic>> [[custom]]"
+        );
+        assert_eq!(document.diagnostics.len(), 2);
+        assert!(
+            document
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.message.starts_with("obsolete macro:")),
+            "{:?}",
+            document.diagnostics
+        );
+    }
+
+    #[test]
+    fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
+        let mut report = Parser::default()
+            .parse_bytes(
+                "future-structure.1",
+                b".Dd August 17, 2026\n.Dt FUTURE 1\n.Os\n.Sh SYNOPSIS\n\
+.Fo future_call\n.Fa argument\n.Fc\n",
+            )
+            .expect("parse structural fixture");
+        let block = find_macro_mut(&mut report.document.root, "Fo").expect("Fo block");
+        block.macro_name = Some("FutureBlock".to_owned());
+
+        let document = lower_mandoc_document(std::path::Path::new("future-structure.1"), &report);
+
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.unhandled-structural-parts")
+                && diagnostic.message.contains("FutureBlock")
+        }));
     }
 
     #[test]

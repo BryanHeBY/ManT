@@ -133,6 +133,7 @@ The following macros receive dedicated inline treatment:
 | Section link | `Sx` |
 | No-space control | `Ns`, `Pf` |
 | Apostrophe attachment | `Ap` |
+| Multi-line function declaration | `Fo`, `Fa`, `Fc` |
 
 Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 
@@ -145,10 +146,14 @@ Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 | Parentheses | `Pq`, `Po` | `Pc` |
 | Braces | `Brq`, `Bro` | `Brc` |
 | Angles | `Aq`, `Ao` | `Ac` |
+| Arbitrary | `Eo opening`, body | `Ec closing` |
+| Stateful (obsolete) | `Es opening closing`, then `En` | Resolved per `En` use |
 
-The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter.
+The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter. `Eo` and `Ec` retain their literal, author-supplied delimiters. The obsolete `Es` macro changes parser state but emits no text; libmandoc resolves that state onto each `En` invocation before ManT lowers it.
 
-Other standard mdoc semantic macros, including `Fn`, `Fo`, `Fc`, `In`, `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
+`Fo` retains the function name from its structural head and joins contained `Fa` arguments into a visible declaration. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2)` rather than discarding the function name.
+
+Other standard mdoc semantic macros, including `Fn`, `In`, `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
 
 ## Roff Requests
 

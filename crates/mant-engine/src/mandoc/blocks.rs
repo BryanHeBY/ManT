@@ -12,8 +12,8 @@ use mant_ir::{
 use super::{
     LoweringContext,
     inline::{
-        FilledBoundary, InlineBuilder, append_inline_node, lower_inline_nodes, parse_roff_text,
-        plain_text, terms_fit_inline,
+        FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
+        parse_roff_text, plain_text, terms_fit_inline,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -306,25 +306,64 @@ fn lower_structural_node(
             lower_link_block(output, node, context, indent_columns, paragraph_distance);
         }
         Some("SY") => lower_man_synopsis(output, node, context, indent_columns, paragraph_distance),
+        Some("Fo") => lower_mdoc_function(output, node, context, indent_columns),
         _ if node.kind == NodeKind::Table => {
             append_table_row(output, node, indent_columns);
         }
         _ if node.kind == NodeKind::Equation => output.push(equation_block(node, indent_columns)),
-        _ => {
-            let body = part_children(node, NodeKind::Body);
-            let children = if body.is_empty() {
-                node.children.as_slice()
-            } else {
-                body
-            };
-            output.extend(lower_blocks(
-                children,
-                context,
-                indent_columns,
-                paragraph_distance,
-            ));
-        }
+        _ => lower_structural_fallback(output, node, context, indent_columns, paragraph_distance),
     }
+}
+
+fn lower_structural_fallback(
+    output: &mut Vec<Block>,
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+) {
+    let body = part_children(node, NodeKind::Body);
+    let head = part_children(node, NodeKind::Head);
+    let tail = part_children(node, NodeKind::Tail);
+    if parts_have_visible_text(head, context.default_name)
+        || parts_have_visible_text(tail, context.default_name)
+    {
+        context.warn_unhandled_structural_parts(node);
+    }
+    let children = if body.is_empty() {
+        node.children.as_slice()
+    } else {
+        body
+    };
+    output.extend(lower_blocks(
+        children,
+        context,
+        indent_columns,
+        paragraph_distance,
+    ));
+}
+
+fn parts_have_visible_text(nodes: &[Node], default_name: Option<&str>) -> bool {
+    !plain_text(&lower_inline_nodes(nodes, default_name))
+        .trim()
+        .is_empty()
+}
+
+fn lower_mdoc_function(
+    output: &mut Vec<Block>,
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+) {
+    let children = lower_inline_nodes(std::slice::from_ref(node), context.default_name);
+    if children.is_empty() {
+        return;
+    }
+    output.push(Block::Paragraph {
+        children,
+        layout: layout(indent_columns),
+        source: source_span(node),
+    });
 }
 
 fn equation_block(node: &Node, indent_columns: u16) -> Block {
@@ -1188,10 +1227,8 @@ fn flush_preformatted(
 
 fn is_inline(node: &Node) -> bool {
     matches!(node.kind, NodeKind::Text | NodeKind::Element)
-        || matches!(
-            node.macro_name.as_deref(),
-            Some("Nm" | "Nd" | "Op" | "Oo" | "Dq" | "Sq" | "Pq" | "Bq" | "Brq" | "Aq")
-        )
+        || is_enclosure_macro(node.macro_name.as_deref())
+        || matches!(node.macro_name.as_deref(), Some("Nm" | "Nd"))
 }
 
 fn is_nonprinting_request(node: &Node) -> bool {
