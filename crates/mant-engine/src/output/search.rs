@@ -87,13 +87,19 @@ pub fn render_search_text_with(
         return output.finish();
     }
 
+    let mut previous_outline = None;
     for (index, found) in search.matches.iter().enumerate() {
-        if index > 0 {
-            output.line();
-            output.line();
+        if previous_outline != Some(&found.outline) {
+            if index > 0 {
+                output.line();
+                output.line();
+            }
+            output.push(SearchTextRole::Document, &label);
+            output.plain("  ");
+            render_outline_trail(&mut output, &found.outline);
         }
-        output.push(SearchTextRole::Document, &label);
-        output.plain(":");
+        output.line();
+        output.plain("  ");
         output.push(
             SearchTextRole::Coordinate,
             &format!(
@@ -101,19 +107,14 @@ pub fn render_search_text_with(
                 found.markdown.start_line, found.markdown.start_column
             ),
         );
-        output.plain("  ");
-        render_outline_trail(&mut output, &found.outline);
-        output.line();
         if found.context.is_empty() {
             output.plain("  ");
             let visible = render_search_line_text(&found.preview);
             output.matching_line(&visible, &found.matched_text);
         } else {
-            for (line_index, line) in found.context.iter().enumerate() {
-                if line_index > 0 {
-                    output.line();
-                }
-                output.plain("  ");
+            for line in &found.context {
+                output.line();
+                output.plain("    ");
                 output.push(
                     if line.matched {
                         SearchTextRole::Match
@@ -133,6 +134,7 @@ pub fn render_search_text_with(
                 }
             }
         }
+        previous_outline = Some(&found.outline);
     }
     if let Some(next_offset) = search.next_offset {
         output.line();
@@ -419,7 +421,7 @@ mod tests {
         let result = result();
         assert!(
             render_search_text(&result)
-                .contains("tar(1):824:3  Outline 5.3/e17: Archive options > --acls")
+                .contains("tar(1)  Outline 5.3/e17: Archive options > --acls\n  824:3  --acls")
         );
         assert!(render_search_text(&result).contains("  --acls"));
         assert!(!render_search_text(&result).contains("`--acls`"));
@@ -450,5 +452,37 @@ mod tests {
         assert!(rendered.contains("  <match>--acls</match>"));
         assert!(!rendered.contains("<match>  --acls</match>"));
         assert!(!rendered.contains('`'));
+    }
+
+    #[test]
+    fn search_text_groups_adjacent_matches_by_exact_outline_node() {
+        let mut result = result();
+        let mut second = result.matches[0].clone();
+        second.ordinal = 2;
+        second.markdown.start_line = 825;
+        second.markdown.end_line = 825;
+        second.markdown.start_column = 7;
+        second.markdown.end_column = 13;
+
+        let mut third = second.clone();
+        third.ordinal = 3;
+        third.markdown.start_line = 900;
+        third.markdown.end_line = 900;
+        third.outline.node = OutlineNodeReference::DocumentSection {
+            path: "6".to_owned().into(),
+            id: "examples".to_owned().into(),
+            title: "Examples".to_owned(),
+        };
+        third.outline.ancestors.clear();
+
+        result.total = 3;
+        result.returned = 3;
+        result.matches.extend([second, third]);
+        let rendered = render_search_text(&result);
+
+        assert_eq!(rendered.matches("Outline 5.3/e17").count(), 1);
+        assert!(rendered.contains("  824:3  --acls\n  825:7  --acls"));
+        assert_eq!(rendered.matches("Outline 6: Examples").count(), 1);
+        assert!(rendered.contains("\n\ntar(1)  Outline 6: Examples\n  900:7  --acls"));
     }
 }

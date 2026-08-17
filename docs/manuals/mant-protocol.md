@@ -1085,6 +1085,8 @@ engine page, and permits zero through five context lines. Every successful
 tool result is capped at 32 KiB of UTF-8 and continues at paragraph or line
 boundaries with the same opaque cursor convention. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
+Adjacent search occurrences owned by the same exact outline node share one
+document-and-trail header while retaining an individual line and column.
 This keeps model-visible results aligned with the CLI's human presentations
 without ANSI escapes, duplicated JSON, schema markers, producer metadata,
 physical source paths, or non-fatal diagnostics. Protocol-level and validation
