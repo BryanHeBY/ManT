@@ -17,10 +17,16 @@ deterministic output without owning a terminal or command-line process.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized IR.
-- Installed-client and private tldr cache discovery and updates.
+- Installed-client and private tldr cache discovery. Explicit subprocess-backed
+  updates are available only with the opt-in `tldr-update` feature.
 
 Process argument parsing, MCP transport, and interactive presentation remain
 outside this crate.
+
+The default feature set is read-only with respect to tldr data. The native
+`mant` composition root enables `tldr-update`; library consumers, renderers,
+and MCP-oriented embeddings do not receive subprocess update authority unless
+they request it explicitly.
 
 ## Execution pipeline
 

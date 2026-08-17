@@ -211,6 +211,13 @@ the combined policy. Manual-only excludes it, and tldr-only omits the full
 document. The CLI recognizes only explicit section forms; dotted logical names
 are never reinterpreted after a failed lookup.
 
+The engine's default tldr feature set is read-only. Subprocess-backed updates
+through an installed tldr client or Git are compiled only by the opt-in
+`tldr-update` feature, which the native `mant` composition root enables. This
+matches `mant-sources`: reusable engine consumers receive local discovery and
+parsing without implicit update authority, while MCP exposes no update entry
+point even in the full executable.
+
 ## Presentation boundaries
 
 ### Interactive TUI

@@ -13,15 +13,19 @@ use std::{
 
 use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
-use crate::{
-    executable::{environment_value, find_executable},
-    source::CommandOutput,
-};
+use crate::executable::{environment_value, find_executable};
 
 use super::cache::{HostPlatform, TldrCacheError, get_tldr_cache_dir};
 
 const DEFAULT_REPOSITORY: &str = "https://github.com/tldr-pages/tldr.git";
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CommandOutput {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    exit_code: i32,
+}
 
 /// Failure to refresh an installed client or `ManT`'s private checkout.
 #[derive(Debug)]
@@ -402,9 +406,9 @@ mod tests {
 
     use mant_protocol::{TldrCacheAction, TldrCacheUpdate};
 
-    use crate::source::CommandOutput;
-
-    use super::{HostPlatform, TldrUpdateError, TldrUpdateHost, update_tldr_cache_with};
+    use super::{
+        CommandOutput, HostPlatform, TldrUpdateError, TldrUpdateHost, update_tldr_cache_with,
+    };
 
     type Call = (PathBuf, Vec<OsString>);
 

@@ -13,6 +13,13 @@ keywords = ["man", "mdoc", "roff", "markdown", "parser"]
 categories = ["parser-implementations", "text-processing"]
 include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = []
+tldr-update = []
+
 [dependencies]
 grep-matcher.workspace = true
 grep-regex.workspace = true

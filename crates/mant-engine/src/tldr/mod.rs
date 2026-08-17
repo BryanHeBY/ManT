@@ -1,7 +1,8 @@
-//! Offline tldr page parsing, cache discovery, and explicit update operations.
+//! Offline tldr parsing and cache discovery, with optional explicit updates.
 
 mod cache;
 mod parser;
+#[cfg(feature = "tldr-update")]
 mod update;
 
 pub use cache::{
@@ -10,4 +11,5 @@ pub use cache::{
     read_cached_tldr_page,
 };
 pub use parser::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
+#[cfg(feature = "tldr-update")]
 pub use update::{TldrUpdateError, update_tldr_cache};

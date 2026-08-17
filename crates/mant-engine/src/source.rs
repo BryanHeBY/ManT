@@ -200,14 +200,6 @@ fn compare_manual_sections(
     }
 }
 
-/// Minimal subprocess result shared by external data update operations.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct CommandOutput {
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
-    pub exit_code: i32,
-}
-
 /// Expected source-discovery failures suitable for a user-facing CLI error.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LocateError {
