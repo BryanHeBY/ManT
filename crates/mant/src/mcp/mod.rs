@@ -4,266 +4,41 @@
 //! `mant`. It exposes the same stable outline, excerpt, and search
 //! projections as the direct CLI over MCP's standard-input/output transport.
 
-use std::{
-    io,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-};
+mod params;
+mod presentation;
+mod service;
+mod transport;
 
-use mant_engine::{QueryPolicy, QueryViewResult};
+use mant_engine::QueryViewResult;
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, DocumentCatalog, NodeSelector, OutlineDetail, QueryExcerpt,
-    QueryInput, QueryOutline, QueryRequest, QuerySearch, QueryView, SearchCase, SearchScope,
-    SearchSyntax, default_search_limit,
+    DocumentCatalog, OutlineDetail, QueryExcerpt, QueryOutline, QueryRequest, QueryView,
+    default_search_limit,
+};
+use params::{
+    DocumentListParams, ExplainParams, GetParams, OutlineParams, SearchParams, catalog_query,
+    non_empty, request_for, validate_document_list,
+};
+use presentation::{
+    prepare_excerpt as prepare_excerpt_for_mcp, prepare_outline as prepare_outline_for_mcp,
+    prepare_search as prepare_search_for_mcp,
 };
 use rmcp::{
-    Json, ServerHandler, ServiceExt,
+    Json, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{Implementation, ServerCapabilities, ServerInfo},
     tool, tool_handler, tool_router,
 };
-use schemars::JsonSchema;
-use serde::Deserialize;
-use tokio::{
-    io::{AsyncRead, ReadBuf},
-    sync::Semaphore,
-    task,
-};
+use service::QueryService;
 
-// ── Stdio process boundary ────────────────────────────────────────────────
+pub(super) use transport::run_stdio;
 
-/// Upper bound on one newline-delimited MCP request, in bytes.
-///
-/// rmcp's stdio transport reads each JSON-RPC message with an unbounded
-/// `read_until(b'\n', ..)`, so a peer that streams bytes without a newline
-/// would grow the read buffer without limit. This cap keeps generous headroom
-/// for large legitimate tool inputs while bounding that growth, mirroring the
-/// intent of the direct CLI's own stdin cap (`MAX_REQUEST_BYTES`).
-const MAX_MCP_LINE_BYTES: usize = 8 * 1024 * 1024;
+#[cfg(test)]
+use transport::LineBoundedReader;
 
-/// Run the MCP server until the peer closes its standard-input stream.
-///
-/// The transport is deliberately silent: MCP hosts own process logging and
-/// tool failures already use structured protocol errors. Native lowering
-/// diagnostics remain available through the ordinary CLI JSON surface.
-pub(super) async fn run_stdio() -> u8 {
-    let transport = (
-        LineBoundedReader::new(tokio::io::stdin(), MAX_MCP_LINE_BYTES),
-        tokio::io::stdout(),
-    );
-    let Ok(service) = MantMcpServer::new().serve(transport).await else {
-        return 1;
-    };
-
-    match service.waiting().await {
-        Ok(_) => 0,
-        Err(_) => 1,
-    }
-}
-
-/// Wraps an [`AsyncRead`] and fails once a single line exceeds `max_line`.
-///
-/// The transport frames requests on `\n`, so counting bytes since the last
-/// newline bounds one request. Exceeding the limit surfaces an I/O error that
-/// ends the read loop rather than letting the buffer grow without limit.
-struct LineBoundedReader<R> {
-    inner: R,
-    max_line: usize,
-    since_newline: usize,
-    tripped: bool,
-}
-
-impl<R> LineBoundedReader<R> {
-    fn new(inner: R, max_line: usize) -> Self {
-        Self {
-            inner,
-            max_line,
-            since_newline: 0,
-            tripped: false,
-        }
-    }
-}
-
-impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        // The AsyncRead contract requires that an error poll fill no bytes.
-        // A prior read that pushed the line past the cap therefore reports the
-        // overrun here, on its own poll, before touching the inner reader.
-        if self.tripped {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "MCP request line exceeded the maximum allowed length",
-            )));
-        }
-
-        let start = buf.filled().len();
-        let poll = Pin::new(&mut self.inner).poll_read(cx, buf);
-        if let Poll::Ready(Ok(())) = &poll {
-            let new = &buf.filled()[start..];
-            match new.iter().rposition(|&byte| byte == b'\n') {
-                Some(last_newline) => self.since_newline = new.len() - last_newline - 1,
-                None => self.since_newline += new.len(),
-            }
-            // Trip on overrun; the next poll returns the error with nothing
-            // filled. At most one buffer's worth passes beyond the cap.
-            self.tripped = self.since_newline > self.max_line;
-        }
-        poll
-    }
-}
-
-// ── MCP parameter contracts ──────────────────────────────────────────────
-
-/// A document name resolved through registered Markdown and native manual paths.
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct DocumentSelector {
-    /// Registered Markdown or manual page name, for example `git` or `mant`.
-    name: String,
-    /// Optional configured Markdown source. It bypasses root documents and manuals.
-    source: Option<String>,
-    /// Optional native manual category. Supplying it bypasses registered Markdown.
-    manual_section: Option<String>,
-}
-
-/// Parameters for the hierarchy-discovery tool.
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct OutlineParams {
-    #[serde(flatten)]
-    selector: DocumentSelector,
-    /// Include only sections, or include every addressable semantic entry.
-    detail: Option<OutlineDetail>,
-}
-
-/// Parameters for retrieving one or more outline nodes.
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct GetParams {
-    #[serde(flatten)]
-    selector: DocumentSelector,
-    /// Outline paths, stable IDs, or entry aliases returned by `mant_document_outline`.
-    #[schemars(length(min = 1))]
-    #[serde(deserialize_with = "lenient_selectors")]
-    selectors: Vec<NodeSelector>,
-}
-
-/// Parameters for resolving a single option, command, variable, or environment entry.
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ExplainParams {
-    #[serde(flatten)]
-    selector: DocumentSelector,
-    /// Option spelling, command or variable name, outline path, or stable ID.
-    entry: String,
-}
-
-/// Parameters for structure-aware manual search.
-#[derive(Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct SearchParams {
-    #[serde(flatten)]
-    selector: DocumentSelector,
-    /// Literal text or a regular expression, depending on `syntax`.
-    #[schemars(length(min = 1, max = 4096))]
-    pattern: String,
-    /// Interpret `pattern` literally (the default) or as a regular expression.
-    syntax: Option<SearchSyntax>,
-    /// Case-folding policy. The default is `insensitive`.
-    case: Option<SearchCase>,
-    /// Search visible text (the default) or generated `CommonMark` source.
-    scope: Option<SearchScope>,
-    /// Restrict matches to Unicode-aware word boundaries.
-    #[serde(default, deserialize_with = "lenient_scalar")]
-    word: Option<bool>,
-    /// Full Markdown lines of context before and after each match, at most 100.
-    #[schemars(range(max = 100))]
-    #[serde(default, deserialize_with = "lenient_scalar", alias = "context_lines")]
-    context_lines: Option<u16>,
-    /// Maximum result count from 1 through 10,000. The default is 100.
-    #[schemars(range(min = 1, max = 10000))]
-    #[serde(default, deserialize_with = "lenient_scalar")]
-    limit: Option<u32>,
-    /// Number of matches to skip for deterministic pagination.
-    #[serde(default, deserialize_with = "lenient_scalar")]
-    offset: Option<u32>,
-}
-
-/// Filters and pagination for the unified local document catalog.
-#[derive(Debug, Default, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct DocumentListParams {
-    /// Case-insensitive substring applied to document names.
-    query: Option<String>,
-    /// Restrict discovery to registered Markdown or manual pages.
-    kind: Option<CatalogDocumentKind>,
-    /// Interpret `query` literally (the default) or as a regular expression.
-    syntax: Option<SearchSyntax>,
-    /// Case-folding policy. The default is `insensitive`.
-    case: Option<SearchCase>,
-    /// Restrict manual pages to one exact manual category; excludes Markdown entries.
-    manual_section: Option<String>,
-    /// Restrict Markdown discovery to one configured source.
-    source: Option<String>,
-    /// Maximum entries returned from 1 through 10,000. The default is 100.
-    #[schemars(range(min = 1, max = 10000))]
-    #[serde(default, deserialize_with = "lenient_scalar")]
-    limit: Option<u32>,
-    /// Number of matching entries to skip for deterministic pagination.
-    #[serde(default, deserialize_with = "lenient_scalar")]
-    offset: Option<u32>,
-}
-
-/// Accepts a native scalar or its stringified spelling such as `"10"` or `"True"`.
-fn lenient_scalar<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: serde::de::DeserializeOwned + std::str::FromStr,
-    T::Err: std::fmt::Display,
-{
-    use serde::de::Error as _;
-
-    let value = serde_json::Value::deserialize(deserializer)?;
-    match value {
-        serde_json::Value::Null => Ok(None),
-        serde_json::Value::String(text) => text
-            .trim()
-            .to_ascii_lowercase()
-            .parse()
-            .map(Some)
-            .map_err(|error| D::Error::custom(format!("cannot parse {text:?}: {error}"))),
-        other => serde_json::from_value(other)
-            .map(Some)
-            .map_err(D::Error::custom),
-    }
-}
-
-const SELECTORS_HINT: &str =
-    r#"selectors must be an array of outline selectors such as ["2","1/e1"]"#;
-
-/// Accepts a selector array, one bare selector, or a stringified JSON array.
-fn lenient_selectors<'de, D>(deserializer: D) -> Result<Vec<NodeSelector>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error as _;
-
-    let value = serde_json::Value::deserialize(deserializer)?;
-    let value = match value {
-        serde_json::Value::String(text) => match serde_json::from_str(&text) {
-            Ok(parsed @ serde_json::Value::Array(_)) => parsed,
-            _ => return Ok(vec![text.into()]),
-        },
-        other => other,
-    };
-    serde_json::from_value(value)
-        .map_err(|error| D::Error::custom(format!("{error}; {SELECTORS_HINT}")))
-}
+#[cfg(test)]
+use params::DocumentSelector;
+#[cfg(test)]
+use service::query_error_for_mcp;
 
 // ── Query execution ──────────────────────────────────────────────────────
 
@@ -275,69 +50,19 @@ where
 #[derive(Debug, Clone)]
 struct MantMcpServer {
     tool_router: ToolRouter<Self>,
-    query_gate: Arc<Semaphore>,
+    query_service: QueryService,
 }
 
 impl MantMcpServer {
     fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),
-            query_gate: Arc::new(Semaphore::new(1)),
+            query_service: QueryService::new(),
         }
     }
 
     async fn query(&self, request: QueryRequest) -> Result<QueryViewResult, String> {
-        let permit = Arc::clone(&self.query_gate)
-            .acquire_owned()
-            .await
-            .map_err(|_| "MCP query service is shutting down".to_owned())?;
-        task::spawn_blocking(move || {
-            let _permit = permit;
-            mant_engine::execute_query(&request, QueryPolicy::default())
-                .map_err(query_error_for_mcp)
-        })
-        .await
-        .map_err(|error| format!("MCP query worker failed: {error}"))?
-    }
-}
-
-fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> String {
-    use mant_engine::{ManualLoadError, QueryError, QueryExecutionError};
-
-    fn manual_error_for_mcp(error: &ManualLoadError) -> String {
-        match error {
-            ManualLoadError::NotFound { name, .. } => {
-                format!("manual '{name}' was not found")
-            }
-            ManualLoadError::Parse { name, .. } => {
-                format!("could not parse manual '{name}'")
-            }
-            ManualLoadError::Empty { name, .. } => {
-                format!("manual '{name}' contained no readable sections")
-            }
-        }
-    }
-
-    let QueryExecutionError::Query(error) = error else {
-        return error.to_string();
-    };
-    match error {
-        QueryError::Markdown { .. } => {
-            "could not load or parse the selected Markdown document".to_owned()
-        }
-        QueryError::EmptyMarkdown { .. } => {
-            "the selected Markdown document has no readable content".to_owned()
-        }
-        QueryError::Registry { .. } => "registered document discovery failed".to_owned(),
-        QueryError::Manual(error) => manual_error_for_mcp(&error),
-        QueryError::ManualWithTldr { error, topic } => format!(
-            "{}; a tldr entry is available for '{topic}'",
-            manual_error_for_mcp(&error)
-        ),
-        QueryError::Tldr { topic, .. } => {
-            format!("could not load the tldr entry for '{topic}'")
-        }
-        other => other.to_string(),
+        self.query_service.query(request).await
     }
 }
 
@@ -358,17 +83,8 @@ impl MantMcpServer {
         parameters: Parameters<DocumentListParams>,
     ) -> Result<Json<DocumentCatalog>, String> {
         let parameters = validate_document_list(parameters.0)?;
-        let permit = Arc::clone(&self.query_gate)
-            .acquire_owned()
-            .await
-            .map_err(|_| "MCP query service is shutting down".to_owned())?;
         let query = catalog_query(&parameters);
-        let catalog = task::spawn_blocking(move || {
-            let _permit = permit;
-            mant_engine::discover_documents(&query)
-        })
-        .await
-        .map_err(|error| format!("MCP document discovery worker failed: {error}"))??;
+        let catalog = self.query_service.discover(query).await?;
         Ok(Json(catalog))
     }
 
@@ -497,101 +213,6 @@ impl ServerHandler for MantMcpServer {
             .with_instructions(
                 "Read locally installed Markdown documents and manual pages by name. Use mant_documents_list for discovery, optionally select a configured source, then call mant_document_outline before retrieving IDs, paths, or aliases. Files may change between calls; this server does not update sources.",
             )
-    }
-}
-
-// ── Input validation ─────────────────────────────────────────────────────
-
-fn validate_document_list(
-    mut parameters: DocumentListParams,
-) -> Result<DocumentListParams, String> {
-    parameters.query = parameters
-        .query
-        .map(|query| query.trim().to_owned())
-        .filter(|query| !query.is_empty());
-    parameters.manual_section = parameters
-        .manual_section
-        .map(|manual_section| non_empty(&manual_section, "manualSection"))
-        .transpose()?;
-    parameters.source = parameters
-        .source
-        .map(|source| non_empty(&source, "source"))
-        .transpose()?;
-    if parameters.source.is_some() && parameters.manual_section.is_some() {
-        return Err("source and manualSection cannot be combined".to_owned());
-    }
-    let limit = parameters.limit.unwrap_or(100);
-    if !(1..=10_000).contains(&limit) {
-        return Err("limit must be between 1 and 10000".to_owned());
-    }
-    parameters.limit = Some(limit);
-    parameters.offset = Some(parameters.offset.unwrap_or(0));
-    Ok(parameters)
-}
-
-fn catalog_query(parameters: &DocumentListParams) -> CatalogQuery {
-    CatalogQuery {
-        pattern: parameters.query.clone(),
-        syntax: parameters.syntax.unwrap_or_default(),
-        case: parameters.case.unwrap_or_default(),
-        kind: parameters.kind,
-        source: parameters.source.clone(),
-        manual_section: parameters.manual_section.clone(),
-        limit: parameters.limit.unwrap_or(100),
-        offset: parameters.offset.unwrap_or(0),
-    }
-}
-
-/// Keep lowering diagnostics out of the agent-facing transport.
-///
-/// The ordinary CLI JSON representation remains the inspection surface for
-/// these findings. MCP callers receive only selected document content and
-/// structured tool errors, avoiding repeated parser noise in agent context.
-fn prepare_excerpt_for_mcp(excerpt: &mut QueryExcerpt) {
-    excerpt.diagnostics.clear();
-    discard_document_source_path(&mut excerpt.source);
-    for selection in &mut excerpt.selections {
-        if let mant_protocol::ExcerptSelection::Tldr { document, .. } = selection {
-            document.source_path.clear();
-        }
-    }
-}
-
-/// Retain useful semantic results while omitting diagnostics and host paths.
-fn prepare_outline_for_mcp(outline: &mut QueryOutline) {
-    outline.diagnostics.clear();
-    discard_document_source_path(&mut outline.source);
-}
-
-fn prepare_search_for_mcp(search: &mut QuerySearch) {
-    discard_document_source_path(&mut search.source);
-}
-
-fn discard_document_source_path(source: &mut Option<mant_ir::DocumentSource>) {
-    if let Some(source) = source {
-        source.path = None;
-    }
-}
-
-fn request_for(selector: DocumentSelector, view: QueryView) -> QueryRequest {
-    let input = QueryInput::Document {
-        selector: selector.name,
-        source: selector.source,
-        manual_section: selector.manual_section,
-    };
-    QueryRequest {
-        schema: mant_protocol::RequestSchema::V0Dot8,
-        input,
-        view,
-    }
-}
-
-fn non_empty(value: &str, field: &str) -> Result<String, String> {
-    let value = value.trim();
-    if value.is_empty() {
-        Err(format!("{field} must not be empty"))
-    } else {
-        Ok(value.to_owned())
     }
 }
 
