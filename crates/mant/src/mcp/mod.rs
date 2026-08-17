@@ -435,4 +435,28 @@ mod tests {
             .expect_err("oversized line");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
+
+    #[tokio::test]
+    async fn line_bounded_reader_rejects_an_oversized_completed_line() {
+        let reader = std::io::Cursor::new(b"12345\n".to_vec());
+        let mut bounded = super::transport::LineBoundedReader::new(reader, 4);
+        let mut output = Vec::new();
+        let error = bounded
+            .read_to_end(&mut output)
+            .await
+            .expect_err("oversized completed line");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[tokio::test]
+    async fn line_bounded_reader_rejects_an_oversized_line_before_a_valid_line() {
+        let reader = std::io::Cursor::new(b"12345\nok\n".to_vec());
+        let mut bounded = super::transport::LineBoundedReader::new(reader, 4);
+        let mut output = Vec::new();
+        let error = bounded
+            .read_to_end(&mut output)
+            .await
+            .expect_err("oversized line must not be hidden by a later newline");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
 }

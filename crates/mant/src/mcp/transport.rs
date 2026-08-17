@@ -1,6 +1,7 @@
 //! Bounded stdio transport for the local MCP subprocess.
 
 use std::{
+    collections::VecDeque,
     io,
     pin::Pin,
     task::{Context, Poll},
@@ -36,6 +37,7 @@ pub(super) struct LineBoundedReader<R> {
     max_line: usize,
     since_newline: usize,
     tripped: bool,
+    pending: VecDeque<u8>,
 }
 
 impl<R> LineBoundedReader<R> {
@@ -45,6 +47,7 @@ impl<R> LineBoundedReader<R> {
             max_line,
             since_newline: 0,
             tripped: false,
+            pending: VecDeque::new(),
         }
     }
 }
@@ -63,15 +66,43 @@ impl<R: AsyncRead + Unpin> AsyncRead for LineBoundedReader<R> {
         }
 
         let start = buf.filled().len();
-        let poll = Pin::new(&mut self.inner).poll_read(cx, buf);
-        if let Poll::Ready(Ok(())) = &poll {
-            let new = &buf.filled()[start..];
-            match new.iter().rposition(|&byte| byte == b'\n') {
-                Some(last_newline) => self.since_newline = new.len() - last_newline - 1,
-                None => self.since_newline += new.len(),
-            }
-            self.tripped = self.since_newline > self.max_line;
+        while buf.remaining() > 0 {
+            let Some(byte) = self.pending.pop_front() else {
+                break;
+            };
+            buf.put_slice(&[byte]);
         }
-        poll
+        if buf.filled().len() > start || buf.remaining() == 0 {
+            return Poll::Ready(Ok(()));
+        }
+
+        let mut storage = [0_u8; 8 * 1024];
+        let mut staged = ReadBuf::new(&mut storage);
+        match Pin::new(&mut self.inner).poll_read(cx, &mut staged) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(error)) => Poll::Ready(Err(error)),
+            Poll::Ready(Ok(())) => {
+                let new = staged.filled();
+                for byte in new {
+                    if *byte == b'\n' {
+                        self.since_newline = 0;
+                        continue;
+                    }
+                    self.since_newline = self.since_newline.saturating_add(1);
+                    if self.since_newline > self.max_line {
+                        self.tripped = true;
+                        return Poll::Ready(Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "MCP request line exceeded the maximum allowed length",
+                        )));
+                    }
+                }
+
+                let delivered = buf.remaining().min(new.len());
+                buf.put_slice(&new[..delivered]);
+                self.pending.extend(&new[delivered..]);
+                Poll::Ready(Ok(()))
+            }
+        }
     }
 }
