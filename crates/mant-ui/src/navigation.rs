@@ -184,7 +184,13 @@ fn continuation_prefix(node: &NavNode, expanded: bool) -> String {
         return "  ".to_owned();
     }
     let mut prefix = "│ ".repeat(node.depth);
-    if node.depth > 0 || node.has_children {
+    if node.depth > 0 {
+        prefix.push_str(if node.is_last && !expanded {
+            "  "
+        } else {
+            "│ "
+        });
+    } else if node.has_children {
         prefix.push_str("│ ");
     }
     if node.has_children && expanded {
@@ -351,6 +357,26 @@ mod tests {
                 .iter()
                 .all(|span| span.style.bg == Some(theme::SELECTED))
         }));
+    }
+
+    #[test]
+    fn wrapped_last_leaf_ends_its_branch_on_continuation_rows() {
+        let rows = node_lines(
+            &node("Options Controlling the Kind of Output"),
+            0,
+            true,
+            false,
+            31,
+        );
+        let text = rows
+            .iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>();
+
+        assert!(text.len() > 1);
+        assert!(text[0].starts_with(" › │ ╰─· "));
+        assert!(text[1].starts_with("   │     "));
+        assert!(!text[1].starts_with("   │ │   "));
     }
 
     #[test]
