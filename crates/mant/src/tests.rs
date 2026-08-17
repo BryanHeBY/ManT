@@ -904,6 +904,19 @@ fn unknown_nodes_are_concise_usage_failures() {
 }
 
 #[test]
+fn explain_misses_point_to_matching_document_text() {
+    let host = FakeHost::with_manual();
+    let (status, output, diagnostics) = invoke(&["demo", "--explain=details"], b"", &host);
+
+    assert_eq!(status, 2);
+    assert!(output.is_empty());
+    assert!(diagnostics.contains("has no semantic entry 'details'"));
+    assert!(diagnostics.contains("appears in outline node 2.1 (Common options)"));
+    assert!(diagnostics.contains("hint: use --search"));
+    assert!(!diagnostics.contains("--outline=entries"));
+}
+
+#[test]
 fn update_and_protocol_results_are_stable_json_documents() {
     let host = FakeHost::new();
     let (status, output, diagnostics) = invoke(&["--update-tldr", "--compact"], b"", &host);

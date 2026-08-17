@@ -76,6 +76,16 @@ fn projection_failure(error: ProjectionError) -> Failure {
         ProjectionError::UnknownSelector { document, selector } => Failure::usage(format!(
             "document '{document}' has no outline node '{selector}'\nhint: run `mant {document} --outline=entries --format json` for available selectors and diagnostics"
         )),
+        ProjectionError::SelectorFoundOnlyInText {
+            document,
+            selector,
+            location,
+            line,
+        } => Failure::usage(format!(
+            "document '{document}' has no semantic entry '{selector}'\nnote: that text appears in outline node {} ({}) at line {line}\nhint: use --search to inspect the matching document text",
+            location.path(),
+            location.title()
+        )),
         ProjectionError::ExplanationRequiresEntry { document, selector } => {
             Failure::usage(format!(
                 "document '{document}' outline node '{selector}' is not a semantic entry\nhint: use --node to read sections"

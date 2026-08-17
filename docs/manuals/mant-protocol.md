@@ -822,7 +822,11 @@ runtime errors return candidate paths and IDs in source order.
 
 Direct `mant --explain=--exclude` and MCP `mant_explain` reuse this
 contract, then require the result to contain exactly one `document-entry`.
-There is intentionally no separate explanation response schema.
+There is intentionally no separate explanation response schema. On an unknown
+entry, the engine performs one bounded visible-text literal probe. A matching
+occurrence is reported with its outline node and line so CLI callers can use
+`--search` and MCP callers can use `mant_search`; it does not change the failed
+entry lookup into a successful prose result.
 
 ## Search Projection
 

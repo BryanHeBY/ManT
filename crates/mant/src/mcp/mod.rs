@@ -492,6 +492,23 @@ mod tests {
         assert!(rendered.contains("call mant_outline with detail=entries"));
         assert!(!rendered.contains("as JSON"));
         assert!(!rendered.contains("--outline"));
+
+        let query = mant_engine::query_markdown_text(
+            "# shell\n\n## Invocation\n\nThe option `-b` ends processing.\n",
+            None,
+        )
+        .expect("Markdown query");
+        let error = mant_engine::project_query_view(
+            query,
+            &mant_protocol::QueryView::Explain {
+                entry: "-b".to_owned(),
+            },
+        )
+        .expect_err("prose is not a semantic entry");
+        let rendered = query_error_for_mcp(error);
+        assert!(rendered.contains("appears in outline node 1 (Invocation)"));
+        assert!(rendered.contains("call mant_search"));
+        assert!(!rendered.contains("--search"));
     }
 
     #[tokio::test]

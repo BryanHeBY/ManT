@@ -52,6 +52,18 @@ pub enum ProjectionError {
         /// Unresolved selector.
         selector: String,
     },
+    /// Explanation lookup found no semantic entry, but the same text occurs
+    /// elsewhere in the rendered document.
+    SelectorFoundOnlyInText {
+        /// Requested document label.
+        document: String,
+        /// Unresolved semantic-entry selector.
+        selector: String,
+        /// Nearest addressable node containing the first text occurrence.
+        location: OutlineTrail,
+        /// One-based rendered line containing the first occurrence.
+        line: u32,
+    },
     /// An alias matched more than one semantic entry.
     AmbiguousSelector {
         /// Requested document label.
@@ -90,6 +102,17 @@ impl fmt::Display for ProjectionError {
             Self::UnknownSelector { document, selector } => write!(
                 formatter,
                 "document '{document}' has no outline node '{selector}'; inspect its entries outline for available selectors and diagnostics"
+            ),
+            Self::SelectorFoundOnlyInText {
+                document,
+                selector,
+                location,
+                line,
+            } => write!(
+                formatter,
+                "document '{document}' has no semantic entry '{selector}', but that text appears in outline node {} ({}) at line {line}",
+                location.path(),
+                location.title()
             ),
             Self::AmbiguousSelector {
                 document,

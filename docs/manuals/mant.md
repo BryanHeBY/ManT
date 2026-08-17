@@ -570,7 +570,10 @@ accepts entries only. Duplicate matches at one precedence return deterministic
 candidate paths and IDs. Only when no entry matches does an exact section,
 root, or tldr selector produce the instruction to use `--node`; consequently a
 command alias may have the same spelling as a section ID without being
-shadowed.
+shadowed. If no semantic entry matches but the same literal text occurs in the
+document, the failure identifies its first outline node and directs the caller
+to `--search`. This remains a diagnostic only: prose never silently becomes an
+explainable semantic entry.
 
 ## Search
 

@@ -17,10 +17,12 @@ use mant_sources::BUILTIN_CONTENT_PRIORITY;
 use crate::{ManualPage, ManualRequest};
 
 use super::{
-    MAX_MARKDOWN_BYTES, QueryError, QueryHost, QueryPolicy, RegisteredLookupPhase,
-    RegisteredSelection, RegisteredSelectionGroup, query_markdown_text, query_with,
-    read_capped_utf8, read_capped_utf8_io,
+    MAX_MARKDOWN_BYTES, QueryError, QueryExecutionError, QueryHost, QueryPolicy,
+    RegisteredLookupPhase, RegisteredSelection, RegisteredSelectionGroup, project_query_view,
+    query_markdown_text, query_with, read_capped_utf8, read_capped_utf8_io,
 };
+
+use crate::ProjectionError;
 
 #[derive(Clone)]
 struct StubHost {
@@ -749,6 +751,47 @@ fn validates_before_touching_host_state() {
         Err(QueryError::EmptyName)
     );
     assert!(host.calls.lock().expect("calls lock").is_empty());
+}
+
+#[test]
+fn explanation_misses_distinguish_visible_prose_from_absent_text() {
+    let query = query_markdown_text(
+        "# shell\n\n## Invocation\n\nThe option `-b` ends option processing.\n",
+        None,
+    )
+    .expect("Markdown query");
+    let error = project_query_view(
+        query.clone(),
+        &QueryView::Explain {
+            entry: "-b".to_owned(),
+        },
+    )
+    .expect_err("prose is not a semantic entry");
+    let QueryExecutionError::Projection(ProjectionError::SelectorFoundOnlyInText {
+        selector,
+        location,
+        line,
+        ..
+    }) = error
+    else {
+        panic!("expected prose-only selector diagnostic");
+    };
+    assert_eq!(selector, "-b");
+    assert_eq!(location.path(), "1");
+    assert_eq!(location.title(), "Invocation");
+    assert!(line > 0);
+
+    assert!(matches!(
+        project_query_view(
+            query,
+            &QueryView::Explain {
+                entry: "--absent".to_owned(),
+            },
+        ),
+        Err(QueryExecutionError::Projection(
+            ProjectionError::UnknownSelector { .. }
+        ))
+    ));
 }
 
 #[test]
