@@ -4801,12 +4801,22 @@
               "$ref": "#/$defs/SearchContextLine"
             }
           },
+          "occurrenceCount": {
+            "description": "Total exact matcher occurrences represented by this line group.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
           "occurrences": {
             "description": "Exact matcher occurrences on this rendered line or line span.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/SearchOccurrence"
             }
+          },
+          "occurrencesTruncated": {
+            "description": "Whether [`Self::occurrences`] omits exact ranges to remain bounded.",
+            "type": "boolean"
           },
           "ordinal": {
             "description": "One-based line-group number in the unpaginated result set.",
@@ -4838,6 +4848,8 @@
           "ordinal",
           "outline",
           "occurrences",
+          "occurrenceCount",
+          "occurrencesTruncated",
           "preview"
         ]
       },

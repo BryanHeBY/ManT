@@ -182,6 +182,10 @@ pub struct SearchMatch {
     pub outline: OutlineTrail,
     /// Exact matcher occurrences on this rendered line or line span.
     pub occurrences: Vec<SearchOccurrence>,
+    /// Total exact matcher occurrences represented by this line group.
+    pub occurrence_count: u32,
+    /// Whether [`Self::occurrences`] omits exact ranges to remain bounded.
+    pub occurrences_truncated: bool,
     /// Original-source location, when the parser retained one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceSpan>,

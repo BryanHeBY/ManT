@@ -25,6 +25,7 @@ use owners::{Owner, OwnerIndex};
 const MAX_PATTERN_BYTES: usize = 4096;
 const MAX_CONTEXT_LINES: u16 = 100;
 const MAX_SEARCH_LIMIT: u32 = 10_000;
+const MAX_OCCURRENCES_PER_MATCH: usize = 256;
 
 /// Invalid search input or matcher construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,7 +82,9 @@ pub fn search_query(
     let owners = OwnerIndex::new(&artifact);
     let searchable = SearchableText::new(markdown, request.scope);
     let matcher = build_matcher(request)?;
-    let mut raw_matches = Vec::new();
+    let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
+    let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
+    let mut collector = SearchCollector::new(markdown, &lines, offset, limit);
     let mut invalid_utf8_match = false;
 
     matcher
@@ -101,11 +104,13 @@ pub fn search_query(
                 return false;
             }
             if let Some(owner) = owners.owner(markdown_start) {
-                raw_matches.push(RawMatch {
-                    searchable: found.start()..found.end(),
-                    markdown: markdown_start..markdown_end,
-                    owner: owner.clone(),
-                });
+                collector.push(
+                    RawOccurrence {
+                        searchable: found.start()..found.end(),
+                        markdown: markdown_start..markdown_end,
+                    },
+                    owner,
+                );
             }
             true
         })
@@ -114,18 +119,11 @@ pub fn search_query(
         return Err(non_utf8_pattern_error());
     }
 
-    let raw_groups = group_matches_by_rendered_lines(raw_matches, markdown, &lines);
-    let total = u32::try_from(raw_groups.len()).unwrap_or(u32::MAX);
-    let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
-    let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
+    let (raw_groups, total) = collector.finish();
     let selected = raw_groups
         .iter()
-        .enumerate()
-        .skip(offset)
-        .take(limit)
-        .map(|(index, found)| {
+        .map(|found| {
             build_match(
-                index,
                 found,
                 &searchable.text,
                 markdown,
@@ -244,57 +242,125 @@ fn non_utf8_pattern_error() -> SearchError {
     )
 }
 
-#[derive(Clone)]
-struct RawMatch {
+struct RawOccurrence {
     searchable: Range<usize>,
     markdown: Range<usize>,
-    owner: Owner,
 }
 
 struct RawMatchGroup {
-    matches: Vec<RawMatch>,
+    ordinal: u32,
+    occurrences: Vec<RawOccurrence>,
+    occurrence_count: u32,
+    owner: Owner,
     start_line_index: usize,
     end_line_index: usize,
 }
 
-fn group_matches_by_rendered_lines(
-    matches: Vec<RawMatch>,
-    markdown: &str,
-    lines: &LineIndex,
-) -> Vec<RawMatchGroup> {
-    let mut groups: Vec<RawMatchGroup> = Vec::new();
-    for found in matches {
-        let start_line_index = lines.position(markdown, found.markdown.start).line_index;
-        let end_line_index = lines.position(markdown, found.markdown.end).line_index;
-        if let Some(group) = groups.last_mut().filter(|group| {
+struct PendingRawMatchGroup {
+    ordinal: u32,
+    occurrences: Vec<RawOccurrence>,
+    occurrence_count: u32,
+    owner: Owner,
+    start_line_index: usize,
+    end_line_index: usize,
+    retained: bool,
+}
+
+struct SearchCollector<'a> {
+    markdown: &'a str,
+    lines: &'a LineIndex,
+    offset: usize,
+    limit: usize,
+    total: usize,
+    selected: Vec<RawMatchGroup>,
+    current: Option<PendingRawMatchGroup>,
+}
+
+impl<'a> SearchCollector<'a> {
+    fn new(markdown: &'a str, lines: &'a LineIndex, offset: usize, limit: usize) -> Self {
+        Self {
+            markdown,
+            lines,
+            offset,
+            limit,
+            total: 0,
+            selected: Vec::with_capacity(limit.min(256)),
+            current: None,
+        }
+    }
+
+    fn push(&mut self, occurrence: RawOccurrence, owner: &Owner) {
+        let start_line_index = self
+            .lines
+            .position(self.markdown, occurrence.markdown.start)
+            .line_index;
+        let end_line_index = self
+            .lines
+            .position(self.markdown, occurrence.markdown.end)
+            .line_index;
+        if let Some(group) = self.current.as_mut().filter(|group| {
             group.start_line_index == start_line_index
                 && group.end_line_index == end_line_index
-                && group
-                    .matches
-                    .first()
-                    .is_some_and(|first| first.owner.outline == found.owner.outline)
+                && group.owner.outline == owner.outline
         }) {
-            group.matches.push(found);
-        } else {
-            groups.push(RawMatchGroup {
-                matches: vec![found],
-                start_line_index,
-                end_line_index,
+            group.occurrence_count = group.occurrence_count.saturating_add(1);
+            if group.retained && group.occurrences.len() < MAX_OCCURRENCES_PER_MATCH {
+                group.occurrences.push(occurrence);
+            }
+            return;
+        }
+
+        self.flush();
+        let retained = self.total >= self.offset && self.selected.len() < self.limit;
+        let occurrences = retained.then_some(occurrence).into_iter().collect();
+        self.current = Some(PendingRawMatchGroup {
+            ordinal: u32::try_from(self.total.saturating_add(1)).unwrap_or(u32::MAX),
+            occurrences,
+            occurrence_count: 1,
+            owner: owner.clone(),
+            start_line_index,
+            end_line_index,
+            retained,
+        });
+    }
+
+    fn flush(&mut self) {
+        let Some(group) = self.current.take() else {
+            return;
+        };
+        self.total = self.total.saturating_add(1);
+        if group.retained {
+            self.selected.push(RawMatchGroup {
+                ordinal: group.ordinal,
+                occurrences: group.occurrences,
+                occurrence_count: group.occurrence_count,
+                owner: group.owner,
+                start_line_index: group.start_line_index,
+                end_line_index: group.end_line_index,
             });
         }
     }
-    groups
+
+    fn finish(mut self) -> (Vec<RawMatchGroup>, u32) {
+        self.flush();
+        (self.selected, u32::try_from(self.total).unwrap_or(u32::MAX))
+    }
+}
+
+impl RawMatchGroup {
+    fn occurrences_truncated(&self) -> bool {
+        usize::try_from(self.occurrence_count).map_or(true, |count| count > self.occurrences.len())
+    }
 }
 
 fn build_match(
-    index: usize,
     found: &RawMatchGroup,
     searchable: &str,
     markdown: &str,
     lines: &LineIndex,
     context_lines: u16,
 ) -> SearchMatch {
-    let first = &found.matches[0];
+    let first = &found.occurrences[0];
     let start = lines.position(markdown, first.markdown.start);
     let preview = display_markdown_line(lines.line(markdown, start.line_index));
     let context_start = found
@@ -317,10 +383,10 @@ fn build_match(
     };
 
     SearchMatch {
-        ordinal: u32::try_from(index.saturating_add(1)).unwrap_or(u32::MAX),
-        outline: first.owner.outline.clone(),
+        ordinal: found.ordinal,
+        outline: found.owner.outline.clone(),
         occurrences: found
-            .matches
+            .occurrences
             .iter()
             .map(|occurrence| {
                 let start = lines.position(markdown, occurrence.markdown.start);
@@ -340,7 +406,9 @@ fn build_match(
                 }
             })
             .collect(),
-        source: first.owner.source,
+        occurrence_count: found.occurrence_count,
+        occurrences_truncated: found.occurrences_truncated(),
+        source: found.owner.source,
         preview,
         context,
     }
@@ -592,7 +660,7 @@ mod tests {
     };
     use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
 
-    use super::search_query;
+    use super::{MAX_OCCURRENCES_PER_MATCH, search_query};
 
     fn query() -> ResolvedContent {
         ResolvedContent {
@@ -719,6 +787,37 @@ mod tests {
             result.matches[0].occurrences[1].markdown.start_line
         );
         assert!(!result.truncated);
+    }
+
+    #[test]
+    fn one_repetitive_line_has_bounded_occurrence_details() {
+        let mut query = query();
+        let Block::DefinitionList { items, .. } =
+            &mut query.document.as_mut().expect("manual").sections[0].blocks[0]
+        else {
+            panic!("fixture contains a definition list");
+        };
+        let occurrence_count = MAX_OCCURRENCES_PER_MATCH + 7;
+        items[0].description = vec![Block::Paragraph {
+            children: vec![Inline::Text {
+                value: vec!["needle"; occurrence_count].join(" "),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let result = search_query(&query, &request("needle")).expect("search");
+
+        assert_eq!(result.total, 1);
+        assert_eq!(
+            result.matches[0].occurrence_count,
+            u32::try_from(occurrence_count).expect("small fixture")
+        );
+        assert_eq!(
+            result.matches[0].occurrences.len(),
+            MAX_OCCURRENCES_PER_MATCH
+        );
+        assert!(result.matches[0].occurrences_truncated);
     }
 
     #[test]

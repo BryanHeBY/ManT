@@ -107,6 +107,11 @@ pub fn render_search_text_with(
         output.line();
         output.plain("  ");
         output.push(SearchTextRole::Coordinate, &group_coordinates(group));
+        if let Some(summary) = truncated_occurrence_summary(group) {
+            output.plain("  [");
+            output.push(SearchTextRole::Muted, &summary);
+            output.plain("]");
+        }
         if found.context.is_empty() {
             output.plain("  ");
             let visible = render_search_line_text(&found.preview);
@@ -245,6 +250,23 @@ fn group_coordinates(matches: &[SearchMatch]) -> String {
         })
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+fn truncated_occurrence_summary(matches: &[SearchMatch]) -> Option<String> {
+    matches
+        .iter()
+        .any(|found| found.occurrences_truncated)
+        .then(|| {
+            let total = matches
+                .iter()
+                .map(|found| u64::from(found.occurrence_count))
+                .sum::<u64>();
+            let shown = matches
+                .iter()
+                .map(|found| found.occurrences.len() as u64)
+                .sum::<u64>();
+            format!("{total} occurrences; {shown} exact coordinates shown")
+        })
 }
 
 fn context_group_end(matches: &[SearchMatch], start: usize) -> usize {
@@ -391,6 +413,13 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
                 source.line, source.column
             ));
         }
+        if found.occurrences_truncated {
+            details.push(format!(
+                "- Occurrences: {} total; {} exact coordinates shown",
+                found.occurrence_count,
+                found.occurrences.len()
+            ));
+        }
         blocks.push(details.join("\n"));
         blocks.push(format!("> {}", found.preview.replace('\n', "\n> ")));
     }
@@ -503,6 +532,8 @@ mod tests {
                         end_column: 9,
                     },
                 }],
+                occurrence_count: 1,
+                occurrences_truncated: false,
                 source: None,
                 preview: "- `--acls`".to_owned(),
                 context: Vec::new(),
