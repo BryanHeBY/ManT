@@ -305,17 +305,11 @@ fn lower_structural_node(
         Some("UR" | "MT") => {
             lower_link_block(output, node, context, indent_columns, paragraph_distance);
         }
+        Some("SY") => lower_man_synopsis(output, node, context, indent_columns, paragraph_distance),
         _ if node.kind == NodeKind::Table => {
             append_table_row(output, node, indent_columns);
         }
-        _ if node.kind == NodeKind::Equation => {
-            output.push(Block::Equation {
-                value: node.equation.clone().unwrap_or_default(),
-                display: true,
-                layout: layout(indent_columns),
-                source: source_span(node),
-            });
-        }
+        _ if node.kind == NodeKind::Equation => output.push(equation_block(node, indent_columns)),
         _ => {
             let body = part_children(node, NodeKind::Body);
             let children = if body.is_empty() {
@@ -331,6 +325,57 @@ fn lower_structural_node(
             ));
         }
     }
+}
+
+fn equation_block(node: &Node, indent_columns: u16) -> Block {
+    Block::Equation {
+        value: node.equation.clone().unwrap_or_default(),
+        display: true,
+        layout: layout(indent_columns),
+        source: source_span(node),
+    }
+}
+
+fn lower_man_synopsis(
+    output: &mut Vec<Block>,
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+) {
+    let head = lower_inline_nodes(part_children(node, NodeKind::Head), context.default_name);
+    let mut nested = lower_blocks(
+        part_children(node, NodeKind::Body),
+        context,
+        indent_columns,
+        paragraph_distance,
+    );
+    if head.is_empty() {
+        output.extend(nested);
+        return;
+    }
+
+    let head = vec![Inline::Strong { children: head }];
+    if let Some(Block::Paragraph {
+        children, source, ..
+    }) = nested.first_mut()
+    {
+        let body = std::mem::take(children);
+        let mut synopsis = InlineBuilder::new();
+        synopsis.append(head);
+        synopsis.append(body);
+        *children = synopsis.finish();
+        *source = source_span(node);
+        output.extend(nested);
+        return;
+    }
+
+    output.push(Block::Paragraph {
+        children: head,
+        layout: layout(indent_columns),
+        source: source_span(node),
+    });
+    output.extend(nested);
 }
 
 fn lower_link_block(

@@ -388,6 +388,51 @@ mod tests {
     }
 
     #[test]
+    fn preserves_man_sy_heads_with_body_content_and_inline_fonts() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("sy-heads.1"),
+            b".TH SY-HEADS 1 \"August 17, 2026\"\n\
+.SH SYNOPSIS\n\
+.SY getent\n\
+.RI [ option ]\n\
+.I database\n\
+.YS\n\
+.SH DESCRIPTION\n\
+.SY #!\\f[I]interpreter\\f[]\n\
+.RI [ optional-arg ]\n\
+.YS\n",
+        )
+        .expect("lower SY heads");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one synopsis paragraph");
+        };
+        assert_eq!(inline_text(children), "getent [option] database");
+        assert!(matches!(
+            children.first(),
+            Some(Inline::Strong { children }) if inline_text(children) == "getent"
+        ));
+
+        let [Block::Paragraph { children, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!("expected one description paragraph");
+        };
+        assert_eq!(inline_text(children), "#!interpreter [optional-arg]");
+        assert!(matches!(
+            children.first(),
+            Some(Inline::Strong { children })
+                if children.iter().any(|inline| matches!(
+                    inline,
+                    Inline::Emphasis { children } if inline_text(children) == "interpreter"
+                ))
+        ));
+        assert!(
+            document.diagnostics.is_empty(),
+            "{:?}",
+            document.diagnostics
+        );
+    }
+
+    #[test]
     fn distinguishes_filled_source_wrapping_from_indented_output_lines() {
         let path = temporary_source(
             "filled-line-boundaries",
