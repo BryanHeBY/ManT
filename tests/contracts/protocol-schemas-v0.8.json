@@ -4320,7 +4320,7 @@
         "minimum": 0
       },
       "offset": {
-        "description": "Applied zero-based match offset.",
+        "description": "Applied zero-based matching-line offset.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -4330,11 +4330,11 @@
         "$ref": "#/$defs/SearchQuery"
       },
       "render": {
-        "description": "Coordinate-space description shared by all matches.",
+        "description": "Coordinate-space description shared by all matching line groups.",
         "$ref": "#/$defs/SearchRender"
       },
       "returned": {
-        "description": "Number of matches present in [`Self::matches`].",
+        "description": "Number of matching line groups present in [`Self::matches`].",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -4361,7 +4361,7 @@
         "minimum": 0
       },
       "truncated": {
-        "description": "Whether additional matches remain.",
+        "description": "Whether additional matching line groups remain.",
         "type": "boolean"
       }
     },
@@ -4740,6 +4740,35 @@
           "matched"
         ]
       },
+      "SearchLineRange": {
+        "description": "One exact occurrence fragment within an anchor-free rendered Markdown line.",
+        "type": "object",
+        "properties": {
+          "endByte": {
+            "description": "Exclusive zero-based UTF-8 byte offset within the presented Markdown line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "line": {
+            "description": "One-based line number in the deterministic full Markdown render.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "startByte": {
+            "description": "Inclusive zero-based UTF-8 byte offset within the presented Markdown line.",
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "line",
+          "startByte",
+          "endByte"
+        ]
+      },
       "SearchMarkdownRange": {
         "description": "Half-open byte range plus one-based human coordinates in full Markdown.",
         "type": "object",
@@ -4857,6 +4886,13 @@
         "description": "One exact matcher occurrence in the canonical Markdown render.",
         "type": "object",
         "properties": {
+          "lineRanges": {
+            "description": "Exact ranges within the anchor-free Markdown lines used for presentation.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchLineRange"
+            }
+          },
           "markdown": {
             "description": "Location in the deterministic full Markdown render.",
             "$ref": "#/$defs/SearchMarkdownRange"
@@ -4868,7 +4904,8 @@
         },
         "required": [
           "matchedText",
-          "markdown"
+          "markdown",
+          "lineRanges"
         ]
       },
       "SearchQuery": {

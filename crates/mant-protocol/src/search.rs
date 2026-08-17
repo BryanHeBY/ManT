@@ -155,15 +155,15 @@ pub struct QuerySearch {
     pub meta: Option<DocumentMeta>,
     /// Normalized query applied by the engine.
     pub query: SearchQuery,
-    /// Coordinate-space description shared by all matches.
+    /// Coordinate-space description shared by all matching line groups.
     pub render: SearchRender,
     /// Total matching line groups before pagination.
     pub total: u32,
-    /// Number of matches present in [`Self::matches`].
+    /// Number of matching line groups present in [`Self::matches`].
     pub returned: u32,
-    /// Applied zero-based match offset.
+    /// Applied zero-based matching-line offset.
     pub offset: u32,
-    /// Whether additional matches remain.
+    /// Whether additional matching line groups remain.
     pub truncated: bool,
     /// Offset for the next page, when one exists.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -204,6 +204,20 @@ pub struct SearchOccurrence {
     pub matched_text: String,
     /// Location in the deterministic full Markdown render.
     pub markdown: SearchMarkdownRange,
+    /// Exact ranges within the anchor-free Markdown lines used for presentation.
+    pub line_ranges: Vec<SearchLineRange>,
+}
+
+/// One exact occurrence fragment within an anchor-free rendered Markdown line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchLineRange {
+    /// One-based line number in the deterministic full Markdown render.
+    pub line: u32,
+    /// Inclusive zero-based UTF-8 byte offset within the presented Markdown line.
+    pub start_byte: u32,
+    /// Exclusive zero-based UTF-8 byte offset within the presented Markdown line.
+    pub end_byte: u32,
 }
 
 /// Half-open byte range plus one-based human coordinates in full Markdown.

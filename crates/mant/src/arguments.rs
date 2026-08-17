@@ -420,11 +420,11 @@ struct Cli {
     )]
     context: Option<u16>,
 
-    /// Return at most this many matches.
+    /// Return at most this many matching lines.
     #[arg(long, value_name = "COUNT", help_heading = "Search")]
     limit: Option<u32>,
 
-    /// Skip this many matches for deterministic pagination.
+    /// Skip this many matching lines for deterministic pagination.
     #[arg(long, value_name = "COUNT", help_heading = "Search")]
     offset: Option<u32>,
 

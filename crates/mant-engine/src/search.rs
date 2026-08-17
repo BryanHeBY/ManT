@@ -9,9 +9,9 @@ use std::{error::Error, fmt, ops::Range};
 use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
-    MarkdownSchema, QuerySearch, SearchCase, SearchContextLine, SearchMarkdownRange, SearchMatch,
-    SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope,
-    SearchSchema, SearchScope, SearchSyntax,
+    MarkdownSchema, QuerySearch, SearchCase, SearchContextLine, SearchLineRange,
+    SearchMarkdownRange, SearchMatch, SearchOccurrence, SearchQuery, SearchRender,
+    SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope, SearchSyntax,
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
 use regex_syntax::ParserBuilder;
@@ -403,6 +403,7 @@ fn build_match(
                             .unwrap_or(u32::MAX),
                         end_column: u32::try_from(end.column).unwrap_or(u32::MAX),
                     },
+                    line_ranges: occurrence_line_ranges(occurrence, markdown, lines),
                 }
             })
             .collect(),
@@ -414,21 +415,101 @@ fn build_match(
     }
 }
 
+fn occurrence_line_ranges(
+    occurrence: &RawOccurrence,
+    markdown: &str,
+    lines: &LineIndex,
+) -> Vec<SearchLineRange> {
+    let start = lines
+        .position(markdown, occurrence.markdown.start)
+        .line_index;
+    let end = lines.position(markdown, occurrence.markdown.end).line_index;
+    (start..=end)
+        .flat_map(|line_index| {
+            let line_start = lines.start(line_index);
+            let line = lines.line(markdown, line_index).trim_end();
+            let line_end = line_start.saturating_add(line.len());
+            let intersection =
+                occurrence.markdown.start.max(line_start)..occurrence.markdown.end.min(line_end);
+            AnchorStrippedLine::new(line)
+                .map_range(
+                    intersection.start.saturating_sub(line_start)
+                        ..intersection.end.saturating_sub(line_start),
+                )
+                .into_iter()
+                .map(move |range| SearchLineRange {
+                    line: u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
+                    start_byte: u32::try_from(range.start).unwrap_or(u32::MAX),
+                    end_byte: u32::try_from(range.end).unwrap_or(u32::MAX),
+                })
+        })
+        .collect()
+}
+
 /// Hide `ManT`'s zero-width source-map anchors from human-facing snippets.
 fn display_markdown_line(line: &str) -> String {
-    let mut output = String::with_capacity(line.len());
-    let mut remaining = line.trim_end();
-    while let Some(start) = remaining.find("<a id=\"") {
-        output.push_str(&remaining[..start]);
-        let anchor = &remaining[start..];
-        let Some(end) = anchor.find("</a>") else {
-            output.push_str(anchor);
-            return output;
-        };
-        remaining = &anchor[end + "</a>".len()..];
+    AnchorStrippedLine::new(line.trim_end()).text
+}
+
+struct AnchorStrippedLine {
+    text: String,
+    segments: Vec<OffsetSegment>,
+}
+
+impl AnchorStrippedLine {
+    fn new(line: &str) -> Self {
+        let mut text = String::with_capacity(line.len());
+        let mut segments = Vec::new();
+        let mut cursor = 0;
+        while let Some(relative_start) = line[cursor..].find("<a id=\"") {
+            let anchor_start = cursor + relative_start;
+            push_retained_line_segment(line, cursor..anchor_start, &mut text, &mut segments);
+            let anchor = &line[anchor_start..];
+            let Some(relative_end) = anchor.find("</a>") else {
+                push_retained_line_segment(
+                    line,
+                    anchor_start..line.len(),
+                    &mut text,
+                    &mut segments,
+                );
+                return Self { text, segments };
+            };
+            cursor = anchor_start + relative_end + "</a>".len();
+        }
+        push_retained_line_segment(line, cursor..line.len(), &mut text, &mut segments);
+        Self { text, segments }
     }
-    output.push_str(remaining);
-    output
+
+    fn map_range(&self, source: Range<usize>) -> Vec<Range<usize>> {
+        self.segments
+            .iter()
+            .filter_map(|segment| {
+                let start = source.start.max(segment.markdown.start);
+                let end = source.end.min(segment.markdown.end);
+                (start < end).then(|| {
+                    segment.visible.start + start.saturating_sub(segment.markdown.start)
+                        ..segment.visible.start + end.saturating_sub(segment.markdown.start)
+                })
+            })
+            .collect()
+    }
+}
+
+fn push_retained_line_segment(
+    line: &str,
+    source: Range<usize>,
+    text: &mut String,
+    segments: &mut Vec<OffsetSegment>,
+) {
+    if source.is_empty() {
+        return;
+    }
+    let visible_start = text.len();
+    text.push_str(&line[source.clone()]);
+    segments.push(OffsetSegment {
+        visible: visible_start..text.len(),
+        markdown: source,
+    });
 }
 
 struct TextPosition {
@@ -475,6 +556,10 @@ impl LineIndex {
         text[start..end]
             .strip_suffix('\n')
             .unwrap_or(&text[start..end])
+    }
+
+    fn start(&self, line_index: usize) -> usize {
+        self.starts[line_index]
     }
 }
 
@@ -753,6 +838,7 @@ mod tests {
             result.matches[0].occurrences[0].matched_text,
             "access control"
         );
+        assert_eq!(result.matches[0].occurrences[0].line_ranges.len(), 1);
         assert!(result.matches[0].occurrences[0].markdown.start_line > 1);
         assert!(result.matches[0].preview.contains("**access control**"));
         assert!(!result.matches[0].preview.contains("<a id="));

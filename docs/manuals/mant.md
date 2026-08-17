@@ -574,11 +574,12 @@ shadowed.
 - `--word`: Require Unicode-aware word boundaries.
 - `--scope SCOPE`: Search `visible` text or generated `markdown`.
 - `--context LINES`: Include surrounding Markdown lines.
-- `--limit COUNT`: Limit returned matches.
-- `--offset COUNT`: Skip matches for deterministic pagination.
+- `--limit COUNT`: Limit returned matching lines.
+- `--offset COUNT`: Skip matching lines for deterministic pagination.
 
 Search defaults to a case-insensitive literal over visible text, returns at
-most 100 matches, and includes no context lines. `smart` case becomes
+most 100 matching lines, and includes no context lines. Multiple occurrences
+on the same rendered line form one pagination result. `smart` case becomes
 case-sensitive when the pattern contains uppercase text. Every result still
 uses generated Markdown as its coordinate space, so line and column ranges
 can be passed between text, JSON, and agent workflows.

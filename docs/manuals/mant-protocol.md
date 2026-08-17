@@ -830,7 +830,7 @@ both structural locations and rendered coordinates.
 | `total` | All matching rendered-line groups before pagination |
 | `returned` | Number of line groups in this page |
 | `offset` | Echoed line-group pagination offset |
-| `truncated` | Whether more matches remain |
+| `truncated` | Whether more matching line groups remain |
 | `nextOffset` | Next deterministic offset when truncated |
 | `matches` | Rendered-line groups containing exact occurrences |
 
@@ -868,15 +868,18 @@ line from duplicating its preview or context. Each line group includes:
 - a one-based global `ordinal` that is not reset by pagination;
 - an `outline` trail ending at the nearest reusable node accepted by excerpt
   selection;
-- one or more `occurrences`, each containing exact `matchedText` and its
-  Markdown range;
+- an `occurrenceCount` plus up to 256 exact `occurrences`; when a highly
+  repetitive line exceeds that bound, `occurrencesTruncated` is true;
+- each retained occurrence contains exact `matchedText`, its canonical
+  Markdown range, and `lineRanges` within the anchor-free Markdown lines used
+  by text presentations;
 - an optional original `source` span;
 - a human-readable `preview`;
 - optional full Markdown context lines.
 
-Text presentations additionally merge overlapping context windows inside one
-outline node and list all columns for a matching line once. Structured results
-retain every exact occurrence range.
+Text presentations additionally merge overlapping or touching context windows
+inside one outline node and list all retained columns for a matching line once.
+Structured results report when exact occurrence details were bounded.
 
 The trail has the same `ancestors` and typed terminal `node` shape used by
 excerpt selections. The node union uses the same `tldr`, `document-root`,
@@ -967,7 +970,7 @@ tools. Outputs intentionally remain text-first:
 | `mant_outline` | `document` | `detail`, default `sections`; `cursor` | Selectable plain-text hierarchy |
 | `mant_read` | `document`, 1–16 `selectors` | `cursor` | CommonMark excerpts |
 | `mant_explain` | `document`, `entry` | `cursor` | One CommonMark semantic entry |
-| `mant_search` | `document`, `pattern` | `syntax`, `case`, `word`, `contextLines`, `limit`, `cursor` | Grep-like visible-text matches |
+| `mant_search` | `document`, `pattern` | `syntax`, `case`, `word`, `contextLines`, `limit`, `cursor` | Grep-like visible-text matching lines |
 
 Every tool is annotated read-only, non-destructive, and closed-world.
 `mant_find` may filter one configured Markdown `source` or one native
