@@ -258,7 +258,12 @@ where
     fn matching_line(&mut self, line: &str, matched: impl IntoIterator<Item = Range<usize>>) {
         let mut ranges = matched
             .into_iter()
-            .filter(|range| range.start < range.end && range.end <= line.len())
+            .filter(|range| {
+                range.start < range.end
+                    && range.end <= line.len()
+                    && line.is_char_boundary(range.start)
+                    && line.is_char_boundary(range.end)
+            })
             .map(|range| (range.start, range.end))
             .collect::<Vec<_>>();
         if ranges.is_empty() {
@@ -591,8 +596,8 @@ mod tests {
     };
 
     use super::{
-        SearchTextRole, render_search_line_text, render_search_markdown, render_search_text,
-        render_search_text_with,
+        SearchTextRenderer, SearchTextRole, render_search_line_text, render_search_markdown,
+        render_search_text, render_search_text_with,
     };
 
     fn result() -> QuerySearch {
@@ -741,6 +746,15 @@ mod tests {
 
         assert!(rendered.contains("foobar <match>foo</match>"));
         assert!(!rendered.contains("<match>foo</match>bar"));
+    }
+
+    #[test]
+    fn matching_lines_ignore_ranges_inside_utf8_characters() {
+        let mut renderer = SearchTextRenderer::new(|_, value| value.to_owned());
+
+        renderer.matching_line("é", std::iter::once(1..2));
+
+        assert_eq!(renderer.finish(), "é");
     }
 
     #[test]
