@@ -212,18 +212,7 @@ impl App {
     /// Construct an application without preloaded discovery rows.
     #[must_use]
     pub fn new(bundle: &ResolvedContent) -> Self {
-        Self::with_catalog(
-            bundle,
-            DocumentCatalog {
-                schema: mant_protocol::CatalogSchema::V0Dot8,
-                total: 0,
-                returned: 0,
-                offset: 0,
-                truncated: false,
-                next_offset: None,
-                documents: Vec::new(),
-            },
-        )
+        Self::with_catalog(bundle, DocumentCatalog::default())
     }
 
     /// Construct an application with a snapshot for the document finder.

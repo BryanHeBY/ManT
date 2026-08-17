@@ -21,15 +21,7 @@ use crate::{App, UpdateOutcome};
 pub fn run(bundle: &ResolvedContent) -> io::Result<()> {
     run_with_catalog(
         bundle,
-        DocumentCatalog {
-            schema: mant_protocol::CatalogSchema::V0Dot8,
-            total: 0,
-            returned: 0,
-            offset: 0,
-            truncated: false,
-            next_offset: None,
-            documents: Vec::new(),
-        },
+        DocumentCatalog::default(),
         |_| Err("document discovery is unavailable in this host".to_owned()),
         |_| Err("document discovery is unavailable in this host".to_owned()),
         |_| Err("external links are unavailable in this host".to_owned()),

@@ -202,3 +202,15 @@ fn request_v0_8_selects_one_configured_source_without_accepting_v4() {
     .expect_err("the last experimental request schema is intentionally unsupported");
     assert!(error.to_string().contains("unknown variant"));
 }
+
+#[test]
+fn an_empty_catalog_is_protocol_owned_and_versioned() {
+    let catalog = mant_protocol::DocumentCatalog::default();
+
+    assert_eq!(catalog.schema, mant_protocol::CatalogSchema::V0Dot8);
+    assert_eq!(catalog.total, 0);
+    assert_eq!(catalog.returned, 0);
+    assert!(catalog.documents.is_empty());
+    assert!(!catalog.truncated);
+    assert_eq!(catalog.next_offset, None);
+}

@@ -103,6 +103,20 @@ pub struct DocumentCatalog {
     pub documents: Vec<DocumentSummary>,
 }
 
+impl Default for DocumentCatalog {
+    fn default() -> Self {
+        Self {
+            schema: CatalogSchema::V0Dot8,
+            total: 0,
+            returned: 0,
+            offset: 0,
+            truncated: false,
+            next_offset: None,
+            documents: Vec::new(),
+        }
+    }
+}
+
 /// Stable relevance tier for literal catalog matching.
 ///
 /// Frontends may add deterministic tie-breakers inside one tier, but must not
