@@ -19,24 +19,29 @@ pub(super) const FIND_PAGE_SIZE: u32 = 50;
 pub(super) const DEFAULT_SEARCH_PAGE_SIZE: u32 = 20;
 /// Maximum match-line page size exposed to an MCP client.
 pub(super) const MAX_SEARCH_PAGE_SIZE: u32 = 100;
+pub(super) const MAX_FIND_QUERY_BYTES: usize = 1024;
+const MAX_SOURCE_BYTES: usize = 128;
+pub(super) const MAX_MANUAL_SECTION_BYTES: usize = 32;
+const MAX_SELECTOR_BYTES: usize = 512;
+const MAX_ENTRY_BYTES: usize = 512;
+const MAX_PATTERN_BYTES: usize = 4096;
 
 /// Discover logical document identities in the local catalog.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct FindParams {
-    /// Optional case-insensitive literal matched against names and catalog paths.
-    #[schemars(length(max = 1024))]
+    /// Optional case-insensitive literal, bounded to 1024 UTF-8 bytes at runtime.
     pub(super) query: Option<String>,
     /// Restrict results to registered Markdown or native manuals.
     pub(super) kind: Option<CatalogDocumentKind>,
     /// Restrict Markdown results to one configured source.
-    #[schemars(length(min = 1, max = 128))]
+    #[schemars(length(min = 1))]
     pub(super) source: Option<String>,
     /// Restrict native manuals to one exact manual section.
-    #[schemars(length(min = 1, max = 32))]
+    #[schemars(length(min = 1))]
     pub(super) manual_section: Option<String>,
     /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1, max = 256))]
+    #[schemars(length(min = 1))]
     pub(super) cursor: Option<String>,
 }
 
@@ -45,12 +50,12 @@ pub(super) struct FindParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct OutlineParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1, max = 1024))]
+    #[schemars(length(min = 1))]
     pub(super) document: String,
     /// Include sections only (the default), or semantic entries as well.
     pub(super) detail: Option<OutlineDetail>,
     /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1, max = 256))]
+    #[schemars(length(min = 1))]
     pub(super) cursor: Option<String>,
 }
 
@@ -59,13 +64,13 @@ pub(super) struct OutlineParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ReadParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1, max = 1024))]
+    #[schemars(length(min = 1))]
     pub(super) document: String,
     /// Outline paths, stable IDs, or semantic aliases.
     #[schemars(length(min = 1, max = 16))]
     pub(super) selectors: Vec<NodeSelector>,
     /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1, max = 256))]
+    #[schemars(length(min = 1))]
     pub(super) cursor: Option<String>,
 }
 
@@ -74,13 +79,13 @@ pub(super) struct ReadParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ExplainParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1, max = 1024))]
+    #[schemars(length(min = 1))]
     pub(super) document: String,
     /// Exact alias, outline path, or stable ID of the entry.
-    #[schemars(length(min = 1, max = 512))]
+    #[schemars(length(min = 1))]
     pub(super) entry: String,
     /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1, max = 256))]
+    #[schemars(length(min = 1))]
     pub(super) cursor: Option<String>,
 }
 
@@ -89,10 +94,10 @@ pub(super) struct ExplainParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct SearchParams {
     /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1, max = 1024))]
+    #[schemars(length(min = 1))]
     pub(super) document: String,
     /// Literal text or a regular expression, depending on `syntax`.
-    #[schemars(length(min = 1, max = 4096))]
+    #[schemars(length(min = 1))]
     pub(super) pattern: String,
     /// Interpret `pattern` literally (the default) or as a regular expression.
     pub(super) syntax: Option<SearchSyntax>,
@@ -109,75 +114,146 @@ pub(super) struct SearchParams {
     #[schemars(range(min = 1, max = 100))]
     pub(super) limit: Option<u32>,
     /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1, max = 256))]
+    #[schemars(length(min = 1))]
     pub(super) cursor: Option<String>,
 }
 
-pub(super) fn validate_find(mut parameters: FindParams) -> Result<FindParams, String> {
-    parameters.query = parameters
-        .query
-        .map(|query| query.trim().to_owned())
-        .filter(|query| !query.is_empty());
-    parameters.source = optional_non_empty(parameters.source, "source")?;
-    parameters.manual_section = optional_non_empty(parameters.manual_section, "manualSection")?;
-    validate_cursor(parameters.cursor.as_deref())?;
-    if parameters.source.is_some() && parameters.manual_section.is_some() {
-        return Err("source and manualSection cannot be combined".to_owned());
+pub(super) struct ValidatedFindParams {
+    pub(super) query: Option<String>,
+    pub(super) kind: Option<CatalogDocumentKind>,
+    pub(super) source: Option<String>,
+    pub(super) manual_section: Option<String>,
+    pub(super) cursor: Option<String>,
+}
+
+pub(super) struct ValidatedOutlineParams {
+    pub(super) document: String,
+    pub(super) detail: OutlineDetail,
+    pub(super) cursor: Option<String>,
+}
+
+pub(super) struct ValidatedReadParams {
+    pub(super) document: String,
+    pub(super) selectors: Vec<NodeSelector>,
+    pub(super) cursor: Option<String>,
+}
+
+pub(super) struct ValidatedExplainParams {
+    pub(super) document: String,
+    pub(super) entry: String,
+    pub(super) cursor: Option<String>,
+}
+
+pub(super) struct ValidatedSearchParams {
+    pub(super) document: String,
+    pub(super) pattern: String,
+    pub(super) syntax: SearchSyntax,
+    pub(super) case: SearchCase,
+    pub(super) word: bool,
+    pub(super) context_lines: u16,
+    pub(super) limit: u32,
+    pub(super) cursor: Option<String>,
+}
+
+impl FindParams {
+    pub(super) fn validate(self) -> Result<ValidatedFindParams, String> {
+        let query = self
+            .query
+            .filter(|query| !query.trim().is_empty())
+            .map(|query| bounded_normalized(&query, "query", MAX_FIND_QUERY_BYTES))
+            .transpose()?;
+        let source = optional_normalized(self.source, "source", MAX_SOURCE_BYTES)?;
+        let manual_section = optional_normalized(
+            self.manual_section,
+            "manualSection",
+            MAX_MANUAL_SECTION_BYTES,
+        )?;
+        validate_cursor(self.cursor.as_deref())?;
+        if source.is_some() && manual_section.is_some() {
+            return Err("source and manualSection cannot be combined".to_owned());
+        }
+        Ok(ValidatedFindParams {
+            query,
+            kind: self.kind,
+            source,
+            manual_section,
+            cursor: self.cursor,
+        })
     }
-    Ok(parameters)
 }
 
-pub(super) fn validate_document(value: &str) -> Result<String, String> {
-    bounded_non_empty(value, "document", MAX_DOCUMENT_BYTES)
-}
-
-pub(super) fn validate_cursor(value: Option<&str>) -> Result<(), String> {
-    if value.is_some_and(|value| value.is_empty() || value.len() > MAX_CURSOR_BYTES) {
-        return Err(format!(
-            "cursor must contain between 1 and {MAX_CURSOR_BYTES} bytes"
-        ));
+impl OutlineParams {
+    pub(super) fn validate(self) -> Result<ValidatedOutlineParams, String> {
+        validate_cursor(self.cursor.as_deref())?;
+        Ok(ValidatedOutlineParams {
+            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            detail: self.detail.unwrap_or(OutlineDetail::Sections),
+            cursor: self.cursor,
+        })
     }
-    Ok(())
 }
 
-pub(super) fn validate_selectors(selectors: &[NodeSelector]) -> Result<(), String> {
-    if selectors.is_empty() || selectors.len() > MAX_SELECTORS {
-        return Err(format!(
-            "selectors must contain between 1 and {MAX_SELECTORS} values"
-        ));
+impl ReadParams {
+    pub(super) fn validate(self) -> Result<ValidatedReadParams, String> {
+        if self.selectors.is_empty() || self.selectors.len() > MAX_SELECTORS {
+            return Err(format!(
+                "selectors must contain between 1 and {MAX_SELECTORS} values"
+            ));
+        }
+        let selectors = self
+            .selectors
+            .into_iter()
+            .map(|selector| {
+                bounded_normalized(selector.as_str(), "selector", MAX_SELECTOR_BYTES)
+                    .map(NodeSelector::new)
+            })
+            .collect::<Result<_, _>>()?;
+        validate_cursor(self.cursor.as_deref())?;
+        Ok(ValidatedReadParams {
+            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            selectors,
+            cursor: self.cursor,
+        })
     }
-    for selector in selectors {
-        bounded_non_empty(selector, "selector", 512)?;
+}
+
+impl ExplainParams {
+    pub(super) fn validate(self) -> Result<ValidatedExplainParams, String> {
+        validate_cursor(self.cursor.as_deref())?;
+        Ok(ValidatedExplainParams {
+            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            entry: bounded_normalized(&self.entry, "entry", MAX_ENTRY_BYTES)?,
+            cursor: self.cursor,
+        })
     }
-    Ok(())
 }
 
-pub(super) fn validate_entry(value: &str) -> Result<String, String> {
-    bounded_non_empty(value, "entry", 512)
-}
-
-pub(super) fn validate_pattern(value: &str) -> Result<String, String> {
-    bounded_non_empty(value, "pattern", 4096)
-}
-
-pub(super) fn validate_context_lines(value: u16) -> Result<(), String> {
-    if value > 5 {
-        return Err("contextLines must be between 0 and 5".to_owned());
+impl SearchParams {
+    pub(super) fn validate(self) -> Result<ValidatedSearchParams, String> {
+        if self.context_lines > 5 {
+            return Err("contextLines must be between 0 and 5".to_owned());
+        }
+        let limit = self.limit.unwrap_or(DEFAULT_SEARCH_PAGE_SIZE);
+        if !(1..=MAX_SEARCH_PAGE_SIZE).contains(&limit) {
+            return Err(format!(
+                "limit must be between 1 and {MAX_SEARCH_PAGE_SIZE}"
+            ));
+        }
+        validate_cursor(self.cursor.as_deref())?;
+        Ok(ValidatedSearchParams {
+            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            pattern: bounded_exact(&self.pattern, "pattern", MAX_PATTERN_BYTES)?,
+            syntax: self.syntax.unwrap_or_default(),
+            case: self.case.unwrap_or_default(),
+            word: self.word,
+            context_lines: self.context_lines,
+            limit,
+            cursor: self.cursor,
+        })
     }
-    Ok(())
 }
 
-pub(super) fn validate_search_limit(value: Option<u32>) -> Result<u32, String> {
-    let value = value.unwrap_or(DEFAULT_SEARCH_PAGE_SIZE);
-    if !(1..=MAX_SEARCH_PAGE_SIZE).contains(&value) {
-        return Err(format!(
-            "limit must be between 1 and {MAX_SEARCH_PAGE_SIZE}"
-        ));
-    }
-    Ok(value)
-}
-
-pub(super) fn catalog_query(parameters: &FindParams, offset: u32) -> CatalogQuery {
+pub(super) fn catalog_query(parameters: &ValidatedFindParams, offset: u32) -> CatalogQuery {
     CatalogQuery {
         pattern: parameters.query.clone(),
         syntax: SearchSyntax::Literal,
@@ -202,14 +278,31 @@ pub(super) fn request_for(document: String, view: QueryView) -> QueryRequest {
     }
 }
 
-fn optional_non_empty(value: Option<String>, field: &str) -> Result<Option<String>, String> {
+fn validate_cursor(value: Option<&str>) -> Result<(), String> {
+    if value.is_some_and(|value| value.is_empty() || value.len() > MAX_CURSOR_BYTES) {
+        return Err(format!(
+            "cursor must contain between 1 and {MAX_CURSOR_BYTES} bytes"
+        ));
+    }
+    Ok(())
+}
+
+fn optional_normalized(
+    value: Option<String>,
+    field: &str,
+    max: usize,
+) -> Result<Option<String>, String> {
     value
-        .map(|value| bounded_non_empty(&value, field, 128))
+        .map(|value| bounded_normalized(&value, field, max))
         .transpose()
 }
 
-fn bounded_non_empty(value: &str, field: &str, max: usize) -> Result<String, String> {
+fn bounded_normalized(value: &str, field: &str, max: usize) -> Result<String, String> {
     let value = value.trim();
+    bounded_exact(value, field, max)
+}
+
+fn bounded_exact(value: &str, field: &str, max: usize) -> Result<String, String> {
     if value.is_empty() {
         return Err(format!("{field} must not be empty"));
     }

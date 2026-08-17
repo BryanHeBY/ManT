@@ -25,8 +25,6 @@ use rmcp::{
 use cursor::{CursorKind, decode, encode, fingerprint, join_position, split_position};
 use params::{
     ExplainParams, FindParams, OutlineParams, ReadParams, SearchParams, catalog_query, request_for,
-    validate_context_lines, validate_cursor, validate_document, validate_entry, validate_find,
-    validate_pattern, validate_search_limit, validate_selectors,
 };
 use presentation::{
     TextPage, finish_page, prepare_excerpt, prepare_outline, prepare_search, render_excerpt,
@@ -68,7 +66,7 @@ impl MantMcpServer {
         )
     )]
     async fn find(&self, parameters: Parameters<FindParams>) -> Result<String, String> {
-        let parameters = validate_find(parameters.0)?;
+        let parameters = parameters.0.validate()?;
         let kind = catalog_kind_key(parameters.kind);
         let fingerprint = fingerprint(&[
             parameters.query.as_deref().unwrap_or(""),
@@ -100,17 +98,20 @@ impl MantMcpServer {
         )
     )]
     async fn outline(&self, parameters: Parameters<OutlineParams>) -> Result<String, String> {
-        let parameters = parameters.0;
-        let document = validate_document(&parameters.document)?;
-        validate_cursor(parameters.cursor.as_deref())?;
-        let detail = parameters.detail.unwrap_or(OutlineDetail::Sections);
-        let fingerprint = fingerprint(&[&document, outline_detail_key(detail)]);
+        let parameters = parameters.0.validate()?;
+        let fingerprint =
+            fingerprint(&[&parameters.document, outline_detail_key(parameters.detail)]);
         let byte = cursor_byte(
             parameters.cursor.as_deref(),
             CursorKind::Outline,
             fingerprint,
         )?;
-        let request = request_for(document, QueryView::Outline { detail });
+        let request = request_for(
+            parameters.document,
+            QueryView::Outline {
+                detail: parameters.detail,
+            },
+        );
         let QueryViewResult::Outline(mut outline) = self.query(request).await? else {
             unreachable!("outline request materializes an outline")
         };
@@ -130,20 +131,17 @@ impl MantMcpServer {
         )
     )]
     async fn read(&self, parameters: Parameters<ReadParams>) -> Result<String, String> {
-        let parameters = parameters.0;
-        let document = validate_document(&parameters.document)?;
-        validate_selectors(&parameters.selectors)?;
-        validate_cursor(parameters.cursor.as_deref())?;
+        let parameters = parameters.0.validate()?;
         let selector_key = parameters
             .selectors
             .iter()
             .map(mant_protocol::NodeSelector::as_str)
             .collect::<Vec<_>>()
             .join("\u{1f}");
-        let fingerprint = fingerprint(&[&document, &selector_key]);
+        let fingerprint = fingerprint(&[&parameters.document, &selector_key]);
         let byte = cursor_byte(parameters.cursor.as_deref(), CursorKind::Read, fingerprint)?;
         let request = request_for(
-            document,
+            parameters.document,
             QueryView::Excerpt {
                 selectors: parameters.selectors,
             },
@@ -167,17 +165,19 @@ impl MantMcpServer {
         )
     )]
     async fn explain(&self, parameters: Parameters<ExplainParams>) -> Result<String, String> {
-        let parameters = parameters.0;
-        let document = validate_document(&parameters.document)?;
-        let entry = validate_entry(&parameters.entry)?;
-        validate_cursor(parameters.cursor.as_deref())?;
-        let fingerprint = fingerprint(&[&document, &entry]);
+        let parameters = parameters.0.validate()?;
+        let fingerprint = fingerprint(&[&parameters.document, &parameters.entry]);
         let byte = cursor_byte(
             parameters.cursor.as_deref(),
             CursorKind::Explain,
             fingerprint,
         )?;
-        let request = request_for(document, QueryView::Explain { entry });
+        let request = request_for(
+            parameters.document,
+            QueryView::Explain {
+                entry: parameters.entry,
+            },
+        );
         let QueryViewResult::Excerpt(mut excerpt) = self.query(request).await? else {
             unreachable!("explain request materializes an excerpt")
         };
@@ -197,22 +197,15 @@ impl MantMcpServer {
         )
     )]
     async fn search(&self, parameters: Parameters<SearchParams>) -> Result<String, String> {
-        let parameters = parameters.0;
-        let document = validate_document(&parameters.document)?;
-        let pattern = validate_pattern(&parameters.pattern)?;
-        validate_context_lines(parameters.context_lines)?;
-        let limit = validate_search_limit(parameters.limit)?;
-        validate_cursor(parameters.cursor.as_deref())?;
-        let syntax = parameters.syntax.unwrap_or_default();
-        let case = parameters.case.unwrap_or_default();
+        let parameters = parameters.0.validate()?;
         let fingerprint = fingerprint(&[
-            &document,
-            &pattern,
-            search_syntax_key(syntax),
-            search_case_key(case),
+            &parameters.document,
+            &parameters.pattern,
+            search_syntax_key(parameters.syntax),
+            search_case_key(parameters.case),
             if parameters.word { "word" } else { "substring" },
             &parameters.context_lines.to_string(),
-            &limit.to_string(),
+            &parameters.limit.to_string(),
         ]);
         let position = decode(
             parameters.cursor.as_deref(),
@@ -221,15 +214,15 @@ impl MantMcpServer {
         )?;
         let (offset, byte) = split_position(position);
         let request = request_for(
-            document,
+            parameters.document,
             QueryView::Search {
-                pattern,
-                syntax,
-                case,
+                pattern: parameters.pattern,
+                syntax: parameters.syntax,
+                case: parameters.case,
                 scope: SearchScope::Visible,
                 word: parameters.word,
                 context_lines: parameters.context_lines,
-                limit,
+                limit: parameters.limit,
                 offset,
             },
         );
@@ -368,14 +361,89 @@ mod tests {
 
     #[test]
     fn focused_tool_limits_are_enforced_at_runtime() {
-        assert!(validate_document("\n").is_err());
-        assert!(validate_context_lines(6).is_err());
-        assert_eq!(validate_search_limit(None), Ok(DEFAULT_SEARCH_PAGE_SIZE));
-        assert!(validate_search_limit(Some(0)).is_err());
-        assert!(validate_search_limit(Some(MAX_SEARCH_PAGE_SIZE + 1)).is_err());
-        assert!(validate_selectors(&[]).is_err());
-        assert!(validate_pattern("\u{7}").is_err());
-        assert!(validate_cursor(Some(&"x".repeat(MAX_CURSOR_BYTES + 1))).is_err());
+        let outline = |document: String, cursor: Option<String>| OutlineParams {
+            document,
+            detail: None,
+            cursor,
+        };
+        assert!(outline("\n".to_owned(), None).validate().is_err());
+        assert!(
+            outline("mant".to_owned(), Some("x".repeat(MAX_CURSOR_BYTES + 1)))
+                .validate()
+                .is_err()
+        );
+
+        let search = |pattern: &str, context_lines, limit| SearchParams {
+            document: "mant".to_owned(),
+            pattern: pattern.to_owned(),
+            syntax: None,
+            case: None,
+            word: false,
+            context_lines,
+            limit,
+            cursor: None,
+        };
+        assert_eq!(
+            search("needle", 0, None)
+                .validate()
+                .expect("defaults")
+                .limit,
+            DEFAULT_SEARCH_PAGE_SIZE
+        );
+        assert!(search("needle", 6, None).validate().is_err());
+        assert!(search("needle", 0, Some(0)).validate().is_err());
+        assert!(
+            search("needle", 0, Some(MAX_SEARCH_PAGE_SIZE + 1))
+                .validate()
+                .is_err()
+        );
+        assert!(search("\u{7}", 0, None).validate().is_err());
+
+        let find = FindParams {
+            query: Some("x".repeat(MAX_FIND_QUERY_BYTES + 1)),
+            ..FindParams::default()
+        };
+        assert!(find.validate().is_err());
+        let find = FindParams {
+            manual_section: Some("x".repeat(MAX_MANUAL_SECTION_BYTES + 1)),
+            ..FindParams::default()
+        };
+        assert!(find.validate().is_err());
+
+        let read = ReadParams {
+            document: "mant".to_owned(),
+            selectors: Vec::new(),
+            cursor: None,
+        };
+        assert!(read.validate().is_err());
+    }
+
+    #[test]
+    fn validated_parameters_normalize_names_but_preserve_search_patterns() {
+        let read = ReadParams {
+            document: " mant ".to_owned(),
+            selectors: vec![mant_protocol::NodeSelector::new(" 1.2 ")],
+            cursor: None,
+        }
+        .validate()
+        .expect("read parameters");
+        assert_eq!(read.document, "mant");
+        assert_eq!(read.selectors[0].as_str(), "1.2");
+
+        let search = SearchParams {
+            document: " mant ".to_owned(),
+            pattern: " needle ".to_owned(),
+            syntax: None,
+            case: None,
+            word: false,
+            context_lines: 0,
+            limit: None,
+            cursor: None,
+        }
+        .validate()
+        .expect("search parameters");
+        assert_eq!(search.document, "mant");
+        assert_eq!(search.pattern, " needle ");
     }
 
     #[test]
