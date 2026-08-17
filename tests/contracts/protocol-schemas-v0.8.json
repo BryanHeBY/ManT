@@ -2401,7 +2401,7 @@
     "$id": "urn:mant:query:v0.8",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "QueryBundle",
-    "description": "Versioned full-query result emitted at JSON and MCP boundaries.",
+    "description": "Versioned full-query result emitted at CLI and request JSON boundaries.",
     "type": "object",
     "properties": {
       "address": {
@@ -4293,7 +4293,7 @@
         "type": "string"
       },
       "matches": {
-        "description": "Matching occurrences in render order.",
+        "description": "Matching line groups in render order.",
         "type": "array",
         "items": {
           "$ref": "#/$defs/SearchMatch"
@@ -4355,7 +4355,7 @@
         ]
       },
       "total": {
-        "description": "Total matches before pagination.",
+        "description": "Total matching line groups before pagination.",
         "type": "integer",
         "format": "uint32",
         "minimum": 0
@@ -4791,7 +4791,7 @@
         ]
       },
       "SearchMatch": {
-        "description": "One exact occurrence and both of its structural and rendered locations.",
+        "description": "One rendered line or line span containing one or more exact occurrences.",
         "type": "object",
         "properties": {
           "context": {
@@ -4801,16 +4801,15 @@
               "$ref": "#/$defs/SearchContextLine"
             }
           },
-          "markdown": {
-            "description": "Location in the deterministic full Markdown render.",
-            "$ref": "#/$defs/SearchMarkdownRange"
-          },
-          "matchedText": {
-            "description": "Exact text consumed by the matcher.",
-            "type": "string"
+          "occurrences": {
+            "description": "Exact matcher occurrences on this rendered line or line span.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchOccurrence"
+            }
           },
           "ordinal": {
-            "description": "One-based occurrence number in the unpaginated result set.",
+            "description": "One-based line-group number in the unpaginated result set.",
             "type": "integer",
             "format": "uint32",
             "minimum": 0
@@ -4838,9 +4837,26 @@
         "required": [
           "ordinal",
           "outline",
-          "matchedText",
-          "markdown",
+          "occurrences",
           "preview"
+        ]
+      },
+      "SearchOccurrence": {
+        "description": "One exact matcher occurrence in the canonical Markdown render.",
+        "type": "object",
+        "properties": {
+          "markdown": {
+            "description": "Location in the deterministic full Markdown render.",
+            "$ref": "#/$defs/SearchMarkdownRange"
+          },
+          "matchedText": {
+            "description": "Exact text consumed by the matcher.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "matchedText",
+          "markdown"
         ]
       },
       "SearchQuery": {
@@ -4861,7 +4877,7 @@
             "minimum": 0
           },
           "limit": {
-            "description": "Maximum number of matches returned.",
+            "description": "Maximum number of matching line groups returned.",
             "type": "integer",
             "format": "uint32",
             "default": 100,
@@ -4869,7 +4885,7 @@
             "minimum": 1
           },
           "offset": {
-            "description": "Number of matching results skipped before collection.",
+            "description": "Number of matching line groups skipped before collection.",
             "type": "integer",
             "format": "uint32",
             "default": 0,

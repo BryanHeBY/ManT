@@ -827,12 +827,12 @@ both structural locations and rendered coordinates.
 | `label`, `source`, `meta` | Source identity |
 | `query` | Fully normalized search settings |
 | `render` | Coordinate-space descriptor |
-| `total` | All matching occurrences before pagination |
-| `returned` | Number of matches in this page |
-| `offset` | Echoed pagination offset |
+| `total` | All matching rendered-line groups before pagination |
+| `returned` | Number of line groups in this page |
+| `offset` | Echoed line-group pagination offset |
 | `truncated` | Whether more matches remain |
 | `nextOffset` | Next deterministic offset when truncated |
-| `matches` | Exact occurrences |
+| `matches` | Rendered-line groups containing exact occurrences |
 
 `query` always echoes all defaults, even when the request omitted them.
 A no-match search is successful and returns `total = 0` with an empty
@@ -861,16 +861,22 @@ coordinates. Columns count Unicode scalar values rather than UTF-8 bytes.
 `scope = "visible"` changes what can match, but coordinates still point into
 the canonical Markdown. `scope = "markdown"` also allows matches in markup.
 
-Each match includes:
+Matches on the same rendered line and in the same outline node form one
+pagination unit. This keeps a regular expression with several matches on one
+line from duplicating its preview or context. Each line group includes:
 
 - a one-based global `ordinal` that is not reset by pagination;
 - an `outline` trail ending at the nearest reusable node accepted by excerpt
   selection;
-- exact `matchedText`;
-- its Markdown range;
+- one or more `occurrences`, each containing exact `matchedText` and its
+  Markdown range;
 - an optional original `source` span;
 - a human-readable `preview`;
 - optional full Markdown context lines.
+
+Text presentations additionally merge overlapping context windows inside one
+outline node and list all columns for a matching line once. Structured results
+retain every exact occurrence range.
 
 The trail has the same `ancestors` and typed terminal `node` shape used by
 excerpt selections. The node union uses the same `tldr`, `document-root`,

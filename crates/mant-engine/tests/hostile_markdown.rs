@@ -147,27 +147,30 @@ fn verify_search_result(
         "{label}: total covers returned matches"
     );
     for found in &result.matches {
-        let start = usize::try_from(found.markdown.start_byte).expect("start fits usize");
-        let end = usize::try_from(found.markdown.end_byte).expect("end fits usize");
-        assert!(
-            start <= end && end <= addressable.len(),
-            "{label}: match byte range must stay inside the render"
-        );
-        assert!(
-            addressable.is_char_boundary(start) && addressable.is_char_boundary(end),
-            "{label}: match byte range must sit on char boundaries"
-        );
-        if scope == SearchScope::Markdown {
-            assert_eq!(
-                &addressable[start..end],
-                found.matched_text,
-                "{label}: markdown-scope coordinates must slice the matched text"
+        for occurrence in &found.occurrences {
+            let start = usize::try_from(occurrence.markdown.start_byte).expect("start fits usize");
+            let end = usize::try_from(occurrence.markdown.end_byte).expect("end fits usize");
+            assert!(
+                start <= end && end <= addressable.len(),
+                "{label}: match byte range must stay inside the render"
+            );
+            assert!(
+                addressable.is_char_boundary(start) && addressable.is_char_boundary(end),
+                "{label}: match byte range must sit on char boundaries"
+            );
+            if scope == SearchScope::Markdown {
+                assert_eq!(
+                    &addressable[start..end],
+                    occurrence.matched_text,
+                    "{label}: markdown-scope coordinates must slice the matched text"
+                );
+            }
+            assert!(
+                occurrence.markdown.start_line >= 1
+                    && occurrence.markdown.start_line <= result.render.line_count,
+                "{label}: match line must exist in the render"
             );
         }
-        assert!(
-            found.markdown.start_line >= 1 && found.markdown.start_line <= result.render.line_count,
-            "{label}: match line must exist in the render"
-        );
         let selector = vec![found.outline.node.path().to_owned()];
         select_excerpt(query, &selector).unwrap_or_else(|error| {
             panic!("{label}: match node {selector:?} must be selectable: {error}")

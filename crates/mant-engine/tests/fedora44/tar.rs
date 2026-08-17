@@ -89,8 +89,8 @@ fn search_maps_long_options_to_markdown_lines_and_selectable_nodes() {
         })
         .expect("--acls option match");
     assert!(option.outline.node.path().contains("/e"));
-    assert!(option.markdown.start_line > 1);
-    assert!(option.markdown.start_column > 0);
+    assert!(option.occurrences[0].markdown.start_line > 1);
+    assert!(option.occurrences[0].markdown.start_column > 0);
     assert!(option.preview.contains("--acls"));
 
     let excerpt = select_excerpt(&query, &[option.outline.node.path().to_owned()])

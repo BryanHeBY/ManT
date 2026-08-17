@@ -1,7 +1,9 @@
 //! Presents structure-aware search results for terminals and language models.
 
 use mant_ir::DefinitionRole;
-use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch};
+use std::collections::BTreeMap;
+
+use mant_protocol::{OutlineNodeReference, OutlineTrail, QuerySearch, SearchMatch};
 use pulldown_cmark::{Event, Parser};
 
 /// Semantic roles in the grep-like search presentation.
@@ -88,7 +90,9 @@ pub fn render_search_text_with(
     }
 
     let mut previous_outline = None;
-    for (index, found) in search.matches.iter().enumerate() {
+    let mut index = 0;
+    while index < search.matches.len() {
+        let found = &search.matches[index];
         if previous_outline != Some(&found.outline) {
             if index > 0 {
                 output.line();
@@ -98,43 +102,40 @@ pub fn render_search_text_with(
             output.plain("  ");
             render_outline_trail(&mut output, &found.outline);
         }
+        let end = context_group_end(&search.matches, index);
+        let group = &search.matches[index..end];
         output.line();
         output.plain("  ");
-        output.push(
-            SearchTextRole::Coordinate,
-            &format!(
-                "{}:{}",
-                found.markdown.start_line, found.markdown.start_column
-            ),
-        );
+        output.push(SearchTextRole::Coordinate, &group_coordinates(group));
         if found.context.is_empty() {
             output.plain("  ");
             let visible = render_search_line_text(&found.preview);
-            output.matching_line(&visible, &found.matched_text);
+            output.matching_line(&visible, occurrence_texts(found));
         } else {
-            for line in &found.context {
+            for (line_number, (text, matched, matched_texts)) in merged_context(group) {
                 output.line();
                 output.plain("    ");
                 output.push(
-                    if line.matched {
+                    if matched {
                         SearchTextRole::Match
                     } else {
                         SearchTextRole::Muted
                     },
-                    if line.matched { ">" } else { " " },
+                    if matched { ">" } else { " " },
                 );
                 output.plain(" ");
-                output.push(SearchTextRole::Coordinate, &line.line.to_string());
+                output.push(SearchTextRole::Coordinate, &line_number.to_string());
                 output.plain(" ");
-                let visible = render_search_line_text(&line.text);
-                if line.matched {
-                    output.matching_line(&visible, &found.matched_text);
+                let visible = render_search_line_text(text);
+                if matched {
+                    output.matching_line(&visible, matched_texts);
                 } else {
                     output.plain(&visible);
                 }
             }
         }
         previous_outline = Some(&found.outline);
+        index = end;
     }
     if let Some(next_offset) = search.next_offset {
         output.line();
@@ -177,33 +178,123 @@ where
         self.rendered.push('\n');
     }
 
-    fn matching_line(&mut self, line: &str, matched: &str) {
-        if matched.is_empty() {
+    fn matching_line<'a>(&mut self, line: &str, matched: impl IntoIterator<Item = &'a str>) {
+        let mut ranges = matched
+            .into_iter()
+            .filter(|matched| !matched.is_empty())
+            .flat_map(|matched| {
+                line.match_indices(matched)
+                    .map(move |(start, value)| (start, start + value.len()))
+            })
+            .collect::<Vec<_>>();
+        if ranges.is_empty() {
             self.plain(line);
             return;
         }
-
-        let mut start = 0;
-        let mut found = false;
-        for (offset, _) in line.match_indices(matched) {
-            found = true;
-            self.plain(&line[start..offset]);
-            let end = offset + matched.len();
-            self.push(SearchTextRole::Match, &line[offset..end]);
-            start = end;
+        ranges.sort_unstable();
+        let mut merged: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
+        for (start, end) in ranges {
+            if let Some((_, previous_end)) = merged.last_mut().filter(|(_, end)| start <= *end) {
+                *previous_end = (*previous_end).max(end);
+            } else {
+                merged.push((start, end));
+            }
         }
-        if found {
-            self.plain(&line[start..]);
-        } else {
-            // Markdown-scope matches can target presentation syntax that is
-            // absent from the visible projection. Do not imply a false range.
-            self.plain(line);
+        let mut position = 0;
+        for (start, end) in merged {
+            self.plain(&line[position..start]);
+            self.push(SearchTextRole::Match, &line[start..end]);
+            position = end;
         }
+        self.plain(&line[position..]);
     }
 
     fn finish(self) -> String {
         self.rendered.trim_end().to_owned()
     }
+}
+
+fn occurrence_texts(found: &SearchMatch) -> impl Iterator<Item = &str> {
+    found
+        .occurrences
+        .iter()
+        .map(|occurrence| occurrence.matched_text.as_str())
+}
+
+fn group_coordinates(matches: &[SearchMatch]) -> String {
+    let mut lines: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for occurrence in matches.iter().flat_map(|found| found.occurrences.iter()) {
+        lines
+            .entry(occurrence.markdown.start_line)
+            .or_default()
+            .push(occurrence.markdown.start_column);
+    }
+    lines
+        .into_iter()
+        .map(|(line, mut columns)| {
+            columns.sort_unstable();
+            columns.dedup();
+            format!(
+                "{line}:{}",
+                columns
+                    .into_iter()
+                    .map(|column| column.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn context_group_end(matches: &[SearchMatch], start: usize) -> usize {
+    let Some((_, mut last_line)) = context_bounds(&matches[start]) else {
+        return start + 1;
+    };
+    let outline = &matches[start].outline;
+    let mut end = start + 1;
+    while let Some(found) = matches.get(end) {
+        let Some((first_line, found_last_line)) = context_bounds(found) else {
+            break;
+        };
+        if &found.outline != outline || first_line > last_line.saturating_add(1) {
+            break;
+        }
+        last_line = last_line.max(found_last_line);
+        end += 1;
+    }
+    end
+}
+
+fn context_bounds(found: &SearchMatch) -> Option<(u32, u32)> {
+    Some((found.context.first()?.line, found.context.last()?.line))
+}
+
+type MergedContext<'a> = BTreeMap<u32, (&'a str, bool, Vec<&'a str>)>;
+
+fn merged_context(matches: &[SearchMatch]) -> MergedContext<'_> {
+    let mut merged: MergedContext<'_> = BTreeMap::new();
+    for found in matches {
+        for line in &found.context {
+            let entry = merged
+                .entry(line.line)
+                .or_insert_with(|| (line.text.as_str(), false, Vec::new()));
+            entry.1 |= line.matched;
+            if line.matched {
+                entry.2.extend(
+                    found
+                        .occurrences
+                        .iter()
+                        .filter(|occurrence| {
+                            (occurrence.markdown.start_line..=occurrence.markdown.end_line)
+                                .contains(&line.line)
+                        })
+                        .map(|occurrence| occurrence.matched_text.as_str()),
+                );
+            }
+        }
+    }
+    merged
 }
 
 fn render_outline_trail<F>(output: &mut SearchTextRenderer<F>, trail: &OutlineTrail)
@@ -290,8 +381,8 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
                     .join(" → ")
             ),
             format!(
-                "- Markdown: line {}, column {}",
-                found.markdown.start_line, found.markdown.start_column
+                "- Markdown: {}",
+                group_coordinates(std::slice::from_ref(found))
             ),
         ];
         if let Some(source) = found.source {
@@ -342,8 +433,9 @@ fn escape_text(value: &str) -> String {
 mod tests {
     use mant_protocol::{
         MarkdownSchema, OutlineNodeReference, OutlineReference, OutlineTrail, QuerySearch,
-        SearchCase, SearchMarkdownRange, SearchMatch, SearchQuery, SearchRender,
-        SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope, SearchSyntax,
+        SearchCase, SearchContextLine, SearchMarkdownRange, SearchMatch, SearchOccurrence,
+        SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSchema,
+        SearchScope, SearchSyntax,
     };
 
     use super::{
@@ -400,15 +492,17 @@ mod tests {
                         names: vec!["--acls".to_owned()],
                     },
                 },
-                matched_text: "--acls".to_owned(),
-                markdown: SearchMarkdownRange {
-                    start_byte: 10,
-                    end_byte: 16,
-                    start_line: 824,
-                    start_column: 3,
-                    end_line: 824,
-                    end_column: 9,
-                },
+                occurrences: vec![SearchOccurrence {
+                    matched_text: "--acls".to_owned(),
+                    markdown: SearchMarkdownRange {
+                        start_byte: 10,
+                        end_byte: 16,
+                        start_line: 824,
+                        start_column: 3,
+                        end_line: 824,
+                        end_column: 9,
+                    },
+                }],
                 source: None,
                 preview: "- `--acls`".to_owned(),
                 context: Vec::new(),
@@ -457,17 +551,22 @@ mod tests {
     #[test]
     fn search_text_groups_adjacent_matches_by_exact_outline_node() {
         let mut result = result();
+        let mut same_line = result.matches[0].occurrences[0].clone();
+        same_line.markdown.start_column = 14;
+        same_line.markdown.end_column = 20;
+        result.matches[0].occurrences.push(same_line);
         let mut second = result.matches[0].clone();
         second.ordinal = 2;
-        second.markdown.start_line = 825;
-        second.markdown.end_line = 825;
-        second.markdown.start_column = 7;
-        second.markdown.end_column = 13;
+        second.occurrences.truncate(1);
+        second.occurrences[0].markdown.start_line = 825;
+        second.occurrences[0].markdown.end_line = 825;
+        second.occurrences[0].markdown.start_column = 7;
+        second.occurrences[0].markdown.end_column = 13;
 
         let mut third = second.clone();
         third.ordinal = 3;
-        third.markdown.start_line = 900;
-        third.markdown.end_line = 900;
+        third.occurrences[0].markdown.start_line = 900;
+        third.occurrences[0].markdown.end_line = 900;
         third.outline.node = OutlineNodeReference::DocumentSection {
             path: "6".to_owned().into(),
             id: "examples".to_owned().into(),
@@ -481,8 +580,46 @@ mod tests {
         let rendered = render_search_text(&result);
 
         assert_eq!(rendered.matches("Outline 5.3/e17").count(), 1);
-        assert!(rendered.contains("  824:3  --acls\n  825:7  --acls"));
+        assert!(rendered.contains("  824:3,14  --acls\n  825:7  --acls"));
         assert_eq!(rendered.matches("Outline 6: Examples").count(), 1);
         assert!(rendered.contains("\n\ntar(1)  Outline 6: Examples\n  900:7  --acls"));
+    }
+
+    #[test]
+    fn search_text_merges_overlapping_context_windows() {
+        let mut result = result();
+        result.matches[0].context = vec![
+            context(823, "before", false),
+            context(824, "first --acls", true),
+            context(825, "between", false),
+        ];
+        let mut second = result.matches[0].clone();
+        second.ordinal = 2;
+        second.occurrences[0].markdown.start_line = 826;
+        second.occurrences[0].markdown.end_line = 826;
+        second.occurrences[0].markdown.start_column = 8;
+        second.context = vec![
+            context(825, "between", false),
+            context(826, "second --acls", true),
+            context(827, "after", false),
+        ];
+        result.total = 2;
+        result.returned = 2;
+        result.matches.push(second);
+
+        let rendered = render_search_text(&result);
+
+        assert!(rendered.contains("  824:3; 826:8"));
+        assert_eq!(rendered.matches(" 825 between").count(), 1);
+        assert_eq!(rendered.matches(" 824 first --acls").count(), 1);
+        assert_eq!(rendered.matches(" 826 second --acls").count(), 1);
+    }
+
+    fn context(line: u32, text: &str, matched: bool) -> SearchContextLine {
+        SearchContextLine {
+            line,
+            text: text.to_owned(),
+            matched,
+        }
     }
 }

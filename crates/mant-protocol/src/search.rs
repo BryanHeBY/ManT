@@ -7,7 +7,7 @@ use mant_ir::{DocumentMeta, DocumentSource, SourceSpan};
 
 use crate::OutlineTrail;
 
-/// Default maximum number of search matches returned in one page.
+/// Default maximum number of matching line groups returned in one page.
 pub const DEFAULT_SEARCH_LIMIT: u32 = 100;
 
 /// Pattern language used for one search.
@@ -68,11 +68,11 @@ pub struct SearchQuery {
     #[serde(default)]
     #[schemars(range(max = 100))]
     pub context_lines: u16,
-    /// Maximum number of matches returned.
+    /// Maximum number of matching line groups returned.
     #[serde(default = "default_search_limit")]
     #[schemars(range(min = 1, max = 10000))]
     pub limit: u32,
-    /// Number of matching results skipped before collection.
+    /// Number of matching line groups skipped before collection.
     #[serde(default)]
     pub offset: u32,
 }
@@ -157,7 +157,7 @@ pub struct QuerySearch {
     pub query: SearchQuery,
     /// Coordinate-space description shared by all matches.
     pub render: SearchRender,
-    /// Total matches before pagination.
+    /// Total matching line groups before pagination.
     pub total: u32,
     /// Number of matches present in [`Self::matches`].
     pub returned: u32,
@@ -168,22 +168,20 @@ pub struct QuerySearch {
     /// Offset for the next page, when one exists.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_offset: Option<u32>,
-    /// Matching occurrences in render order.
+    /// Matching line groups in render order.
     pub matches: Vec<SearchMatch>,
 }
 
-/// One exact occurrence and both of its structural and rendered locations.
+/// One rendered line or line span containing one or more exact occurrences.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchMatch {
-    /// One-based occurrence number in the unpaginated result set.
+    /// One-based line-group number in the unpaginated result set.
     pub ordinal: u32,
     /// Complete logical location of the nearest addressable node.
     pub outline: OutlineTrail,
-    /// Exact text consumed by the matcher.
-    pub matched_text: String,
-    /// Location in the deterministic full Markdown render.
-    pub markdown: SearchMarkdownRange,
+    /// Exact matcher occurrences on this rendered line or line span.
+    pub occurrences: Vec<SearchOccurrence>,
     /// Original-source location, when the parser retained one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceSpan>,
@@ -192,6 +190,16 @@ pub struct SearchMatch {
     /// Optional rendered lines surrounding the match.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub context: Vec<SearchContextLine>,
+}
+
+/// One exact matcher occurrence in the canonical Markdown render.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchOccurrence {
+    /// Exact text consumed by the matcher.
+    pub matched_text: String,
+    /// Location in the deterministic full Markdown render.
+    pub markdown: SearchMarkdownRange,
 }
 
 /// Half-open byte range plus one-based human coordinates in full Markdown.

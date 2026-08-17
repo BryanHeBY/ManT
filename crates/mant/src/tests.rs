@@ -859,7 +859,9 @@ fn searches_report_markdown_coordinates_and_reusable_outline_nodes() {
     assert_eq!(value["total"], 1);
     assert_eq!(value["matches"][0]["outline"]["node"]["path"], "2.1");
     assert_eq!(value["matches"][0]["outline"]["node"]["id"], "common-3");
-    assert!(value["matches"][0]["markdown"]["startLine"].as_u64() > Some(1));
+    assert!(
+        value["matches"][0]["occurrences"][0]["markdown"]["startLine"].as_u64() > Some(1)
+    );
     assert!(diagnostics.is_empty());
 
     let (status, output, diagnostics) = invoke(&["demo", "--grep", "missing"], b"", &host);

@@ -10,8 +10,8 @@ use grep_matcher::Matcher;
 use grep_regex::RegexMatcherBuilder;
 use mant_protocol::{
     MarkdownSchema, QuerySearch, SearchCase, SearchContextLine, SearchMarkdownRange, SearchMatch,
-    SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope, SearchSchema, SearchScope,
-    SearchSyntax,
+    SearchOccurrence, SearchQuery, SearchRender, SearchRenderFormat, SearchRenderScope,
+    SearchSchema, SearchScope, SearchSyntax,
 };
 use pulldown_cmark::{Event, Parser, TagEnd};
 use regex_syntax::ParserBuilder;
@@ -114,10 +114,11 @@ pub fn search_query(
         return Err(non_utf8_pattern_error());
     }
 
-    let total = u32::try_from(raw_matches.len()).unwrap_or(u32::MAX);
+    let raw_groups = group_matches_by_rendered_lines(raw_matches, markdown, &lines);
+    let total = u32::try_from(raw_groups.len()).unwrap_or(u32::MAX);
     let offset = usize::try_from(request.offset).unwrap_or(usize::MAX);
     let limit = usize::try_from(request.limit).unwrap_or(usize::MAX);
-    let selected = raw_matches
+    let selected = raw_groups
         .iter()
         .enumerate()
         .skip(offset)
@@ -250,20 +251,57 @@ struct RawMatch {
     owner: Owner,
 }
 
+struct RawMatchGroup {
+    matches: Vec<RawMatch>,
+    start_line_index: usize,
+    end_line_index: usize,
+}
+
+fn group_matches_by_rendered_lines(
+    matches: Vec<RawMatch>,
+    markdown: &str,
+    lines: &LineIndex,
+) -> Vec<RawMatchGroup> {
+    let mut groups: Vec<RawMatchGroup> = Vec::new();
+    for found in matches {
+        let start_line_index = lines.position(markdown, found.markdown.start).line_index;
+        let end_line_index = lines.position(markdown, found.markdown.end).line_index;
+        if let Some(group) = groups.last_mut().filter(|group| {
+            group.start_line_index == start_line_index
+                && group.end_line_index == end_line_index
+                && group
+                    .matches
+                    .first()
+                    .is_some_and(|first| first.owner.outline == found.owner.outline)
+        }) {
+            group.matches.push(found);
+        } else {
+            groups.push(RawMatchGroup {
+                matches: vec![found],
+                start_line_index,
+                end_line_index,
+            });
+        }
+    }
+    groups
+}
+
 fn build_match(
     index: usize,
-    found: &RawMatch,
+    found: &RawMatchGroup,
     searchable: &str,
     markdown: &str,
     lines: &LineIndex,
     context_lines: u16,
 ) -> SearchMatch {
-    let start = lines.position(markdown, found.markdown.start);
-    let end = lines.position(markdown, found.markdown.end);
+    let first = &found.matches[0];
+    let start = lines.position(markdown, first.markdown.start);
     let preview = display_markdown_line(lines.line(markdown, start.line_index));
-    let context_start = start.line_index.saturating_sub(usize::from(context_lines));
-    let context_end = end
-        .line_index
+    let context_start = found
+        .start_line_index
+        .saturating_sub(usize::from(context_lines));
+    let context_end = found
+        .end_line_index
         .saturating_add(usize::from(context_lines))
         .min(lines.count().saturating_sub(1));
     let context = if context_lines == 0 {
@@ -273,24 +311,36 @@ fn build_match(
             .map(|line_index| SearchContextLine {
                 line: u32::try_from(line_index.saturating_add(1)).unwrap_or(u32::MAX),
                 text: display_markdown_line(lines.line(markdown, line_index)),
-                matched: (start.line_index..=end.line_index).contains(&line_index),
+                matched: (found.start_line_index..=found.end_line_index).contains(&line_index),
             })
             .collect()
     };
 
     SearchMatch {
         ordinal: u32::try_from(index.saturating_add(1)).unwrap_or(u32::MAX),
-        outline: found.owner.outline.clone(),
-        matched_text: searchable[found.searchable.clone()].to_owned(),
-        markdown: SearchMarkdownRange {
-            start_byte: u64::try_from(found.markdown.start).unwrap_or(u64::MAX),
-            end_byte: u64::try_from(found.markdown.end).unwrap_or(u64::MAX),
-            start_line: u32::try_from(start.line_index.saturating_add(1)).unwrap_or(u32::MAX),
-            start_column: u32::try_from(start.column).unwrap_or(u32::MAX),
-            end_line: u32::try_from(end.line_index.saturating_add(1)).unwrap_or(u32::MAX),
-            end_column: u32::try_from(end.column).unwrap_or(u32::MAX),
-        },
-        source: found.owner.source,
+        outline: first.owner.outline.clone(),
+        occurrences: found
+            .matches
+            .iter()
+            .map(|occurrence| {
+                let start = lines.position(markdown, occurrence.markdown.start);
+                let end = lines.position(markdown, occurrence.markdown.end);
+                SearchOccurrence {
+                    matched_text: searchable[occurrence.searchable.clone()].to_owned(),
+                    markdown: SearchMarkdownRange {
+                        start_byte: u64::try_from(occurrence.markdown.start).unwrap_or(u64::MAX),
+                        end_byte: u64::try_from(occurrence.markdown.end).unwrap_or(u64::MAX),
+                        start_line: u32::try_from(start.line_index.saturating_add(1))
+                            .unwrap_or(u32::MAX),
+                        start_column: u32::try_from(start.column).unwrap_or(u32::MAX),
+                        end_line: u32::try_from(end.line_index.saturating_add(1))
+                            .unwrap_or(u32::MAX),
+                        end_column: u32::try_from(end.column).unwrap_or(u32::MAX),
+                    },
+                }
+            })
+            .collect(),
+        source: first.owner.source,
         preview,
         context,
     }
@@ -631,11 +681,44 @@ mod tests {
 
         assert_eq!(result.total, 1);
         assert_eq!(result.matches[0].outline.node.path(), "1/e1");
-        assert_eq!(result.matches[0].matched_text, "access control");
-        assert!(result.matches[0].markdown.start_line > 1);
+        assert_eq!(
+            result.matches[0].occurrences[0].matched_text,
+            "access control"
+        );
+        assert!(result.matches[0].occurrences[0].markdown.start_line > 1);
         assert!(result.matches[0].preview.contains("**access control**"));
         assert!(!result.matches[0].preview.contains("<a id="));
         assert!(!result.matches[0].context.is_empty());
+    }
+
+    #[test]
+    fn same_line_occurrences_form_one_paginated_search_result() {
+        let mut query = query();
+        let Block::DefinitionList { items, .. } =
+            &mut query.document.as_mut().expect("manual").sections[0].blocks[0]
+        else {
+            panic!("fixture contains a definition list");
+        };
+        items[0].description = vec![Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "needle, then another needle on one line".to_owned(),
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        }];
+
+        let mut request = request("needle");
+        request.limit = 1;
+        let result = search_query(&query, &request).expect("search");
+
+        assert_eq!(result.total, 1);
+        assert_eq!(result.returned, 1);
+        assert_eq!(result.matches[0].occurrences.len(), 2);
+        assert_eq!(
+            result.matches[0].occurrences[0].markdown.start_line,
+            result.matches[0].occurrences[1].markdown.start_line
+        );
+        assert!(!result.truncated);
     }
 
     #[test]
