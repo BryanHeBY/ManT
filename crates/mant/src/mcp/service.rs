@@ -50,7 +50,7 @@ impl QueryService {
 }
 
 pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> String {
-    use mant_engine::{ManualLoadError, QueryError, QueryExecutionError};
+    use mant_engine::{ManualLoadError, ProjectionError, QueryError, QueryExecutionError};
 
     fn manual_error_for_mcp(error: &ManualLoadError) -> String {
         match error {
@@ -63,7 +63,21 @@ pub(super) fn query_error_for_mcp(error: mant_engine::QueryExecutionError) -> St
     }
 
     let QueryExecutionError::Query(error) = error else {
-        return error.to_string();
+        return match error {
+            QueryExecutionError::Projection(ProjectionError::UnknownSelector {
+                document,
+                selector,
+            }) => format!(
+                "document '{document}' has no outline node '{selector}'; call mant_outline with detail=entries for available selectors"
+            ),
+            QueryExecutionError::Projection(ProjectionError::ExplanationRequiresEntry {
+                document,
+                selector,
+            }) => format!(
+                "document '{document}' outline node '{selector}' is not a semantic entry; use mant_read for sections"
+            ),
+            other => other.to_string(),
+        };
     };
     match error {
         QueryError::Markdown { .. } => {

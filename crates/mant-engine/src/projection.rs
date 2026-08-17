@@ -89,7 +89,7 @@ impl fmt::Display for ProjectionError {
             Self::EmptySelector => formatter.write_str("outline node must not be empty"),
             Self::UnknownSelector { document, selector } => write!(
                 formatter,
-                "document '{document}' has no outline node '{selector}'; inspect its entries outline as JSON for available selectors and diagnostics"
+                "document '{document}' has no outline node '{selector}'; inspect its entries outline for available selectors and diagnostics"
             ),
             Self::AmbiguousSelector {
                 document,
@@ -110,7 +110,7 @@ impl fmt::Display for ProjectionError {
             }
             Self::ExplanationRequiresEntry { document, selector } => write!(
                 formatter,
-                "document '{document}' outline node '{selector}' is not a semantic entry; use --node for sections"
+                "document '{document}' outline node '{selector}' is not a semantic entry; select a semantic entry instead"
             ),
         }
     }

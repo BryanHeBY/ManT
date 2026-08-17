@@ -73,11 +73,17 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
 fn projection_failure(error: ProjectionError) -> Failure {
     match error {
         ProjectionError::MissingContent { .. } => Failure::operational(error),
+        ProjectionError::UnknownSelector { document, selector } => Failure::usage(format!(
+            "document '{document}' has no outline node '{selector}'\nhint: run `mant {document} --outline=entries --format json` for available selectors and diagnostics"
+        )),
+        ProjectionError::ExplanationRequiresEntry { document, selector } => {
+            Failure::usage(format!(
+                "document '{document}' outline node '{selector}' is not a semantic entry\nhint: use --node to read sections"
+            ))
+        }
         ProjectionError::EmptySelection
         | ProjectionError::EmptySelector
-        | ProjectionError::UnknownSelector { .. }
-        | ProjectionError::AmbiguousSelector { .. }
-        | ProjectionError::ExplanationRequiresEntry { .. } => Failure::usage(error),
+        | ProjectionError::AmbiguousSelector { .. } => Failure::usage(error),
     }
 }
 

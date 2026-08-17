@@ -340,6 +340,16 @@ mod tests {
             assert_eq!(annotations.read_only_hint, Some(true));
             assert_eq!(annotations.destructive_hint, Some(false));
             assert_eq!(annotations.open_world_hint, Some(false));
+            if tool.name == "mant_search" {
+                let properties = tool
+                    .input_schema
+                    .get("properties")
+                    .and_then(serde_json::Value::as_object)
+                    .expect("search properties");
+                assert!(properties.contains_key("limit"));
+                assert!(!properties.contains_key("offset"));
+                assert!(!properties.contains_key("scope"));
+            }
         }
     }
 
@@ -468,6 +478,20 @@ mod tests {
             assert!(!rendered.contains(r"C:\Users"), "{rendered}");
             assert!(!rendered.contains("/secret/"), "{rendered}");
         }
+    }
+
+    #[test]
+    fn mcp_projection_errors_use_tool_native_guidance() {
+        let rendered = query_error_for_mcp(mant_engine::QueryExecutionError::Projection(
+            mant_engine::ProjectionError::UnknownSelector {
+                document: "bash".to_owned(),
+                selector: "missing".to_owned(),
+            },
+        ));
+
+        assert!(rendered.contains("call mant_outline with detail=entries"));
+        assert!(!rendered.contains("as JSON"));
+        assert!(!rendered.contains("--outline"));
     }
 
     #[tokio::test]

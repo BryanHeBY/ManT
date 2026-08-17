@@ -716,7 +716,8 @@ fn explains_one_semantic_entry_through_the_excerpt_response() {
     let (status, output, diagnostics) = invoke(&["demo", "--explain=2"], b"", &host);
     assert_eq!(status, 2);
     assert!(output.is_empty());
-    assert!(diagnostics.contains("is not a semantic entry; use --node for sections"));
+    assert!(diagnostics.contains("is not a semantic entry"));
+    assert!(diagnostics.contains("hint: use --node to read sections"));
 }
 
 #[test]
@@ -897,7 +898,7 @@ fn unknown_nodes_are_concise_usage_failures() {
     assert_eq!(status, 2);
     assert!(output.is_empty());
     assert!(diagnostics.contains("document 'demo' has no outline node '9'"));
-    assert!(diagnostics.contains("inspect its entries outline as JSON"));
+    assert!(diagnostics.contains("mant demo --outline=entries --format json"));
 }
 
 #[test]
