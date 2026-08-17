@@ -628,18 +628,6 @@ fn protocol_version_is_a_clean_json_document() {
             "the protocol reference must document {field}"
         );
     }
-    for tool in [
-        "mant_documents_list",
-        "mant_document_outline",
-        "mant_document_get",
-        "mant_document_explain",
-        "mant_document_search",
-    ] {
-        assert!(
-            PROTOCOL_REFERENCE.contains(tool),
-            "the protocol reference must document {tool}"
-        );
-    }
 }
 
 #[test]

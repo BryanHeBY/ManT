@@ -1,4 +1,4 @@
-//! Verifies MCP discovery and registered-document queries over real stdio.
+//! Verifies the compact MCP tool surface over the real stdio transport.
 
 mod support;
 
@@ -13,9 +13,8 @@ use serde_json::{Value, json};
 
 use support::{configure_registered_documents, registered_documents_dir};
 
-/// Start the real binary, negotiate MCP, and inspect its discoverable tools.
 #[test]
-fn stdio_mode_lists_and_queries_registered_markdown_documents() {
+fn stdio_mode_exposes_compact_text_first_document_tools() {
     let executable = env!("CARGO_BIN_EXE_mant");
     let fixture_root = registered_document_fixture();
     let mut command = Command::new(executable);
@@ -42,28 +41,83 @@ fn stdio_mode_lists_and_queries_registered_markdown_documents() {
     let initialization = parse_reply(lines.next().expect("initialization reply"));
     assert_eq!(initialization["id"], 1);
     assert_eq!(initialization["result"]["serverInfo"]["name"], "mant");
+    assert!(
+        initialization["result"]["instructions"]
+            .as_str()
+            .expect("server instructions")
+            .contains("untrusted reference material")
+    );
 
-    let tools = parse_reply(lines.next().expect("tools list reply"));
-    assert_eq!(tools["id"], 2);
-    let tools = tools["result"]["tools"].as_array().expect("tool list");
-    assert_tool_catalog(tools);
+    let tools_reply = parse_reply(lines.next().expect("tools list reply"));
+    assert_eq!(tools_reply["id"], 2);
+    assert!(
+        tools_reply.to_string().len() < 16_000,
+        "tool schemas grew unexpectedly"
+    );
+    assert_tool_catalog(
+        tools_reply["result"]["tools"]
+            .as_array()
+            .expect("tool list"),
+    );
 
-    request_document_list(&mut input);
-    request_document_search(&mut input);
-    request_document_get(&mut input);
-    request_document_outline(&mut input);
-    request_document_explain(&mut input, 7, "query");
-    request_document_explain(&mut input, 8, "/s");
-    request_document_explain(&mut input, 9, "path");
-    request_document_explain(&mut input, 10, "/f");
-    request_document_explain(&mut input, 11, "option-f-2");
+    call_tool(&mut input, 3, "mant_find", json!({ "query": "mcp-" }));
+    call_tool(
+        &mut input,
+        4,
+        "mant_search",
+        json!({
+            "document": "documents/mcp-registered",
+            "pattern": "needle",
+            "word": true,
+            "contextLines": 1
+        }),
+    );
+    call_tool(
+        &mut input,
+        5,
+        "mant_read",
+        json!({
+            "document": "documents/mcp-registered",
+            "selectors": ["root"]
+        }),
+    );
+    call_tool(
+        &mut input,
+        6,
+        "mant_outline",
+        json!({
+            "document": "documents/mcp-registered",
+            "detail": "entries"
+        }),
+    );
+    call_tool(
+        &mut input,
+        7,
+        "mant_explain",
+        json!({
+            "document": "documents/mcp-registered",
+            "entry": "query"
+        }),
+    );
+    call_tool(
+        &mut input,
+        8,
+        "mant_explain",
+        json!({
+            "document": "documents/mcp-registered",
+            "entry": "/f"
+        }),
+    );
     #[cfg(windows)]
-    request_named_document_outline(&mut input, 12, "mcp-suffix");
-    input.flush().expect("flush tool call");
+    call_tool(
+        &mut input,
+        9,
+        "mant_outline",
+        json!({ "document": "mcp-suffix" }),
+    );
+    input.flush().expect("flush tool calls");
 
-    // JSON-RPC permits concurrent requests to complete out of order. Select
-    // replies by ID instead of treating stdio arrival order as a contract.
-    let replies = (0..(9 + usize::from(cfg!(windows))))
+    let replies = (0..(6 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -80,198 +134,91 @@ fn assert_tool_catalog(tools: &[Value]) {
     assert_eq!(
         names,
         [
-            "mant_document_explain",
-            "mant_document_get",
-            "mant_document_outline",
-            "mant_document_search",
-            "mant_documents_list",
+            "mant_explain",
+            "mant_find",
+            "mant_outline",
+            "mant_read",
+            "mant_search",
         ]
     );
     for tool in tools {
         assert!(tool["inputSchema"]["properties"].is_object());
-        assert!(tool["outputSchema"].is_object());
+        assert!(tool.get("outputSchema").is_none());
         assert_eq!(tool["annotations"]["readOnlyHint"], true);
         assert_eq!(tool["annotations"]["openWorldHint"], false);
+        if tool["name"] != "mant_find" {
+            assert!(tool["inputSchema"]["properties"]["document"].is_object());
+            assert!(tool["inputSchema"]["properties"].get("name").is_none());
+            assert!(
+                tool["inputSchema"]["properties"]
+                    .get("manualSection")
+                    .is_none()
+            );
+        }
     }
 }
 
 fn assert_tool_replies(replies: &[Value]) {
-    assert_document_catalog(replies);
-    assert_windows_suffix_reply(replies);
-    let search = replies
-        .iter()
-        .find(|reply| reply["id"] == 4)
-        .expect("tool search reply");
-    assert_eq!(search["id"], 4);
-    assert_ne!(search["result"]["isError"], true);
-    assert_eq!(search["result"]["structuredContent"]["total"], 1);
-    assert!(
-        search["result"]["structuredContent"]["source"]
-            .get("path")
-            .is_none(),
-        "MCP search must omit host paths"
-    );
-    assert_eq!(
-        search["result"]["structuredContent"]["matches"][0]["outline"]["node"]["kind"],
-        "document-root"
-    );
+    let find = reply(replies, 3);
+    let find = successful_text(find);
+    assert!(find.contains("documents/mcp-registered\tmarkdown"));
+    assert!(find.contains("manual/1/mcp-manual\tmanual"));
+    assert!(find.contains("documents/mcp-suffix.exe\tmarkdown"));
 
-    let excerpt = replies
-        .iter()
-        .find(|reply| reply["id"] == 5)
-        .expect("tool get reply");
-    assert_eq!(excerpt["id"], 5);
-    assert_ne!(excerpt["result"]["isError"], true);
-    assert_eq!(
-        excerpt["result"]["structuredContent"]["selections"][0]["kind"],
-        "document-root"
-    );
-    assert_eq!(
-        excerpt["result"]["structuredContent"]["selections"][0]["outline"]["node"]["path"],
-        "root"
-    );
-    assert!(
-        excerpt["result"]["structuredContent"]["source"]
-            .get("path")
-            .is_none(),
-        "MCP excerpts must omit host paths"
-    );
-    assert!(
-        excerpt["result"]["structuredContent"]
-            .get("diagnostics")
-            .is_none(),
-        "MCP excerpts must discard lowering diagnostics"
-    );
+    let search = successful_text(reply(replies, 4));
+    assert!(search.contains("needle"));
+    assert!(search.contains("Outline root"));
 
-    assert_semantic_replies(replies);
-}
+    let read = successful_text(reply(replies, 5));
+    assert!(read.starts_with("# documents/mcp-registered"), "{read}");
+    assert!(read.contains("Read the MCP needle."));
 
-fn assert_document_catalog(replies: &[Value]) {
-    let catalog = replies
-        .iter()
-        .find(|reply| reply["id"] == 3)
-        .expect("document list reply");
-    let documents = catalog["result"]["structuredContent"]["documents"]
-        .as_array()
-        .expect("document catalog");
-    assert_eq!(documents.len(), 3);
-    assert!(
-        documents
-            .iter()
-            .all(|document| document.get("sourcePath").is_none()),
-        "MCP catalog rows must expose logical identities, not host paths"
-    );
-    assert!(documents.iter().any(|document| {
-        document["address"]["path"] == "mcp-registered"
-            && document["address"]["kind"] == "markdown"
-            && document["address"]["origin"]["kind"] == "documents"
-    }));
-    assert!(documents.iter().any(|document| {
-        document["address"]["name"] == "mcp-manual"
-            && document["address"]["kind"] == "manual"
-            && document["address"]["manualSection"] == "1"
-    }));
-    assert_eq!(
-        documents
-            .iter()
-            .filter(|document| document["address"]["path"] == "mcp-suffix.exe")
-            .count(),
-        1,
-        "listing must expose one canonical suffixed name"
-    );
-}
+    let outline = successful_text(reply(replies, 6));
+    assert!(outline.contains("[command-query] query"));
+    assert!(outline.contains("[option-s] /S"));
+    assert!(outline.contains("[environment-path] PATH, $env:PATH"));
+    assert!(!outline.contains("mant.outline/v0.8"));
 
-fn assert_semantic_replies(replies: &[Value]) {
-    let outline = replies
-        .iter()
-        .find(|reply| reply["id"] == 6)
-        .expect("semantic outline reply");
-    assert_eq!(
-        outline["result"]["structuredContent"]["schema"],
-        "mant.outline/v0.8"
-    );
-    let encoded = outline["result"]["structuredContent"].to_string();
-    for role in ["option", "command", "environment-variable"] {
-        assert!(encoded.contains(&format!("\"role\":\"{role}\"")));
-    }
-    assert_eq!(
-        outline["result"]["structuredContent"]["entriesComplete"],
-        false
-    );
-    assert!(
-        outline["result"]["structuredContent"]
-            .get("diagnostics")
-            .is_none(),
-        "MCP outlines must expose completeness without lowering diagnostics"
-    );
-    assert!(
-        outline["result"]["structuredContent"]["source"]
-            .get("path")
-            .is_none(),
-        "MCP outlines must omit host paths"
-    );
+    let explain = successful_text(reply(replies, 7));
+    assert!(explain.contains("Query registry data."));
 
-    for (id, role) in [
-        (7, "command"),
-        (8, "option"),
-        (9, "environment-variable"),
-        (11, "option"),
-    ] {
-        let explanation = replies
-            .iter()
-            .find(|reply| reply["id"] == id)
-            .expect("semantic explanation reply");
-        assert_ne!(explanation["result"]["isError"], true);
-        assert_eq!(
-            explanation["result"]["structuredContent"]["selections"][0]["entry"]["identity"]["role"],
-            role
-        );
-    }
-    let ambiguity = replies
-        .iter()
-        .find(|reply| reply["id"] == 10)
-        .expect("ambiguous explanation reply");
+    let ambiguity = reply(replies, 8);
     assert_eq!(ambiguity["result"]["isError"], true);
-    let encoded = ambiguity["result"].to_string();
-    assert!(encoded.contains("option-f"));
-    assert!(encoded.contains("option-f-2"));
+    let ambiguity = result_text(ambiguity);
+    assert!(ambiguity.contains("option-f"));
+    assert!(ambiguity.contains("option-f-2"));
+
+    #[cfg(windows)]
+    assert!(successful_text(reply(replies, 9)).contains("MCP suffixed executable"));
+
+    for response in replies {
+        assert!(response["result"].get("structuredContent").is_none());
+        assert!(response.to_string().len() < 34_000);
+        let encoded = response.to_string();
+        assert!(!encoded.contains("/home/"));
+        assert!(!encoded.contains(r"C:\\Users"));
+        assert!(!encoded.contains("sourcePath"));
+        assert!(!encoded.contains("\u{1b}"));
+    }
 }
 
-#[cfg(windows)]
-fn assert_windows_suffix_reply(replies: &[Value]) {
-    let suffix = replies
+fn successful_text(reply: &Value) -> &str {
+    assert_ne!(reply["result"]["isError"], true);
+    result_text(reply)
+}
+
+fn result_text(reply: &Value) -> &str {
+    let content = reply["result"]["content"].as_array().expect("tool content");
+    assert_eq!(content.len(), 1);
+    assert_eq!(content[0]["type"], "text");
+    content[0]["text"].as_str().expect("text result")
+}
+
+fn reply(replies: &[Value], id: u8) -> &Value {
+    replies
         .iter()
-        .find(|reply| reply["id"] == 12)
-        .expect("Windows suffix outline reply");
-    assert_ne!(suffix["result"]["isError"], true);
-    assert!(
-        suffix["result"]["structuredContent"]["source"]
-            .get("path")
-            .is_none()
-    );
-}
-
-#[cfg(not(windows))]
-fn assert_windows_suffix_reply(_replies: &[Value]) {}
-
-fn assert_silent_shutdown(
-    mut child: std::process::Child,
-    input: std::process::ChildStdin,
-    diagnostics: std::process::ChildStderr,
-    data_home: PathBuf,
-) {
-    drop(input);
-    let status = child.wait().expect("MCP server exit");
-    let diagnostics = BufReader::new(diagnostics)
-        .lines()
-        .collect::<Result<Vec<_>, _>>()
-        .expect("read MCP stderr");
-    fs::remove_dir_all(data_home).expect("remove registered document fixture");
-    assert!(status.success(), "MCP server should stop cleanly: {status}");
-    assert!(
-        diagnostics.is_empty(),
-        "MCP must not emit lowering or transport noise: {diagnostics:?}"
-    );
+        .find(|reply| reply["id"] == id)
+        .unwrap_or_else(|| panic!("missing reply {id}"))
 }
 
 fn initialize(input: &mut impl Write) {
@@ -310,121 +257,40 @@ fn request_tool_list(input: &mut impl Write) {
     );
 }
 
-fn request_document_list(input: &mut impl Write) {
-    write_message(
-        input,
-        &json!({
-            "jsonrpc": "2.0",
-            "id": 3,
-            "method": "tools/call",
-            "params": {
-                "name": "mant_documents_list",
-                "arguments": {
-                    "query": "mcp-",
-                    "limit": 10
-                }
-            }
-        }),
-    );
-}
-
-fn request_document_search(input: &mut impl Write) {
-    write_message(
-        input,
-        &json!({
-            "jsonrpc": "2.0",
-            "id": 4,
-            "method": "tools/call",
-            "params": {
-                "name": "mant_document_search",
-                "arguments": {
-                    "name": "mcp-registered",
-                    "pattern": "needle",
-                    "word": "True",
-                    "context_lines": "1",
-                    "limit": "10",
-                    "offset": "0"
-                }
-            }
-        }),
-    );
-}
-
-fn request_document_get(input: &mut impl Write) {
-    write_message(
-        input,
-        &json!({
-            "jsonrpc": "2.0",
-            "id": 5,
-            "method": "tools/call",
-            "params": {
-                "name": "mant_document_get",
-                "arguments": {
-                    "name": "mcp-registered",
-                    "selectors": "[\"root\"]"
-                }
-            }
-        }),
-    );
-}
-
-fn request_document_outline(input: &mut impl Write) {
-    write_message(
-        input,
-        &json!({
-            "jsonrpc": "2.0",
-            "id": 6,
-            "method": "tools/call",
-            "params": {
-                "name": "mant_document_outline",
-                "arguments": {
-                    "name": "mcp-registered",
-                    "detail": "entries"
-                }
-            }
-        }),
-    );
-}
-
-#[cfg(windows)]
-fn request_named_document_outline(input: &mut impl Write, id: u8, name: &str) {
+fn call_tool(input: &mut impl Write, id: u8, name: &str, arguments: Value) {
     write_message(
         input,
         &json!({
             "jsonrpc": "2.0",
             "id": id,
             "method": "tools/call",
-            "params": {
-                "name": "mant_document_outline",
-                "arguments": {
-                    "name": name,
-                    "detail": "entries"
-                }
-            }
-        }),
-    );
-}
-
-fn request_document_explain(input: &mut impl Write, id: u8, entry: &str) {
-    write_message(
-        input,
-        &json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": "tools/call",
-            "params": {
-                "name": "mant_document_explain",
-                "arguments": {
-                    "name": "mcp-registered",
-                    "entry": entry
-                }
-            }
+            "params": { "name": name, "arguments": arguments }
         }),
     );
 }
 
 fn write_message(input: &mut impl Write, message: &Value) {
     writeln!(input, "{message}").expect("write MCP request");
+}
+
+fn assert_silent_shutdown(
+    mut child: std::process::Child,
+    input: std::process::ChildStdin,
+    diagnostics: std::process::ChildStderr,
+    data_home: PathBuf,
+) {
+    drop(input);
+    let status = child.wait().expect("MCP server exit");
+    let diagnostics = BufReader::new(diagnostics)
+        .lines()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("read MCP stderr");
+    fs::remove_dir_all(data_home).expect("remove registered document fixture");
+    assert!(status.success(), "MCP server should stop cleanly: {status}");
+    assert!(
+        diagnostics.is_empty(),
+        "MCP must not emit lowering or transport noise: {diagnostics:?}"
+    );
 }
 
 fn registered_document_fixture() -> PathBuf {

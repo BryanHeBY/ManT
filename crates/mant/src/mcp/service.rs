@@ -6,7 +6,7 @@ use mant_engine::{QueryPolicy, QueryViewResult};
 use mant_protocol::{CatalogQuery, DocumentCatalog, QueryRequest};
 use tokio::{sync::Semaphore, task};
 
-/// Serializes synchronous parser and filesystem work away from the protocol loop.
+/// Bounds synchronous parser and filesystem work away from the protocol loop.
 #[derive(Debug, Clone)]
 pub(super) struct QueryService {
     gate: Arc<Semaphore>,
@@ -15,7 +15,9 @@ pub(super) struct QueryService {
 impl QueryService {
     pub(super) fn new() -> Self {
         Self {
-            gate: Arc::new(Semaphore::new(1)),
+            // Native libmandoc parsing remains serialized by its own parser
+            // lock; independent Markdown and catalog reads need not block it.
+            gate: Arc::new(Semaphore::new(4)),
         }
     }
 

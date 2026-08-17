@@ -12,7 +12,7 @@ use tokio::io::{AsyncRead, ReadBuf};
 use super::MantMcpServer;
 
 /// Upper bound on one newline-delimited MCP request, in bytes.
-pub(super) const MAX_MCP_LINE_BYTES: usize = 8 * 1024 * 1024;
+pub(super) const MAX_MCP_LINE_BYTES: usize = 256 * 1024;
 
 /// Run the MCP server until the peer closes its standard-input stream.
 pub(crate) async fn run_stdio() -> u8 {
