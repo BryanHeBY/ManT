@@ -5,8 +5,7 @@ use super::{
     DocumentScope, DocumentSelector, DocumentTraversal, ErrorKind, InputFormat, InputFormatMode,
     NodeSelector, QueryFormat, QueryInput, QueryPolicy, QueryPresentation, QueryRequest,
     QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope, SearchSyntax,
-    default_scope_depth, default_scope_document_limit, default_search_limit, is_manual_section,
-    normalize_tldr_topic, parenthesized_manual_reference,
+    default_search_limit, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
 };
 
 pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
@@ -590,10 +589,8 @@ fn normalize_scope_query_source(
             documents,
             traversal: DocumentTraversal {
                 follow_links: options.follow_links,
-                max_depth: options.max_depth.unwrap_or_else(default_scope_depth),
-                max_documents: options
-                    .max_documents
-                    .unwrap_or_else(default_scope_document_limit),
+                max_depth: options.max_depth,
+                max_documents: options.max_documents,
             },
         },
         view,

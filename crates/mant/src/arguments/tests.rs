@@ -168,8 +168,8 @@ fn parses_bounded_multi_document_queries_without_changing_single_document_syntax
                     ],
                     traversal: DocumentTraversal {
                         follow_links: true,
-                        max_depth: 3,
-                        max_documents: 12,
+                        max_depth: Some(3),
+                        max_documents: Some(12),
                     },
                 },
                 view: Some(ScopeQueryView::Search {

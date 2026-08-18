@@ -6,11 +6,11 @@ use std::{error::Error, fmt};
 use mant_ir::visit::{Visit, walk_inline};
 use mant_ir::{DocumentAddress, Inline, LinkTarget, ResolvedContent};
 use mant_protocol::{
-    DocumentEdge, DocumentEdgeKind, DocumentScope, DocumentSelector, MAX_SCOPE_DEPTH,
-    MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, QueryInput, QueryRequest, RequestSchema,
-    ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResponse, ScopeQueryResult,
+    DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
+    MAX_SCOPE_DEPTH, MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, QueryInput, QueryRequest,
+    RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResponse, ScopeQueryResult,
     ScopeQuerySchema, ScopeQueryView, ScopeSearch, ScopedDocument, ScopedExplanation,
-    ScopedQueryFailure, ScopedSearchDocument, SearchQuery, UnresolvedDocument,
+    ScopedQueryFailure, ScopedSearchDocument, SearchQuery, TraversalLimit, UnresolvedDocument,
 };
 
 use crate::{
@@ -38,6 +38,8 @@ pub enum ScopeQueryError {
     DepthLimit,
     /// The document budget was zero, too large, or smaller than the root set.
     DocumentLimit,
+    /// Traversal limits were supplied while link following was disabled.
+    TraversalLimitsRequireLinks,
     /// A semantic-entry selector was empty.
     EmptyEntry,
     /// Search configuration was invalid.
@@ -65,6 +67,9 @@ impl fmt::Display for ScopeQueryError {
                 formatter,
                 "document limit must include every initial document and not exceed {MAX_SCOPE_DOCUMENT_LIMIT}"
             ),
+            Self::TraversalLimitsRequireLinks => {
+                formatter.write_str("maxDepth and maxDocuments require followLinks=true")
+            }
             Self::EmptyEntry => formatter.write_str("semantic entry must not be empty"),
             Self::Search(error) => error.fmt(formatter),
             Self::NoResolvedDocuments { reasons } => {
@@ -86,6 +91,7 @@ impl Error for ScopeQueryError {
             | Self::TooManyDocuments
             | Self::DepthLimit
             | Self::DocumentLimit
+            | Self::TraversalLimitsRequireLinks
             | Self::EmptyEntry
             | Self::NoResolvedDocuments { .. } => None,
         }
@@ -134,12 +140,17 @@ fn validate_document_scope(scope: &DocumentScope) -> Result<(), ScopeQueryError>
     if scope.documents.len() > MAX_SCOPE_DOCUMENTS {
         return Err(ScopeQueryError::TooManyDocuments);
     }
-    if scope.traversal.max_depth > MAX_SCOPE_DEPTH {
+    if !scope.traversal.follow_links
+        && (scope.traversal.max_depth.is_some() || scope.traversal.max_documents.is_some())
+    {
+        return Err(ScopeQueryError::TraversalLimitsRequireLinks);
+    }
+    if scope.traversal.effective_max_depth() > MAX_SCOPE_DEPTH {
         return Err(ScopeQueryError::DepthLimit);
     }
     let root_count = u32::try_from(scope.documents.len()).unwrap_or(u32::MAX);
-    if scope.traversal.max_documents < root_count
-        || scope.traversal.max_documents > MAX_SCOPE_DOCUMENT_LIMIT
+    if scope.traversal.effective_max_documents() < root_count
+        || scope.traversal.effective_max_documents() > MAX_SCOPE_DOCUMENT_LIMIT
     {
         return Err(ScopeQueryError::DocumentLimit);
     }
@@ -256,7 +267,6 @@ impl ScopeResolution {
                 edges: Vec::new(),
                 frontier: Vec::new(),
                 unresolved: Vec::new(),
-                truncated: false,
             },
             documents: Vec::new(),
             positions: BTreeMap::new(),
@@ -314,13 +324,31 @@ impl ScopeResolution {
     fn follow_links(&mut self, resolver: &DocumentResolver) {
         while let Some(position) = self.queue.pop_front() {
             let depth = self.graph.documents[position].depth;
-            if depth >= self.graph.query.traversal.max_depth {
+            if depth >= self.graph.query.traversal.effective_max_depth() {
+                self.record_depth_frontier(position);
                 continue;
             }
             let from = self.graph.documents[position].address.clone();
             for reference in document_references(&self.documents[position]) {
                 self.follow_reference(resolver, &from, depth, &reference);
             }
+        }
+    }
+
+    fn record_depth_frontier(&mut self, position: usize) {
+        let from = self.graph.documents[position].address.clone();
+        for reference in document_references(&self.documents[position]) {
+            if let Some(address) = reference.exact_address(&from) {
+                let edge = DocumentEdge {
+                    from: from.clone(),
+                    to: address,
+                    kind: reference.kind,
+                };
+                if self.record_existing_edge(&edge) {
+                    continue;
+                }
+            }
+            self.record_frontier(&from, &reference, TraversalLimit::MaxDepth);
         }
     }
 
@@ -341,11 +369,11 @@ impl ScopeResolution {
                 return;
             }
             if self.at_document_limit() {
-                self.record_frontier(edge);
+                self.record_frontier(from, reference, TraversalLimit::MaxDocuments);
                 return;
             }
         } else if self.at_document_limit() {
-            self.graph.truncated = true;
+            self.record_frontier(from, reference, TraversalLimit::MaxDocuments);
             return;
         }
 
@@ -390,7 +418,7 @@ impl ScopeResolution {
             return;
         }
         if self.at_document_limit() {
-            self.record_frontier(edge);
+            self.record_frontier(from, reference, TraversalLimit::MaxDocuments);
             return;
         }
         self.insert_linked(bundle, address, from, depth + 1, edge);
@@ -440,13 +468,25 @@ impl ScopeResolution {
 
     fn at_document_limit(&self) -> bool {
         u32::try_from(self.documents.len()).unwrap_or(u32::MAX)
-            >= self.graph.query.traversal.max_documents
+            >= self.graph.query.traversal.effective_max_documents()
     }
 
-    fn record_frontier(&mut self, edge: DocumentEdge) {
-        self.graph.truncated = true;
-        if !self.graph.frontier.contains(&edge) {
-            self.graph.frontier.push(edge);
+    fn record_frontier(
+        &mut self,
+        from: &DocumentAddress,
+        reference: &DocumentReference,
+        limit: TraversalLimit,
+    ) {
+        let frontier = DocumentFrontier {
+            from: from.clone(),
+            target: reference
+                .selector(from)
+                .unwrap_or_else(|| reference.fallback_selector()),
+            kind: reference.kind,
+            limit,
+        };
+        if !self.graph.frontier.contains(&frontier) {
+            self.graph.frontier.push(frontier);
         }
     }
 
@@ -460,6 +500,7 @@ impl ScopeResolution {
 
 fn execute_scope_explain(loaded: &LoadedDocumentScope, entry: &str) -> ScopeQueryResult {
     let mut matches = Vec::new();
+    let mut missed = 0_u32;
     let mut failures = Vec::new();
     for (scoped, bundle) in loaded.scope.documents.iter().zip(&loaded.documents) {
         match select_explanation(bundle, entry) {
@@ -468,7 +509,9 @@ fn execute_scope_explain(loaded: &LoadedDocumentScope, entry: &str) -> ScopeQuer
                 depth: scoped.depth,
                 excerpt,
             }),
-            Err(ProjectionError::UnknownSelector { .. }) => {}
+            Err(ProjectionError::UnknownSelector { .. }) => {
+                missed = missed.saturating_add(1);
+            }
             Err(error) => failures.push(ScopedQueryFailure {
                 address: scoped.address.clone(),
                 reason: error.to_string(),
@@ -478,6 +521,7 @@ fn execute_scope_explain(loaded: &LoadedDocumentScope, entry: &str) -> ScopeQuer
     ScopeQueryResult::Explain {
         entry: entry.to_owned(),
         matches,
+        missed,
         failures,
     }
 }
@@ -656,13 +700,34 @@ mod tests {
                 },
             ],
             traversal: mant_protocol::DocumentTraversal {
-                max_documents: 1,
+                follow_links: true,
+                max_documents: Some(1),
                 ..mant_protocol::DocumentTraversal::default()
             },
         };
         assert_eq!(
             validate_document_scope(&scope),
             Err(ScopeQueryError::DocumentLimit)
+        );
+    }
+
+    #[test]
+    fn explicit_traversal_limits_require_link_following() {
+        let scope = DocumentScope {
+            documents: vec![DocumentSelector {
+                selector: "a".to_owned(),
+                source: None,
+                manual_section: None,
+            }],
+            traversal: mant_protocol::DocumentTraversal {
+                follow_links: false,
+                max_depth: Some(0),
+                max_documents: None,
+            },
+        };
+        assert_eq!(
+            validate_document_scope(&scope),
+            Err(ScopeQueryError::TraversalLimitsRequireLinks)
         );
     }
 
@@ -682,6 +747,43 @@ mod tests {
         assert_eq!(
             reference.selector(&from).map(|selector| selector.selector),
             Some("documents/other".to_owned())
+        );
+    }
+
+    #[test]
+    fn frontier_retains_unresolved_manual_targets_without_inventing_an_address() {
+        let scope = DocumentScope {
+            documents: vec![DocumentSelector {
+                selector: "root".to_owned(),
+                source: None,
+                manual_section: Some("1".to_owned()),
+            }],
+            traversal: mant_protocol::DocumentTraversal {
+                follow_links: true,
+                max_depth: None,
+                max_documents: Some(1),
+            },
+        };
+        let from = DocumentAddress::Manual {
+            name: "root".to_owned(),
+            manual_section: "1".to_owned(),
+        };
+        let reference = DocumentReference {
+            target: LinkTarget::Manual {
+                name: "child".to_owned(),
+                manual_section: None,
+            },
+            kind: DocumentEdgeKind::Manual,
+        };
+        let mut resolution = ScopeResolution::new(&scope);
+        resolution.record_frontier(&from, &reference, TraversalLimit::MaxDocuments);
+
+        assert_eq!(resolution.graph.frontier.len(), 1);
+        assert_eq!(resolution.graph.frontier[0].target.selector, "child");
+        assert_eq!(resolution.graph.frontier[0].target.manual_section, None);
+        assert_eq!(
+            resolution.graph.frontier[0].limit,
+            TraversalLimit::MaxDocuments
         );
     }
 }

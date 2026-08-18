@@ -517,12 +517,16 @@ The request has three fields:
 | Field | Default | Bound | Meaning |
 | --- | ---: | ---: | --- |
 | `followLinks` | `false` | Boolean | Follow typed outbound document links |
-| `maxDepth` | `8` | 0 through 32 | Maximum link distance from an initial document |
-| `maxDocuments` | `64` | Root count through 256 | Distinct loaded documents, including roots |
+| `maxDepth` | `8` | 0 through 32 | Maximum number of link edges followed from an initial document |
+| `maxDocuments` | `64` | At least the initial-document count; at most 256 | Distinct loaded documents, including roots |
+
+`maxDepth` and `maxDocuments` are optional and valid only when `followLinks` is `true`; supplying either field while traversal is disabled is rejected. `maxDepth = 0` resolves only the initial documents and follows no links. `maxDepth = 1` additionally resolves their one-hop neighbours.
 
 Only `LinkTarget::Document` and `LinkTarget::Manual` create edges. Markdown targets resolve relative to the referring document and retain its personal/source namespace; a path escaping that namespace is rejected. Manual links with a section resolve that exact logical address. Page-local, external, and email links are excluded. Plain prose and filename prefixes are never interpreted as edges.
 
-Traversal is breadth-first. Initial selector order comes first, followed by typed links in source order. A canonical `DocumentAddress` supplies cycle detection and deduplication. A document reached by several parents is queried once while `reachedFrom` retains each distinct parent. Missing roots and links appear in `unresolved`; a request fails only when no initial document is readable. Reaching `maxDepth` completes the requested bounded traversal normally. Reaching `maxDocuments` sets `truncated` and records exact excluded edges in `frontier`.
+Traversal is breadth-first. Initial selector order comes first, followed by typed links in source order. A canonical `DocumentAddress` supplies cycle detection and deduplication. A document reached by several parents is queried once while `reachedFrom` retains each distinct parent. Missing roots and links appear in `unresolved`; `from` is absent for an initial selector and present for a followed link. A request fails only when no initial document is readable.
+
+`frontier` records each typed logical link that traversal did not follow. Its `limit` is `max-depth` or `max-documents`; its `target` remains a `DocumentSelector` because resolving a target can itself exceed the requested bound. Merely loading a document at `maxDepth` does not create a frontier entry when that document has no outbound typed links. Links from a boundary document to an address already loaded in the scope remain ordinary resolved `edges` rather than false truncation signals.
 
 Example:
 
@@ -554,9 +558,9 @@ Example:
 }
 ```
 
-The response uses `mant.scope-query/v0.8`. Its `scope` field contains the normalized request, ordered resolved documents, unique edges, optional unresolved targets and budget frontier, and `truncated`. `result.kind = "search"` supplies global `total`, `returned`, `offset`, `truncated`, and `nextOffset` values, then groups retained `mant.search/v0.8` projections by exact document address. Limit and offset apply globally, not once per document.
+The response uses `mant.scope-query/v0.8`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. `result.kind = "search"` supplies global `total`, `returned`, `offset`, `truncated`, and `nextOffset` values, then groups retained `mant.search/v0.8` projections by exact document address. This search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
 
-For `result.kind = "explain"`, `matches` contains exact document addresses, graph depths, and ordinary `mant.excerpt/v0.8` projections. A missing entry in one document is an ordinary sparse miss. Ambiguous or invalid entry selection remains in `failures` for that document and never causes another document's exact match to be guessed or discarded.
+For `result.kind = "explain"`, `matches` contains exact document addresses, graph depths, and ordinary `mant.excerpt/v0.8` projections. A missing entry in one resolved document is an ordinary sparse miss counted by `missed`; it is not a projection failure. Ambiguous or invalid entry selection remains in `failures` for that document and never causes another document's exact match to be guessed or discarded. Therefore `matches.len() + missed + failures.len()` equals the number of resolved documents queried.
 
 The CLI constructs the same contract with repeated `--document`, or with one positional selector plus `--follow-links`. An interactive scope has no serialized `full` view: the host resolves `DocumentScope` directly, opens its first readable root, and gives the loaded set to the TUI's confirmed text search.
 
@@ -1084,9 +1088,21 @@ Markdown links with the same deterministic breadth-first traversal as the
 native scope contract. `maxDepth` defaults to 8 and is capped at 32;
 `maxDocuments` defaults to 64 and is capped at 256. Both limit fields require
 `followLinks: true`, and `maxDocuments` must include every initial document.
-The compact result omits the graph itself, but reports unresolved or truncated
-traversal in a final status line. Cursors are bound to the ordered documents and
-all traversal limits.
+The compact result omits the graph itself. When `followLinks` is true, or when
+an initial document is unresolved, it ends with this stable status form:
+
+```text
+[scope: documents=N, unresolved-roots=R, unresolved-links=L, depth-frontier=D, budget-frontier=B]
+```
+
+All five fields are always present in that order. A complete traversal therefore
+still emits the line with zero unresolved and frontier counts, making link
+following observable. `R` counts unresolved initial selectors, `L` counts
+unresolved followed links, and the two frontier fields count logical links
+excluded by the corresponding bound. `mant_explain` additionally emits
+`[explain: matched=M, missed=K, failed=F]`; documents without an entry contribute
+to `missed` instead of disappearing from the compact result. Cursors are bound
+to the ordered documents and all traversal limits.
 
 Discover both registered Markdown and section-qualified manual pages with:
 

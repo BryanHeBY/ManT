@@ -264,9 +264,9 @@ fn scope_key(scope: &DocumentScope) -> String {
         "0"
     });
     key.push(':');
-    key.push_str(&scope.traversal.max_depth.to_string());
+    key.push_str(&scope.traversal.effective_max_depth().to_string());
     key.push(':');
-    key.push_str(&scope.traversal.max_documents.to_string());
+    key.push_str(&scope.traversal.effective_max_documents().to_string());
     key
 }
 
@@ -498,8 +498,8 @@ mod tests {
         assert_eq!(search.scope.documents[0].selector, "mant");
         assert_eq!(search.scope.documents[1].selector, "manual/1/git");
         assert!(search.scope.traversal.follow_links);
-        assert_eq!(search.scope.traversal.max_depth, 2);
-        assert_eq!(search.scope.traversal.max_documents, 8);
+        assert_eq!(search.scope.traversal.max_depth, Some(2));
+        assert_eq!(search.scope.traversal.max_documents, Some(8));
         assert_eq!(search.pattern, " needle ");
     }
 

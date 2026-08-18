@@ -2,6 +2,7 @@
 
 use mant_protocol::{
     DocumentCatalog, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse, ScopeQueryResult,
+    TraversalLimit,
 };
 
 use crate::arguments::QueryFormat;
@@ -46,6 +47,7 @@ pub(super) fn render_scope_explain(
     let ScopeQueryResult::Explain {
         entry,
         matches,
+        missed,
         failures,
     } = &response.result
     else {
@@ -65,6 +67,14 @@ pub(super) fn render_scope_explain(
             response.scope.documents.len()
         );
     }
+    append_status_line(
+        &mut text,
+        &format!(
+            "[explain: matched={}, missed={missed}, failed={}]",
+            matches.len(),
+            failures.len()
+        ),
+    );
     append_scope_status(&mut text, response);
     page_text(&text, byte)
 }
@@ -95,24 +105,44 @@ pub(super) fn render_scope_search(
 }
 
 fn append_scope_status(text: &mut String, response: &ScopeQueryResponse) {
-    if response.scope.unresolved.is_empty() && !response.scope.truncated {
+    let unresolved_roots = response
+        .scope
+        .unresolved
+        .iter()
+        .filter(|failure| failure.from.is_none())
+        .count();
+    let unresolved_links = response
+        .scope
+        .unresolved
+        .len()
+        .saturating_sub(unresolved_roots);
+    let depth_frontier = response
+        .scope
+        .frontier
+        .iter()
+        .filter(|edge| edge.limit == TraversalLimit::MaxDepth)
+        .count();
+    let budget_frontier = response.scope.frontier.len().saturating_sub(depth_frontier);
+    if !response.scope.query.traversal.follow_links
+        && unresolved_roots == 0
+        && unresolved_links == 0
+    {
         return;
     }
+    append_status_line(
+        text,
+        &format!(
+            "[scope: documents={}, unresolved-roots={unresolved_roots}, unresolved-links={unresolved_links}, depth-frontier={depth_frontier}, budget-frontier={budget_frontier}]",
+            response.scope.documents.len()
+        ),
+    );
+}
+
+fn append_status_line(text: &mut String, status: &str) {
     if !text.is_empty() {
         text.push_str("\n\n");
     }
-    text.push_str("[scope: ");
-    text.push_str(&response.scope.documents.len().to_string());
-    text.push_str(" documents");
-    if !response.scope.unresolved.is_empty() {
-        text.push_str(", ");
-        text.push_str(&response.scope.unresolved.len().to_string());
-        text.push_str(" unresolved");
-    }
-    if response.scope.truncated {
-        text.push_str(", traversal truncated");
-    }
-    text.push(']');
+    text.push_str(status);
 }
 
 /// Attach the only transport-specific framing used by successful results.

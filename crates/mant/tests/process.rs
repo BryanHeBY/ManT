@@ -1246,24 +1246,7 @@ fn unqualified_names_prefer_registered_markdown() {
 
 #[test]
 fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
-    let fixture_root = std::env::temp_dir().join(format!(
-        "mant-document-scope-process-{}",
-        std::process::id()
-    ));
-    let documents = registered_documents_dir(&fixture_root);
-    fs::create_dir_all(&documents).expect("create scope documents");
-    let page = |name: &str, body: &str| {
-        fs::write(documents.join(name), body).expect("write scope document");
-    };
-    page(
-        "alpha.md",
-        "# Alpha\n\n[Beta](beta.md)\n\nneedle alpha\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--shared`: Alpha option.\n",
-    );
-    page(
-        "beta.md",
-        "# Beta\n\n[Gamma](gamma.md)\n\nneedle beta\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--shared`: Beta option.\n",
-    );
-    page("gamma.md", "# Gamma\n\n[Alpha](alpha.md)\n\nneedle gamma\n");
+    let fixture_root = document_scope_fixture("traversal");
 
     let search = run_with_registered_documents(
         &fixture_root,
@@ -1286,7 +1269,7 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     let search: serde_json::Value =
         serde_json::from_slice(&search.stdout).expect("scope search JSON");
     assert_eq!(scope_document_paths(&search), ["alpha", "beta", "gamma"]);
-    assert_eq!(search["scope"]["truncated"], false);
+    assert!(search["scope"].get("frontier").is_none());
     assert_eq!(search["result"]["search"]["total"], 3);
     assert_eq!(
         search["result"]["search"]["documents"]
@@ -1318,6 +1301,38 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert_eq!(matches.len(), 2);
     assert_eq!(matches[0]["address"]["path"], "beta");
     assert_eq!(matches[1]["address"]["path"], "alpha");
+    assert_eq!(explain["result"]["missed"], 0);
+
+    fs::remove_dir_all(fixture_root).expect("remove scope fixture");
+}
+
+#[test]
+fn document_scope_frontiers_distinguish_depth_and_document_limits() {
+    let fixture_root = document_scope_fixture("frontier");
+
+    let depth_bounded = run_with_registered_documents(
+        &fixture_root,
+        &[
+            "alpha",
+            "--follow-links",
+            "--max-depth",
+            "0",
+            "--search",
+            "needle",
+            "--format",
+            "json",
+            "--compact",
+        ],
+    );
+    assert!(depth_bounded.status.success(), "{depth_bounded:?}");
+    let depth_bounded: serde_json::Value =
+        serde_json::from_slice(&depth_bounded.stdout).expect("depth-bounded scope JSON");
+    assert_eq!(scope_document_paths(&depth_bounded), ["alpha"]);
+    assert_eq!(depth_bounded["scope"]["frontier"][0]["limit"], "max-depth");
+    assert_eq!(
+        depth_bounded["scope"]["frontier"][0]["target"]["selector"],
+        "documents/beta"
+    );
 
     let bounded = run_with_registered_documents(
         &fixture_root,
@@ -1336,7 +1351,6 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert!(bounded.status.success(), "{bounded:?}");
     let bounded: serde_json::Value =
         serde_json::from_slice(&bounded.stdout).expect("bounded scope JSON");
-    assert_eq!(bounded["scope"]["truncated"], true);
     assert_eq!(
         bounded["scope"]["frontier"]
             .as_array()
@@ -1344,8 +1358,35 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
             .len(),
         1
     );
+    assert_eq!(bounded["scope"]["frontier"][0]["limit"], "max-documents");
+    assert_eq!(
+        bounded["scope"]["frontier"][0]["target"]["selector"],
+        "documents/gamma"
+    );
 
     fs::remove_dir_all(fixture_root).expect("remove scope fixture");
+}
+
+fn document_scope_fixture(label: &str) -> PathBuf {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "mant-document-scope-process-{}-{label}",
+        std::process::id(),
+    ));
+    let documents = registered_documents_dir(&fixture_root);
+    fs::create_dir_all(&documents).expect("create scope documents");
+    let page = |name: &str, body: &str| {
+        fs::write(documents.join(name), body).expect("write scope document");
+    };
+    page(
+        "alpha.md",
+        "# Alpha\n\n[Beta](beta.md)\n\nneedle alpha\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--shared`: Alpha option.\n",
+    );
+    page(
+        "beta.md",
+        "# Beta\n\n[Gamma](gamma.md)\n\nneedle beta\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--shared`: Beta option.\n",
+    );
+    page("gamma.md", "# Gamma\n\n[Alpha](alpha.md)\n\nneedle gamma\n");
+    fixture_root
 }
 
 fn scope_document_paths(response: &serde_json::Value) -> Vec<&str> {

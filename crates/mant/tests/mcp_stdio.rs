@@ -63,7 +63,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
-    let replies = (0..(6 + usize::from(cfg!(windows))))
+    let replies = (0..(7 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -108,7 +108,7 @@ fn request_document_tools(input: &mut impl Write) {
         7,
         "mant_explain",
         &json!({
-            "documents": ["documents/mcp-registered"],
+            "documents": ["documents/mcp-registered", "documents/mcp-suffix.exe"],
             "entry": "query"
         }),
     );
@@ -119,6 +119,17 @@ fn request_document_tools(input: &mut impl Write) {
         &json!({
             "documents": ["documents/mcp-registered"],
             "entry": "/f"
+        }),
+    );
+    call_tool(
+        input,
+        10,
+        "mant_search",
+        &json!({
+            "documents": ["documents/mcp-registered"],
+            "followLinks": true,
+            "maxDepth": 0,
+            "pattern": "needle"
         }),
     );
     #[cfg(windows)]
@@ -192,10 +203,20 @@ fn assert_tool_replies(replies: &[Value]) {
 
     let explain = successful_text(reply(replies, 7));
     assert!(explain.contains("Query registry data."));
+    assert!(
+        explain.contains("[explain: matched=1, missed=1, failed=0]"),
+        "{explain}"
+    );
 
     let ambiguity = successful_text(reply(replies, 8));
     assert!(ambiguity.contains("option-f"), "{ambiguity}");
     assert!(ambiguity.contains("option-f-2"), "{ambiguity}");
+
+    let bounded = successful_text(reply(replies, 10));
+    assert!(
+        bounded.contains("[scope: documents=1, unresolved-roots=0, unresolved-links=0, depth-frontier=1, budget-frontier=0]"),
+        "{bounded}"
+    );
 
     #[cfg(windows)]
     assert!(successful_text(reply(replies, 9)).contains("Suffix details"));
@@ -311,9 +332,14 @@ fn registered_document_fixture() -> PathBuf {
     fs::create_dir_all(&documents).expect("create document directory");
     fs::write(
         documents.join("mcp-registered.md"),
-        "# MCP registered\n\nRead the MCP needle.\n\nA second needle stays in the same outline node.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n\n## Invalid declaration\n\n<!-- mant:entries role=option case=insensitive -->\n- `/driver..exclude`: Keep malformed entries out of the outline.\n",
+        "# MCP registered\n\nRead the MCP needle.\n\n[Linked details](mcp-linked.md)\n\nA second needle stays in the same outline node.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n\n## Invalid declaration\n\n<!-- mant:entries role=option case=insensitive -->\n- `/driver..exclude`: Keep malformed entries out of the outline.\n",
     )
     .expect("write registered document");
+    fs::write(
+        documents.join("mcp-linked.md"),
+        "# MCP linked\n\nA linked document beyond the requested depth.\n",
+    )
+    .expect("write linked registered document");
     fs::write(
         documents.join("mcp-suffix.exe.md"),
         "# MCP suffixed executable\n\n## Suffix details\n\nWindows suffix fallback.\n",

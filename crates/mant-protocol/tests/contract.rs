@@ -184,8 +184,8 @@ fn scope_request_is_closed_bounded_and_keeps_single_document_views_separate() {
     assert_eq!(request.schema, ScopeRequestSchema::V0Dot8);
     assert_eq!(request.scope.documents.len(), 2);
     assert!(request.scope.traversal.follow_links);
-    assert_eq!(request.scope.traversal.max_depth, 3);
-    assert_eq!(request.scope.traversal.max_documents, 12);
+    assert_eq!(request.scope.traversal.max_depth, Some(3));
+    assert_eq!(request.scope.traversal.max_documents, Some(12));
     assert!(matches!(
         request.view,
         ScopeQueryView::Search {

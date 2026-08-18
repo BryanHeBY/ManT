@@ -17,8 +17,7 @@ use mant_engine::{
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
     InputFormat, NodeSelector, OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema,
-    ScopeQueryView, SearchCase, SearchScope, SearchSyntax, default_scope_depth,
-    default_scope_document_limit, default_search_limit,
+    ScopeQueryView, SearchCase, SearchScope, SearchSyntax, default_search_limit,
 };
 
 mod normalize;

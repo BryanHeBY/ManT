@@ -3,7 +3,6 @@
 use mant_protocol::{
     CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
     NodeSelector, OutlineDetail, QueryInput, QueryRequest, QueryView, SearchCase, SearchSyntax,
-    default_scope_depth, default_scope_document_limit,
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -309,17 +308,18 @@ fn validate_scope(
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let max_documents = max_documents.unwrap_or_else(default_scope_document_limit);
-    if max_documents < u32::try_from(documents.len()).unwrap_or(u32::MAX)
-        || max_documents > mant_protocol::MAX_SCOPE_DOCUMENT_LIMIT
+    let effective_max_documents =
+        max_documents.unwrap_or(mant_protocol::DEFAULT_SCOPE_DOCUMENT_LIMIT);
+    if effective_max_documents < u32::try_from(documents.len()).unwrap_or(u32::MAX)
+        || effective_max_documents > mant_protocol::MAX_SCOPE_DOCUMENT_LIMIT
     {
         return Err(format!(
             "maxDocuments must include every initial document and not exceed {}",
             mant_protocol::MAX_SCOPE_DOCUMENT_LIMIT
         ));
     }
-    let max_depth = max_depth.unwrap_or_else(default_scope_depth);
-    if max_depth > mant_protocol::MAX_SCOPE_DEPTH {
+    let effective_max_depth = max_depth.unwrap_or(mant_protocol::DEFAULT_SCOPE_DEPTH);
+    if effective_max_depth > mant_protocol::MAX_SCOPE_DEPTH {
         return Err(format!(
             "maxDepth must not exceed {}",
             mant_protocol::MAX_SCOPE_DEPTH

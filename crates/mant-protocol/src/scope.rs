@@ -10,9 +10,9 @@ use crate::{
 
 /// Maximum number of initial documents accepted by the native scope contract.
 pub const MAX_SCOPE_DOCUMENTS: usize = 16;
-/// Default maximum link distance from an initial document.
+/// Default maximum number of link edges followed from an initial document.
 pub const DEFAULT_SCOPE_DEPTH: u16 = 8;
-/// Hard maximum link distance accepted by the native scope contract.
+/// Hard maximum number of link edges accepted by the native scope contract.
 pub const MAX_SCOPE_DEPTH: u16 = 32;
 /// Default maximum number of distinct documents in one resolved scope.
 pub const DEFAULT_SCOPE_DOCUMENT_LIMIT: u32 = 64;
@@ -35,29 +35,40 @@ pub struct DocumentSelector {
 }
 
 /// Bounded traversal applied after resolving the initial documents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DocumentTraversal {
     /// Follow typed links to other registered documents.
     #[serde(default)]
     pub follow_links: bool,
-    /// Maximum number of link edges from an initial document.
-    #[serde(default = "default_scope_depth")]
+    /// Optional maximum number of link edges from an initial document.
+    ///
+    /// Omission selects [`DEFAULT_SCOPE_DEPTH`] when [`Self::follow_links`] is
+    /// true. The field is invalid when link traversal is disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(range(max = 32))]
-    pub max_depth: u16,
-    /// Maximum number of distinct documents, including initial documents.
-    #[serde(default = "default_scope_document_limit")]
+    pub max_depth: Option<u16>,
+    /// Optional maximum number of distinct documents, including roots.
+    ///
+    /// Omission selects [`DEFAULT_SCOPE_DOCUMENT_LIMIT`] when
+    /// [`Self::follow_links`] is true. The field is invalid when link traversal
+    /// is disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(range(min = 1, max = 256))]
-    pub max_documents: u32,
+    pub max_documents: Option<u32>,
 }
 
-impl Default for DocumentTraversal {
-    fn default() -> Self {
-        Self {
-            follow_links: false,
-            max_depth: DEFAULT_SCOPE_DEPTH,
-            max_documents: DEFAULT_SCOPE_DOCUMENT_LIMIT,
-        }
+impl DocumentTraversal {
+    /// Effective edge limit after applying the native default.
+    #[must_use]
+    pub fn effective_max_depth(self) -> u16 {
+        self.max_depth.unwrap_or(DEFAULT_SCOPE_DEPTH)
+    }
+
+    /// Effective document budget after applying the native default.
+    #[must_use]
+    pub fn effective_max_documents(self) -> u32 {
+        self.max_documents.unwrap_or(DEFAULT_SCOPE_DOCUMENT_LIMIT)
     }
 }
 
@@ -180,6 +191,33 @@ pub enum DocumentEdgeKind {
     Manual,
 }
 
+/// Traversal bound that excluded an outbound logical link.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum TraversalLimit {
+    /// The maximum number of followed link edges was reached.
+    MaxDepth,
+    /// The maximum number of distinct loaded documents was reached.
+    MaxDocuments,
+}
+
+/// One typed outbound link excluded by a traversal bound.
+///
+/// A frontier retains the logical selector rather than requiring a resolved
+/// address: resolving a target may itself exceed the requested bound.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentFrontier {
+    /// Address containing the excluded link.
+    pub from: DocumentAddress,
+    /// Logical target that would be resolved if traversal continued.
+    pub target: DocumentSelector,
+    /// Semantic link family.
+    pub kind: DocumentEdgeKind,
+    /// Bound that prevented traversal of this link.
+    pub limit: TraversalLimit,
+}
+
 /// One resolved edge in source order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -231,15 +269,12 @@ pub struct ResolvedDocumentScope {
     pub documents: Vec<ScopedDocument>,
     /// Successfully resolved typed edges in source order.
     pub edges: Vec<DocumentEdge>,
-    /// Resolved edges whose target documents were excluded by the document
-    /// budget. Empty unless [`Self::truncated`] is true.
+    /// Typed outbound links excluded by depth or document limits.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub frontier: Vec<DocumentEdge>,
+    pub frontier: Vec<DocumentFrontier>,
     /// Seeds and edges that could not resolve to a readable document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unresolved: Vec<UnresolvedDocument>,
-    /// True when the document budget stopped traversal before its frontier emptied.
-    pub truncated: bool,
 }
 
 /// One document's search hits inside a globally paginated scope result.
@@ -312,6 +347,8 @@ pub enum ScopeQueryResult {
         entry: String,
         /// Documents with one or more exact candidates.
         matches: Vec<ScopedExplanation>,
+        /// Resolved documents in which the entry was not present.
+        missed: u32,
         /// Ambiguity or projection failures, excluding ordinary misses.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         failures: Vec<ScopedQueryFailure>,
