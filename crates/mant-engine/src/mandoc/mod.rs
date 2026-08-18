@@ -576,6 +576,23 @@ continuation\n\
     }
 
     #[test]
+    fn keeps_explicit_horizontal_separation_at_a_tight_line_join() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("motion-continuation.1"),
+            b".TH MOTION-CONTINUATION 1\n\
+.SH DESCRIPTION\n\
+\\h'-04' 1.\\h'+01'\\c\n\
+The next line.\n",
+        )
+        .expect("lower a horizontally spaced continued line");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one paragraph: {:?}", document.sections[0].blocks);
+        };
+        assert_eq!(inline_text(children), " 1. The next line.");
+    }
+
+    #[test]
     fn lets_explicit_fonts_override_an_alternating_macro_default() {
         let path = temporary_source(
             "alternating-font-reset",

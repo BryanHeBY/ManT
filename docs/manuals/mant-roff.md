@@ -190,6 +190,7 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\e`, `\\` | Visible reverse solidus |
 | `\ `, `\~`, `\0` | Visible space |
 | `\c` at the end of an input line | Suppress the implicit space or line break before the next input line |
+| `\h'N'` with a positive literal relative distance | Preserve at least one visible word boundary; exact horizontal geometry is not reproduced |
 | `\p` | Inline line break |
 | `\(XX`, `\[NAME]`, `\C'desc'` | Known named special character |
 | `\E` | Copy-mode-safe nested escape |
@@ -215,7 +216,7 @@ output. For example, `\fB\-\fP\fB\-emulate\fP` becomes
 escaping is minimal but lossless: intraword underscores such as the one in
 `PATH_SCRIPT` remain literal, while delimiter-active underscores are escaped.
 
-Color, point size, motion, drawing, overstrike, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
+Color, point size, vertical or non-literal motion, drawing, overstrike, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. A positive literal relative horizontal motion retains one space as a text-mode approximation, including before a `\c` line join; negative, absolute, register-based, and compound motions remain presentation-only. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 ## Tables
 

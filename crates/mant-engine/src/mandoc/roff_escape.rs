@@ -26,6 +26,7 @@ pub(super) enum RoffFont {
 pub(super) enum PresentationKind {
     Color,
     PointSize,
+    HorizontalMotion,
     Motion,
     Spacing,
     FormatterState,
@@ -169,7 +170,8 @@ impl Decoder {
                     argument,
                 });
             }
-            'h' | 'H' | 'L' | 'l' | 'S' | 'v' | 'x' => {
+            'h' => self.decode_horizontal_motion(),
+            'H' | 'L' | 'l' | 'S' | 'v' | 'x' => {
                 let argument = self.take_delimited_argument();
                 self.emit(RoffInlineEvent::Presentation {
                     kind: PresentationKind::Motion,
@@ -237,6 +239,20 @@ impl Decoder {
                 argument: None,
             }),
         }
+    }
+
+    fn decode_horizontal_motion(&mut self) {
+        let argument = self.take_delimited_argument();
+        if argument.as_deref().is_some_and(is_positive_literal_motion) {
+            // ManT does not reproduce formatter geometry, but an explicit
+            // positive advance is still a semantic word boundary. Retaining
+            // one space matters when `\c` suppresses the input-line break.
+            self.text.push(' ');
+        }
+        self.emit(RoffInlineEvent::Presentation {
+            kind: PresentationKind::HorizontalMotion,
+            argument,
+        });
     }
 
     fn push_source_character(&mut self, character: char) {
@@ -342,6 +358,50 @@ impl Decoder {
     }
 }
 
+/// Recognize a positive literal relative advance without attempting to
+/// evaluate roff expressions or absolute (`|`) positions.
+///
+/// A single visible space is a safe text-mode approximation for forms such as
+/// `+01`, `1n`, and `.5m`.  Negative, zero, register-based, and compound
+/// expressions remain presentation-only because guessing their evaluated sign
+/// could create text that the formatter never displayed.
+fn is_positive_literal_motion(argument: &str) -> bool {
+    let argument = argument.trim();
+    let argument = argument.strip_prefix('+').unwrap_or(argument);
+    if argument.is_empty() || argument.starts_with(['-', '|', '\\']) {
+        return false;
+    }
+
+    let mut saw_digit = false;
+    let mut saw_nonzero = false;
+    let mut saw_decimal = false;
+    let mut end = 0;
+    for (index, character) in argument.char_indices() {
+        match character {
+            '0'..='9' => {
+                saw_digit = true;
+                saw_nonzero |= character != '0';
+                end = index + character.len_utf8();
+            }
+            '.' if !saw_decimal => {
+                saw_decimal = true;
+                end = index + 1;
+            }
+            _ => break,
+        }
+    }
+    if !saw_digit || !saw_nonzero {
+        return false;
+    }
+
+    let suffix = &argument[end..];
+    suffix.is_empty()
+        || (suffix.len() == 1
+            && suffix
+                .chars()
+                .all(|character| character.is_ascii_alphabetic()))
+}
+
 fn font(name: &str) -> RoffFont {
     match name {
         "B" | "3" => RoffFont::Strong,
@@ -445,6 +505,17 @@ mod tests {
         let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next\\&.\\|.\\|.");
 
         assert_eq!(visible_text(&source), "git-config (1)next...");
+    }
+
+    #[test]
+    fn preserves_literal_positive_horizontal_motion_as_a_word_boundary() {
+        assert_eq!(visible_text(r"1.\h'+01'\c"), "1. ");
+        assert_eq!(visible_text(r"a\h'1n'b"), "a b");
+        assert_eq!(visible_text(r"a\h'.5m'b"), "a b");
+        assert_eq!(visible_text(r"a\h'-04'b"), "ab");
+        assert_eq!(visible_text(r"a\h'+0'b"), "ab");
+        assert_eq!(visible_text(r"a\h'|1i'b"), "ab");
+        assert_eq!(visible_text(r"a\h'\n[x]'b"), "ab");
     }
 
     #[test]
