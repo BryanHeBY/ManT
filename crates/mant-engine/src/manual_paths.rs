@@ -28,7 +28,7 @@ const MAX_EXPANDED_CONFIG_PATHS: usize = 256;
 
 /// Discover effective manual hierarchy roots for the current host.
 ///
-/// `MANT_MANPATH` is a complete ManT override.  Otherwise `MANPATH` follows
+/// `MANT_MANPATH` is a complete `ManT` override.  Otherwise `MANPATH` follows
 /// conventional empty-component insertion, with host-derived defaults at each
 /// empty component.  When neither variable is set, platform configuration is
 /// read without spawning `man`, `manpath`, or any other external program.
@@ -213,10 +213,10 @@ fn macos_path_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<Pat
     };
     for executable_dir in env::split_paths(path) {
         let mut candidates = vec![executable_dir.join("man"), executable_dir.join("MAN")];
-        if executable_dir.file_name().is_some_and(|name| name == "bin") {
-            if let Some(prefix) = executable_dir.parent() {
-                candidates.extend([prefix.join("share/man"), prefix.join("man")]);
-            }
+        if executable_dir.file_name().is_some_and(|name| name == "bin")
+            && let Some(prefix) = executable_dir.parent()
+        {
+            candidates.extend([prefix.join("share/man"), prefix.join("man")]);
         }
         if let Some(manual_root) = candidates.into_iter().find(|path| path.is_dir()) {
             roots.push(manual_root);
@@ -515,8 +515,7 @@ fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
             Component::Prefix(prefix) => {
                 candidates = vec![PathBuf::from(prefix.as_os_str())];
             }
-            Component::RootDir => {}
-            Component::CurDir => {}
+            Component::RootDir | Component::CurDir => {}
             Component::ParentDir => {
                 for candidate in &mut candidates {
                     candidate.push("..");
@@ -575,9 +574,7 @@ fn wildcard_matches(pattern: &str, value: &str) -> bool {
                 }
             }
             b'?' => {
-                for index in 1..=value.len() {
-                    current[index] = previous[index - 1];
-                }
+                current[1..].copy_from_slice(&previous[..value.len()]);
             }
             token => {
                 for index in 1..=value.len() {

@@ -105,7 +105,7 @@ Every supported target compiles `libmandoc-rs`. Windows uses its memory-only C
 transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
 Native root discovery is also Rust-owned: Linux reads man-db mappings or
 mandoc `man.conf`, macOS reads its PATH, active developer selection, and
-`MANPATH`/`MANCONFIG` configuration, and Windows optionally reads ManT's own
+`MANPATH`/`MANCONFIG` configuration, and Windows optionally reads `ManT`'s own
 `man.conf`, all without spawning a host manual utility.
 
 ## Layering
