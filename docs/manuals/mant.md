@@ -3,41 +3,25 @@
 
 > Turn local manual pages and cross-platform Markdown into structured documents.
 
-- Read a complete manual interactively:
+- Read Git's complete manual in the interactive reader:
 
-`mant {{name}}`
+`mant git`
 
-- Inspect a manual outline:
+- Extract tar's --exclude entry as portable Markdown:
 
-`mant {{name}} --outline [sections]`
+`mant tar --explain=--exclude --format markdown`
 
-- Retrieve one section from that outline:
+- Search Git and its linked manuals for worktree, limited to two hops:
 
-`mant {{name}} --node {{path}}`
+`mant git --search worktree --follow-links --max-depth 2 --max-documents 32 --context 1`
 
-- Explain one option directly:
+- Discover up to 20 native Git manuals as compact JSON:
 
-`mant {{name}} --explain={{option}}`
+`mant --find '^git' --regex --kind manual --limit 20 --format json --compact`
 
-- Read a local Markdown file:
+- Validate a local Markdown manual's semantic outline and diagnostics:
 
-`mant --input {{path/to/document.md}}`
-
-- Read Markdown from standard input:
-
-`cat {{path/to/document.md}} | mant --input - --input-format markdown`
-
-- Update configured document sources:
-
-`mant --update-docs`
-
-- Preview removal of sources absent from the configuration:
-
-`mant --prune-docs --dry-run`
-
-- Diagnose the local installation without changing it:
-
-`mant --doctor`
+`mant --input ./tool.md --outline=entries --format json --compact`
 <!-- mant:tldr:end -->
 
 # mant
@@ -550,8 +534,8 @@ exit, errors, and Rust panics.
 `--document SELECTOR` is repeatable and supplies an ordered set of initial registered documents. It is the multi-document form of the ordinary positional selector:
 
 ```sh
-mant --document git --document git-lfs --search worktree
-mant --document git --document git-config --explain core.worktree
+mant --document git --document git-lfs --search worktree --follow-links --max-depth 2 --max-documents 32
+mant --document git --document git-config --explain core.worktree --follow-links --max-depth 1 --max-documents 16
 ```
 
 `--follow-links` expands either one positional selector or the repeated `--document` set through typed manual references and same-source Markdown document links. Expansion is breadth-first in initial-document and source-link order. Exact logical addresses deduplicate cycles and diamonds. Ordinary prose resembling `name(section)`, filename prefixes such as `git-*`, page-local links, and external links never create graph edges.

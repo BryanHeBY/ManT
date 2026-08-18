@@ -145,7 +145,7 @@ Add the crate when implementing an in-process parser, index, renderer, or truste
 
 ```toml
 [dependencies]
-mant-ir = "0.7"
+mant-ir = "0.8"
 ```
 
 Prefer constructors and visitors from the crate over recursively rewriting public fields by hand. Use `visit::Visit` or `visit::VisitMut` for whole-document passes and run validation after transformations that can affect identities or links.

@@ -141,15 +141,17 @@ Markdown parsing never executes HTML, follows remote links, loads images, or rea
 
 Use one H1 document title followed by H2 manual sections and deeper headings only where they improve navigation. Prefer paragraphs, fenced code, ordinary lists, semantic entry lists, and tables. Use explicit relative `.md` links for cross-document navigation and explicit heading IDs only when a stable human-authored fragment is important.
 
-Run these checks while authoring:
+Use these focused checks while authoring:
 
 ```sh
-mant --input ./tool.md --outline=entries
-mant --input ./tool.md --format json --compact
-mant --input ./tool.md --search warning
+mant --input ./tool.md --outline=entries --format json --compact
+mant --input ./tool.md --search warning --word --context 1 --format markdown
 ```
 
-An empty `diagnostics` array confirms that the document stayed inside the supported semantic subset.
+The first command exposes the addressable outline and any diagnostics in one
+machine-readable result. The second verifies how a reader sees a specific term
+with its surrounding context. An empty `diagnostics` array confirms that the
+document stayed inside the supported semantic subset.
 
 ## See Also
 

@@ -4,7 +4,7 @@ use mant_engine::{
     build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
     select_excerpt,
 };
-use mant_ir::{TldrCommandPart, TldrOrigin};
+use mant_ir::TldrOrigin;
 use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
@@ -37,29 +37,27 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         document.diagnostics
     );
     assert_eq!(tldr.origin, TldrOrigin::Embedded);
+    let commands = tldr
+        .examples
+        .iter()
+        .map(|example| example.command.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        commands,
+        [
+            "mant git",
+            "mant tar --explain=--exclude --format markdown",
+            "mant git --search worktree --follow-links --max-depth 2 --max-documents 32 --context 1",
+            "mant --find '^git' --regex --kind manual --limit 20 --format json --compact",
+            "mant --input ./tool.md --outline=entries --format json --compact",
+        ],
+        "{name} quick reference should stay concise and show complete user tasks"
+    );
     assert!(
-        tldr.examples.len() >= 4
-            && tldr
-                .examples
-                .iter()
-                .all(|example| !example.description.is_empty() && !example.command.is_empty()),
+        tldr.examples
+            .iter()
+            .all(|example| !example.description.is_empty() && !example.command.is_empty()),
         "{name} quick reference follows the tldr description/command layout"
-    );
-    assert!(
-        tldr.examples.iter().any(|example| {
-            example
-                .command_parts
-                .iter()
-                .any(|part| matches!(part, TldrCommandPart::Placeholder { .. }))
-        }),
-        "{name} uses the standard tldr placeholder syntax that drives command highlighting"
-    );
-    assert!(
-        tldr.examples.iter().any(|example| {
-            example.description == "Inspect a manual outline"
-                && example.command == "mant {{name}} --outline [sections]"
-        }),
-        "{name} quick reference exposes the section-only outline"
     );
 
     let outline =

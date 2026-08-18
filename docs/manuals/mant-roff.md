@@ -246,7 +246,8 @@ For manuals intended to work across mandoc, groff, and ManT:
 2. Use `Xr` or `MR` for cross-manual links, `Sx` for mdoc section links, and `Lk`/`UR` for external links.
 3. Use `Bl`/`It`, `TP`/`IP`, `Bd`, `EX`/`EE`, `tbl`, and `eqn` only where their retained structure matters.
 4. Avoid relying on device geometry, page traps, custom diversions, color, point size, or arbitrary file inclusion.
-5. Inspect the normalized result and diagnostics with `mant --input PAGE --format json`.
+5. Inspect a concrete normalized outline and its diagnostics with
+   `mant --input ./widget.1 --input-format roff --outline=entries --format json --compact`.
 
 ## Upstream References
 
