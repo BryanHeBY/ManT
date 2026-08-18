@@ -45,6 +45,12 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
         initialization["result"]["instructions"]
             .as_str()
             .expect("server instructions")
+            .contains("may resolve uncertainty")
+    );
+    assert!(
+        initialization["result"]["instructions"]
+            .as_str()
+            .expect("server instructions")
             .contains("untrusted reference material")
     );
 
