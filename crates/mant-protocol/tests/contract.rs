@@ -3,7 +3,7 @@
 use mant_ir::{Block, Inline, SourceFormat};
 use mant_protocol::{
     OutlineDetail, QueryBundle, QueryInput, QueryRequest, QuerySchema, QueryView, RequestSchema,
-    SearchCase, SearchScope, SearchSyntax,
+    ScopeQueryRequest, ScopeQueryView, ScopeRequestSchema, SearchCase, SearchScope, SearchSyntax,
 };
 use serde_json::Value;
 
@@ -173,6 +173,42 @@ fn request_v0_8_rejects_the_obsolete_options_outline_detail() {
     )
     .expect_err("request v0.8 uses the canonical entries spelling");
     assert!(error.to_string().contains("unknown variant `options`"));
+}
+
+#[test]
+fn scope_request_is_closed_bounded_and_keeps_single_document_views_separate() {
+    let request: ScopeQueryRequest = serde_json::from_str(
+        r#"{"schema":"mant.scope-request/v0.8","scope":{"documents":[{"selector":"git"},{"selector":"manual/1/git-add"}],"traversal":{"followLinks":true,"maxDepth":3,"maxDocuments":12}},"view":{"kind":"search","pattern":"index"}}"#,
+    )
+    .expect("valid scope request");
+    assert_eq!(request.schema, ScopeRequestSchema::V0Dot8);
+    assert_eq!(request.scope.documents.len(), 2);
+    assert!(request.scope.traversal.follow_links);
+    assert_eq!(request.scope.traversal.max_depth, 3);
+    assert_eq!(request.scope.traversal.max_documents, 12);
+    assert!(matches!(
+        request.view,
+        ScopeQueryView::Search {
+            syntax: SearchSyntax::Literal,
+            case: SearchCase::Insensitive,
+            scope: SearchScope::Visible,
+            limit: 100,
+            offset: 0,
+            ..
+        }
+    ));
+
+    let error = serde_json::from_str::<ScopeQueryRequest>(
+        r#"{"schema":"mant.scope-request/v0.8","scope":{"documents":[{"selector":"git"}]},"view":{"kind":"outline"}}"#,
+    )
+    .expect_err("outline remains a single-document request");
+    assert!(error.to_string().contains("unknown variant"));
+
+    let error = serde_json::from_str::<ScopeQueryRequest>(
+        r#"{"schema":"mant.scope-request/v0.8","scope":{"documents":[{"selector":"git"}],"future":true},"view":{"kind":"explain","entry":"clone"}}"#,
+    )
+    .expect_err("scope objects are closed");
+    assert!(error.to_string().contains("unknown field"));
 }
 
 #[test]

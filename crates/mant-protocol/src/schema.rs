@@ -6,7 +6,7 @@ use schemars::{JsonSchema, Schema, generate::SchemaSettings};
 
 use crate::{
     DoctorReport, DocumentCatalog, QueryBundle, QueryExcerpt, QueryOutline, QueryRequest,
-    QuerySearch,
+    QuerySearch, ScopeQueryRequest, ScopeQueryResponse,
 };
 
 /// Generate the read-only installation health report schema.
@@ -51,6 +51,18 @@ pub fn query_search_json_schema() -> Schema {
     serialize_schema::<QuerySearch>()
 }
 
+/// Generate the bounded multi-document request representation.
+#[must_use]
+pub fn scope_query_request_json_schema() -> Schema {
+    deserialize_schema::<ScopeQueryRequest>()
+}
+
+/// Generate the bounded multi-document result representation.
+#[must_use]
+pub fn scope_query_response_json_schema() -> Schema {
+    serialize_schema::<ScopeQueryResponse>()
+}
+
 /// Generate every public request and query-response contract in stable order.
 #[must_use]
 pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
@@ -61,6 +73,8 @@ pub fn query_json_schema_catalog() -> BTreeMap<&'static str, Schema> {
         ("query", query_bundle_json_schema()),
         ("request", query_request_json_schema()),
         ("search", query_search_json_schema()),
+        ("scope-query", scope_query_response_json_schema()),
+        ("scope-request", scope_query_request_json_schema()),
     ])
 }
 

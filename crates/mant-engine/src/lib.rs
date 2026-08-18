@@ -13,6 +13,7 @@ mod markdown_mapping;
 mod output;
 mod projection;
 mod query;
+mod scope;
 mod search;
 mod source;
 mod text_safety;
@@ -47,6 +48,7 @@ pub use query::{
     QueryPolicy, QueryViewResult, execute_query, project_query_view, query_markdown_text,
     query_roff_bytes, resolve_query, resolve_query_with_policy, validate_query_request,
 };
+pub use scope::{LoadedDocumentScope, ScopeQueryError, validate_scope_query_request};
 pub use search::{SearchError, search_query, validate_search_query};
 pub use source::{
     LocateError, ManualIndex, ManualPage, ManualRequest, discover_manual_roots,

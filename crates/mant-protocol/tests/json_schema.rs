@@ -126,7 +126,14 @@ fn schema_catalog_exposes_every_public_query_contract() {
     assert_eq!(
         catalog.keys().copied().collect::<Vec<_>>(),
         [
-            "catalog", "excerpt", "outline", "query", "request", "search"
+            "catalog",
+            "excerpt",
+            "outline",
+            "query",
+            "request",
+            "scope-query",
+            "scope-request",
+            "search"
         ]
     );
 }

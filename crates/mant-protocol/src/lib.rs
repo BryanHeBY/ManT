@@ -8,6 +8,7 @@ mod outline;
 mod presentation;
 mod query;
 mod schema;
+mod scope;
 mod search;
 mod selector;
 mod update;
@@ -19,6 +20,7 @@ pub use outline::*;
 pub use presentation::*;
 pub use query::*;
 pub use schema::*;
+pub use scope::*;
 pub use search::*;
 pub use selector::*;
 pub use update::*;
@@ -33,7 +35,8 @@ pub const CLI_PROTOCOL_VERSION: &str = "mant.cli/v0.8";
 mod tests {
     use super::{
         CLI_PROTOCOL_VERSION, CatalogSchema, DocumentSchema, ExcerptSchema, NATIVE_API_VERSION,
-        OutlineSchema, QuerySchema, RequestSchema, SearchSchema,
+        OutlineSchema, QuerySchema, RequestSchema, ScopeQuerySchema, ScopeRequestSchema,
+        SearchSchema,
     };
 
     #[test]
@@ -63,6 +66,14 @@ mod tests {
                 ExcerptSchema::ID,
             ),
             (serde_json::to_value(SearchSchema::V0Dot8), SearchSchema::ID),
+            (
+                serde_json::to_value(ScopeRequestSchema::V0Dot8),
+                ScopeRequestSchema::ID,
+            ),
+            (
+                serde_json::to_value(ScopeQuerySchema::V0Dot8),
+                ScopeQuerySchema::ID,
+            ),
             (
                 serde_json::to_value(CatalogSchema::V0Dot8),
                 CatalogSchema::ID,

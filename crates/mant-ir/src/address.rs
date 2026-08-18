@@ -122,6 +122,35 @@ impl DocumentAddress {
             } => format!("manual/{manual_section}/{name}"),
         }
     }
+
+    /// Resolve an extension-free relative Markdown document reference inside
+    /// the current registered namespace.
+    ///
+    /// The result never crosses from personal documents into a configured
+    /// source, or between configured sources. References that would escape the
+    /// namespace root are rejected.
+    #[must_use]
+    pub fn resolve_document_reference(&self, reference: &str) -> Option<Self> {
+        let Self::Markdown { path, origin } = self else {
+            return None;
+        };
+        let mut components = path.split('/').collect::<Vec<_>>();
+        components.pop();
+        for component in reference.split('/') {
+            match component {
+                "." => {}
+                ".." => {
+                    components.pop()?;
+                }
+                value if !value.is_empty() => components.push(value),
+                _ => return None,
+            }
+        }
+        (!components.is_empty()).then(|| Self::Markdown {
+            path: components.join("/"),
+            origin: origin.clone(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -166,5 +195,26 @@ mod tests {
         ] {
             assert_eq!(DocumentAddress::parse_catalog_path(value), None, "{value}");
         }
+    }
+
+    #[test]
+    fn markdown_references_remain_inside_their_registered_namespace() {
+        let current = DocumentAddress::Markdown {
+            path: "guides/git/start".to_owned(),
+            origin: MarkdownOrigin::Source {
+                name: "tooling".to_owned(),
+            },
+        };
+        assert_eq!(
+            current.resolve_document_reference("../reference/options"),
+            Some(DocumentAddress::Markdown {
+                path: "guides/reference/options".to_owned(),
+                origin: MarkdownOrigin::Source {
+                    name: "tooling".to_owned(),
+                },
+            })
+        );
+        assert_eq!(current.resolve_document_reference("../../../escape"), None);
+        assert_eq!(current.resolve_document_reference("/absolute"), None);
     }
 }
