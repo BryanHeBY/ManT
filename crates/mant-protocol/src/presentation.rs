@@ -1,10 +1,35 @@
 //! Deterministic, transport-neutral presentations of protocol projections.
 
-use std::{collections::BTreeMap, fmt::Write as _};
+use std::{borrow::Cow, collections::BTreeMap, fmt::Write as _};
 
 use mant_ir::{DocumentAddress, MarkdownOrigin};
 
 use crate::DocumentCatalog;
+
+/// Replace control characters in dynamic text before terminal presentation.
+///
+/// Logical document identities and diagnostics can originate in local file
+/// names or parser input. JSON keeps those values as data, while text-oriented
+/// frontends must never let them inject terminal control sequences or extra
+/// display lines.
+#[must_use]
+pub fn sanitize_terminal_text(value: &str) -> Cow<'_, str> {
+    if !value.chars().any(char::is_control) {
+        return Cow::Borrowed(value);
+    }
+    Cow::Owned(
+        value
+            .chars()
+            .map(|character| {
+                if character.is_control() {
+                    '\u{fffd}'
+                } else {
+                    character
+                }
+            })
+            .collect(),
+    )
+}
 
 /// Explain why an empty catalog query selected no indexable scope.
 ///
@@ -16,7 +41,10 @@ pub fn render_catalog_coverage_text(catalog: &DocumentCatalog) -> Option<String>
         return None;
     }
     if let Some(section) = &catalog.query.manual_section {
-        let mut message = format!("no manuals indexed for section '{section}'");
+        let mut message = format!(
+            "no manuals indexed for section '{}'",
+            sanitize_terminal_text(section)
+        );
         if !catalog.coverage.manual_sections.is_empty() {
             message.push_str("\nindexed manual sections: ");
             message.push_str(&catalog.coverage.manual_sections.join(", "));
@@ -24,7 +52,10 @@ pub fn render_catalog_coverage_text(catalog: &DocumentCatalog) -> Option<String>
         return Some(message);
     }
     if let Some(source) = &catalog.query.source {
-        let mut message = format!("source '{source}' has no indexed Markdown documents");
+        let mut message = format!(
+            "source '{}' has no indexed Markdown documents",
+            sanitize_terminal_text(source)
+        );
         if !catalog.coverage.markdown_sources.is_empty() {
             message.push_str("\nindexed Markdown sources: ");
             message.push_str(&catalog.coverage.markdown_sources.join(", "));
@@ -51,8 +82,12 @@ pub fn render_catalog_text(catalog: &DocumentCatalog, grouped: bool) -> String {
         let mut output = String::new();
         for document in &catalog.documents {
             let (_, kind) = catalog_category(&document.address);
-            writeln!(output, "{}\t{kind}", document.catalog_path())
-                .expect("writing to String cannot fail");
+            writeln!(
+                output,
+                "{}\t{kind}",
+                sanitize_terminal_text(&document.catalog_path())
+            )
+            .expect("writing to String cannot fail");
         }
         return output;
     }
@@ -73,11 +108,11 @@ pub fn render_catalog_text(catalog: &DocumentCatalog, grouped: bool) -> String {
         if index > 0 {
             output.push('\n');
         }
-        output.push_str(&category);
+        output.push_str(&sanitize_terminal_text(&category));
         output.push('\n');
         for name in names {
             output.push_str("  ");
-            output.push_str(name);
+            output.push_str(&sanitize_terminal_text(name));
             output.push('\n');
         }
     }
@@ -109,7 +144,16 @@ mod tests {
         DocumentSummary,
     };
 
-    use super::{render_catalog_coverage_text, render_catalog_text};
+    use super::{render_catalog_coverage_text, render_catalog_text, sanitize_terminal_text};
+
+    #[test]
+    fn masks_terminal_controls_without_changing_unicode_text() {
+        assert_eq!(sanitize_terminal_text("safe → text"), "safe → text");
+        assert_eq!(
+            sanitize_terminal_text("bad\u{1b}[31m\nname"),
+            "bad�[31m�name"
+        );
+    }
 
     fn catalog() -> DocumentCatalog {
         let addresses = [
@@ -152,6 +196,22 @@ mod tests {
             render_catalog_text(&catalog(), true),
             "documents\n  mant\n\nmanual/1\n  git\n"
         );
+    }
+
+    #[test]
+    fn catalog_text_masks_controls_from_logical_addresses() {
+        let mut catalog = catalog();
+        catalog.documents[0].address = DocumentAddress::Manual {
+            name: "tool\u{1b}[2J\nnext".to_owned(),
+            manual_section: "1".to_owned(),
+        };
+
+        let rendered = render_catalog_text(&catalog, false);
+        assert_eq!(
+            rendered,
+            "manual/1/tool�[2J�next\tmanual\nmanual/1/git\tmanual\n"
+        );
+        assert!(!rendered.contains('\u{1b}'));
     }
 
     #[test]

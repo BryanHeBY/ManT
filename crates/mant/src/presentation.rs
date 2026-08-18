@@ -7,7 +7,7 @@ use mant_engine::QueryViewResult;
 use mant_ir::{Block, DefinitionRole, Inline, ResolvedContent, Section, SourceFormat};
 use mant_protocol::{
     ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse,
-    ScopeQueryResult,
+    ScopeQueryResult, sanitize_terminal_text,
 };
 use serde::Serialize;
 
@@ -42,12 +42,13 @@ impl TerminalText {
     }
 
     fn plain(&mut self, value: &str) {
-        self.value.push_str(value);
+        self.value.push_str(&sanitize_terminal_text(value));
     }
 
     fn styled(&mut self, role: TerminalRole, value: &str) {
+        let value = sanitize_terminal_text(value);
         if !self.color || value.is_empty() {
-            self.plain(value);
+            self.plain(&value);
             return;
         }
         let style = terminal_style(role);
@@ -135,8 +136,9 @@ fn render_terminal_search(search: &QuerySearch, color: bool) -> String {
         return mant_engine::render_search_text(search);
     }
     mant_engine::render_search_text_with(search, |role, value| {
+        let value = sanitize_terminal_text(value);
         let role = match role {
-            mant_engine::SearchTextRole::Plain => return value.to_owned(),
+            mant_engine::SearchTextRole::Plain => return value.into_owned(),
             mant_engine::SearchTextRole::Document => TerminalRole::Document,
             mant_engine::SearchTextRole::Coordinate => TerminalRole::Coordinate,
             mant_engine::SearchTextRole::Path => TerminalRole::Path,
@@ -396,7 +398,7 @@ pub(super) fn render_scope_query_result(
                 }
                 write_scope_heading(&mut output, &failure.address.catalog_path(), format, color);
                 output.push('\n');
-                output.push_str(&failure.reason);
+                output.push_str(&sanitize_terminal_text(&failure.reason));
             }
         }
         ScopeQueryResult::Search { search } => {
@@ -419,16 +421,17 @@ pub(super) fn render_scope_query_result(
 }
 
 fn write_scope_heading(output: &mut String, address: &str, format: QueryFormat, color: bool) {
+    let address = sanitize_terminal_text(address);
     match format {
         QueryFormat::Markdown => {
             output.push_str("## ");
-            output.push_str(address);
+            output.push_str(&address);
         }
         QueryFormat::Text if color => {
             let style = terminal_style(TerminalRole::Document);
             write!(output, "{style}{address}{style:#}").expect("writing to String cannot fail");
         }
-        QueryFormat::Text => output.push_str(address),
+        QueryFormat::Text => output.push_str(&address),
         QueryFormat::Json | QueryFormat::Man => unreachable!(),
     }
 }

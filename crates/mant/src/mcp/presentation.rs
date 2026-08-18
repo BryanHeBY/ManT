@@ -2,7 +2,7 @@
 
 use mant_protocol::{
     DocumentCatalog, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse, ScopeQueryResult,
-    TraversalLimit,
+    TraversalLimit, sanitize_terminal_text,
 };
 
 use crate::arguments::QueryFormat;
@@ -234,9 +234,15 @@ pub(super) fn prepare_scope(response: &mut ScopeQueryResponse) {
         "document could not be resolved".clone_into(&mut unresolved.reason);
     }
     match &mut response.result {
-        ScopeQueryResult::Explain { matches, .. } => {
+        ScopeQueryResult::Explain {
+            matches, failures, ..
+        } => {
             for found in matches {
                 prepare_excerpt(&mut found.excerpt);
+            }
+            for failure in failures {
+                let reason = sanitize_terminal_text(&failure.reason).into_owned();
+                reason.clone_into(&mut failure.reason);
             }
         }
         ScopeQueryResult::Search { search } => {
@@ -255,7 +261,13 @@ fn discard_document_source_path(source: &mut Option<mant_ir::DocumentSource>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_OUTPUT_BYTES, finish_page, page_text};
+    use mant_ir::DocumentAddress;
+    use mant_protocol::{
+        DocumentScope, DocumentSelector, DocumentTraversal, ResolvedDocumentScope,
+        ScopeQueryResponse, ScopeQueryResult, ScopeQuerySchema, ScopedQueryFailure,
+    };
+
+    use super::{MAX_OUTPUT_BYTES, finish_page, page_text, prepare_scope};
 
     #[test]
     fn text_pages_are_utf8_safe_bounded_and_continuable() {
@@ -292,5 +304,44 @@ mod tests {
     fn stale_byte_positions_are_rejected() {
         assert!(page_text("é", 1).is_err());
         assert!(page_text("short", 99).is_err());
+    }
+
+    #[test]
+    fn scope_failures_keep_their_selector_guidance_but_mask_controls() {
+        let mut response = ScopeQueryResponse {
+            schema: ScopeQuerySchema::V0Dot8,
+            scope: ResolvedDocumentScope {
+                query: DocumentScope {
+                    documents: vec![DocumentSelector {
+                        selector: "tool".to_owned(),
+                        source: None,
+                        manual_section: None,
+                    }],
+                    traversal: DocumentTraversal::default(),
+                },
+                documents: Vec::new(),
+                edges: Vec::new(),
+                frontier: Vec::new(),
+                unresolved: Vec::new(),
+            },
+            result: ScopeQueryResult::Explain {
+                entry: "-f".to_owned(),
+                matches: Vec::new(),
+                missed: 0,
+                failures: vec![ScopedQueryFailure {
+                    address: DocumentAddress::Manual {
+                        name: "tool".to_owned(),
+                        manual_section: "1".to_owned(),
+                    },
+                    reason: "multiple entries\u{1b}[2J: 1/e1 (first)".to_owned(),
+                }],
+            },
+        };
+
+        prepare_scope(&mut response);
+        let ScopeQueryResult::Explain { failures, .. } = response.result else {
+            panic!("fixture must stay an explanation");
+        };
+        assert_eq!(failures[0].reason, "multiple entries�[2J: 1/e1 (first)");
     }
 }
