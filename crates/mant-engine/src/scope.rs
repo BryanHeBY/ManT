@@ -7,11 +7,12 @@ use mant_ir::visit::{Visit, walk_inline};
 use mant_ir::{DocumentAddress, Inline, LinkTarget, ResolvedContent};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
-    MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH, MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS,
-    QueryInput, QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest,
-    ScopeQueryResponse, ScopeQueryResult, ScopeQuerySchema, ScopeQueryView, ScopeSearch,
+    MAX_DOCUMENT_SELECTOR_BYTES, MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH,
+    MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, MAX_SEMANTIC_ENTRY_BYTES, QueryInput,
+    QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResponse,
+    ScopeQueryResult, ScopeQuerySchema, ScopeQueryView, ScopeSearch, ScopeTextError,
     ScopedDocument, ScopedExplanation, ScopedQueryFailure, ScopedSearchDocument, SearchQuery,
-    TraversalLimit, UnresolvedDocument,
+    TraversalLimit, UnresolvedDocument, validate_scope_text,
 };
 
 use crate::{
@@ -43,8 +44,10 @@ pub enum ScopeQueryError {
     ContentLimit,
     /// Traversal limits were supplied while link following was disabled.
     TraversalLimitsRequireLinks,
-    /// A semantic-entry selector was empty.
-    EmptyEntry,
+    /// A logical document selector violated its native bound.
+    DocumentSelector(ScopeTextError),
+    /// A semantic-entry selector violated its native bound.
+    EntrySelector(ScopeTextError),
     /// Search configuration was invalid.
     Search(crate::SearchError),
     /// No initial document could be loaded.
@@ -78,7 +81,20 @@ impl fmt::Display for ScopeQueryError {
             Self::TraversalLimitsRequireLinks => {
                 formatter.write_str("maxDepth and maxDocuments require followLinks=true")
             }
-            Self::EmptyEntry => formatter.write_str("semantic entry must not be empty"),
+            Self::DocumentSelector(error) => {
+                write!(
+                    formatter,
+                    "document selector {}",
+                    scope_text_error_message(*error)
+                )
+            }
+            Self::EntrySelector(error) => {
+                write!(
+                    formatter,
+                    "semantic entry {}",
+                    scope_text_error_message(*error)
+                )
+            }
             Self::Search(error) => error.fmt(formatter),
             Self::NoResolvedDocuments { reasons } => {
                 formatter.write_str("none of the initial documents could be resolved")?;
@@ -101,7 +117,8 @@ impl Error for ScopeQueryError {
             | Self::DocumentLimit
             | Self::ContentLimit
             | Self::TraversalLimitsRequireLinks
-            | Self::EmptyEntry
+            | Self::DocumentSelector(_)
+            | Self::EntrySelector(_)
             | Self::NoResolvedDocuments { .. } => None,
         }
     }
@@ -115,9 +132,8 @@ impl Error for ScopeQueryError {
 pub fn validate_scope_query_request(request: &ScopeQueryRequest) -> Result<(), ScopeQueryError> {
     validate_document_scope(&request.scope)?;
     match &request.view {
-        ScopeQueryView::Explain { entry } if entry.trim().is_empty() => {
-            Err(ScopeQueryError::EmptyEntry)
-        }
+        ScopeQueryView::Explain { entry } => validate_scope_text(entry, MAX_SEMANTIC_ENTRY_BYTES)
+            .map_err(ScopeQueryError::EntrySelector),
         ScopeQueryView::Search {
             pattern,
             syntax,
@@ -138,7 +154,6 @@ pub fn validate_scope_query_request(request: &ScopeQueryRequest) -> Result<(), S
             offset: *offset,
         })
         .map_err(ScopeQueryError::Search),
-        ScopeQueryView::Explain { .. } => Ok(()),
     }
 }
 
@@ -148,6 +163,10 @@ fn validate_document_scope(scope: &DocumentScope) -> Result<(), ScopeQueryError>
     }
     if scope.documents.len() > MAX_SCOPE_DOCUMENTS {
         return Err(ScopeQueryError::TooManyDocuments);
+    }
+    for selector in &scope.documents {
+        validate_scope_text(&selector.selector, MAX_DOCUMENT_SELECTOR_BYTES)
+            .map_err(ScopeQueryError::DocumentSelector)?;
     }
     if !scope.traversal.follow_links
         && (scope.traversal.max_depth.is_some() || scope.traversal.max_documents.is_some())
@@ -164,6 +183,16 @@ fn validate_document_scope(scope: &DocumentScope) -> Result<(), ScopeQueryError>
         return Err(ScopeQueryError::DocumentLimit);
     }
     Ok(())
+}
+
+fn scope_text_error_message(error: ScopeTextError) -> String {
+    match error {
+        ScopeTextError::Empty => "must not be empty".to_owned(),
+        ScopeTextError::ControlCharacter => "must not contain control characters".to_owned(),
+        ScopeTextError::TooLong { maximum } => {
+            format!("must not exceed {maximum} bytes")
+        }
+    }
 }
 
 impl DocumentResolver {
@@ -799,6 +828,56 @@ mod tests {
         assert_eq!(
             validate_document_scope(&scope),
             Err(ScopeQueryError::TraversalLimitsRequireLinks)
+        );
+    }
+
+    #[test]
+    fn native_scope_request_enforces_document_selector_contract() {
+        let mut scope = DocumentScope {
+            documents: vec![DocumentSelector {
+                selector: "a".repeat(MAX_DOCUMENT_SELECTOR_BYTES + 1),
+                source: None,
+                manual_section: None,
+            }],
+            traversal: mant_protocol::DocumentTraversal::default(),
+        };
+        assert_eq!(
+            validate_document_scope(&scope),
+            Err(ScopeQueryError::DocumentSelector(ScopeTextError::TooLong {
+                maximum: MAX_DOCUMENT_SELECTOR_BYTES,
+            }))
+        );
+
+        scope.documents[0].selector = "root\nother".to_owned();
+        assert_eq!(
+            validate_document_scope(&scope),
+            Err(ScopeQueryError::DocumentSelector(
+                ScopeTextError::ControlCharacter
+            ))
+        );
+    }
+
+    #[test]
+    fn native_scope_request_enforces_entry_selector_contract() {
+        let request = ScopeQueryRequest {
+            schema: mant_protocol::ScopeRequestSchema::V0Dot8,
+            scope: DocumentScope {
+                documents: vec![DocumentSelector {
+                    selector: "root".to_owned(),
+                    source: None,
+                    manual_section: None,
+                }],
+                traversal: mant_protocol::DocumentTraversal::default(),
+            },
+            view: ScopeQueryView::Explain {
+                entry: "x".repeat(MAX_SEMANTIC_ENTRY_BYTES + 1),
+            },
+        };
+        assert_eq!(
+            validate_scope_query_request(&request),
+            Err(ScopeQueryError::EntrySelector(ScopeTextError::TooLong {
+                maximum: MAX_SEMANTIC_ENTRY_BYTES,
+            }))
         );
     }
 

@@ -25,13 +25,53 @@ pub const MAX_SCOPE_DOCUMENT_LIMIT: u32 = 256;
 /// independent guard prevents a small number of individually valid documents
 /// from creating an unbounded aggregate allocation.
 pub const MAX_SCOPE_CONTENT_BYTES: u64 = 64 * 1024 * 1024;
+/// Maximum UTF-8 byte length of one logical document selector.
+pub const MAX_DOCUMENT_SELECTOR_BYTES: usize = 1024;
+/// Maximum UTF-8 byte length of one semantic-entry selector.
+pub const MAX_SEMANTIC_ENTRY_BYTES: usize = 512;
+
+/// One violated runtime constraint shared by scope-query request adapters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeTextError {
+    /// The value was empty after trimming surrounding whitespace.
+    Empty,
+    /// The value contained a terminal or structural control character.
+    ControlCharacter,
+    /// The UTF-8 byte length exceeded the declared maximum.
+    TooLong {
+        /// Inclusive maximum accepted byte length.
+        maximum: usize,
+    },
+}
+
+/// Validate one bounded logical selector at the native request boundary.
+///
+/// JSON Schema advertises the same limits, but native `--request-json` callers
+/// do not pass through a schema validator, so the runtime contract must check
+/// them independently.
+///
+/// # Errors
+///
+/// Returns the precise empty, control-character, or byte-length violation.
+pub fn validate_scope_text(value: &str, maximum: usize) -> Result<(), ScopeTextError> {
+    if value.trim().is_empty() {
+        return Err(ScopeTextError::Empty);
+    }
+    if value.chars().any(char::is_control) {
+        return Err(ScopeTextError::ControlCharacter);
+    }
+    if value.len() > maximum {
+        return Err(ScopeTextError::TooLong { maximum });
+    }
+    Ok(())
+}
 
 /// One logical document selector before catalog resolution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DocumentSelector {
     /// Unqualified name or complete catalog path.
-    #[schemars(length(min = 1, max = 1024))]
+    #[schemars(length(min = 1, max = MAX_DOCUMENT_SELECTOR_BYTES))]
     pub selector: String,
     /// Optional configured Markdown source for an unqualified selector.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,7 +168,7 @@ pub enum ScopeQueryView {
     /// Resolve one semantic entry independently in every document.
     Explain {
         /// Exact alias, outline path, or stable ID.
-        #[schemars(length(min = 1, max = 512))]
+        #[schemars(length(min = 1, max = MAX_SEMANTIC_ENTRY_BYTES))]
         entry: String,
     },
     /// Search visible or generated-Markdown text over the complete scope.

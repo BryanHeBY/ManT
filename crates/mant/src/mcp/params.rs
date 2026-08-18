@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 /// Maximum accepted logical document selector length.
-pub(super) const MAX_DOCUMENT_BYTES: usize = 1024;
+pub(super) const MAX_DOCUMENT_BYTES: usize = mant_protocol::MAX_DOCUMENT_SELECTOR_BYTES;
 /// Maximum accepted continuation token length.
 pub(super) const MAX_CURSOR_BYTES: usize = 256;
 /// Maximum selectors accepted by one focused read.
@@ -23,7 +23,6 @@ pub(super) const MAX_FIND_QUERY_BYTES: usize = 1024;
 const MAX_SOURCE_BYTES: usize = 128;
 pub(super) const MAX_MANUAL_SECTION_BYTES: usize = 32;
 const MAX_SELECTOR_BYTES: usize = 512;
-const MAX_ENTRY_BYTES: usize = 512;
 const MAX_PATTERN_BYTES: usize = 4096;
 
 /// Discover logical document identities in the local catalog.
@@ -245,7 +244,11 @@ impl ExplainParams {
                 self.max_depth,
                 self.max_documents,
             )?,
-            entry: bounded_normalized(&self.entry, "entry", MAX_ENTRY_BYTES)?,
+            entry: bounded_normalized(
+                &self.entry,
+                "entry",
+                mant_protocol::MAX_SEMANTIC_ENTRY_BYTES,
+            )?,
             cursor: self.cursor,
         })
     }
