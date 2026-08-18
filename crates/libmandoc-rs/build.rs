@@ -9,7 +9,7 @@
 //! cross compilation non-deterministic. `ManT` instead checks in the small
 //! target-family configurations that its release matrix supports.
 
-use std::{env, fs, path::PathBuf};
+use std::{collections::HashSet, env, fmt::Write as _, fs, path::PathBuf};
 
 #[path = "src/build_config.rs"]
 mod build_config;
@@ -59,6 +59,7 @@ fn main() {
 
     fs::copy(crate_dir.join(config), out_dir.join("config.h"))
         .expect("copy checked mandoc target configuration");
+    generate_special_character_table(&vendor_dir, &out_dir);
 
     let mut build = cc::Build::new();
     build
@@ -104,4 +105,103 @@ fn main() {
     println!("cargo:rerun-if-changed=config");
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
+}
+
+/// Generate the Rust lookup from the same pinned table compiled into
+/// libmandoc. Keeping one source of truth prevents parser upgrades from
+/// silently leaving the higher-level text projection behind.
+fn generate_special_character_table(vendor_dir: &std::path::Path, out_dir: &std::path::Path) {
+    let source = fs::read_to_string(vendor_dir.join("chars.c"))
+        .expect("read pinned mandoc character catalog");
+    let mut entries = Vec::new();
+    let mut names = HashSet::new();
+
+    for line in source.lines().map(str::trim) {
+        if !line.starts_with("{ \"") {
+            continue;
+        }
+        let (name, remainder) = parse_c_string(&line[2..])
+            .unwrap_or_else(|| panic!("invalid character name in chars.c: {line}"));
+        let fields = remainder
+            .strip_prefix(',')
+            .unwrap_or_else(|| panic!("missing character fields in chars.c: {line}"));
+        let codepoint = fields
+            .strip_suffix(',')
+            .and_then(|fields| fields.strip_suffix('}'))
+            .and_then(|fields| fields.rsplit(',').next())
+            .map(str::trim)
+            .and_then(parse_c_integer)
+            .unwrap_or_else(|| panic!("invalid Unicode value in chars.c: {line}"));
+        assert!(
+            names.insert(name.clone()),
+            "duplicate roff character {name}"
+        );
+        entries.push((name, codepoint));
+    }
+
+    assert!(
+        entries.len() >= 300,
+        "pinned mandoc character catalog unexpectedly contains only {} entries",
+        entries.len()
+    );
+    entries.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+
+    let mut generated = String::from(
+        "// Generated from vendor/mandoc-1.14.6/chars.c; do not edit.\n\
+         const CATALOG: &[(&str, u32)] = &[\n",
+    );
+    for (name, codepoint) in entries {
+        assert!(
+            codepoint == 0 || char::from_u32(codepoint).is_some(),
+            "invalid Unicode scalar U+{codepoint:04X} for {name}"
+        );
+        writeln!(generated, "    ({name:?}, 0x{codepoint:X}),")
+            .expect("write generated character entry");
+    }
+    generated.push_str(
+        "];\n\
+         pub(super) fn lookup(name: &str) -> Option<u32> {\n\
+             CATALOG\n\
+                 .binary_search_by_key(&name, |(candidate, _)| *candidate)\n\
+                 .ok()\n\
+                 .map(|index| CATALOG[index].1)\n\
+         }\n",
+    );
+    fs::write(out_dir.join("special_characters.rs"), generated)
+        .expect("write generated mandoc character catalog");
+}
+
+fn parse_c_string(source: &str) -> Option<(String, &str)> {
+    let mut characters = source.char_indices();
+    if characters.next()?.1 != '"' {
+        return None;
+    }
+
+    let mut output = String::new();
+    while let Some((index, character)) = characters.next() {
+        match character {
+            '"' => return Some((output, &source[index + 1..])),
+            '\\' => {
+                let (_, escaped) = characters.next()?;
+                output.push(match escaped {
+                    '\\' => '\\',
+                    '"' => '"',
+                    '\'' => '\'',
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    _ => return None,
+                });
+            }
+            _ => output.push(character),
+        }
+    }
+    None
+}
+
+fn parse_c_integer(source: &str) -> Option<u32> {
+    source.strip_prefix("0x").map_or_else(
+        || source.parse().ok(),
+        |hex| u32::from_str_radix(hex, 16).ok(),
+    )
 }

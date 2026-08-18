@@ -943,6 +943,27 @@ The next line.\n",
     }
 
     #[test]
+    fn lowers_the_pinned_named_character_catalog_without_silent_deletion() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("named-characters.7"),
+            b".TH NAMED-CHARACTERS 7\n\
+.SH TEST\n\
+at=\\(at ga=\\(ga oq=\\(oq arrow=\\(-> larrow=\\(<- mu=\\(mu\n\
+de=\\(de pl=\\(pl dg=\\(dg ua=\\(ua da=\\(da lB=\\(lB rB=\\(rB\n\
+unknown=\\[future-glyph]\n",
+        )
+        .expect("lower named characters");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one character paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "at=@ ga=` oq=' arrow=→ larrow=← mu=× de=° pl=+ dg=† ua=↑ da=↓ lB=[ rB=] unknown=\\[future-glyph]"
+        );
+    }
+
+    #[test]
     fn preserves_explicit_mdoc_function_and_enclosure_structure() {
         let document = parse_manual_bytes(
             std::path::Path::new("explicit-mdoc.1"),

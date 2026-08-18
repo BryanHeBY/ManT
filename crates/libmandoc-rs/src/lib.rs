@@ -9,6 +9,7 @@ mod diagnostics;
 #[allow(unsafe_code)]
 mod ffi;
 mod parser;
+mod special_character;
 
 pub use ast::{
     AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
@@ -18,6 +19,7 @@ pub use diagnostics::{Diagnostic, DiagnosticLevel, SourceLocation};
 pub use parser::{
     Compression, IncludePolicy, ParseError, ParseErrorKind, ParseOptions, ParseReport, Parser,
 };
+pub use special_character::{SpecialCharacter, special_character};
 
 /// Pinned upstream version compiled by this crate's build script.
 pub const LIBMANDOC_VERSION: &str = "1.14.6";

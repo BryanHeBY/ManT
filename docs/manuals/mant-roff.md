@@ -192,11 +192,11 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\c` at the end of an input line | Suppress the implicit space or line break before the next input line |
 | `\h'N'` with a positive literal relative distance | Preserve at least one visible word boundary; exact horizontal geometry is not reproduced |
 | `\p` | Inline line break |
-| `\(XX`, `\[NAME]`, `\C'desc'` | Known named special character |
+| `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned libmandoc catalog; an unknown name remains visible in escaped source form |
 | `\E` | Copy-mode-safe nested escape |
 | `\X'tty: link URI'` | External terminal link start; `\X'tty: link'` ends it |
 
-Named characters with dedicated Unicode or ASCII lowering are `en`, `em`, `aq`, `cq`, `dq`, `lq`, `rq`, `co`, `rg`, `tm`, `bu`, `ha`, `ti`, and `rs`. libmandoc may normalize additional common characters before this stage; ManT does not claim complete glyph coverage for the full groff character catalog.
+Named characters resolve through the complete character catalog compiled from the pinned libmandoc source. ManT deliberately applies copy-friendly compatibility folds to common quotes and symbols; other catalog entries use their declared Unicode scalar. A name absent from that catalog is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
 
 Font names map as follows:
 

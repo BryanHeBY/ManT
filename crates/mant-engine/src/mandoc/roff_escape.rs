@@ -6,6 +6,7 @@
 //! visible document text.
 
 use crate::text_safety::push_terminal_safe;
+use libmandoc_rs::SpecialCharacter;
 
 const ASCII_BREAK: char = '\u{1d}';
 const ASCII_HYPH: char = '\u{1e}';
@@ -129,15 +130,15 @@ impl Decoder {
             'X' => self.decode_postprocessor_escape(),
             '(' => {
                 let name = self.take_counted(2);
-                self.text.push_str(special_character(&name));
+                self.push_special_character(&name, NamedCharacterSyntax::TwoCharacter);
             }
             '[' => {
                 let name = self.take_until(']');
-                self.text.push_str(special_character(&name));
+                self.push_special_character(&name, NamedCharacterSyntax::Bracketed);
             }
             'C' => {
                 let name = self.take_delimited_argument().unwrap_or_default();
-                self.text.push_str(special_character(&name));
+                self.push_special_character(&name, NamedCharacterSyntax::CharacterDescriptor);
             }
             '-' => self.text.push('-'),
             'e' | '\\' => self.text.push('\\'),
@@ -253,6 +254,33 @@ impl Decoder {
             kind: PresentationKind::HorizontalMotion,
             argument,
         });
+    }
+
+    fn push_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
+        if let Some(value) = dedicated_special_character(name) {
+            self.text.push_str(value);
+            return;
+        }
+        match libmandoc_rs::special_character(name) {
+            Some(SpecialCharacter::Visible(character)) => {
+                push_terminal_safe(&mut self.text, character);
+            }
+            Some(SpecialCharacter::ZeroWidth) => {}
+            None => self.push_unknown_special_character(name, syntax),
+        }
+    }
+
+    fn push_unknown_special_character(&mut self, name: &str, syntax: NamedCharacterSyntax) {
+        let (prefix, suffix) = match syntax {
+            NamedCharacterSyntax::TwoCharacter => (r"\(", ""),
+            NamedCharacterSyntax::Bracketed => (r"\[", "]"),
+            NamedCharacterSyntax::CharacterDescriptor => (r"\C'", "'"),
+        };
+        self.text.push_str(prefix);
+        for character in name.chars() {
+            push_terminal_safe(&mut self.text, character);
+        }
+        self.text.push_str(suffix);
     }
 
     fn push_source_character(&mut self, character: char) {
@@ -414,20 +442,29 @@ fn font(name: &str) -> RoffFont {
     }
 }
 
-fn special_character(name: &str) -> &'static str {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NamedCharacterSyntax {
+    TwoCharacter,
+    Bracketed,
+    CharacterDescriptor,
+}
+
+/// Compatibility folds intentionally chosen by `ManT`. Every other known name
+/// comes from the complete catalog pinned by `libmandoc-rs`.
+fn dedicated_special_character(name: &str) -> Option<&'static str> {
     match name {
-        "en" => "–",
-        "em" => "—",
-        "aq" | "cq" => "'",
-        "dq" | "lq" | "rq" => "\"",
-        "co" => "©",
-        "rg" => "®",
-        "tm" => "™",
-        "bu" => "•",
-        "ha" => "^",
-        "ti" => "~",
-        "rs" => "\\",
-        _ => "",
+        "en" => Some("–"),
+        "em" => Some("—"),
+        "aq" | "cq" | "oq" => Some("'"),
+        "dq" | "lq" | "rq" => Some("\""),
+        "co" => Some("©"),
+        "rg" => Some("®"),
+        "tm" => Some("™"),
+        "bu" => Some("•"),
+        "ha" => Some("^"),
+        "ti" => Some("~"),
+        "rs" => Some("\\"),
+        _ => None,
     }
 }
 
@@ -538,6 +575,23 @@ mod tests {
         assert_eq!(
             visible_text(r"C:\[rs]path\[rs]file \[rs]\[rs]server\[rs]share"),
             r"C:\path\file \\server\share",
+        );
+    }
+
+    #[test]
+    fn resolves_named_characters_from_the_pinned_mandoc_catalog() {
+        assert_eq!(
+            visible_text(r"at=\(at ga=\(ga oq=\(oq arrow=\(-> larrow=\(<- mu=\(mu lB=\(lB rB=\(rB"),
+            "at=@ ga=` oq=' arrow=→ larrow=← mu=× lB=[ rB=]"
+        );
+        assert_eq!(visible_text(r"zero=\[:]width"), "zero=width");
+    }
+
+    #[test]
+    fn retains_unknown_named_characters_in_a_visible_source_form() {
+        assert_eq!(
+            visible_text(r"a=\(zz b=\[future-glyph] c=\C'other'"),
+            r"a=\(zz b=\[future-glyph] c=\C'other'"
         );
     }
 
