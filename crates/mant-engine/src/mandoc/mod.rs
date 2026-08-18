@@ -541,6 +541,41 @@ mod tests {
     }
 
     #[test]
+    fn honours_roff_no_space_line_continuations() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("line-continuation.1"),
+            b".TH LINE-CONTINUATION 1\n\
+.SH DESCRIPTION\n\
+extsize=\\c\n\
+nnnn; multi-\\c\n\
+block; (\\c\n\
+.BR read (2)\n\
+.EX\n\
+literal-\\c\n\
+continuation\n\
+.EE\n",
+        )
+        .expect("lower no-space line continuations");
+
+        let [
+            Block::Paragraph {
+                children: prose, ..
+            },
+            Block::Preformatted {
+                children: literal, ..
+            },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!(
+                "expected one filled and one no-fill block: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(prose), "extsize=nnnn; multi-block; (read(2)");
+        assert_eq!(inline_text(literal), "literal-continuation");
+    }
+
+    #[test]
     fn lets_explicit_fonts_override_an_alternating_macro_default() {
         let path = temporary_source(
             "alternating-font-reset",

@@ -252,6 +252,8 @@ fn author_mode(value: i32) -> Result<Option<AuthorMode>, String> {
 
 unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
     let raw_flags = unsafe { mant_mandoc_node_flags(pointer) };
+    let text = unsafe { optional_string(mant_mandoc_node_text(pointer)) };
+    let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
     let mut children = Vec::new();
     let mut child = unsafe { mant_mandoc_node_child(pointer) };
     while !child.is_null() {
@@ -265,7 +267,7 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
     Ok(Node {
         kind: node_kind(unsafe { mant_mandoc_node_kind(pointer) })?,
         macro_name: unsafe { optional_string(mant_mandoc_node_macro(pointer)) },
-        text: unsafe { optional_string(mant_mandoc_node_text(pointer)) },
+        text,
         tag: unsafe { optional_string(mant_mandoc_node_tag(pointer)) },
         line: unsafe { mant_mandoc_node_line(pointer) }
             .try_into()
@@ -283,6 +285,7 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
             line_start: raw_flags & NODE_LINE_START != 0,
             delimiter_open: raw_flags & NODE_DELIMITER_OPEN != 0,
             delimiter_close: raw_flags & NODE_DELIMITER_CLOSE != 0,
+            line_continuation,
         },
         list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,
         display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,
@@ -299,6 +302,23 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
         equation: unsafe { optional_string(mant_mandoc_node_equation(pointer)) },
         children,
     })
+}
+
+/// Match libmandoc's `man_hasc`: only an unescaped final `\c` continues the
+/// input line. An odd number of immediately preceding backslashes escapes the
+/// candidate backslash instead.
+fn ends_with_no_space_escape(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let Some(prefix) = bytes.strip_suffix(br"\c") else {
+        return false;
+    };
+    prefix
+        .iter()
+        .rev()
+        .take_while(|byte| **byte == b'\\')
+        .count()
+        % 2
+        == 0
 }
 
 unsafe fn copy_table_cells(mut pointer: *const CTableCell) -> Vec<TableCell> {

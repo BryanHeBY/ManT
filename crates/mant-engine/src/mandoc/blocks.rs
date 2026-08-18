@@ -171,10 +171,8 @@ fn lower_blocks(
             continue;
         }
         if let Some(lines) = lower_no_fill_lines(node, context.default_name) {
-            for (line, source) in lines {
-                if !line.is_empty() {
-                    state.push_preformatted(line, source);
-                }
+            for line in lines {
+                state.push_preformatted(line.nodes, line.source, line.continues_line);
             }
             continue;
         }
@@ -208,6 +206,7 @@ fn lower_blocks(
                 lower_inline_nodes(std::slice::from_ref(node), context.default_name),
                 source_span(node),
                 starts_indented_filled_line(node),
+                ends_with_line_continuation(node),
             );
         } else {
             state.flush_paragraph();
@@ -230,15 +229,19 @@ fn lower_blocks(
 /// Most no-fill input arrives as text or inline elements. GNU man-ext also
 /// permits a complete `.SY` block inside `.EX`; its printable head and body
 /// still represent adjacent source lines and must join the same verbatim block.
-fn lower_no_fill_lines(
-    node: &Node,
-    default_name: Option<&str>,
-) -> Option<Vec<(Vec<Inline>, Option<mant_ir::SourceSpan>)>> {
+struct LoweredNoFillLine {
+    nodes: Vec<Inline>,
+    source: Option<mant_ir::SourceSpan>,
+    continues_line: bool,
+}
+
+fn lower_no_fill_lines(node: &Node, default_name: Option<&str>) -> Option<Vec<LoweredNoFillLine>> {
     if node.flags.no_fill && is_inline(node) {
-        return Some(vec![(
-            lower_inline_nodes(std::slice::from_ref(node), default_name),
-            source_span(node),
-        )]);
+        return Some(vec![LoweredNoFillLine {
+            nodes: lower_inline_nodes(std::slice::from_ref(node), default_name),
+            source: source_span(node),
+            continues_line: ends_with_line_continuation(node),
+        }]);
     }
     let body = part_children(node, NodeKind::Body);
     if node.macro_name.as_deref() != Some("SY") || !body.iter().any(|child| child.flags.no_fill) {
@@ -248,12 +251,22 @@ fn lower_no_fill_lines(
     let mut lines = Vec::new();
     let head = lower_inline_nodes(part_children(node, NodeKind::Head), default_name);
     if !head.is_empty() {
-        lines.push((vec![Inline::Strong { children: head }], source_span(node)));
+        lines.push(LoweredNoFillLine {
+            nodes: vec![Inline::Strong { children: head }],
+            source: source_span(node),
+            continues_line: part_children(node, NodeKind::Head)
+                .last()
+                .is_some_and(ends_with_line_continuation),
+        });
     }
     for child in body {
         let line = lower_inline_nodes(std::slice::from_ref(child), default_name);
         if !line.is_empty() {
-            lines.push((line, source_span(child)));
+            lines.push(LoweredNoFillLine {
+                nodes: line,
+                source: source_span(child),
+                continues_line: ends_with_line_continuation(child),
+            });
         }
     }
     Some(lines)
@@ -730,6 +743,7 @@ struct BlockState {
     paragraph_last_line: Option<u32>,
     preformatted: Vec<Inline>,
     pre_source: Option<mant_ir::SourceSpan>,
+    preformatted_tight_boundary: bool,
     indent_columns: u16,
 }
 
@@ -742,6 +756,7 @@ impl BlockState {
             paragraph_last_line: None,
             preformatted: Vec::new(),
             pre_source: None,
+            preformatted_tight_boundary: false,
             indent_columns,
         }
     }
@@ -751,8 +766,12 @@ impl BlockState {
         nodes: Vec<Inline>,
         source: Option<mant_ir::SourceSpan>,
         starts_indented_line: bool,
+        continues_line: bool,
     ) {
         if nodes.is_empty() {
+            if continues_line {
+                self.paragraph.tighten_next_boundary();
+            }
             return;
         }
         if self.paragraph_source.is_none() {
@@ -763,7 +782,7 @@ impl BlockState {
             .paragraph_last_line
             .zip(source_line)
             .is_some_and(|(previous, current)| current > previous);
-        let boundary = if !crossed_source_line {
+        let boundary = if self.paragraph.has_tight_boundary() || !crossed_source_line {
             FilledBoundary::SameLine
         } else if starts_indented_line {
             FilledBoundary::LineBreak
@@ -771,6 +790,9 @@ impl BlockState {
             FilledBoundary::Word
         };
         self.paragraph.append_filled(nodes, boundary);
+        if continues_line {
+            self.paragraph.tighten_next_boundary();
+        }
         if source_line.is_some() {
             self.paragraph_last_line = source_line;
         }
@@ -780,12 +802,24 @@ impl BlockState {
         self.paragraph.hard_break();
     }
 
-    fn push_preformatted(&mut self, nodes: Vec<Inline>, source: Option<mant_ir::SourceSpan>) {
+    fn push_preformatted(
+        &mut self,
+        nodes: Vec<Inline>,
+        source: Option<mant_ir::SourceSpan>,
+        continues_line: bool,
+    ) {
         self.flush_paragraph();
-        if !self.preformatted.is_empty() {
+        if nodes.is_empty() {
+            if continues_line {
+                self.preformatted_tight_boundary = true;
+            }
+            return;
+        }
+        if !self.preformatted.is_empty() && !self.preformatted_tight_boundary {
             self.preformatted.push(Inline::LineBreak);
         }
         self.preformatted.extend(nodes);
+        self.preformatted_tight_boundary = continues_line;
         if self.pre_source.is_none() {
             self.pre_source = source;
         }
@@ -808,6 +842,7 @@ impl BlockState {
             &mut self.pre_source,
             self.indent_columns,
         );
+        self.preformatted_tight_boundary = false;
     }
 
     fn finish(mut self) -> Vec<Block> {
@@ -838,6 +873,23 @@ fn starts_indented_filled_line(node: &Node) -> bool {
         .iter()
         .find(|child| !child.flags.no_print && child.kind != NodeKind::Comment)
         .is_some_and(starts_indented_filled_line)
+}
+
+/// Whether the final printable fragment in this syntax subtree ends with the
+/// roff `\c` escape. The parser retains this as source-boundary semantics so
+/// filled and no-fill flows can make the same join decision.
+fn ends_with_line_continuation(node: &Node) -> bool {
+    if node.flags.no_print || node.kind == NodeKind::Comment {
+        return false;
+    }
+    if node.kind == NodeKind::Text {
+        return node.flags.line_continuation;
+    }
+    node.children
+        .iter()
+        .rev()
+        .find(|child| !child.flags.no_print && child.kind != NodeKind::Comment)
+        .is_some_and(ends_with_line_continuation)
 }
 
 fn lower_mdoc_list(

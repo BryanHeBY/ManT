@@ -15,7 +15,7 @@ use super::{
 
 pub(super) struct InlineBuilder {
     nodes: Vec<Inline>,
-    suppress_space: bool,
+    tight_next_boundary: bool,
 }
 
 /// Semantic boundary between two inline fragments in filled roff mode.
@@ -36,12 +36,16 @@ impl InlineBuilder {
     pub(super) const fn new() -> Self {
         Self {
             nodes: Vec::new(),
-            suppress_space: false,
+            tight_next_boundary: false,
         }
     }
 
-    pub(super) fn suppress_next_space(&mut self) {
-        self.suppress_space = true;
+    pub(super) fn tighten_next_boundary(&mut self) {
+        self.tight_next_boundary = true;
+    }
+
+    pub(super) const fn has_tight_boundary(&self) -> bool {
+        self.tight_next_boundary
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -51,7 +55,7 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(super) fn hard_break(&mut self) {
-        self.suppress_space = false;
+        self.tight_next_boundary = false;
         if plain_text(&self.nodes)
             .chars()
             .any(|character| character != '\n')
@@ -90,10 +94,10 @@ impl InlineBuilder {
         } else {
             needs_space(&self.nodes, incoming)
         };
-        if !self.suppress_space && add_space {
+        if !self.tight_next_boundary && add_space {
             push_text(&mut self.nodes, " ".to_owned());
         }
-        self.suppress_space = false;
+        self.tight_next_boundary = false;
         self.nodes.append(incoming);
     }
 
@@ -125,10 +129,10 @@ pub(super) fn append_inline_node(
     default_name: Option<&str>,
 ) {
     if node.flags.delimiter_close {
-        builder.suppress_next_space();
+        builder.tighten_next_boundary();
     }
     match node.macro_name.as_deref() {
-        Some("Ns" | "Pf") => builder.suppress_next_space(),
+        Some("Ns" | "Pf") => builder.tighten_next_boundary(),
         // A roff break ends the current output line, not the paragraph.
         // Keeping it inline lets every renderer preserve the same flow.
         Some("br") => builder.hard_break(),
@@ -144,14 +148,14 @@ pub(super) fn append_inline_node(
             | "nr" | "ta",
         ) => {}
         Some("Ap") => {
-            builder.suppress_next_space();
+            builder.tighten_next_boundary();
             builder.append(vec![Inline::Text { value: "'".into() }]);
-            builder.suppress_next_space();
+            builder.tighten_next_boundary();
         }
         _ => builder.append(lower_inline_node(node, default_name)),
     }
-    if node.flags.delimiter_open {
-        builder.suppress_next_space();
+    if node.flags.delimiter_open || node.flags.line_continuation {
+        builder.tighten_next_boundary();
     }
 }
 

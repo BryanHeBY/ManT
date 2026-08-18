@@ -156,6 +156,9 @@ pub struct NodeFlags {
     pub delimiter_open: bool,
     /// This text node is closing punctuation and suppresses spacing before it.
     pub delimiter_close: bool,
+    /// This text node ends with the roff `\c` escape and joins the next input
+    /// line without an implicit space or line break.
+    pub line_continuation: bool,
 }
 
 /// An owned syntax node with no pointers into the C parser.

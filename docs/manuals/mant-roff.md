@@ -52,7 +52,7 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `MT`, `ME` | Email link block |
 | `MR` | Typed manual-page reference |
 
-`br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries.
+`br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
 
 `OP`, `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
 
@@ -189,6 +189,7 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\-` | Copyable ASCII hyphen-minus |
 | `\e`, `\\` | Visible reverse solidus |
 | `\ `, `\~`, `\0` | Visible space |
+| `\c` at the end of an input line | Suppress the implicit space or line break before the next input line |
 | `\p` | Inline line break |
 | `\(XX`, `\[NAME]`, `\C'desc'` | Known named special character |
 | `\E` | Copy-mode-safe nested escape |
