@@ -3,7 +3,9 @@
 use std::sync::Arc;
 
 use mant_engine::{QueryPolicy, QueryViewResult};
-use mant_protocol::{CatalogQuery, DocumentCatalog, QueryRequest};
+use mant_protocol::{
+    CatalogQuery, DocumentCatalog, QueryRequest, ScopeQueryRequest, ScopeQueryResponse,
+};
 use tokio::{sync::Semaphore, task};
 
 /// Bounds synchronous parser and filesystem work away from the protocol loop.
@@ -35,6 +37,24 @@ impl QueryService {
         .map_err(|error| format!("MCP query worker failed: {error}"))?
     }
 
+    pub(super) async fn query_scope(
+        &self,
+        request: ScopeQueryRequest,
+    ) -> Result<ScopeQueryResponse, String> {
+        let permit = Arc::clone(&self.gate)
+            .acquire_owned()
+            .await
+            .map_err(|_| "MCP query service is shutting down".to_owned())?;
+        task::spawn_blocking(move || {
+            let _permit = permit;
+            mant_engine::DocumentResolver::from_system()
+                .execute_scope_query(&request)
+                .map_err(scope_error_for_mcp)
+        })
+        .await
+        .map_err(|error| format!("MCP scope-query worker failed: {error}"))?
+    }
+
     pub(super) async fn discover(&self, query: CatalogQuery) -> Result<DocumentCatalog, String> {
         let permit = Arc::clone(&self.gate)
             .acquire_owned()
@@ -46,6 +66,20 @@ impl QueryService {
         })
         .await
         .map_err(|error| format!("MCP document discovery worker failed: {error}"))?
+    }
+}
+
+fn scope_error_for_mcp(error: mant_engine::ScopeQueryError) -> String {
+    use mant_engine::ScopeQueryError;
+
+    match error {
+        // Resolution errors can contain host paths. The individual selectors
+        // remain visible in the tool input, so the aggregate result is enough
+        // for this path-safe boundary.
+        ScopeQueryError::NoResolvedDocuments { .. } => {
+            "none of the requested documents could be resolved".to_owned()
+        }
+        other => other.to_string(),
     }
 }
 

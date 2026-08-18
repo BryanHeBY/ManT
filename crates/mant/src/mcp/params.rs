@@ -1,8 +1,9 @@
 //! Closed, compact input schemas exposed by the agent-facing MCP tools.
 
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, NodeSelector, OutlineDetail, QueryInput, QueryRequest,
-    QueryView, SearchCase, SearchSyntax,
+    CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
+    NodeSelector, OutlineDetail, QueryInput, QueryRequest, QueryView, SearchCase, SearchSyntax,
+    default_scope_depth, default_scope_document_limit,
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -78,9 +79,18 @@ pub(super) struct ReadParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ExplainParams {
-    /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1))]
-    pub(super) document: String,
+    /// One or more unqualified names or canonical IDs returned by `mant_find`.
+    #[schemars(length(min = 1, max = 16))]
+    pub(super) documents: Vec<String>,
+    /// Follow typed links from the initial documents.
+    #[serde(default)]
+    pub(super) follow_links: bool,
+    /// Maximum followed-link distance; valid only with `followLinks`.
+    #[schemars(range(max = 32))]
+    pub(super) max_depth: Option<u16>,
+    /// Maximum distinct documents including roots; valid only with `followLinks`.
+    #[schemars(range(min = 1, max = 256))]
+    pub(super) max_documents: Option<u32>,
     /// Exact alias, outline path, or stable ID of the entry.
     #[schemars(length(min = 1))]
     pub(super) entry: String,
@@ -93,9 +103,18 @@ pub(super) struct ExplainParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct SearchParams {
-    /// Unqualified name or canonical catalog path returned by `mant_find`.
-    #[schemars(length(min = 1))]
-    pub(super) document: String,
+    /// One or more unqualified names or canonical IDs returned by `mant_find`.
+    #[schemars(length(min = 1, max = 16))]
+    pub(super) documents: Vec<String>,
+    /// Follow typed links from the initial documents.
+    #[serde(default)]
+    pub(super) follow_links: bool,
+    /// Maximum followed-link distance; valid only with `followLinks`.
+    #[schemars(range(max = 32))]
+    pub(super) max_depth: Option<u16>,
+    /// Maximum distinct documents including roots; valid only with `followLinks`.
+    #[schemars(range(min = 1, max = 256))]
+    pub(super) max_documents: Option<u32>,
     /// Literal text or a regular expression, depending on `syntax`.
     #[schemars(length(min = 1))]
     pub(super) pattern: String,
@@ -139,13 +158,13 @@ pub(super) struct ValidatedReadParams {
 }
 
 pub(super) struct ValidatedExplainParams {
-    pub(super) document: String,
+    pub(super) scope: DocumentScope,
     pub(super) entry: String,
     pub(super) cursor: Option<String>,
 }
 
 pub(super) struct ValidatedSearchParams {
-    pub(super) document: String,
+    pub(super) scope: DocumentScope,
     pub(super) pattern: String,
     pub(super) syntax: SearchSyntax,
     pub(super) case: SearchCase,
@@ -221,7 +240,12 @@ impl ExplainParams {
     pub(super) fn validate(self) -> Result<ValidatedExplainParams, String> {
         validate_cursor(self.cursor.as_deref())?;
         Ok(ValidatedExplainParams {
-            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            scope: validate_scope(
+                self.documents,
+                self.follow_links,
+                self.max_depth,
+                self.max_documents,
+            )?,
             entry: bounded_normalized(&self.entry, "entry", MAX_ENTRY_BYTES)?,
             cursor: self.cursor,
         })
@@ -241,7 +265,12 @@ impl SearchParams {
         }
         validate_cursor(self.cursor.as_deref())?;
         Ok(ValidatedSearchParams {
-            document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
+            scope: validate_scope(
+                self.documents,
+                self.follow_links,
+                self.max_depth,
+                self.max_documents,
+            )?,
             pattern: bounded_exact(&self.pattern, "pattern", MAX_PATTERN_BYTES)?,
             syntax: self.syntax.unwrap_or_default(),
             case: self.case.unwrap_or_default(),
@@ -251,6 +280,59 @@ impl SearchParams {
             cursor: self.cursor,
         })
     }
+}
+
+fn validate_scope(
+    documents: Vec<String>,
+    follow_links: bool,
+    max_depth: Option<u16>,
+    max_documents: Option<u32>,
+) -> Result<DocumentScope, String> {
+    if documents.is_empty() || documents.len() > mant_protocol::MAX_SCOPE_DOCUMENTS {
+        return Err(format!(
+            "documents must contain between 1 and {} values",
+            mant_protocol::MAX_SCOPE_DOCUMENTS
+        ));
+    }
+    if !follow_links && (max_depth.is_some() || max_documents.is_some()) {
+        return Err("maxDepth and maxDocuments require followLinks=true".to_owned());
+    }
+    let documents = documents
+        .into_iter()
+        .map(|document| {
+            bounded_normalized(&document, "document", MAX_DOCUMENT_BYTES).map(|selector| {
+                DocumentSelector {
+                    selector,
+                    source: None,
+                    manual_section: None,
+                }
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let max_documents = max_documents.unwrap_or_else(default_scope_document_limit);
+    if max_documents < u32::try_from(documents.len()).unwrap_or(u32::MAX)
+        || max_documents > mant_protocol::MAX_SCOPE_DOCUMENT_LIMIT
+    {
+        return Err(format!(
+            "maxDocuments must include every initial document and not exceed {}",
+            mant_protocol::MAX_SCOPE_DOCUMENT_LIMIT
+        ));
+    }
+    let max_depth = max_depth.unwrap_or_else(default_scope_depth);
+    if max_depth > mant_protocol::MAX_SCOPE_DEPTH {
+        return Err(format!(
+            "maxDepth must not exceed {}",
+            mant_protocol::MAX_SCOPE_DEPTH
+        ));
+    }
+    Ok(DocumentScope {
+        documents,
+        traversal: DocumentTraversal {
+            follow_links,
+            max_depth,
+            max_documents,
+        },
+    })
 }
 
 pub(super) fn catalog_query(parameters: &ValidatedFindParams, offset: u32) -> CatalogQuery {

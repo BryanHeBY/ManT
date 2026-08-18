@@ -78,7 +78,7 @@ fn request_document_tools(input: &mut impl Write) {
         4,
         "mant_search",
         &json!({
-            "document": "documents/mcp-registered",
+            "documents": ["documents/mcp-registered"],
             "pattern": "needle",
             "word": true,
             "contextLines": 1,
@@ -108,7 +108,7 @@ fn request_document_tools(input: &mut impl Write) {
         7,
         "mant_explain",
         &json!({
-            "document": "documents/mcp-registered",
+            "documents": ["documents/mcp-registered"],
             "entry": "query"
         }),
     );
@@ -117,7 +117,7 @@ fn request_document_tools(input: &mut impl Write) {
         8,
         "mant_explain",
         &json!({
-            "document": "documents/mcp-registered",
+            "documents": ["documents/mcp-registered"],
             "entry": "/f"
         }),
     );
@@ -151,7 +151,7 @@ fn assert_tool_catalog(tools: &[Value]) {
         assert!(tool.get("outputSchema").is_none());
         assert_eq!(tool["annotations"]["readOnlyHint"], true);
         assert_eq!(tool["annotations"]["openWorldHint"], false);
-        if tool["name"] != "mant_find" {
+        if matches!(tool["name"].as_str(), Some("mant_outline" | "mant_read")) {
             assert!(tool["inputSchema"]["properties"]["document"].is_object());
             assert!(tool["inputSchema"]["properties"].get("name").is_none());
             assert!(
@@ -159,6 +159,11 @@ fn assert_tool_catalog(tools: &[Value]) {
                     .get("manualSection")
                     .is_none()
             );
+        }
+        if matches!(tool["name"].as_str(), Some("mant_explain" | "mant_search")) {
+            assert!(tool["inputSchema"]["properties"]["documents"].is_object());
+            assert!(tool["inputSchema"]["properties"]["followLinks"].is_object());
+            assert!(tool["inputSchema"]["properties"].get("document").is_none());
         }
     }
 }
@@ -188,11 +193,9 @@ fn assert_tool_replies(replies: &[Value]) {
     let explain = successful_text(reply(replies, 7));
     assert!(explain.contains("Query registry data."));
 
-    let ambiguity = reply(replies, 8);
-    assert_eq!(ambiguity["result"]["isError"], true);
-    let ambiguity = result_text(ambiguity);
-    assert!(ambiguity.contains("option-f"));
-    assert!(ambiguity.contains("option-f-2"));
+    let ambiguity = successful_text(reply(replies, 8));
+    assert!(ambiguity.contains("option-f"), "{ambiguity}");
+    assert!(ambiguity.contains("option-f-2"), "{ambiguity}");
 
     #[cfg(windows)]
     assert!(successful_text(reply(replies, 9)).contains("Suffix details"));

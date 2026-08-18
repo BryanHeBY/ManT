@@ -1,6 +1,10 @@
 //! Compact, bounded presentations for the agent-facing MCP boundary.
 
-use mant_protocol::{DocumentCatalog, QueryExcerpt, QueryOutline, QuerySearch};
+use mant_protocol::{
+    DocumentCatalog, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse, ScopeQueryResult,
+};
+
+use crate::arguments::QueryFormat;
 
 /// Maximum UTF-8 bytes returned by one successful tool call.
 pub(super) const MAX_OUTPUT_BYTES: usize = 32 * 1024;
@@ -35,10 +39,80 @@ pub(super) fn render_excerpt(excerpt: &QueryExcerpt, byte: u32) -> Result<TextPa
     page_text(&mant_engine::render_excerpt_markdown(excerpt), byte)
 }
 
-pub(super) fn render_search(search: &QuerySearch, byte: u32) -> Result<TextPage, String> {
-    let mut page = search.clone();
-    page.next_offset = None;
-    page_text(&mant_engine::render_search_text(&page), byte)
+pub(super) fn render_scope_explain(
+    response: &ScopeQueryResponse,
+    byte: u32,
+) -> Result<TextPage, String> {
+    let ScopeQueryResult::Explain {
+        entry,
+        matches,
+        failures,
+    } = &response.result
+    else {
+        return Err("scope response does not contain an explanation".to_owned());
+    };
+    let mut text = crate::presentation::render_scope_query_result(
+        response,
+        QueryFormat::Markdown,
+        false,
+        false,
+        false,
+    )
+    .map_err(crate::error::Failure::into_message)?;
+    if matches.is_empty() && failures.is_empty() {
+        text = format!(
+            "0 matches for semantic entry `{entry}` across {} documents",
+            response.scope.documents.len()
+        );
+    }
+    append_scope_status(&mut text, response);
+    page_text(&text, byte)
+}
+
+pub(super) fn render_scope_search(
+    response: &ScopeQueryResponse,
+    byte: u32,
+) -> Result<TextPage, String> {
+    let ScopeQueryResult::Search { search } = &response.result else {
+        return Err("scope response does not contain search results".to_owned());
+    };
+    let mut text = crate::presentation::render_scope_query_result(
+        response,
+        QueryFormat::Text,
+        false,
+        false,
+        false,
+    )
+    .map_err(crate::error::Failure::into_message)?;
+    if search.returned == 0 {
+        text = format!(
+            "0 matches across {} documents",
+            response.scope.documents.len()
+        );
+    }
+    append_scope_status(&mut text, response);
+    page_text(&text, byte)
+}
+
+fn append_scope_status(text: &mut String, response: &ScopeQueryResponse) {
+    if response.scope.unresolved.is_empty() && !response.scope.truncated {
+        return;
+    }
+    if !text.is_empty() {
+        text.push_str("\n\n");
+    }
+    text.push_str("[scope: ");
+    text.push_str(&response.scope.documents.len().to_string());
+    text.push_str(" documents");
+    if !response.scope.unresolved.is_empty() {
+        text.push_str(", ");
+        text.push_str(&response.scope.unresolved.len().to_string());
+        text.push_str(" unresolved");
+    }
+    if response.scope.truncated {
+        text.push_str(", traversal truncated");
+    }
+    text.push(']');
 }
 
 /// Attach the only transport-specific framing used by successful results.
@@ -55,7 +129,7 @@ pub(super) fn finish_page(mut page: TextPage, cursor: Option<&str>) -> String {
     page.text
 }
 
-fn page_text(text: &str, byte: u32) -> Result<TextPage, String> {
+pub(super) fn page_text(text: &str, byte: u32) -> Result<TextPage, String> {
     let start = usize::try_from(byte).map_err(|_| "cursor position is too large".to_owned())?;
     if start > text.len() || !text.is_char_boundary(start) {
         return Err("cursor no longer addresses this result; restart without it".to_owned());
@@ -112,6 +186,24 @@ pub(super) fn prepare_outline(outline: &mut QueryOutline) {
 
 pub(super) fn prepare_search(search: &mut QuerySearch) {
     discard_document_source_path(&mut search.source);
+}
+
+pub(super) fn prepare_scope(response: &mut ScopeQueryResponse) {
+    for unresolved in &mut response.scope.unresolved {
+        "document could not be resolved".clone_into(&mut unresolved.reason);
+    }
+    match &mut response.result {
+        ScopeQueryResult::Explain { matches, .. } => {
+            for found in matches {
+                prepare_excerpt(&mut found.excerpt);
+            }
+        }
+        ScopeQueryResult::Search { search } => {
+            for found in &mut search.documents {
+                prepare_search(&mut found.search);
+            }
+        }
+    }
 }
 
 fn discard_document_source_path(source: &mut Option<mant_ir::DocumentSource>) {
