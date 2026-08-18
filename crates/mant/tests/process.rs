@@ -1244,6 +1244,119 @@ fn unqualified_names_prefer_registered_markdown() {
     fs::remove_dir_all(fixture_root).expect("remove registered document fixture");
 }
 
+#[test]
+fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "mant-document-scope-process-{}",
+        std::process::id()
+    ));
+    let documents = registered_documents_dir(&fixture_root);
+    fs::create_dir_all(&documents).expect("create scope documents");
+    let page = |name: &str, body: &str| {
+        fs::write(documents.join(name), body).expect("write scope document");
+    };
+    page(
+        "alpha.md",
+        "# Alpha\n\n[Beta](beta.md)\n\nneedle alpha\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--shared`: Alpha option.\n",
+    );
+    page(
+        "beta.md",
+        "# Beta\n\n[Gamma](gamma.md)\n\nneedle beta\n\n## Options\n\n<!-- mant:entries role=option -->\n- `--shared`: Beta option.\n",
+    );
+    page("gamma.md", "# Gamma\n\n[Alpha](alpha.md)\n\nneedle gamma\n");
+
+    let search = run_with_registered_documents(
+        &fixture_root,
+        &[
+            "alpha",
+            "--follow-links",
+            "--max-depth",
+            "8",
+            "--max-documents",
+            "8",
+            "--search",
+            "needle",
+            "--format",
+            "json",
+            "--compact",
+        ],
+    );
+    assert!(search.status.success(), "{search:?}");
+    assert!(search.stderr.is_empty());
+    let search: serde_json::Value =
+        serde_json::from_slice(&search.stdout).expect("scope search JSON");
+    assert_eq!(scope_document_paths(&search), ["alpha", "beta", "gamma"]);
+    assert_eq!(search["scope"]["truncated"], false);
+    assert_eq!(search["result"]["search"]["total"], 3);
+    assert_eq!(
+        search["result"]["search"]["documents"]
+            .as_array()
+            .expect("search groups")
+            .len(),
+        3
+    );
+
+    let explain = run_with_registered_documents(
+        &fixture_root,
+        &[
+            "--document",
+            "beta",
+            "--document",
+            "alpha",
+            "--explain=--shared",
+            "--format",
+            "json",
+            "--compact",
+        ],
+    );
+    assert!(explain.status.success(), "{explain:?}");
+    let explain: serde_json::Value =
+        serde_json::from_slice(&explain.stdout).expect("scope explain JSON");
+    let matches = explain["result"]["matches"]
+        .as_array()
+        .expect("scope explanations");
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0]["address"]["path"], "beta");
+    assert_eq!(matches[1]["address"]["path"], "alpha");
+
+    let bounded = run_with_registered_documents(
+        &fixture_root,
+        &[
+            "alpha",
+            "--follow-links",
+            "--max-documents",
+            "2",
+            "--search",
+            "needle",
+            "--format",
+            "json",
+            "--compact",
+        ],
+    );
+    assert!(bounded.status.success(), "{bounded:?}");
+    let bounded: serde_json::Value =
+        serde_json::from_slice(&bounded.stdout).expect("bounded scope JSON");
+    assert_eq!(bounded["scope"]["truncated"], true);
+    assert_eq!(
+        bounded["scope"]["frontier"]
+            .as_array()
+            .expect("scope frontier")
+            .len(),
+        1
+    );
+
+    fs::remove_dir_all(fixture_root).expect("remove scope fixture");
+}
+
+fn scope_document_paths(response: &serde_json::Value) -> Vec<&str> {
+    response["scope"]["documents"]
+        .as_array()
+        .expect("scope documents")
+        .iter()
+        .map(|document| document["address"]["path"].as_str().expect("Markdown path"))
+        .collect()
+}
+
 #[cfg(windows)]
 fn windows_suffix_fixture() -> PathBuf {
     let fixture_root = std::env::temp_dir().join(format!(

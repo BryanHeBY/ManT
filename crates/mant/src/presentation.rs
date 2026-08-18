@@ -5,7 +5,10 @@ use std::fmt::Write as _;
 use anstyle::{AnsiColor, Style};
 use mant_engine::QueryViewResult;
 use mant_ir::{Block, DefinitionRole, Inline, ResolvedContent, Section, SourceFormat};
-use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch};
+use mant_protocol::{
+    ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse,
+    ScopeQueryResult,
+};
 use serde::Serialize;
 
 use crate::{arguments::QueryFormat, error::Failure};
@@ -348,6 +351,85 @@ pub(super) fn render_query_result(
                 mant_engine::render_search_json(search, pretty).map_err(Failure::operational)
             }
         },
+    }
+}
+
+pub(super) fn render_scope_query_result(
+    response: &ScopeQueryResponse,
+    format: QueryFormat,
+    pretty: bool,
+    preserve_anchors: bool,
+    color: bool,
+) -> Result<String, Failure> {
+    if format == QueryFormat::Json {
+        return render_json(response, pretty);
+    }
+    if format == QueryFormat::Man {
+        return Err(Failure::usage(
+            "--format man applies only to one full native manual",
+        ));
+    }
+    let mut output = String::new();
+    match &response.result {
+        ScopeQueryResult::Explain {
+            matches, failures, ..
+        } => {
+            for (index, found) in matches.iter().enumerate() {
+                if index > 0 {
+                    output.push_str("\n\n");
+                }
+                write_scope_heading(&mut output, &found.address.catalog_path(), format, color);
+                output.push('\n');
+                let rendered = match format {
+                    QueryFormat::Markdown => mant_engine::render_excerpt_markdown_with_options(
+                        &found.excerpt,
+                        mant_engine::MarkdownOptions { preserve_anchors },
+                    ),
+                    QueryFormat::Text => render_terminal_excerpt(&found.excerpt, color),
+                    QueryFormat::Json | QueryFormat::Man => unreachable!(),
+                };
+                output.push_str(rendered.trim());
+            }
+            for failure in failures {
+                if !output.is_empty() {
+                    output.push_str("\n\n");
+                }
+                write_scope_heading(&mut output, &failure.address.catalog_path(), format, color);
+                output.push('\n');
+                output.push_str(&failure.reason);
+            }
+        }
+        ScopeQueryResult::Search { search } => {
+            for (index, found) in search.documents.iter().enumerate() {
+                if index > 0 {
+                    output.push_str("\n\n");
+                }
+                write_scope_heading(&mut output, &found.address.catalog_path(), format, color);
+                output.push('\n');
+                let rendered = match format {
+                    QueryFormat::Markdown => mant_engine::render_search_markdown(&found.search),
+                    QueryFormat::Text => render_terminal_search(&found.search, color),
+                    QueryFormat::Json | QueryFormat::Man => unreachable!(),
+                };
+                output.push_str(rendered.trim());
+            }
+        }
+    }
+    Ok(output)
+}
+
+fn write_scope_heading(output: &mut String, address: &str, format: QueryFormat, color: bool) {
+    match format {
+        QueryFormat::Markdown => {
+            output.push_str("## ");
+            output.push_str(address);
+        }
+        QueryFormat::Text if color => {
+            let style = terminal_style(TerminalRole::Document);
+            write!(output, "{style}{address}{style:#}").expect("writing to String cannot fail");
+        }
+        QueryFormat::Text => output.push_str(address),
+        QueryFormat::Json | QueryFormat::Man => unreachable!(),
     }
 }
 

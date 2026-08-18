@@ -2,13 +2,15 @@
 
 use super::{
     CatalogKindMode, CatalogPaging, CatalogQuery, Cli, ColorMode, Command, CommandFactory,
-    ErrorKind, InputFormat, InputFormatMode, NodeSelector, QueryFormat, QueryInput, QueryPolicy,
-    QueryPresentation, QueryRequest, QuerySource, QueryView, RequestSchema, SearchCase,
-    SearchScope, SearchSyntax, default_search_limit, is_manual_section, normalize_tldr_topic,
-    parenthesized_manual_reference,
+    DocumentScope, DocumentSelector, DocumentTraversal, ErrorKind, InputFormat, InputFormatMode,
+    NodeSelector, QueryFormat, QueryInput, QueryPolicy, QueryPresentation, QueryRequest,
+    QuerySource, QueryView, RequestSchema, ScopeQueryView, SearchCase, SearchScope, SearchSyntax,
+    default_scope_depth, default_scope_document_limit, default_search_limit, is_manual_section,
+    normalize_tldr_topic, parenthesized_manual_reference,
 };
 
 pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, clap::Error> {
+    validate_scope_mode(&parsed, color)?;
     if parsed.no_pager && !parsed.list && parsed.find.is_none() {
         return Err(command_error(
             ErrorKind::ArgumentConflict,
@@ -66,6 +68,10 @@ pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, cl
         QuerySourceOptions {
             request_json: parsed.request_json,
             selectors: parsed.selector,
+            documents: parsed.document,
+            follow_links: parsed.follow_links,
+            max_depth: parsed.max_depth,
+            max_documents: parsed.max_documents,
             input_path: parsed.input,
             input_format: parsed.input_format,
             configured_source: parsed.source,
@@ -98,6 +104,31 @@ pub(super) fn normalize(mut parsed: Cli, color: ColorMode) -> Result<Command, cl
         },
         preserve_anchors: parsed.preserve_anchors,
     })
+}
+
+fn validate_scope_mode(parsed: &Cli, color: ColorMode) -> Result<(), clap::Error> {
+    let configured =
+        parsed.follow_links || parsed.max_depth.is_some() || parsed.max_documents.is_some();
+    if configured
+        && (parsed.list
+            || parsed.find.is_some()
+            || parsed.request_json
+            || parsed.input.is_some()
+            || parsed.doctor
+            || parsed.update_docs
+            || parsed.prune_docs
+            || parsed.update_tldr
+            || parsed.protocol_version
+            || parsed.schema.is_some()
+            || parsed.mcp)
+    {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "document-scope options apply only to registered document queries",
+            color,
+        ));
+    }
+    Ok(())
 }
 
 fn normalize_doctor(parsed: &Cli, color: ColorMode) -> Result<Command, clap::Error> {
@@ -214,6 +245,23 @@ fn validate_query_search_options(parsed: &Cli, color: ColorMode) -> Result<(), c
         return Err(command_error(
             ErrorKind::ArgumentConflict,
             "--kind requires --list or --find",
+            color,
+        ));
+    }
+    if (parsed.follow_links || parsed.max_depth.is_some() || parsed.max_documents.is_some())
+        && parsed.selector.is_empty()
+        && parsed.document.is_empty()
+    {
+        return Err(command_error(
+            ErrorKind::MissingRequiredArgument,
+            "--follow-links requires a document selector or --document",
+            color,
+        ));
+    }
+    if (!parsed.document.is_empty() || parsed.follow_links) && (parsed.manual || parsed.tldr) {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "--manual and --tldr accept one document; document scopes resolve typed registered links",
             color,
         ));
     }
@@ -335,6 +383,23 @@ fn normalize_presentation(
 ) -> QueryPresentation {
     let view = match source {
         QuerySource::Arguments(request) => Some(&request.view),
+        QuerySource::ScopeArguments { view, .. } => {
+            return if ui {
+                QueryPresentation::Interactive
+            } else if let Some(format) = format {
+                QueryPresentation::Output {
+                    format,
+                    color: color.unwrap_or_default(),
+                }
+            } else if view.is_none() {
+                QueryPresentation::Auto
+            } else {
+                QueryPresentation::Output {
+                    format: QueryFormat::Text,
+                    color: color.unwrap_or_default(),
+                }
+            };
+        }
         QuerySource::InputStdin { view, .. } => Some(view),
         QuerySource::StdinJson => None,
     };
@@ -378,6 +443,10 @@ fn normalize_presentation(
 struct QuerySourceOptions {
     request_json: bool,
     selectors: Vec<String>,
+    documents: Vec<String>,
+    follow_links: bool,
+    max_depth: Option<u16>,
+    max_documents: Option<u32>,
     input_path: Option<String>,
     input_format: Option<InputFormatMode>,
     configured_source: Option<String>,
@@ -395,6 +464,9 @@ fn normalize_query_source(
     view: QueryView,
     color: ColorMode,
 ) -> Result<QuerySource, clap::Error> {
+    if let Some(source) = normalize_scope_query_source(&options, view.clone(), color)? {
+        return Ok(source);
+    }
     let source = if options.request_json {
         QuerySource::StdinJson
     } else if let Some(path) = options.input_path {
@@ -433,6 +505,99 @@ fn normalize_query_source(
         })
     };
     Ok(source)
+}
+
+fn normalize_scope_query_source(
+    options: &QuerySourceOptions,
+    view: QueryView,
+    color: ColorMode,
+) -> Result<Option<QuerySource>, clap::Error> {
+    let scope_requested = !options.documents.is_empty()
+        || options.follow_links
+        || options.max_depth.is_some()
+        || options.max_documents.is_some();
+    if !scope_requested {
+        return Ok(None);
+    }
+    if scope_requested && (options.request_json || options.input_path.is_some()) {
+        return Err(command_error(
+            ErrorKind::ArgumentConflict,
+            "document scopes cannot be combined with --request-json or --input",
+            color,
+        ));
+    }
+    let operands = if options.documents.is_empty() {
+        vec![normalize_document_operands(
+            &options.selectors,
+            options.manual_section.clone(),
+            false,
+            color,
+        )?]
+    } else {
+        options
+            .documents
+            .iter()
+            .map(|selector| {
+                normalize_document_operands(
+                    std::slice::from_ref(selector),
+                    options.manual_section.clone(),
+                    false,
+                    color,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let documents = operands
+        .into_iter()
+        .map(|normalized| DocumentSelector {
+            selector: normalized.name,
+            source: options.configured_source.clone(),
+            manual_section: normalized.manual_section,
+        })
+        .collect::<Vec<_>>();
+    let view = match view {
+        QueryView::Full {} => None,
+        QueryView::Explain { entry } => Some(ScopeQueryView::Explain { entry }),
+        QueryView::Search {
+            pattern,
+            syntax,
+            case,
+            scope,
+            word,
+            context_lines,
+            limit,
+            offset,
+        } => Some(ScopeQueryView::Search {
+            pattern,
+            syntax,
+            case,
+            scope,
+            word,
+            context_lines,
+            limit,
+            offset,
+        }),
+        QueryView::Outline { .. } | QueryView::Excerpt { .. } => {
+            return Err(command_error(
+                ErrorKind::ArgumentConflict,
+                "multi-document scopes support interactive reading, --search, and --explain",
+                color,
+            ));
+        }
+    };
+    Ok(Some(QuerySource::ScopeArguments {
+        scope: DocumentScope {
+            documents,
+            traversal: DocumentTraversal {
+                follow_links: options.follow_links,
+                max_depth: options.max_depth.unwrap_or_else(default_scope_depth),
+                max_documents: options
+                    .max_documents
+                    .unwrap_or_else(default_scope_document_limit),
+            },
+        },
+        view,
+    }))
 }
 
 fn normalize_document_operands(

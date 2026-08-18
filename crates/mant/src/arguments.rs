@@ -15,9 +15,10 @@ use mant_engine::{
     QueryPolicy, is_manual_section, normalize_tldr_topic, parenthesized_manual_reference,
 };
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, InputFormat, NodeSelector, OutlineDetail, QueryInput,
-    QueryRequest, QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
-    default_search_limit,
+    CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
+    InputFormat, NodeSelector, OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema,
+    ScopeQueryView, SearchCase, SearchScope, SearchSyntax, default_scope_depth,
+    default_scope_document_limit, default_search_limit,
 };
 
 mod normalize;
@@ -116,6 +117,8 @@ pub(crate) enum SchemaContract {
     Outline,
     Excerpt,
     Search,
+    ScopeRequest,
+    ScopeQuery,
     Catalog,
     All,
 }
@@ -192,6 +195,10 @@ impl From<SearchScopeMode> for SearchScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum QuerySource {
     Arguments(QueryRequest),
+    ScopeArguments {
+        scope: DocumentScope,
+        view: Option<ScopeQueryView>,
+    },
     StdinJson,
     InputStdin {
         format: InputFormat,
@@ -264,10 +271,10 @@ const CLI_STYLES: Styles = Styles::styled()
     styles = CLI_STYLES,
     disable_help_flag = true,
     version,
-    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --doctor [--format <text|json>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
-    after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant 1 tar --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --doctor\n  mant --update-docs\n  mant --mcp",
+    override_usage = "mant <SELECTOR> [OPTIONS]\n       mant <MAN_SECTION> <NAME> [OPTIONS]\n       mant --document <SELECTOR>... [--follow-links] [OPTIONS]\n       mant --input <PATH|-> [--input-format <FORMAT>] [OPTIONS]\n       mant --list [FILTERS]\n       mant --find <PATTERN> [FILTERS]\n       mant --request-json [--format <FORMAT>] [--compact]\n       mant --doctor [--format <text|json>] [--compact]\n       mant --schema <CONTRACT> [--compact]\n       mant --update-docs [--compact]\n       mant --prune-docs [--dry-run] [--compact]\n       mant --update-tldr [--compact]\n       mant --protocol-version [--compact]\n       mant --mcp",
+    after_help = "Examples:\n  mant git\n  mant 1 git\n  mant 'git(1)'\n  mant manual/1/git\n  mant git --search worktree --follow-links\n  mant --document git --document git-lfs --explain=--work-tree\n  mant --input README.md\n  mant --input /usr/share/man/man1/git.1.gz\n  cat guide.md | mant --input - --input-format markdown\n  mant --list\n  mant --find process --source pwsh7\n  mant git --tldr\n  mant 1 tar --tldr\n  mant gcc --outline\n  mant tar --explain=--exclude\n  mant git --format json --compact\n  mant --doctor\n  mant --update-docs\n  mant --mcp",
     group = ArgGroup::new("action")
-        .args(["selector", "input", "list", "find", "request_json", "doctor", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
+        .args(["selector", "document", "input", "list", "find", "request_json", "doctor", "update_docs", "prune_docs", "update_tldr", "protocol_version", "schema", "mcp"])
         .required(true)
         .multiple(false)
 )]
@@ -275,6 +282,38 @@ struct Cli {
     /// Document selector, or a man-style `MAN_SECTION NAME` pair.
     #[arg(value_name = "SELECTOR", value_parser = non_empty, num_args = 0..)]
     selector: Vec<String>,
+
+    /// Add one initial document to a bounded multi-document query; repeatable.
+    #[arg(
+        long,
+        value_name = "SELECTOR",
+        value_parser = non_empty,
+        action = ArgAction::Append,
+        help_heading = "Document scope"
+    )]
+    document: Vec<String>,
+
+    /// Follow typed links between registered Markdown and native manuals.
+    #[arg(long, help_heading = "Document scope")]
+    follow_links: bool,
+
+    /// Follow at most this many document-link edges from an initial document.
+    #[arg(
+        long,
+        value_name = "DEPTH",
+        requires = "follow_links",
+        help_heading = "Document scope"
+    )]
+    max_depth: Option<u16>,
+
+    /// Load at most this many distinct documents, including initial documents.
+    #[arg(
+        long,
+        value_name = "COUNT",
+        requires = "follow_links",
+        help_heading = "Document scope"
+    )]
+    max_documents: Option<u32>,
 
     /// Read one explicit Markdown or roff file; use `-` for standard input.
     #[arg(long, value_name = "PATH|-", value_parser = non_empty, help_heading = "Input")]
@@ -543,7 +582,7 @@ struct Cli {
     )]
     protocol_version: bool,
 
-    /// Print a generated JSON Schema contract (`doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`).
+    /// Print a generated JSON Schema contract, including single- or multi-document requests and results.
     #[arg(
         long,
         value_name = "CONTRACT",

@@ -22,8 +22,9 @@ use mant_ir::ResolvedContent;
 use mant_protocol::{
     CatalogQuery, CatalogSchema, DoctorReport, DocumentAddress, DocumentCatalog, DocumentSchema,
     ExcerptSchema, InputFormat, MarkdownOrigin, OutlineSchema, QueryInput, QueryRequest,
-    QuerySchema, QueryView, RequestSchema, SearchSchema, TldrCacheUpdate,
-    render_catalog_coverage_text, render_catalog_text,
+    QuerySchema, QueryView, RequestSchema, ScopeQueryRequest, ScopeQueryResponse, ScopeQuerySchema,
+    ScopeRequestSchema, SearchSchema, TldrCacheUpdate, render_catalog_coverage_text,
+    render_catalog_text,
 };
 use mant_sources::{DocumentSourcesPrune, DocumentSourcesUpdate};
 use presentation::{render_json, render_query_result};
@@ -47,6 +48,8 @@ struct ProtocolDescription<'a> {
     outline_schema: &'a str,
     excerpt_schema: &'a str,
     search_schema: &'a str,
+    scope_request_schema: &'a str,
+    scope_query_schema: &'a str,
     catalog_schema: &'a str,
 }
 
@@ -88,6 +91,19 @@ trait CliHost {
         policy: QueryPolicy,
     ) -> Result<ResolvedContent, Failure>;
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure>;
+    fn resolve_scope(
+        &self,
+        _scope: &mant_protocol::DocumentScope,
+    ) -> Result<mant_engine::LoadedDocumentScope, Failure> {
+        Err(Failure::operational(
+            "document scopes are unavailable in this host",
+        ))
+    }
+    fn query_scope(&self, _request: &ScopeQueryRequest) -> Result<ScopeQueryResponse, Failure> {
+        Err(Failure::operational(
+            "document scope queries are unavailable in this host",
+        ))
+    }
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure>;
     fn update_docs(&self) -> Result<DocumentSourcesUpdate, Failure>;
     fn prune_docs(&self, dry_run: bool) -> Result<DocumentSourcesPrune, Failure>;
@@ -126,6 +142,21 @@ impl CliHost for SystemHost {
 
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure> {
         mant_engine::query_markdown_text(source, None).map_err(Failure::operational)
+    }
+
+    fn resolve_scope(
+        &self,
+        scope: &mant_protocol::DocumentScope,
+    ) -> Result<mant_engine::LoadedDocumentScope, Failure> {
+        self.resolver
+            .resolve_scope(scope)
+            .map_err(Failure::operational)
+    }
+
+    fn query_scope(&self, request: &ScopeQueryRequest) -> Result<ScopeQueryResponse, Failure> {
+        self.resolver
+            .execute_scope_query(request)
+            .map_err(Failure::operational)
     }
 
     fn update_tldr(&self) -> Result<TldrCacheUpdate, Failure> {
@@ -444,6 +475,8 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
                 outline_schema: OutlineSchema::ID,
                 excerpt_schema: ExcerptSchema::ID,
                 search_schema: SearchSchema::ID,
+                scope_request_schema: ScopeRequestSchema::ID,
+                scope_query_schema: ScopeQuerySchema::ID,
                 catalog_schema: CatalogSchema::ID,
             },
             pretty,
@@ -466,6 +499,12 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             }
             SchemaContract::Search => {
                 render_json(&mant_protocol::query_search_json_schema(), pretty)
+            }
+            SchemaContract::ScopeRequest => {
+                render_json(&mant_protocol::scope_query_request_json_schema(), pretty)
+            }
+            SchemaContract::ScopeQuery => {
+                render_json(&mant_protocol::scope_query_response_json_schema(), pretty)
             }
             SchemaContract::Catalog => {
                 render_json(&mant_protocol::document_catalog_json_schema(), pretty)
@@ -529,8 +568,40 @@ fn execute_query(
     input: &mut dyn Read,
     host: &dyn CliHost,
 ) -> Result<String, Failure> {
-    let policy = command.policy;
-    let result = match command.source {
+    let QueryExecution {
+        source,
+        presentation,
+        pretty,
+        policy,
+        preserve_anchors,
+    } = command;
+    let source = match source {
+        QuerySource::ScopeArguments { scope, view } => {
+            return execute_scope_arguments(
+                scope,
+                view,
+                presentation,
+                pretty,
+                policy,
+                preserve_anchors,
+                host,
+            );
+        }
+        QuerySource::StdinJson => match read_native_request(input)? {
+            NativeRequest::Query(request) => QuerySource::Arguments(request),
+            NativeRequest::Scope(request) => {
+                return execute_scope_request(
+                    &request,
+                    presentation,
+                    pretty,
+                    preserve_anchors,
+                    host,
+                );
+            }
+        },
+        source => source,
+    };
+    let result = match source {
         QuerySource::InputStdin { format, view } => {
             validate_markdown_policy(policy)?;
             let query = match format {
@@ -556,7 +627,7 @@ fn execute_query(
                 .map_err(query_execution_failure)?
         }
     };
-    if let QueryPresentation::Tldr(color) = command.presentation {
+    if let QueryPresentation::Tldr(color) = presentation {
         let mant_engine::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt {
             selections, ..
         }) = &result
@@ -579,7 +650,7 @@ fn execute_query(
             },
         );
     }
-    let (format, color) = match command.presentation {
+    let (format, color) = match presentation {
         QueryPresentation::Auto => (QueryFormat::Markdown, ColorMode::Never),
         QueryPresentation::Output { format, color } => (format, color),
         QueryPresentation::Interactive => {
@@ -592,8 +663,61 @@ fn execute_query(
     render_query_result(
         &result,
         format,
-        command.pretty,
-        command.preserve_anchors,
+        pretty,
+        preserve_anchors,
+        color == ColorMode::Always,
+    )
+}
+
+fn execute_scope_arguments(
+    scope: mant_protocol::DocumentScope,
+    view: Option<mant_protocol::ScopeQueryView>,
+    presentation: QueryPresentation,
+    pretty: bool,
+    policy: QueryPolicy,
+    preserve_anchors: bool,
+    host: &dyn CliHost,
+) -> Result<String, Failure> {
+    let Some(view) = view else {
+        return Err(Failure::usage(
+            "multi-document output requires --search or --explain; use --ui for interactive reading",
+        ));
+    };
+    if policy != QueryPolicy::Combined {
+        return Err(Failure::usage(
+            "--manual and --tldr do not apply to multi-document scopes",
+        ));
+    }
+    let request = ScopeQueryRequest {
+        schema: ScopeRequestSchema::V0Dot8,
+        scope,
+        view,
+    };
+    execute_scope_request(&request, presentation, pretty, preserve_anchors, host)
+}
+
+fn execute_scope_request(
+    request: &ScopeQueryRequest,
+    presentation: QueryPresentation,
+    pretty: bool,
+    preserve_anchors: bool,
+    host: &dyn CliHost,
+) -> Result<String, Failure> {
+    let response = host.query_scope(request)?;
+    let (format, color) = match presentation {
+        QueryPresentation::Output { format, color } => (format, color),
+        QueryPresentation::Auto => (QueryFormat::Markdown, ColorMode::Never),
+        QueryPresentation::Interactive | QueryPresentation::Tldr(_) => {
+            return Err(Failure::usage(
+                "scope request JSON supports only deterministic output",
+            ));
+        }
+    };
+    presentation::render_scope_query_result(
+        &response,
+        format,
+        pretty,
+        preserve_anchors,
         color == ColorMode::Always,
     )
 }
@@ -618,35 +742,70 @@ fn run_interactive(
             diagnostics_color,
         );
     };
-    let QuerySource::Arguments(request) = source else {
-        return report_failure(
-            &Failure::usage("interactive mode requires a document selector or explicit input"),
-            diagnostics,
-            diagnostics_color,
-        );
-    };
-    if !matches!(request.view, QueryView::Full {}) {
-        return report_failure(
-            &Failure::usage("interactive mode requires the complete document view"),
-            diagnostics,
-            diagnostics_color,
-        );
-    }
-    if let Err(error) = mant_engine::validate_query_request(&request, policy).map_err(query_failure)
-    {
-        return report_failure(&error, diagnostics, diagnostics_color);
-    }
-    let query = match host.query(&request, policy) {
-        Ok(query) => query,
-        Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
+    let (query, scope_documents) = match source {
+        QuerySource::Arguments(request) => {
+            if !matches!(request.view, QueryView::Full {}) {
+                return report_failure(
+                    &Failure::usage("interactive mode requires the complete document view"),
+                    diagnostics,
+                    diagnostics_color,
+                );
+            }
+            if let Err(error) =
+                mant_engine::validate_query_request(&request, policy).map_err(query_failure)
+            {
+                return report_failure(&error, diagnostics, diagnostics_color);
+            }
+            let query = match host.query(&request, policy) {
+                Ok(query) => query,
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
+            };
+            (query.clone(), vec![query])
+        }
+        QuerySource::ScopeArguments { scope, view: None } => {
+            if policy != QueryPolicy::Combined {
+                return report_failure(
+                    &Failure::usage("--manual and --tldr do not apply to document scopes"),
+                    diagnostics,
+                    diagnostics_color,
+                );
+            }
+            let loaded = match host.resolve_scope(&scope) {
+                Ok(loaded) => loaded,
+                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
+            };
+            let Some(query) = loaded.documents.first().cloned() else {
+                return report_failure(
+                    &Failure::operational("document scope resolved no readable documents"),
+                    diagnostics,
+                    diagnostics_color,
+                );
+            };
+            (query, loaded.documents)
+        }
+        QuerySource::ScopeArguments { view: Some(_), .. } => {
+            return report_failure(
+                &Failure::usage("interactive mode does not accept --search or --explain"),
+                diagnostics,
+                diagnostics_color,
+            );
+        }
+        QuerySource::StdinJson | QuerySource::InputStdin { .. } => {
+            return report_failure(
+                &Failure::usage("interactive mode requires a registered document selector"),
+                diagnostics,
+                diagnostics_color,
+            );
+        }
     };
     let catalog = match host.discover(&CatalogQuery::default()) {
         Ok(catalog) => catalog,
         Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
-    match mant_ui::run_with_catalog(
+    match mant_ui::run_with_catalog_and_scope(
         &query,
         catalog,
+        &scope_documents,
         |catalog_query| host.discover(catalog_query).map_err(Failure::into_message),
         |address| {
             let (request, policy) = request_for_address(address);
@@ -727,11 +886,41 @@ fn read_query_request(source: QuerySource, input: &mut dyn Read) -> Result<Query
         QuerySource::InputStdin { .. } => {
             unreachable!("direct stdin input is consumed before protocol request decoding");
         }
+        QuerySource::ScopeArguments { .. } => {
+            unreachable!("scope requests are consumed before single-document decoding");
+        }
     }
 
     let request = read_utf8_input(input, MAX_REQUEST_BYTES, "request JSON")?;
     serde_json::from_str(&request)
         .map_err(|error| Failure::usage(format!("invalid query request JSON: {error}")))
+}
+
+enum NativeRequest {
+    Query(QueryRequest),
+    Scope(ScopeQueryRequest),
+}
+
+fn read_native_request(input: &mut dyn Read) -> Result<NativeRequest, Failure> {
+    let request = read_utf8_input(input, MAX_REQUEST_BYTES, "request JSON")?;
+    let value = serde_json::from_str::<serde_json::Value>(&request)
+        .map_err(|error| Failure::usage(format!("invalid request JSON: {error}")))?;
+    match value.get("schema").and_then(serde_json::Value::as_str) {
+        Some(RequestSchema::ID) => serde_json::from_value(value)
+            .map(NativeRequest::Query)
+            .map_err(|error| Failure::usage(format!("invalid query request JSON: {error}"))),
+        Some(ScopeRequestSchema::ID) => serde_json::from_value(value)
+            .map(NativeRequest::Scope)
+            .map_err(|error| Failure::usage(format!("invalid scope request JSON: {error}"))),
+        Some(schema) => Err(Failure::usage(format!(
+            "unsupported request schema '{schema}'; expected '{}' or '{}'",
+            RequestSchema::ID,
+            ScopeRequestSchema::ID
+        ))),
+        None => Err(Failure::usage(
+            "request JSON requires a schema discriminator",
+        )),
+    }
 }
 
 fn read_utf8_input(input: &mut dyn Read, limit: u64, label: &str) -> Result<String, Failure> {

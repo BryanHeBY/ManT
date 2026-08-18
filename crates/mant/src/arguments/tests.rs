@@ -1,6 +1,7 @@
 use mant_protocol::{
-    CatalogDocumentKind, CatalogQuery, InputFormat, OutlineDetail, QueryInput, QueryRequest,
-    QueryView, RequestSchema, SearchCase, SearchScope, SearchSyntax,
+    CatalogDocumentKind, CatalogQuery, DocumentScope, DocumentSelector, DocumentTraversal,
+    InputFormat, OutlineDetail, QueryInput, QueryRequest, QueryView, RequestSchema, ScopeQueryView,
+    SearchCase, SearchScope, SearchSyntax,
 };
 
 use super::{
@@ -130,6 +131,95 @@ fn parses_an_explicit_interactive_query_without_an_output_projection() {
             parse(&args(&["git", "--ui", conflicting])).is_err(),
             "accepted {conflicting}"
         );
+    }
+}
+
+#[test]
+fn parses_bounded_multi_document_queries_without_changing_single_document_syntax() {
+    assert_eq!(
+        parse(&args(&[
+            "--document",
+            "manual/1/git",
+            "--document",
+            "documents/mant",
+            "--follow-links",
+            "--max-depth",
+            "3",
+            "--max-documents",
+            "12",
+            "--search",
+            "worktree",
+        ]))
+        .expect("bounded document scope"),
+        Command::Query {
+            source: QuerySource::ScopeArguments {
+                scope: DocumentScope {
+                    documents: vec![
+                        DocumentSelector {
+                            selector: "manual/1/git".to_owned(),
+                            source: None,
+                            manual_section: None,
+                        },
+                        DocumentSelector {
+                            selector: "documents/mant".to_owned(),
+                            source: None,
+                            manual_section: None,
+                        },
+                    ],
+                    traversal: DocumentTraversal {
+                        follow_links: true,
+                        max_depth: 3,
+                        max_documents: 12,
+                    },
+                },
+                view: Some(ScopeQueryView::Search {
+                    pattern: "worktree".to_owned(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Insensitive,
+                    scope: SearchScope::Visible,
+                    word: false,
+                    context_lines: 0,
+                    limit: 100,
+                    offset: 0,
+                }),
+            },
+            presentation: QueryPresentation::Output {
+                format: QueryFormat::Text,
+                color: ColorMode::Auto,
+            },
+            pretty: true,
+            policy: QueryPolicy::Combined,
+            preserve_anchors: false,
+        }
+    );
+
+    assert!(matches!(
+        parse(&args(&["git", "--follow-links", "--ui"]))
+            .expect("interactive transitive scope"),
+        Command::Query {
+            source: QuerySource::ScopeArguments {
+                view: None,
+                scope: DocumentScope {
+                    ref documents,
+                    traversal: DocumentTraversal {
+                        follow_links: true,
+                        ..
+                    },
+                },
+            },
+            presentation: QueryPresentation::Interactive,
+            ..
+        } if documents[0].selector == "git"
+    ));
+
+    for invalid in [
+        vec!["--document", "git", "--outline"],
+        vec!["--document", "git", "--tldr"],
+        vec!["--document", "git", "--max-depth", "2", "--search", "x"],
+        vec!["git", "--follow-links", "--manual"],
+        vec!["--list", "--follow-links"],
+    ] {
+        assert!(parse(&args(&invalid)).is_err(), "accepted {invalid:?}");
     }
 }
 
