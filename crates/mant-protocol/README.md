@@ -23,6 +23,8 @@ QueryRequest ──> host / mant-engine ──┬─> QueryBundle
                                      ├─> QueryExcerpt
                                      └─> QuerySearch
 
+ScopeQueryRequest ──> host / mant-engine ──> ScopeQueryResponse
+
 CatalogQuery ──> host ──────────────────> DocumentCatalog ──> compact text
 
 local inspection ───────────────────────> DoctorReport
@@ -32,6 +34,7 @@ local inspection ─────────────────────
 | --- | --- | --- |
 | Process framing | `mant.cli/v0.8` | Advertised by the `mant` executable |
 | Request | `mant.request/v0.8` | Closed input accepted by `--request-json` |
+| Scope request/result | `mant.scope-request/v0.8`, `mant.scope-query/v0.8` | Bounded multi-document search and explanation |
 | Full query | `mant.query/v0.8` | Document plus optional tldr content |
 | Document | `mant.document/v0.8` | Versioned projection of the normalized document |
 | Catalog | `mant.catalog/v0.8` | Registered Markdown and native-manual discovery |

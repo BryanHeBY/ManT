@@ -547,6 +547,19 @@ exit, errors, and Rust panics.
 
 ## Document Selection
 
+`--document SELECTOR` is repeatable and supplies an ordered set of initial registered documents. It is the multi-document form of the ordinary positional selector:
+
+```sh
+mant --document git --document git-lfs --search worktree
+mant --document git --document git-config --explain core.worktree
+```
+
+`--follow-links` expands either one positional selector or the repeated `--document` set through typed manual references and same-source Markdown document links. Expansion is breadth-first in initial-document and source-link order. Exact logical addresses deduplicate cycles and diamonds. Ordinary prose resembling `name(section)`, filename prefixes such as `git-*`, page-local links, and external links never create graph edges.
+
+`--max-depth` limits the number of followed edges from an initial document and defaults to 8. `--max-documents` includes initial documents, defaults to 64, and cannot exceed 256. JSON results report missing targets, a `truncated` flag, and the resolved frontier excluded by the document budget. Search applies one global `--limit` and `--offset` over breadth-first document order. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity.
+
+Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--ui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
+
 - `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and
   `sections` is the compact form. The CLI accepts historical `options` as an
   alias for `entries`.
@@ -653,8 +666,8 @@ a native CLI interface and is not exposed through the read-only MCP server.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v0.8` object from standard input.
-- `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `catalog`, or `all`.
+- `--request-json`: Read one closed `mant.request/v0.8` or `mant.scope-request/v0.8` object from standard input.
+- `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Successful calls
   return bounded plain text or CommonMark without ordinary lowering
@@ -674,6 +687,8 @@ The current protocol descriptor is:
   "outlineSchema": "mant.outline/v0.8",
   "excerptSchema": "mant.excerpt/v0.8",
   "searchSchema": "mant.search/v0.8",
+  "scopeRequestSchema": "mant.scope-request/v0.8",
+  "scopeQuerySchema": "mant.scope-query/v0.8",
   "catalogSchema": "mant.catalog/v0.8"
 }
 ```

@@ -85,7 +85,11 @@ mant git --tldr
 mant gcc --node 4.2 --format markdown
 mant tar --explain=--exclude
 mant tar --search=--acls --context 1
+mant git --search worktree --follow-links
+mant --document git --document git-lfs --explain=--work-tree
 ```
+
+Repeated `--document` values form an ordered query set. `--follow-links` adds typed native-manual and same-source Markdown destinations with bounded breadth-first traversal. Search uses global pagination across the set; explain returns exact per-document matches. Interactive search spans the same pre-resolved set while ordinary document discovery remains global.
 
 Partial document queries default to text and can explicitly select Markdown or
 JSON. A complete native roff manual also supports `--format man` for manual-only
