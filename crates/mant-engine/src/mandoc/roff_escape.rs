@@ -88,7 +88,7 @@ impl Decoder {
     }
 
     fn decode(mut self) -> Vec<RoffInlineEvent> {
-        while self.index < self.characters.len() {
+        'input: while self.index < self.characters.len() {
             let character = self.characters[self.index];
             if character != '\\' {
                 self.push_source_character(character);
@@ -97,10 +97,22 @@ impl Decoder {
             }
 
             self.index += 1;
-            let Some(trigger) = self.take_character() else {
+            let Some(mut trigger) = self.take_character() else {
                 self.text.push('\\');
                 break;
             };
+            // `\\E` is the copy-mode-safe escape character.  It makes the
+            // next trigger behave exactly as if the copy had contained a
+            // literal backslash.  Flatten it here instead of recursively
+            // decoding nested copies: hostile input can contain an arbitrary
+            // number of `\\E` prefixes, while each prefix consumes one byte.
+            while trigger == 'E' {
+                let Some(next) = self.take_character() else {
+                    self.text.push('\\');
+                    continue 'input;
+                };
+                trigger = next;
+            }
             self.decode_escape(trigger);
         }
         self.flush_text();
@@ -142,16 +154,6 @@ impl Decoder {
             }
             '-' => self.text.push('-'),
             'e' | '\\' => self.text.push('\\'),
-            // `\E` is a copy-mode-safe escape character. Once it reaches a
-            // parsed text node, interpret the following trigger exactly as a
-            // normal backslash would.
-            'E' => {
-                if let Some(nested_trigger) = self.take_character() {
-                    self.decode_escape(nested_trigger);
-                } else {
-                    self.text.push('\\');
-                }
-            }
             ' ' | '~' | '0' => self.text.push(' '),
             'p' => self.emit(RoffInlineEvent::LineBreak),
             // Opaque formatter state supported by mandoc_escape(3). These
@@ -603,6 +605,13 @@ mod tests {
         assert_eq!(visible_text(r"\EfBbold\EfR"), "bold");
         assert_eq!(visible_text(r"before\N1after"), "beforeafter");
         assert_eq!(visible_text(r"before\zXafter"), "beforeafter");
+    }
+
+    #[test]
+    fn copy_mode_escape_chains_are_decoded_iteratively() {
+        let source = format!(r"\E{}fBbold\EfR", "E".repeat(16_384));
+
+        assert_eq!(visible_text(&source), "bold");
     }
 
     #[test]
