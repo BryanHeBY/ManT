@@ -17,6 +17,7 @@ use std::{
 
 use crate::source::deduplicate_paths;
 
+#[cfg(unix)]
 const DEFAULT_UNIX_MANUAL_ROOTS: [&str; 4] = [
     "/usr/local/share/man",
     "/usr/local/man",
@@ -105,14 +106,17 @@ const fn host_platform() -> ManualPathPlatform {
     }
 }
 
+#[cfg(unix)]
 fn fallback_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
     let mut roots = supplemental_manual_roots(environment);
-    #[cfg(unix)]
-    {
-        roots.extend(path_derived_manual_roots(environment));
-        roots.extend(DEFAULT_UNIX_MANUAL_ROOTS.map(PathBuf::from));
-    }
+    roots.extend(path_derived_manual_roots(environment));
+    roots.extend(DEFAULT_UNIX_MANUAL_ROOTS.map(PathBuf::from));
     deduplicate_paths(roots)
+}
+
+#[cfg(not(unix))]
+fn fallback_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
+    deduplicate_paths(supplemental_manual_roots(environment))
 }
 
 fn supplemental_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
@@ -144,6 +148,7 @@ fn supplemental_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<P
     roots
 }
 
+#[cfg(unix)]
 fn path_derived_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(path) = environment.get(OsStr::new("PATH")) {
@@ -589,7 +594,7 @@ fn wildcard_matches(pattern: &str, value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, ffi::OsString, fs, path::PathBuf};
+    use std::{collections::HashMap, env, ffi::OsString, fs, path::PathBuf};
 
     use super::{
         BsdManConfig, ManDbConfig, developer_manual_roots, discover_manual_roots_from,
@@ -660,48 +665,57 @@ mod tests {
 
     #[test]
     fn man_db_maps_path_then_appends_mandatory_roots_and_systems() {
-        let configuration = parse_man_db_config(
-            "MANPATH_MAP /tool/bin /tool/man\nMANPATH_MAP /tool/bin /tool/share/man\nMANDATORY_MANPATH /usr/share/man\n",
-        );
+        let root = temporary_root("man-db-mappings");
+        let binary = root.join("tool/bin");
+        let manual = root.join("tool/man");
+        let shared = root.join("tool/share/man");
+        let mandatory = root.join("usr/share/man");
+        let configuration = parse_man_db_config(&format!(
+            "MANPATH_MAP {} {}\nMANPATH_MAP {} {}\nMANDATORY_MANPATH {}\n",
+            binary.display(),
+            manual.display(),
+            binary.display(),
+            shared.display(),
+            mandatory.display(),
+        ));
         assert_eq!(
             configuration,
             ManDbConfig {
                 mappings: vec![
-                    (PathBuf::from("/tool/bin"), PathBuf::from("/tool/man")),
-                    (PathBuf::from("/tool/bin"), PathBuf::from("/tool/share/man")),
+                    (binary.clone(), manual.clone()),
+                    (binary.clone(), shared.clone()),
                 ],
-                mandatory: vec![PathBuf::from("/usr/share/man")],
+                mandatory: vec![mandatory.clone()],
             }
         );
         let environment = HashMap::from([
-            (OsString::from("PATH"), OsString::from("/tool/bin")),
+            (
+                OsString::from("PATH"),
+                env::join_paths([binary]).expect("join PATH"),
+            ),
             (OsString::from("SYSTEM"), OsString::from("man")),
         ]);
         assert_eq!(
             super::man_db_manual_roots(&environment, &configuration),
-            vec![
-                PathBuf::from("/tool/man"),
-                PathBuf::from("/tool/share/man"),
-                PathBuf::from("/usr/share/man")
-            ]
+            vec![manual, shared, mandatory]
         );
     }
 
     #[test]
     fn empty_manpath_components_insert_one_native_default_sequence() {
-        let environment =
-            HashMap::from([(OsString::from("MANPATH"), OsString::from("/first::/last"))]);
+        let root = temporary_root("empty-manpath");
+        let first = root.join("first");
+        let empty = PathBuf::new();
+        let last = root.join("last");
+        let environment = HashMap::from([(
+            OsString::from("MANPATH"),
+            env::join_paths([&first, &empty, &last]).expect("join MANPATH"),
+        )]);
+        let native_a = root.join("native/a");
+        let native_b = root.join("native/b");
         assert_eq!(
-            discover_manual_roots_from(
-                &environment,
-                vec![PathBuf::from("/native/a"), PathBuf::from("/native/b")],
-            ),
-            vec![
-                PathBuf::from("/first"),
-                PathBuf::from("/native/a"),
-                PathBuf::from("/native/b"),
-                PathBuf::from("/last"),
-            ]
+            discover_manual_roots_from(&environment, vec![native_a.clone(), native_b.clone()],),
+            vec![first, native_a, native_b, last]
         );
     }
 
