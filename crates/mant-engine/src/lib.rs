@@ -8,6 +8,7 @@ mod executable;
 mod inline;
 mod mandoc;
 mod manual;
+mod manual_paths;
 mod markdown;
 mod markdown_mapping;
 mod output;
@@ -30,6 +31,7 @@ pub use mandoc::{
 };
 pub use mant_ir::ResolvedContent;
 pub use manual::{is_command_manual_section, is_manual_section, parenthesized_manual_reference};
+pub use manual_paths::discover_manual_roots;
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
 pub use output::{
     MarkdownOptions, SearchTextRole, render_excerpt_json, render_excerpt_markdown,
@@ -50,10 +52,7 @@ pub use query::{
 };
 pub use scope::{LoadedDocumentScope, ScopeQueryError, validate_scope_query_request};
 pub use search::{SearchError, search_query, validate_search_query};
-pub use source::{
-    LocateError, ManualIndex, ManualPage, ManualRequest, discover_manual_roots,
-    locate_manual_source_in,
-};
+pub use source::{LocateError, ManualIndex, ManualPage, ManualRequest, locate_manual_source_in};
 pub use tldr::{
     HostPlatform, TldrCacheError, TldrPageLocation, TldrParseError, get_system_tldr_cache_dirs,
     get_tldr_cache_dir, get_tldr_languages, get_tldr_platforms, get_tldr_read_cache_dirs,

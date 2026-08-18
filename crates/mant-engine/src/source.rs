@@ -1,20 +1,11 @@
 //! Discovers and resolves local manual sources without invoking a man program.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    env,
-    ffi::{OsStr, OsString},
-    fmt, fs,
+    collections::{BTreeMap, HashSet},
+    env, fmt, fs,
     path::{Path, PathBuf},
 };
 
-#[cfg(unix)]
-const DEFAULT_MANUAL_ROOTS: [&str; 4] = [
-    "/usr/local/share/man",
-    "/usr/local/man",
-    "/usr/share/man",
-    "/usr/man",
-];
 const SUPPORTED_COMPRESSION_SUFFIXES: [&str; 2] = [".gz", ".zst"];
 const DEFAULT_MANUAL_SECTIONS: [&str; 16] = [
     "1", "1p", "n", "l", "8", "3", "3p", "0", "0p", "2", "3type", "5", "4", "9", "6", "7",
@@ -273,13 +264,6 @@ impl fmt::Display for LocateError {
 
 impl std::error::Error for LocateError {}
 
-/// Discover manual roots from explicit variables and platform conventions.
-#[must_use]
-pub fn discover_manual_roots() -> Vec<PathBuf> {
-    let environment = env::vars_os().collect::<HashMap<_, _>>();
-    discover_manual_roots_with(&environment)
-}
-
 /// Locate a manual in an explicit immutable index.
 ///
 /// # Errors
@@ -307,69 +291,7 @@ pub fn locate_manual_source_in(
         })
 }
 
-fn discover_manual_roots_with(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    if let Some(explicit) = environment.get(OsStr::new("MANT_MANPATH")) {
-        return deduplicate_paths(
-            env::split_paths(explicit).filter(|path| !path.as_os_str().is_empty()),
-        );
-    }
-
-    let defaults = conventional_manual_roots(environment);
-    if let Some(manpath) = environment.get(OsStr::new("MANPATH")) {
-        let mut roots = Vec::new();
-        for path in env::split_paths(manpath) {
-            if path.as_os_str().is_empty() {
-                roots.extend(defaults.iter().cloned());
-            } else {
-                roots.push(path);
-            }
-        }
-        return deduplicate_paths(roots);
-    }
-    defaults
-}
-
-fn conventional_manual_roots(environment: &HashMap<OsString, OsString>) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    #[cfg(windows)]
-    if let Some(profile) = environment
-        .get(OsStr::new("USERPROFILE"))
-        .map(PathBuf::from)
-    {
-        roots.push(profile.join(".local/share/man"));
-    }
-    #[cfg(unix)]
-    if let Some(home) = environment.get(OsStr::new("HOME")).map(PathBuf::from) {
-        roots.push(home.join(".local/share/man"));
-        roots.push(home.join(".local/man"));
-        roots.push(home.join("man"));
-    }
-    #[cfg(unix)]
-    if let Some(data_home) = environment
-        .get(OsStr::new("XDG_DATA_HOME"))
-        .map(PathBuf::from)
-    {
-        roots.push(data_home.join("man"));
-    }
-    #[cfg(unix)]
-    if let Some(data_dirs) = environment.get(OsStr::new("XDG_DATA_DIRS")) {
-        roots.extend(env::split_paths(data_dirs).map(|root| root.join("man")));
-    }
-    #[cfg(unix)]
-    if let Some(path) = environment.get(OsStr::new("PATH")) {
-        for binary_dir in env::split_paths(path) {
-            if let Some(prefix) = binary_dir.parent() {
-                roots.push(prefix.join("share/man"));
-                roots.push(prefix.join("man"));
-            }
-        }
-    }
-    #[cfg(unix)]
-    roots.extend(DEFAULT_MANUAL_ROOTS.map(PathBuf::from));
-    deduplicate_paths(roots)
-}
-
-fn deduplicate_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec<PathBuf> {
+pub(crate) fn deduplicate_paths(paths: impl IntoIterator<Item = PathBuf>) -> Vec<PathBuf> {
     let current_directory = env::current_dir().ok();
     let mut seen = HashSet::new();
     paths
@@ -527,9 +449,10 @@ mod tests {
     use std::{collections::HashMap, ffi::OsString, fs, path::PathBuf};
 
     use super::{
-        LocateError, ManualIndex, ManualRequest, deduplicate_paths, discover_manual_roots_with,
-        locate_manual_source_in, normalize_locale, parse_manual_section_order,
+        LocateError, ManualIndex, ManualRequest, deduplicate_paths, locate_manual_source_in,
+        normalize_locale, parse_manual_section_order,
     };
+    use crate::manual_paths::discover_manual_roots_with;
 
     fn temporary_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(

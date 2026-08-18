@@ -236,7 +236,11 @@ cp ./widget.1 ./project-man/man1/widget.1
 MANT_MANPATH="$PWD/project-man" mant widget --manual
 ```
 
-The same index works on Linux with glibc, macOS, and Windows. Logical queries
+The same index works on Linux with glibc, macOS, and Windows. On Unix it reads
+the host's man-path configuration (man-db, mandoc, or macOS `man.conf`) before
+using conservative fallbacks; macOS also follows its active Xcode or Command
+Line Tools tree. Windows can use `%APPDATA%\ManT\man.conf` with `manpath
+DIRECTORY` lines. Logical queries
 accept `mant 1 git`, `mant 'git(1)'`, `mant git --man-section 1`, and the
 canonical path `mant manual/1/git`. A dotted selector such as `git.1` remains
 an exact logical document name; ManT never guesses whether its suffix is a

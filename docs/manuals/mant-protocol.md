@@ -331,8 +331,16 @@ eligible only when `PATHEXT` contains it. An unset or empty `PATHEXT` uses
 `manualSection` is optional and bypasses registered Markdown. The native index reads
 `MANT_MANPATH` as a complete root override. Otherwise, a set `MANPATH` replaces
 the defaults except where an empty component inserts them; an unset `MANPATH`
-uses platform conventions. Unix derives user/XDG, PATH, and system roots;
-Windows defaults only to `%USERPROFILE%\.local\share\man`.
+uses platform conventions. Linux follows man-db `MANPATH_MAP`,
+`MANDATORY_MANPATH`, and `SYSTEM` from `~/.manpath` or the usual system
+configuration locations, falling back to mandoc `/etc/man.conf` `manpath`
+entries. macOS follows its `$PATH`, active Xcode or Command Line Tools manual
+trees, system defaults, then `/etc/man.conf` `MANPATH` plus `MANCONFIG`
+fragments; it reads the xcode-select state directly rather than spawning that
+tool. Windows has no native convention; ManT reads an optional
+`%APPDATA%\ManT\man.conf` with `manpath DIRECTORY` lines before its
+`%USERPROFILE%\.local\share\man` fallback. Discovery is read-only and does
+not invoke a host command.
 A root may contain `tool.1` directly or a hierarchy such as
 `project-man/man1/tool.1`; both become the logical catalog address
 `manual/1/tool`. Raw, gzip, and zstd sources are indexed because those are the

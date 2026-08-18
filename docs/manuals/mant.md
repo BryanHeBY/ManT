@@ -178,8 +178,10 @@ manual shorthand. This preserves Markdown names, dotted executable names, and
 tldr collision pages such as `command.1` without a context-dependent guess.
 Use `--input PATH` for a physical roff file.
 
-Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root
-and accepts additional roots through `MANPATH` or `MANT_MANPATH`.
+Windows uses `%USERPROFILE%\.local\share\man` as its conventional user root.
+It also accepts additional roots through `MANPATH` or `MANT_MANPATH`, and an
+optional ManT-owned `%APPDATA%\ManT\man.conf` can provide persistent roots
+without requiring a shell profile.
 
 - `--man-section MAN_SECTION`: Select the full document from one exact native
   manual category such as `1` or `3p`. In an ordinary combined query, a selected
@@ -235,13 +237,40 @@ $env:MANT_MANPATH = (Resolve-Path .\project-man).Path
 mant widget --man-section 1
 ```
 
-`MANT_MANPATH` is a complete ManT-specific override. `MANPATH` also replaces
-the derived defaults unless it contains an empty component; an empty component
-inserts user/XDG, PATH-derived, and conventional system roots at that point.
-This preserves familiar path-list behavior without invoking `man`. Unix uses
-colon-separated entries; Windows uses semicolon-separated entries. Its
-conventional fallback contains only `%USERPROFILE%\.local\share\man`; other
-locations remain explicit.
+`MANT_MANPATH` is a complete ManT-specific override. `MANPATH` likewise
+replaces the derived roots, except that an empty component inserts the complete
+host-derived default sequence at that point. Unix lists use colons; Windows
+lists use semicolons. This preserves the established leading, trailing, and
+double-delimiter behaviour without invoking `man`, `manpath`, or any external
+program.
+
+#### Host Manual Paths
+
+When neither override is set, ManT reads the host's manual-path configuration
+before adding its supplemental user roots. On Linux, it first reads a user
+`~/.manpath` when present; otherwise it recognizes the common man-db locations
+`/etc/man_db.conf`, `/etc/manpath.config`, and `/usr/local/etc/man_db.conf`.
+It applies every `MANPATH_MAP`, then `MANDATORY_MANPATH`, and honors the
+man-db `SYSTEM` expansion. If no man-db configuration is available, it follows
+mandoc-style `/etc/man.conf` `manpath` entries. This covers the standard
+man-db families (including Debian/Ubuntu, Fedora/RHEL, and Arch) as well as
+mandoc-based Linux installations such as Alpine.
+
+On macOS, ManT follows the native order: the first existing manual directory
+derived from each `$PATH` component, the active developer tree, the system
+defaults, then `/etc/man.conf` `MANPATH` entries and its `MANCONFIG` fragments
+(including the default `/usr/local/etc/man.d/*.conf` extension directory).
+The active developer tree follows `DEVELOPER_DIR`, xcode-select's persisted
+selection, and Apple's standard Xcode or Command Line Tools fallbacks; it
+includes both tool and SDK manual directories. ManT reads that state directly
+instead of invoking `xcode-select`. Only when no native root is available does
+it fall back to `/etc/manpaths` and sorted `/etc/manpaths.d` files.
+
+Windows has no system `man(1)` convention. If present,
+`%APPDATA%\ManT\man.conf` is a ManT-owned portable configuration containing
+one `manpath DIRECTORY` line per root; its entries precede the conventional
+`%USERPROFILE%\.local\share\man` fallback. The parser also accepts uppercase
+`MANPATH` for familiarity with macOS and FreeBSD configuration files.
 
 The index accepts a leaf page symlink whose target is a regular file, including
 one outside the configured root. It does not traverse directory symlinks or
@@ -731,7 +760,8 @@ private tldr checkout lives below `~/Library/Caches/ManT/tldr-pages`.
 
 On Windows, documents live below `%APPDATA%\ManT`. ManT's private
 tldr checkout lives below `%LOCALAPPDATA%\ManT\cache\tldr-pages`. The native
-manual fallback root is `%USERPROFILE%\.local\share\man`.
+manual fallback root is `%USERPROFILE%\.local\share\man`; an optional
+`%APPDATA%\ManT\man.conf` adds persistent native-manual roots.
 
 `sources.toml` lives at the data root. Personal documents remain below
 `documents/`; installed source directories remain below `sources/`. See the online
@@ -744,7 +774,10 @@ for the schema and update lifecycle.
   Unix and semicolons on Windows. A root may contain flat roff files or section
   directories such as `man1/`, but is never an individual roff file.
 - `MANPATH`: Override the derived manual roots. Empty components insert the
-  user/XDG, PATH-derived, and conventional system roots.
+  complete host-derived default sequence at that position.
+- `SYSTEM`: On Linux man-db hosts, expand derived manual roots through the
+  named comma- or colon-separated operating-system subtrees; `man` retains the
+  native root in that expansion.
 - `MANT_TLDR_DIR`: Use one explicit tldr checkout for reads and updates.
 - `XDG_CACHE_HOME`: Relocate cache discovery and ManT's Linux fallback cache.
 - `XDG_DATA_HOME`: Relocate the user document directory from the default
