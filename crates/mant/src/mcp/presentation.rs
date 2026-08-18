@@ -122,7 +122,18 @@ fn append_scope_status(text: &mut String, response: &ScopeQueryResponse) {
         .iter()
         .filter(|edge| edge.limit == TraversalLimit::MaxDepth)
         .count();
-    let budget_frontier = response.scope.frontier.len().saturating_sub(depth_frontier);
+    let document_frontier = response
+        .scope
+        .frontier
+        .iter()
+        .filter(|edge| edge.limit == TraversalLimit::MaxDocuments)
+        .count();
+    let content_frontier = response
+        .scope
+        .frontier
+        .iter()
+        .filter(|edge| edge.limit == TraversalLimit::MaxContentBytes)
+        .count();
     if !response.scope.query.traversal.follow_links
         && unresolved_roots == 0
         && unresolved_links == 0
@@ -132,7 +143,7 @@ fn append_scope_status(text: &mut String, response: &ScopeQueryResponse) {
     append_status_line(
         text,
         &format!(
-            "[scope: documents={}, unresolved-roots={unresolved_roots}, unresolved-links={unresolved_links}, depth-frontier={depth_frontier}, budget-frontier={budget_frontier}]",
+            "[scope: documents={}, unresolved-roots={unresolved_roots}, unresolved-links={unresolved_links}, depth-frontier={depth_frontier}, document-frontier={document_frontier}, content-frontier={content_frontier}]",
             response.scope.documents.len()
         ),
     );

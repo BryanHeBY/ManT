@@ -214,7 +214,7 @@ fn assert_tool_replies(replies: &[Value]) {
 
     let bounded = successful_text(reply(replies, 10));
     assert!(
-        bounded.contains("[scope: documents=1, unresolved-roots=0, unresolved-links=0, depth-frontier=1, budget-frontier=0]"),
+        bounded.contains("[scope: documents=1, unresolved-roots=0, unresolved-links=0, depth-frontier=1, document-frontier=0, content-frontier=0]"),
         "{bounded}"
     );
 

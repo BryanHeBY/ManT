@@ -526,7 +526,7 @@ Only `LinkTarget::Document` and `LinkTarget::Manual` create edges. Markdown targ
 
 Traversal is breadth-first. Initial selector order comes first, followed by typed links in source order. A canonical `DocumentAddress` supplies cycle detection and deduplication. A document reached by several parents is queried once while `reachedFrom` retains each distinct parent. Missing roots and links appear in `unresolved`; `from` is absent for an initial selector and present for a followed link. A request fails only when no initial document is readable.
 
-`frontier` records each typed logical link that traversal did not follow. Its `limit` is `max-depth` or `max-documents`; its `target` remains a `DocumentSelector` because resolving a target can itself exceed the requested bound. Merely loading a document at `maxDepth` does not create a frontier entry when that document has no outbound typed links. Links from a boundary document to an address already loaded in the scope remain ordinary resolved `edges` rather than false truncation signals.
+`frontier` records each typed logical link that traversal did not follow. Its `limit` is `max-depth`, `max-documents`, or `max-content-bytes`; its `target` remains a `DocumentSelector` because resolving a target can itself exceed the requested bound. Scope resolution retains at most 64 MiB of normalized semantic IR across all loaded documents; this fixed aggregate budget bounds in-memory traversal even when every individual input satisfies its own file-size limit. Merely loading a document at `maxDepth` does not create a frontier entry when that document has no outbound typed links. Links from a boundary document to an address already loaded in the scope remain ordinary resolved `edges` rather than false truncation signals.
 
 Example:
 
@@ -1092,14 +1092,16 @@ The compact result omits the graph itself. When `followLinks` is true, or when
 an initial document is unresolved, it ends with this stable status form:
 
 ```text
-[scope: documents=N, unresolved-roots=R, unresolved-links=L, depth-frontier=D, budget-frontier=B]
+[scope: documents=N, unresolved-roots=R, unresolved-links=L, depth-frontier=D, document-frontier=G, content-frontier=C]
 ```
 
-All five fields are always present in that order. A complete traversal therefore
+All six fields are always present in that order. A complete traversal therefore
 still emits the line with zero unresolved and frontier counts, making link
 following observable. `R` counts unresolved initial selectors, `L` counts
-unresolved followed links, and the two frontier fields count logical links
-excluded by the corresponding bound. `mant_explain` additionally emits
+unresolved followed links, and the three frontier fields count logical links
+excluded by the corresponding bound. `document-frontier` reports the configured
+document count, while `content-frontier` reports the fixed 64 MiB aggregate
+normalized-IR guard. `mant_explain` additionally emits
 `[explain: matched=M, missed=K, failed=F]`; documents without an entry contribute
 to `missed` instead of disappearing from the compact result. Cursors are bound
 to the ordered documents and all traversal limits.

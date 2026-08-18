@@ -18,6 +18,13 @@ pub const MAX_SCOPE_DEPTH: u16 = 32;
 pub const DEFAULT_SCOPE_DOCUMENT_LIMIT: u32 = 64;
 /// Hard maximum number of distinct documents in one resolved scope.
 pub const MAX_SCOPE_DOCUMENT_LIMIT: u32 = 256;
+/// Maximum aggregate normalized-document payload retained by one scope.
+///
+/// Scope resolution keeps each parsed document in memory so later search,
+/// explanation, and interactive navigation observe one consistent graph. This
+/// independent guard prevents a small number of individually valid documents
+/// from creating an unbounded aggregate allocation.
+pub const MAX_SCOPE_CONTENT_BYTES: u64 = 64 * 1024 * 1024;
 
 /// One logical document selector before catalog resolution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -199,6 +206,9 @@ pub enum TraversalLimit {
     MaxDepth,
     /// The maximum number of distinct loaded documents was reached.
     MaxDocuments,
+    /// Retaining another normalized document would exceed the aggregate
+    /// semantic-content budget.
+    MaxContentBytes,
 }
 
 /// One typed outbound link excluded by a traversal bound.
@@ -269,7 +279,7 @@ pub struct ResolvedDocumentScope {
     pub documents: Vec<ScopedDocument>,
     /// Successfully resolved typed edges in source order.
     pub edges: Vec<DocumentEdge>,
-    /// Typed outbound links excluded by depth or document limits.
+    /// Typed outbound links excluded by depth, document, or content limits.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frontier: Vec<DocumentFrontier>,
     /// Seeds and edges that could not resolve to a readable document.

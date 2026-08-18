@@ -1,16 +1,17 @@
 //! Resolves typed document links into bounded, deterministic query scopes.
 
 use std::collections::{BTreeMap, VecDeque};
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, io::Write};
 
 use mant_ir::visit::{Visit, walk_inline};
 use mant_ir::{DocumentAddress, Inline, LinkTarget, ResolvedContent};
 use mant_protocol::{
     DocumentEdge, DocumentEdgeKind, DocumentFrontier, DocumentScope, DocumentSelector,
-    MAX_SCOPE_DEPTH, MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS, QueryInput, QueryRequest,
-    RequestSchema, ResolvedDocumentScope, ScopeQueryRequest, ScopeQueryResponse, ScopeQueryResult,
-    ScopeQuerySchema, ScopeQueryView, ScopeSearch, ScopedDocument, ScopedExplanation,
-    ScopedQueryFailure, ScopedSearchDocument, SearchQuery, TraversalLimit, UnresolvedDocument,
+    MAX_SCOPE_CONTENT_BYTES, MAX_SCOPE_DEPTH, MAX_SCOPE_DOCUMENT_LIMIT, MAX_SCOPE_DOCUMENTS,
+    QueryInput, QueryRequest, RequestSchema, ResolvedDocumentScope, ScopeQueryRequest,
+    ScopeQueryResponse, ScopeQueryResult, ScopeQuerySchema, ScopeQueryView, ScopeSearch,
+    ScopedDocument, ScopedExplanation, ScopedQueryFailure, ScopedSearchDocument, SearchQuery,
+    TraversalLimit, UnresolvedDocument,
 };
 
 use crate::{
@@ -38,6 +39,8 @@ pub enum ScopeQueryError {
     DepthLimit,
     /// The document budget was zero, too large, or smaller than the root set.
     DocumentLimit,
+    /// The initial document set exceeded the aggregate semantic-content budget.
+    ContentLimit,
     /// Traversal limits were supplied while link following was disabled.
     TraversalLimitsRequireLinks,
     /// A semantic-entry selector was empty.
@@ -67,6 +70,11 @@ impl fmt::Display for ScopeQueryError {
                 formatter,
                 "document limit must include every initial document and not exceed {MAX_SCOPE_DOCUMENT_LIMIT}"
             ),
+            Self::ContentLimit => write!(
+                formatter,
+                "initial documents exceed the {} MiB scope content limit",
+                MAX_SCOPE_CONTENT_BYTES / (1024 * 1024)
+            ),
             Self::TraversalLimitsRequireLinks => {
                 formatter.write_str("maxDepth and maxDocuments require followLinks=true")
             }
@@ -91,6 +99,7 @@ impl Error for ScopeQueryError {
             | Self::TooManyDocuments
             | Self::DepthLimit
             | Self::DocumentLimit
+            | Self::ContentLimit
             | Self::TraversalLimitsRequireLinks
             | Self::EmptyEntry
             | Self::NoResolvedDocuments { .. } => None,
@@ -170,7 +179,7 @@ impl DocumentResolver {
     ) -> Result<LoadedDocumentScope, ScopeQueryError> {
         validate_document_scope(query)?;
         let mut resolution = ScopeResolution::new(query);
-        resolution.resolve_roots(self);
+        resolution.resolve_roots(self)?;
         if resolution.documents.is_empty() {
             return Err(ScopeQueryError::NoResolvedDocuments {
                 reasons: resolution
@@ -256,6 +265,7 @@ struct ScopeResolution {
     documents: Vec<ResolvedContent>,
     positions: BTreeMap<DocumentAddress, usize>,
     queue: VecDeque<usize>,
+    content_bytes: u64,
 }
 
 impl ScopeResolution {
@@ -271,13 +281,18 @@ impl ScopeResolution {
             documents: Vec::new(),
             positions: BTreeMap::new(),
             queue: VecDeque::new(),
+            content_bytes: 0,
         }
     }
 
-    fn resolve_roots(&mut self, resolver: &DocumentResolver) {
+    fn resolve_roots(&mut self, resolver: &DocumentResolver) -> Result<(), ScopeQueryError> {
         for (root_index, selector) in self.graph.query.documents.clone().iter().enumerate() {
             match resolver.resolve_selector(selector, QueryPolicy::Combined) {
-                Ok(bundle) => self.insert_root(bundle, selector, root_index),
+                Ok(bundle) => {
+                    if !self.insert_root(bundle, selector, root_index) {
+                        return Err(ScopeQueryError::ContentLimit);
+                    }
+                }
                 Err(error) => self.graph.unresolved.push(UnresolvedDocument {
                     from: None,
                     selector: selector.clone(),
@@ -285,6 +300,7 @@ impl ScopeResolution {
                 }),
             }
         }
+        Ok(())
     }
 
     fn insert_root(
@@ -292,14 +308,14 @@ impl ScopeResolution {
         bundle: ResolvedContent,
         selector: &DocumentSelector,
         root_index: usize,
-    ) {
+    ) -> bool {
         let Some(address) = bundle.address.clone() else {
             self.graph.unresolved.push(UnresolvedDocument {
                 from: None,
                 selector: selector.clone(),
                 reason: "selector did not resolve to a registered document".to_owned(),
             });
-            return;
+            return true;
         };
         let root_index = u16::try_from(root_index).unwrap_or(u16::MAX);
         if let Some(position) = self.positions.get(&address).copied() {
@@ -307,7 +323,10 @@ impl ScopeResolution {
             if !roots.contains(&root_index) {
                 roots.push(root_index);
             }
-            return;
+            return true;
+        }
+        if !self.reserve_content_bytes(&bundle) {
+            return false;
         }
         let position = self.documents.len();
         self.positions.insert(address.clone(), position);
@@ -319,6 +338,7 @@ impl ScopeResolution {
             reached_from: Vec::new(),
         });
         self.queue.push_back(position);
+        true
     }
 
     fn follow_links(&mut self, resolver: &DocumentResolver) {
@@ -421,7 +441,9 @@ impl ScopeResolution {
             self.record_frontier(from, reference, TraversalLimit::MaxDocuments);
             return;
         }
-        self.insert_linked(bundle, address, from, depth + 1, edge);
+        if !self.insert_linked(bundle, address, from, depth + 1, edge) {
+            self.record_frontier(from, reference, TraversalLimit::MaxContentBytes);
+        }
     }
 
     fn record_existing_edge(&mut self, edge: &DocumentEdge) -> bool {
@@ -450,7 +472,10 @@ impl ScopeResolution {
         from: &DocumentAddress,
         depth: u16,
         edge: DocumentEdge,
-    ) {
+    ) -> bool {
+        if !self.reserve_content_bytes(&bundle) {
+            return false;
+        }
         if !self.graph.edges.contains(&edge) {
             self.graph.edges.push(edge);
         }
@@ -464,6 +489,19 @@ impl ScopeResolution {
             reached_from: vec![from.clone()],
         });
         self.queue.push_back(position);
+        true
+    }
+
+    fn reserve_content_bytes(&mut self, bundle: &ResolvedContent) -> bool {
+        let bytes = normalized_content_bytes(bundle);
+        let Some(total) = self.content_bytes.checked_add(bytes) else {
+            return false;
+        };
+        if total > MAX_SCOPE_CONTENT_BYTES {
+            return false;
+        }
+        self.content_bytes = total;
+        true
     }
 
     fn at_document_limit(&self) -> bool {
@@ -495,6 +533,39 @@ impl ScopeResolution {
             scope: self.graph,
             documents: self.documents,
         }
+    }
+}
+
+/// Count the retained semantic payload without allocating an additional
+/// serialized copy. The count intentionally follows the normalized IR rather
+/// than compressed or on-disk source bytes: the IR is what scope resolution
+/// retains for all later projections.
+fn normalized_content_bytes(content: &ResolvedContent) -> u64 {
+    let mut counter = ByteCounter::default();
+    if let Some(document) = &content.document {
+        serde_json::to_writer(&mut counter, document)
+            .expect("writing normalized document bytes to a counter cannot fail");
+    }
+    if let Some(tldr) = &content.tldr {
+        serde_json::to_writer(&mut counter, tldr)
+            .expect("writing normalized tldr bytes to a counter cannot fail");
+    }
+    counter.0
+}
+
+#[derive(Default)]
+struct ByteCounter(u64);
+
+impl Write for ByteCounter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0 = self
+            .0
+            .saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -784,6 +855,31 @@ mod tests {
         assert_eq!(
             resolution.graph.frontier[0].limit,
             TraversalLimit::MaxDocuments
+        );
+    }
+
+    #[test]
+    fn normalized_content_budget_refuses_another_document_before_retaining_it() {
+        let scope = DocumentScope {
+            documents: vec![DocumentSelector {
+                selector: "root".to_owned(),
+                source: None,
+                manual_section: None,
+            }],
+            traversal: mant_protocol::DocumentTraversal::default(),
+        };
+        let content =
+            crate::query_markdown_text("# Child\n\nBody.\n", None).expect("fixture content");
+        let bytes = normalized_content_bytes(&content);
+        assert!(bytes > 0 && bytes <= MAX_SCOPE_CONTENT_BYTES);
+
+        let mut resolution = ScopeResolution::new(&scope);
+        resolution.content_bytes = MAX_SCOPE_CONTENT_BYTES - bytes + 1;
+
+        assert!(!resolution.reserve_content_bytes(&content));
+        assert_eq!(
+            resolution.content_bytes,
+            MAX_SCOPE_CONTENT_BYTES - bytes + 1
         );
     }
 }

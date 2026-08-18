@@ -6171,7 +6171,7 @@
             }
           },
           "frontier": {
-            "description": "Typed outbound links excluded by depth or document limits.",
+            "description": "Typed outbound links excluded by depth, document, or content limits.",
             "type": "array",
             "items": {
               "$ref": "#/$defs/DocumentFrontier"
@@ -7191,6 +7191,11 @@
             "description": "The maximum number of distinct loaded documents was reached.",
             "type": "string",
             "const": "max-documents"
+          },
+          {
+            "description": "Retaining another normalized document would exceed the aggregate\nsemantic-content budget.",
+            "type": "string",
+            "const": "max-content-bytes"
           }
         ]
       },
