@@ -3,8 +3,17 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use unicode_width::UnicodeWidthChar;
 
+use mant_protocol::DocumentAddress;
+
 use super::App;
 use crate::RenderedSearchMatch;
+
+#[derive(Debug, Clone)]
+pub(super) struct ScopedRenderedSearchMatch {
+    pub(super) document_index: usize,
+    pub(super) address: Option<DocumentAddress>,
+    pub(super) rendered: RenderedSearchMatch,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SearchMode {
@@ -20,13 +29,14 @@ pub(super) enum SearchCommand {
     Previous,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct SearchState {
     pub(super) mode: SearchMode,
     pub(super) draft: String,
     pub(super) cursor: usize,
     pub(super) query: String,
     pub(super) matches: Vec<RenderedSearchMatch>,
+    pub(super) scope_matches: Vec<ScopedRenderedSearchMatch>,
     pub(super) active_match: usize,
     pub(super) render_width: u16,
 }
@@ -39,6 +49,7 @@ impl Default for SearchState {
             cursor: 0,
             query: String::new(),
             matches: Vec::new(),
+            scope_matches: Vec::new(),
             active_match: 0,
             render_width: 0,
         }
@@ -80,7 +91,9 @@ impl SearchState {
                 return SearchCommand::Confirm;
             }
             KeyCode::Char('n' | 'N')
-                if !self.is_editing() && self.draft == self.query && !self.matches.is_empty() =>
+                if !self.is_editing()
+                    && self.draft == self.query
+                    && !self.scope_matches.is_empty() =>
             {
                 return if key.code == KeyCode::Char('N')
                     || key.modifiers.contains(KeyModifiers::SHIFT)
@@ -170,23 +183,36 @@ impl App {
     }
 
     pub(super) fn refresh_search(&mut self, width: u16) {
-        let rendered = self
-            .rendered_cache
-            .entry(width)
-            .or_insert_with(|| self.document.render(width));
-        self.search.matches = rendered.search(&self.search.query);
+        let query = self.search.query.clone();
+        self.search.scope_matches =
+            self.scope_documents
+                .iter()
+                .enumerate()
+                .flat_map(|(document_index, bundle)| {
+                    let address = bundle.address.clone();
+                    let rendered = crate::DocumentView::new(bundle).render(width);
+                    rendered.search(&query).into_iter().map(move |rendered| {
+                        ScopedRenderedSearchMatch {
+                            document_index,
+                            address: address.clone(),
+                            rendered,
+                        }
+                    })
+                })
+                .collect();
         self.search.active_match = self
             .search
             .active_match
-            .min(self.search.matches.len().saturating_sub(1));
+            .min(self.search.scope_matches.len().saturating_sub(1));
+        self.sync_current_search_matches();
         self.search.render_width = width;
     }
 
     pub(super) fn select_search_relative(&mut self, delta: isize) {
-        if self.search.matches.is_empty() {
+        if self.search.scope_matches.is_empty() {
             return;
         }
-        let length = isize::try_from(self.search.matches.len()).unwrap_or(isize::MAX);
+        let length = isize::try_from(self.search.scope_matches.len()).unwrap_or(isize::MAX);
         let current = isize::try_from(self.search.active_match).unwrap_or_default();
         self.search.active_match =
             usize::try_from((current + delta).rem_euclid(length)).unwrap_or_default();
@@ -194,11 +220,57 @@ impl App {
     }
 
     fn select_active_search_match(&mut self) {
-        let Some(search_match) = self.search.matches.get(self.search.active_match).cloned() else {
+        let Some(search_match) = self
+            .search
+            .scope_matches
+            .get(self.search.active_match)
+            .cloned()
+        else {
             return;
         };
-        self.content_scroll = search_match.row;
-        self.select_section_at_row(search_match.row);
+        if self.current_address != search_match.address {
+            let current = self.current_location();
+            let Some(bundle) = self
+                .scope_documents
+                .get(search_match.document_index)
+                .cloned()
+            else {
+                return;
+            };
+            let search = self.search.clone();
+            super::push_history(&mut self.back_history, current);
+            self.forward_history.clear();
+            self.replace_document(&bundle);
+            self.search = search;
+            self.sync_current_search_matches();
+        }
+        self.content_scroll = search_match.rendered.row;
+        self.select_section_at_row(search_match.rendered.row);
+    }
+
+    pub(super) fn active_rendered_search_match(&self) -> Option<usize> {
+        let active = self.search.scope_matches.get(self.search.active_match)?;
+        if active.address != self.current_address {
+            return None;
+        }
+        Some(
+            self.search
+                .scope_matches
+                .iter()
+                .take(self.search.active_match)
+                .filter(|candidate| candidate.address == self.current_address)
+                .count(),
+        )
+    }
+
+    fn sync_current_search_matches(&mut self) {
+        self.search.matches = self
+            .search
+            .scope_matches
+            .iter()
+            .filter(|candidate| candidate.address == self.current_address)
+            .map(|candidate| candidate.rendered.clone())
+            .collect();
     }
 
     pub(super) fn move_search_cursor_to(&mut self, column: u16) {

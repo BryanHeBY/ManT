@@ -190,6 +190,7 @@ pub struct App {
     show_sidebar: bool,
     quit: bool,
     search: SearchState,
+    scope_documents: Vec<Arc<ResolvedContent>>,
     finder: FinderState,
     pending_discovery: Option<CatalogQuery>,
     pending_open: Option<NavigationRequest>,
@@ -218,6 +219,17 @@ impl App {
     /// Construct an application with a snapshot for the document finder.
     #[must_use]
     pub fn with_catalog(bundle: &ResolvedContent, catalog: DocumentCatalog) -> Self {
+        Self::with_catalog_and_scope(bundle, catalog, std::slice::from_ref(bundle))
+    }
+
+    /// Construct an application whose in-document search spans a bounded,
+    /// pre-resolved document scope.
+    #[must_use]
+    pub fn with_catalog_and_scope(
+        bundle: &ResolvedContent,
+        catalog: DocumentCatalog,
+        scope: &[ResolvedContent],
+    ) -> Self {
         let document = DocumentView::new(bundle);
         let mut finder = FinderState::default();
         finder.replace_catalog(catalog);
@@ -227,6 +239,13 @@ impl App {
             .filter(|item| item.kind == NavKind::Section && item.depth == 0)
             .map(|item| item.id.clone())
             .collect();
+        let mut scope_documents = scope.iter().cloned().map(Arc::new).collect::<Vec<_>>();
+        if !scope_documents
+            .iter()
+            .any(|candidate| candidate.address == bundle.address)
+        {
+            scope_documents.insert(0, Arc::new(bundle.clone()));
+        }
         Self {
             document,
             selected: 0,
@@ -238,6 +257,7 @@ impl App {
             show_sidebar: true,
             quit: false,
             search: SearchState::default(),
+            scope_documents,
             finder,
             pending_discovery: None,
             pending_open: None,

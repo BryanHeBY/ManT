@@ -252,7 +252,7 @@ impl App {
             self.content_scroll,
             viewport_height,
             matches,
-            (!matches.is_empty()).then_some(self.search.active_match),
+            self.active_rendered_search_match(),
         );
         frame.render_widget(
             Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),
@@ -297,11 +297,11 @@ impl App {
         );
         let suffix = if let Some(notice) = &self.notice {
             format!("{} ", notice.lines().next().unwrap_or_default())
-        } else if !self.search.query.is_empty() && !self.search.matches.is_empty() {
+        } else if !self.search.query.is_empty() && !self.search.scope_matches.is_empty() {
             format!(
                 "Find “{}” · {} matches ",
                 self.search.query,
-                self.search.matches.len()
+                self.search.scope_matches.len()
             )
         } else if self.document.has_tldr() {
             format!("{} visible nodes · TLDR ", self.visible_node_count())
@@ -347,19 +347,19 @@ impl App {
             area,
         );
         let suffix = if !self.search.is_editing() && !self.search.query.is_empty() {
-            if self.search.matches.is_empty() {
+            if self.search.scope_matches.is_empty() {
                 " No matches · Edit query · Esc close ".to_owned()
             } else {
                 format!(
                     " {}/{} · Enter next · Esc close ",
                     self.search.active_match + 1,
-                    self.search.matches.len()
+                    self.search.scope_matches.len()
                 )
             }
         } else {
             " Enter search · Esc cancel ".to_owned()
         };
-        let suffix_style = if self.search.matches.is_empty()
+        let suffix_style = if self.search.scope_matches.is_empty()
             && !self.search.is_editing()
             && !self.search.query.is_empty()
         {

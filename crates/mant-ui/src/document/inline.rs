@@ -242,28 +242,7 @@ fn markdown_reference_address(
     current: Option<&DocumentAddress>,
     name: &str,
 ) -> Option<DocumentAddress> {
-    let DocumentAddress::Markdown { path, origin } = current? else {
-        return None;
-    };
-    let mut components = path.split('/').collect::<Vec<_>>();
-    components.pop();
-    for component in name.split('/') {
-        match component {
-            "." => {}
-            ".." => {
-                components.pop()?;
-            }
-            value if !value.is_empty() => components.push(value),
-            _ => return None,
-        }
-    }
-    if components.is_empty() {
-        return None;
-    }
-    Some(DocumentAddress::Markdown {
-        path: components.join("/"),
-        origin: origin.clone(),
-    })
+    current?.resolve_document_reference(name)
 }
 
 pub(super) fn safe_external_uri(uri: &str) -> Option<String> {

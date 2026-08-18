@@ -44,6 +44,36 @@ pub fn run(bundle: &ResolvedContent) -> io::Result<()> {
 pub fn run_with_catalog<D, F, E>(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
+    discover_documents: D,
+    open_document: F,
+    open_external: E,
+) -> io::Result<()>
+where
+    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
+    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
+    E: FnMut(&str) -> Result<(), String>,
+{
+    run_with_catalog_and_scope(
+        bundle,
+        catalog,
+        std::slice::from_ref(bundle),
+        discover_documents,
+        open_document,
+        open_external,
+    )
+}
+
+/// Run the frontend with a pre-resolved document set used by interactive text
+/// search. The first `bundle` remains the initial page; the catalog finder is
+/// still global and is not restricted to this scope.
+///
+/// # Errors
+///
+/// Returns terminal setup, input, drawing, or restoration failures.
+pub fn run_with_catalog_and_scope<D, F, E>(
+    bundle: &ResolvedContent,
+    catalog: DocumentCatalog,
+    scope: &[ResolvedContent],
     mut discover_documents: D,
     mut open_document: F,
     mut open_external: E,
@@ -62,7 +92,7 @@ where
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut app = App::with_catalog(bundle, catalog);
+    let mut app = App::with_catalog_and_scope(bundle, catalog, scope);
 
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<()> {
         let mut redraw = true;
