@@ -4,7 +4,7 @@ use mant_engine::{
     build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
     select_excerpt,
 };
-use mant_ir::TldrOrigin;
+use mant_ir::{TldrCommandPart, TldrOrigin};
 use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
@@ -46,12 +46,22 @@ fn shipped_manual_parses_without_lossy_fallbacks() {
         commands,
         [
             "mant git",
-            "mant tar --explain=--exclude --format markdown",
-            "mant git --search worktree --follow-links --max-depth 2 --max-documents 32 --context 1",
-            "mant --find '^git' --regex --kind manual --limit 20 --format json --compact",
-            "mant --input ./tool.md --outline=entries --format json --compact",
+            "mant tar --explain={{--exclude}} --format markdown",
+            "mant git --search {{worktree}} --follow-links --max-depth 2 --max-documents 32 --context 1",
+            "mant --find {{'^git'}} --regex --kind manual --limit 20 --format json --compact",
+            "mant --input {{./tool.md}} --outline=entries --format json --compact",
+            "mant --mcp",
         ],
         "{name} quick reference should stay concise and show complete user tasks"
+    );
+    assert!(
+        tldr.examples.iter().skip(1).take(4).all(|example| {
+            example
+                .command_parts
+                .iter()
+                .any(|part| matches!(part, TldrCommandPart::Placeholder { .. }))
+        }),
+        "{name} quick reference should retain semantic placeholder highlighting"
     );
     assert!(
         tldr.examples

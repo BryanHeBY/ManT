@@ -7,21 +7,25 @@
 
 `mant git`
 
-- Extract tar's --exclude entry as portable Markdown:
+- Extract a tar option entry as portable Markdown:
 
-`mant tar --explain=--exclude --format markdown`
+`mant tar --explain={{--exclude}} --format markdown`
 
-- Search Git and its linked manuals for worktree, limited to two hops:
+- Search Git and its linked manuals for a topic, limited to two hops:
 
-`mant git --search worktree --follow-links --max-depth 2 --max-documents 32 --context 1`
+`mant git --search {{worktree}} --follow-links --max-depth 2 --max-documents 32 --context 1`
 
-- Discover up to 20 native Git manuals as compact JSON:
+- Discover up to 20 native manuals matching a name as compact JSON:
 
-`mant --find '^git' --regex --kind manual --limit 20 --format json --compact`
+`mant --find {{'^git'}} --regex --kind manual --limit 20 --format json --compact`
 
 - Validate a local Markdown manual's semantic outline and diagnostics:
 
-`mant --input ./tool.md --outline=entries --format json --compact`
+`mant --input {{./tool.md}} --outline=entries --format json --compact`
+
+- Serve local documentation to an MCP client over standard input and output:
+
+`mant --mcp`
 <!-- mant:tldr:end -->
 
 # mant
