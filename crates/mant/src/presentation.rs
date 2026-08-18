@@ -65,10 +65,7 @@ impl TerminalText {
 }
 
 fn render_terminal_outline(outline: &QueryOutline, color: bool) -> String {
-    if !color {
-        return mant_engine::render_outline_text(outline);
-    }
-    let mut output = TerminalText::new(true);
+    let mut output = TerminalText::new(color);
     output.styled(
         TerminalRole::Document,
         &document_label(
@@ -109,7 +106,8 @@ fn render_outline_nodes(nodes: &[OutlineNode], prefix: &str, output: &mut Termin
 }
 
 fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
-    let plain = mant_engine::render_excerpt_text(excerpt);
+    let excerpt = terminal_excerpt(excerpt);
+    let plain = mant_engine::render_excerpt_text(&excerpt);
     if !color || plain.is_empty() {
         return plain;
     }
@@ -132,11 +130,11 @@ fn render_terminal_excerpt(excerpt: &QueryExcerpt, color: bool) -> String {
 }
 
 fn render_terminal_search(search: &QuerySearch, color: bool) -> String {
-    if !color {
-        return mant_engine::render_search_text(search);
-    }
     mant_engine::render_search_text_with(search, |role, value| {
         let value = sanitize_terminal_text(value);
+        if !color {
+            return value.into_owned();
+        }
         let role = match role {
             mant_engine::SearchTextRole::Plain => return value.into_owned(),
             mant_engine::SearchTextRole::Document => TerminalRole::Document,
@@ -321,6 +319,35 @@ fn document_label(document: &str, section: Option<&str>) -> String {
     )
 }
 
+/// Copy a complete document with its terminal-visible identity made safe.
+///
+/// Engine text renderers produce structural newlines themselves, so sanitizing
+/// their finished string would erase layout. The identity is the only
+/// terminal-visible direct-input field that bypasses the parsed text-safety
+/// boundary; sanitize it before rendering instead.
+fn terminal_content(query: &ResolvedContent) -> ResolvedContent {
+    let mut query = query.clone();
+    query.label = sanitize_terminal_text(&query.label).into_owned();
+    if let Some(document) = query.document.as_mut()
+        && let Some(section) = document.meta.manual_section.as_mut()
+    {
+        *section = sanitize_terminal_text(section).into_owned();
+    }
+    query
+}
+
+/// Copy an excerpt with its terminal-visible document identity made safe.
+fn terminal_excerpt(excerpt: &QueryExcerpt) -> QueryExcerpt {
+    let mut excerpt = excerpt.clone();
+    excerpt.label = sanitize_terminal_text(&excerpt.label).into_owned();
+    if let Some(meta) = excerpt.meta.as_mut()
+        && let Some(section) = meta.manual_section.as_mut()
+    {
+        *section = sanitize_terminal_text(section).into_owned();
+    }
+    excerpt
+}
+
 pub(super) fn render_query_result(
     result: &QueryViewResult,
     format: QueryFormat,
@@ -469,7 +496,10 @@ fn render_full_query(
             query,
             mant_engine::MarkdownOptions { preserve_anchors },
         )),
-        QueryFormat::Text => Ok(mant_engine::render_query_text(query)),
+        QueryFormat::Text => {
+            let query = terminal_content(query);
+            Ok(mant_engine::render_query_text(&query))
+        }
         QueryFormat::Man => {
             let Some(document) = query.document.as_ref() else {
                 return Err(Failure::operational(
@@ -481,7 +511,8 @@ fn render_full_query(
                     "--format man applies only to roff manual pages",
                 ));
             }
-            Ok(mant_engine::render_query_man(query))
+            let query = terminal_content(query);
+            Ok(mant_engine::render_query_man(&query))
         }
         QueryFormat::Json => {
             mant_engine::render_query_json(query, pretty).map_err(Failure::operational)
@@ -559,6 +590,41 @@ The selected color is visible in terminal output.
             let rendered = render_query_result(&result, format, true, false, true)
                 .expect("deterministic output");
             assert!(!rendered.contains("\x1b["));
+        }
+    }
+
+    #[test]
+    fn uncoloured_terminal_presentations_mask_controls_in_direct_input_labels() {
+        let source_path = "ev\u{1b}[31mil.md".to_owned();
+        let views = [
+            QueryView::Full {},
+            QueryView::Outline {
+                detail: OutlineDetail::Entries,
+            },
+            QueryView::Explain {
+                entry: "--color".to_owned(),
+            },
+            QueryView::Search {
+                pattern: "color".to_owned(),
+                syntax: mant_protocol::SearchSyntax::Literal,
+                case: mant_protocol::SearchCase::Insensitive,
+                scope: mant_protocol::SearchScope::Visible,
+                word: false,
+                context_lines: 1,
+                limit: 100,
+                offset: 0,
+            },
+        ];
+
+        for view in views {
+            let query = query_markdown_text(PAGE, Some(source_path.clone()))
+                .expect("Markdown query with hostile label");
+            let result = project_query_view(query, &view).expect("query projection");
+            let rendered = render_query_result(&result, QueryFormat::Text, true, false, false)
+                .expect("plain terminal text");
+
+            assert!(!rendered.contains('\u{1b}'));
+            assert!(rendered.contains("ev�[31mil.md"));
         }
     }
 
