@@ -375,6 +375,17 @@ fn lower_structural_node(
             }
             output.push(block);
         }
+        Some("Rs") => {
+            let children =
+                lower_inline_nodes(part_children(node, NodeKind::Body), context.default_name);
+            if !children.is_empty() {
+                output.push(Block::Paragraph {
+                    children,
+                    layout: layout_with_spacing(indent_columns, u16::from(!output.is_empty())),
+                    source: source_span(node),
+                });
+            }
+        }
         Some("RS") => {
             let nested = lower_blocks(
                 part_children(node, NodeKind::Body),

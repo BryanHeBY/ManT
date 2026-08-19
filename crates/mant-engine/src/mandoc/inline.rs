@@ -111,7 +111,20 @@ impl InlineBuilder {
 
 pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
     let mut builder = InlineBuilder::new();
-    for node in nodes {
+    for (index, node) in nodes.iter().enumerate() {
+        // mandoc joins the final pair in a contiguous mdoc bibliography
+        // author run with "and". The conjunction is formatter-generated, so
+        // it is not a child of either `%A` node and must be restored while the
+        // sibling context is still available.
+        if node.macro_name.as_deref() == Some("%A")
+            && index > 0
+            && nodes[index - 1].macro_name.as_deref() == Some("%A")
+            && nodes
+                .get(index + 1)
+                .is_none_or(|next| next.macro_name.as_deref() != Some("%A"))
+        {
+            builder.append(text_node("and"));
+        }
         append_inline_node(&mut builder, node, default_name);
     }
     builder.finish()

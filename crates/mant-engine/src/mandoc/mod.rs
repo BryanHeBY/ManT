@@ -1110,6 +1110,25 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     }
 
     #[test]
+    fn joins_the_final_mdoc_bibliography_authors() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("bibliography.3"),
+            b".Dd August 19, 2026\n.Dt BIBLIOGRAPHY 3\n.Os\n.Sh SEE ALSO\n\
+.Rs\n.%A Bentley, J.L.\n.%A McIlroy, M.D.\n.%T Engineering a Sort Function\n.Re\n",
+        )
+        .expect("lower mdoc bibliography");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one bibliography paragraph");
+        };
+
+        assert!(
+            inline_text(children).contains("Bentley, J.L. and McIlroy, M.D."),
+            "{}",
+            inline_text(children)
+        );
+    }
+
+    #[test]
     fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
         let mut report = Parser::default()
             .parse_bytes(
