@@ -331,12 +331,14 @@ content audit, use `--replay-fidelity-records` with that corpus. This reads
 records. The prior audit results remain immutable while the new observations
 enter `LAYOUT_AUDIT.csv`.
 
-[`LAYOUT_AUDIT.csv`](../tests/fixtures/roff/LAYOUT_AUDIT.csv) begins empty on
-purpose: it is evidence for newly selected renderer-layout sweeps, not a claim
-that older content/structure samples were retroactively checked. Its
-[guide](../tests/fixtures/roff/LAYOUT_AUDIT.md) defines the narrow signal and
-review lifecycle. Do not add it to daily CI; only its self-check and focused
-regressions derived from confirmed findings belong there.
+[`LAYOUT_AUDIT.csv`](../tests/fixtures/roff/LAYOUT_AUDIT.csv) is evidence for
+newly selected renderer-layout sweeps, not a claim that older
+content/structure samples were retroactively checked. It is independent of
+both older ledgers: a completed layout row never rewrites or upgrades their
+historical conclusions. Its [guide](../tests/fixtures/roff/LAYOUT_AUDIT.md)
+defines the narrow signal and review lifecycle. Do not add it to daily CI;
+only its self-check and focused regressions derived from confirmed findings
+belong there.
 
 `--syntax-priority` replaces path-only ranking with deterministic greedy coverage over the actual owned libmandoc AST. The development-only `roff_ast_profile` example reports macro names, node roles and parent/child shapes, normalized list/display/font state, tables, equations, parser diagnostic classes, and rendering-relevant node flags without copying document text. It also reports bounded interaction features: a node or parent/child context paired with its flags and normalized attributes, plus attribute pairs on the same node. The sampler weights these combinations ahead of isolated features, first preferring shapes absent from the completed CSV ledger and then underrepresented and rarer forms. This distinguishes merely having seen `.SY`, a no-fill node, and a font from having exercised their exact combination.
 

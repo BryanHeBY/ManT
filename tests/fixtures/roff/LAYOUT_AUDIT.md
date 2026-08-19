@@ -61,3 +61,8 @@ Use `--recheck-recorded` only when changing this layout probe or deliberately
 revisiting a renderer result. Keep reviewed third-party output in a local
 scratch directory; commit the compact ledger conclusion and a focused licensed
 fixture only after confirming a real ManT defect.
+
+After a narrowly scoped lowering fix that can only remove a known candidate,
+`--recheck-review-recorded` replays just unchanged rows whose latest layout
+status is `review`. This keeps a confirmation pass proportional to the actual
+finding set rather than rescanning an entire local corpus.

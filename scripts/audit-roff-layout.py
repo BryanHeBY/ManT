@@ -165,6 +165,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="scan every selected page, including completed layout-ledger rows",
     )
     selection.add_argument(
+        "--recheck-review-recorded",
+        action="store_true",
+        help="scan only unchanged selected rows whose latest layout result requires review",
+    )
+    selection.add_argument(
         "--replay-fidelity-records",
         action="store_true",
         help=(
@@ -588,6 +593,13 @@ def main(argv: Sequence[str]) -> int:
                 if records[path][1] is not None
                 and (corpus, records[path][0], records[path][1]) in database
             ]
+        elif arguments.recheck_review_recorded:
+            pages = [
+                path for path in pages
+                if records[path][1] is not None
+                and (record := database.get((corpus, records[path][0], records[path][1]))) is not None
+                and record.scan_status == "review"
+            ]
         elif arguments.replay_fidelity_records:
             fidelity_records = read_fidelity_records(arguments.fidelity_db)
             pages = [
@@ -624,6 +636,8 @@ def main(argv: Sequence[str]) -> int:
     print(f"  corpus:    {corpus}")
     if arguments.replay_fidelity_records:
         print(f"  replay:    completed rows from {arguments.fidelity_db}")
+    elif arguments.recheck_review_recorded:
+        print("  replay:    current review rows from the layout ledger")
     print("  contract:  source-gated line boundaries, spacing, and relative indentation")
     print()
 

@@ -1050,6 +1050,11 @@ def no_fill_source_layout(source: str) -> NoFillSourceLayout:
                 flowed_previous = None
             continue
         candidate = arguments if name in inline_macros else raw_line if name is None else ""
+        if name in inline_macros:
+            # Macro arguments frequently quote an entire visible literal row.
+            # Keep the row comparable with terminal text while leaving escaped
+            # quotes untouched.
+            candidate = re.sub(r'(?<!\\)"([^"]*)"', r"\1", candidate)
         candidate = ROFF_FONT_ESCAPE.sub("", candidate)
         candidate = candidate.replace(r"\&", "").replace(r"\~", " ")
         key = layout_key(candidate)
@@ -2148,6 +2153,9 @@ def self_check() -> None:
         "plain first\nplain second\n.EX\nplain first\nplain second\n.EE\n",
     )
     assert not any("line boundaries may merge" in item for item in same_text_elsewhere.candidates)
+    assert "plain first plain second" in no_fill_source_layout(
+        '.EX\n.B "plain first plain second"\n.EE\n'
+    ).source_lines
     spacing_layout = layout_comparison(
         "  plain first\n  plain second\n",
         "plain first\n\nplain second\n",
