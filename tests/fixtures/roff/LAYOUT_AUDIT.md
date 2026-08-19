@@ -17,7 +17,9 @@ narrow layout signal:
 - blank-line spacing changes between two adjacent source lines when the source
   itself contains a blank line or `.sp` request inside a recognised no-fill or
   literal-display region;
-- two short no-fill reference lines that ManT renders as one line.
+- two short no-fill reference lines that ManT renders as one line, unless the
+  same text is also attributable to a flowed or single-line source occurrence;
+  this avoids treating formatter wrapping or repeated text as a lost boundary.
 
 It records blank-run counts, indentation levels, and aligned anchor counts in
 its JSON report for human review. It does **not** compare ordinary paragraph
@@ -43,10 +45,11 @@ python3 scripts/audit-roff-layout.py --manpath /tmp/new-release/share/man \
   --json /tmp/mant-layout.json --findings-only
 ```
 
-To add layout evidence for exactly the source bytes already completed in the
+To add layout evidence for exactly the source bytes already comparable in the
 content-fidelity ledger, select that corpus explicitly. The content ledger is
-only read as an immutable identity index; it is neither re-rendered nor
-rewritten:
+only read as an immutable identity index; its historical `skipped` and
+`hard-failure` rows are not comparable renderer baselines and are excluded. It
+is neither re-rendered nor rewritten:
 
 ```sh
 python3 scripts/audit-roff-layout.py --manpath /tmp/old-release/share/man \

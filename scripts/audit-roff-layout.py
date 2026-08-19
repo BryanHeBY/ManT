@@ -35,7 +35,7 @@ FIDELITY_AUDITOR = ROOT / "scripts/audit-roff-fidelity.py"
 DEFAULT_MANT = ROOT / "target/debug/mant"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/LAYOUT_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-LAYOUT_SCHEMA = "mant.roff-layout-audit/v2"
+LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
 MANUAL_SUFFIX = re.compile(r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$")
 DATABASE_FIELDS = [
     "corpus",
@@ -352,9 +352,9 @@ def read_fidelity_records(path: Path) -> set[tuple[str, str, str]]:
 
     The layout probe can deliberately revisit exactly the source bytes that
     were already rendered for fidelity.  It does not treat a historical
-    ``skipped`` row as evidence of a completed comparison, and it needs no
-    fidelity status beyond selecting the immutable `(corpus, path, digest)`
-    identity.
+    ``skipped`` or ``hard-failure`` row as comparable evidence: neither had a
+    completed two-renderer baseline. It needs no further fidelity detail beyond
+    selecting the immutable `(corpus, path, digest)` identity.
     """
     if not path.is_file():
         raise ValueError(f"content-fidelity database does not exist: {path}")
@@ -373,7 +373,7 @@ def read_fidelity_records(path: Path) -> set[tuple[str, str, str]]:
                 raise ValueError(f"invalid content-fidelity digest at {path}:{number}")
             if status not in {"clean", "review", "hard-failure", "skipped"}:
                 raise ValueError(f"invalid content-fidelity status at {path}:{number}")
-            if status != "skipped":
+            if status in {"clean", "review"}:
                 identities.add((row["corpus"], row["path"], digest))
     return identities
 
@@ -530,6 +530,7 @@ def self_check() -> None:
                 [
                     ",".join(FIDELITY_DATABASE_FIELDS),
                     f"known,man/man1/known.1,1,{'0' * 64},clean,not-required,",
+                    f"failed,man/man1/failed.1,1,{'2' * 64},hard-failure,pending,",
                     f"skipped,man/man1/skipped.1,1,{'1' * 64},skipped,pending,",
                     "",
                 ]

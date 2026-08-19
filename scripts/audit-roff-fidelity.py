@@ -144,12 +144,17 @@ class NoFillSourceLayout:
     A formatter's implicit display gutter is not source content.  Only raw
     indentation authored inside a no-fill region, explicit blank requests,
     and adjacent authored lines are suitable cross-renderer layout signals.
+    Flowed source is retained only to reject same-text, different-location
+    collisions: it can produce the same visible fragments without losing a
+    no-fill boundary.
     """
 
     anchors: frozenset[str]
     authored_indents: dict[str, int]
     spaced_pairs: frozenset[tuple[str, str]]
     consecutive_pairs: frozenset[tuple[str, str]]
+    source_lines: frozenset[str]
+    flowed_pairs: frozenset[tuple[str, str]]
 
 
 @dataclass
@@ -1007,7 +1012,10 @@ def no_fill_source_layout(source: str) -> NoFillSourceLayout:
     indent_observations: dict[str, set[int]] = {}
     spaced_pairs: set[tuple[str, str]] = set()
     consecutive_pairs: set[tuple[str, str]] = set()
+    source_lines: set[str] = set()
+    flowed_pairs: set[tuple[str, str]] = set()
     previous: str | None = None
+    flowed_previous: str | None = None
     pending_space = False
     for raw_line in source.splitlines():
         match = ROFF_REQUEST.fullmatch(raw_line)
@@ -1016,32 +1024,48 @@ def no_fill_source_layout(source: str) -> NoFillSourceLayout:
         if name == "Bd" and "-literal" in arguments.split():
             depth += 1
             previous = None
+            flowed_previous = None
             pending_space = False
             continue
         if name in starts:
             depth += 1
             previous = None
+            flowed_previous = None
             pending_space = False
             continue
         if name == "Ed" or name in ends:
             depth = max(0, depth - 1)
             previous = None
+            flowed_previous = None
             pending_space = False
             continue
-        if depth == 0:
-            continue
         if not raw_line.strip() or name == "sp":
-            pending_space |= previous is not None
+            if depth == 0:
+                flowed_previous = None
+            else:
+                pending_space |= previous is not None
             continue
         if raw_line.lstrip().startswith((r'.\\"', r"'\\\"")):
+            if depth == 0:
+                flowed_previous = None
             continue
         candidate = arguments if name in inline_macros else raw_line if name is None else ""
-        authored_indent = 0 if name in inline_macros else leading_columns(candidate)
         candidate = ROFF_FONT_ESCAPE.sub("", candidate)
         candidate = candidate.replace(r"\&", "").replace(r"\~", " ")
         key = layout_key(candidate)
+        if depth == 0:
+            if useful_layout_anchor(key):
+                source_lines.add(key)
+                if flowed_previous is not None:
+                    flowed_pairs.add((flowed_previous, key))
+                flowed_previous = key
+            elif name is not None:
+                flowed_previous = None
+            continue
+        authored_indent = 0 if name in inline_macros else leading_columns(candidate)
         if useful_layout_anchor(key):
             anchors.add(key)
+            source_lines.add(key)
             indent_observations.setdefault(key, set()).add(authored_indent)
             if previous is not None:
                 pair = (previous, key)
@@ -1059,6 +1083,8 @@ def no_fill_source_layout(source: str) -> NoFillSourceLayout:
         },
         spaced_pairs=frozenset(spaced_pairs),
         consecutive_pairs=frozenset(consecutive_pairs),
+        source_lines=frozenset(source_lines),
+        flowed_pairs=frozenset(flowed_pairs),
     )
 
 
@@ -1207,6 +1233,8 @@ def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutCo
             and useful_layout_anchor(second.key)
             and source_layout is not None
             and (first.key, second.key) in source_layout.consecutive_pairs
+            and f"{first.key} {second.key}" not in source_layout.source_lines
+            and (first.key, second.key) not in source_layout.flowed_pairs
             and len(first.key) <= 96
             and len(second.key) <= 96
             and f"{first.key} {second.key}" in mant_whole_lines
@@ -2114,6 +2142,12 @@ def self_check() -> None:
         layout_source,
     )
     assert any("line boundaries may merge" in item for item in merged_layout.candidates)
+    same_text_elsewhere = layout_comparison(
+        "  plain first\n  plain second\n",
+        "plain first plain second\n",
+        "plain first\nplain second\n.EX\nplain first\nplain second\n.EE\n",
+    )
+    assert not any("line boundaries may merge" in item for item in same_text_elsewhere.candidates)
     spacing_layout = layout_comparison(
         "  plain first\n  plain second\n",
         "plain first\n\nplain second\n",
