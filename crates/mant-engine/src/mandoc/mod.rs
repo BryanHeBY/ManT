@@ -1267,10 +1267,9 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
             panic!("expected one bibliography paragraph");
         };
 
-        assert!(
-            inline_text(children).contains("Bentley, J.L. and McIlroy, M.D."),
-            "{}",
-            inline_text(children)
+        assert_eq!(
+            inline_text(children),
+            "Bentley, J.L. and McIlroy, M.D. Engineering a Sort Function."
         );
     }
 
