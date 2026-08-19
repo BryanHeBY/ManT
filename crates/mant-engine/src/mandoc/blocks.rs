@@ -243,15 +243,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             });
             return;
         }
-        if let Some(lines) = lower_no_fill_lines(node, self.context.default_name) {
-            for line in lines {
-                self.state.push_preformatted(
-                    line.nodes,
-                    line.source,
-                    line.continues_line,
-                    self.context,
-                );
-            }
+        if self.push_no_fill_lines(node) {
             return;
         }
         self.state.flush_preformatted();
@@ -322,6 +314,21 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
 
     fn finish(self) -> Vec<Block> {
         self.state.finish()
+    }
+
+    fn push_no_fill_lines(&mut self, node: &Node) -> bool {
+        let Some(lines) = lower_no_fill_lines(node, self.context.default_name) else {
+            return false;
+        };
+        for line in lines {
+            self.state.push_preformatted(
+                line.nodes,
+                line.source,
+                line.continues_line,
+                self.context,
+            );
+        }
+        true
     }
 
     fn push_inline_node(&mut self, node: &Node) {
@@ -2007,16 +2014,15 @@ fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> 
         if previous_visible_line.is_some_and(|previous| node.line > previous) {
             output.extend(std::mem::replace(&mut line, InlineBuilder::new()).finish());
         }
-        if let Some(previous) = previous_visible_line.filter(|previous| node.line > *previous) {
-            if !output.is_empty() {
-                output.push(Inline::LineBreak);
-                let extra_rows =
-                    context.no_fill_blank_rows_between(Some(previous), Some(node.line));
-                output.extend(std::iter::repeat_n(
-                    Inline::LineBreak,
-                    usize::from(extra_rows),
-                ));
-            }
+        if let Some(previous) = previous_visible_line.filter(|previous| node.line > *previous)
+            && !output.is_empty()
+        {
+            output.push(Inline::LineBreak);
+            let extra_rows = context.no_fill_blank_rows_between(Some(previous), Some(node.line));
+            output.extend(std::iter::repeat_n(
+                Inline::LineBreak,
+                usize::from(extra_rows),
+            ));
         }
         if node.kind == NodeKind::Text || node.macro_name.is_some() {
             append_inline_node(&mut line, node, context.default_name);
