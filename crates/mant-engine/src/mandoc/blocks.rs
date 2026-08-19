@@ -167,32 +167,14 @@ fn lower_blocks(
     let mut spacing_enabled = true;
 
     for node in nodes {
-        if node.macro_name.as_deref() == Some("PD") {
-            update_paragraph_distance(node, paragraph_distance);
-            continue;
-        }
-        if node.macro_name.as_deref() == Some("An") {
-            match node.author_mode {
-                Some(AuthorMode::Split) => {
-                    split_authors = true;
-                    continue;
-                }
-                Some(AuthorMode::NoSplit) => {
-                    split_authors = false;
-                    continue;
-                }
-                None if split_authors => state.hard_break(),
-                None => {}
-            }
-        }
-        if node.macro_name.as_deref() == Some("Sm") {
-            let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
-            spacing_enabled = match setting.trim() {
-                "on" => true,
-                "off" => false,
-                "" => !spacing_enabled,
-                _ => spacing_enabled,
-            };
+        if consume_block_control(
+            node,
+            context,
+            &mut state,
+            paragraph_distance,
+            &mut split_authors,
+            &mut spacing_enabled,
+        ) {
             continue;
         }
         if node.flags.no_print
@@ -276,6 +258,40 @@ fn lower_blocks(
         }
     }
     state.finish()
+}
+
+/// Consume state-only roff requests before printable block lowering.
+fn consume_block_control(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    state: &mut BlockState,
+    paragraph_distance: &mut u16,
+    split_authors: &mut bool,
+    spacing_enabled: &mut bool,
+) -> bool {
+    match node.macro_name.as_deref() {
+        Some("PD") => update_paragraph_distance(node, paragraph_distance),
+        Some("An") => match node.author_mode {
+            Some(AuthorMode::Split) => *split_authors = true,
+            Some(AuthorMode::NoSplit) => *split_authors = false,
+            None if *split_authors => {
+                state.hard_break();
+                return false;
+            }
+            None => return false,
+        },
+        Some("Sm") => {
+            let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
+            *spacing_enabled = match setting.trim() {
+                "on" => true,
+                "off" => false,
+                "" => !*spacing_enabled,
+                _ => *spacing_enabled,
+            };
+        }
+        _ => return false,
+    }
+    true
 }
 
 /// Keep man-ext links inside the surrounding filled flow.
