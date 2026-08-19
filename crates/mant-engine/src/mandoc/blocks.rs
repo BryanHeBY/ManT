@@ -161,114 +161,146 @@ fn lower_blocks(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) -> Vec<Block> {
-    let mut state = BlockState::new(indent_columns);
     let (table_embeddings, embedded_nodes) = table_embeddings(nodes, context);
+    let mut lowerer = BlockLowerer::new(context, indent_columns, paragraph_distance);
+    for (index, node) in nodes.iter().enumerate() {
+        if !embedded_nodes[index] {
+            lowerer.push(node, table_embeddings[index].as_ref());
+        }
+    }
+    lowerer.finish()
+}
+
+struct BlockLowerer<'a, 'source> {
+    context: &'a LoweringContext<'source>,
+    indent_columns: u16,
+    paragraph_distance: &'a mut u16,
+    state: BlockState,
     // man(7) starts each section or relative-indent scope with a seven-column
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
-    let mut definition_hanging_width = 7;
-    let mut split_authors = false;
-    let mut spacing_enabled = true;
+    definition_hanging_width: usize,
+    split_authors: bool,
+    spacing_enabled: bool,
+}
 
-    for (index, node) in nodes.iter().enumerate() {
-        if embedded_nodes[index] {
-            continue;
+impl<'a, 'source> BlockLowerer<'a, 'source> {
+    fn new(
+        context: &'a LoweringContext<'source>,
+        indent_columns: u16,
+        paragraph_distance: &'a mut u16,
+    ) -> Self {
+        Self {
+            context,
+            indent_columns,
+            paragraph_distance,
+            state: BlockState::new(indent_columns),
+            definition_hanging_width: 7,
+            split_authors: false,
+            spacing_enabled: true,
         }
+    }
+
+    fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
         if consume_block_control(
             node,
-            context,
-            &mut state,
-            paragraph_distance,
-            &mut split_authors,
-            &mut spacing_enabled,
+            self.context,
+            &mut self.state,
+            self.paragraph_distance,
+            &mut self.split_authors,
+            &mut self.spacing_enabled,
         ) {
-            continue;
+            return;
         }
         if node.flags.no_print
             || node.kind == NodeKind::Comment
             || is_section(node, false)
             || is_nonprinting_request(node)
         {
-            continue;
+            return;
         }
         if node.kind == NodeKind::Text
             && node.text.as_deref().is_some_and(str::is_empty)
             && !node.flags.no_fill
         {
-            state.flush_paragraph();
-            state.output.push(Block::VerticalSpace {
+            self.state.flush_paragraph();
+            self.state.output.push(Block::VerticalSpace {
                 lines: 1,
                 source: source_span(node),
             });
-            continue;
+            return;
         }
-        if let Some(lines) = lower_no_fill_lines(node, context.default_name) {
+        if let Some(lines) = lower_no_fill_lines(node, self.context.default_name) {
             for line in lines {
-                state.push_preformatted(line.nodes, line.source, line.continues_line);
+                self.state
+                    .push_preformatted(line.nodes, line.source, line.continues_line);
             }
-            continue;
+            return;
         }
-        state.flush_preformatted();
+        self.state.flush_preformatted();
         if node.flags.delimiter_close
             && participates_in_inline_flow(node)
-            && state.paragraph.is_empty()
+            && self.state.paragraph.is_empty()
         {
-            let tail = lower_inline_nodes(std::slice::from_ref(node), context.default_name);
-            if append_to_last_inline_block(&mut state.output, &tail) {
-                continue;
+            let tail = lower_inline_nodes(std::slice::from_ref(node), self.context.default_name);
+            if append_to_last_inline_block(&mut self.state.output, &tail) {
+                return;
             }
         }
         if node.macro_name.as_deref() == Some("Pp") {
-            state.flush_paragraph();
-            if !state.output.is_empty() {
-                state.output.push(Block::VerticalSpace {
+            self.state.flush_paragraph();
+            if !self.state.output.is_empty() {
+                self.state.output.push(Block::VerticalSpace {
                     lines: 1,
                     source: source_span(node),
                 });
             }
         } else if node.macro_name.as_deref() == Some("sp") {
-            state.flush_paragraph();
+            self.state.flush_paragraph();
             if let Some(lines) = vertical_distance_lines(node).filter(|lines| *lines > 0) {
-                state.output.push(Block::VerticalSpace {
+                self.state.output.push(Block::VerticalSpace {
                     lines,
                     source: source_span(node),
                 });
             }
         } else if node.macro_name.as_deref() == Some("br") {
-            state.hard_break();
+            self.state.hard_break();
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            push_man_link(&mut state, node, context.default_name);
+            push_man_link(&mut self.state, node, self.context.default_name);
         } else if participates_in_inline_flow(node) {
             let source = source_span(node);
             if node.flags.delimiter_close || node.macro_name.as_deref() == Some("Ns") {
-                state.tighten_next_boundary();
+                self.state.tighten_next_boundary();
             }
-            if !spacing_enabled {
-                state.tighten_same_line_boundary(source.as_ref());
+            if !self.spacing_enabled {
+                self.state.tighten_same_line_boundary(source.as_ref());
             }
-            state.push_inline(
-                lower_inline_nodes(std::slice::from_ref(node), context.default_name),
+            self.state.push_inline(
+                lower_inline_nodes(std::slice::from_ref(node), self.context.default_name),
                 source,
                 starts_indented_filled_line(node),
                 ends_with_line_continuation(node),
             );
             if node.macro_name.as_deref() == Some("Pf") {
-                state.tighten_next_boundary();
+                self.state.tighten_next_boundary();
             }
         } else {
-            state.flush_paragraph();
+            self.state.flush_paragraph();
             lower_structural_node(
                 node,
-                context,
-                indent_columns,
-                paragraph_distance,
-                &mut state.output,
-                &mut definition_hanging_width,
-                table_embeddings[index].as_ref(),
+                self.context,
+                self.indent_columns,
+                self.paragraph_distance,
+                &mut self.state.output,
+                &mut self.definition_hanging_width,
+                table_embedding,
             );
         }
     }
-    state.finish()
+
+    fn finish(self) -> Vec<Block> {
+        self.state.finish()
+    }
 }
 
 struct TableEmbedding<'a> {
