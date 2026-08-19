@@ -38,8 +38,8 @@ a parser regression:
 | `debian-sid-2026-07-21-amd64` | Debian packages `cpio 2.15+dfsg-2.1`, `dash 0.5.12-12`, and `groff 1.24.1-1` | 52 pages, 49 distinct decompressed sources | 45 clean; 7 reviewed renderer/device-condition differences |
 | `fedora44-2026-07-20-x86_64` | Fedora packages `bash 5.3.9-3.fc44`, `clang 22.1.1-2.fc44`, `gcc 16.0.1-0.10.fc44`, `git-core-doc 2.53.0-1.fc44`, and `tar 1.35-8.fc44` | 258 pages discovered; 257 rendered; 1 exact source reused from an earlier completed corpus | 202 clean; 55 reviewed aliases whose embedded `.so` chains are deliberately not expanded by ManT |
 | `alpine-3.24.1-x86_64` | Official Alpine 3.24.1 APKs: `man-pages 6.18-r0`, `busybox-doc 1.37.0-r31`, `openssl-doc 3.5.7-r0`, and `util-linux-doc 2.42.1-r0` | 425 incremental ledger rows; 394 syntax-prioritized pages rechecked after the table fixes | 412 no-candidate scans; 8 reviewed link or formatter token-boundary differences; 5 confirmed table findings fixed |
-| `openbsd-7.9-amd64` | Official OpenBSD 7.9 `man79.tgz` for amd64 | 150 syntax-prioritized pages from 2,902 distinct sources | 139 clean after fixes; 11 reviewed formatter and Pod token-boundary differences |
-| `netbsd-10.1-amd64` | Official NetBSD 10.1 amd64 `man.tar.xz` set | 146 syntax-prioritized pages from 2,544 distinct sources | 138 clean after fixes; 8 reviewed formatter and terminal-layout differences |
+| `openbsd-7.9-amd64` | Official OpenBSD 7.9 `man79.tgz` for amd64 | 339 syntax-prioritized and source-directed pages from 2,902 distinct sources | 332 latest clean scans; 7 reviewed candidates; 8 real lowering defects fixed and 22 source-checked false positives |
+| `netbsd-10.1-amd64` | Official NetBSD 10.1 amd64 `man.tar.xz` set | 541 syntax-prioritized and source-directed pages from 2,544 distinct sources | 523 latest clean scans; 18 reviewed candidates; 2 real lowering defects fixed and 19 source-checked false positives |
 | `freebsd-15.1-amd64` | Official FreeBSD 15.1-RELEASE amd64 `base.txz` | 237 stable and syntax-prioritized pages from 11,183 paths / 4,085 distinct sources | 224 clean; 5 real lowering defects fixed; 8 reviewed formatter or reference-renderer differences |
 | `illumos-gate-e8f5c080` | Official illumos-gate read-only mirror at commit `e8f5c080` | 918 stable, syntax-prioritized, section-balanced, and source-directed pages from 4,627 distinct sources | 914 clean automated scans; 4 reviewed reference-renderer differences; 1 mdoc link-lowering defect fixed |
 | `apple-oss-manpages-pinned` | Apple `bsdmanpages-56` and `man-171` source tags | 36 syntax-prioritized pages | 34 clean; 2 aliases whose targets are absent from the individual official source repositories |
@@ -61,9 +61,15 @@ the device-only `ti` argument is no longer exposed as document text; and the
 pinned parser recognizes the current `-isoC-2023` and `-p1003.1-2024`
 standard names. Each change has a minimal Rust regression. Remaining BSD
 findings were checked against the source and both visible outputs before being
-classified. In particular, differences in historical `St` wording, `Bx`
-typography, Pod term/body joining, URL punctuation, and terminal table layout
-do not represent discarded source content.
+classified. In particular, differences in historical `St` wording, Pod
+term/body joining, URL punctuation, and terminal table layout do not represent
+discarded source content. A later complete BSD source-directed pass over `.Lk`,
+`.Mt`, and `.Bx` occurrences also verified that `Bx`'s lifecycle aliases and
+version/release forms arrive from libmandoc as compact generated tokens.
+Lowering now uses the macro's authored AST arguments to render the mdoc-defined
+portable lifecycle text and canonical `versionBSD release` form. The remaining
+`.St` signals are formatter-owned alternate titles for the same standards,
+rather than missing source text.
 
 The FreeBSD and illumos expansion then moved beyond section-balanced samples
 to inverse-frequency AST selection. It found five additional general FreeBSD
@@ -78,7 +84,7 @@ geometry rather than a missing operand or operator. A later balanced 746-page
 pass across all section suffixes found one general mdoc defect: `.Lk URL .`
 treated sentence punctuation as its visible label, hiding the URL in text
 renderers. Link lowering now keeps an unlabeled target visible and appends the
-punctuation outside the link. The remaining new `csh(1has)` candidate is a
+punctuation outside the link. The remaining new `csh(1)` candidate is a
 reference tokenisation artefact: its definition term and following body remain
 separate and intact in ManT.
 
