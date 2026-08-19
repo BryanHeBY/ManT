@@ -13,7 +13,7 @@ use super::{
     LoweringContext,
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
-        parse_roff_text, plain_text, terms_fit_inline,
+        lower_man_link, parse_roff_text, plain_text, terms_fit_inline,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -201,7 +201,17 @@ fn lower_blocks(
             }
         } else if node.macro_name.as_deref() == Some("br") {
             state.hard_break();
+        } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
+            state.push_inline(
+                lower_man_link(node, context.default_name),
+                source_span(node),
+                starts_indented_filled_line(node),
+                ends_with_line_continuation(node),
+            );
         } else if is_inline(node) {
+            if node.flags.delimiter_close {
+                state.tighten_next_boundary();
+            }
             state.push_inline(
                 lower_inline_nodes(std::slice::from_ref(node), context.default_name),
                 source_span(node),
@@ -351,9 +361,6 @@ fn lower_structural_node(
             );
             extend_transparent_blocks(output, nested, *paragraph_distance);
         }
-        Some("UR" | "MT") => {
-            lower_link_block(output, node, context, indent_columns, paragraph_distance);
-        }
         Some("SY") => lower_man_synopsis(output, node, context, indent_columns, paragraph_distance),
         Some("Fo") => lower_mdoc_function(output, node, context, indent_columns),
         _ if node.kind == NodeKind::Table => {
@@ -464,107 +471,6 @@ fn lower_man_synopsis(
         source: source_span(node),
     });
     output.extend(nested);
-}
-
-fn lower_link_block(
-    output: &mut Vec<Block>,
-    node: &Node,
-    context: &LoweringContext<'_>,
-    indent_columns: u16,
-    paragraph_distance: &mut u16,
-) {
-    let target = plain_text(&lower_inline_nodes(
-        part_children(node, NodeKind::Head),
-        context.default_name,
-    ));
-    let email = node.macro_name.as_deref() == Some("MT");
-    let mut nested = lower_blocks(
-        part_children(node, NodeKind::Body),
-        context,
-        indent_columns,
-        paragraph_distance,
-    );
-    if !target.is_empty() {
-        if nested.is_empty() {
-            nested.push(Block::Paragraph {
-                children: vec![link_inline(
-                    &target,
-                    email,
-                    vec![Inline::Text {
-                        value: target.clone(),
-                    }],
-                )],
-                layout: layout(indent_columns),
-                source: source_span(node),
-            });
-        } else {
-            wrap_blocks_in_link(&mut nested, &target, email);
-        }
-    }
-    let tail = lower_inline_nodes(part_children(node, NodeKind::Tail), context.default_name);
-    if !tail.is_empty() && !append_to_last_inline_block(&mut nested, &tail) {
-        nested.push(Block::Paragraph {
-            children: tail,
-            layout: layout(indent_columns),
-            source: source_span(node),
-        });
-    }
-    extend_transparent_blocks(output, nested, *paragraph_distance);
-}
-
-fn wrap_blocks_in_link(blocks: &mut [Block], target: &str, email: bool) {
-    for block in blocks {
-        match block {
-            Block::Paragraph { children, .. } | Block::Preformatted { children, .. } => {
-                let label = std::mem::take(children);
-                if !label.is_empty() {
-                    children.push(link_inline(target, email, label));
-                }
-            }
-            Block::List { items, .. } => {
-                for item in items {
-                    wrap_blocks_in_link(&mut item.blocks, target, email);
-                }
-            }
-            Block::DefinitionList { items, .. } => {
-                for item in items {
-                    for term in &mut item.terms {
-                        let label = std::mem::take(term);
-                        if !label.is_empty() {
-                            term.push(link_inline(target, email, label));
-                        }
-                    }
-                    wrap_blocks_in_link(&mut item.description, target, email);
-                }
-            }
-            Block::Table { rows, .. } => {
-                for cell in rows.iter_mut().flat_map(|row| &mut row.cells) {
-                    wrap_blocks_in_link(&mut cell.blocks, target, email);
-                }
-            }
-            Block::Equation { .. }
-            | Block::VerticalSpace { .. }
-            | Block::ThematicBreak { .. }
-            | Block::Unsupported { .. } => {}
-        }
-    }
-}
-
-fn link_inline(target: &str, email: bool, children: Vec<Inline>) -> Inline {
-    let target = if email {
-        mant_ir::LinkTarget::Email {
-            address: target.to_owned(),
-        }
-    } else {
-        mant_ir::LinkTarget::External {
-            uri: target.to_owned(),
-        }
-    };
-    Inline::Link {
-        target,
-        title: None,
-        children,
-    }
 }
 
 fn apply_normalized_font(blocks: &mut [Block], font: NormalizedFont) {
@@ -800,6 +706,10 @@ impl BlockState {
 
     fn hard_break(&mut self) {
         self.paragraph.hard_break();
+    }
+
+    fn tighten_next_boundary(&mut self) {
+        self.paragraph.tighten_next_boundary();
     }
 
     fn push_preformatted(

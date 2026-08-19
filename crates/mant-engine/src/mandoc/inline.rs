@@ -368,6 +368,50 @@ fn lower_link(children: &[Node], default_name: Option<&str>, email: bool) -> Vec
     }]
 }
 
+/// Lower GNU man-ext `.UR` and `.MT` blocks as one inline phrase.
+///
+/// The macros are structural in libmandoc's tree because their label occupies
+/// a body, but they do not start a paragraph in man(7). A descriptive label
+/// keeps the target visible after the link so text search and citation views
+/// retain both pieces of source information.
+pub(super) fn lower_man_link(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
+    let target = plain_text(&lower_inline_nodes(
+        part_children(node, NodeKind::Head),
+        default_name,
+    ));
+    if target.is_empty() {
+        return lower_inline_nodes(part_children(node, NodeKind::Body), default_name);
+    }
+
+    let label = lower_inline_nodes(part_children(node, NodeKind::Body), default_name);
+    let has_label = !label.is_empty();
+    let children = if has_label { label } else { text_node(&target) };
+    let link_target = if node.macro_name.as_deref() == Some("MT") {
+        mant_ir::LinkTarget::Email {
+            address: target.clone(),
+        }
+    } else {
+        mant_ir::LinkTarget::External {
+            uri: target.clone(),
+        }
+    };
+    let mut output = vec![Inline::Link {
+        target: link_target,
+        title: None,
+        children,
+    }];
+    if has_label {
+        output.push(Inline::Text {
+            value: format!(" ⟨{target}⟩"),
+        });
+    }
+    output.extend(lower_inline_nodes(
+        part_children(node, NodeKind::Tail),
+        default_name,
+    ));
+    output
+}
+
 fn wrap_strong(children: Vec<Inline>) -> Vec<Inline> {
     (!children.is_empty())
         .then_some(Inline::Strong { children })

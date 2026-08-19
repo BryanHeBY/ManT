@@ -1187,11 +1187,16 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
             ".TH TOOL 1\n\
              .SH DESCRIPTION\n\
              .MR git-add 1 ,\n\
+             .PP\n\
+             Read\n\
              .UR https://example.test/docs\n\
              Documentation\n\
-             .UE .\n\
+             .UE\n\
+             now.\n\
+             .PP\n\
+             Mail comments, suggestions and bug reports to\n\
              .MT docs@example.test\n\
-             Mail us\n\
+             Sean\n\
              .ME .\n",
         );
 
@@ -1260,7 +1265,45 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
                 _ => None,
             })
             .collect::<Vec<_>>();
-        assert_eq!(linked_paragraphs, ["Documentation.", "Mail us."]);
+        assert_eq!(
+            linked_paragraphs,
+            [
+                "Read Documentation ⟨https://example.test/docs⟩ now.",
+                "Mail comments, suggestions and bug reports to Sean ⟨docs@example.test⟩."
+            ]
+        );
+    }
+
+    #[test]
+    fn searches_across_man_link_labels_and_visible_targets() {
+        let source = b".TH LINK-SEARCH 1\n\
+.SH REPORTING BUGS\n\
+Mail comments, suggestions and bug reports to\n\
+.MT docs@example.test\n\
+Sean\n\
+.ME .\n";
+
+        for pattern in ["bug reports to Sean", "docs@example.test"] {
+            let query = crate::query_roff_bytes(source).expect("query link fixture");
+            let result = crate::project_query_view(
+                query,
+                &mant_protocol::QueryView::Search {
+                    pattern: pattern.to_owned(),
+                    syntax: mant_protocol::SearchSyntax::Literal,
+                    case: mant_protocol::SearchCase::Sensitive,
+                    scope: mant_protocol::SearchScope::Visible,
+                    word: false,
+                    context_lines: 0,
+                    limit: 100,
+                    offset: 0,
+                },
+            )
+            .expect("search link fixture");
+            let crate::QueryViewResult::Search(search) = result else {
+                panic!("expected search result");
+            };
+            assert_eq!(search.total, 1, "pattern={pattern:?}");
+        }
     }
 
     #[test]
