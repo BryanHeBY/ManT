@@ -14,7 +14,8 @@ use super::{
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
         lower_inline_nodes_with_spacing, lower_man_link, lower_source_alternating_fonts,
-        lower_source_mdoc_request, parse_roff_text, plain_text, terms_fit_inline, updated_spacing,
+        lower_source_mdoc_request, parse_roff_text, plain_text, spacing_after_node,
+        spacing_after_nodes, terms_fit_inline, updated_spacing,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -298,6 +299,11 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             }
             .push(node, table_embedding);
         }
+        self.state.inherit_spacing(spacing_after_node(
+            node,
+            self.state.spacing_enabled(),
+            self.context.default_name,
+        ));
     }
 
     fn finish(self) -> Vec<Block> {
@@ -1176,6 +1182,20 @@ impl BlockState {
         self.spacing_enabled = updated_spacing(self.spacing_enabled, setting);
     }
 
+    /// Carry formatter state out of a structural subtree.
+    ///
+    /// Nested mdoc enclosures can contain `.Sm` transitions that affect later
+    /// sibling nodes even though the enclosure itself is lowered by a nested
+    /// block builder. The nested builder has already applied the transition at
+    /// its source position, so the parent inherits only the final state.
+    fn inherit_spacing(&mut self, spacing_enabled: bool) {
+        if spacing_enabled == self.spacing_enabled {
+            return;
+        }
+        self.paragraph.inherit_spacing(spacing_enabled);
+        self.spacing_enabled = spacing_enabled;
+    }
+
     fn push_inline(
         &mut self,
         nodes: Vec<Inline>,
@@ -1424,25 +1444,6 @@ fn mdoc_list_items<'a>(
         spacing_enabled = spacing_after_node(child, spacing_enabled, default_name);
     }
     items
-}
-
-fn spacing_after_nodes(
-    nodes: &[Node],
-    mut spacing_enabled: bool,
-    default_name: Option<&str>,
-) -> bool {
-    for node in nodes {
-        spacing_enabled = spacing_after_node(node, spacing_enabled, default_name);
-    }
-    spacing_enabled
-}
-
-fn spacing_after_node(node: &Node, spacing_enabled: bool, default_name: Option<&str>) -> bool {
-    if node.macro_name.as_deref() == Some("Sm") {
-        let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
-        return updated_spacing(spacing_enabled, setting.trim());
-    }
-    spacing_after_nodes(&node.children, spacing_enabled, default_name)
 }
 
 /// Preserve every body sibling of an mdoc `Bl -column` item as one table cell.

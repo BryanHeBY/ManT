@@ -78,6 +78,17 @@ impl InlineBuilder {
         self.spacing_enabled = updated;
     }
 
+    /// Carry formatter state out of a nested structural wrapper.
+    ///
+    /// The nested builder has already applied the transition at its exact
+    /// source position. The parent therefore inherits only the final state;
+    /// replaying `set_spacing` here would invent a preserved boundary after a
+    /// nested `Sm off` request.
+    pub(super) fn inherit_spacing(&mut self, spacing_enabled: bool) {
+        self.spacing_enabled = spacing_enabled;
+        self.preserve_next_boundary = false;
+    }
+
     pub(super) fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
@@ -169,7 +180,10 @@ pub(super) fn lower_inline_nodes_with_spacing(
         {
             builder.append(text_node("and"));
         }
+        let spacing_before = builder.spacing_enabled();
         append_inline_node(&mut builder, node, default_name);
+        let spacing_after = spacing_after_node(node, spacing_before, default_name);
+        builder.inherit_spacing(spacing_after);
     }
     builder.finish()
 }
@@ -186,6 +200,29 @@ pub(super) fn updated_spacing(current: bool, setting: &str) -> bool {
         "" => !current,
         _ => current,
     }
+}
+
+pub(super) fn spacing_after_nodes(
+    nodes: &[Node],
+    mut spacing_enabled: bool,
+    default_name: Option<&str>,
+) -> bool {
+    for node in nodes {
+        spacing_enabled = spacing_after_node(node, spacing_enabled, default_name);
+    }
+    spacing_enabled
+}
+
+pub(super) fn spacing_after_node(
+    node: &Node,
+    spacing_enabled: bool,
+    default_name: Option<&str>,
+) -> bool {
+    if node.macro_name.as_deref() == Some("Sm") {
+        let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
+        return updated_spacing(spacing_enabled, setting.trim());
+    }
+    spacing_after_nodes(&node.children, spacing_enabled, default_name)
 }
 
 /// Lower one syntax node into an existing inline flow.

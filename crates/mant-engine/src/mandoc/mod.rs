@@ -2189,6 +2189,25 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
     }
 
     #[test]
+    fn carries_mdoc_spacing_state_out_of_nested_synopsis_enclosures() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("nested-synopsis-spacing.8"),
+            b".Dd August 19, 2026\n.Dt NESTED-SYNOPSIS-SPACING 8\n.Os\n.Sh SYNOPSIS\n\
+.Nm demo\n.Sm off\n.Oo Fl m\\~\n.Ar memory\n.Sm on\n.Oc\n\
+.Op Fl o Ar variable Ns Cm = Ns Ar value\n.Ar name\n",
+        )
+        .expect("lower nested synopsis spacing transitions");
+
+        let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected synopsis paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "demo [-m memory] [-o variable=value] name"
+        );
+    }
+
+    #[test]
     fn preserves_the_boundary_that_enters_a_compact_mdoc_term() {
         let document = parse_manual_bytes(
             std::path::Path::new("spacing-transition.5"),
