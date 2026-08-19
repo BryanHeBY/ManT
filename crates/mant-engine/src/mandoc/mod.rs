@@ -2222,6 +2222,25 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
         assert_eq!(inline_text(&items[0].terms[0]), "@newuser name:uid:gid");
     }
 
+    #[test]
+    fn separates_alternative_terms_in_an_extended_mdoc_definition_head() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("extended-term-alternatives.8"),
+            b".Dd August 19, 2026\n.Dt EXTENDED-TERM-ALTERNATIVES 8\n.Os\n.Sh OPTIONS\n\
+.Bl -tag -width Ds\n.It Xo\n.Sm off\n.Ar ipaddr\n.Op / Ar masklen\n.Pp\n\
+.Ar ipaddr\n.Op / Ar prefixlen\n.Sm on\n.Xc\nAccept this peer.\n.El\n",
+        )
+        .expect("lower alternative extended definition terms");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].terms.len(), 2);
+        assert_eq!(inline_text(&items[0].terms[0]), "ipaddr[/masklen]");
+        assert_eq!(inline_text(&items[0].terms[1]), "ipaddr[/prefixlen]");
+    }
+
     fn inline_text(children: &[Inline]) -> String {
         children
             .iter()

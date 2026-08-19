@@ -1513,7 +1513,7 @@ fn definition_item(
     if let Some(id) = definition_head_anchor(node, &term) {
         term.insert(0, Inline::Anchor { id: id.into() });
     }
-    let terms: Vec<Vec<Inline>> = (!term.is_empty()).then_some(term).into_iter().collect();
+    let terms = split_definition_terms(term);
     DefinitionItem {
         identity: None,
         inline_term: terms_fit_inline(&terms, max_term_width),
@@ -1527,6 +1527,30 @@ fn definition_item(
         ),
         spacing_before_lines: None,
     }
+}
+
+/// Split alternatives embedded in one extended mdoc definition head.
+///
+/// libmandoc retains `.Pp` inside `It Xo ... Xc` as an inline child. In that
+/// position it separates equivalent term spellings rather than starting a
+/// new description paragraph. The IR already models such aliases as several
+/// terms on one definition item, so preserve that structure explicitly.
+fn split_definition_terms(term: Vec<Inline>) -> Vec<Vec<Inline>> {
+    let mut terms = Vec::new();
+    let mut current = Vec::new();
+    for node in term {
+        if node == Inline::LineBreak {
+            if !current.is_empty() {
+                terms.push(std::mem::take(&mut current));
+            }
+        } else {
+            current.push(node);
+        }
+    }
+    if !current.is_empty() {
+        terms.push(current);
+    }
+    terms
 }
 
 /// Preserve libmandoc's tag on a man(7) `.TP`/`.IP` head. Unlike mdoc `Fl`

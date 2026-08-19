@@ -253,8 +253,11 @@ pub(super) fn append_inline_node(
             builder.tighten_next_boundary();
         }
         // A roff break ends the current output line, not the paragraph.
-        // Keeping it inline lets every renderer preserve the same flow.
-        Some("br") => builder.hard_break(),
+        // `Pp` can also occur inside an extended mdoc definition head, where
+        // it separates alternative terms without ending the owning item.
+        // Keeping both inline lets the definition lowering retain that
+        // distinction instead of concatenating the alternatives.
+        Some("br" | "Pp") => builder.hard_break(),
         // Formatting requests carry control arguments such as `CW` and `R`.
         // `Es` likewise only changes the delimiters later `En` nodes use;
         // libmandoc resolves those delimiters onto each invocation. These
