@@ -137,6 +137,7 @@ The following macros receive dedicated inline treatment:
 | Visible no-space prefix | `Pf` (prefix retained) |
 | Automatic spacing mode | `Sm on`, `Sm off` |
 | Apostrophe attachment | `Ap` |
+| Function declaration | `Fn` |
 | Multi-line function declaration | `Fo`, `Fa`, `Fc` |
 
 Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
@@ -155,9 +156,9 @@ Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 
 The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter. `Eo` and `Ec` retain their literal, author-supplied delimiters. The obsolete `Es` macro changes parser state but emits no text; libmandoc resolves that state onto each `En` invocation before ManT lowers it.
 
-`Fo` retains the function name from its structural head and joins contained `Fa` arguments into a visible declaration. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2)` rather than discarding the function name.
+`Fn` and `Fo` retain the function name, join their arguments inside parentheses, and preserve the formatter-owned terminating semicolon when libmandoc marks the declaration for synopsis presentation. The same `Fn` in prose remains an inline function reference without a semicolon. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2);` in `SYNOPSIS` rather than discarding the function name or punctuation.
 
-Other standard mdoc semantic macros, including `Fn`, `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
+Other standard mdoc semantic macros, including `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
 
 ## Roff Requests
 
@@ -225,7 +226,7 @@ Color, point size, vertical or non-literal motion, drawing, overstrike, register
 
 `tbl(7)` rows become IR tables. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
 
-Cell text passes through the same roff inline decoder as ordinary prose. Complex nested block markup inside a cell may flatten to the visible cell payload exposed by libmandoc 1.14.6.
+Cell text passes through the same roff inline decoder as ordinary prose. ManT also recognizes a `T{`/`T}` text block containing `.Nm`, because libmandoc 1.14.6 otherwise exposes that cell as empty; an omitted argument resolves to the validated document name. Other complex nested block markup may flatten to the visible cell payload exposed by libmandoc. If an empty semantic text block cannot be recovered from the bounded input source, ManT emits `manual.unhandled-table-text-block` instead of claiming silent fidelity.
 
 ## Equations
 
