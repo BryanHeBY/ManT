@@ -28,6 +28,13 @@ to presentation differences such as wrapping, table traversal, generated
 headers, or reference-renderer token concatenation. `confirmed-fixed` is
 reserved for a real ManT defect with a focused Rust regression.
 
+The small, stricter subset where review establishes that ManT preserves the
+source semantics more usefully than the observed terminal reference is recorded
+separately in [`REFERENCE_RENDERER_DEVIATIONS.csv`](REFERENCE_RENDERER_DEVIATIONS.csv)
+and its [admission guide](REFERENCE_RENDERER_DEVIATIONS.md). Do not promote an
+ordinary presentation difference to that ledger without source, IR, and
+renderer evidence.
+
 The ledger began with the host Arch Linux manual tree and independently
 installed Miniconda manual trees. It also records pinned package corpora so a
 distribution comparison can be repeated without confusing package drift with

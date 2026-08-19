@@ -29,6 +29,8 @@ The same fixed pages can be compared with a local `man(1)`/groff renderer by run
 
 [`../FIDELITY_AUDIT.csv`](../FIDELITY_AUDIT.csv) is the incremental catalogue for wider host-corpus scans; its [ledger guide](../FIDELITY_AUDIT.md) defines the fields and review lifecycle. Unlike the source-specific `VERIFIED_TOPICS.txt` files, which summarize successful parser breadth for reproducible snapshots, the CSV identifies every audited source by corpus, relative path, section, and decompressed-source hash. It also separates the automated signal from the human disposition, so known reference-renderer false positives are not re-investigated on later expansion runs.
 
+[`../STRUCTURE_AUDIT.csv`](../STRUCTURE_AUDIT.csv) independently records AST-to-IR topology checks that content comparison intentionally cannot see: no-fill source lines, list and definition items, table structure, relative indentation, explicit breaks, and typed links. Its batch profiler is local-only and compares ManT's owned libmandoc AST with ManT IR; it neither invokes a host formatter nor widens ordinary CI.
+
 ### `VERIFIED_TOPICS.txt` purpose and principles
 
 These summaries show **which upstream packages have actually been exercised**

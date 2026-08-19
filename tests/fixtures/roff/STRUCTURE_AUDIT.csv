@@ -1,0 +1,4 @@
+corpus,path,section,source_sha256,profile_schema,scan_status,review_status,note
+fixtures,real/archlinux/archive_entry_stat.3,3,06311cf3566f167804ef732defd0e5d1375dd68ceb001713be666de69e58581b,mant.roff-structure-profile/v1,clean,not-required,
+fixtures,real/archlinux/clang.1.gz,1,ff10a1611fc293291388feabf2d988c2c8950c0e784a34d4fcea5b4eb966fce0,mant.roff-structure-profile/v1,review,pending,
+fixtures,real/archlinux/gawk.1.zst,1,d28fc0d5bfdc08f85faaa6267b14223520967f9fdf0730550f12fee880b2ca31,mant.roff-structure-profile/v1,review,pending,
