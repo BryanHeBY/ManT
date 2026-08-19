@@ -120,11 +120,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            zlib1g-dev
+        run: bash scripts/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |
@@ -234,11 +230,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            zlib1g-dev
+        run: bash scripts/install-ci-native-dependencies.sh
 
       - name: Install minimum supported Rust toolchain
         run: rustup toolchain install "$RUST_MSRV" --profile minimal
@@ -273,11 +265,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            zlib1g-dev
+        run: bash scripts/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |

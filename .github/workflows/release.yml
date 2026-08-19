@@ -112,16 +112,13 @@ jobs:
             scripts/build-and-smoke.sh
             scripts/build-and-smoke.ps1
             scripts/finalize-cyclonedx.mjs
+            scripts/install-ci-native-dependencies.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
       - name: Install Linux native dependencies
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            zlib1g-dev
+        run: bash .release-automation/scripts/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |
@@ -313,11 +310,7 @@ jobs:
           persist-credentials: false
 
       - name: Install native publishing dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential \
-            zlib1g-dev
+        run: bash scripts/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |
