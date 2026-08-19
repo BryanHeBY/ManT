@@ -1368,6 +1368,20 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     }
 
     #[test]
+    fn discards_temporary_indent_arguments_without_hiding_the_next_line() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("temporary-indent.8"),
+            b".TH TEMPORARY-INDENT 8\n.SH EXAMPLES\n.ti +8n\nexample% command\n.ti\nexample% other\n",
+        )
+        .expect("lower temporary indentation requests");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one examples paragraph");
+        };
+        assert_eq!(inline_text(children), "example% command example% other");
+    }
+
+    #[test]
     fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
         let mut report = Parser::default()
             .parse_bytes(

@@ -1940,7 +1940,7 @@ fn participates_in_inline_flow(node: &Node) -> bool {
 fn is_nonprinting_request(node: &Node) -> bool {
     matches!(
         node.macro_name.as_deref(),
-        Some("ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta")
+        Some("ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr" | "ta" | "ti")
     )
 }
 
