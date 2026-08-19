@@ -56,10 +56,17 @@ struct ProtocolDescription<'a> {
 /// Normalized fields of a conventional CLI document query.
 struct QueryExecution {
     source: QuerySource,
+    policy: QueryPolicy,
+    output: QueryOutput,
+}
+
+/// Resolved presentation policy shared by single- and multi-document queries.
+#[derive(Debug, Clone, Copy)]
+struct QueryOutput {
     presentation: QueryPresentation,
     pretty: bool,
-    policy: QueryPolicy,
     preserve_anchors: bool,
+    target: presentation::OutputTarget,
 }
 
 /// Terminal capabilities consulted only by the OS process entry point.
@@ -249,7 +256,11 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         &mut diagnostics,
         &host,
         true,
-        terminal.output,
+        if terminal.output {
+            presentation::OutputTarget::Terminal
+        } else {
+            presentation::OutputTarget::Stream
+        },
     )
 }
 
@@ -278,7 +289,12 @@ fn run_paged_catalog(
         Command::Catalog { grouped: false, .. } => "mant --find",
         _ => unreachable!("pager accepts only catalog commands"),
     };
-    let rendered = match execute(command, &mut io::empty(), host, false) {
+    let rendered = match execute(
+        command,
+        &mut io::empty(),
+        host,
+        presentation::OutputTarget::Stream,
+    ) {
         Ok(rendered) => rendered,
         Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
@@ -376,7 +392,7 @@ fn run_with_host(
         diagnostics,
         host,
         diagnostics_color,
-        false,
+        presentation::OutputTarget::Stream,
     )
 }
 
@@ -387,7 +403,7 @@ fn run_command(
     diagnostics: &mut dyn Write,
     host: &dyn CliHost,
     diagnostics_color: bool,
-    output_terminal: bool,
+    output_target: presentation::OutputTarget,
 ) -> u8 {
     if matches!(command, Command::Mcp) {
         return report_failure(
@@ -459,7 +475,7 @@ fn run_command(
             };
             (rendered, status)
         }
-        command => match execute(command, input, host, output_terminal) {
+        command => match execute(command, input, host, output_target) {
             Ok(rendered) => (rendered, 0),
             Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
         },
@@ -476,7 +492,7 @@ fn execute(
     command: Command,
     input: &mut dyn Read,
     host: &dyn CliHost,
-    output_terminal: bool,
+    output_target: presentation::OutputTarget,
 ) -> Result<String, Failure> {
     match command {
         Command::Help(help) => Ok(help),
@@ -566,14 +582,16 @@ fn execute(
         } => execute_query(
             QueryExecution {
                 source,
-                presentation,
-                pretty,
                 policy,
-                preserve_anchors,
+                output: QueryOutput {
+                    presentation,
+                    pretty,
+                    preserve_anchors,
+                    target: output_target,
+                },
             },
             input,
             host,
-            output_terminal,
         ),
     }
 }
@@ -583,39 +601,20 @@ fn execute_query(
     command: QueryExecution,
     input: &mut dyn Read,
     host: &dyn CliHost,
-    output_terminal: bool,
 ) -> Result<String, Failure> {
     let QueryExecution {
         source,
-        presentation,
-        pretty,
         policy,
-        preserve_anchors,
+        output,
     } = command;
     let source = match source {
         QuerySource::ScopeArguments { scope, view } => {
-            return execute_scope_arguments(
-                scope,
-                view,
-                presentation,
-                pretty,
-                policy,
-                preserve_anchors,
-                host,
-                output_terminal,
-            );
+            return execute_scope_arguments(scope, view, output, policy, host);
         }
         QuerySource::StdinJson => match read_native_request(input)? {
             NativeRequest::Query(request) => QuerySource::Arguments(request),
             NativeRequest::Scope(request) => {
-                return execute_scope_request(
-                    &request,
-                    presentation,
-                    pretty,
-                    preserve_anchors,
-                    host,
-                    output_terminal,
-                );
+                return execute_scope_request(&request, output, host);
             }
         },
         source => source,
@@ -646,7 +645,7 @@ fn execute_query(
                 .map_err(query_execution_failure)?
         }
     };
-    if let QueryPresentation::Tldr(color) = presentation {
+    if let QueryPresentation::Tldr(color) = output.presentation {
         let mant_engine::QueryViewResult::Excerpt(mant_protocol::QueryExcerpt {
             selections, ..
         }) = &result
@@ -669,7 +668,7 @@ fn execute_query(
             },
         );
     }
-    let (format, color) = match presentation {
+    let (format, color) = match output.presentation {
         QueryPresentation::Auto => (QueryFormat::Markdown, ColorMode::Never),
         QueryPresentation::Output { format, color } => (format, color),
         QueryPresentation::Interactive => {
@@ -681,23 +680,22 @@ fn execute_query(
     };
     render_query_result(
         &result,
-        format,
-        pretty,
-        preserve_anchors,
-        color == ColorMode::Always,
-        output_terminal,
+        presentation::RenderOptions {
+            format,
+            pretty: output.pretty,
+            preserve_anchors: output.preserve_anchors,
+            color: color == ColorMode::Always,
+            target: output.target,
+        },
     )
 }
 
 fn execute_scope_arguments(
     scope: mant_protocol::DocumentScope,
     view: Option<mant_protocol::ScopeQueryView>,
-    presentation: QueryPresentation,
-    pretty: bool,
+    output: QueryOutput,
     policy: QueryPolicy,
-    preserve_anchors: bool,
     host: &dyn CliHost,
-    output_terminal: bool,
 ) -> Result<String, Failure> {
     let Some(view) = view else {
         return Err(Failure::usage(
@@ -714,26 +712,16 @@ fn execute_scope_arguments(
         scope,
         view,
     };
-    execute_scope_request(
-        &request,
-        presentation,
-        pretty,
-        preserve_anchors,
-        host,
-        output_terminal,
-    )
+    execute_scope_request(&request, output, host)
 }
 
 fn execute_scope_request(
     request: &ScopeQueryRequest,
-    presentation: QueryPresentation,
-    pretty: bool,
-    preserve_anchors: bool,
+    output: QueryOutput,
     host: &dyn CliHost,
-    output_terminal: bool,
 ) -> Result<String, Failure> {
     let response = host.query_scope(request)?;
-    let (format, color) = match presentation {
+    let (format, color) = match output.presentation {
         QueryPresentation::Output { format, color } => (format, color),
         QueryPresentation::Auto => (QueryFormat::Markdown, ColorMode::Never),
         QueryPresentation::Interactive | QueryPresentation::Tldr(_) => {
@@ -744,11 +732,13 @@ fn execute_scope_request(
     };
     presentation::render_scope_query_result(
         &response,
-        format,
-        pretty,
-        preserve_anchors,
-        color == ColorMode::Always,
-        output_terminal,
+        presentation::RenderOptions {
+            format,
+            pretty: output.pretty,
+            preserve_anchors: output.preserve_anchors,
+            color: color == ColorMode::Always,
+            target: output.target,
+        },
     )
 }
 

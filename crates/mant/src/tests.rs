@@ -461,7 +461,7 @@ fn invoke_with_terminal_output(
         &mut diagnostics,
         host,
         false,
-        true,
+        super::presentation::OutputTarget::Terminal,
     );
     (
         status,

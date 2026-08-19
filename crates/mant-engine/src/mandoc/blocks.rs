@@ -202,12 +202,7 @@ fn lower_blocks(
         } else if node.macro_name.as_deref() == Some("br") {
             state.hard_break();
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            state.push_inline(
-                lower_man_link(node, context.default_name),
-                source_span(node),
-                starts_indented_filled_line(node),
-                ends_with_line_continuation(node),
-            );
+            push_man_link(&mut state, node, context.default_name);
         } else if is_inline(node) {
             if node.flags.delimiter_close {
                 state.tighten_next_boundary();
@@ -231,6 +226,16 @@ fn lower_blocks(
         }
     }
     state.finish()
+}
+
+/// Keep man-ext links inside the surrounding filled flow.
+fn push_man_link(state: &mut BlockState, node: &Node, default_name: Option<&str>) {
+    state.push_inline(
+        lower_man_link(node, default_name),
+        source_span(node),
+        starts_indented_filled_line(node),
+        ends_with_line_continuation(node),
+    );
 }
 
 /// Lower one source-level no-fill line owner without letting structural macros

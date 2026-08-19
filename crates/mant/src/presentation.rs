@@ -15,6 +15,29 @@ use serde::Serialize;
 
 use crate::{arguments::QueryFormat, error::Failure};
 
+/// Physical destination characteristics that may affect terminal safety only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OutputTarget {
+    Stream,
+    Terminal,
+}
+
+/// Complete rendering policy after command-line defaults have been resolved.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct RenderOptions {
+    pub(super) format: QueryFormat,
+    pub(super) pretty: bool,
+    pub(super) preserve_anchors: bool,
+    pub(super) color: bool,
+    pub(super) target: OutputTarget,
+}
+
+impl RenderOptions {
+    const fn terminal(self) -> bool {
+        matches!(self.target, OutputTarget::Terminal)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TerminalRole {
     Document,
@@ -372,16 +395,17 @@ fn sanitize_terminal_meta(meta: &mut DocumentMeta) {
 
 pub(super) fn render_query_result(
     result: &QueryViewResult,
-    format: QueryFormat,
-    pretty: bool,
-    preserve_anchors: bool,
-    color: bool,
-    output_terminal: bool,
+    options: RenderOptions,
 ) -> Result<String, Failure> {
+    let RenderOptions {
+        format,
+        pretty,
+        color,
+        ..
+    } = options;
+    let output_terminal = options.terminal();
     match result {
-        QueryViewResult::Full(query) => {
-            render_full_query(query, format, pretty, preserve_anchors, output_terminal)
-        }
+        QueryViewResult::Full(query) => render_full_query(query, options),
         QueryViewResult::Outline(outline) => match format {
             QueryFormat::Markdown if output_terminal => Ok(mant_engine::render_outline_markdown(
                 &terminal_outline(outline),
@@ -395,14 +419,7 @@ pub(super) fn render_query_result(
                 mant_engine::render_outline_json(outline, pretty).map_err(Failure::operational)
             }
         },
-        QueryViewResult::Excerpt(excerpt) => render_excerpt(
-            excerpt,
-            format,
-            pretty,
-            preserve_anchors,
-            color,
-            output_terminal,
-        ),
+        QueryViewResult::Excerpt(excerpt) => render_excerpt(excerpt, options),
         QueryViewResult::Search(search) => match format {
             QueryFormat::Markdown if output_terminal => Ok(mant_engine::render_search_markdown(
                 &terminal_search(search),
@@ -421,12 +438,16 @@ pub(super) fn render_query_result(
 
 pub(super) fn render_scope_query_result(
     response: &ScopeQueryResponse,
-    format: QueryFormat,
-    pretty: bool,
-    preserve_anchors: bool,
-    color: bool,
-    output_terminal: bool,
+    options: RenderOptions,
 ) -> Result<String, Failure> {
+    let RenderOptions {
+        format,
+        pretty,
+        preserve_anchors,
+        color,
+        ..
+    } = options;
+    let output_terminal = options.terminal();
     if format == QueryFormat::Json {
         return render_json(response, pretty);
     }
@@ -542,12 +563,16 @@ fn write_scope_heading(
 
 fn render_excerpt(
     excerpt: &mant_protocol::QueryExcerpt,
-    format: QueryFormat,
-    pretty: bool,
-    preserve_anchors: bool,
-    color: bool,
-    output_terminal: bool,
+    options: RenderOptions,
 ) -> Result<String, Failure> {
+    let RenderOptions {
+        format,
+        pretty,
+        preserve_anchors,
+        color,
+        ..
+    } = options;
+    let output_terminal = options.terminal();
     match format {
         QueryFormat::Markdown => {
             let terminal_copy = output_terminal.then(|| terminal_excerpt(excerpt));
@@ -566,13 +591,14 @@ fn render_excerpt(
     }
 }
 
-fn render_full_query(
-    query: &ResolvedContent,
-    format: QueryFormat,
-    pretty: bool,
-    preserve_anchors: bool,
-    output_terminal: bool,
-) -> Result<String, Failure> {
+fn render_full_query(query: &ResolvedContent, options: RenderOptions) -> Result<String, Failure> {
+    let RenderOptions {
+        format,
+        pretty,
+        preserve_anchors,
+        ..
+    } = options;
+    let output_terminal = options.terminal();
     match format {
         QueryFormat::Markdown => {
             let terminal_copy = output_terminal.then(|| terminal_content(query));
@@ -618,7 +644,7 @@ mod tests {
     use mant_engine::{project_query_view, query_markdown_text};
     use mant_protocol::{OutlineDetail, QueryView};
 
-    use super::{QueryFormat, render_query_result};
+    use super::{OutputTarget, QueryFormat, RenderOptions, render_query_result};
 
     const PAGE: &str = r"# demo
 
@@ -652,10 +678,16 @@ The selected color is visible in terminal output.
         ] {
             let query = query_markdown_text(PAGE, None).expect("Markdown query");
             let result = project_query_view(query, &view).expect("query projection");
-            let plain = render_query_result(&result, QueryFormat::Text, true, false, false, false)
-                .expect("plain terminal text");
-            let colored = render_query_result(&result, QueryFormat::Text, true, false, true, true)
-                .expect("colored terminal text");
+            let plain = render_query_result(
+                &result,
+                options(QueryFormat::Text, false, OutputTarget::Stream),
+            )
+            .expect("plain terminal text");
+            let colored = render_query_result(
+                &result,
+                options(QueryFormat::Text, true, OutputTarget::Terminal),
+            )
+            .expect("colored terminal text");
             assert!(colored.contains("\x1b["));
             assert_eq!(strip_ansi(&colored), plain);
         }
@@ -672,8 +704,9 @@ The selected color is visible in terminal output.
         )
         .expect("explanation");
         for format in [QueryFormat::Markdown, QueryFormat::Json] {
-            let rendered = render_query_result(&result, format, true, false, true, false)
-                .expect("deterministic output");
+            let rendered =
+                render_query_result(&result, options(format, true, OutputTarget::Stream))
+                    .expect("deterministic output");
             assert!(!rendered.contains("\x1b["));
         }
     }
@@ -705,9 +738,11 @@ The selected color is visible in terminal output.
             let query = query_markdown_text(PAGE, Some(source_path.clone()))
                 .expect("Markdown query with hostile label");
             let result = project_query_view(query, &view).expect("query projection");
-            let rendered =
-                render_query_result(&result, QueryFormat::Text, true, false, false, true)
-                    .expect("plain terminal text");
+            let rendered = render_query_result(
+                &result,
+                options(QueryFormat::Text, false, OutputTarget::Terminal),
+            )
+            .expect("plain terminal text");
 
             assert!(!rendered.contains('\u{1b}'));
             assert!(rendered.contains("ev�[31mil.md"));
@@ -739,16 +774,30 @@ The selected color is visible in terminal output.
             let query = query_markdown_text(PAGE, Some(source_path.clone()))
                 .expect("Markdown query with hostile label");
             let result = project_query_view(query, &view).expect("query projection");
-            let redirected =
-                render_query_result(&result, QueryFormat::Markdown, true, false, false, false)
-                    .expect("redirected Markdown");
-            let terminal =
-                render_query_result(&result, QueryFormat::Markdown, true, false, false, true)
-                    .expect("terminal Markdown");
+            let redirected = render_query_result(
+                &result,
+                options(QueryFormat::Markdown, false, OutputTarget::Stream),
+            )
+            .expect("redirected Markdown");
+            let terminal = render_query_result(
+                &result,
+                options(QueryFormat::Markdown, false, OutputTarget::Terminal),
+            )
+            .expect("terminal Markdown");
 
             assert!(redirected.contains('\u{1b}'));
             assert!(!terminal.contains('\u{1b}'));
             assert!(terminal.contains("ris�c.md"));
+        }
+    }
+
+    const fn options(format: QueryFormat, color: bool, target: OutputTarget) -> RenderOptions {
+        RenderOptions {
+            format,
+            pretty: true,
+            preserve_anchors: false,
+            color,
+            target,
         }
     }
 
