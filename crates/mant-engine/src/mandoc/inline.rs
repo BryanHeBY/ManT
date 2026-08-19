@@ -634,21 +634,46 @@ fn lower_link(
         return Vec::new();
     }
     let label = lower_inline_nodes_with_spacing(&children[1..], default_name, spacing_enabled);
+    lower_external_link(address, label, email)
+}
+
+/// Build an mdoc external link without allowing punctuation to hide its target.
+///
+/// `Lk` and `Mt` accept ordinary trailing sentence punctuation as an argument.
+/// It is not a descriptive label: a source spelling such as `.Lk URL .` must
+/// render `URL.` rather than an otherwise invisible link whose only child is
+/// `.`. The same policy is shared with the source fallback below.
+fn lower_external_link(address: String, label: Vec<Inline>, email: bool) -> Vec<Inline> {
+    let punctuation_only = is_source_closing_punctuation(&plain_text(&label));
+    if punctuation_only {
+        let children = text_node(&address);
+        let target = external_link_target(address, email);
+        let mut output = vec![Inline::Link {
+            target,
+            title: None,
+            children,
+        }];
+        output.extend(label);
+        return output;
+    }
     let children = if label.is_empty() {
         text_node(&address)
     } else {
         label
     };
-    let target = if email {
-        mant_ir::LinkTarget::Email { address }
-    } else {
-        mant_ir::LinkTarget::External { uri: address }
-    };
     vec![Inline::Link {
-        target,
+        target: external_link_target(address, email),
         title: None,
         children,
     }]
+}
+
+fn external_link_target(address: String, email: bool) -> mant_ir::LinkTarget {
+    if email {
+        mant_ir::LinkTarget::Email { address }
+    } else {
+        mant_ir::LinkTarget::External { uri: address }
+    }
 }
 
 /// Lower GNU man-ext `.UR` and `.MT` blocks as one inline phrase.
@@ -934,22 +959,7 @@ fn source_external_link(arguments: &[String], email: bool) -> Vec<Inline> {
     let label = parse_roff_text(&source_argument_text(
         arguments.get(1..).unwrap_or_default(),
     ));
-    let children = if label.is_empty() {
-        text_node(&destination)
-    } else {
-        label
-    };
-    vec![Inline::Link {
-        target: if email {
-            mant_ir::LinkTarget::Email {
-                address: destination,
-            }
-        } else {
-            mant_ir::LinkTarget::External { uri: destination }
-        },
-        title: None,
-        children,
-    }]
+    lower_external_link(destination, label, email)
 }
 
 fn source_function(arguments: &[String]) -> Vec<Inline> {
@@ -1335,7 +1345,9 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Font, parse_roff_text, parse_roff_text_with_font, plain_text};
+    use super::{
+        Font, parse_roff_text, parse_roff_text_with_font, plain_text, source_external_link,
+    };
     use mant_ir::Inline;
 
     #[test]
@@ -1358,6 +1370,29 @@ mod tests {
         let source = r"[\|optional\|]\&.\|.\|. \||\|";
 
         assert_eq!(plain_text(&parse_roff_text(source)), "[optional]... |");
+    }
+
+    #[test]
+    fn source_external_links_keep_an_unlabelled_target_visible_before_punctuation() {
+        let nodes = source_external_link(
+            &["https://example.test/books".to_owned(), ".".to_owned()],
+            false,
+        );
+
+        assert_eq!(plain_text(&nodes), "https://example.test/books.");
+        assert!(matches!(
+            nodes.as_slice(),
+            [
+                Inline::Link {
+                    target: mant_ir::LinkTarget::External { uri },
+                    children,
+                    ..
+                },
+                Inline::Text { value },
+            ] if uri == "https://example.test/books"
+                && plain_text(children) == "https://example.test/books"
+                && value == "."
+        ));
     }
 
     #[test]

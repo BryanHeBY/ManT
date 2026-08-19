@@ -1047,6 +1047,33 @@ The next line.\n",
     }
 
     #[test]
+    fn retains_unlabelled_mdoc_link_targets_before_trailing_punctuation() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("external-link.9"),
+            b".Dd August 19, 2026\n.Dt EXTERNAL-LINK 9\n.Os\n.Sh DESCRIPTION\n.Lk https://example.test/books .\n",
+        )
+        .expect("lower an unlabelled mdoc external link");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one external-link paragraph");
+        };
+        assert_eq!(inline_text(children), "https://example.test/books.");
+        assert!(matches!(
+            children.as_slice(),
+            [
+                Inline::Link {
+                    target: mant_ir::LinkTarget::External { uri },
+                    children: link_children,
+                    ..
+                },
+                Inline::Text { value },
+            ] if uri == "https://example.test/books"
+                && inline_text(link_children) == "https://example.test/books"
+                && value == "."
+        ));
+    }
+
+    #[test]
     fn preserves_complete_mdoc_include_directives() {
         let document = parse_manual_bytes(
             std::path::Path::new("include.3"),
