@@ -41,7 +41,7 @@ a parser regression:
 | `openbsd-7.9-amd64` | Official OpenBSD 7.9 `man79.tgz` for amd64 | 150 syntax-prioritized pages from 2,902 distinct sources | 139 clean after fixes; 11 reviewed formatter and Pod token-boundary differences |
 | `netbsd-10.1-amd64` | Official NetBSD 10.1 amd64 `man.tar.xz` set | 146 syntax-prioritized pages from 2,544 distinct sources | 138 clean after fixes; 8 reviewed formatter and terminal-layout differences |
 | `freebsd-15.1-amd64` | Official FreeBSD 15.1-RELEASE amd64 `base.txz` | 237 stable and syntax-prioritized pages from 11,183 paths / 4,085 distinct sources | 224 clean; 5 real lowering defects fixed; 8 reviewed formatter or reference-renderer differences |
-| `illumos-gate-e8f5c080` | Official illumos-gate read-only mirror at commit `e8f5c080` | 170 stable and syntax-prioritized pages from 4,627 distinct sources | 167 clean; 3 reviewed equation-layout, standards-wording, or reference-table differences |
+| `illumos-gate-e8f5c080` | Official illumos-gate read-only mirror at commit `e8f5c080` | 918 stable, syntax-prioritized, section-balanced, and source-directed pages from 4,627 distinct sources | 914 clean automated scans; 4 reviewed reference-renderer differences; 1 mdoc link-lowering defect fixed |
 | `apple-oss-manpages-pinned` | Apple `bsdmanpages-56` and `man-171` source tags | 36 syntax-prioritized pages | 34 clean; 2 aliases whose targets are absent from the individual official source repositories |
 | `apple-oss-command-repos-pinned` | Apple `shell_cmds-329`, `file_cmds-479`, and `system_cmds-1042.120.1` source tags | 70 syntax-prioritized pages from 185 sources | 66 clean; 1 real request-lowering defect fixed; 3 source-layout or formatter differences reviewed |
 | `generator-ronn-scdoc-pinned` | ronn-ng `v0.10.1` committed output and scdoc `1.9.7` locally generated output | All 4 generated pages | 4 clean; no candidate findings |
@@ -72,10 +72,15 @@ flattened inside `tbl` text cells; nested `Sm` state lost between structural
 siblings; `.Pp`-separated alternatives concatenated inside extended
 definition heads; and punctuation following implicit mdoc enclosures silently
 discarded. Each defect was checked in the real page and reduced to a focused
-Rust regression. The illumos sample added SysV-derived section families and
-traditional man/eqn inputs without exposing a new content-loss defect. Its
-remaining equation finding is terminal fraction-bar geometry rather than a
-missing operand or operator.
+Rust regression. The initial illumos sample added SysV-derived section families
+and traditional man/eqn inputs; its equation finding is terminal fraction-bar
+geometry rather than a missing operand or operator. A later balanced 746-page
+pass across all section suffixes found one general mdoc defect: `.Lk URL .`
+treated sentence punctuation as its visible label, hiding the URL in text
+renderers. Link lowering now keeps an unlabeled target visible and appends the
+punctuation outside the link. The remaining new `csh(1has)` candidate is a
+reference tokenisation artefact: its definition term and following body remain
+separate and intact in ManT.
 
 The Alpine 3.24.1 pass adds a musl-based Linux release plus BusyBox, OpenSSL's
 Pod-derived pages, and util-linux generated manuals. It manually inspected all
