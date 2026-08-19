@@ -8,7 +8,7 @@ use mant_ir::Inline;
 pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
 use super::{
-    part_children,
+    first_part_children,
     reference::trailing_sphinx_manual_reference,
     roff_escape::{RoffFont as Font, RoffInlineEvent, decode, visible_text},
 };
@@ -256,9 +256,9 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         }
         Some("Fo") => lower_function_declaration(node, default_name),
         Some("Eo") => surround_fragments(
-            lower_inline_nodes(part_children(node, NodeKind::Head), default_name),
+            lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name),
             lowered,
-            lower_inline_nodes(part_children(node, NodeKind::Tail), default_name),
+            lower_inline_nodes(first_part_children(node, NodeKind::Tail), default_name),
         ),
         Some("En") => match node.enclosure.as_ref() {
             Some(enclosure) => surround(
@@ -285,8 +285,8 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
 }
 
 fn lower_function_declaration(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
-    let head = lower_inline_nodes(part_children(node, NodeKind::Head), default_name);
-    let body = part_children(node, NodeKind::Body);
+    let head = lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name);
+    let body = first_part_children(node, NodeKind::Body);
     if head.is_empty() {
         return lower_inline_nodes(body, default_name);
     }
@@ -346,7 +346,7 @@ fn navigation_anchor(node: &Node, lowered: &[Inline]) -> Option<Inline> {
 }
 
 fn inline_children(node: &Node) -> &[Node] {
-    let body = part_children(node, NodeKind::Body);
+    let body = first_part_children(node, NodeKind::Body);
     if body.is_empty() {
         &node.children
     } else {
@@ -417,14 +417,14 @@ fn lower_link(children: &[Node], default_name: Option<&str>, email: bool) -> Vec
 /// retain both pieces of source information.
 pub(super) fn lower_man_link(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
     let target = plain_text(&lower_inline_nodes(
-        part_children(node, NodeKind::Head),
+        first_part_children(node, NodeKind::Head),
         default_name,
     ));
     if target.is_empty() {
-        return lower_inline_nodes(part_children(node, NodeKind::Body), default_name);
+        return lower_inline_nodes(first_part_children(node, NodeKind::Body), default_name);
     }
 
-    let label = lower_inline_nodes(part_children(node, NodeKind::Body), default_name);
+    let label = lower_inline_nodes(first_part_children(node, NodeKind::Body), default_name);
     let has_label = !label.is_empty();
     let children = if has_label { label } else { text_node(&target) };
     let link_target = if node.macro_name.as_deref() == Some("MT") {
@@ -447,7 +447,7 @@ pub(super) fn lower_man_link(node: &Node, default_name: Option<&str>) -> Vec<Inl
         });
     }
     output.extend(lower_inline_nodes(
-        part_children(node, NodeKind::Tail),
+        first_part_children(node, NodeKind::Tail),
         default_name,
     ));
     output

@@ -217,7 +217,7 @@ impl<'a> LoweringContext<'a> {
             level: DiagnosticLevel::Warning,
             code: Some("manual.unhandled-structural-parts".to_owned()),
             message: format!(
-                "structural macro '{macro_name}' contains visible head or tail content without a lowering policy"
+                "structural macro '{macro_name}' contains parts without a complete lowering policy"
             ),
             source: source_span(node),
         });
@@ -238,11 +238,24 @@ fn source_span(node: &Node) -> Option<SourceSpan> {
     })
 }
 
-fn part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
+/// Return the first libmandoc structural part of one kind.
+///
+/// Most semantic macros own at most one head, body, and tail. Callers whose
+/// grammar permits repeated parts must use [`part_child_groups`] instead so
+/// the multiplicity remains explicit at the lowering boundary.
+fn first_part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
     node.children
         .iter()
         .find(|child| child.kind == kind)
         .map_or(&[], |child| child.children.as_slice())
+}
+
+/// Iterate every libmandoc structural part of one kind in source order.
+fn part_child_groups(node: &Node, kind: libmandoc_rs::NodeKind) -> impl Iterator<Item = &[Node]> {
+    node.children
+        .iter()
+        .filter(move |child| child.kind == kind)
+        .map(|child| child.children.as_slice())
 }
 
 #[cfg(test)]
@@ -269,6 +282,16 @@ mod tests {
         node.children
             .iter_mut()
             .find_map(|child| find_macro_mut(child, name))
+    }
+
+    fn replace_first_text(node: &mut libmandoc_rs::Node, value: &str) -> bool {
+        if let Some(text) = node.text.as_mut() {
+            *text = value.to_owned();
+            return true;
+        }
+        node.children
+            .iter_mut()
+            .any(|child| replace_first_text(child, value))
     }
 
     #[test]
@@ -1184,6 +1207,14 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
             .expect("parse structural fixture");
         let block = find_macro_mut(&mut report.document.root, "Fo").expect("Fo block");
         block.macro_name = Some("FutureBlock".to_owned());
+        let mut second_body = block
+            .children
+            .iter()
+            .find(|child| child.kind == libmandoc_rs::NodeKind::Body)
+            .cloned()
+            .expect("function body");
+        assert!(replace_first_text(&mut second_body, "second_argument"));
+        block.children.push(second_body);
 
         let document = lower_mandoc_document(std::path::Path::new("future-structure.1"), &report);
 
@@ -1191,6 +1222,15 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
             diagnostic.code.as_deref() == Some("manual.unhandled-structural-parts")
                 && diagnostic.message.contains("FutureBlock")
         }));
+        let rendered = document.sections[0]
+            .blocks
+            .iter()
+            .map(|block| match block {
+                Block::Paragraph { children, .. } => inline_text(children),
+                block => panic!("expected fallback paragraph, got {block:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(rendered, ["argument", "second_argument"]);
     }
 
     #[test]

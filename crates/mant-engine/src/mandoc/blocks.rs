@@ -10,7 +10,7 @@ use mant_ir::{
 };
 
 use super::{
-    LoweringContext,
+    LoweringContext, first_part_children,
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
         lower_man_link, parse_roff_text, plain_text, terms_fit_inline,
@@ -20,7 +20,7 @@ use super::{
         layout_with_spacing, normalize_explicit_vertical_spacing, section_spacing,
         set_block_spacing, update_paragraph_distance, vertical_distance_lines,
     },
-    part_children,
+    part_child_groups,
     roff_escape::visible_text,
     source_span,
 };
@@ -67,7 +67,7 @@ pub(super) fn lower_root_blocks(root: &Node, context: &LoweringContext<'_>) -> V
     let mut paragraph_distance = 1;
     let mut start = 0;
     for (index, node) in root.children.iter().enumerate() {
-        if !is_section(node, true) {
+        if !is_section(node, true) && !is_section(node, false) {
             continue;
         }
         output.extend(lower_blocks(
@@ -103,12 +103,15 @@ fn lower_section(
     spacing_before_lines: u16,
     paragraph_distance: &mut u16,
 ) -> Section {
-    let heading = lower_inline_nodes(part_children(node, NodeKind::Head), context.default_name);
+    let heading = lower_inline_nodes(
+        first_part_children(node, NodeKind::Head),
+        context.default_name,
+    );
     let title = plain_text(&heading).trim().to_owned();
     // Allocate IDs in visible document order. Besides being deterministic for
     // consumers, this makes `.Sx` resolution independent of tree recursion.
     let id = context.section_id(&title);
-    let body = part_children(node, NodeKind::Body);
+    let body = first_part_children(node, NodeKind::Body);
     let first_subsection = body
         .iter()
         .position(|child| is_section(child, false))
@@ -202,7 +205,10 @@ fn lower_blocks(
             continue;
         }
         state.flush_preformatted();
-        if node.flags.delimiter_close && is_inline(node) && state.paragraph.is_empty() {
+        if node.flags.delimiter_close
+            && participates_in_inline_flow(node)
+            && state.paragraph.is_empty()
+        {
             let tail = lower_inline_nodes(std::slice::from_ref(node), context.default_name);
             if append_to_last_inline_block(&mut state.output, &tail) {
                 continue;
@@ -228,7 +234,7 @@ fn lower_blocks(
             state.hard_break();
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
             push_man_link(&mut state, node, context.default_name);
-        } else if is_inline(node) {
+        } else if participates_in_inline_flow(node) {
             let source = source_span(node);
             if node.flags.delimiter_close || node.macro_name.as_deref() == Some("Ns") {
                 state.tighten_next_boundary();
@@ -317,25 +323,25 @@ struct LoweredNoFillLine {
 }
 
 fn lower_no_fill_lines(node: &Node, default_name: Option<&str>) -> Option<Vec<LoweredNoFillLine>> {
-    if node.flags.no_fill && is_inline(node) {
+    if node.flags.no_fill && participates_in_inline_flow(node) {
         return Some(vec![LoweredNoFillLine {
             nodes: lower_inline_nodes(std::slice::from_ref(node), default_name),
             source: source_span(node),
             continues_line: ends_with_line_continuation(node),
         }]);
     }
-    let body = part_children(node, NodeKind::Body);
+    let body = first_part_children(node, NodeKind::Body);
     if node.macro_name.as_deref() != Some("SY") || !body.iter().any(|child| child.flags.no_fill) {
         return None;
     }
 
     let mut lines = Vec::new();
-    let head = lower_inline_nodes(part_children(node, NodeKind::Head), default_name);
+    let head = lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name);
     if !head.is_empty() {
         lines.push(LoweredNoFillLine {
             nodes: vec![Inline::Strong { children: head }],
             source: source_span(node),
-            continues_line: part_children(node, NodeKind::Head)
+            continues_line: first_part_children(node, NodeKind::Head)
                 .last()
                 .is_some_and(ends_with_line_continuation),
         });
@@ -369,7 +375,7 @@ fn lower_structural_node(
                 *paragraph_distance
             };
             let nested = lower_blocks(
-                part_children(node, NodeKind::Body),
+                first_part_children(node, NodeKind::Body),
                 context,
                 indent_columns,
                 paragraph_distance,
@@ -395,7 +401,7 @@ fn lower_structural_node(
         }
         Some("Bf") => {
             let mut nested = lower_blocks(
-                part_children(node, NodeKind::Body),
+                first_part_children(node, NodeKind::Body),
                 context,
                 indent_columns,
                 paragraph_distance,
@@ -408,7 +414,7 @@ fn lower_structural_node(
         Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
             let spacing_before = u16::from(!output.is_empty() && !node.compact);
             let nested = lower_blocks(
-                part_children(node, NodeKind::Body),
+                first_part_children(node, NodeKind::Body),
                 context,
                 indent_columns + display_indent(node),
                 paragraph_distance,
@@ -424,8 +430,10 @@ fn lower_structural_node(
             output.push(block);
         }
         Some("Rs") => {
-            let children =
-                lower_inline_nodes(part_children(node, NodeKind::Body), context.default_name);
+            let children = lower_inline_nodes(
+                first_part_children(node, NodeKind::Body),
+                context.default_name,
+            );
             if !children.is_empty() {
                 output.push(Block::Paragraph {
                     children,
@@ -436,7 +444,7 @@ fn lower_structural_node(
         }
         Some("RS") => {
             let nested = lower_blocks(
-                part_children(node, NodeKind::Body),
+                first_part_children(node, NodeKind::Body),
                 context,
                 indent_columns + 4,
                 paragraph_distance,
@@ -462,25 +470,34 @@ fn lower_structural_fallback(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) {
-    let body = part_children(node, NodeKind::Body);
-    let head = part_children(node, NodeKind::Head);
-    let tail = part_children(node, NodeKind::Tail);
-    if parts_have_visible_text(head, context.default_name)
-        || parts_have_visible_text(tail, context.default_name)
+    let heads = part_child_groups(node, NodeKind::Head).collect::<Vec<_>>();
+    let bodies = part_child_groups(node, NodeKind::Body).collect::<Vec<_>>();
+    let tails = part_child_groups(node, NodeKind::Tail).collect::<Vec<_>>();
+    if heads
+        .iter()
+        .chain(&tails)
+        .any(|part| parts_have_visible_text(part, context.default_name))
+        || bodies.len() > 1
     {
         context.warn_unhandled_structural_parts(node);
     }
-    let children = if body.is_empty() {
-        node.children.as_slice()
+    if bodies.is_empty() {
+        output.extend(lower_blocks(
+            node.children.as_slice(),
+            context,
+            indent_columns,
+            paragraph_distance,
+        ));
     } else {
-        body
-    };
-    output.extend(lower_blocks(
-        children,
-        context,
-        indent_columns,
-        paragraph_distance,
-    ));
+        for body in bodies {
+            output.extend(lower_blocks(
+                body,
+                context,
+                indent_columns,
+                paragraph_distance,
+            ));
+        }
+    }
 }
 
 fn parts_have_visible_text(nodes: &[Node], default_name: Option<&str>) -> bool {
@@ -529,9 +546,12 @@ fn lower_synopsis_head(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) {
-    let head = lower_inline_nodes(part_children(node, NodeKind::Head), context.default_name);
+    let head = lower_inline_nodes(
+        first_part_children(node, NodeKind::Head),
+        context.default_name,
+    );
     let mut nested = lower_blocks(
-        part_children(node, NodeKind::Body),
+        first_part_children(node, NodeKind::Body),
         context,
         indent_columns,
         paragraph_distance,
@@ -909,7 +929,7 @@ fn lower_mdoc_list(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) -> Block {
-    let items: Vec<&Node> = part_children(node, NodeKind::Body)
+    let items: Vec<&Node> = first_part_children(node, NodeKind::Body)
         .iter()
         .filter(|child| child.macro_name.as_deref() == Some("It"))
         .collect();
@@ -919,7 +939,7 @@ fn lower_mdoc_list(
     ) || (node.list_kind.is_none()
         && items
             .iter()
-            .any(|item| !part_children(item, NodeKind::Head).is_empty()));
+            .any(|item| !first_part_children(item, NodeKind::Head).is_empty()));
     let list_indent = indent_columns + display_indent(node);
     if node.list_kind == Some(NormalizedListKind::Column) {
         return lower_mdoc_column_list(
@@ -967,7 +987,7 @@ fn lower_mdoc_list(
                 .into_iter()
                 .map(|item| ListItem {
                     blocks: lower_blocks(
-                        part_children(item, NodeKind::Body),
+                        first_part_children(item, NodeKind::Body),
                         context,
                         list_indent,
                         paragraph_distance,
@@ -997,17 +1017,9 @@ fn lower_mdoc_column_list(
     let rows = items
         .into_iter()
         .map(|item| {
-            let mut cells = item
-                .children
-                .iter()
-                .filter(|part| part.kind == NodeKind::Body)
+            let mut cells = part_child_groups(item, NodeKind::Body)
                 .map(|body| AstTableCell {
-                    blocks: lower_blocks(
-                        body.children.as_slice(),
-                        context,
-                        cell_indent,
-                        paragraph_distance,
-                    ),
+                    blocks: lower_blocks(body, context, cell_indent, paragraph_distance),
                     column_span: 1,
                     row_span: 1,
                     alignment: Some(AstTableAlignment::Left),
@@ -1048,7 +1060,7 @@ fn definition_item(
         inline_term: terms_fit_inline(&terms, max_term_width),
         terms,
         description: lower_blocks(
-            part_children(node, NodeKind::Body),
+            first_part_children(node, NodeKind::Body),
             context,
             indent_columns + 4,
             paragraph_distance,
@@ -1085,7 +1097,7 @@ fn definition_head_anchor(node: &Node, term: &[Inline]) -> Option<String> {
 /// structural; inspecting strings such as `96u` would incorrectly remove a
 /// numeric term while still leaking non-numeric width expressions.
 fn visible_definition_head(node: &Node) -> &[Node] {
-    let head = part_children(node, NodeKind::Head);
+    let head = first_part_children(node, NodeKind::Head);
     match node.macro_name.as_deref() {
         Some("IP") => head.first().map_or(&[], std::slice::from_ref),
         Some("TP" | "TQ") => head
@@ -1146,7 +1158,7 @@ fn append_definition(
 }
 
 fn update_man_definition_width(node: &Node, current_width: &mut usize) {
-    let head = part_children(node, NodeKind::Head);
+    let head = first_part_children(node, NodeKind::Head);
     let argument = match node.macro_name.as_deref() {
         Some("TP" | "TQ") => head
             .iter()
@@ -1307,7 +1319,7 @@ fn preformatted_block(node: &Node, context: &LoweringContext<'_>, indent_columns
         let tail = &node.children[body_index + 1..];
         let tail_len = tail
             .iter()
-            .take_while(|child| child.line == node.line && is_inline(child))
+            .take_while(|child| child.line == node.line && participates_in_inline_flow(child))
             .count();
         if tail
             .first()
@@ -1385,7 +1397,13 @@ fn flush_preformatted(
     });
 }
 
-fn is_inline(node: &Node) -> bool {
+/// Whether a parsed node contributes to the current filled inline flow.
+///
+/// Node role is authoritative: the same semantic macro can be an `Element`
+/// in prose and a structural `Block` in a synopsis. Macro-name-only
+/// classification previously treated block-shaped `.Nm` as inline and lost
+/// its command head.
+fn participates_in_inline_flow(node: &Node) -> bool {
     matches!(node.kind, NodeKind::Text | NodeKind::Element)
         || is_enclosure_macro(node.macro_name.as_deref())
         || node.macro_name.as_deref() == Some("Nd")
