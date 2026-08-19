@@ -169,7 +169,7 @@ fn remaining_budget(
 }
 
 pub(super) fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u8>>, ManualError> {
-    let mut target = None;
+    let mut payloads = Vec::new();
     let mut has_other_content = false;
 
     for raw_line in source.split(|byte| *byte == b'\n') {
@@ -181,16 +181,15 @@ pub(super) fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u
             has_other_content = true;
             continue;
         };
-        if target.is_some() {
-            return Err(unsupported_so_error(path));
-        }
-        target = Some(parse_so_target(path, payload)?);
+        payloads.push(payload);
     }
 
-    match (target, has_other_content) {
-        (None, _) => Ok(None),
-        (Some(_), true) => Err(unsupported_so_error(path)),
-        (Some(target), false) => Ok(Some(target)),
+    match (payloads.as_slice(), has_other_content) {
+        ([payload], false) => parse_so_target(path, payload).map(Some),
+        // An embedded include is not an alias. Leave it in the source so the
+        // safe libmandoc policy emits a diagnostic and preserves surrounding
+        // content instead of rejecting the complete page before parsing.
+        _ => Ok(None),
     }
 }
 
@@ -235,10 +234,6 @@ fn trim_ascii(mut value: &[u8]) -> &[u8] {
         value = &value[..value.len() - 1];
     }
     value
-}
-
-fn unsupported_so_error(path: &Path) -> ManualError {
-    ManualError::redirect(path, "only redirect-only .so manual pages are supported")
 }
 
 fn resolve_redirect_target(
@@ -483,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn embedded_so_requests_fail_instead_of_silently_losing_content() {
+    fn embedded_so_requests_preserve_surrounding_content_with_a_diagnostic() {
         let root = std::env::temp_dir().join(format!("mant-embedded-so-{}", process::id()));
         let man1 = root.join("man1");
         fs::create_dir_all(&man1).expect("create manual section");
@@ -496,17 +491,27 @@ mod tests {
         fs::write(&source, ".TH MIXED 1\n.so target.1\n.SH NAME\nmixed\n")
             .expect("write mixed source");
 
-        let error = parse_manual_page(&ManualPage {
+        let document = parse_manual_page(&ManualPage {
             name: "mixed".to_owned(),
             section: "1".to_owned(),
             path: source,
             manual_root: root.clone(),
         })
-        .expect_err("reject an embedded include");
+        .expect("parse around a denied embedded include");
         fs::remove_dir_all(root).expect("remove mixed source fixture");
 
-        assert_eq!(error.kind(), ManualErrorKind::Redirect);
-        assert!(error.message().contains("redirect-only"));
+        assert!(
+            document
+                .sections
+                .iter()
+                .any(|section| section.title == "NAME")
+        );
+        assert!(
+            document
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains(".so"))
+        );
     }
 
     #[test]

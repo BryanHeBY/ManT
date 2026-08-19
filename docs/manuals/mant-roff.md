@@ -27,7 +27,7 @@ A macro not listed as semantic may still be visible because libmandoc expands or
 
 Native discovery accepts ordinary, gzip, and zstd-compressed manual sources. Decompression and reads are bounded before bytes enter libmandoc. The original source path remains in the IR.
 
-Indexed redirect-only pages containing `.so target` may resolve only to another discovered page inside the same approved manual hierarchy. Standalone `--input` files reject `.so` redirects because no trusted hierarchy accompanies them.
+Indexed redirect-only pages containing `.so target` may resolve only to another discovered page inside the same approved manual hierarchy. Standalone `--input` files reject `.so` redirects because no trusted hierarchy accompanies them. An embedded `.so` request is not followed; libmandoc reports the denied include while ManT preserves the surrounding page content.
 
 libmandoc file inclusion is disabled. Requests that read, write, execute, pipe, or include arbitrary files remain denied or ignored by the upstream safe parser. ManT never invokes the host `man`, `groff`, `nroff`, or shell executable.
 
