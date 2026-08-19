@@ -16,6 +16,7 @@ use super::{
 pub(super) struct InlineBuilder {
     nodes: Vec<Inline>,
     tight_next_boundary: bool,
+    spacing_enabled: bool,
 }
 
 /// Semantic boundary between two inline fragments in filled roff mode.
@@ -37,6 +38,7 @@ impl InlineBuilder {
         Self {
             nodes: Vec::new(),
             tight_next_boundary: false,
+            spacing_enabled: true,
         }
     }
 
@@ -46,6 +48,10 @@ impl InlineBuilder {
 
     pub(super) const fn has_tight_boundary(&self) -> bool {
         self.tight_next_boundary
+    }
+
+    pub(super) fn set_spacing(&mut self, setting: &str) {
+        self.spacing_enabled = updated_spacing(self.spacing_enabled, setting);
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -94,7 +100,7 @@ impl InlineBuilder {
         } else {
             needs_space(&self.nodes, incoming)
         };
-        if !self.tight_next_boundary && add_space {
+        if self.spacing_enabled && !self.tight_next_boundary && add_space {
             push_text(&mut self.nodes, " ".to_owned());
         }
         self.tight_next_boundary = false;
@@ -112,6 +118,11 @@ impl InlineBuilder {
 pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
     let mut builder = InlineBuilder::new();
     for (index, node) in nodes.iter().enumerate() {
+        if node.macro_name.as_deref() == Some("Sm") {
+            let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
+            builder.set_spacing(setting.trim());
+            continue;
+        }
         // mandoc joins the final pair in a contiguous mdoc bibliography
         // author run with "and". The conjunction is formatter-generated, so
         // it is not a child of either `%A` node and must be restored while the
@@ -128,6 +139,20 @@ pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> 
         append_inline_node(&mut builder, node, default_name);
     }
     builder.finish()
+}
+
+/// Apply one validated mdoc `Sm` state transition.
+///
+/// The same state machine is used for top-level filled flow and for nested
+/// definition terms. Keeping it here prevents an `Sm` inside `Xo` from being
+/// discarded merely because that subtree is lowered by an inline builder.
+pub(super) fn updated_spacing(current: bool, setting: &str) -> bool {
+    match setting {
+        "on" => true,
+        "off" => false,
+        "" => !current,
+        _ => current,
+    }
 }
 
 /// Lower one syntax node into an existing inline flow.

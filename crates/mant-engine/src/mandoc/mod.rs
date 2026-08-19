@@ -1724,6 +1724,24 @@ Sean\n\
         );
     }
 
+    #[test]
+    fn preserves_nested_mdoc_spacing_state_in_definition_terms() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("nested-spacing.1"),
+            b".Dd August 19, 2026\n.Dt NESTED-SPACING 1\n.Os\n.Sh OPTIONS\n\
+.Bl -tag -width Ds\n.It Fl L Xo\n.Sm off\n.Ar local_socket : host : hostport\n.Sm on\n.Xc\nForward a socket.\n.El\n",
+        )
+        .expect("lower nested mdoc spacing controls");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected an option definition list");
+        };
+        assert_eq!(
+            inline_text(&items[0].terms[0]),
+            "-L local_socket:host:hostport"
+        );
+    }
+
     fn inline_text(children: &[Inline]) -> String {
         children
             .iter()

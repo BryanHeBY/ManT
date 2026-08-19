@@ -13,7 +13,7 @@ use super::{
     LoweringContext, first_part_children,
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
-        lower_man_link, parse_roff_text, plain_text, terms_fit_inline,
+        lower_man_link, parse_roff_text, plain_text, terms_fit_inline, updated_spacing,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -288,12 +288,7 @@ fn consume_block_control(
         },
         Some("Sm") => {
             let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
-            *spacing_enabled = match setting.trim() {
-                "on" => true,
-                "off" => false,
-                "" => !*spacing_enabled,
-                _ => *spacing_enabled,
-            };
+            *spacing_enabled = updated_spacing(*spacing_enabled, setting.trim());
         }
         _ => return false,
     }
