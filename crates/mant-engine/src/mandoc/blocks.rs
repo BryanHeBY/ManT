@@ -55,6 +55,38 @@ pub(super) fn lower_sections(root: &Node, context: &mut LoweringContext<'_>) -> 
     sections
 }
 
+/// Lower printable root content that is not owned by a formal section.
+///
+/// Most manuals contain only metadata and section blocks at the root, but
+/// roff also permits ordinary text there. Generated or malformed pages can,
+/// for example, indent what looks like a request and thereby make it literal
+/// text. Preserve those bytes in `Document::blocks` instead of silently
+/// discarding them while discovering sections.
+pub(super) fn lower_root_blocks(root: &Node, context: &LoweringContext<'_>) -> Vec<Block> {
+    let mut output = Vec::new();
+    let mut paragraph_distance = 1;
+    let mut start = 0;
+    for (index, node) in root.children.iter().enumerate() {
+        if !is_section(node, true) {
+            continue;
+        }
+        output.extend(lower_blocks(
+            &root.children[start..index],
+            context,
+            0,
+            &mut paragraph_distance,
+        ));
+        start = index + 1;
+    }
+    output.extend(lower_blocks(
+        &root.children[start..],
+        context,
+        0,
+        &mut paragraph_distance,
+    ));
+    output
+}
+
 fn is_bullet_glyph(text: &str) -> bool {
     let mut chars = text.chars();
     match (chars.next(), chars.next()) {

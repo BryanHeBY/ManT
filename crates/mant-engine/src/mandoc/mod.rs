@@ -121,10 +121,10 @@ pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref());
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
+    let mut root_blocks = blocks::lower_root_blocks(&parsed.root, &context);
     diagnostics.extend(context.take_diagnostics());
     let explicit_targets = navigation::explicit_targets(&parsed.root);
     let mut retained_targets = explicit_targets.clone();
-    let mut root_blocks = Vec::new();
     retained_targets.extend(crate::definitions::identify_definitions(
         &mut root_blocks,
         &mut sections,
@@ -1153,6 +1153,24 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
                 "helper [-q]",
             ]
         );
+    }
+
+    #[test]
+    fn preserves_printable_roff_content_outside_formal_sections() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("manweb.1"),
+            b".TH MANWEB 1\n .SH NAME\nmanweb - browse generated documentation\n.SH SYNOPSIS\n.B manweb\n",
+        )
+        .expect("lower root prose");
+        let [Block::Paragraph { children, .. }] = document.blocks.as_slice() else {
+            panic!("expected one root paragraph, got {:?}", document.blocks);
+        };
+
+        assert_eq!(
+            inline_text(children),
+            " .SH NAME manweb - browse generated documentation"
+        );
+        assert_eq!(document.sections[0].title, "SYNOPSIS");
     }
 
     #[test]
