@@ -148,6 +148,27 @@ mod tests {
     }
 
     #[test]
+    fn parser_retains_mdoc_include_arguments() {
+        let report = Parser::default()
+            .parse_bytes(
+                "include.3",
+                b".Dd August 19, 2026\n.Dt INCLUDE 3\n.Os\n.Sh SYNOPSIS\n.In fido.h\n",
+            )
+            .expect("parse mdoc include");
+
+        let include = find_macro(&report.document.root, "In").expect("In node");
+        assert_eq!(include.kind, NodeKind::Element);
+        assert_eq!(
+            include
+                .children
+                .iter()
+                .filter_map(|child| child.text.as_deref())
+                .collect::<Vec<_>>(),
+            ["fido.h"]
+        );
+    }
+
+    #[test]
     fn parser_accepts_pandoc_verbatim_font_aliases() {
         let report = Parser::default()
             .parse_bytes(

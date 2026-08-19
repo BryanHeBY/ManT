@@ -888,6 +888,43 @@ The next line.\n",
     }
 
     #[test]
+    fn preserves_complete_mdoc_include_directives() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("include.3"),
+            b".Dd August 19, 2026\n.Dt INCLUDE 3\n.Os\n.Sh SYNOPSIS\n.In fido.h\n",
+        )
+        .expect("lower mdoc include");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one include paragraph");
+        };
+        assert_eq!(inline_text(children), "#include <fido.h>");
+        assert!(matches!(
+            children.as_slice(),
+            [Inline::Code { value }] if value == "#include <fido.h>"
+        ));
+    }
+
+    #[test]
+    fn propagates_nested_no_space_and_preserves_prefix_content() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-space.7"),
+            b".Dd August 19, 2026\n.Dt NO-SPACE 7\n.Os\n.Sh DESCRIPTION\n\
+.Em Bell Labs Ns -derived\n\
+.Ar job Ns s :\n\
+.Sm off\n\
+.Pf [\\-]ddd Cm \\&. No ddd\n\
+.Sm on\n",
+        )
+        .expect("lower nested no-space macros");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one no-space paragraph");
+        };
+        assert_eq!(inline_text(children), "Bell Labs-derived jobs: [-]ddd.ddd");
+    }
+
+    #[test]
     fn lowers_documented_mdoc_delimiters_and_common_roff_characters() {
         let path = temporary_source(
             "mdoc-delimiters",

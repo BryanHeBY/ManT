@@ -32,3 +32,23 @@ fn keeps_the_real_dash_page_spacing_and_anchors_normalized() {
     common::assert_anchor_ids_are_clean("debian/sh", document);
     common::assert_no_duplicate_vertical_spacing(&document.sections, "debian/sh");
 }
+
+/// Nested `Ns`, stateful `Sm`, and visible `Pf` prefixes share one spacing
+/// model instead of dropping words or inventing gaps between mdoc macros.
+#[test]
+fn preserves_no_space_controls_and_prefix_macros() {
+    let document = debian_manual("sh");
+    let builtins = block_slice_text(&common::section(document, "Builtins").blocks);
+
+    for expected in [
+        "Bell Labs-derived getopt(1)",
+        "specified, jobs:",
+        "style [-]ddd.ddd",
+        "style [-]d.ddde±dd",
+    ] {
+        assert!(
+            builtins.contains(expected),
+            "missing {expected:?} from the real dash builtins section"
+        );
+    }
+}

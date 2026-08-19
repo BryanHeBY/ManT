@@ -132,7 +132,14 @@ pub(super) fn append_inline_node(
         builder.tighten_next_boundary();
     }
     match node.macro_name.as_deref() {
-        Some("Ns" | "Pf") => builder.tighten_next_boundary(),
+        Some("Ns") => builder.tighten_next_boundary(),
+        // `Pf` owns visible prefix text and suppresses only the boundary to
+        // the following sibling. Treating it like the empty `Ns` request
+        // silently discarded constructs such as `.Pf [\-]ddd Cm \&.`.
+        Some("Pf") => {
+            builder.append(lower_inline_node(node, default_name));
+            builder.tighten_next_boundary();
+        }
         // A roff break ends the current output line, not the paragraph.
         // Keeping it inline lets every renderer preserve the same flow.
         Some("br") => builder.hard_break(),
@@ -154,9 +161,27 @@ pub(super) fn append_inline_node(
         }
         _ => builder.append(lower_inline_node(node, default_name)),
     }
-    if node.flags.delimiter_open || node.flags.line_continuation {
+    if node.flags.delimiter_open || node.flags.line_continuation || ends_with_no_space_control(node)
+    {
         builder.tighten_next_boundary();
     }
+}
+
+/// Whether a nested inline scope leaves a no-space request for its next sibling.
+///
+/// libmandoc can keep `.Ns` as the final child of a styled macro while moving
+/// the following text beside that macro. The inner builder sees the request,
+/// but without this propagation its pending boundary would disappear when the
+/// styled fragment is returned to the outer flow.
+fn ends_with_no_space_control(node: &Node) -> bool {
+    if matches!(node.macro_name.as_deref(), Some("Ns" | "Pf")) {
+        return true;
+    }
+    node.children
+        .iter()
+        .rev()
+        .find(|child| child.kind != NodeKind::Comment && !child.flags.no_print)
+        .is_some_and(ends_with_no_space_control)
 }
 
 fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
@@ -194,6 +219,9 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         Some("Ar" | "Pa" | "Em" | "Va" | "Vt" | "Ft" | "Fa" | "I") => wrap_emphasis(lowered),
         Some("Li") => vec![Inline::Code {
             value: plain_text(&lowered),
+        }],
+        Some("In") if !lowered.is_empty() => vec![Inline::Code {
+            value: format!("#include <{}>", plain_text(&lowered)),
         }],
         Some("Xr" | "MR") => lower_manual_reference(children, default_name),
         Some("Lk") => lower_link(children, default_name, false),

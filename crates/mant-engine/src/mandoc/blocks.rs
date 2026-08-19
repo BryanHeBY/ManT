@@ -132,6 +132,7 @@ fn lower_blocks(
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
     let mut definition_hanging_width = 7;
     let mut split_authors = false;
+    let mut spacing_enabled = true;
 
     for node in nodes {
         if node.macro_name.as_deref() == Some("PD") {
@@ -151,6 +152,16 @@ fn lower_blocks(
                 None if split_authors => state.hard_break(),
                 None => {}
             }
+        }
+        if node.macro_name.as_deref() == Some("Sm") {
+            let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
+            spacing_enabled = match setting.trim() {
+                "on" => true,
+                "off" => false,
+                "" => !spacing_enabled,
+                _ => spacing_enabled,
+            };
+            continue;
         }
         if node.flags.no_print
             || node.kind == NodeKind::Comment
@@ -204,15 +215,22 @@ fn lower_blocks(
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
             push_man_link(&mut state, node, context.default_name);
         } else if is_inline(node) {
-            if node.flags.delimiter_close {
+            let source = source_span(node);
+            if node.flags.delimiter_close || node.macro_name.as_deref() == Some("Ns") {
                 state.tighten_next_boundary();
+            }
+            if !spacing_enabled {
+                state.tighten_same_line_boundary(source.as_ref());
             }
             state.push_inline(
                 lower_inline_nodes(std::slice::from_ref(node), context.default_name),
-                source_span(node),
+                source,
                 starts_indented_filled_line(node),
                 ends_with_line_continuation(node),
             );
+            if node.macro_name.as_deref() == Some("Pf") {
+                state.tighten_next_boundary();
+            }
         } else {
             state.flush_paragraph();
             lower_structural_node(
@@ -715,6 +733,16 @@ impl BlockState {
 
     fn tighten_next_boundary(&mut self) {
         self.paragraph.tighten_next_boundary();
+    }
+
+    fn tighten_same_line_boundary(&mut self, source: Option<&mant_ir::SourceSpan>) {
+        if self
+            .paragraph_last_line
+            .zip(source.map(|span| span.line))
+            .is_some_and(|(previous, current)| previous == current)
+        {
+            self.paragraph.tighten_next_boundary();
+        }
     }
 
     fn push_preformatted(

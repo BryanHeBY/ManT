@@ -129,10 +129,13 @@ The following macros receive dedicated inline treatment:
 | Strong | `Nm`, `Fl`, `Cm`, `Ic`, `Sy` |
 | Emphasis | `Ar`, `Pa`, `Em`, `Va`, `Vt`, `Ft`, `Fa` |
 | Code | `Li` |
+| Include directive | `In` (`#include <header>`) |
 | Manual link | `Xr` |
 | External or email link | `Lk`, `Mt` |
 | Section link | `Sx` |
-| No-space control | `Ns`, `Pf` |
+| No-space boundary | `Ns` |
+| Visible no-space prefix | `Pf` (prefix retained) |
+| Automatic spacing mode | `Sm on`, `Sm off` |
 | Apostrophe attachment | `Ap` |
 | Multi-line function declaration | `Fo`, `Fa`, `Fc` |
 
@@ -154,7 +157,7 @@ The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds 
 
 `Fo` retains the function name from its structural head and joins contained `Fa` arguments into a visible declaration. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2)` rather than discarding the function name.
 
-Other standard mdoc semantic macros, including `Fn`, `In`, `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
+Other standard mdoc semantic macros, including `Fn`, `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
 
 ## Roff Requests
 
