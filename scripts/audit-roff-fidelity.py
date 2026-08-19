@@ -23,7 +23,9 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import asdict, dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -31,6 +33,8 @@ from typing import Iterable, Sequence
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_MANT = ROOT / "target/debug/mant"
+DEFAULT_SYNTAX_PROFILER = ROOT / "target/debug/examples/roff_ast_profile"
+SYNTAX_CACHE_VERSION = 1
 AUDIT_DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -111,6 +115,13 @@ class AuditRecord:
     note: str
 
 
+@dataclass(frozen=True)
+class SyntaxProfile:
+    features: frozenset[str]
+    diagnostics: int
+    error: str | None = None
+
+
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -164,7 +175,43 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--seed",
         default="mant-fidelity-v1",
-        help="stable sampling seed used with --max-pages",
+        help="stable sampling seed used with bounded sampling",
+    )
+    parser.add_argument(
+        "--syntax-priority",
+        action="store_true",
+        help=(
+            "prefer pages with rare or not-yet-recorded libmandoc AST features "
+            "when bounded sampling is active"
+        ),
+    )
+    parser.add_argument(
+        "--syntax-profiler",
+        type=Path,
+        default=DEFAULT_SYNTAX_PROFILER,
+        metavar="FILE",
+        help=(
+            "batch AST profiler built from the libmandoc-rs example "
+            f"(default: {DEFAULT_SYNTAX_PROFILER.relative_to(ROOT)})"
+        ),
+    )
+    parser.add_argument(
+        "--syntax-cache",
+        type=Path,
+        metavar="FILE",
+        help="reuse and update content-addressed AST profiles in a JSON cache",
+    )
+    parser.add_argument(
+        "--syntax-report",
+        type=Path,
+        metavar="FILE",
+        help="write AST feature coverage for the discovered corpus",
+    )
+    parser.add_argument(
+        "--syntax-timeout",
+        type=positive_integer,
+        default=600,
+        help="seconds allowed for the complete batch AST profile (default: 600)",
     )
     parser.add_argument(
         "--ngram",
@@ -326,6 +373,311 @@ def stable_sample_by_section(
         path
         for section in sorted(grouped)
         for path in stable_sample(grouped[section], maximum, f"{seed}\0{section}")
+    ]
+    return sorted(sampled, key=lambda path: path.as_posix())
+
+
+def syntax_cache_key(corpus: str, label: str, digest: str) -> tuple[str, str, str]:
+    return corpus, label, digest
+
+
+def read_syntax_cache(
+    path: Path | None,
+) -> dict[tuple[str, str, str], SyntaxProfile]:
+    if path is None or not path.exists():
+        return {}
+    try:
+        if path.name.endswith(".gz"):
+            with gzip.open(path, "rt", encoding="utf-8") as source:
+                payload = json.load(source)
+        else:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read syntax cache {path}: {error}") from error
+    if payload.get("version") != SYNTAX_CACHE_VERSION:
+        raise ValueError(
+            f"unsupported syntax cache version in {path}; "
+            f"expected {SYNTAX_CACHE_VERSION}"
+        )
+    profiles: dict[tuple[str, str, str], SyntaxProfile] = {}
+    for number, row in enumerate(payload.get("profiles", []), 1):
+        try:
+            corpus = row["corpus"]
+            label = row["path"]
+            digest = row["sourceSha256"]
+            features = row["features"]
+            diagnostics = row["diagnostics"]
+            error = row.get("error")
+        except (KeyError, TypeError) as cache_error:
+            raise ValueError(
+                f"invalid syntax cache entry {number} in {path}"
+            ) from cache_error
+        if not all(isinstance(value, str) for value in [corpus, label, digest]):
+            raise ValueError(f"invalid syntax cache identity at {path}:{number}")
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"invalid syntax cache digest at {path}:{number}")
+        if not isinstance(features, list) or not all(
+            isinstance(feature, str) for feature in features
+        ):
+            raise ValueError(f"invalid syntax features at {path}:{number}")
+        if not isinstance(diagnostics, int) or diagnostics < 0:
+            raise ValueError(f"invalid diagnostic count at {path}:{number}")
+        if error is not None and not isinstance(error, str):
+            raise ValueError(f"invalid syntax error at {path}:{number}")
+        profiles[syntax_cache_key(corpus, label, digest)] = SyntaxProfile(
+            frozenset(features), diagnostics, error
+        )
+    return profiles
+
+
+def write_syntax_cache(
+    path: Path,
+    profiles: dict[tuple[str, str, str], SyntaxProfile],
+) -> None:
+    rows = []
+    for (corpus, label, digest), profile in sorted(profiles.items()):
+        rows.append(
+            {
+                "corpus": corpus,
+                "path": label,
+                "sourceSha256": digest,
+                "features": sorted(profile.features),
+                "diagnostics": profile.diagnostics,
+                "error": profile.error,
+            }
+        )
+    payload = {
+        "tool": "mant-roff-ast-profile-cache",
+        "version": SYNTAX_CACHE_VERSION,
+        "profiles": rows,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    if path.name.endswith(".gz"):
+        with gzip.open(temporary, "wt", encoding="utf-8") as destination:
+            json.dump(payload, destination, ensure_ascii=False, separators=(",", ":"))
+            destination.write("\n")
+    else:
+        temporary.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    temporary.replace(path)
+
+
+def run_syntax_profile_batch(
+    requests: dict[str, str],
+    profiler: Path,
+    timeout: int,
+) -> dict[str, dict[str, object]]:
+    if not requests:
+        return {}
+    try:
+        result = subprocess.run(
+            [str(profiler)],
+            input=("\n".join(requests.values()) + "\n").encode("utf-8"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        result = None
+    if result is None or result.returncode != 0:
+        if len(requests) == 1:
+            request_id = next(iter(requests))
+            detail = (
+                f"profiler timed out after {timeout}s"
+                if result is None
+                else f"profiler exited with status {result.returncode}"
+            )
+            return {request_id: {"id": request_id, "error": detail}}
+        items = list(requests.items())
+        midpoint = len(items) // 2
+        return {
+            **run_syntax_profile_batch(dict(items[:midpoint]), profiler, timeout),
+            **run_syntax_profile_batch(dict(items[midpoint:]), profiler, timeout),
+        }
+
+    responses: dict[str, dict[str, object]] = {}
+    for number, line in enumerate(result.stdout.splitlines(), 1):
+        try:
+            response = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"syntax profiler returned invalid JSON on line {number}"
+            ) from error
+        request_id = response.get("id")
+        if (
+            not isinstance(request_id, str)
+            or request_id not in requests
+            or request_id in responses
+        ):
+            raise ValueError(f"syntax profiler returned an invalid id on line {number}")
+        responses[request_id] = response
+    for request_id in requests.keys() - responses.keys():
+        responses[request_id] = {
+            "id": request_id,
+            "error": "profiler returned no response",
+        }
+    return responses
+
+
+def syntax_profiles(
+    pages: Sequence[Path],
+    roots: Sequence[Path],
+    page_records: dict[Path, tuple[str, str | None]],
+    corpus: str,
+    profiler: Path,
+    timeout: int,
+    cache: dict[tuple[str, str, str], SyntaxProfile],
+) -> dict[Path, SyntaxProfile]:
+    profiles: dict[Path, SyntaxProfile] = {}
+    missing: dict[str, tuple[Path, tuple[str, str, str]]] = {}
+    for page in pages:
+        label, digest = page_records[page]
+        if digest is None:
+            profiles[page] = SyntaxProfile(
+                frozenset(), 0, "source could not be decompressed"
+            )
+            continue
+        key = syntax_cache_key(corpus, label, digest)
+        if key in cache:
+            profiles[page] = cache[key]
+            continue
+        request_id = hashlib.sha256("\0".join(key).encode("utf-8")).hexdigest()
+        missing[request_id] = (page, key)
+
+    if missing:
+        requests: dict[str, str] = {}
+        for request_id, (page, _) in missing.items():
+            hierarchy_root = manual_hierarchy_root(page, roots)
+            if hierarchy_root is None:
+                profiles[page] = SyntaxProfile(
+                    frozenset({"profile:error"}), 0, "manual hierarchy is unknown"
+                )
+                continue
+            requests[request_id] = json.dumps(
+                {
+                    "id": request_id,
+                    "path": str(page),
+                    "root": str(hierarchy_root),
+                },
+                ensure_ascii=False,
+                )
+        responses: dict[str, dict[str, object]] = {}
+        request_items = list(requests.items())
+        for offset in range(0, len(request_items), 256):
+            responses.update(
+                run_syntax_profile_batch(
+                    dict(request_items[offset : offset + 256]), profiler, timeout
+                )
+            )
+        for request_id, (page, key) in missing.items():
+            if page in profiles:
+                continue
+            response = responses.get(request_id)
+            if response is None:
+                profile = SyntaxProfile(
+                    frozenset({"profile:error"}), 0, "profiler returned no response"
+                )
+            elif isinstance(response.get("error"), str):
+                profile = SyntaxProfile(
+                    frozenset({"profile:error"}), 0, str(response["error"])
+                )
+            else:
+                features = response.get("features")
+                diagnostics = response.get("diagnostics")
+                if not isinstance(features, list) or not all(
+                    isinstance(feature, str) for feature in features
+                ):
+                    raise ValueError("syntax profiler returned invalid features")
+                if not isinstance(diagnostics, int) or diagnostics < 0:
+                    raise ValueError("syntax profiler returned invalid diagnostics")
+                profile = SyntaxProfile(frozenset(features), diagnostics)
+            profiles[page] = profile
+            cache[key] = profile
+    return profiles
+
+
+def feature_counts(
+    pages: Iterable[Path], profiles: dict[Path, SyntaxProfile]
+) -> Counter[str]:
+    return Counter(
+        feature
+        for page in pages
+        for feature in profiles.get(
+            page, SyntaxProfile(frozenset({"profile:error"}), 0)
+        ).features
+    )
+
+
+def rare_feature_sample(
+    pages: Sequence[Path],
+    maximum: int,
+    seed: str,
+    profiles: dict[Path, SyntaxProfile],
+    frequencies: Counter[str],
+    coverage: Counter[str],
+) -> list[Path]:
+    if maximum == 0 or len(pages) <= maximum:
+        selected = list(pages)
+        coverage.update(feature_counts(selected, profiles))
+        return selected
+    remaining = set(pages)
+    selected: list[Path] = []
+    while remaining and len(selected) < maximum:
+        def score(page: Path) -> tuple[Fraction, Fraction, bytes]:
+            features = profiles[page].features
+            uncovered = sum(
+                (Fraction(1, frequencies[feature]) for feature in features if not coverage[feature]),
+                start=Fraction(),
+            )
+            balance = sum(
+                (
+                    Fraction(
+                        1,
+                        frequencies[feature] * (coverage[feature] + 1),
+                    )
+                    for feature in features
+                ),
+                start=Fraction(),
+            )
+            tie = hashlib.sha256(
+                f"{seed}\0{page.as_posix()}".encode("utf-8")
+            ).digest()
+            return uncovered, balance, tie
+
+        chosen = max(remaining, key=score)
+        remaining.remove(chosen)
+        selected.append(chosen)
+        coverage.update(profiles[chosen].features)
+    return sorted(selected, key=lambda path: path.as_posix())
+
+
+def rare_feature_sample_by_section(
+    pages: Sequence[Path],
+    maximum: int,
+    seed: str,
+    profiles: dict[Path, SyntaxProfile],
+    frequencies: Counter[str],
+    coverage: Counter[str],
+) -> list[Path]:
+    grouped: dict[str, list[Path]] = {}
+    for page in pages:
+        section = manual_section(page)
+        if section is not None:
+            grouped.setdefault(section, []).append(page)
+    sampled = [
+        page
+        for section in sorted(grouped)
+        for page in rare_feature_sample(
+            grouped[section],
+            maximum,
+            f"{seed}\0{section}",
+            profiles,
+            frequencies,
+            coverage,
+        )
     ]
     return sorted(sampled, key=lambda path: path.as_posix())
 
@@ -853,6 +1205,82 @@ def write_json_report(
     path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def write_syntax_report(
+    path: Path,
+    roots: Sequence[Path],
+    corpus: str,
+    all_pages: Sequence[Path],
+    recorded_pages: set[Path],
+    selected_pages: Sequence[Path],
+    page_records: dict[Path, tuple[str, str | None]],
+    profiles: dict[Path, SyntaxProfile],
+) -> None:
+    corpus_counts = feature_counts(all_pages, profiles)
+    recorded_counts = feature_counts(recorded_pages, profiles)
+    selected_counts = feature_counts(selected_pages, profiles)
+    examples: dict[str, list[str]] = {}
+    for page in all_pages:
+        label, _ = page_records[page]
+        for feature in profiles[page].features:
+            values = examples.setdefault(feature, [])
+            if len(values) < 3:
+                values.append(label)
+    features = [
+        {
+            "feature": feature,
+            "corpusPages": corpus_counts[feature],
+            "recordedPages": recorded_counts[feature],
+            "selectedPages": selected_counts[feature],
+            "examples": examples.get(feature, []),
+        }
+        for feature in sorted(corpus_counts)
+    ]
+    errors = [
+        {
+            "path": page_records[page][0],
+            "error": profiles[page].error,
+        }
+        for page in all_pages
+        if profiles[page].error is not None
+    ]
+    unique_sources = {
+        digest for _, digest in page_records.values() if digest is not None
+    }
+    payload = {
+        "tool": "mant-roff-syntax-coverage/v1",
+        "corpus": corpus,
+        "roots": [str(root) for root in roots],
+        "summary": {
+            "corpusPages": len(all_pages),
+            "uniqueSources": len(unique_sources),
+            "recordedPages": len(recorded_pages),
+            "selectedPages": len(selected_pages),
+            "features": len(corpus_counts),
+            "recordedFeatures": sum(
+                1 for feature in corpus_counts if recorded_counts[feature]
+            ),
+            "selectedNewFeatures": sum(
+                1
+                for feature in corpus_counts
+                if not recorded_counts[feature] and selected_counts[feature]
+            ),
+            "uncoveredFeaturesAfterSelection": sum(
+                1
+                for feature in corpus_counts
+                if not recorded_counts[feature] and not selected_counts[feature]
+            ),
+            "profileErrors": len(errors),
+        },
+        "selectedPaths": [page_records[page][0] for page in selected_pages],
+        "features": features,
+        "errors": errors,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
 def self_check() -> None:
     assert token_key("line-break") == token_key("linebreak")
     assert manual_section(Path("git.1.gz")) == "1"
@@ -871,6 +1299,25 @@ def self_check() -> None:
         [Path("/opt/tools/man"), Path("/opt/tools/share/man")],
     ) == "share/man/man1/demo.1"
     assert source_digest(Path(__file__)) is not None
+    profile_a = SyntaxProfile(frozenset({"common", "rare-a"}), 0)
+    profile_b = SyntaxProfile(frozenset({"common"}), 0)
+    profile_c = SyntaxProfile(frozenset({"common", "rare-c"}), 0)
+    sample_pages = [Path("a.1"), Path("b.1"), Path("c.1")]
+    sample_profiles = {
+        sample_pages[0]: profile_a,
+        sample_pages[1]: profile_b,
+        sample_pages[2]: profile_c,
+    }
+    sample_frequencies = feature_counts(sample_pages, sample_profiles)
+    sample_coverage = Counter({"common": 1, "rare-a": 1})
+    assert rare_feature_sample(
+        sample_pages,
+        1,
+        "self-check",
+        sample_profiles,
+        sample_frequencies,
+        sample_coverage,
+    ) == [Path("c.1")]
     assert token_key("alloca.") == token_key("alloca")
     assert token_key("docs.example/path") != token_key("docs.example")
     assert tokens("one line-\nbreak here") == ["one", "linebreak", "here"]
@@ -913,6 +1360,14 @@ def validate_tools(mant: Path, reference: str) -> None:
         raise ValueError(f"reference command not found: {reference}")
 
 
+def validate_syntax_profiler(path: Path) -> None:
+    if not path.is_file():
+        raise ValueError(
+            f"syntax profiler not found: {path}; run "
+            "`cargo build -p libmandoc-rs --example roff_ast_profile`"
+        )
+
+
 def main(argv: Sequence[str]) -> int:
     arguments = parse_arguments(argv)
     if arguments.self_check:
@@ -944,11 +1399,21 @@ def main(argv: Sequence[str]) -> int:
                 "--recheck-recorded are mutually exclusive"
             )
         validate_tools(arguments.mant, arguments.reference)
+        syntax_enabled = (
+            arguments.syntax_priority
+            or arguments.syntax_report is not None
+            or arguments.syntax_cache is not None
+        )
+        if syntax_enabled:
+            validate_syntax_profiler(arguments.syntax_profiler)
         roots = [path.resolve() for path in arguments.manpath] if arguments.manpath else [FIXTURE_ROOT]
-        pages = discover_pages(roots)
+        all_pages = discover_pages(roots)
         if arguments.man_section:
             selected_sections = set(arguments.man_section)
-            pages = [path for path in pages if manual_section(path) in selected_sections]
+            all_pages = [
+                path for path in all_pages if manual_section(path) in selected_sections
+            ]
+        pages = list(all_pages)
         corpus = arguments.corpus or (
             "fixtures" if not arguments.manpath else "local-manpath"
         )
@@ -986,16 +1451,67 @@ def main(argv: Sequence[str]) -> int:
             pages = [path for path in pages if path in recorded]
         elif not arguments.recheck_recorded:
             pages = [path for path in pages if path not in completed]
-        pages = (
-            stable_sample_by_section(
-                pages, arguments.max_pages_per_section, arguments.seed
+        profiles: dict[Path, SyntaxProfile] = {}
+        if syntax_enabled:
+            syntax_cache = read_syntax_cache(arguments.syntax_cache)
+            profiles = syntax_profiles(
+                all_pages,
+                roots,
+                page_records,
+                corpus,
+                arguments.syntax_profiler,
+                arguments.syntax_timeout,
+                syntax_cache,
             )
-            if arguments.max_pages_per_section
-            else stable_sample(pages, arguments.max_pages, arguments.seed)
-        )
+            if arguments.syntax_cache:
+                write_syntax_cache(arguments.syntax_cache, syntax_cache)
+            frequencies = feature_counts(all_pages, profiles)
+            coverage = feature_counts(completed, profiles)
+            pages = (
+                rare_feature_sample_by_section(
+                    pages,
+                    arguments.max_pages_per_section,
+                    arguments.seed,
+                    profiles,
+                    frequencies,
+                    coverage,
+                )
+                if arguments.max_pages_per_section
+                else rare_feature_sample(
+                    pages,
+                    arguments.max_pages,
+                    arguments.seed,
+                    profiles,
+                    frequencies,
+                    coverage,
+                )
+            )
+            if arguments.syntax_report:
+                write_syntax_report(
+                    arguments.syntax_report,
+                    roots,
+                    corpus,
+                    all_pages,
+                    completed,
+                    pages,
+                    page_records,
+                    profiles,
+                )
+        else:
+            pages = (
+                stable_sample_by_section(
+                    pages, arguments.max_pages_per_section, arguments.seed
+                )
+                if arguments.max_pages_per_section
+                else stable_sample(pages, arguments.max_pages, arguments.seed)
+            )
     except ValueError as error:
         print(f"audit-roff-fidelity: {error}", file=sys.stderr)
         return 2
+    if arguments.syntax_report:
+        print(f"syntax report: {arguments.syntax_report}")
+    if arguments.syntax_cache:
+        print(f"syntax cache:  {arguments.syntax_cache}")
     if not pages and arguments.audit_db and completed:
         print(
             "audit-roff-fidelity: no new or changed manual pages; "

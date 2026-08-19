@@ -67,3 +67,24 @@ Omit `--recorded-only` to add new or changed pages. Use a new `corpus` name
 when the provenance or root collection changes. The checked-in compressed
 fixtures and their package/license records remain the reproducible CI oracle;
 this host ledger is discovery evidence.
+
+For syntax-directed expansion, first build the batch profiler and combine the
+ledger with a compressed local profile cache:
+
+```sh
+cargo build --package libmandoc-rs --example roff_ast_profile
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+  --max-pages-per-section 25 --syntax-priority \
+  --syntax-cache /tmp/mant-roff-syntax.json.gz \
+  --syntax-report /tmp/mant-roff-syntax-report.json \
+  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
+  --corpus archlinux-host --findings-only
+```
+
+The profiler reads the real libmandoc AST in batches. Its report distinguishes
+features already represented in completed ledger rows, features added by the
+current selection, and structures still absent after selection. The cache is
+keyed by corpus, relative path, and decompressed-source hash, so a package
+upgrade is profiled again while unchanged pages are reused. AST coverage guides
+which pages deserve comparison; only a human-reviewed finding plus a focused
+fixture and Rust assertion becomes a regression contract.

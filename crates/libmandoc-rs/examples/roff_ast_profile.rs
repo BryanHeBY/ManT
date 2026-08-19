@@ -47,6 +47,9 @@ fn run() -> Result<(), String> {
         stdout
             .write_all(b"\n")
             .map_err(|error| format!("write response {}: {error}", index + 1))?;
+        stdout
+            .flush()
+            .map_err(|error| format!("flush response {}: {error}", index + 1))?;
     }
     stdout
         .flush()
