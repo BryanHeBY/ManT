@@ -83,13 +83,34 @@ python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
 
 The profiler reads the real libmandoc AST in batches. Its report distinguishes
 features already represented in completed ledger rows, features added by the
-current selection, and structures still absent after selection. The cache is
+current selection, and structures still absent after selection. In addition
+to atomic macros and node attributes, it records the combinations of flags,
+fonts, list/display modes, table properties, and their node or parent context.
+The sampler gives these interaction shapes extra weight so a corpus cannot look
+complete merely because each constituent feature appeared somewhere. The cache is
 keyed by corpus, relative path, and decompressed-source hash, and records the
 profiler feature-schema identity. A package upgrade is profiled again while
 unchanged pages are reused; changing the profiler's observed AST shapes
 invalidates and rebuilds the old cache. AST coverage guides
 which pages deserve comparison; only a human-reviewed finding plus a focused
 fixture and Rust assertion becomes a regression contract.
+
+When adding another distribution or release tree, avoid spending the review
+budget on byte-identical copies already represented by a completed corpus:
+
+```sh
+python3 scripts/audit-roff-fidelity.py --manpath /tmp/other/share/man \
+  --max-pages 200 --syntax-priority --dedupe-across-corpora \
+  --syntax-cache /tmp/other-roff-syntax.json.gz \
+  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
+  --corpus other-release-amd64 --findings-only
+```
+
+Reuse requires the same decompressed SHA-256, topic, and exact section. Pages
+that mention `.so` or `.mso` remain corpus-local because their meaning can
+depend on neighbouring files. The syntax report records each reused page and
+its prior corpus; the CSV retains the original evidence instead of claiming a
+second renderer run that did not occur.
 
 When a syntax family is rare or a known lowering policy must be rechecked over
 every occurrence, select it from the decompressed source before sampling:

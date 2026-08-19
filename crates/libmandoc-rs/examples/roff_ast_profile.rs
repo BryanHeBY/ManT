@@ -21,7 +21,7 @@ use libmandoc_rs::{
 };
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-ast-profile/v1";
+const PROFILE_SCHEMA: &str = "mant.roff-ast-profile/v2";
 
 fn main() {
     if let Err(error) = run() {
@@ -123,6 +123,8 @@ fn syntax_features(root: &Node) -> BTreeSet<String> {
 fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTreeSet<String>) {
     let kind = node_kind_name(node.kind);
     features.insert(format!("node:{kind}"));
+    let identity = node_identity(node);
+    let mut properties = BTreeSet::new();
     if let Some(name) = node.macro_name.as_deref() {
         features.insert(format!("macro:{name}"));
         features.insert(format!("macro-kind:{name}:{kind}"));
@@ -135,49 +137,49 @@ fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTre
         ));
     }
     if let Some(list_kind) = node.list_kind {
-        features.insert(format!("list:{}", list_kind_name(list_kind)));
+        properties.insert(format!("list:{}", list_kind_name(list_kind)));
     }
     if let Some(display_kind) = node.display_kind {
-        features.insert(format!("display:{}", display_kind_name(display_kind)));
+        properties.insert(format!("display:{}", display_kind_name(display_kind)));
     }
     if let Some(font) = node.font {
-        features.insert(format!("font:{}", font_name(font)));
+        properties.insert(format!("font:{}", font_name(font)));
     }
     if let Some(author_mode) = node.author_mode {
-        features.insert(format!("author:{}", author_mode_name(author_mode)));
+        properties.insert(format!("author:{}", author_mode_name(author_mode)));
     }
     if node.enclosure.is_some() {
-        features.insert("enclosure:resolved".to_owned());
+        properties.insert("enclosure:resolved".to_owned());
     }
     if node.compact {
-        features.insert("layout:compact".to_owned());
+        properties.insert("layout:compact".to_owned());
     }
     if node.offset.is_some() {
-        features.insert("layout:offset".to_owned());
+        properties.insert("layout:offset".to_owned());
     }
     if node.width.is_some() {
-        features.insert("layout:width".to_owned());
+        properties.insert("layout:width".to_owned());
     }
     if !node.table_cells.is_empty() {
-        features.insert("table:cells".to_owned());
+        properties.insert("table:cells".to_owned());
         for cell in &node.table_cells {
             if cell.text_block {
-                features.insert("table:text-block".to_owned());
+                properties.insert("table:text-block".to_owned());
             }
-            features.insert(format!(
+            properties.insert(format!(
                 "table:alignment:{}",
                 table_alignment_name(cell.alignment)
             ));
             if cell.column_span > 1 {
-                features.insert("table:column-span".to_owned());
+                properties.insert("table:column-span".to_owned());
             }
             if cell.row_span > 1 {
-                features.insert("table:row-span".to_owned());
+                properties.insert("table:row-span".to_owned());
             }
         }
     }
     if node.equation.is_some() {
-        features.insert("equation:expression".to_owned());
+        properties.insert("equation:expression".to_owned());
     }
     for (enabled, name) in [
         (node.flags.generated, "generated"),
@@ -193,7 +195,23 @@ fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTre
         (node.flags.synopsis_pretty, "synopsis-pretty"),
     ] {
         if enabled {
-            features.insert(format!("flag:{name}"));
+            properties.insert(format!("flag:{name}"));
+        }
+    }
+    features.extend(properties.iter().cloned());
+    for property in &properties {
+        features.insert(format!("interaction:{identity}+{property}"));
+        if let Some(parent) = parent {
+            features.insert(format!(
+                "interaction:{}>{identity}+{property}",
+                node_identity(parent)
+            ));
+        }
+    }
+    let properties = properties.into_iter().collect::<Vec<_>>();
+    for (index, left) in properties.iter().enumerate() {
+        for right in &properties[index + 1..] {
+            features.insert(format!("interaction:{left}+{right}"));
         }
     }
     for child in &node.children {

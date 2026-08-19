@@ -34,8 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_MANT = ROOT / "target/debug/mant"
 DEFAULT_SYNTAX_PROFILER = ROOT / "target/debug/examples/roff_ast_profile"
-SYNTAX_PROFILE_SCHEMA = "mant.roff-ast-profile/v1"
-SYNTAX_CACHE_VERSION = 2
+SYNTAX_PROFILE_SCHEMA = "mant.roff-ast-profile/v2"
+SYNTAX_CACHE_VERSION = 3
 AUDIT_DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -72,6 +72,9 @@ INTERNAL_MARKER = re.compile("[\u001d-\u001f]")
 MDOC_NAME_DESCRIPTION = re.compile(r"^[.']Nd(?:\s|$)", re.MULTILINE)
 MDOC_FUNCTION_DECLARATION = re.compile(r"^[.'](?:Fn|Fo)(?:\s|$)", re.MULTILINE)
 EM_DASH_ATTACHED_TO_WORD = re.compile(r"—(?=\w)")
+EXTERNAL_ROFF_CONTEXT = re.compile(
+    rb"(?:^|[ \t])[.'](?:so|mso)(?:[ \t]|$)", re.MULTILINE
+)
 
 TRANSLATION = str.maketrans(
     {
@@ -273,6 +276,14 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--corpus",
         metavar="NAME",
         help="stable source name stored in --audit-db (default: fixtures or local-manpath)",
+    )
+    parser.add_argument(
+        "--dedupe-across-corpora",
+        action="store_true",
+        help=(
+            "skip context-independent topic/section sources whose exact bytes "
+            "already have a completed record in another corpus"
+        ),
     )
     parser.add_argument(
         "--recheck-recorded",
@@ -664,13 +675,17 @@ def rare_feature_sample(
         def score(page: Path) -> tuple[Fraction, Fraction, bytes]:
             features = profiles[page].features
             uncovered = sum(
-                (Fraction(1, frequencies[feature]) for feature in features if not coverage[feature]),
+                (
+                    Fraction(syntax_feature_weight(feature), frequencies[feature])
+                    for feature in features
+                    if not coverage[feature]
+                ),
                 start=Fraction(),
             )
             balance = sum(
                 (
                     Fraction(
-                        1,
+                        syntax_feature_weight(feature),
                         frequencies[feature] * (coverage[feature] + 1),
                     )
                     for feature in features
@@ -687,6 +702,10 @@ def rare_feature_sample(
         selected.append(chosen)
         coverage.update(profiles[chosen].features)
     return sorted(selected, key=lambda path: path.as_posix())
+
+
+def syntax_feature_weight(feature: str) -> int:
+    return 3 if feature.startswith("interaction:") else 1
 
 
 def rare_feature_sample_by_section(
@@ -990,6 +1009,54 @@ def filter_pages_by_source(
 def source_digest(path: Path) -> str | None:
     source = source_bytes(path)
     return hashlib.sha256(source).hexdigest() if source is not None else None
+
+
+def source_audit_identity(label: str, digest: str) -> tuple[str, str, str] | None:
+    path = Path(label)
+    topic = manual_topic(path)
+    section = manual_section(path)
+    if topic is None or section is None:
+        return None
+    return digest, topic, section
+
+
+def source_is_context_independent(path: Path) -> bool:
+    source = source_bytes(path)
+    return source is not None and source_bytes_are_context_independent(source)
+
+
+def source_bytes_are_context_independent(source: bytes) -> bool:
+    return EXTERNAL_ROFF_CONTEXT.search(source) is None
+
+
+def reusable_cross_corpus_sources(
+    pages: Sequence[Path],
+    page_records: dict[Path, tuple[str, str | None]],
+    database: dict[tuple[str, str, str], AuditRecord],
+    corpus: str,
+) -> dict[Path, AuditRecord]:
+    reusable: dict[tuple[str, str, str], AuditRecord] = {}
+    for record in database.values():
+        if (
+            record.corpus == corpus
+            or record.scan_status not in {"clean", "review"}
+            or record.review_status == "pending"
+        ):
+            continue
+        identity = source_audit_identity(record.path, record.digest)
+        if identity is not None:
+            reusable.setdefault(identity, record)
+
+    duplicates = {}
+    for page in pages:
+        label, digest = page_records[page]
+        if digest is None:
+            continue
+        identity = source_audit_identity(label, digest)
+        origin = reusable.get(identity) if identity is not None else None
+        if origin is not None and source_is_context_independent(page):
+            duplicates[page] = origin
+    return duplicates
 
 
 def read_audit_database(
@@ -1316,12 +1383,14 @@ def write_syntax_report(
     corpus: str,
     all_pages: Sequence[Path],
     recorded_pages: set[Path],
+    cross_corpus_pages: dict[Path, AuditRecord],
     selected_pages: Sequence[Path],
     page_records: dict[Path, tuple[str, str | None]],
     profiles: dict[Path, SyntaxProfile],
 ) -> None:
     corpus_counts = feature_counts(all_pages, profiles)
-    recorded_counts = feature_counts(recorded_pages, profiles)
+    covered_pages = recorded_pages | set(cross_corpus_pages)
+    recorded_counts = feature_counts(covered_pages, profiles)
     selected_counts = feature_counts(selected_pages, profiles)
     examples: dict[str, list[str]] = {}
     for page in all_pages:
@@ -1352,13 +1421,15 @@ def write_syntax_report(
         digest for _, digest in page_records.values() if digest is not None
     }
     payload = {
-        "tool": "mant-roff-syntax-coverage/v1",
+        "tool": "mant-roff-syntax-coverage/v2",
         "corpus": corpus,
         "roots": [str(root) for root in roots],
         "summary": {
             "corpusPages": len(all_pages),
             "uniqueSources": len(unique_sources),
             "recordedPages": len(recorded_pages),
+            "reusedCrossCorpusPages": len(cross_corpus_pages),
+            "coveredPages": len(covered_pages),
             "selectedPages": len(selected_pages),
             "features": len(corpus_counts),
             "recordedFeatures": sum(
@@ -1376,6 +1447,17 @@ def write_syntax_report(
             ),
             "profileErrors": len(errors),
         },
+        "reusedCrossCorpusSources": [
+            {
+                "path": page_records[page][0],
+                "fromCorpus": record.corpus,
+                "fromPath": record.path,
+            }
+            for page, record in sorted(
+                cross_corpus_pages.items(),
+                key=lambda item: page_records[item[0]][0],
+            )
+        ],
         "selectedPaths": [page_records[page][0] for page in selected_pages],
         "features": features,
         "errors": errors,
@@ -1387,6 +1469,15 @@ def write_syntax_report(
 
 
 def self_check() -> None:
+    digest = "0" * 64
+    assert source_audit_identity("share/man/man1/git.1.gz", digest) == (
+        digest,
+        "git",
+        "1",
+    )
+    assert not source_bytes_are_context_independent(b".so man1/git.1\n")
+    assert not source_bytes_are_context_independent(b".if n .mso fallback.tmac\n")
+    assert source_bytes_are_context_independent(b".SH DESCRIPTION\nordinary text\n")
     assert strip_reference_chrome(
         "delim $$\nMM2GV(1) General Commands Manual MM2GV(1)\ncontent\nfooter\n"
     ).strip() == "content"
@@ -1429,6 +1520,23 @@ def self_check() -> None:
         sample_frequencies,
         sample_coverage,
     ) == [Path("c.1")]
+    interaction_profiles = {
+        sample_pages[0]: SyntaxProfile(frozenset({"common", "rare-atomic"}), 0),
+        sample_pages[1]: SyntaxProfile(
+            frozenset({"common", "interaction:macro:SY+flag:no-fill"}), 0
+        ),
+    }
+    interaction_frequencies = feature_counts(
+        sample_pages[:2], interaction_profiles
+    )
+    assert rare_feature_sample(
+        sample_pages[:2],
+        1,
+        "interaction-self-check",
+        interaction_profiles,
+        interaction_frequencies,
+        Counter({"common": 1}),
+    ) == [Path("b.1")]
     assert token_key("alloca.") == token_key("alloca")
     assert token_key("docs.example/path") != token_key("docs.example")
     assert tokens("one line-\nbreak here") == ["one", "linebreak", "here"]
@@ -1484,6 +1592,30 @@ def self_check() -> None:
     assert merged_review_status(None, "review") == "pending"
     assert merged_review_status(clean, "hard-failure") == "pending"
     assert merged_review_status(pending, "clean") == "not-required"
+    reusable_page = ROOT / "tests/fixtures/roff/nested-fl-mdoc.1"
+    reusable_digest = source_digest(reusable_page)
+    assert reusable_digest is not None
+    reusable_record = AuditRecord(
+        "prior",
+        "man1/nested-fl-mdoc.1",
+        "1",
+        reusable_digest,
+        "clean",
+        "not-required",
+        "",
+    )
+    assert reusable_cross_corpus_sources(
+        [reusable_page],
+        {reusable_page: ("share/man1/nested-fl-mdoc.1", reusable_digest)},
+        {
+            (
+                reusable_record.corpus,
+                reusable_record.path,
+                reusable_record.digest,
+            ): reusable_record
+        },
+        "current",
+    ) == {reusable_page: reusable_record}
 
 
 def validate_tools(mant: Path, reference: str) -> None:
@@ -1515,6 +1647,8 @@ def main(argv: Sequence[str]) -> int:
             raise ValueError("--retry-skipped requires --audit-db")
         if arguments.pending_only and arguments.audit_db is None:
             raise ValueError("--pending-only requires --audit-db")
+        if arguments.dedupe_across_corpora and arguments.audit_db is None:
+            raise ValueError("--dedupe-across-corpora requires --audit-db")
         if arguments.recorded_only and arguments.recheck_recorded:
             raise ValueError("--recorded-only and --recheck-recorded are mutually exclusive")
         exclusive_database_selections = sum(
@@ -1530,6 +1664,11 @@ def main(argv: Sequence[str]) -> int:
             raise ValueError(
                 "--retry-skipped, --pending-only, --recorded-only, and "
                 "--recheck-recorded are mutually exclusive"
+            )
+        if arguments.dedupe_across_corpora and exclusive_database_selections:
+            raise ValueError(
+                "--dedupe-across-corpora cannot be combined with an explicit "
+                "audit database recheck mode"
             )
         validate_tools(arguments.mant, arguments.reference)
         syntax_enabled = (
@@ -1560,6 +1699,13 @@ def main(argv: Sequence[str]) -> int:
         page_records = {
             path: (relative_label(path, roots), source_digest(path)) for path in pages
         }
+        cross_corpus_duplicates = (
+            reusable_cross_corpus_sources(
+                pages, page_records, database, corpus
+            )
+            if arguments.dedupe_across_corpora
+            else {}
+        )
         recorded = {
             path
             for path, (label, digest) in page_records.items()
@@ -1587,7 +1733,11 @@ def main(argv: Sequence[str]) -> int:
         elif arguments.recorded_only:
             pages = [path for path in pages if path in recorded]
         elif not arguments.recheck_recorded:
-            pages = [path for path in pages if path not in completed]
+            pages = [
+                path
+                for path in pages
+                if path not in completed and path not in cross_corpus_duplicates
+            ]
         profiles: dict[Path, SyntaxProfile] = {}
         if syntax_enabled:
             syntax_cache = read_syntax_cache(arguments.syntax_cache)
@@ -1603,7 +1753,9 @@ def main(argv: Sequence[str]) -> int:
             if arguments.syntax_cache:
                 write_syntax_cache(arguments.syntax_cache, syntax_cache)
             frequencies = feature_counts(all_pages, profiles)
-            coverage = feature_counts(completed, profiles)
+            coverage = feature_counts(
+                completed | set(cross_corpus_duplicates), profiles
+            )
             pages = (
                 rare_feature_sample_by_section(
                     pages,
@@ -1630,6 +1782,7 @@ def main(argv: Sequence[str]) -> int:
                     corpus,
                     all_pages,
                     completed,
+                    cross_corpus_duplicates,
                     pages,
                     page_records,
                     profiles,
@@ -1655,10 +1808,11 @@ def main(argv: Sequence[str]) -> int:
             f"{path}",
             file=sys.stderr,
         )
-    if not pages and arguments.audit_db and completed:
+    if not pages and arguments.audit_db and (completed or cross_corpus_duplicates):
         print(
             "audit-roff-fidelity: no new or changed manual pages; "
-            f"{len(completed)} unchanged pages are already complete"
+            f"{len(completed)} unchanged pages are already complete and "
+            f"{len(cross_corpus_duplicates)} sources were reused across corpora"
         )
         return 0
     if not pages:
@@ -1674,7 +1828,8 @@ def main(argv: Sequence[str]) -> int:
         print(
             f"  audit db:  {arguments.audit_db} "
             f"({len(completed)} completed pages skipped from {corpus}; "
-            f"{len(incomplete)} historical skips selected again)"
+            f"{len(incomplete)} historical skips selected again; "
+            f"{len(cross_corpus_duplicates)} cross-corpus sources reused)"
         )
     if arguments.man_section:
         print(f"  sections:  {', '.join(arguments.man_section)}")
