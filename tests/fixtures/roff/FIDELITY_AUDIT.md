@@ -22,6 +22,21 @@ rechecks update `scan_status` but preserve a human disposition; a clean
 recheck therefore does not erase the evidence that a page once exposed a real
 regression.
 
+The advanced `--pages-file FILE` input accepts a newline-delimited set of
+absolute manual paths below the selected `--fixtures` or `--manpath` roots. It
+bypasses sampling and ledger selection while retaining normal hierarchy and
+alias handling. It is primarily the narrow interface used by the separate
+renderer-layout audit; it does not by itself change the ledger unless an
+explicit `--audit-db` is also supplied.
+
+`--layout-signals` adds reference-layout evidence to JSON without changing a
+page's content-fidelity `scan_status`. It aligns only unique whole-line anchors
+and records each renderer's blank-line runs and indentation levels. Candidates
+are limited to an indentation collapse relative to the local body baseline,
+spacing changes between adjacent source no-fill lines, and exact merges of two
+short source no-fill lines. This keeps ordinary device-width wrapping and
+formatter-owned margins out of the review queue.
+
 `false-positive` is not a generic allowlist. It means the roff source,
 reference output, and ManT output were compared and the signal was attributed
 to presentation differences such as wrapping, table traversal, generated

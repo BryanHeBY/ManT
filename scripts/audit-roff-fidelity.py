@@ -76,6 +76,8 @@ EM_DASH_ATTACHED_TO_WORD = re.compile(r"—(?=\w)")
 EXTERNAL_ROFF_CONTEXT = re.compile(
     rb"(?:^|[ \t])[.'](?:so|mso)(?:[ \t]|$)", re.MULTILINE
 )
+ROFF_REQUEST = re.compile(r"^[.'](?P<name>[A-Za-z][A-Za-z0-9]*)(?:[ \t]+(?P<args>.*))?$")
+ROFF_FONT_ESCAPE = re.compile(r"\\f(?:\[[^]]*]|.)")
 
 TRANSLATION = str.maketrans(
     {
@@ -106,6 +108,33 @@ class Finding:
     broken_phrases: list[str] | None = None
     signatures: list[str] | None = None
     detail: str | None = None
+    layout: "LayoutComparison | None" = None
+
+
+@dataclass
+class LayoutProfile:
+    """Geometry observed in one terminal rendering.
+
+    The values are deliberately descriptive.  Groff's absolute columns and
+    wrapping are device-dependent, while ManT renders a copyable semantic
+    layout; only anchor-relative transitions can become candidates.
+    """
+
+    nonblank_lines: int
+    blank_line_runs: int
+    blank_lines: int
+    max_indent: int
+    indent_levels: list[int]
+
+
+@dataclass
+class LayoutComparison:
+    reference: LayoutProfile
+    mant: LayoutProfile
+    shared_anchors: int
+    reference_baseline_indent: int | None
+    mant_baseline_indent: int | None
+    candidates: list[str]
 
 
 @dataclass
@@ -170,6 +199,16 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         type=Path,
         metavar="DIR",
         help="audit one or more local manual roots instead of checked-in fixtures",
+    )
+    parser.add_argument(
+        "--pages-file",
+        type=Path,
+        metavar="FILE",
+        help=(
+            "audit the newline-delimited absolute manual paths in FILE; "
+            "bypass discovery sampling and ledger selection while retaining "
+            "the selected source roots"
+        ),
     )
     parser.add_argument(
         "--mant",
@@ -267,6 +306,15 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--findings-only",
         action="store_true",
         help="print only REVIEW and HARD pages while retaining the full summary and JSON",
+    )
+    parser.add_argument(
+        "--layout-signals",
+        action="store_true",
+        help=(
+            "include conservative reference-versus-ManT line-boundary, spacing, "
+            "and relative-indentation evidence in JSON; it never changes the "
+            "content-fidelity result"
+        ),
     )
     parser.add_argument(
         "--timeout",
@@ -372,6 +420,40 @@ def discover_pages(roots: Sequence[Path]) -> list[Path]:
             if (path.is_file() or path.is_symlink()) and MANUAL_SUFFIX.search(path.name):
                 pages.add(path)
     return sorted(pages, key=lambda path: path.as_posix())
+
+
+def explicit_pages(path: Path, roots: Sequence[Path]) -> list[Path]:
+    """Read an exact audit set without loosening the selected manual roots.
+
+    A caller that already selected pages (for example the structure audit) must
+    not accidentally re-run a different sample because its own CSV completion
+    state differs from the fidelity ledger.  Paths are deliberately absolute
+    and must lexically remain below one supplied root; this keeps labels and
+    `.so` hierarchy resolution identical to normal discovery.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise ValueError(f"cannot read --pages-file {path}: {error}") from error
+    pages: set[Path] = set()
+    for number, value in enumerate(lines, 1):
+        if not value:
+            continue
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            raise ValueError(f"--pages-file {path}:{number} is not an absolute path")
+        if not MANUAL_SUFFIX.search(candidate.name):
+            raise ValueError(f"--pages-file {path}:{number} is not a manual page")
+        if not any(candidate.is_relative_to(root) for root in roots):
+            raise ValueError(
+                f"--pages-file {path}:{number} is outside the selected manual roots"
+            )
+        if not (candidate.is_file() or candidate.is_symlink()):
+            raise ValueError(f"--pages-file {path}:{number} is not a readable manual page")
+        pages.add(candidate)
+    if not pages:
+        raise ValueError(f"--pages-file {path} did not select any manual pages")
+    return sorted(pages, key=lambda candidate: candidate.as_posix())
 
 
 def stable_sample(pages: Sequence[Path], maximum: int, seed: str) -> list[Path]:
@@ -850,6 +932,247 @@ def token_lines(value: str) -> list[list[str]]:
     return [TOKEN.findall(line) for line in value.splitlines()]
 
 
+@dataclass(frozen=True)
+class LayoutLine:
+    number: int
+    indent: int
+    key: str
+
+
+def layout_key(value: str) -> str:
+    """Return a conservative whole-line anchor for cross-renderer geometry.
+
+    This intentionally does *not* dehyphenate or unwrap: a line-boundary probe
+    needs to see whether one renderer joined source-visible lines that the
+    other renderer retained.  Typography and bullet glyphs are normalised only
+    enough to let the same short display line align across terminal devices.
+    """
+    value = value.translate(TRANSLATION)
+    value = BORDERS.sub(" ", value)
+    value = re.sub(r"\[\s+", "[", value)
+    value = re.sub(r"\s+\]", "]", value)
+    return " ".join(value.split()).casefold()
+
+
+def no_fill_source_anchors(source: str) -> set[str]:
+    """Find simple source lines whose visible boundary is formatter-significant.
+
+    The reference layout is only actionable when the roff source itself asks
+    for line-preserving output.  This intentionally handles the common man and
+    mdoc display forms plus their simple inline macro operands; a complex macro
+    expansion merely produces no candidate, rather than a misleading claim.
+    """
+    starts = {"nf", "EX", "DS", "CS", "Vb"}
+    ends = {"fi", "EE", "YS", "DE", "CE", "Ve"}
+    inline_macros = {
+        "B",
+        "BI",
+        "BR",
+        "Cm",
+        "Em",
+        "I",
+        "IB",
+        "IR",
+        "Li",
+        "Nm",
+        "Op",
+        "RI",
+        "RB",
+        "S",
+        "SM",
+        "SY",
+    }
+    depth = 0
+    output: set[str] = set()
+    for raw_line in source.splitlines():
+        match = ROFF_REQUEST.fullmatch(raw_line)
+        name = match.group("name") if match else None
+        arguments = match.group("args") if match and match.group("args") else ""
+        if name == "Bd" and "-literal" in arguments.split():
+            depth += 1
+            continue
+        if name in starts:
+            depth += 1
+            continue
+        if name == "Ed" or name in ends:
+            depth = max(0, depth - 1)
+            continue
+        if depth == 0:
+            continue
+        candidate = arguments if name in inline_macros else raw_line if name is None else ""
+        candidate = ROFF_FONT_ESCAPE.sub("", candidate)
+        candidate = candidate.replace(r"\&", "").replace(r"\~", " ")
+        key = layout_key(candidate)
+        if useful_layout_anchor(key):
+            output.add(key)
+    return output
+
+
+def layout_lines(value: str) -> tuple[list[LayoutLine], int, int]:
+    """Return nonblank terminal lines plus blank-line-run observations."""
+    output: list[LayoutLine] = []
+    blank_lines = 0
+    blank_runs = 0
+    in_blank_run = False
+    for number, raw_line in enumerate(strip_terminal_formatting(value).splitlines(), 1):
+        line = raw_line.expandtabs(8)
+        stripped = line.lstrip(" ")
+        if not stripped:
+            blank_lines += 1
+            if not in_blank_run:
+                blank_runs += 1
+                in_blank_run = True
+            continue
+        in_blank_run = False
+        output.append(LayoutLine(number, len(line) - len(stripped), layout_key(stripped)))
+    return output, blank_runs, blank_lines
+
+
+def useful_layout_anchor(value: str) -> bool:
+    # Avoid headings like "NAME" and generic fragments such as "the".  A
+    # unique, sufficiently long whole line is a reliable alignment point even
+    # when the surrounding prose has been wrapped differently.
+    return len(value) >= 8 and sum(character.isalnum() for character in value) >= 4
+
+
+def modal_indent(values: Sequence[int]) -> int:
+    if not values:
+        return 0
+    counts = Counter(values)
+    return min(counts, key=lambda value: (-counts[value], value))
+
+
+def layout_profile(lines: Sequence[LayoutLine], blank_runs: int, blank_lines: int) -> LayoutProfile:
+    indents = sorted({line.indent for line in lines})
+    return LayoutProfile(
+        nonblank_lines=len(lines),
+        blank_line_runs=blank_runs,
+        blank_lines=blank_lines,
+        max_indent=max(indents, default=0),
+        indent_levels=indents,
+    )
+
+
+def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutComparison:
+    """Extract conservative layout candidates without treating groff as law.
+
+    `man(1)`/groff normally supplies a page-wide body indentation and wraps
+    prose at a device width, while ManT deliberately emits reflow-free semantic
+    text.  The comparison therefore aligns only unique whole-line anchors,
+    derives each renderer's local body baseline, and reports *relative*
+    indentation collapse, adjacent blank-gap divergence, and a short-line
+    merge that is exact after whitespace normalisation.  All observations are
+    review evidence rather than automatic fidelity failures.
+    """
+    reference_lines, reference_runs, reference_blanks = layout_lines(reference)
+    mant_lines, mant_runs, mant_blanks = layout_lines(mant)
+    no_fill_anchors = no_fill_source_anchors(source) if source is not None else set()
+    reference_by_key: dict[str, list[LayoutLine]] = {}
+    mant_by_key: dict[str, list[LayoutLine]] = {}
+    for line in reference_lines:
+        if useful_layout_anchor(line.key):
+            reference_by_key.setdefault(line.key, []).append(line)
+    for line in mant_lines:
+        if useful_layout_anchor(line.key):
+            mant_by_key.setdefault(line.key, []).append(line)
+    pairs = [
+        (reference_by_key[key][0], mant_by_key[key][0])
+        for key in reference_by_key.keys() & mant_by_key.keys()
+        if len(reference_by_key[key]) == len(mant_by_key[key]) == 1
+    ]
+    pairs.sort(key=lambda pair: pair[0].number)
+    reference_positive = [line.indent for line, _ in pairs if line.indent > 0]
+    reference_baseline = modal_indent(reference_positive)
+    mant_baseline = modal_indent(
+        [candidate.indent for line, candidate in pairs if line.indent == reference_baseline]
+    )
+    candidates: list[str] = []
+
+    collapsed = [
+        (reference_line, mant_line)
+        for reference_line, mant_line in pairs
+        if reference_line.indent - reference_baseline >= 2
+        and mant_line.indent <= mant_baseline
+    ]
+    if collapsed:
+        samples = ", ".join(
+            f"{reference_line.key[:48]!r} (reference +{reference_line.indent - reference_baseline}, "
+            f"ManT +{max(0, mant_line.indent - mant_baseline)})"
+            for reference_line, mant_line in collapsed[:3]
+        )
+        candidates.append(
+            f"relative indentation may collapse for {len(collapsed)} aligned line(s): {samples}"
+        )
+
+    common_unique = {reference_line.key for reference_line, _ in pairs}
+    mant_positions = {
+        line.key: index
+        for index, line in enumerate(mant_lines)
+        if line.key in common_unique
+    }
+    spacing = []
+    for reference_first, reference_second in zip(reference_lines, reference_lines[1:]):
+        if (
+            reference_first.key not in common_unique
+            or reference_second.key not in common_unique
+            or reference_first.key not in mant_positions
+            or reference_second.key not in mant_positions
+        ):
+            continue
+        mant_first_index = mant_positions[reference_first.key]
+        mant_second_index = mant_positions[reference_second.key]
+        if mant_second_index != mant_first_index + 1:
+            continue
+        reference_gap = reference_second.number - reference_first.number - 1
+        mant_first = mant_lines[mant_first_index]
+        mant_second = mant_lines[mant_second_index]
+        mant_gap = mant_second.number - mant_first.number - 1
+        if (
+            reference_gap != mant_gap
+            and reference_first.key in no_fill_anchors
+            and reference_second.key in no_fill_anchors
+        ):
+            spacing.append((reference_first.key, reference_gap, mant_gap))
+    if spacing:
+        samples = ", ".join(
+            f"{key[:40]!r} (reference blank lines={reference_gap}, ManT={mant_gap})"
+            for key, reference_gap, mant_gap in spacing[:3]
+        )
+        candidates.append(
+            f"adjacent aligned lines have {len(spacing)} spacing divergence(s): {samples}"
+        )
+
+    mant_whole_lines = {line.key for line in mant_lines if useful_layout_anchor(line.key)}
+    merged = []
+    for first, second in zip(reference_lines, reference_lines[1:]):
+        if (
+            useful_layout_anchor(first.key)
+            and useful_layout_anchor(second.key)
+            and first.key in no_fill_anchors
+            and second.key in no_fill_anchors
+            and len(first.key) <= 96
+            and len(second.key) <= 96
+            and f"{first.key} {second.key}" in mant_whole_lines
+        ):
+            merged.append((first.key, second.key))
+    if merged:
+        samples = ", ".join(
+            f"{first[:32]!r} + {second[:32]!r}" for first, second in merged[:3]
+        )
+        candidates.append(
+            f"reference line boundaries may merge in ManT for {len(merged)} short pair(s): {samples}"
+        )
+
+    return LayoutComparison(
+        reference=layout_profile(reference_lines, reference_runs, reference_blanks),
+        mant=layout_profile(mant_lines, mant_runs, mant_blanks),
+        shared_anchors=len(pairs),
+        reference_baseline_indent=reference_baseline if pairs else None,
+        mant_baseline_indent=mant_baseline if pairs else None,
+        candidates=candidates,
+    )
+
+
 def token_key(value: str) -> str:
     # Sentence punctuation is not a semantic part of a token, and reference
     # renderers disagree about whether punctuation abuts inline markup. Keep
@@ -1259,6 +1582,7 @@ def audit_page(
     reference: str,
     timeout: int,
     ngram: int,
+    layout_signals: bool,
 ) -> AuditArtifact:
     environment = reference_environment()
     raw_source = source_bytes(path)
@@ -1352,6 +1676,15 @@ def audit_page(
         hard_signatures.append("ManT produced empty output")
     signatures = hard_signatures + review_signatures
     status = "hard-failure" if hard_signatures else "review" if missing or phrases or review_signatures else "clean"
+    layout = (
+        layout_comparison(
+            reference_output,
+            mant_output,
+            raw_source.decode("utf-8", errors="replace") if raw_source is not None else None,
+        )
+        if layout_signals
+        else None
+    )
     return AuditArtifact(
         finding=Finding(
             path=label,
@@ -1361,6 +1694,7 @@ def audit_page(
             missing_tokens=missing,
             broken_phrases=phrases,
             signatures=signatures,
+            layout=layout,
         ),
         source=raw_source,
         reference_output=reference_output,
@@ -1394,6 +1728,10 @@ def print_finding(finding: Finding, show: int) -> None:
             print(f"         - {phrase}")
         if len(finding.broken_phrases) > show:
             print("         - …")
+    if finding.layout and finding.layout.candidates:
+        print(f"       layout anchors: {finding.layout.shared_anchors}")
+        for candidate in finding.layout.candidates:
+            print(f"       layout: {candidate}")
 
 
 def update_summary(summary: AuditSummary, finding: Finding) -> None:
@@ -1413,6 +1751,7 @@ def write_json_report(
     roots: Sequence[Path],
     mant: Path,
     reference: str,
+    layout_signals: bool,
     summary: AuditSummary,
     findings: Sequence[Finding],
 ) -> None:
@@ -1421,6 +1760,7 @@ def write_json_report(
         "roots": [str(root) for root in roots],
         "mant": str(mant),
         "reference": reference,
+        "layout_signals": layout_signals,
         "summary": asdict(summary),
         "findings": [asdict(finding) for finding in findings],
     }
@@ -1696,6 +2036,33 @@ def self_check() -> None:
     assert not differential_signatures(
         ".Fn function\n", "function();", "function();"
     )
+    layout_source = ".EX\nplain first\nplain second\n.EE\n"
+    synopsis_source = (
+        ".EX\n.SY #!\\f[I]interpreter\\f[]\n.RI [ optional-arg ]\n.YS\n.EE\n"
+    )
+    assert no_fill_source_anchors(synopsis_source) == {
+        "#!interpreter",
+        "[optional-arg]",
+    }
+    collapsed_layout = layout_comparison(
+        "  plain first\n    plain second\n",
+        "plain first\nplain second\n",
+        layout_source,
+    )
+    assert collapsed_layout.shared_anchors == 2
+    assert any("relative indentation may collapse" in item for item in collapsed_layout.candidates)
+    merged_layout = layout_comparison(
+        "  plain first\n  plain second\n",
+        "plain first plain second\n",
+        layout_source,
+    )
+    assert any("line boundaries may merge" in item for item in merged_layout.candidates)
+    spacing_layout = layout_comparison(
+        "  plain first\n  plain second\n",
+        "plain first\n\nplain second\n",
+        layout_source,
+    )
+    assert any("spacing divergence" in item for item in spacing_layout.candidates)
     assert len(compile_source_patterns([r"^\.Dd", r"^\.Fn"])) == 2
     clean = AuditRecord(
         "host", "man/demo.1", "1", "0" * 64, "clean", "not-required", ""
@@ -1774,6 +2141,7 @@ def main(argv: Sequence[str]) -> int:
         return 0
 
     try:
+        explicit_page_set = arguments.pages_file is not None
         if arguments.recorded_only and arguments.audit_db is None:
             raise ValueError("--recorded-only requires --audit-db")
         if arguments.retry_skipped and arguments.audit_db is None:
@@ -1803,6 +2171,21 @@ def main(argv: Sequence[str]) -> int:
                 "--dedupe-across-corpora cannot be combined with an explicit "
                 "audit database recheck mode"
             )
+        if explicit_page_set and (
+            arguments.max_pages
+            or arguments.max_pages_per_section
+            or arguments.man_section
+            or arguments.source_pattern
+            or arguments.syntax_priority
+            or arguments.syntax_cache is not None
+            or arguments.syntax_report is not None
+            or arguments.dedupe_across_corpora
+            or exclusive_database_selections
+        ):
+            raise ValueError(
+                "--pages-file cannot be combined with sampling, source filters, "
+                "syntax selection, or ledger selection options"
+            )
         validate_tools(arguments.mant, arguments.reference)
         syntax_enabled = (
             arguments.syntax_priority
@@ -1812,16 +2195,20 @@ def main(argv: Sequence[str]) -> int:
         if syntax_enabled:
             validate_syntax_profiler(arguments.syntax_profiler)
         roots = [path.resolve() for path in arguments.manpath] if arguments.manpath else [FIXTURE_ROOT]
-        all_pages = discover_pages(roots)
-        if arguments.man_section:
-            selected_sections = set(arguments.man_section)
-            all_pages = [
-                path for path in all_pages if manual_section(path) in selected_sections
-            ]
-        source_patterns = compile_source_patterns(arguments.source_pattern)
-        all_pages, source_filter_errors = filter_pages_by_source(
-            all_pages, source_patterns
-        )
+        if explicit_page_set:
+            all_pages = explicit_pages(arguments.pages_file, roots)
+            source_filter_errors: list[Path] = []
+        else:
+            all_pages = discover_pages(roots)
+            if arguments.man_section:
+                selected_sections = set(arguments.man_section)
+                all_pages = [
+                    path for path in all_pages if manual_section(path) in selected_sections
+                ]
+            source_patterns = compile_source_patterns(arguments.source_pattern)
+            all_pages, source_filter_errors = filter_pages_by_source(
+                all_pages, source_patterns
+            )
         pages = list(all_pages)
         corpus = arguments.corpus or (
             "fixtures" if not arguments.manpath else "local-manpath"
@@ -1836,7 +2223,7 @@ def main(argv: Sequence[str]) -> int:
             reusable_cross_corpus_sources(
                 pages, page_records, database, corpus
             )
-            if arguments.dedupe_across_corpora
+            if arguments.dedupe_across_corpora and not explicit_page_set
             else {}
         )
         recorded = {
@@ -1859,7 +2246,12 @@ def main(argv: Sequence[str]) -> int:
                 (corpus, label, digest)
             ].review_status == "pending":
                 pending.add(path)
-        if arguments.pending_only:
+        if explicit_page_set:
+            # Exact page sets are callers' explicit intent.  They may still
+            # update an audit database, but never become empty simply because
+            # the same source was audited in an earlier broad scan.
+            pass
+        elif arguments.pending_only:
             pages = [path for path in pages if path in pending]
         elif arguments.retry_skipped:
             pages = [path for path in pages if path in incomplete]
@@ -1957,6 +2349,8 @@ def main(argv: Sequence[str]) -> int:
     print(f"  reference: {arguments.reference}")
     print(f"  roots:     {', '.join(str(root) for root in roots)}")
     print(f"  pages:     {len(pages)}")
+    if arguments.pages_file:
+        print(f"  page set:  {arguments.pages_file}")
     if arguments.audit_db:
         print(
             f"  audit db:  {arguments.audit_db} "
@@ -1970,7 +2364,7 @@ def main(argv: Sequence[str]) -> int:
         print(f"  source:    {' AND '.join(arguments.source_pattern)}")
     print(
         "  contract:  visible tokens, continuity, and source-conditioned punctuation; "
-        "layout is intentionally ignored"
+        "layout is intentionally ignored unless --layout-signals is selected"
     )
     print()
 
@@ -1987,13 +2381,18 @@ def main(argv: Sequence[str]) -> int:
             arguments.reference,
             arguments.timeout,
             arguments.ngram,
+            arguments.layout_signals,
         )
         finding = artifact.finding
         findings.append(finding)
         if arguments.review_dir is not None:
             review_artifacts.append((label, artifact))
         update_summary(summary, finding)
-        if not arguments.findings_only or finding.status in {"review", "hard-failure"}:
+        if (
+            not arguments.findings_only
+            or finding.status in {"review", "hard-failure"}
+            or (finding.layout is not None and finding.layout.candidates)
+        ):
             print_finding(finding, arguments.show)
         if arguments.audit_db and digest is not None:
             key = (corpus, label, digest)
@@ -2021,6 +2420,7 @@ def main(argv: Sequence[str]) -> int:
             roots,
             arguments.mant,
             arguments.reference,
+            arguments.layout_signals,
             summary,
             findings,
         )

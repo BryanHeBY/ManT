@@ -307,6 +307,29 @@ python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
 
 [`STRUCTURE_AUDIT.csv`](../tests/fixtures/roff/STRUCTURE_AUDIT.csv) is an independent incremental ledger, while its [guide](../tests/fixtures/roff/STRUCTURE_AUDIT.md) defines the review lifecycle. The `roff_structure_profile` example and both audit scripts are development tools: no host corpus, renderer, or batch profile is part of normal CI. CI runs only their dependency-free self-checks and the focused Rust regressions that follow a confirmed finding.
 
+### Roff renderer-layout audit
+
+The optional renderer-layout audit is separate from both the content and
+AST-to-IR ledgers. It uses the same local `man(1)`/groff reference rendering as
+the fidelity auditor, but only compares source-gated line boundaries, spacing,
+and relative indentation after removing each renderer's own body margin. It
+does not re-run, modify, or invalidate completed `FIDELITY_AUDIT.csv` or
+`STRUCTURE_AUDIT.csv` rows.
+
+```sh
+cargo build --package mant
+python3 scripts/audit-roff-layout.py --manpath /tmp/new-release/share/man \
+  --corpus new-release-amd64 --max-pages-per-section 20 \
+  --json /tmp/mant-layout.json --findings-only
+```
+
+[`LAYOUT_AUDIT.csv`](../tests/fixtures/roff/LAYOUT_AUDIT.csv) begins empty on
+purpose: it is evidence for newly selected renderer-layout sweeps, not a claim
+that older content/structure samples were retroactively checked. Its
+[guide](../tests/fixtures/roff/LAYOUT_AUDIT.md) defines the narrow signal and
+review lifecycle. Do not add it to daily CI; only its self-check and focused
+regressions derived from confirmed findings belong there.
+
 `--syntax-priority` replaces path-only ranking with deterministic greedy coverage over the actual owned libmandoc AST. The development-only `roff_ast_profile` example reports macro names, node roles and parent/child shapes, normalized list/display/font state, tables, equations, parser diagnostic classes, and rendering-relevant node flags without copying document text. It also reports bounded interaction features: a node or parent/child context paired with its flags and normalized attributes, plus attribute pairs on the same node. The sampler weights these combinations ahead of isolated features, first preferring shapes absent from the completed CSV ledger and then underrepresented and rarer forms. This distinguishes merely having seen `.SY`, a no-fill node, and a font from having exercised their exact combination.
 
 `--syntax-report` records per-feature corpus, ledger, reused-source, and selected-page counts plus representative paths; it measures exercised parser structure, not semantic correctness. `--syntax-cache` avoids reparsing unchanged `(corpus, path, source hash)` identities and supports compact `.json.gz` files. Both the profiler response and cache carry a feature-schema identity, so changing the set of observed AST flags or shapes invalidates and rebuilds an older cache instead of silently treating stale profiles as complete. Profiling uses bounded subprocess batches and isolates an abnormal native-parser exit down to the exact page instead of losing the whole scan. Unreadable host paths remain visible as report errors but do not masquerade as syntax features.
