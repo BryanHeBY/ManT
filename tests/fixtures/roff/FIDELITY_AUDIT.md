@@ -39,6 +39,8 @@ a parser regression:
 | `fedora44-2026-07-20-x86_64` | Fedora packages `bash 5.3.9-3.fc44`, `clang 22.1.1-2.fc44`, `gcc 16.0.1-0.10.fc44`, `git-core-doc 2.53.0-1.fc44`, and `tar 1.35-8.fc44` | 258 pages discovered; 257 rendered; 1 exact source reused from an earlier completed corpus | 202 clean; 55 reviewed aliases whose embedded `.so` chains are deliberately not expanded by ManT |
 | `openbsd-7.9-amd64` | Official OpenBSD 7.9 `man79.tgz` for amd64 | 150 syntax-prioritized pages from 2,902 distinct sources | 139 clean after fixes; 11 reviewed formatter and Pod token-boundary differences |
 | `netbsd-10.1-amd64` | Official NetBSD 10.1 amd64 `man.tar.xz` set | 146 syntax-prioritized pages from 2,544 distinct sources | 138 clean after fixes; 8 reviewed formatter and terminal-layout differences |
+| `freebsd-15.1-amd64` | Official FreeBSD 15.1-RELEASE amd64 `base.txz` | 237 stable and syntax-prioritized pages from 11,183 paths / 4,085 distinct sources | 224 clean; 5 real lowering defects fixed; 8 reviewed formatter or reference-renderer differences |
+| `illumos-gate-e8f5c080` | Official illumos-gate read-only mirror at commit `e8f5c080` | 170 stable and syntax-prioritized pages from 4,627 distinct sources | 167 clean; 3 reviewed equation-layout, standards-wording, or reference-table differences |
 | `apple-oss-manpages-pinned` | Apple `bsdmanpages-56` and `man-171` source tags | 36 syntax-prioritized pages | 34 clean; 2 aliases whose targets are absent from the individual official source repositories |
 | `apple-oss-command-repos-pinned` | Apple `shell_cmds-329`, `file_cmds-479`, and `system_cmds-1042.120.1` source tags | 70 syntax-prioritized pages from 185 sources | 66 clean; 1 real request-lowering defect fixed; 3 source-layout or formatter differences reviewed |
 | `generator-ronn-scdoc-pinned` | ronn-ng `v0.10.1` committed output and scdoc `1.9.7` locally generated output | All 4 generated pages | 4 clean; no candidate findings |
@@ -51,7 +53,7 @@ minimal Rust regressions; the ledger records the corrected page bytes rather
 than retaining stale failures. The remaining review rows state the precise
 false-positive reason instead of acting as a generic allowlist.
 
-The BSD and Apple expansion found four general compatibility gaps. Stateful
+The earlier BSD and Apple expansion found four general compatibility gaps. Stateful
 mdoc `Sm` spacing now crosses list-item and structural boundaries correctly;
 `Rs` bibliography entries retain formatter-generated terminal punctuation;
 the device-only `ti` argument is no longer exposed as document text; and the
@@ -62,16 +64,31 @@ classified. In particular, differences in historical `St` wording, `Bx`
 typography, Pod term/body joining, URL punctuation, and terminal table layout
 do not represent discarded source content.
 
+The FreeBSD and illumos expansion then moved beyond section-balanced samples
+to inverse-frequency AST selection. It found five additional general FreeBSD
+gaps: command heads lost in extended `Nm` synopsis blocks; mdoc requests
+flattened inside `tbl` text cells; nested `Sm` state lost between structural
+siblings; `.Pp`-separated alternatives concatenated inside extended
+definition heads; and punctuation following implicit mdoc enclosures silently
+discarded. Each defect was checked in the real page and reduced to a focused
+Rust regression. The illumos sample added SysV-derived section families and
+traditional man/eqn inputs without exposing a new content-loss defect. Its
+remaining equation finding is terminal fraction-bar geometry rather than a
+missing operand or operator.
+
 The pinned inputs can be independently identified as follows:
 
 - OpenBSD `man79.tgz` SHA-256: `7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af`.
 - NetBSD `man.tar.xz` SHA-512: `79f523d692c734a3a18921a4ec9cc7e0c2d1ae567bf4911a04f85dc78281c15f0b0fd68d201e9050daba498068df2c59660d3633e3abdbbc3d651ea8a26dd5a3`.
+- FreeBSD 15.1-RELEASE amd64 `base.txz` SHA-256: `3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f`.
+- The illumos-gate mirror was pinned at commit `e8f5c080cc0b7997410d860afd787df30ba1cf2d`; its source files retain their upstream CDDL headers.
 - Apple tags resolve to commits `c62819a460dcc7906465c4c213a7fc0211148960`, `d798e66636621e416604cdeacc01ca45d964ad2d`, `298787009e5432c5e4c378a077f98267077e3495`, `659a8a301e2acf0343f8b8673a154a2ca4d07084`, and `15832a892bdd86cf3e3f2fde9265142f714437c8` in the table's repository order.
 - ronn-ng `v0.10.1`, scdoc `1.9.7`, and `clap_mangen-v0.3.0` resolve to commits `bc667fe55b2df9fe54bd34d8f589ab58a3e81371`, `5c782cda95427e7170bab7a9d7eef19c7c2d12d0`, and `f0d30d961d26f8fb636b33242256fca73a717f77` respectively.
 
-The generator sources are MIT or Apache-2.0/MIT licensed. Their outputs were
-used as local discovery inputs and were not copied into the repository, so no
-new third-party fixture or redistribution notice is required.
+The generator sources are MIT or Apache-2.0/MIT licensed. Their outputs, the
+FreeBSD release tree, and the illumos checkout were used as local discovery
+inputs and were not copied into the repository, so no new third-party fixture
+or redistribution notice is required.
 
 A `skipped` row is historical, incomplete coverage rather than an accepted
 disposition. Normal incremental runs select such a row again even when its
