@@ -13,7 +13,8 @@ use super::{
     LoweringContext, TableTextBlock, first_part_children,
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
-        lower_man_link, parse_roff_text, plain_text, terms_fit_inline, updated_spacing,
+        lower_man_link, lower_source_alternating_fonts, parse_roff_text, plain_text,
+        terms_fit_inline, updated_spacing,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -911,11 +912,13 @@ fn lower_table_cell(
             .copied()
             .filter(|candidate| text_block.contains_line(candidate.line))
             .collect::<Vec<_>>();
-        if cell.text.as_deref().is_none_or(str::is_empty) || !semantic_nodes.is_empty() {
-            let reconstructed = lower_table_text_block(text_block, &semantic_nodes, context);
-            if !reconstructed.is_empty() {
-                return reconstructed;
-            }
+        // A tbl `T{ ... T}` cell retains its source requests, while the
+        // flattened libmandoc cell text has already discarded request-level
+        // font and spacing semantics. Reconstruct from the bounded source
+        // block first even when no printable AST siblings escaped the table.
+        let reconstructed = lower_table_text_block(text_block, &semantic_nodes, context);
+        if !reconstructed.is_empty() {
+            return reconstructed;
         }
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
@@ -974,6 +977,10 @@ fn lower_table_text_block(
             .filter(|node| node.line == line)
             .collect::<Vec<_>>();
         if !nodes.is_empty() {
+            if let Some(inline) = source_table_inline(source_line.trim(), context.default_name) {
+                builder.append_filled(inline, FilledBoundary::Word);
+                continue;
+            }
             for node in nodes {
                 let lowered = if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
                     lower_man_link(node, context.default_name)
@@ -1006,6 +1013,9 @@ fn source_table_inline(source_line: &str, default_name: Option<&str>) -> Option<
         .split_once(char::is_whitespace)
         .unwrap_or((request, ""));
     let argument = rest.trim();
+    if matches!(name, "BI" | "BR" | "IB" | "IR" | "RB" | "RI") {
+        return lower_source_alternating_fonts(name, argument);
+    }
     let children = if name == "Nm" && argument.is_empty() {
         default_name.map(|name| {
             vec![Inline::Text {

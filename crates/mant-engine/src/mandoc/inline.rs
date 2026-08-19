@@ -549,6 +549,59 @@ fn lower_alternating_fonts(
     output
 }
 
+/// Lower a source request that libmandoc flattened while parsing a `tbl`
+/// `T{ ... T}` cell. This shares the ordinary man(7) alternating-font model,
+/// including tight argument concatenation and explicit `\\f` overrides.
+pub(super) fn lower_source_alternating_fonts(
+    macro_name: &str,
+    source: &str,
+) -> Option<Vec<Inline>> {
+    let (first, second) = alternating_font_pair(Some(macro_name))?;
+    let mut output = Vec::new();
+    for (index, argument) in roff_macro_arguments(source).into_iter().enumerate() {
+        let font = if index % 2 == 0 { first } else { second };
+        output.extend(parse_roff_text_with_font(&argument, font, true));
+    }
+    Some(output)
+}
+
+fn roff_macro_arguments(source: &str) -> Vec<String> {
+    let mut arguments = Vec::new();
+    let mut current = String::new();
+    let mut started = false;
+    let mut quoted = false;
+    let mut escaped = false;
+    for character in source.chars() {
+        if escaped {
+            current.push('\\');
+            current.push(character);
+            escaped = false;
+            started = true;
+        } else if character == '\\' {
+            escaped = true;
+            started = true;
+        } else if character == '"' {
+            quoted = !quoted;
+            started = true;
+        } else if character.is_whitespace() && !quoted {
+            if started {
+                arguments.push(std::mem::take(&mut current));
+                started = false;
+            }
+        } else {
+            current.push(character);
+            started = true;
+        }
+    }
+    if escaped {
+        current.push('\\');
+    }
+    if started {
+        arguments.push(current);
+    }
+    arguments
+}
+
 fn alternating_font_pair(macro_name: Option<&str>) -> Option<(Font, Font)> {
     match macro_name {
         Some("BI") => Some((Font::Strong, Font::Emphasis)),

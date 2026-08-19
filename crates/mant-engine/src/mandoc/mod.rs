@@ -225,7 +225,8 @@ impl<'a> LoweringContext<'a> {
         for (index, line) in source.lines().enumerate().skip(start) {
             let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
             if let Some((content, start_line)) = current.as_mut() {
-                if line.trim_start().starts_with("T}") {
+                let trimmed = line.trim_start();
+                if let Some(remainder) = trimmed.strip_prefix("T}") {
                     blocks.push(TableTextBlock {
                         source: std::mem::take(content),
                         start_line: *start_line,
@@ -234,6 +235,12 @@ impl<'a> LoweringContext<'a> {
                     current = None;
                     if blocks.len() == maximum {
                         break;
+                    }
+                    // tbl serializes adjacent multiline cells as `T}\tT{`.
+                    // Closing the first cell must not hide the next opening
+                    // marker carried by the same physical source line.
+                    if remainder.trim_end().ends_with("T{") {
+                        current = Some((String::new(), line_number.saturating_add(1)));
                     }
                 } else {
                     if !content.is_empty() {
@@ -1979,6 +1986,45 @@ gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
             children
                 .iter()
                 .any(|child| matches!(child, Inline::Emphasis { .. }))
+        );
+    }
+
+    #[test]
+    fn restores_alternating_font_arguments_inside_tbl_text_blocks() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("table-text-alternation.7"),
+            b".TH TABLE-TEXT-ALTERNATION 7\n.SH DESCRIPTION\n.TS\nl l.\nT{\n\
+.BI \\[aq] s1 \\[aq] s2 \\[aq]\nT}\tT{\n\
+.I s1\nproduces the same formatted output as\n.IR s2 .\nT}\n.TE\n",
+        )
+        .expect("lower alternating man macros inside a tbl text block");
+
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a structured table");
+        };
+        let [left, right] = rows[0].cells.as_slice() else {
+            panic!("expected both reconstructed table cells");
+        };
+        let [Block::Paragraph { children: left, .. }] = left.blocks.as_slice() else {
+            panic!("expected a reconstructed left table-cell paragraph");
+        };
+        let [
+            Block::Paragraph {
+                children: right, ..
+            },
+        ] = right.blocks.as_slice()
+        else {
+            panic!("expected a reconstructed right table-cell paragraph");
+        };
+        assert_eq!(inline_text(left), "'s1's2'");
+        assert_eq!(
+            inline_text(right),
+            "s1 produces the same formatted output as s2."
+        );
+        assert!(
+            right
+                .iter()
+                .any(|inline| matches!(inline, Inline::Emphasis { .. }))
         );
     }
 
