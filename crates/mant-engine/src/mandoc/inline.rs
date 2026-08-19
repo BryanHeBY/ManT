@@ -402,7 +402,13 @@ fn lower_inline_node(
         },
         Some(name) if enclosure_marks(name).is_some() => {
             let (opening, closing) = enclosure_marks(name).expect("matched enclosure macro");
-            surround(opening, lowered, closing)
+            let mut content = surround(opening, lowered, closing);
+            content.extend(trailing_enclosure_delimiters(
+                node,
+                default_name,
+                spacing_enabled,
+            ));
+            content
         }
         _ => lowered,
     };
@@ -410,6 +416,24 @@ fn lower_inline_node(
         output.insert(0, anchor);
     }
     output
+}
+
+/// Retain punctuation that libmandoc moves behind an implicit enclosure body.
+///
+/// In input such as `.Pq phrase ;`, the semicolon is neither part of the
+/// structural body nor the generated closing parenthesis. libmandoc keeps it
+/// as a direct child and marks its validated delimiter role. Reading only the
+/// body would silently turn `(phrase);` into `(phrase)`.
+fn trailing_enclosure_delimiters(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    node.children
+        .iter()
+        .filter(|child| child.flags.delimiter_close)
+        .flat_map(|child| lower_inline_node(child, default_name, spacing_enabled))
+        .collect()
 }
 
 /// Lower the block form of an mdoc `Nm` synopsis without losing its head.

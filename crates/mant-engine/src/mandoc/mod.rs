@@ -1126,6 +1126,24 @@ The next line.\n",
     }
 
     #[test]
+    fn retains_punctuation_after_implicit_mdoc_enclosures() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("implicit-enclosure-punctuation.7"),
+            b".Dd August 19, 2026\n.Dt IMPLICIT-ENCLOSURE-PUNCTUATION 7\n.Os\n\
+.Sh DESCRIPTION\nWhen disabled\n.Pq all features remain readable ;\ncontinue safely.\n",
+        )
+        .expect("lower punctuation after an implicit enclosure");
+
+        let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected one paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "When disabled (all features remain readable); continue safely."
+        );
+    }
+
+    #[test]
     fn lowers_the_pinned_named_character_catalog_without_silent_deletion() {
         let document = parse_manual_bytes(
             std::path::Path::new("named-characters.7"),
