@@ -344,7 +344,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     ///
     /// libmandoc marks the declaration-oriented `Fd`, `In`, `Ft`, `Fn`,
     /// `Fo`, and `Vt` nodes with `synopsis_pretty`.  Their terminal layout is
-    /// intentionally richer than ManT's IR, but the declaration boundary is
+    /// intentionally richer than `ManT`'s IR, but the declaration boundary is
     /// semantic: an include directive must not merge into the next return
     /// type, and each function declaration must remain independently
     /// addressable.  A return type and the immediately following function
