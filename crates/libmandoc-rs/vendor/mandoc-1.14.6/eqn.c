@@ -16,6 +16,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 
@@ -375,7 +376,7 @@ eqn_def_find(struct eqn_node *ep)
 static enum eqn_tok
 eqn_next(struct eqn_node *ep, enum parse_mode mode)
 {
-	static int	 last_len, lim;
+	MANT_THREAD_LOCAL int last_len, lim;
 
 	struct eqn_def	*def;
 	size_t		 start;

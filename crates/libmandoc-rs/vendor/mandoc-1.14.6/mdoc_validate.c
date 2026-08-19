@@ -19,6 +19,7 @@
  * Validation module for mdoc(7) syntax trees used by mandoc(1).
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 #ifndef OSNAME
@@ -294,7 +295,7 @@ static	const char * const secnames[SEC__MAX] = {
 	NULL
 };
 
-static	int	  fn_prio = TAG_STRONG;
+MANT_THREAD_LOCAL int fn_prio = TAG_STRONG;
 
 
 /* Validate the subtree rooted at mdoc->last. */
@@ -2872,7 +2873,7 @@ post_os(POST_ARGS)
 {
 #ifndef OSNAME
 	struct utsname	  utsname;
-	static char	 *defbuf;
+	char		 *defbuf = NULL;
 #endif
 	struct roff_node *n;
 
@@ -2921,6 +2922,9 @@ post_os(POST_ARGS)
 #endif /*!OSNAME*/
 
 out:
+#ifndef OSNAME
+	free(defbuf);
+#endif
 	if (mdoc->meta.os_e == MANDOC_OS_OTHER) {
 		if (strstr(mdoc->meta.os, "OpenBSD") != NULL)
 			mdoc->meta.os_e = MANDOC_OS_OPENBSD;

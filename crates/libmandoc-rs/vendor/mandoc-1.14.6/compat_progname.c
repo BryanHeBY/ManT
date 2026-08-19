@@ -15,8 +15,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
-static const char *progname;
+MANT_THREAD_LOCAL const char *progname;
 
 void
 setprogname(const char *name)

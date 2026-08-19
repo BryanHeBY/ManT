@@ -23,6 +23,7 @@
  * and steering of the various parsers.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 #ifndef MANDOC_MEMORY_ONLY
@@ -625,7 +626,7 @@ mparse_readmem(struct mparse *curp, const unsigned char *data, size_t size,
 void
 mparse_readfd(struct mparse *curp, int fd, const char *filename)
 {
-	static int	 recursion_depth;
+	MANT_THREAD_LOCAL int recursion_depth;
 
 	struct buf	 blk;
 	struct buf	*save_primary;

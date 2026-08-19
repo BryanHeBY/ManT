@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 
@@ -28,9 +29,9 @@
 #include "mandoc_ohash.h"
 #include "mandoc_xr.h"
 
-static struct ohash	 *xr_hash = NULL;
-static struct mandoc_xr	 *xr_first = NULL;
-static struct mandoc_xr	 *xr_last = NULL;
+MANT_THREAD_LOCAL struct ohash *xr_hash = NULL;
+MANT_THREAD_LOCAL struct mandoc_xr *xr_first = NULL;
+MANT_THREAD_LOCAL struct mandoc_xr *xr_last = NULL;
 
 static void		  mandoc_xr_clear(void);
 

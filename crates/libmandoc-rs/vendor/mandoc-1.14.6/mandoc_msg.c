@@ -18,6 +18,7 @@
  * Implementation of warning and error messages for mandoc(1).
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -279,10 +280,10 @@ static	const char *const type_message[MANDOCERR_MAX] = {
 	"write",
 };
 
-static	FILE		*fileptr = NULL;
-static	const char	*filename = NULL;
-static	enum mandocerr	 min_type = MANDOCERR_BADARG;
-static	enum mandoclevel rc = MANDOCLEVEL_OK;
+MANT_THREAD_LOCAL FILE *fileptr = NULL;
+MANT_THREAD_LOCAL const char *filename = NULL;
+MANT_THREAD_LOCAL enum mandocerr min_type = MANDOCERR_BADARG;
+MANT_THREAD_LOCAL enum mandoclevel rc = MANDOCLEVEL_OK;
 
 
 void

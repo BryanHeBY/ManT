@@ -18,6 +18,7 @@
  * Implementation of the roff(7) parser for mandoc(1).
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 
@@ -627,10 +628,10 @@ static	const struct predef predefs[PREDEFS_MAX] = {
 #include "predefs.in"
 };
 
-static	int	 roffce_lines;	/* number of input lines to center */
-static	struct roff_node *roffce_node;  /* active request */
-static	int	 roffit_lines;  /* number of lines to delay */
-static	char	*roffit_macro;  /* nil-terminated macro line */
+MANT_THREAD_LOCAL int roffce_lines; /* number of input lines to center */
+MANT_THREAD_LOCAL struct roff_node *roffce_node; /* active request */
+MANT_THREAD_LOCAL int roffit_lines; /* number of lines to delay */
+MANT_THREAD_LOCAL char *roffit_macro; /* nil-terminated macro line */
 
 
 /* --- request table ------------------------------------------------------ */

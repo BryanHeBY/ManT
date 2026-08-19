@@ -18,6 +18,7 @@
  * For internal use by mandoc(1) validation modules only.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 
@@ -47,7 +48,7 @@ static void		 tag_move_href(struct roff_man *,
 				struct roff_node *, const char *);
 static void		 tag_move_id(struct roff_node *);
 
-static struct ohash	 tag_data;
+MANT_THREAD_LOCAL struct ohash tag_data;
 
 
 /*

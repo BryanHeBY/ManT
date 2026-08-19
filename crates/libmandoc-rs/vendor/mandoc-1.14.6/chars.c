@@ -17,6 +17,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 
@@ -426,7 +427,7 @@ static struct ln lines[] = {
 	{ "ts",			"<sigma>",	0x03c2	},
 };
 
-static	struct ohash	  mchars;
+MANT_THREAD_LOCAL struct ohash mchars;
 
 
 void

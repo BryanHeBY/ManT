@@ -76,6 +76,12 @@ fn main() {
         // flag_if_supported, while GCC development output remains readable.
         .flag_if_supported("-Wno-maybe-uninitialized")
         .flag_if_supported("-Wno-unused-parameter");
+    if !memory_only {
+        // The local libmandoc patch uses C11 thread-local storage for the
+        // parser's mutable static state. Windows/MSVC uses its native static
+        // TLS spelling and does not need this language-mode flag.
+        build.flag_if_supported("-std=c11");
+    }
     if memory_only {
         build.define("MANDOC_MEMORY_ONLY", None);
     } else {

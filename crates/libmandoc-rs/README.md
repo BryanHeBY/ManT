@@ -13,7 +13,7 @@ to depend on libmandoc's private C structures or parser lifetime.
 - A `Parser` API whose caller-controlled `.so` policy defaults to denial.
 - Structured non-fatal diagnostics and typed source/decompression failures.
 - Top-level uncompressed, gzip, and zstd manual sources.
-- Serialized calls to the upstream parser, whose relevant state is global.
+- Concurrent parser calls with thread-local upstream and shim state.
 
 The crate is a parser layer only.  It intentionally does not render terminal
 output or HTML, locate system manual pages, interpret application-specific
@@ -71,9 +71,10 @@ process working directory. The approved root itself may be a symbolic link.
 Native C file inclusion is currently Unix-only; Windows callers resolve
 sources first and use the default memory-only policy.
 
-Parser sessions are serialized because relevant upstream state is
-process-global. A `Parser` value is inexpensive configuration, not an
-independent parallel C parser instance.
+The vendored parser subset and its include shim make all mutable parse state
+thread-local, so independent `Parser` calls may run concurrently. A `Parser`
+value is inexpensive immutable configuration; this guarantees parallel calls,
+not recursive re-entry through a caller callback on the same OS thread.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
@@ -93,6 +94,11 @@ The vendored C source at `vendor/mandoc-1.14.6/` is derived from the
 [official 1.14.6 snapshot](https://mandoc.bsd.lv/snapshots/) with optional
 local patches applied. End-user `cargo build` compiles this tree directly;
 no network access or external patch tool is required.
+
+The local thread-safety patch moves each mutable parser-global slot in the
+compiled libmandoc subset into static thread-local storage. It uses C11 TLS on
+Linux and macOS, and `__declspec(thread)` on Windows/MSVC; macOS's native
+process-global program-name slot is initialized once before concurrent parses.
 
 Maintainers use `scripts/sync-vendor` to regenerate the vendor tree:
 

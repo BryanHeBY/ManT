@@ -6,6 +6,7 @@
  * structures lets Rust release the parser before crossing the FFI boundary.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <errno.h>
 #ifndef MANDOC_MEMORY_ONLY
@@ -17,6 +18,9 @@
 #include <string.h>
 #ifndef MANDOC_MEMORY_ONLY
 #include <unistd.h>
+#endif
+#if HAVE_PROGNAME
+#include <pthread.h>
 #endif
 
 #include "mandoc.h"
@@ -79,10 +83,10 @@ struct mant_mandoc_document {
 };
 
 #ifndef MANDOC_MEMORY_ONLY
-static char *source_root;
-static int source_root_strict;
+MANT_THREAD_LOCAL char *source_root;
+MANT_THREAD_LOCAL int source_root_strict;
 /* Absolute top-level file path that parse_file itself is allowed to open. */
-static char *source_path;
+MANT_THREAD_LOCAL char *source_path;
 /*
  * Directory that literally contains the parsed file, kept unstripped.
  *
@@ -92,7 +96,24 @@ static char *source_path;
  * resolve next to the stub (man1/last.1). Keeping the original directory lets
  * the include resolver try both bases the way man(1) does.
  */
-static char *source_dir;
+MANT_THREAD_LOCAL char *source_dir;
+#endif
+
+/*
+ * BSD-derived targets expose a process-global program-name slot.  All parser
+ * callers use the same immutable label, so initialize it once instead of
+ * racing to assign it on every parse.  Linux and Windows compile the vendored
+ * TLS compatibility implementation and initialize their own thread-local
+ * slots below.
+ */
+#if HAVE_PROGNAME
+static pthread_once_t mant_progname_once = PTHREAD_ONCE_INIT;
+
+static void
+set_mant_progname(void)
+{
+	setprogname("mant");
+}
 #endif
 
 /*
@@ -195,7 +216,11 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		options |= MPARSE_SO;
 
 	messages = tmpfile();
+#if HAVE_PROGNAME
+	pthread_once(&mant_progname_once, set_mant_progname);
+#else
 	setprogname("mant");
+#endif
 	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
 #ifndef MANDOC_MEMORY_ONLY

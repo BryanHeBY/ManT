@@ -6,7 +6,6 @@ use std::{
     fs::File,
     io,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
 };
 
 #[cfg(unix)]
@@ -19,8 +18,6 @@ use std::io::Read;
 use flate2::read::MultiGzDecoder;
 
 use crate::{Diagnostic, Document, RawDocument, diagnostics, ffi};
-
-static PARSER_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 /// Policy controlling whether `.so` requests may resolve files.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -107,6 +104,10 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 /// Reusable parser with an explicit input policy.
+///
+/// Independent calls may run concurrently. The bundled C parser keeps its
+/// mutable session state in static thread-local storage; this type does not
+/// support recursive re-entry on one OS thread.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Parser {
     options: ParseOptions,
@@ -237,10 +238,6 @@ impl Parser {
             kind: ParseErrorKind::InvalidPath,
             message: "manual source path contains a NUL byte".into(),
         })?;
-        let lock = PARSER_LOCK.get_or_init(|| Mutex::new(()));
-        let _guard = lock
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let (include_root, allow_includes) = self.include_root()?;
         let raw = parse(&c_path, include_root.as_ref(), allow_includes).map_err(|message| {
             ParseError {

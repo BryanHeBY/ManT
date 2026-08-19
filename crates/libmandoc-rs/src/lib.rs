@@ -32,7 +32,10 @@ struct RawDocument {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, process};
+    use std::{
+        fs, process,
+        sync::{Arc, Barrier},
+    };
 
     #[cfg(windows)]
     use std::io::Write;
@@ -553,26 +556,83 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_callers_are_serialized_around_libmandoc_globals() {
-        let path = source_path("concurrent-mandoc-session");
-        fs::write(&path, ".TH THREADS 1\n.SH NAME\nthreads \\- test\n")
-            .expect("write temporary manual source");
+    fn concurrent_callers_keep_thread_local_parser_state_isolated() {
+        const WORKERS: usize = 8;
+        const ROUNDS: usize = 16;
 
-        let workers: Vec<_> = (0..4)
-            .map(|_| {
-                let path = path.clone();
-                std::thread::spawn(move || parse_file(&path, false))
+        let start = Arc::new(Barrier::new(WORKERS));
+        let workers: Vec<_> = (0..WORKERS)
+            .map(|worker| {
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    start.wait();
+                    for round in 0..ROUNDS {
+                        let title = format!("TLS-{worker}-{round}");
+                        let source = format!(
+                            ".Dd August 19, 2026\n.Dt {title} 1\n.Os\n.Sh NAME\n.Nm tls-{worker}-{round}\n.Nd concurrent \\(em parser state\n.Sh SEE ALSO\n.Xr pthread_create 3\n"
+                        );
+                        let report = Parser::default()
+                            .parse_bytes(format!("tls-{worker}-{round}.1"), source.as_bytes())
+                            .expect("concurrent memory parse must succeed");
+                        assert_eq!(report.document.metadata.title.as_deref(), Some(title.as_str()));
+                        let name = format!("tls-{worker}-{round}");
+                        assert_eq!(report.document.metadata.name.as_deref(), Some(name.as_str()));
+                    }
+                })
             })
             .collect();
         for worker in workers {
-            let document = worker
-                .join()
-                .expect("parser worker must not panic")
-                .expect("concurrent parse must succeed");
-            assert_eq!(document.metadata.title.as_deref(), Some("THREADS"));
+            worker.join().expect("parser worker must not panic");
         }
+    }
 
-        fs::remove_file(path).expect("remove temporary manual source");
+    #[cfg(unix)]
+    #[test]
+    fn concurrent_source_tree_includes_keep_each_root_isolated() {
+        const WORKERS: usize = 8;
+
+        let root = std::env::temp_dir().join(format!(
+            "libmandoc-rs-thread-local-includes-{}",
+            process::id()
+        ));
+        let aliases: Vec<_> = (0..WORKERS)
+            .map(|worker| {
+                let tree = root.join(format!("tree-{worker}")).join("man1");
+                fs::create_dir_all(&tree).expect("create isolated manual tree");
+                fs::write(
+                    tree.join("target.1"),
+                    format!(
+                        ".Dd August 19, 2026\n.Dt TLS-INCLUDE-{worker} 1\n.Os\n.Sh NAME\n.Nm tls-include-{worker}\n.Nd isolated include tree\n"
+                    ),
+                )
+                .expect("write included manual source");
+                let alias = tree.join("alias.1");
+                fs::write(&alias, ".so target.1\n").expect("write manual redirect");
+                alias
+            })
+            .collect();
+
+        let start = Arc::new(Barrier::new(WORKERS));
+        let workers: Vec<_> = aliases
+            .into_iter()
+            .enumerate()
+            .map(|(worker, alias)| {
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    start.wait();
+                    let document = parse_file(&alias, true)
+                        .expect("concurrent source-tree include must succeed");
+                    assert_eq!(
+                        document.metadata.title.as_deref(),
+                        Some(format!("TLS-INCLUDE-{worker}").as_str())
+                    );
+                })
+            })
+            .collect();
+        for worker in workers {
+            worker.join().expect("include worker must not panic");
+        }
+        fs::remove_dir_all(root).expect("remove isolated manual trees");
     }
 
     #[cfg(unix)]
