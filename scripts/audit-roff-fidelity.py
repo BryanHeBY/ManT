@@ -23,6 +23,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from dataclasses import asdict, dataclass
 from fractions import Fraction
@@ -105,6 +106,22 @@ class Finding:
     broken_phrases: list[str] | None = None
     signatures: list[str] | None = None
     detail: str | None = None
+
+
+@dataclass
+class AuditArtifact:
+    """One comparison result plus the local evidence used to review it.
+
+    The normal JSON report remains intentionally compact and contains only
+    normalized findings. An explicitly requested review bundle keeps the raw
+    decompressed source and both visible renderings together so a human can
+    decide whether a candidate is semantic loss or presentation drift.
+    """
+
+    finding: Finding
+    source: bytes | None
+    reference_output: str | None
+    mant_output: str | None
 
 
 @dataclass
@@ -262,6 +279,15 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         type=Path,
         metavar="FILE",
         help="also write the complete machine-readable report",
+    )
+    parser.add_argument(
+        "--review-dir",
+        type=Path,
+        metavar="DIR",
+        help=(
+            "write decompressed source, reference text, ManT text, and a "
+            "manifest for every selected page to this local review bundle"
+        ),
     )
     parser.add_argument(
         "--audit-db",
@@ -1233,8 +1259,9 @@ def audit_page(
     reference: str,
     timeout: int,
     ngram: int,
-) -> Finding:
+) -> AuditArtifact:
     environment = reference_environment()
+    raw_source = source_bytes(path)
     mant_command, hierarchy_root = mant_render_command(path, roots, mant)
     if hierarchy_root is not None:
         environment["MANT_MANPATH"] = str(hierarchy_root)
@@ -1249,22 +1276,32 @@ def audit_page(
         environment,
     )
     if mant_status != 0:
-        return Finding(
-            path=label,
-            status="hard-failure",
-            signatures=["ManT failed to render the page"],
-            detail=mant_error.strip() or f"exit status {mant_status}",
+        return AuditArtifact(
+            finding=Finding(
+                path=label,
+                status="hard-failure",
+                signatures=["ManT failed to render the page"],
+                detail=mant_error.strip() or f"exit status {mant_status}",
+            ),
+            source=raw_source,
+            reference_output=None,
+            mant_output=mant_output,
         )
 
     reference_status, reference_output, reference_error = run_renderer(
         reference_render_command(path, reference, hierarchy_root), timeout, environment
     )
     if reference_status != 0:
-        return Finding(
-            path=label,
-            status="hard-failure",
-            signatures=["reference renderer failed; page was not compared"],
-            detail=reference_error.strip() or f"reference exit status {reference_status}",
+        return AuditArtifact(
+            finding=Finding(
+                path=label,
+                status="hard-failure",
+                signatures=["reference renderer failed; page was not compared"],
+                detail=reference_error.strip() or f"reference exit status {reference_status}",
+            ),
+            source=raw_source,
+            reference_output=reference_output,
+            mant_output=mant_output,
         )
 
     reference_output = strip_reference_chrome(reference_output)
@@ -1272,28 +1309,37 @@ def audit_page(
     reference_tokens = [value for line in reference_lines for value in line]
     mant_tokens = tokens(mant_output)
     if not reference_tokens:
-        return Finding(
-            path=label,
-            status="hard-failure",
-            reference_tokens=len(reference_tokens),
-            mant_tokens=len(mant_tokens),
-            signatures=["reference renderer produced no comparable visible tokens"],
-            detail="the page cannot be classified as clean without a reference corpus",
+        return AuditArtifact(
+            finding=Finding(
+                path=label,
+                status="hard-failure",
+                reference_tokens=len(reference_tokens),
+                mant_tokens=len(mant_tokens),
+                signatures=["reference renderer produced no comparable visible tokens"],
+                detail="the page cannot be classified as clean without a reference corpus",
+            ),
+            source=raw_source,
+            reference_output=reference_output,
+            mant_output=mant_output,
         )
     if not mant_tokens:
-        return Finding(
-            path=label,
-            status="hard-failure",
-            reference_tokens=len(reference_tokens),
-            mant_tokens=0,
-            signatures=["ManT produced no comparable visible tokens"],
-            detail="the reference renderer produced visible content",
+        return AuditArtifact(
+            finding=Finding(
+                path=label,
+                status="hard-failure",
+                reference_tokens=len(reference_tokens),
+                mant_tokens=0,
+                signatures=["ManT produced no comparable visible tokens"],
+                detail="the reference renderer produced visible content",
+            ),
+            source=raw_source,
+            reference_output=reference_output,
+            mant_output=mant_output,
         )
 
     missing = missing_token_candidates(reference_tokens, mant_tokens)
     phrases = broken_phrase_candidates(reference_lines, mant_tokens, ngram)
     hard_signatures, review_signatures = fidelity_signatures(mant_output)
-    raw_source = source_bytes(path)
     if raw_source is not None:
         review_signatures.extend(
             differential_signatures(
@@ -1306,14 +1352,19 @@ def audit_page(
         hard_signatures.append("ManT produced empty output")
     signatures = hard_signatures + review_signatures
     status = "hard-failure" if hard_signatures else "review" if missing or phrases or review_signatures else "clean"
-    return Finding(
-        path=label,
-        status=status,
-        reference_tokens=len(reference_tokens),
-        mant_tokens=len(mant_tokens),
-        missing_tokens=missing,
-        broken_phrases=phrases,
-        signatures=signatures,
+    return AuditArtifact(
+        finding=Finding(
+            path=label,
+            status=status,
+            reference_tokens=len(reference_tokens),
+            mant_tokens=len(mant_tokens),
+            missing_tokens=missing,
+            broken_phrases=phrases,
+            signatures=signatures,
+        ),
+        source=raw_source,
+        reference_output=reference_output,
+        mant_output=mant_output,
     )
 
 
@@ -1375,6 +1426,69 @@ def write_json_report(
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def review_bundle_name(label: str) -> str:
+    """Return one stable, path-safe directory name for a reviewed page."""
+    leaf = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(label).name).strip(".-")
+    readable = leaf or "manual"
+    digest = hashlib.sha256(label.encode("utf-8")).hexdigest()[:16]
+    return f"{readable}-{digest}"
+
+
+def write_review_bundle(
+    directory: Path,
+    artifacts: Sequence[tuple[str, AuditArtifact]],
+) -> None:
+    """Write local source/render evidence without changing the audit ledger.
+
+    The bundle is intentionally opt-in and is not a fixture format: it may
+    contain third-party manuals and renderer-specific text.  A stable hash of
+    the logical path avoids interpreting a source label as a filesystem path.
+    """
+    pages = directory / "pages"
+    pages.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for label, artifact in sorted(artifacts, key=lambda value: value[0]):
+        name = review_bundle_name(label)
+        page_directory = pages / name
+        page_directory.mkdir(parents=True, exist_ok=True)
+        files: dict[str, str] = {}
+        if artifact.source is not None:
+            (page_directory / "source.roff").write_bytes(artifact.source)
+            files["source"] = f"pages/{name}/source.roff"
+        if artifact.reference_output is not None:
+            (page_directory / "reference.txt").write_text(
+                artifact.reference_output,
+                encoding="utf-8",
+            )
+            files["reference"] = f"pages/{name}/reference.txt"
+        if artifact.mant_output is not None:
+            (page_directory / "mant.txt").write_text(
+                artifact.mant_output,
+                encoding="utf-8",
+            )
+            files["mant"] = f"pages/{name}/mant.txt"
+        (page_directory / "finding.json").write_text(
+            json.dumps(asdict(artifact.finding), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        files["finding"] = f"pages/{name}/finding.json"
+        entries.append(
+            {
+                "path": label,
+                "status": artifact.finding.status,
+                "files": files,
+            }
+        )
+    manifest = {
+        "tool": "mant-roff-fidelity-review/v1",
+        "pages": entries,
+    }
+    (directory / "manifest.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
 
 def write_syntax_report(
@@ -1592,6 +1706,25 @@ def self_check() -> None:
     assert merged_review_status(None, "review") == "pending"
     assert merged_review_status(clean, "hard-failure") == "pending"
     assert merged_review_status(pending, "clean") == "not-required"
+    artifact = AuditArtifact(
+        finding=Finding(path="manual/1/demo", status="clean"),
+        source=b".TH DEMO 1\n",
+        reference_output="DEMO(1)\n",
+        mant_output="DEMO\n",
+    )
+    with tempfile.TemporaryDirectory() as temporary:
+        bundle = Path(temporary) / "review"
+        write_review_bundle(bundle, [(artifact.finding.path, artifact)])
+        manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["tool"] == "mant-roff-fidelity-review/v1"
+        assert len(manifest["pages"]) == 1
+        page = manifest["pages"][0]
+        assert page["path"] == "manual/1/demo"
+        assert page["status"] == "clean"
+        assert set(page["files"]) == {"source", "reference", "mant", "finding"}
+        assert (bundle / page["files"]["source"]).read_bytes() == artifact.source
+        assert (bundle / page["files"]["reference"]).read_text(encoding="utf-8") == artifact.reference_output
+        assert (bundle / page["files"]["mant"]).read_text(encoding="utf-8") == artifact.mant_output
     reusable_page = ROOT / "tests/fixtures/roff/nested-fl-mdoc.1"
     reusable_digest = source_digest(reusable_page)
     assert reusable_digest is not None
@@ -1842,10 +1975,11 @@ def main(argv: Sequence[str]) -> int:
     print()
 
     findings: list[Finding] = []
+    review_artifacts: list[tuple[str, AuditArtifact]] = []
     summary = AuditSummary()
     for path in pages:
         label, digest = page_records[path]
-        finding = audit_page(
+        artifact = audit_page(
             path,
             label,
             roots,
@@ -1854,7 +1988,10 @@ def main(argv: Sequence[str]) -> int:
             arguments.timeout,
             arguments.ngram,
         )
+        finding = artifact.finding
         findings.append(finding)
+        if arguments.review_dir is not None:
+            review_artifacts.append((label, artifact))
         update_summary(summary, finding)
         if not arguments.findings_only or finding.status in {"review", "hard-failure"}:
             print_finding(finding, arguments.show)
@@ -1888,6 +2025,9 @@ def main(argv: Sequence[str]) -> int:
             findings,
         )
         print(f"report: {arguments.json}")
+    if arguments.review_dir:
+        write_review_bundle(arguments.review_dir, review_artifacts)
+        print(f"review bundle: {arguments.review_dir}")
     if arguments.audit_db:
         write_audit_database(arguments.audit_db, database.values())
         print(f"audit database: {arguments.audit_db}")

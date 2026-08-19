@@ -168,6 +168,8 @@ invalidates and rebuilds the old cache. AST coverage guides
 which pages deserve comparison; only a human-reviewed finding plus a focused
 fixture and Rust assertion becomes a regression contract.
 
+For deliberate visual and structural inspection, pass `--review-dir /tmp/mant-roff-review` to the audit command. It produces a local manifest with one path-safe directory per selected page containing the decompressed source, reference text, ManT text, and finding metadata. This is review evidence only: do not commit the bundle or treat its renderer output as a snapshot fixture. Record the conclusion in this ledger and reduce a real defect to the existing licensed fixture system instead.
+
 When adding another distribution or release tree, avoid spending the review
 budget on byte-identical copies already represented by a completed corpus:
 

@@ -272,6 +272,9 @@ python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
   --max-pages-per-section 25 --syntax-priority \
   --syntax-cache /tmp/mant-roff-syntax.json.gz \
   --syntax-report /tmp/mant-roff-syntax-report.json --findings-only
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+  --max-pages-per-section 12 --syntax-priority \
+  --review-dir /tmp/mant-roff-review
 python3 scripts/audit-roff-fidelity.py --manpath /tmp/debian-man \
   --max-pages 200 --syntax-priority --dedupe-across-corpora \
   --syntax-cache /tmp/mant-debian-syntax.json.gz \
@@ -292,6 +295,8 @@ The audit compares normalized visible tokens and contiguous token phrases, plus 
 `--syntax-priority` replaces path-only ranking with deterministic greedy coverage over the actual owned libmandoc AST. The development-only `roff_ast_profile` example reports macro names, node roles and parent/child shapes, normalized list/display/font state, tables, equations, parser diagnostic classes, and rendering-relevant node flags without copying document text. It also reports bounded interaction features: a node or parent/child context paired with its flags and normalized attributes, plus attribute pairs on the same node. The sampler weights these combinations ahead of isolated features, first preferring shapes absent from the completed CSV ledger and then underrepresented and rarer forms. This distinguishes merely having seen `.SY`, a no-fill node, and a font from having exercised their exact combination.
 
 `--syntax-report` records per-feature corpus, ledger, reused-source, and selected-page counts plus representative paths; it measures exercised parser structure, not semantic correctness. `--syntax-cache` avoids reparsing unchanged `(corpus, path, source hash)` identities and supports compact `.json.gz` files. Both the profiler response and cache carry a feature-schema identity, so changing the set of observed AST flags or shapes invalidates and rebuilds an older cache instead of silently treating stale profiles as complete. Profiling uses bounded subprocess batches and isolates an abnormal native-parser exit down to the exact page instead of losing the whole scan. Unreadable host paths remain visible as report errors but do not masquerade as syntax features.
+
+`--review-dir` writes a local, untracked review bundle for every selected page: the decompressed source, normalized reference text, ManT text, its exact finding, and a path-safe manifest. Use a bounded syntax-prioritized selection to build a deliberate manual review batch, and never commit the bundle because it can contain third-party manuals and renderer-specific output. The regular JSON report and CSV ledger remain compact metadata rather than a copy of the reviewed corpus.
 
 Treat fidelity loss as three related but distinct classes: an unhandled construct, a recognized construct with an unmapped operand, or an incorrectly lowered recognized construct. Structured parser/lowering diagnostics can expose the first two classes, but a zero diagnostic count never proves fidelity because the third class requires an external oracle or a focused semantic regression. The local differential audit is therefore the discovery surface; reproducible fixtures and exact Rust assertions remain the CI gate.
 
