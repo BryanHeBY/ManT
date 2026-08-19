@@ -71,6 +71,7 @@ unsafe extern "C" {
     fn mant_mandoc_node_equation(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_table_cells(node: *const CNode) -> *const CTableCell;
     fn mant_mandoc_table_cell_text(cell: *const CTableCell) -> *const c_char;
+    fn mant_mandoc_table_cell_is_text_block(cell: *const CTableCell) -> i32;
     fn mant_mandoc_table_cell_column_span(cell: *const CTableCell) -> u32;
     fn mant_mandoc_table_cell_row_span(cell: *const CTableCell) -> u32;
     fn mant_mandoc_table_cell_alignment(cell: *const CTableCell) -> i32;
@@ -328,6 +329,7 @@ unsafe fn copy_table_cells(mut pointer: *const CTableCell) -> Vec<TableCell> {
     while !pointer.is_null() {
         cells.push(TableCell {
             text: unsafe { optional_string(mant_mandoc_table_cell_text(pointer)) },
+            text_block: unsafe { mant_mandoc_table_cell_is_text_block(pointer) } != 0,
             column_span: unsafe { mant_mandoc_table_cell_column_span(pointer) }
                 .try_into()
                 .unwrap_or(u16::MAX),

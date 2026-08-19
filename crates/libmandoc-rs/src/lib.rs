@@ -463,6 +463,26 @@ mod tests {
     }
 
     #[test]
+    fn parser_marks_tbl_text_block_cells() {
+        let path = source_path("tbl-text-block");
+        fs::write(
+            &path,
+            ".Dd August 19, 2026\n.Dt TBL-TEXT-BLOCK 3\n.Os\n.Sh NAME\n.Nm demo\n.Nd demo\n.Sh ATTRIBUTES\n.TS\nallbox;\nl l.\nInterface\tValue\nT{\n.Nm\nT}\tMT-Safe\n.TE\n",
+        )
+        .expect("write tbl text block source");
+        let document = parse_file(&path, false).expect("parse tbl text block source");
+        fs::remove_file(path).expect("remove tbl text block source");
+        let row = find_node(&document.root, &|node| {
+            node.kind == NodeKind::Table && node.table_cells.iter().any(|cell| cell.text_block)
+        })
+        .expect("tbl row containing a text block");
+        assert_eq!(row.table_cells.len(), 2);
+        assert_eq!(row.table_cells[0].text.as_deref(), Some(""));
+        assert!(row.table_cells[0].text_block);
+        assert!(!row.table_cells[1].text_block);
+    }
+
+    #[test]
     fn parser_session_reports_file_errors_as_values() {
         let path = source_path("missing-mandoc-session");
         let error = parse_file(&path, false).expect_err("missing source must fail");

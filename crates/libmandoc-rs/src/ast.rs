@@ -122,6 +122,8 @@ pub enum TableAlignment {
 pub struct TableCell {
     /// Visible cell content, or `None` for a spanning/empty cell.
     pub text: Option<String>,
+    /// The cell was written using a multiline tbl(7) `T{`/`T}` text block.
+    pub text_block: bool,
     /// Number of logical columns occupied by the cell.
     pub column_span: u16,
     /// Number of logical rows occupied by the cell.

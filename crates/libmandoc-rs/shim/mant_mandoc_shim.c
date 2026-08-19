@@ -30,6 +30,7 @@
 
 struct mant_mandoc_table_cell {
 	char			*text;
+	int			 text_block;
 	unsigned int		 column_span;
 	unsigned int		 row_span;
 	int			 alignment;
@@ -701,6 +702,7 @@ copy_table_cells(const struct tbl_span *span)
 		if (*next == NULL)
 			break;
 		(*next)->text = copy_string(source->string);
+		(*next)->text_block = source->block;
 		(*next)->column_span = source->hspans < 0 ? 1U :
 		    (unsigned int)source->hspans + 1U;
 		(*next)->row_span = source->vspans < 0 ? 1U :
@@ -1076,6 +1078,12 @@ const char *
 mant_mandoc_table_cell_text(const struct mant_mandoc_table_cell *cell)
 {
 	return cell == NULL ? NULL : cell->text;
+}
+
+int
+mant_mandoc_table_cell_is_text_block(const struct mant_mandoc_table_cell *cell)
+{
+	return cell == NULL ? 0 : cell->text_block;
 }
 
 unsigned int

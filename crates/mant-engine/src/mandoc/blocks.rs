@@ -451,7 +451,7 @@ fn lower_structural_node(
         }
         Some("Fo") => lower_mdoc_function(output, node, context, indent_columns),
         _ if node.kind == NodeKind::Table => {
-            append_table_row(output, node, indent_columns);
+            append_table_row(output, node, context, indent_columns);
         }
         _ if node.kind == NodeKind::Equation => output.push(equation_block(node, indent_columns)),
         _ => lower_structural_fallback(output, node, context, indent_columns, paragraph_distance),
@@ -713,17 +713,39 @@ fn lower_man_definition(
     }
 }
 
-fn append_table_row(output: &mut Vec<Block>, node: &Node, indent_columns: u16) {
+fn append_table_row(
+    output: &mut Vec<Block>,
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+) {
     if node.table_cells.is_empty() {
         return;
     }
+    let mut text_blocks = context
+        .table_text_blocks(
+            node.line,
+            node.table_cells
+                .iter()
+                .filter(|cell| cell.text_block)
+                .count(),
+        )
+        .into_iter();
     let row = TableRow {
         cells: node
             .table_cells
             .iter()
             .map(|cell| AstTableCell {
                 blocks: vec![Block::Paragraph {
-                    children: cell.text.as_deref().map_or_else(Vec::new, parse_roff_text),
+                    children: lower_table_cell(
+                        cell,
+                        node,
+                        context,
+                        cell.text_block
+                            .then(|| text_blocks.next())
+                            .flatten()
+                            .as_deref(),
+                    ),
                     layout: LayoutHint::default(),
                     source: source_span(node),
                 }],
@@ -746,6 +768,47 @@ fn append_table_row(output: &mut Vec<Block>, node: &Node, indent_columns: u16) {
             source: source_span(node),
         });
     }
+}
+
+fn lower_table_cell(
+    cell: &libmandoc_rs::TableCell,
+    node: &Node,
+    context: &LoweringContext<'_>,
+    text_block: Option<&str>,
+) -> Vec<Inline> {
+    if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
+        return parse_roff_text(cell.text.as_deref().unwrap_or_default());
+    }
+    if !cell.text_block {
+        return Vec::new();
+    }
+
+    let request =
+        text_block.and_then(|source| source.lines().map(str::trim).find(|line| !line.is_empty()));
+    let name = request
+        .and_then(|line| {
+            line.strip_prefix(".Nm")
+                .or_else(|| line.strip_prefix("'Nm"))
+        })
+        .filter(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+        .map(str::trim)
+        .and_then(|argument| {
+            if argument.is_empty() {
+                context.default_name.map(|name| {
+                    vec![Inline::Text {
+                        value: name.to_owned(),
+                    }]
+                })
+            } else {
+                Some(parse_roff_text(argument))
+            }
+        });
+    if let Some(children) = name.filter(|children| !children.is_empty()) {
+        return vec![Inline::Strong { children }];
+    }
+
+    context.warn_unhandled_table_text_block(node);
+    Vec::new()
 }
 
 struct BlockState {

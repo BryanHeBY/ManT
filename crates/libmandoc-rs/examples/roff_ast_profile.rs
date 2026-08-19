@@ -157,6 +157,9 @@ fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTre
     if !node.table_cells.is_empty() {
         features.insert("table:cells".to_owned());
         for cell in &node.table_cells {
+            if cell.text_block {
+                features.insert("table:text-block".to_owned());
+            }
             features.insert(format!(
                 "table:alignment:{}",
                 table_alignment_name(cell.alignment)

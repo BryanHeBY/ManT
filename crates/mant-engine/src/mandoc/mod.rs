@@ -96,7 +96,8 @@ fn parse_plain_manual(
     })
     .parse_bytes(path, source.as_ref())
     .map_err(ManualError::from)?;
-    let mut document = lower_mandoc_document(path, &report);
+    let source_text = String::from_utf8_lossy(source.as_ref());
+    let mut document = lower_mandoc_document_with_source(path, &report, Some(&source_text));
     if masked_controls > 0 {
         document.diagnostics.insert(
             0,
@@ -117,8 +118,16 @@ fn parse_plain_manual(
 /// Convert a completed low-level parse into the stable document contract.
 #[must_use]
 pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
+    lower_mandoc_document_with_source(path, report, None)
+}
+
+fn lower_mandoc_document_with_source(
+    path: &Path,
+    report: &ParseReport,
+    source: Option<&str>,
+) -> Document {
     let parsed: &MandocDocument = &report.document;
-    let mut context = LoweringContext::new(parsed.metadata.name.as_deref());
+    let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
     let mut diagnostics = diagnostics::lower_diagnostics(&report.diagnostics);
     let mut sections = blocks::lower_sections(&parsed.root, &mut context);
     let mut root_blocks = blocks::lower_root_blocks(&parsed.root, &context);
@@ -173,17 +182,55 @@ fn normalize_metadata(value: Option<&str>) -> Option<String> {
 
 struct LoweringContext<'a> {
     default_name: Option<&'a str>,
+    source: Option<&'a str>,
     next_section_id: usize,
     diagnostics: RefCell<Vec<Diagnostic>>,
 }
 
 impl<'a> LoweringContext<'a> {
-    const fn new(default_name: Option<&'a str>) -> Self {
+    const fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
             default_name,
+            source,
             next_section_id: 1,
             diagnostics: RefCell::new(Vec::new()),
         }
+    }
+
+    fn table_text_blocks(&self, line: u32, maximum: usize) -> Vec<String> {
+        let Some(start) = usize::try_from(line)
+            .ok()
+            .and_then(|line| line.checked_sub(1))
+        else {
+            return Vec::new();
+        };
+        let Some(source) = self.source else {
+            return Vec::new();
+        };
+        let mut blocks = Vec::new();
+        let mut current = None::<String>;
+        for line in source.lines().skip(start) {
+            if let Some(content) = current.as_mut() {
+                if line.trim_start().starts_with("T}") {
+                    blocks.push(std::mem::take(content));
+                    current = None;
+                    if blocks.len() == maximum {
+                        break;
+                    }
+                } else {
+                    if !content.is_empty() {
+                        content.push('\n');
+                    }
+                    content.push_str(line);
+                }
+            } else if line
+                .split(|character: char| character.is_whitespace())
+                .any(|field| field == "T{")
+            {
+                current = Some(String::new());
+            }
+        }
+        blocks
     }
 
     fn section_id(&mut self, title: &str) -> String {
@@ -219,6 +266,15 @@ impl<'a> LoweringContext<'a> {
             message: format!(
                 "structural macro '{macro_name}' contains parts without a complete lowering policy"
             ),
+            source: source_span(node),
+        });
+    }
+
+    fn warn_unhandled_table_text_block(&self, node: &Node) {
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.unhandled-table-text-block".to_owned()),
+            message: "tbl text block contains semantic roff that could not be retained".to_owned(),
             source: source_span(node),
         });
     }
@@ -1743,6 +1799,27 @@ Sean\n\
             document.sections[1].blocks[0],
             Block::Equation { ref value, .. } if value == "x + width / 2"
         ));
+    }
+
+    #[test]
+    fn restores_mdoc_names_inside_tbl_text_blocks() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("table-text-block.3"),
+            b".Dd August 19, 2026\n.Dt TABLE-TEXT-BLOCK 3\n.Os\n\
+.Sh NAME\n.Nm table-text-block\n.Nd test tbl text blocks\n\
+.Sh ATTRIBUTES\n.TS\nallbox;\nl l.\nInterface\tValue\n\
+T{\n.Nm\nT}\tMT-Safe\n.TE\n",
+        )
+        .expect("lower tbl text blocks");
+
+        let Block::Table { rows, .. } = &document.sections[1].blocks[0] else {
+            panic!("expected attributes table");
+        };
+        let [Block::Paragraph { children, .. }] = rows[1].cells[0].blocks.as_slice() else {
+            panic!("expected recovered name cell");
+        };
+        assert_eq!(inline_text(children), "table-text-block");
+        assert!(matches!(children.as_slice(), [Inline::Strong { .. }]));
     }
 
     #[test]
