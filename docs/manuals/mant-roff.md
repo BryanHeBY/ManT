@@ -70,6 +70,7 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Sx` | Resolved same-document section link or visible text when unresolved |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
+| `Bx` | BSD lifecycle forms such as `-alpha`, `-beta`, and `-devel` expand to their portable descriptive text; version forms render as canonical `versionBSD` names with an optional release |
 
 Validated libmandoc tags on mdoc definitions are retained for page-local navigation. Tags and section IDs share one document-local namespace and are disambiguated during IR validation.
 

@@ -354,6 +354,7 @@ fn lower_inline_node(
         Some("Xr" | "MR") => lower_manual_reference(children, default_name, spacing_enabled),
         Some("Lk") => lower_link(children, default_name, false, spacing_enabled),
         Some("Mt") => lower_link(children, default_name, true, spacing_enabled),
+        Some("Bx") => lower_bsd_reference(node, lowered),
         // Keep the heading text as a private unresolved target until the
         // complete section tree is available. The document post-pass replaces
         // it with the stable Section::id or degrades it to ordinary text.
@@ -666,6 +667,51 @@ fn lower_external_link(address: String, label: Vec<Inline>, email: bool) -> Vec<
         title: None,
         children,
     }]
+}
+
+/// Lower the portable semantic forms of mdoc `Bx` from its authored arguments.
+///
+///
+/// libmandoc appends a generated `BSD` node with `Ns` and intentionally leaves
+/// lifecycle arguments as compact `-develBSD` text. The mdoc contract instead
+/// gives the lifecycle forms descriptive meanings, while an ordinary version
+/// and optional release render as `versionBSD release`. The raw AST flags make
+/// this distinction explicit without reparsing source text or depending on a
+/// particular formatter's generated nodes.
+fn lower_bsd_reference(node: &Node, fallback: Vec<Inline>) -> Vec<Inline> {
+    let mut authored = node
+        .children
+        .iter()
+        .filter(|child| {
+            child.kind == NodeKind::Text && !child.flags.generated && !child.flags.no_print
+        })
+        .filter_map(|child| child.text.as_deref())
+        .map(visible_text)
+        .filter(|value| !value.is_empty());
+    let Some(first) = authored.next() else {
+        return text_node("BSD");
+    };
+    let second = authored.next();
+    if authored.next().is_some() {
+        return fallback;
+    }
+    if second.is_none() {
+        let lifecycle = match first.as_str() {
+            "-alpha" => Some("BSD (currently in alpha test)"),
+            "-beta" => Some("BSD (currently in beta test)"),
+            "-devel" => Some("BSD (currently under development)"),
+            _ => None,
+        };
+        if let Some(lifecycle) = lifecycle {
+            return text_node(lifecycle);
+        }
+    }
+    let mut value = format!("{first}BSD");
+    if let Some(second) = second {
+        value.push(' ');
+        value.push_str(&second);
+    }
+    text_node(&value)
 }
 
 fn external_link_target(address: String, email: bool) -> mant_ir::LinkTarget {

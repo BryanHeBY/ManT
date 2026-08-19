@@ -1074,6 +1074,21 @@ The next line.\n",
     }
 
     #[test]
+    fn expands_mdoc_bsd_lifecycle_and_release_forms() {
+        let source = b".Dd August 19, 2026\n.Dt BSD-LIFECYCLE 7\n.Os\n.Sh DESCRIPTION\n.Bx\n.Bx -alpha\n.Bx -beta\n.Bx -devel .\n.Bx 4.3 .\n.Bx 4.3 Net/2 .\n.Bx 386 0.1 .\n";
+        let document = parse_manual_bytes(std::path::Path::new("bsd-lifecycle.7"), source)
+            .expect("lower mdoc BSD lifecycle forms");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one BSD lifecycle paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "BSD BSD (currently in alpha test) BSD (currently in beta test) BSD (currently under development). 4.3BSD. 4.3BSD Net/2. 386BSD 0.1."
+        );
+    }
+
+    #[test]
     fn preserves_complete_mdoc_include_directives() {
         let document = parse_manual_bytes(
             std::path::Path::new("include.3"),
