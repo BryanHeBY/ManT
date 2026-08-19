@@ -211,6 +211,12 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn table_text_blocks(&self, line: u32, maximum: usize) -> Vec<TableTextBlock> {
+        // Ordinary tbl rows must not scan forward for `T{` markers.  Besides
+        // wasting work, that used to let a commented-out multiline-cell
+        // marker claim later real rows as its embedded semantic children.
+        if maximum == 0 {
+            return Vec::new();
+        }
         let Some(start) = usize::try_from(line)
             .ok()
             .and_then(|line| line.checked_sub(1))
@@ -224,8 +230,15 @@ impl<'a> LoweringContext<'a> {
         let mut current = None::<(String, u32)>;
         for (index, line) in source.lines().enumerate().skip(start) {
             let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
+            let trimmed = line.trim_start();
+            // `.\\"` comments are not tbl control lines, even when their
+            // prose contains a disabled `T{` or `T}` marker.  Ignore them
+            // both while looking for a block and inside an active block,
+            // matching roff's non-printing comment semantics.
+            if trimmed.starts_with(".\\\"") || trimmed.starts_with("'\\\"") {
+                continue;
+            }
             if let Some((content, start_line)) = current.as_mut() {
-                let trimmed = line.trim_start();
                 if let Some(remainder) = trimmed.strip_prefix("T}") {
                     blocks.push(TableTextBlock {
                         source: std::mem::take(content),
@@ -248,7 +261,7 @@ impl<'a> LoweringContext<'a> {
                     }
                     content.push_str(line);
                 }
-            } else if line.trim_end().ends_with("T{") {
+            } else if trimmed.trim_end().ends_with("T{") {
                 current = Some((String::new(), line_number.saturating_add(1)));
             }
         }
@@ -1929,6 +1942,43 @@ Sean\n\
             document.sections[1].blocks[0],
             Block::Equation { ref value, .. } if value == "x + width / 2"
         ));
+    }
+
+    #[test]
+    fn preserves_tbl_rows_across_interleaved_comments_and_text_blocks() {
+        let source = b".TH COMMENTED-TABLE 1\n.SH TABLE\n.TS\nl l.\na\t1\n.\\\" disabled text block T{\n.\\\" ignored\n.\\\" T}\nb\t2\nc\t3\nT{\n.BR d (1)\nT}\t4\ne\t5\n.TE\n";
+        let document = parse_manual_bytes(std::path::Path::new("commented-table.1"), source)
+            .expect("lower commented table");
+
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a table");
+        };
+        assert_eq!(rows.len(), 5);
+        let first_cells = rows
+            .iter()
+            .map(|row| match row.cells[0].blocks.as_slice() {
+                [Block::Paragraph { children, .. }] => inline_text(children),
+                cells => panic!("expected one paragraph per table cell: {cells:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(first_cells, ["a", "b", "c", "d(1)", "e"]);
+    }
+
+    #[test]
+    fn keeps_tbl_vertical_span_markers_out_of_visible_cells() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("vertical-table-span.1"),
+            b".TH VERTICAL-TABLE-SPAN 1\n.SH ATTRIBUTES\n.TS\nl l l.\nInterface\tAttribute\tValue\nT{\n.BR demo (1)\nT}\tThread safety\tMT-Safe\n\\^\tAsync-signal safety\tAS-Unsafe\n\\^\tAsync-cancel safety\tAC-Unsafe\n.TE\n",
+        )
+        .expect("lower vertical table span");
+
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a table");
+        };
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[1].cells[0].row_span, 3);
+        assert!(rows[2].cells[0].blocks.is_empty());
+        assert!(rows[3].cells[0].blocks.is_empty());
     }
 
     #[test]

@@ -1021,6 +1021,7 @@ fn append_table_row(
         cells: (0..cell_count)
             .map(|index| {
                 let cell = node.table_cells.get(index);
+                let vertical_continuation = cell.is_some_and(is_vertical_table_continuation);
                 let text_block = if cell.is_some_and(|cell| cell.text_block) {
                     let block =
                         embedding.and_then(|embedding| embedding.blocks.get(text_block_index));
@@ -1033,30 +1034,40 @@ fn append_table_row(
                     .as_ref()
                     .and_then(|cells| cells.get(index))
                     .copied();
-                let children = cell.map_or_else(
-                    || lower_missing_table_cell(raw_source, node, context),
-                    |cell| {
-                        let lowered = lower_table_cell(
-                            cell,
-                            node,
-                            context,
-                            text_block,
-                            embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
-                        );
-                        if lowered.is_empty() && raw_source.is_some_and(|source| !source.is_empty())
-                        {
-                            lower_missing_table_cell(raw_source, node, context)
-                        } else {
-                            lowered
-                        }
-                    },
-                );
-                AstTableCell {
-                    blocks: vec![Block::Paragraph {
+                let blocks = if vertical_continuation {
+                    // `\\^` is tbl's vertical-span control marker.  The
+                    // preceding cell owns the actual content and its copied
+                    // `row_span`; rendering the marker as text would invent
+                    // a visible token that groff and mandoc both suppress.
+                    Vec::new()
+                } else {
+                    let children = cell.map_or_else(
+                        || lower_missing_table_cell(raw_source, node, context),
+                        |cell| {
+                            let lowered = lower_table_cell(
+                                cell,
+                                node,
+                                context,
+                                text_block,
+                                embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
+                            );
+                            if lowered.is_empty()
+                                && raw_source.is_some_and(|source| !source.is_empty())
+                            {
+                                lower_missing_table_cell(raw_source, node, context)
+                            } else {
+                                lowered
+                            }
+                        },
+                    );
+                    vec![Block::Paragraph {
                         children,
                         layout: LayoutHint::default(),
                         source: source_span(node),
-                    }],
+                    }]
+                };
+                AstTableCell {
+                    blocks,
                     column_span: cell.map_or(1, |cell| cell.column_span),
                     row_span: cell.map_or(1, |cell| cell.row_span),
                     alignment: Some(match cell.map(|cell| cell.alignment) {
@@ -1077,6 +1088,10 @@ fn append_table_row(
             source: source_span(node),
         });
     }
+}
+
+fn is_vertical_table_continuation(cell: &libmandoc_rs::TableCell) -> bool {
+    cell.text.as_deref() == Some(r"\^")
 }
 
 fn lower_missing_table_cell(
