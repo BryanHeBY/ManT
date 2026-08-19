@@ -275,10 +275,15 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
             children: lowered,
         }],
         Some("Nd") => {
-            let mut content = text_node("—");
+            // `Nd` owns the separator between the name list and its one-line
+            // description. This is formatter-generated punctuation rather
+            // than a boundary between sibling source nodes, so spell the
+            // required trailing space explicitly.
+            let mut content = text_node("— ");
             content.extend(lowered);
             content
         }
+        Some("Fn") => lower_function_element(node, default_name),
         Some("Fo") => lower_function_declaration(node, default_name),
         Some("Eo") => surround_fragments(
             lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name),
@@ -309,6 +314,24 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
     output
 }
 
+fn lower_function_element(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
+    let Some((name, arguments)) = inline_children(node).split_first() else {
+        return Vec::new();
+    };
+    let mut declaration = wrap_strong(lower_inline_node(name, default_name));
+    declaration.push(Inline::Text { value: "(".into() });
+    for (index, argument) in arguments.iter().enumerate() {
+        if index > 0 {
+            declaration.push(Inline::Text { value: ", ".into() });
+        }
+        declaration.extend(wrap_emphasis(lower_inline_node(argument, default_name)));
+    }
+    declaration.push(Inline::Text {
+        value: function_closing(node.flags.synopsis_pretty).into(),
+    });
+    declaration
+}
+
 fn lower_function_declaration(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
     let head = lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name);
     let body = first_part_children(node, NodeKind::Body);
@@ -327,8 +350,19 @@ fn lower_function_declaration(node: &Node, default_name: Option<&str>) -> Vec<In
             default_name,
         ));
     }
-    declaration.push(Inline::Text { value: ")".into() });
+    let synopsis_pretty = node.flags.synopsis_pretty
+        || node
+            .children
+            .iter()
+            .any(|child| child.kind == NodeKind::Body && child.flags.synopsis_pretty);
+    declaration.push(Inline::Text {
+        value: function_closing(synopsis_pretty).into(),
+    });
     declaration
+}
+
+const fn function_closing(synopsis_pretty: bool) -> &'static str {
+    if synopsis_pretty { ");" } else { ")" }
 }
 
 /// Whether a semantic macro owns an inline enclosure body.

@@ -650,6 +650,8 @@ copy_node(const struct roff_node *source, int depth)
 		node->flags |= MANT_MANDOC_NODE_DELIMITER_OPEN;
 	if (source->flags & NODE_DELIMC)
 		node->flags |= MANT_MANDOC_NODE_DELIMITER_CLOSE;
+	if (source->flags & NODE_SYNPRETTY)
+		node->flags |= MANT_MANDOC_NODE_SYNOPSIS_PRETTY;
 
 	next_child = &node->child;
 	for (source_child = source->child; source_child != NULL;

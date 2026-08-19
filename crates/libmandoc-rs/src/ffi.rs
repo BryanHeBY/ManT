@@ -88,6 +88,7 @@ const NODE_PERMALINK: u32 = 1 << 5;
 const NODE_LINE_START: u32 = 1 << 6;
 const NODE_DELIMITER_OPEN: u32 = 1 << 7;
 const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
+const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
 
 struct DocumentHandle(NonNull<CDocument>);
 
@@ -285,6 +286,7 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
             line_start: raw_flags & NODE_LINE_START != 0,
             delimiter_open: raw_flags & NODE_DELIMITER_OPEN != 0,
             delimiter_close: raw_flags & NODE_DELIMITER_CLOSE != 0,
+            synopsis_pretty: raw_flags & NODE_SYNOPSIS_PRETTY != 0,
             line_continuation,
         },
         list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,

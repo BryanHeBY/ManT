@@ -159,6 +159,11 @@ pub struct NodeFlags {
     /// This text node ends with the roff `\c` escape and joins the next input
     /// line without an implicit space or line break.
     pub line_continuation: bool,
+    /// libmandoc selected synopsis-style presentation for this node.
+    ///
+    /// Some semantic punctuation is generated only in this context, notably
+    /// the terminating semicolon of mdoc `Fn` and `Fo` declarations.
+    pub synopsis_pretty: bool,
 }
 
 /// An owned syntax node with no pointers into the C parser.

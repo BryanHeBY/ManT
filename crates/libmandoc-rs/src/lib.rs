@@ -430,6 +430,39 @@ mod tests {
     }
 
     #[test]
+    fn parser_preserves_mdoc_synopsis_presentation_roles() {
+        let path = source_path("synopsis-role-mandoc-session");
+        fs::write(
+            &path,
+            ".Dd August 19, 2026\n.Dt SYNOPSIS-ROLE 3\n.Os\n\
+             .Sh SYNOPSIS\n.Fn synopsis_call \"int value\"\n\
+             .Fo explicit_call\n.Fa \"int value\"\n.Fc\n\
+             .Sh DESCRIPTION\n.Fn prose_call \"int value\"\n",
+        )
+        .expect("write synopsis-role source");
+
+        let document = parse_file(&path, false).expect("parse synopsis-role source");
+        fs::remove_file(path).expect("remove synopsis-role source");
+
+        let synopsis_function = find_node(&document.root, &|node| {
+            node.macro_name.as_deref() == Some("Fn") && node.line == 5
+        })
+        .expect("synopsis Fn");
+        let explicit_function = find_node(&document.root, &|node| {
+            node.macro_name.as_deref() == Some("Fo") && node.kind == NodeKind::Body
+        })
+        .expect("synopsis Fo body");
+        let prose_function = find_node(&document.root, &|node| {
+            node.macro_name.as_deref() == Some("Fn") && node.line == 10
+        })
+        .expect("prose Fn");
+
+        assert!(synopsis_function.flags.synopsis_pretty);
+        assert!(explicit_function.flags.synopsis_pretty);
+        assert!(!prose_function.flags.synopsis_pretty);
+    }
+
+    #[test]
     fn parser_session_reports_file_errors_as_values() {
         let path = source_path("missing-mandoc-session");
         let error = parse_file(&path, false).expect_err("missing source must fail");

@@ -183,6 +183,7 @@ fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTre
         (node.flags.delimiter_open, "delimiter-open"),
         (node.flags.delimiter_close, "delimiter-close"),
         (node.flags.line_continuation, "line-continuation"),
+        (node.flags.synopsis_pretty, "synopsis-pretty"),
     ] {
         if enabled {
             features.insert(format!("flag:{name}"));

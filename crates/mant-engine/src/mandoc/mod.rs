@@ -1179,6 +1179,55 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     }
 
     #[test]
+    fn preserves_mdoc_name_and_function_punctuation_by_context() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("function-punctuation.3"),
+            b".Dd August 19, 2026\n.Dt FUNCTION-PUNCTUATION 3\n.Os\n\
+.Sh NAME\n.Nm function-punctuation\n.Nd test generated punctuation\n\
+.Sh SYNOPSIS\n.Fn compact_call \"int value\"\n\
+.Fo explicit_call\n.Fa \"int value\"\n.Fc\n\
+.Sh DESCRIPTION\nThe\n.Fn prose_call \"int value\"\nfunction.\n",
+        )
+        .expect("lower mdoc generated punctuation");
+
+        let [Block::Paragraph { children: name, .. }] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("expected one NAME paragraph");
+        };
+        assert_eq!(
+            inline_text(name),
+            "function-punctuation — test generated punctuation"
+        );
+
+        let synopsis = document.sections[1]
+            .blocks
+            .iter()
+            .map(|block| match block {
+                Block::Paragraph { children, .. } => inline_text(children),
+                block => panic!("expected synopsis paragraph, got {block:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            synopsis,
+            ["compact_call(int value);", "explicit_call(int value);"]
+        );
+
+        let [
+            Block::Paragraph {
+                children: description,
+                ..
+            },
+        ] = document.sections[2].blocks.as_slice()
+        else {
+            panic!("expected one DESCRIPTION paragraph");
+        };
+        assert_eq!(
+            inline_text(description),
+            "The prose_call(int value) function."
+        );
+    }
+
+    #[test]
     fn preserves_printable_roff_content_outside_formal_sections() {
         let document = parse_manual_bytes(
             std::path::Path::new("manweb.1"),

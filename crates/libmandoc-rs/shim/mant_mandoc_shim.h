@@ -68,6 +68,7 @@ enum mant_mandoc_author_mode {
 #define MANT_MANDOC_NODE_LINE_START (1U << 6)
 #define MANT_MANDOC_NODE_DELIMITER_OPEN (1U << 7)
 #define MANT_MANDOC_NODE_DELIMITER_CLOSE (1U << 8)
+#define MANT_MANDOC_NODE_SYNOPSIS_PRETTY (1U << 9)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(
     const char *, const char *, int);
