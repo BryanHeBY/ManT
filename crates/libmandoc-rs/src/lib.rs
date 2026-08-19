@@ -169,6 +169,34 @@ mod tests {
     }
 
     #[test]
+    fn parser_expands_the_libbsd_library_name() {
+        let report = Parser::default()
+            .parse_bytes(
+                "libbsd.3bsd",
+                b".Dd August 19, 2026\n.Dt LIBBSD 3bsd\n.Os\n.Sh LIBRARY\n.Lb libbsd\n",
+            )
+            .expect("parse libbsd library declaration");
+        let library = find_macro(&report.document.root, "Lb").expect("Lb node");
+        let visible = library
+            .children
+            .iter()
+            .filter(|child| !child.flags.no_print)
+            .filter_map(|child| child.text.as_deref())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            visible,
+            ["Utility functions from BSD systems (libbsd, \\-lbsd)"]
+        );
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.message.contains("unknown library"))
+        );
+    }
+
+    #[test]
     fn parser_accepts_pandoc_verbatim_font_aliases() {
         let report = Parser::default()
             .parse_bytes(

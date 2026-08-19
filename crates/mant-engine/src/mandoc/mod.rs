@@ -1093,6 +1093,23 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     }
 
     #[test]
+    fn preserves_the_complete_libbsd_library_identity() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("libbsd.3bsd"),
+            b".Dd August 19, 2026\n.Dt LIBBSD 3bsd\n.Os\n.Sh LIBRARY\n.Lb libbsd\n",
+        )
+        .expect("lower libbsd library declaration");
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one library paragraph");
+        };
+
+        assert_eq!(
+            inline_text(children),
+            "Utility functions from BSD systems (libbsd, -lbsd)"
+        );
+    }
+
+    #[test]
     fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
         let mut report = Parser::default()
             .parse_bytes(
