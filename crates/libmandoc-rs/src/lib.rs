@@ -92,6 +92,17 @@ mod tests {
         })
     }
 
+    fn collect_visible_text<'a>(node: &'a Node, visible: &mut Vec<&'a str>) {
+        if !node.flags.no_print
+            && let Some(text) = node.text.as_deref()
+        {
+            visible.push(text);
+        }
+        for child in &node.children {
+            collect_visible_text(child, visible);
+        }
+    }
+
     #[test]
     fn upstream_version_is_pinned() {
         assert_eq!(super::LIBMANDOC_VERSION, "1.14.6");
@@ -193,6 +204,33 @@ mod tests {
                 .diagnostics
                 .iter()
                 .all(|diagnostic| !diagnostic.message.contains("unknown library"))
+        );
+    }
+
+    #[test]
+    fn parser_expands_current_mdoc_standard_names() {
+        let report = Parser::default()
+            .parse_bytes(
+                "modern-standards.7",
+                b".Dd August 19, 2026\n.Dt MODERN-STANDARDS 7\n.Os\n\
+.Sh STANDARDS\n.St -isoC-2023\n.St -p1003.1-2024\n",
+            )
+            .expect("parse current standards declarations");
+
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+
+        assert!(
+            visible
+                .iter()
+                .any(|text| text.contains("ISO/IEC 9899:2024")),
+            "C23 declaration must expand: {visible:?}"
+        );
+        assert!(
+            visible
+                .iter()
+                .any(|text| text.contains("IEEE Std 1003.1-2024")),
+            "POSIX.1-2024 declaration must expand: {visible:?}"
         );
     }
 
