@@ -743,6 +743,43 @@ mod tests {
     }
 
     #[test]
+    fn parser_retains_column_list_cells() {
+        let report = Parser::default()
+            .parse_bytes(
+                "columns.3",
+                b".Dd August 19, 2026\n.Dt COLUMNS 3\n.Os\n.Sh DESCRIPTION\n\
+.Bl -column name type description\n.It Dv CLSET_TIMEOUT Ta \"struct timeval *\" Ta \"set total timeout\"\n.El\n",
+            )
+            .expect("parse mdoc column list");
+        let item = find_macro(&report.document.root, "It").expect("column item");
+        let bodies = item
+            .children
+            .iter()
+            .filter(|child| child.kind == NodeKind::Body)
+            .collect::<Vec<_>>();
+
+        assert_eq!(bodies.len(), 3);
+        assert_eq!(
+            bodies
+                .iter()
+                .map(|body| {
+                    body.children
+                        .iter()
+                        .flat_map(|child| child.children.iter())
+                        .chain(body.children.iter())
+                        .filter_map(|child| child.text.as_deref())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>(),
+            [
+                vec!["CLSET_TIMEOUT"],
+                vec!["struct timeval *"],
+                vec!["set total timeout"],
+            ]
+        );
+    }
+
+    #[test]
     fn parser_copies_normalized_font_and_author_modes() {
         let report = Parser::default()
             .parse_bytes(

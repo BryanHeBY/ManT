@@ -864,6 +864,16 @@ fn lower_mdoc_list(
             .iter()
             .any(|item| !part_children(item, NodeKind::Head).is_empty()));
     let list_indent = indent_columns + display_indent(node);
+    if node.list_kind == Some(NormalizedListKind::Column) {
+        return lower_mdoc_column_list(
+            node,
+            items,
+            context,
+            indent_columns,
+            list_indent,
+            paragraph_distance,
+        );
+    }
     if is_definition {
         let max_term_width = node
             .width
@@ -910,6 +920,57 @@ fn lower_mdoc_list(
             layout: layout(indent_columns),
             source: source_span(node),
         }
+    }
+}
+
+/// Preserve every body sibling of an mdoc `Bl -column` item as one table cell.
+///
+/// libmandoc represents `Ta` separators by creating several `Body` siblings
+/// below the same `It` block. The usual term/body helper intentionally returns
+/// only one structural part, so treating a column list as a definition list
+/// silently discarded every cell after the first.
+fn lower_mdoc_column_list(
+    node: &Node,
+    items: Vec<&Node>,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    cell_indent: u16,
+    paragraph_distance: &mut u16,
+) -> Block {
+    let rows = items
+        .into_iter()
+        .map(|item| {
+            let mut cells = item
+                .children
+                .iter()
+                .filter(|part| part.kind == NodeKind::Body)
+                .map(|body| AstTableCell {
+                    blocks: lower_blocks(
+                        body.children.as_slice(),
+                        context,
+                        cell_indent,
+                        paragraph_distance,
+                    ),
+                    column_span: 1,
+                    row_span: 1,
+                    alignment: Some(AstTableAlignment::Left),
+                })
+                .collect::<Vec<_>>();
+            if item.flags.deep_link_target
+                && let Some(id) = item.tag.as_deref()
+                && let Some(Block::Paragraph { children, .. }) =
+                    cells.first_mut().and_then(|cell| cell.blocks.first_mut())
+            {
+                children.insert(0, Inline::Anchor { id: id.into() });
+            }
+            TableRow { cells }
+        })
+        .filter(|row| !row.cells.is_empty())
+        .collect();
+    Block::Table {
+        rows,
+        layout: layout(indent_columns),
+        source: source_span(node),
     }
 }
 

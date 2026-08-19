@@ -1611,6 +1611,34 @@ Sean\n\
         ));
     }
 
+    #[test]
+    fn lowers_every_mdoc_column_list_cell() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("columns.3"),
+            b".Dd August 19, 2026\n.Dt COLUMNS 3\n.Os\n.Sh DESCRIPTION\n\
+.Bl -column name type description\n.It Dv CLSET_TIMEOUT Ta \"struct timeval *\" Ta \"set total timeout\"\n.El\n",
+        )
+        .expect("lower mdoc column list");
+
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected column list to lower as a table");
+        };
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].cells.len(), 3);
+        let rendered = rows[0]
+            .cells
+            .iter()
+            .map(|cell| match cell.blocks.as_slice() {
+                [Block::Paragraph { children, .. }] => inline_text(children),
+                blocks => panic!("expected one paragraph per cell, got {blocks:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rendered,
+            ["CLSET_TIMEOUT", "struct timeval *", "set total timeout"]
+        );
+    }
+
     fn inline_text(children: &[Inline]) -> String {
         children
             .iter()
