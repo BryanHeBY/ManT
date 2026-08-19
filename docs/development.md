@@ -301,6 +301,8 @@ Pages containing `.so` requests use the indexed-manual path with an exact derive
 
 The full oracle is a local and release-time discovery tool, not a per-push CI dependency. Ordinary CI runs only its dependency-free self-check plus the focused Rust regressions derived from confirmed findings. When the audit exposes real semantic loss, add the smallest licensed page to the existing source catalogue, document its provenance, and encode the confirmed behavior in the corresponding `crates/mant-engine/tests/<source>/` module or a shared assertion. Do not add an allowlist merely to silence an unexplained candidate.
 
+Every new corpus expansion also has a manual review budget. Inspect every `REVIEW` and `HARD` result, then inspect representative clean pages that collectively cover the corpus's table forms, no-fill or display content, font changes, links or includes, and its dominant macro dialect (`man` or `mdoc`). Compare the source, the reference renderer, ManT text, and the structured result when a layout difference could hide an IR error. Record each candidate's durable conclusion in `FIDELITY_AUDIT.csv`; record the corpus-level scope and any confirmed fixes in `tests/fixtures/roff/FIDELITY_AUDIT.md`. This makes the ledger evidence of both automated breadth and deliberate human inspection without turning host-specific presentation into a CI gate.
+
 ManT intentionally does not expose this comparison as a user-facing
 `mant --verify` fidelity certificate. A reference renderer is unavailable on
 some supported platforms, installed macro packages and pages are host state,

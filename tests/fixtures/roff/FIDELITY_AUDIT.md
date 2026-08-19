@@ -37,6 +37,7 @@ a parser regression:
 | --- | --- | ---: | --- |
 | `debian-sid-2026-07-21-amd64` | Debian packages `cpio 2.15+dfsg-2.1`, `dash 0.5.12-12`, and `groff 1.24.1-1` | 52 pages, 49 distinct decompressed sources | 45 clean; 7 reviewed renderer/device-condition differences |
 | `fedora44-2026-07-20-x86_64` | Fedora packages `bash 5.3.9-3.fc44`, `clang 22.1.1-2.fc44`, `gcc 16.0.1-0.10.fc44`, `git-core-doc 2.53.0-1.fc44`, and `tar 1.35-8.fc44` | 258 pages discovered; 257 rendered; 1 exact source reused from an earlier completed corpus | 202 clean; 55 reviewed aliases whose embedded `.so` chains are deliberately not expanded by ManT |
+| `alpine-3.24.1-x86_64` | Official Alpine 3.24.1 APKs: `man-pages 6.18-r0`, `busybox-doc 1.37.0-r31`, `openssl-doc 3.5.7-r0`, and `util-linux-doc 2.42.1-r0` | 425 incremental ledger rows; 394 syntax-prioritized pages rechecked after the table fixes | 412 no-candidate scans; 8 reviewed link or formatter token-boundary differences; 5 confirmed table findings fixed |
 | `openbsd-7.9-amd64` | Official OpenBSD 7.9 `man79.tgz` for amd64 | 150 syntax-prioritized pages from 2,902 distinct sources | 139 clean after fixes; 11 reviewed formatter and Pod token-boundary differences |
 | `netbsd-10.1-amd64` | Official NetBSD 10.1 amd64 `man.tar.xz` set | 146 syntax-prioritized pages from 2,544 distinct sources | 138 clean after fixes; 8 reviewed formatter and terminal-layout differences |
 | `freebsd-15.1-amd64` | Official FreeBSD 15.1-RELEASE amd64 `base.txz` | 237 stable and syntax-prioritized pages from 11,183 paths / 4,085 distinct sources | 224 clean; 5 real lowering defects fixed; 8 reviewed formatter or reference-renderer differences |
@@ -76,11 +77,22 @@ traditional man/eqn inputs without exposing a new content-loss defect. Its
 remaining equation finding is terminal fraction-bar geometry rather than a
 missing operand or operator.
 
+The Alpine 3.24.1 pass adds a musl-based Linux release plus BusyBox, OpenSSL's
+Pod-derived pages, and util-linux generated manuals. It manually inspected all
+11 differential candidates and source-to-IR behavior for the two confirmed
+findings. A commented-out `T{` marker had let source-assisted `tbl` recovery
+claim later ordinary rows, and a `\\^` vertical-span control marker was rendered
+as visible text. Both are now reduced to focused Rust regressions. The remaining
+candidates retain their source text: they arise from deliberately visible link
+destinations, reference token concatenation across definition terms, or a
+different but structurally faithful traversal of a vertically spanned table.
+
 The pinned inputs can be independently identified as follows:
 
 - OpenBSD `man79.tgz` SHA-256: `7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af`.
 - NetBSD `man.tar.xz` SHA-512: `79f523d692c734a3a18921a4ec9cc7e0c2d1ae567bf4911a04f85dc78281c15f0b0fd68d201e9050daba498068df2c59660d3633e3abdbbc3d651ea8a26dd5a3`.
 - FreeBSD 15.1-RELEASE amd64 `base.txz` SHA-256: `3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f`.
+- Alpine 3.24.1 x86_64 APK SHA-256 values: `man-pages-6.18-r0.apk` `2ba1a7a9f579495cdb084fab1bc3efc72266402b172f94279549affb30506916`; `busybox-doc-1.37.0-r31.apk` `508b598dc2f6f91a2078418870ebc1ac00138ef2c7fd059d9a640e0a65ec5ff4`; `openssl-doc-3.5.7-r0.apk` `4553b42473e80dbfff28d287c2f5b8ed4c1f838c7d48782e40635654cd4769d8`; `util-linux-doc-2.42.1-r0.apk` `acf57e3589d3c0ee5b95aea6e9dd9df62ac71829da815dd4fc38e174deb07d2b`.
 - The illumos-gate mirror was pinned at commit `e8f5c080cc0b7997410d860afd787df30ba1cf2d`; its source files retain their upstream CDDL headers.
 - Apple tags resolve to commits `c62819a460dcc7906465c4c213a7fc0211148960`, `d798e66636621e416604cdeacc01ca45d964ad2d`, `298787009e5432c5e4c378a077f98267077e3495`, `659a8a301e2acf0343f8b8673a154a2ca4d07084`, and `15832a892bdd86cf3e3f2fde9265142f714437c8` in the table's repository order.
 - ronn-ng `v0.10.1`, scdoc `1.9.7`, and `clap_mangen-v0.3.0` resolve to commits `bc667fe55b2df9fe54bd34d8f589ab58a3e81371`, `5c782cda95427e7170bab7a9d7eef19c7c2d12d0`, and `f0d30d961d26f8fb636b33242256fca73a717f77` respectively.
