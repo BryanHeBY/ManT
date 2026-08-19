@@ -11,10 +11,12 @@ manual-root resolution, terminal cleanup, and the controlled `MANWIDTH=200`
 reference environment have one implementation. It then derives a deliberately
 narrow layout signal:
 
-- relative indentation collapse at a unique whole-line anchor, after removing
-  each renderer's own page-wide body margin;
-- blank-line spacing changes between two adjacent source lines inside a
-  recognised no-fill or literal-display region;
+- authored relative indentation collapse at a unique whole-line anchor inside
+  a no-fill or literal-display region; a renderer's implicit display gutter is
+  explicitly out of scope;
+- blank-line spacing changes between two adjacent source lines when the source
+  itself contains a blank line or `.sp` request inside a recognised no-fill or
+  literal-display region;
 - two short no-fill reference lines that ManT renders as one line.
 
 It records blank-run counts, indentation levels, and aligned anchor counts in

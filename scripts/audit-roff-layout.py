@@ -35,7 +35,7 @@ FIDELITY_AUDITOR = ROOT / "scripts/audit-roff-fidelity.py"
 DEFAULT_MANT = ROOT / "target/debug/mant"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/LAYOUT_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-LAYOUT_SCHEMA = "mant.roff-layout-audit/v1"
+LAYOUT_SCHEMA = "mant.roff-layout-audit/v2"
 MANUAL_SUFFIX = re.compile(r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$")
 DATABASE_FIELDS = [
     "corpus",

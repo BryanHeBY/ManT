@@ -137,6 +137,21 @@ class LayoutComparison:
     candidates: list[str]
 
 
+@dataclass(frozen=True)
+class NoFillSourceLayout:
+    """Source obligations narrow enough to compare across renderers.
+
+    A formatter's implicit display gutter is not source content.  Only raw
+    indentation authored inside a no-fill region, explicit blank requests,
+    and adjacent authored lines are suitable cross-renderer layout signals.
+    """
+
+    anchors: frozenset[str]
+    authored_indents: dict[str, int]
+    spaced_pairs: frozenset[tuple[str, str]]
+    consecutive_pairs: frozenset[tuple[str, str]]
+
+
 @dataclass
 class AuditArtifact:
     """One comparison result plus the local evidence used to review it.
@@ -954,8 +969,13 @@ def layout_key(value: str) -> str:
     return " ".join(value.split()).casefold()
 
 
-def no_fill_source_anchors(source: str) -> set[str]:
-    """Find simple source lines whose visible boundary is formatter-significant.
+def leading_columns(value: str) -> int:
+    expanded = value.expandtabs(8)
+    return len(expanded) - len(expanded.lstrip(" "))
+
+
+def no_fill_source_layout(source: str) -> NoFillSourceLayout:
+    """Find authored no-fill obligations without adopting a formatter's gutter.
 
     The reference layout is only actionable when the roff source itself asks
     for line-preserving output.  This intentionally handles the common man and
@@ -983,29 +1003,63 @@ def no_fill_source_anchors(source: str) -> set[str]:
         "SY",
     }
     depth = 0
-    output: set[str] = set()
+    anchors: set[str] = set()
+    indent_observations: dict[str, set[int]] = {}
+    spaced_pairs: set[tuple[str, str]] = set()
+    consecutive_pairs: set[tuple[str, str]] = set()
+    previous: str | None = None
+    pending_space = False
     for raw_line in source.splitlines():
         match = ROFF_REQUEST.fullmatch(raw_line)
         name = match.group("name") if match else None
         arguments = match.group("args") if match and match.group("args") else ""
         if name == "Bd" and "-literal" in arguments.split():
             depth += 1
+            previous = None
+            pending_space = False
             continue
         if name in starts:
             depth += 1
+            previous = None
+            pending_space = False
             continue
         if name == "Ed" or name in ends:
             depth = max(0, depth - 1)
+            previous = None
+            pending_space = False
             continue
         if depth == 0:
             continue
+        if not raw_line.strip() or name == "sp":
+            pending_space |= previous is not None
+            continue
+        if raw_line.lstrip().startswith((r'.\\"', r"'\\\"")):
+            continue
         candidate = arguments if name in inline_macros else raw_line if name is None else ""
+        authored_indent = 0 if name in inline_macros else leading_columns(candidate)
         candidate = ROFF_FONT_ESCAPE.sub("", candidate)
         candidate = candidate.replace(r"\&", "").replace(r"\~", " ")
         key = layout_key(candidate)
         if useful_layout_anchor(key):
-            output.add(key)
-    return output
+            anchors.add(key)
+            indent_observations.setdefault(key, set()).add(authored_indent)
+            if previous is not None:
+                pair = (previous, key)
+                consecutive_pairs.add(pair)
+                if pending_space:
+                    spaced_pairs.add(pair)
+            previous = key
+            pending_space = False
+    return NoFillSourceLayout(
+        anchors=frozenset(anchors),
+        authored_indents={
+            key: next(iter(indents))
+            for key, indents in indent_observations.items()
+            if len(indents) == 1
+        },
+        spaced_pairs=frozenset(spaced_pairs),
+        consecutive_pairs=frozenset(consecutive_pairs),
+    )
 
 
 def layout_lines(value: str) -> tuple[list[LayoutLine], int, int]:
@@ -1066,7 +1120,8 @@ def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutCo
     """
     reference_lines, reference_runs, reference_blanks = layout_lines(reference)
     mant_lines, mant_runs, mant_blanks = layout_lines(mant)
-    no_fill_anchors = no_fill_source_anchors(source) if source is not None else set()
+    source_layout = no_fill_source_layout(source) if source is not None else None
+    no_fill_anchors = source_layout.anchors if source_layout is not None else frozenset()
     reference_by_key: dict[str, list[LayoutLine]] = {}
     mant_by_key: dict[str, list[LayoutLine]] = {}
     for line in reference_lines:
@@ -1091,17 +1146,19 @@ def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutCo
     collapsed = [
         (reference_line, mant_line)
         for reference_line, mant_line in pairs
-        if reference_line.indent - reference_baseline >= 2
-        and mant_line.indent <= mant_baseline
+        if source_layout is not None
+        and source_layout.authored_indents.get(reference_line.key, 0) >= 2
+        and reference_line.indent >= source_layout.authored_indents[reference_line.key]
+        and mant_line.indent < source_layout.authored_indents[reference_line.key]
     ]
     if collapsed:
         samples = ", ".join(
-            f"{reference_line.key[:48]!r} (reference +{reference_line.indent - reference_baseline}, "
-            f"ManT +{max(0, mant_line.indent - mant_baseline)})"
+            f"{reference_line.key[:48]!r} (source +{source_layout.authored_indents[reference_line.key]}, "
+            f"reference={reference_line.indent}, ManT={mant_line.indent})"
             for reference_line, mant_line in collapsed[:3]
         )
         candidates.append(
-            f"relative indentation may collapse for {len(collapsed)} aligned line(s): {samples}"
+            f"authored relative indentation may collapse for {len(collapsed)} aligned line(s): {samples}"
         )
 
     common_unique = {reference_line.key for reference_line, _ in pairs}
@@ -1129,8 +1186,8 @@ def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutCo
         mant_gap = mant_second.number - mant_first.number - 1
         if (
             reference_gap != mant_gap
-            and reference_first.key in no_fill_anchors
-            and reference_second.key in no_fill_anchors
+            and source_layout is not None
+            and (reference_first.key, reference_second.key) in source_layout.spaced_pairs
         ):
             spacing.append((reference_first.key, reference_gap, mant_gap))
     if spacing:
@@ -1148,8 +1205,8 @@ def layout_comparison(reference: str, mant: str, source: str | None) -> LayoutCo
         if (
             useful_layout_anchor(first.key)
             and useful_layout_anchor(second.key)
-            and first.key in no_fill_anchors
-            and second.key in no_fill_anchors
+            and source_layout is not None
+            and (first.key, second.key) in source_layout.consecutive_pairs
             and len(first.key) <= 96
             and len(second.key) <= 96
             and f"{first.key} {second.key}" in mant_whole_lines
@@ -2036,21 +2093,21 @@ def self_check() -> None:
     assert not differential_signatures(
         ".Fn function\n", "function();", "function();"
     )
-    layout_source = ".EX\nplain first\nplain second\n.EE\n"
+    layout_source = ".EX\nplain first\n  plain second\n.EE\n"
     synopsis_source = (
         ".EX\n.SY #!\\f[I]interpreter\\f[]\n.RI [ optional-arg ]\n.YS\n.EE\n"
     )
-    assert no_fill_source_anchors(synopsis_source) == {
-        "#!interpreter",
-        "[optional-arg]",
-    }
+    synopsis_layout = no_fill_source_layout(synopsis_source)
+    assert synopsis_layout.anchors == {"#!interpreter", "[optional-arg]"}
+    assert synopsis_layout.authored_indents["#!interpreter"] == 0
+    assert synopsis_layout.consecutive_pairs == {("#!interpreter", "[optional-arg]")}
     collapsed_layout = layout_comparison(
         "  plain first\n    plain second\n",
         "plain first\nplain second\n",
         layout_source,
     )
     assert collapsed_layout.shared_anchors == 2
-    assert any("relative indentation may collapse" in item for item in collapsed_layout.candidates)
+    assert any("authored relative indentation may collapse" in item for item in collapsed_layout.candidates)
     merged_layout = layout_comparison(
         "  plain first\n  plain second\n",
         "plain first plain second\n",
@@ -2060,7 +2117,7 @@ def self_check() -> None:
     spacing_layout = layout_comparison(
         "  plain first\n  plain second\n",
         "plain first\n\nplain second\n",
-        layout_source,
+        ".EX\nplain first\n\nplain second\n.EE\n",
     )
     assert any("spacing divergence" in item for item in spacing_layout.candidates)
     assert len(compile_source_patterns([r"^\.Dd", r"^\.Fn"])) == 2

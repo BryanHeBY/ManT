@@ -312,7 +312,8 @@ python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
 The optional renderer-layout audit is separate from both the content and
 AST-to-IR ledgers. It uses the same local `man(1)`/groff reference rendering as
 the fidelity auditor, but only compares source-gated line boundaries, spacing,
-and relative indentation after removing each renderer's own body margin. It
+and authored relative indentation; formatter-owned display gutters and body
+margins are out of scope. It
 does not re-run, modify, or invalidate completed `FIDELITY_AUDIT.csv` or
 `STRUCTURE_AUDIT.csv` rows.
 
