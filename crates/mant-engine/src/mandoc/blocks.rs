@@ -194,6 +194,7 @@ struct BlockLowerer<'a, 'source> {
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
     definition_hanging_width: usize,
     split_authors: bool,
+    synopsis_return_type_open: bool,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -210,6 +211,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             state: BlockState::new(indent_columns, spacing_enabled),
             definition_hanging_width: 7,
             split_authors: false,
+            synopsis_return_type_open: false,
         }
     }
 
@@ -249,6 +251,14 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             return;
         }
         self.state.flush_preformatted();
+        if self.push_mdoc_synopsis_declaration(node) {
+            self.state.inherit_spacing(spacing_after_node(
+                node,
+                self.state.spacing_enabled(),
+                self.context.default_name,
+            ));
+            return;
+        }
         if node.flags.delimiter_close
             && participates_in_inline_flow(node)
             && self.state.paragraph.is_empty()
@@ -328,6 +338,73 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         if node.macro_name.as_deref() == Some("Pf") {
             self.state.tighten_next_boundary();
         }
+    }
+
+    /// Preserve declaration boundaries selected by mdoc's SYNOPSIS grammar.
+    ///
+    /// libmandoc marks the declaration-oriented `Fd`, `In`, `Ft`, `Fn`,
+    /// `Fo`, and `Vt` nodes with `synopsis_pretty`.  Their terminal layout is
+    /// intentionally richer than ManT's IR, but the declaration boundary is
+    /// semantic: an include directive must not merge into the next return
+    /// type, and each function declaration must remain independently
+    /// addressable.  A return type and the immediately following function
+    /// macro form one useful IR paragraph; all other marked declarations own
+    /// a paragraph of their own.
+    fn push_mdoc_synopsis_declaration(&mut self, node: &Node) -> bool {
+        let Some(role) = mdoc_synopsis_declaration_role(node) else {
+            if self.synopsis_return_type_open {
+                self.state.flush_paragraph();
+                self.synopsis_return_type_open = false;
+            }
+            return false;
+        };
+
+        match role {
+            SynopsisDeclarationRole::ReturnType => {
+                self.state.flush_paragraph();
+                self.push_inline_node(node);
+                self.synopsis_return_type_open = true;
+            }
+            SynopsisDeclarationRole::Function => {
+                if !self.synopsis_return_type_open {
+                    self.state.flush_paragraph();
+                }
+                self.push_inline_node(node);
+                self.state.flush_paragraph();
+                self.synopsis_return_type_open = false;
+            }
+            SynopsisDeclarationRole::Standalone => {
+                self.state.flush_paragraph();
+                self.push_inline_node(node);
+                self.state.flush_paragraph();
+                self.synopsis_return_type_open = false;
+            }
+        }
+        true
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SynopsisDeclarationRole {
+    Standalone,
+    ReturnType,
+    Function,
+}
+
+fn mdoc_synopsis_declaration_role(node: &Node) -> Option<SynopsisDeclarationRole> {
+    let synopsis_pretty = node.flags.synopsis_pretty
+        || node
+            .children
+            .iter()
+            .any(|child| child.flags.synopsis_pretty);
+    if !synopsis_pretty {
+        return None;
+    }
+    match node.macro_name.as_deref()? {
+        "Fd" | "In" | "Vt" => Some(SynopsisDeclarationRole::Standalone),
+        "Ft" => Some(SynopsisDeclarationRole::ReturnType),
+        "Fn" | "Fo" => Some(SynopsisDeclarationRole::Function),
+        _ => None,
     }
 }
 

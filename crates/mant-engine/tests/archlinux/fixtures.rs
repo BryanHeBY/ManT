@@ -17,6 +17,7 @@ static GAWK: OnceLock<Document> = OnceLock::new();
 static RSYNC: OnceLock<Document> = OnceLock::new();
 static TAR: OnceLock<Document> = OnceLock::new();
 static SH: OnceLock<Document> = OnceLock::new();
+static ARCHIVE_ENTRY_STAT: OnceLock<Document> = OnceLock::new();
 
 pub fn archlinux_manual(name: &str) -> &'static Document {
     let slot = match name {
@@ -28,6 +29,7 @@ pub fn archlinux_manual(name: &str) -> &'static Document {
         "rsync" => &RSYNC,
         "tar" => &TAR,
         "sh" => &SH,
+        "archive_entry_stat" => &ARCHIVE_ENTRY_STAT,
         _ => panic!("unknown Arch Linux fixture {name}"),
     };
     slot.get_or_init(|| {
@@ -41,6 +43,11 @@ pub fn archlinux_manual_query(name: &str) -> ResolvedContent {
 }
 
 pub fn archlinux_fixture_path(name: &str) -> PathBuf {
+    if name == "archive_entry_stat" {
+        return PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("tests/fixtures/roff/real/archlinux/archive_entry_stat.3");
+    }
     if name == "sh" {
         return PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")

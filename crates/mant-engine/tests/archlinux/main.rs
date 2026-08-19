@@ -8,6 +8,7 @@
 mod common;
 mod fixtures;
 
+mod archive_entry_stat;
 mod clang;
 mod gawk;
 mod gcc;

@@ -1368,6 +1368,38 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     }
 
     #[test]
+    fn preserves_mdoc_synopsis_declaration_units() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("synopsis-declarations.3"),
+            b".Dd August 19, 2026\n.Dt SYNOPSIS-DECLARATIONS 3\n.Os\n\
+.Sh SYNOPSIS\n.In synprobe.h\n.Ft const struct stat *\n\
+.Fn synprobe_first \"struct thing *a\"\n.Ft void\n\
+.Fo synprobe_second\n.Fa \"struct thing *a\"\n.Fa \"int n\"\n.Fc\n\
+.Fn synprobe_third \"int n\"\n",
+        )
+        .expect("lower mdoc synopsis declarations");
+
+        let rendered = document.sections[0]
+            .blocks
+            .iter()
+            .map(|block| match block {
+                Block::Paragraph { children, .. } => inline_text(children),
+                block => panic!("expected synopsis declaration paragraph, got {block:?}"),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered,
+            [
+                "#include <synprobe.h>",
+                "const struct stat * synprobe_first(struct thing *a);",
+                "void synprobe_second(struct thing *a, int n);",
+                "synprobe_third(int n);",
+            ]
+        );
+    }
+
+    #[test]
     fn preserves_printable_roff_content_outside_formal_sections() {
         let document = parse_manual_bytes(
             std::path::Path::new("manweb.1"),
