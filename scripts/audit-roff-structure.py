@@ -4,8 +4,8 @@
 Unlike ``audit-roff-fidelity.py``, this development-only audit never compares
 terminal wrapping or invokes a host renderer. It compares structural
 obligations observed in libmandoc's owned AST with the source-aware ManT IR:
-no-fill source lines, list and definition items, table rows and spans,
-indented scopes, explicit breaks, and typed navigation links.
+no-fill source lines, paragraph/list/definition container shape, table rows,
+cells and spans, relative indentation, and typed navigation links.
 
 The output is deliberately a review queue. A count mismatch can expose true
 lowering loss, but a human must still inspect the source and IR before adding a
@@ -38,7 +38,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v1"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v2"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -489,11 +489,13 @@ def profile_findings(
                 violations = response.get("violations")
                 expected = response.get("expected")
                 observed = response.get("observed")
+                topology = response.get("topology")
                 if (
                     not isinstance(violations, list)
                     or not all(isinstance(item, str) for item in violations)
                     or not valid_structure_counts(expected)
                     or not valid_structure_counts(observed)
+                    or not valid_structure_topology(topology)
                 ):
                     yield Finding(label, "hard-failure", [], "profiler returned invalid violations")
                 else:
@@ -511,6 +513,18 @@ def valid_structure_counts(value: object) -> bool:
         isinstance(key, str) and isinstance(count, int) and count >= 0
         for key, count in value.items()
     )
+
+
+def valid_structure_topology(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    for side in ("expected", "observed"):
+        topology = value.get(side)
+        if not isinstance(topology, dict):
+            return False
+        if not all(isinstance(topology.get(field), list) for field in ("lists", "tableRows")):
+            return False
+    return True
 
 
 def self_check() -> None:

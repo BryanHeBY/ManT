@@ -21,24 +21,28 @@ use libmandoc_rs::{
     Parser,
 };
 use mant_engine::{ManualPage, parse_manual_page};
-use mant_ir::{Block, Document, Inline, Section};
+use mant_ir::{Block, Document, Inline, LinkTarget, Section};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v1";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v2";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AstStructure {
     no_fill_lines: usize,
     literal_displays: usize,
+    paragraph_boundaries: usize,
     generic_list_items: usize,
     definition_items: usize,
     table_rows: usize,
     table_spanning_cells: usize,
-    indented_scopes: usize,
+    max_relative_indent_depth: usize,
     hard_breaks: usize,
-    navigation_links: usize,
+    manual_links: usize,
+    external_links: usize,
+    email_links: usize,
+    section_links: usize,
 }
 
 #[derive(Default, Serialize)]
@@ -46,13 +50,92 @@ struct AstStructure {
 struct IrStructure {
     preformatted_blocks: usize,
     preformatted_lines: usize,
+    paragraph_blocks: usize,
     generic_list_items: usize,
     definition_items: usize,
     table_rows: usize,
     table_spanning_cells: usize,
-    indented_blocks: usize,
+    max_indent_columns: u16,
     hard_breaks: usize,
-    navigation_links: usize,
+    manual_links: usize,
+    external_links: usize,
+    email_links: usize,
+    section_links: usize,
+}
+
+/// Source-addressable topology for semantic containers.  Counts catch broad
+/// loss; these signatures catch a list or table retaining the right total in
+/// the wrong parent or shape.
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AstTopology {
+    lists: Vec<AstListTopology>,
+    table_rows: Vec<AstTableRowTopology>,
+}
+
+#[derive(Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IrTopology {
+    lists: Vec<IrListTopology>,
+    table_rows: Vec<IrTableRowTopology>,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ListTopologyKind {
+    Generic,
+    Definition,
+}
+
+impl ListTopologyKind {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Generic => "generic",
+            Self::Definition => "definition",
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AstListTopology {
+    source_line: u32,
+    kind: ListTopologyKind,
+    items: usize,
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IrListTopology {
+    source_line: u32,
+    kind: ListTopologyKind,
+    items: usize,
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+struct AstTableRowTopology {
+    cells: Vec<AstTableCellTopology>,
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AstTableCellTopology {
+    column_span: u16,
+    row_span: u16,
+    vertical_continuation: bool,
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+struct IrTableRowTopology {
+    cells: Vec<IrTableCellTopology>,
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IrTableCellTopology {
+    column_span: u16,
+    row_span: u16,
+    empty: bool,
 }
 
 fn main() {
@@ -113,7 +196,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
-    let expected = ast_structure(&report.document.root);
+    let (expected, expected_topology) = ast_profile(&report.document.root);
     let document = parse_manual_page(&ManualPage {
         name: "audit".to_owned(),
         section: "1".to_owned(),
@@ -121,14 +204,19 @@ fn profile_request(line: &str) -> Result<Value, String> {
         manual_root: root,
     })
     .map_err(|error| error.to_string())?;
-    let observed = ir_structure(&document);
-    let violations = compare_structure(&expected, &observed);
+    let (observed, observed_topology) = ir_profile(&document);
+    let violations =
+        compare_structure(&expected, &observed, &expected_topology, &observed_topology);
 
     Ok(json!({
         "schema": PROFILE_SCHEMA,
         "id": id,
         "expected": expected,
         "observed": observed,
+        "topology": {
+            "expected": expected_topology,
+            "observed": observed_topology,
+        },
         "diagnostics": {
             "parser": report.diagnostics.len(),
             "ir": document.diagnostics.len(),
@@ -146,20 +234,24 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("request.{field} must be a non-empty string"))
 }
 
-fn ast_structure(root: &Node) -> AstStructure {
+fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
-    collect_ast_structure(root, false, &mut profile, &mut no_fill_lines);
+    collect_ast_structure(root, false, 0, &mut profile, &mut no_fill_lines);
     profile.no_fill_lines = no_fill_lines
         .values()
         .filter(|continues_line| !**continues_line)
         .count();
-    profile
+    let mut topology = AstTopology::default();
+    collect_ast_topology(root, &mut topology);
+    topology.lists.sort_by_key(|list| list.source_line);
+    (profile, topology)
 }
 
 fn collect_ast_structure(
     node: &Node,
     inherited_nonprinting: bool,
+    relative_indent_depth: usize,
     profile: &mut AstStructure,
     no_fill_lines: &mut BTreeMap<u32, bool>,
 ) {
@@ -167,7 +259,8 @@ fn collect_ast_structure(
     if node.flags.no_fill
         && !nonprinting
         && node.kind == NodeKind::Text
-        && node.text.as_deref().is_some_and(|text| !text.is_empty())
+        && node.flags.line_start
+        && node.text.as_deref().is_some_and(is_visible_no_fill_text)
         && node.line > 0
     {
         no_fill_lines
@@ -183,20 +276,42 @@ fn collect_ast_structure(
             {
                 profile.literal_displays += 1;
             }
-            Some("Bl") => match node.list_kind {
-                Some(NormalizedListKind::Definition | NormalizedListKind::Column) => {
+            Some("PP" | "P" | "LP" | "HP") if has_visible_flow_text(node) => {
+                profile.paragraph_boundaries += 1;
+            }
+            Some("Bl") => match mdoc_list_topology_kind(node) {
+                Some(MdocContainerKind::Definition) => {
                     profile.definition_items += direct_list_item_count(node);
                 }
-                _ => profile.generic_list_items += direct_list_item_count(node),
+                Some(MdocContainerKind::Table) => {
+                    profile.table_rows += mdoc_column_rows(node).len();
+                }
+                Some(MdocContainerKind::Generic) | None => {
+                    profile.generic_list_items += direct_list_item_count(node);
+                }
             },
-            Some("TP" | "IP" | "TQ") => profile.definition_items += 1,
-            Some("RS") => profile.indented_scopes += 1,
+            Some("IP") if ast_ip_is_bullet(node) => profile.generic_list_items += 1,
+            // `.TQ` only adds an alias to the next described `.TP` item.  It
+            // intentionally has no standalone IR item.
+            Some("TP" | "IP") if has_visible_definition_description(node) => {
+                profile.definition_items += 1;
+            }
             _ => {}
         }
     }
     match node.macro_name.as_deref() {
         Some("br") if node.kind == NodeKind::Element => profile.hard_breaks += 1,
-        Some("Xr" | "Lk" | "Mt" | "UR") => profile.navigation_links += 1,
+        Some("Xr" | "Lk" | "Mt" | "Sx") if node.kind == NodeKind::Element => {
+            match node.macro_name.as_deref() {
+                Some("Xr") => profile.manual_links += 1,
+                Some("Lk") => profile.external_links += 1,
+                Some("Mt") => profile.email_links += 1,
+                Some("Sx") => profile.section_links += 1,
+                _ => unreachable!("guarded semantic link macro"),
+            }
+        }
+        Some("UR") if node.kind == NodeKind::Block => profile.external_links += 1,
+        Some("MT") if node.kind == NodeKind::Block => profile.email_links += 1,
         _ => {}
     }
     if node.kind == NodeKind::Table && !node.table_cells.is_empty() {
@@ -207,9 +322,32 @@ fn collect_ast_structure(
             .filter(|cell| cell.column_span > 1 || cell.row_span > 1)
             .count();
     }
+    let child_indent_depth = relative_indent_depth
+        + usize::from(node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("RS"));
+    profile.max_relative_indent_depth = profile.max_relative_indent_depth.max(child_indent_depth);
     for child in &node.children {
-        collect_ast_structure(child, nonprinting, profile, no_fill_lines);
+        collect_ast_structure(
+            child,
+            nonprinting,
+            child_indent_depth,
+            profile,
+            no_fill_lines,
+        );
     }
+}
+
+/// libmandoc keeps a source-line node for a standalone `\f` font switch in a
+/// no-fill display. The switch has no printable glyph and therefore cannot
+/// demand a `LineBreak` in `ManT` IR.
+fn is_visible_no_fill_text(text: &str) -> bool {
+    !text.is_empty() && !is_roff_font_switch(text)
+}
+
+fn is_roff_font_switch(text: &str) -> bool {
+    let Some(font) = text.strip_prefix(r"\f") else {
+        return false;
+    };
+    font.len() == 1 || (font.starts_with('[') && font.ends_with(']') && !font.contains(r"\f"))
 }
 
 fn is_stateful_request(node: &Node) -> bool {
@@ -243,65 +381,256 @@ fn direct_list_item_count(node: &Node) -> usize {
         .count()
 }
 
-fn ir_structure(document: &Document) -> IrStructure {
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum MdocContainerKind {
+    Generic,
+    Definition,
+    Table,
+}
+
+fn mdoc_list_topology_kind(node: &Node) -> Option<MdocContainerKind> {
+    if node.macro_name.as_deref() != Some("Bl") {
+        return None;
+    }
+    Some(match node.list_kind {
+        Some(NormalizedListKind::Column) => MdocContainerKind::Table,
+        Some(NormalizedListKind::Definition) => MdocContainerKind::Definition,
+        None if node.children.iter().any(|child| {
+            child.kind == NodeKind::Body
+                && child.children.iter().any(|item| {
+                    item.macro_name.as_deref() == Some("It")
+                        && item
+                            .children
+                            .iter()
+                            .any(|part| part.kind == NodeKind::Head && !part.children.is_empty())
+                })
+        }) =>
+        {
+            MdocContainerKind::Definition
+        }
+        Some(
+            NormalizedListKind::Bullet | NormalizedListKind::Ordered | NormalizedListKind::Plain,
+        )
+        | None => MdocContainerKind::Generic,
+    })
+}
+
+fn ast_ip_is_bullet(node: &Node) -> bool {
+    let Some(head) = node
+        .children
+        .iter()
+        .find(|child| child.kind == NodeKind::Head)
+    else {
+        return false;
+    };
+    let Some(term) = head.children.first() else {
+        return false;
+    };
+    is_bullet_glyph(ast_visible_text(term).trim())
+}
+
+fn has_visible_definition_description(node: &Node) -> bool {
+    node.children
+        .iter()
+        .filter(|part| part.kind == NodeKind::Body)
+        .any(has_visible_text)
+}
+
+fn has_visible_text(node: &Node) -> bool {
+    !node.flags.no_print
+        && node.kind != NodeKind::Comment
+        && (node.text.as_deref().is_some_and(|text| !text.is_empty())
+            || node.children.iter().any(has_visible_text))
+}
+
+fn ast_visible_text(node: &Node) -> String {
+    if node.flags.no_print || node.kind == NodeKind::Comment {
+        return String::new();
+    }
+    let mut text = node.text.clone().unwrap_or_default();
+    for child in &node.children {
+        text.push_str(&ast_visible_text(child));
+    }
+    text
+}
+
+fn is_bullet_glyph(value: &str) -> bool {
+    matches!(value, "o" | r"\[bu]" | r"\(bu")
+        || matches!(value.chars().collect::<Vec<_>>().as_slice(), [glyph] if !glyph.is_alphanumeric())
+}
+
+fn has_visible_flow_text(node: &Node) -> bool {
+    node.children.iter().any(|child| {
+        !child.flags.no_print
+            && child.kind != NodeKind::Comment
+            && child.kind != NodeKind::Block
+            && (child.text.as_deref().is_some_and(|text| !text.is_empty())
+                || has_visible_flow_text(child))
+    })
+}
+
+fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
+    node.children
+        .iter()
+        .filter(|part| part.kind == NodeKind::Body)
+        .flat_map(|body| &body.children)
+        .filter(|item| item.macro_name.as_deref() == Some("It"))
+        .filter_map(|item| {
+            let cells = item
+                .children
+                .iter()
+                .filter(|part| part.kind == NodeKind::Body)
+                .map(|_| AstTableCellTopology {
+                    column_span: 1,
+                    row_span: 1,
+                    vertical_continuation: false,
+                })
+                .collect::<Vec<_>>();
+            (!cells.is_empty()).then_some(AstTableRowTopology { cells })
+        })
+        .collect()
+}
+
+fn collect_ast_topology(node: &Node, topology: &mut AstTopology) {
+    if node.kind == NodeKind::Block
+        && mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table)
+        && node.line > 0
+    {
+        topology.table_rows.extend(mdoc_column_rows(node));
+    } else if node.kind == NodeKind::Block
+        && let Some(kind) = mdoc_list_topology_kind(node)
+        && node.line > 0
+    {
+        topology.lists.push(AstListTopology {
+            source_line: node.line,
+            kind: match kind {
+                MdocContainerKind::Generic => ListTopologyKind::Generic,
+                MdocContainerKind::Definition => ListTopologyKind::Definition,
+                MdocContainerKind::Table => unreachable!("column lists are tables"),
+            },
+            items: direct_list_item_count(node),
+        });
+    }
+
+    for child in &node.children {
+        if child.kind == NodeKind::Table && !child.table_cells.is_empty() {
+            topology.table_rows.push(AstTableRowTopology {
+                cells: child
+                    .table_cells
+                    .iter()
+                    .map(|cell| AstTableCellTopology {
+                        column_span: cell.column_span,
+                        row_span: cell.row_span,
+                        vertical_continuation: cell.vertical_continuation,
+                    })
+                    .collect(),
+            });
+            continue;
+        }
+        collect_ast_topology(child, topology);
+    }
+}
+
+fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
     let mut profile = IrStructure::default();
-    collect_blocks(&document.blocks, &mut profile);
+    let mut topology = IrTopology::default();
+    collect_blocks(&document.blocks, &mut profile, &mut topology);
     for section in &document.sections {
-        collect_section(section, &mut profile);
+        collect_section(section, &mut profile, &mut topology);
     }
-    profile
+    topology.lists.sort_by_key(|list| list.source_line);
+    (profile, topology)
 }
 
-fn collect_section(section: &Section, profile: &mut IrStructure) {
-    collect_blocks(&section.blocks, profile);
+fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut IrTopology) {
+    collect_blocks(&section.blocks, profile, topology);
     for child in &section.children {
-        collect_section(child, profile);
+        collect_section(child, profile, topology);
     }
 }
 
-fn collect_blocks(blocks: &[Block], profile: &mut IrStructure) {
+#[allow(clippy::too_many_lines)]
+fn collect_blocks(blocks: &[Block], profile: &mut IrStructure, topology: &mut IrTopology) {
     for block in blocks {
         match block {
             Block::Paragraph {
                 children, layout, ..
             } => {
-                profile.indented_blocks += usize::from(layout.indent_columns > 0);
+                profile.paragraph_blocks += 1;
+                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
                 collect_inlines(children, profile);
             }
             Block::Unsupported { layout, .. } | Block::Equation { layout, .. } => {
-                profile.indented_blocks += usize::from(layout.indent_columns > 0);
+                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
             }
             Block::Preformatted {
                 children, layout, ..
             } => {
                 profile.preformatted_blocks += 1;
-                profile.indented_blocks += usize::from(layout.indent_columns > 0);
+                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
                 if has_visible_inline(children) {
                     profile.preformatted_lines += 1;
                 }
                 profile.preformatted_lines += line_break_count(children);
                 collect_inlines(children, profile);
             }
-            Block::List { items, layout, .. } => {
+            Block::List {
+                items,
+                layout,
+                source,
+                ..
+            } => {
                 profile.generic_list_items += items.len();
-                profile.indented_blocks += usize::from(layout.indent_columns > 0);
+                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
+                if let Some(source) = source {
+                    topology.lists.push(IrListTopology {
+                        source_line: source.line,
+                        kind: ListTopologyKind::Generic,
+                        items: items.len(),
+                    });
+                }
                 for item in items {
-                    collect_blocks(&item.blocks, profile);
+                    collect_blocks(&item.blocks, profile, topology);
                 }
             }
-            Block::DefinitionList { items, layout, .. } => {
+            Block::DefinitionList {
+                items,
+                layout,
+                source,
+                ..
+            } => {
                 profile.definition_items += items.len();
-                profile.indented_blocks += usize::from(layout.indent_columns > 0);
+                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
+                if let Some(source) = source {
+                    topology.lists.push(IrListTopology {
+                        source_line: source.line,
+                        kind: ListTopologyKind::Definition,
+                        items: items.len(),
+                    });
+                }
                 for item in items {
                     for term in &item.terms {
                         collect_inlines(term, profile);
                     }
-                    collect_blocks(&item.description, profile);
+                    collect_blocks(&item.description, profile, topology);
                 }
             }
             Block::Table { rows, layout, .. } => {
-                profile.indented_blocks += usize::from(layout.indent_columns > 0);
+                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
                 profile.table_rows += rows.len();
+                topology.table_rows.extend(rows.iter().map(|row| {
+                    IrTableRowTopology {
+                        cells: row
+                            .cells
+                            .iter()
+                            .map(|cell| IrTableCellTopology {
+                                column_span: cell.column_span,
+                                row_span: cell.row_span,
+                                empty: cell.blocks.is_empty(),
+                            })
+                            .collect(),
+                    }
+                }));
                 for row in rows {
                     profile.table_spanning_cells += row
                         .cells
@@ -309,7 +638,7 @@ fn collect_blocks(blocks: &[Block], profile: &mut IrStructure) {
                         .filter(|cell| cell.column_span > 1 || cell.row_span > 1)
                         .count();
                     for cell in &row.cells {
-                        collect_blocks(&cell.blocks, profile);
+                        collect_blocks(&cell.blocks, profile, topology);
                     }
                 }
             }
@@ -334,8 +663,16 @@ fn collect_inlines(inlines: &[Inline], profile: &mut IrStructure) {
             Inline::Strong { children } | Inline::Emphasis { children } => {
                 collect_inlines(children, profile);
             }
-            Inline::Link { children, .. } => {
-                profile.navigation_links += 1;
+            Inline::Link {
+                target, children, ..
+            } => {
+                match target {
+                    LinkTarget::Manual { .. } => profile.manual_links += 1,
+                    LinkTarget::External { .. } => profile.external_links += 1,
+                    LinkTarget::Email { .. } => profile.email_links += 1,
+                    LinkTarget::Section { .. } => profile.section_links += 1,
+                    LinkTarget::Document { .. } => {}
+                }
                 collect_inlines(children, profile);
             }
             Inline::LineBreak => profile.hard_breaks += 1,
@@ -357,7 +694,12 @@ fn line_break_count(inlines: &[Inline]) -> usize {
         .sum()
 }
 
-fn compare_structure(expected: &AstStructure, observed: &IrStructure) -> Vec<String> {
+fn compare_structure(
+    expected: &AstStructure,
+    observed: &IrStructure,
+    expected_topology: &AstTopology,
+    observed_topology: &IrTopology,
+) -> Vec<String> {
     let mut violations = Vec::new();
     underflow(
         &mut violations,
@@ -379,12 +721,6 @@ fn compare_structure(expected: &AstStructure, observed: &IrStructure) -> Vec<Str
     );
     underflow(
         &mut violations,
-        "definition-items",
-        expected.definition_items,
-        observed.definition_items,
-    );
-    underflow(
-        &mut violations,
         "table-rows",
         expected.table_rows,
         observed.table_rows,
@@ -397,23 +733,125 @@ fn compare_structure(expected: &AstStructure, observed: &IrStructure) -> Vec<Str
     );
     underflow(
         &mut violations,
-        "indented-scopes",
-        expected.indented_scopes,
-        observed.indented_blocks,
+        "manual-links",
+        expected.manual_links,
+        observed.manual_links,
     );
     underflow(
         &mut violations,
-        "hard-breaks",
-        expected.hard_breaks,
-        observed.hard_breaks,
+        "external-links",
+        expected.external_links,
+        observed.external_links,
     );
     underflow(
         &mut violations,
-        "navigation-links",
-        expected.navigation_links,
-        observed.navigation_links,
+        "email-links",
+        expected.email_links,
+        observed.email_links,
+    );
+    underflow(
+        &mut violations,
+        "section-links",
+        expected.section_links,
+        observed.section_links,
+    );
+    if expected.max_relative_indent_depth > 0 && observed.max_indent_columns == 0 {
+        violations.push(format!(
+            "relative-indent: expected nested RS depth {}, observed no indented IR block",
+            expected.max_relative_indent_depth
+        ));
+    }
+    compare_list_topology(
+        &mut violations,
+        &expected_topology.lists,
+        &observed_topology.lists,
+    );
+    compare_table_topology(
+        &mut violations,
+        &expected_topology.table_rows,
+        &observed_topology.table_rows,
     );
     violations
+}
+
+fn compare_list_topology(
+    violations: &mut Vec<String>,
+    expected: &[AstListTopology],
+    observed: &[IrListTopology],
+) {
+    for expected_list in expected {
+        let observed_list = observed.iter().find(|candidate| {
+            candidate.source_line == expected_list.source_line
+                && candidate.kind == expected_list.kind
+        });
+        match observed_list {
+            Some(observed_list) if observed_list.items == expected_list.items => {}
+            Some(observed_list) => violations.push(format!(
+                "list-topology at line {}: expected {} {} items, observed {}",
+                expected_list.source_line,
+                expected_list.items,
+                expected_list.kind.as_str(),
+                observed_list.items,
+            )),
+            None => violations.push(format!(
+                "list-topology at line {}: expected {} list with {} items, observed none",
+                expected_list.source_line,
+                expected_list.kind.as_str(),
+                expected_list.items,
+            )),
+        }
+    }
+}
+
+fn compare_table_topology(
+    violations: &mut Vec<String>,
+    expected: &[AstTableRowTopology],
+    observed: &[IrTableRowTopology],
+) {
+    if expected.len() != observed.len() {
+        violations.push(format!(
+            "table-topology: expected {} rows, observed {}",
+            expected.len(),
+            observed.len(),
+        ));
+    }
+    for (row_index, (expected_row, observed_row)) in expected.iter().zip(observed).enumerate() {
+        if expected_row.cells.len() != observed_row.cells.len() {
+            violations.push(format!(
+                "table-topology at row {}: expected {} cells, observed {}",
+                row_index + 1,
+                expected_row.cells.len(),
+                observed_row.cells.len(),
+            ));
+        }
+        for (cell_index, (expected_cell, observed_cell)) in expected_row
+            .cells
+            .iter()
+            .zip(&observed_row.cells)
+            .enumerate()
+        {
+            if expected_cell.column_span != observed_cell.column_span
+                || expected_cell.row_span != observed_cell.row_span
+            {
+                violations.push(format!(
+                    "table-topology at row {}, cell {}: expected span {}x{}, observed {}x{}",
+                    row_index + 1,
+                    cell_index + 1,
+                    expected_cell.column_span,
+                    expected_cell.row_span,
+                    observed_cell.column_span,
+                    observed_cell.row_span,
+                ));
+            }
+            if expected_cell.vertical_continuation && !observed_cell.empty {
+                violations.push(format!(
+                    "table-topology at row {}, cell {}: vertical continuation retained visible content",
+                    row_index + 1,
+                    cell_index + 1,
+                ));
+            }
+        }
+    }
 }
 
 fn underflow(violations: &mut Vec<String>, property: &str, expected: usize, observed: usize) {
@@ -421,5 +859,18 @@ fn underflow(violations: &mut Vec<String>, property: &str, expected: usize, obse
         violations.push(format!(
             "{property}: expected at least {expected}, observed {observed}"
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_visible_no_fill_text;
+
+    #[test]
+    fn standalone_roff_font_switches_do_not_claim_visible_no_fill_lines() {
+        assert!(!is_visible_no_fill_text(r"\f[C]"));
+        assert!(!is_visible_no_fill_text(r"\fR"));
+        assert!(is_visible_no_fill_text(r"\f[C]visible\f[R]"));
+        assert!(is_visible_no_fill_text("visible"));
     }
 }
