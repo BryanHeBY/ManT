@@ -1869,7 +1869,8 @@ T{\n.Nm\nT}\tMT-Safe\n.TE\n",
 .\\}\n\
 .rr do-fallback\n\
 .SH DESCRIPTION\n\
-.TS\ntab($);\nl l.\ngrn$T{\nrenders\n.MR gremlin 1\ndiagrams;\nT}\n.TE\n",
+.TS\ntab($);\nl l.\ngrn$T{\nrenders\n.MR gremlin 1\ndiagrams;\nT}\n\
+gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
         )
         .expect("lower semantic tbl text block");
 
@@ -1887,6 +1888,18 @@ T{\n.Nm\nT}\tMT-Safe\n.TE\n",
                 ..
             } if name == "gremlin" && manual_section.as_deref() == Some("1")
         )));
+        let [Block::Paragraph { children, .. }] = rows[1].cells[1].blocks.as_slice() else {
+            panic!("expected styled semantic table cell paragraph");
+        };
+        assert_eq!(
+            inline_text(children),
+            "populates groff registers using perl(1);"
+        );
+        assert!(
+            children
+                .iter()
+                .any(|child| matches!(child, Inline::Emphasis { .. }))
+        );
     }
 
     #[test]

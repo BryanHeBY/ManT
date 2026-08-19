@@ -918,11 +918,8 @@ fn lower_table_text_block(
         if source_line.is_empty() {
             continue;
         }
-        if let Some(name) = source_table_name(source_line, context.default_name) {
-            builder.append_filled(
-                vec![Inline::Strong { children: name }],
-                FilledBoundary::Word,
-            );
+        if let Some(inline) = source_table_inline(source_line, context.default_name) {
+            builder.append_filled(inline, FilledBoundary::Word);
         } else if source_line.starts_with('.') || source_line.starts_with('\'') {
             context.warn_unhandled_table_text_block_line(line);
         } else {
@@ -932,18 +929,25 @@ fn lower_table_text_block(
     builder.finish()
 }
 
-fn source_table_name(source_line: &str, default_name: Option<&str>) -> Option<Vec<Inline>> {
-    let rest = source_line
-        .strip_prefix(".Nm")
-        .or_else(|| source_line.strip_prefix("'Nm"))?;
-    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
-        return None;
-    }
+fn source_table_inline(source_line: &str, default_name: Option<&str>) -> Option<Vec<Inline>> {
+    let request = source_line.strip_prefix(['.', '\''])?;
+    let (name, rest) = request
+        .split_once(char::is_whitespace)
+        .unwrap_or((request, ""));
     let argument = rest.trim();
-    if argument.is_empty() {
-        default_name.map(|name| vec![Inline::Text { value: name.into() }])
+    let children = if name == "Nm" && argument.is_empty() {
+        default_name.map(|name| {
+            vec![Inline::Text {
+                value: name.to_owned(),
+            }]
+        })?
     } else {
-        Some(parse_roff_text(argument))
+        parse_roff_text(argument)
+    };
+    match name {
+        "Nm" | "B" | "SB" => Some(vec![Inline::Strong { children }]),
+        "I" => Some(vec![Inline::Emphasis { children }]),
+        _ => None,
     }
 }
 
