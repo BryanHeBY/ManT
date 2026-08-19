@@ -5,6 +5,8 @@ The audit compares ManT's plain manual rendering with a local man(1)/groff
 reference. It is deliberately a developer and release-time discovery tool:
 ordinary CI keeps the focused, deterministic Rust regressions derived from
 confirmed findings instead of installing or trusting a host reference renderer.
+Pages containing .so requests are rendered through ManT's indexed-manual path
+so aliases exercise the same bounded hierarchy resolution as product queries.
 """
 
 from __future__ import annotations
@@ -218,6 +220,16 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="audit only unchanged pages already present in --audit-db",
     )
     parser.add_argument(
+        "--retry-skipped",
+        action="store_true",
+        help="audit only unchanged historical skipped rows from --audit-db",
+    )
+    parser.add_argument(
+        "--pending-only",
+        action="store_true",
+        help="audit only unchanged rows awaiting human review in --audit-db",
+    )
+    parser.add_argument(
         "--self-check",
         action="store_true",
         help=argparse.SUPPRESS,
@@ -265,6 +277,41 @@ def stable_sample(pages: Sequence[Path], maximum: int, seed: str) -> list[Path]:
 def manual_section(path: Path) -> str | None:
     match = MANUAL_SUFFIX.search(path.name)
     return match.group("section") if match is not None else None
+
+
+def manual_topic(path: Path) -> str | None:
+    match = MANUAL_SUFFIX.search(path.name)
+    return path.name[: match.start()] if match is not None else None
+
+
+def manual_hierarchy_root(path: Path, roots: Sequence[Path]) -> Path | None:
+    """Return the narrow hierarchy root owning an exact manual leaf.
+
+    A localized page such as ``ROOT/fr/man1/demo.1`` belongs to ``ROOT/fr``.
+    Using that root with MANT_MANPATH selects the exact localized leaf while
+    keeping ``.so man1/...`` redirects inside the same approved hierarchy.
+    """
+    section = manual_section(path)
+    if section is None:
+        return None
+    for root in roots:
+        try:
+            relative = path.relative_to(root)
+        except ValueError:
+            continue
+        parts = relative.parts
+        candidates = [
+            index
+            for index, part in enumerate(parts[:-1])
+            if part.startswith("man")
+            and part[3:]
+            and section.startswith(part[3:])
+        ]
+        if not candidates:
+            return root
+        index = candidates[-1]
+        return root.joinpath(*parts[:index])
+    return None
 
 
 def stable_sample_by_section(
@@ -570,27 +617,8 @@ def write_audit_database(
     temporary.replace(path)
 
 
-def redirect_only_stub(path: Path) -> bool:
-    source = source_bytes(path)
-    if source is None:
-        return False
-    lines = []
-    for line in source.decode("utf-8", errors="replace").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith('.\\"'):
-            continue
-        lines.append(stripped)
-    return len(lines) == 1 and lines[0].startswith(".so ")
-
-
-def contains_embedded_include(path: Path) -> bool:
-    """Return whether a non-redirect page asks roff to include another file.
-
-    Standalone input intentionally has no trusted manual hierarchy and rejects
-    embedded .so requests. The local differential audit therefore records
-    these pages as outside its input contract rather than reporting a parser
-    failure.
-    """
+def contains_so_request(path: Path) -> bool:
+    """Return whether a page needs an approved hierarchy for a .so request."""
     source = source_bytes(path)
     if source is None:
         return False
@@ -598,6 +626,56 @@ def contains_embedded_include(path: Path) -> bool:
         re.match(rb"^[.']so(?:[ \t]|$)", line) is not None
         for line in source.splitlines()
     )
+
+
+def mant_render_command(
+    path: Path, roots: Sequence[Path], mant: Path
+) -> tuple[list[str], Path | None]:
+    """Select standalone or indexed rendering without weakening --input.
+
+    Any source containing a .so request needs an approved manual hierarchy.
+    Redirect-only aliases then resolve normally; unsupported embedded includes
+    become visible hard failures instead of silently leaving the audit corpus.
+    """
+    if contains_so_request(path):
+        section = manual_section(path)
+        topic = manual_topic(path)
+        root = manual_hierarchy_root(path, roots)
+        if section is not None and topic is not None and root is not None:
+            return (
+                [
+                    str(mant),
+                    f"manual/{section}/{topic}",
+                    "--manual",
+                    "--format",
+                    "man",
+                ],
+                root,
+            )
+    return (
+        [
+            str(mant),
+            "--input",
+            str(path),
+            "--input-format",
+            "roff",
+            "--format",
+            "man",
+        ],
+        None,
+    )
+
+
+def reference_render_command(
+    path: Path, reference: str, hierarchy_root: Path | None
+) -> list[str]:
+    """Render aliases through the reference index when `man -l` cannot."""
+    if hierarchy_root is not None:
+        section = manual_section(path)
+        topic = manual_topic(path)
+        if section is not None and topic is not None:
+            return [reference, section, topic]
+    return [reference, "-l", str(path)]
 
 
 def relative_label(path: Path, roots: Sequence[Path]) -> str:
@@ -627,37 +705,31 @@ def merged_review_status(
         and scan_status in {"review", "hard-failure"}
     ):
         return "pending"
+    if previous.review_status == "pending" and scan_status == "clean":
+        return "not-required"
     return previous.review_status
 
 
 def audit_page(
     path: Path,
     label: str,
+    roots: Sequence[Path],
     mant: Path,
     reference: str,
     timeout: int,
     ngram: int,
 ) -> Finding:
-    if redirect_only_stub(path):
-        return Finding(path=label, status="skipped", detail="redirect-only .so page")
-    if contains_embedded_include(path):
-        return Finding(
-            path=label,
-            status="skipped",
-            detail="embedded .so include requires an indexed manual hierarchy",
-        )
-
     environment = reference_environment()
+    mant_command, hierarchy_root = mant_render_command(path, roots, mant)
+    if hierarchy_root is not None:
+        environment["MANT_MANPATH"] = str(hierarchy_root)
+        # GNU man resolves redirect-only `.so` pages through MANPATH even
+        # with `-l`. Keep the reference on the same localized hierarchy as
+        # ManT instead of accidentally comparing a translated alias with the
+        # default-language target.
+        environment["MANPATH"] = str(hierarchy_root)
     mant_status, mant_output, mant_error = run_renderer(
-        [
-            str(mant),
-            "--input",
-            str(path),
-            "--input-format",
-            "roff",
-            "--format",
-            "man",
-        ],
+        mant_command,
         timeout,
         environment,
     )
@@ -670,12 +742,13 @@ def audit_page(
         )
 
     reference_status, reference_output, reference_error = run_renderer(
-        [reference, "-l", str(path)], timeout, environment
+        reference_render_command(path, reference, hierarchy_root), timeout, environment
     )
     if reference_status != 0:
         return Finding(
             path=label,
-            status="skipped",
+            status="hard-failure",
+            signatures=["reference renderer failed; page was not compared"],
             detail=reference_error.strip() or f"reference exit status {reference_status}",
         )
 
@@ -683,13 +756,23 @@ def audit_page(
     reference_lines = token_lines(reference_output)
     reference_tokens = [value for line in reference_lines for value in line]
     mant_tokens = tokens(mant_output)
-    if not reference_tokens or not mant_tokens:
+    if not reference_tokens:
         return Finding(
             path=label,
-            status="skipped",
+            status="hard-failure",
             reference_tokens=len(reference_tokens),
             mant_tokens=len(mant_tokens),
-            detail="reference or ManT produced no comparable visible tokens",
+            signatures=["reference renderer produced no comparable visible tokens"],
+            detail="the page cannot be classified as clean without a reference corpus",
+        )
+    if not mant_tokens:
+        return Finding(
+            path=label,
+            status="hard-failure",
+            reference_tokens=len(reference_tokens),
+            mant_tokens=0,
+            signatures=["ManT produced no comparable visible tokens"],
+            detail="the reference renderer produced visible content",
         )
 
     missing = missing_token_candidates(reference_tokens, mant_tokens)
@@ -774,6 +857,15 @@ def self_check() -> None:
     assert token_key("line-break") == token_key("linebreak")
     assert manual_section(Path("git.1.gz")) == "1"
     assert manual_section(Path("SSL_read.3ssl")) == "3ssl"
+    assert manual_topic(Path("SSL_read.3ssl.gz")) == "SSL_read"
+    assert manual_hierarchy_root(
+        Path("/usr/share/man/fr/man3/printf.3.gz"),
+        [Path("/usr/share/man")],
+    ) == Path("/usr/share/man/fr")
+    assert manual_hierarchy_root(
+        Path("/usr/share/man/man3/printf.3bsd.gz"),
+        [Path("/usr/share/man")],
+    ) == Path("/usr/share/man")
     assert relative_label(
         Path("/opt/tools/share/man/man1/demo.1"),
         [Path("/opt/tools/man"), Path("/opt/tools/share/man")],
@@ -806,8 +898,12 @@ def self_check() -> None:
     clean = AuditRecord(
         "host", "man/demo.1", "1", "0" * 64, "clean", "not-required", ""
     )
+    pending = AuditRecord(
+        "host", "man/demo.1", "1", "0" * 64, "review", "pending", ""
+    )
     assert merged_review_status(None, "review") == "pending"
     assert merged_review_status(clean, "hard-failure") == "pending"
+    assert merged_review_status(pending, "clean") == "not-required"
 
 
 def validate_tools(mant: Path, reference: str) -> None:
@@ -827,8 +923,26 @@ def main(argv: Sequence[str]) -> int:
     try:
         if arguments.recorded_only and arguments.audit_db is None:
             raise ValueError("--recorded-only requires --audit-db")
+        if arguments.retry_skipped and arguments.audit_db is None:
+            raise ValueError("--retry-skipped requires --audit-db")
+        if arguments.pending_only and arguments.audit_db is None:
+            raise ValueError("--pending-only requires --audit-db")
         if arguments.recorded_only and arguments.recheck_recorded:
             raise ValueError("--recorded-only and --recheck-recorded are mutually exclusive")
+        exclusive_database_selections = sum(
+            int(selected)
+            for selected in [
+                arguments.retry_skipped,
+                arguments.pending_only,
+                arguments.recorded_only,
+                arguments.recheck_recorded,
+            ]
+        )
+        if exclusive_database_selections > 1:
+            raise ValueError(
+                "--retry-skipped, --pending-only, --recorded-only, and "
+                "--recheck-recorded are mutually exclusive"
+            )
         validate_tools(arguments.mant, arguments.reference)
         roots = [path.resolve() for path in arguments.manpath] if arguments.manpath else [FIXTURE_ROOT]
         pages = discover_pages(roots)
@@ -849,10 +963,29 @@ def main(argv: Sequence[str]) -> int:
             for path, (label, digest) in page_records.items()
             if digest is not None and (corpus, label, digest) in database
         }
-        if arguments.recorded_only:
+        completed = set()
+        for path in recorded:
+            label, digest = page_records[path]
+            if digest is not None and database[
+                (corpus, label, digest)
+            ].scan_status != "skipped":
+                completed.add(path)
+        incomplete = recorded - completed
+        pending = set()
+        for path in recorded:
+            label, digest = page_records[path]
+            if digest is not None and database[
+                (corpus, label, digest)
+            ].review_status == "pending":
+                pending.add(path)
+        if arguments.pending_only:
+            pages = [path for path in pages if path in pending]
+        elif arguments.retry_skipped:
+            pages = [path for path in pages if path in incomplete]
+        elif arguments.recorded_only:
             pages = [path for path in pages if path in recorded]
         elif not arguments.recheck_recorded:
-            pages = [path for path in pages if path not in recorded]
+            pages = [path for path in pages if path not in completed]
         pages = (
             stable_sample_by_section(
                 pages, arguments.max_pages_per_section, arguments.seed
@@ -863,10 +996,10 @@ def main(argv: Sequence[str]) -> int:
     except ValueError as error:
         print(f"audit-roff-fidelity: {error}", file=sys.stderr)
         return 2
-    if not pages and arguments.audit_db and recorded:
+    if not pages and arguments.audit_db and completed:
         print(
             "audit-roff-fidelity: no new or changed manual pages; "
-            f"{len(recorded)} unchanged pages are already recorded"
+            f"{len(completed)} unchanged pages are already complete"
         )
         return 0
     if not pages:
@@ -881,7 +1014,8 @@ def main(argv: Sequence[str]) -> int:
     if arguments.audit_db:
         print(
             f"  audit db:  {arguments.audit_db} "
-            f"({len(recorded)} unchanged pages skipped from {corpus})"
+            f"({len(completed)} completed pages skipped from {corpus}; "
+            f"{len(incomplete)} historical skips selected again)"
         )
     if arguments.man_section:
         print(f"  sections:  {', '.join(arguments.man_section)}")
@@ -895,6 +1029,7 @@ def main(argv: Sequence[str]) -> int:
         finding = audit_page(
             path,
             label,
+            roots,
             arguments.mant,
             arguments.reference,
             arguments.timeout,

@@ -29,7 +29,32 @@ headers, or reference-renderer token concatenation. `confirmed-fixed` is
 reserved for a real ManT defect with a focused Rust regression.
 
 The initial ledger covers the host Arch Linux manual tree and the independently
-installed Miniconda manual trees. Re-run only recorded content with:
+installed Miniconda manual trees. A `skipped` row is historical, incomplete
+coverage rather than an accepted disposition. Normal incremental runs select
+such a row again even when its content hash is unchanged.
+
+Pages containing `.so` requests are rendered through the indexed-manual query
+path with an exact derived `MANT_MANPATH`. Localized hierarchies remain isolated
+from their default-language neighbours, redirect targets stay under the same
+approved root, and aliases exercise the product resolver rather than a second
+implementation in the audit script. A renderer failure or an output without
+comparable visible tokens is a `hard-failure`, never a silent skip.
+
+Migrate only historical skips after upgrading the audit logic with:
+
+```sh
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+  --retry-skipped \
+  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
+  --corpus archlinux-host
+```
+
+After improving either renderer or the comparison heuristic, re-run only rows
+still awaiting disposition with `--pending-only`. A clean recheck clears an
+automated `pending` state; human `false-positive`, `confirmed-open`, and
+`confirmed-fixed` decisions remain durable.
+
+Re-run all recorded content, including historical skips, with:
 
 ```sh
 python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
