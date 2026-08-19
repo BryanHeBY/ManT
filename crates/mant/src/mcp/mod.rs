@@ -381,10 +381,27 @@ mod tests {
                 assert!(properties.contains_key("limit"));
                 assert!(properties.contains_key("documents"));
                 assert!(properties.contains_key("followLinks"));
+                assert_eq!(properties["documents"]["type"], "array");
+                assert!(schema_type_contains(&properties["limit"], "integer"));
                 assert!(!properties.contains_key("offset"));
                 assert!(!properties.contains_key("scope"));
             }
+            if tool.name == "mant_read" {
+                let properties = tool
+                    .input_schema
+                    .get("properties")
+                    .and_then(serde_json::Value::as_object)
+                    .expect("read properties");
+                assert_eq!(properties["selectors"]["type"], "array");
+            }
         }
+    }
+
+    fn schema_type_contains(schema: &serde_json::Value, expected: &str) -> bool {
+        schema["type"] == expected
+            || schema["type"]
+                .as_array()
+                .is_some_and(|types| types.iter().any(|value| value == expected))
     }
 
     #[test]
@@ -398,6 +415,72 @@ mod tests {
             serde_json::from_value::<OutlineParams>(json!({
                 "name": "git",
                 "manualSection": "1"
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn stringified_mcp_collections_and_scalars_remain_compatible() {
+        let read: ReadParams = serde_json::from_value(json!({
+            "document": "manual/1/git",
+            "selectors": "[\"root\",\"1/e1\"]"
+        }))
+        .expect("stringified selector array");
+        assert_eq!(
+            read.selectors
+                .iter()
+                .map(mant_protocol::NodeSelector::as_str)
+                .collect::<Vec<_>>(),
+            ["root", "1/e1"]
+        );
+
+        let read: ReadParams = serde_json::from_value(json!({
+            "document": "manual/1/git",
+            "selectors": "root"
+        }))
+        .expect("one bare selector");
+        assert_eq!(read.selectors[0].as_str(), "root");
+
+        let search: SearchParams = serde_json::from_value(json!({
+            "documents": "[\"manual/1/git\",\"manual/1/tar\"]",
+            "followLinks": "True",
+            "maxDepth": "2",
+            "maxDocuments": "8",
+            "pattern": "exclude",
+            "word": "false",
+            "contextLines": "1",
+            "limit": "3"
+        }))
+        .expect("stringified search parameters");
+        let search = search.validate().expect("valid normalized search");
+        assert_eq!(search.scope.documents.len(), 2);
+        assert!(search.scope.traversal.follow_links);
+        assert_eq!(search.scope.traversal.max_depth, Some(2));
+        assert_eq!(search.scope.traversal.max_documents, Some(8));
+        assert!(!search.word);
+        assert_eq!(search.context_lines, 1);
+        assert_eq!(search.limit, 3);
+
+        let explain: ExplainParams = serde_json::from_value(json!({
+            "documents": "manual/1/tar",
+            "entry": "--exclude"
+        }))
+        .expect("one bare document");
+        assert_eq!(explain.documents, ["manual/1/tar"]);
+
+        assert!(
+            serde_json::from_value::<SearchParams>(json!({
+                "documents": "[1]",
+                "pattern": "exclude"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<SearchParams>(json!({
+                "documents": ["manual/1/tar"],
+                "pattern": "exclude",
+                "limit": "many"
             }))
             .is_err()
         );

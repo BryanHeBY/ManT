@@ -1091,6 +1091,14 @@ as `manual/1/git`, `documents/mant`, or `sources/pwsh/Get-Item`. Canonical IDs
 are recommended because they preserve source and manual-section identity
 without widening every tool schema. MCP does not accept arbitrary local paths.
 
+`tools/list` remains the normative input shape: collections are JSON arrays and
+numeric or Boolean fields use native JSON scalars. At the MCP transport boundary
+only, ManT also tolerates a bare collection item, a stringified JSON array, or a
+stringified numeric or Boolean scalar. This narrow compatibility normalization
+handles clients that stringify generated tool arguments; it does not widen the
+native protocol, CLI JSON, or engine contracts. New clients should always emit
+the canonical schema form.
+
 For explain and search, `followLinks: true` expands typed manual and registered
 Markdown links with the same deterministic breadth-first traversal as the
 native scope contract. `maxDepth` defaults to 8 and is capped at 32;

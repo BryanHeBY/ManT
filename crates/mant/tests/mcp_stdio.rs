@@ -69,7 +69,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
-    let replies = (0..(7 + usize::from(cfg!(windows))))
+    let replies = (0..(10 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -136,6 +136,36 @@ fn request_document_tools(input: &mut impl Write) {
             "followLinks": true,
             "maxDepth": 0,
             "pattern": "needle"
+        }),
+    );
+    call_tool(
+        input,
+        11,
+        "mant_search",
+        &json!({
+            "documents": "[\"documents/mcp-registered\"]",
+            "pattern": "needle",
+            "word": "true",
+            "contextLines": "1",
+            "limit": "1"
+        }),
+    );
+    call_tool(
+        input,
+        12,
+        "mant_read",
+        &json!({
+            "document": "documents/mcp-registered",
+            "selectors": "[\"root\",\"1\"]"
+        }),
+    );
+    call_tool(
+        input,
+        13,
+        "mant_explain",
+        &json!({
+            "documents": "[\"documents/mcp-registered\",\"documents/mcp-suffix.exe\"]",
+            "entry": "query"
         }),
     );
     #[cfg(windows)]
@@ -222,6 +252,23 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(
         bounded.contains("[scope: documents=1, unresolved-roots=0, unresolved-links=0, depth-frontier=1, document-frontier=0, content-frontier=0]"),
         "{bounded}"
+    );
+
+    let compatible_search = successful_text(reply(replies, 11));
+    assert!(compatible_search.contains("needle"), "{compatible_search}");
+    let compatible_read = successful_text(reply(replies, 12));
+    assert!(
+        compatible_read.contains("Read the MCP needle."),
+        "{compatible_read}"
+    );
+    assert!(
+        compatible_read.contains("General query behavior."),
+        "{compatible_read}"
+    );
+    let compatible_explain = successful_text(reply(replies, 13));
+    assert!(
+        compatible_explain.contains("Query registry data."),
+        "{compatible_explain}"
     );
 
     #[cfg(windows)]

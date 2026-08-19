@@ -5,7 +5,7 @@ use mant_protocol::{
     NodeSelector, OutlineDetail, QueryInput, QueryRequest, QueryView, SearchCase, SearchSyntax,
 };
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 
 /// Maximum accepted logical document selector length.
 pub(super) const MAX_DOCUMENT_BYTES: usize = mant_protocol::MAX_DOCUMENT_SELECTOR_BYTES;
@@ -67,6 +67,7 @@ pub(super) struct ReadParams {
     pub(super) document: String,
     /// Outline paths, stable IDs, or semantic aliases.
     #[schemars(length(min = 1, max = 16))]
+    #[serde(deserialize_with = "deserialize_selectors")]
     pub(super) selectors: Vec<NodeSelector>,
     /// Opaque continuation token returned by an earlier identical call.
     #[schemars(length(min = 1))]
@@ -79,15 +80,18 @@ pub(super) struct ReadParams {
 pub(super) struct ExplainParams {
     /// One or more unqualified names or canonical IDs returned by `mant_find`.
     #[schemars(length(min = 1, max = 16))]
+    #[serde(deserialize_with = "deserialize_documents")]
     pub(super) documents: Vec<String>,
     /// Follow typed links from the initial documents.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) follow_links: bool,
     /// Maximum followed-link distance; valid only with `followLinks`.
     #[schemars(range(max = 32))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_depth: Option<u16>,
     /// Maximum distinct documents including roots; valid only with `followLinks`.
     #[schemars(range(min = 1, max = 256))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_documents: Option<u32>,
     /// Exact alias, outline path, or stable ID of the entry.
     #[schemars(length(min = 1))]
@@ -103,15 +107,18 @@ pub(super) struct ExplainParams {
 pub(super) struct SearchParams {
     /// One or more unqualified names or canonical IDs returned by `mant_find`.
     #[schemars(length(min = 1, max = 16))]
+    #[serde(deserialize_with = "deserialize_documents")]
     pub(super) documents: Vec<String>,
     /// Follow typed links from the initial documents.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) follow_links: bool,
     /// Maximum followed-link distance; valid only with `followLinks`.
     #[schemars(range(max = 32))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_depth: Option<u16>,
     /// Maximum distinct documents including roots; valid only with `followLinks`.
     #[schemars(range(min = 1, max = 256))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_documents: Option<u32>,
     /// Literal text or a regular expression, depending on `syntax`.
     #[schemars(length(min = 1))]
@@ -121,14 +128,15 @@ pub(super) struct SearchParams {
     /// Case-folding policy. The default is `insensitive`.
     pub(super) case: Option<SearchCase>,
     /// Restrict matches to Unicode-aware word boundaries.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) word: bool,
     /// Visible lines of context before and after a match, from zero through five.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     #[schemars(range(max = 5))]
     pub(super) context_lines: u16,
     /// Maximum matching line groups returned before a continuation cursor.
     #[schemars(range(min = 1, max = 100))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) limit: Option<u32>,
     /// Opaque continuation token returned by an earlier identical call.
     #[schemars(length(min = 1))]
@@ -170,6 +178,92 @@ pub(super) struct ValidatedSearchParams {
     pub(super) context_lines: u16,
     pub(super) limit: u32,
     pub(super) cursor: Option<String>,
+}
+
+/// Preserve the canonical array schema while accepting collection spellings
+/// that some MCP clients serialize as one string.
+fn deserialize_documents<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_compat_list(deserializer, "documents")
+}
+
+/// Preserve the canonical array schema while accepting one selector or a
+/// stringified selector array from an MCP client.
+fn deserialize_selectors<'de, D>(deserializer: D) -> Result<Vec<NodeSelector>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_compat_list(deserializer, "selectors")
+}
+
+fn deserialize_compat_list<'de, D, T>(deserializer: D, field: &str) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: DeserializeOwned,
+{
+    use serde::de::Error as _;
+
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let value = match value {
+        serde_json::Value::String(text) => match serde_json::from_str(&text) {
+            Ok(parsed @ serde_json::Value::Array(_)) => parsed,
+            _ => serde_json::Value::Array(vec![serde_json::Value::String(text)]),
+        },
+        other => other,
+    };
+    serde_json::from_value(value).map_err(|error| {
+        D::Error::custom(format!(
+            "invalid {field}: {error}; use a JSON array such as [\"manual/1/git\"]"
+        ))
+    })
+}
+
+/// Accept a native MCP scalar or the string spelling emitted by clients that
+/// do not preserve the generated JSON Schema type.
+fn deserialize_compat_scalar<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: DeserializeOwned + Default + std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    use serde::de::Error as _;
+
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null => Ok(T::default()),
+        serde_json::Value::String(text) => text
+            .trim()
+            .to_ascii_lowercase()
+            .parse()
+            .map_err(|error| D::Error::custom(format!("cannot parse {text:?}: {error}"))),
+        other => serde_json::from_value(other).map_err(D::Error::custom),
+    }
+}
+
+/// Optional counterpart to [`deserialize_compat_scalar`].
+fn deserialize_compat_optional_scalar<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: DeserializeOwned + std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    use serde::de::Error as _;
+
+    let value = serde_json::Value::deserialize(deserializer)?;
+    match value {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::String(text) => text
+            .trim()
+            .to_ascii_lowercase()
+            .parse()
+            .map(Some)
+            .map_err(|error| D::Error::custom(format!("cannot parse {text:?}: {error}"))),
+        other => serde_json::from_value(other)
+            .map(Some)
+            .map_err(D::Error::custom),
+    }
 }
 
 impl FindParams {
