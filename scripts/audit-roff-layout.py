@@ -34,6 +34,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 FIDELITY_AUDITOR = ROOT / "scripts/audit-roff-fidelity.py"
 DEFAULT_MANT = ROOT / "target/debug/mant"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/LAYOUT_AUDIT.csv"
+DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
 LAYOUT_SCHEMA = "mant.roff-layout-audit/v1"
 MANUAL_SUFFIX = re.compile(r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$")
 DATABASE_FIELDS = [
@@ -42,6 +43,15 @@ DATABASE_FIELDS = [
     "section",
     "source_sha256",
     "layout_schema",
+    "scan_status",
+    "review_status",
+    "note",
+]
+FIDELITY_DATABASE_FIELDS = [
+    "corpus",
+    "path",
+    "section",
+    "source_sha256",
     "scan_status",
     "review_status",
     "note",
@@ -153,6 +163,24 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--recheck-recorded",
         action="store_true",
         help="scan every selected page, including completed layout-ledger rows",
+    )
+    selection.add_argument(
+        "--replay-fidelity-records",
+        action="store_true",
+        help=(
+            "select only unchanged completed rows from --fidelity-db for the "
+            "chosen corpus; never modifies that content-fidelity ledger"
+        ),
+    )
+    parser.add_argument(
+        "--fidelity-db",
+        type=Path,
+        default=DEFAULT_FIDELITY_DB,
+        metavar="FILE",
+        help=(
+            "content-fidelity ledger used only with --replay-fidelity-records "
+            f"(default: {DEFAULT_FIDELITY_DB.relative_to(ROOT)})"
+        ),
     )
     parser.add_argument(
         "--findings-only",
@@ -319,6 +347,37 @@ def read_database(path: Path) -> dict[tuple[str, str, str], AuditRecord]:
     return entries
 
 
+def read_fidelity_records(path: Path) -> set[tuple[str, str, str]]:
+    """Return completed content-audit identities without altering their ledger.
+
+    The layout probe can deliberately revisit exactly the source bytes that
+    were already rendered for fidelity.  It does not treat a historical
+    ``skipped`` row as evidence of a completed comparison, and it needs no
+    fidelity status beyond selecting the immutable `(corpus, path, digest)`
+    identity.
+    """
+    if not path.is_file():
+        raise ValueError(f"content-fidelity database does not exist: {path}")
+    identities: set[tuple[str, str, str]] = set()
+    with path.open(encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != FIDELITY_DATABASE_FIELDS:
+            raise ValueError(
+                f"invalid content-fidelity database header in {path}; "
+                f"expected {','.join(FIDELITY_DATABASE_FIELDS)}"
+            )
+        for number, row in enumerate(reader, 2):
+            digest = row["source_sha256"]
+            status = row["scan_status"]
+            if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError(f"invalid content-fidelity digest at {path}:{number}")
+            if status not in {"clean", "review", "hard-failure", "skipped"}:
+                raise ValueError(f"invalid content-fidelity status at {path}:{number}")
+            if status != "skipped":
+                identities.add((row["corpus"], row["path"], digest))
+    return identities
+
+
 def write_database(path: Path, entries: Iterable[AuditRecord]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
@@ -463,6 +522,23 @@ def self_check() -> None:
     assert manual_section(Path("SSL_read.3ssl.zst")) == "3ssl"
     assert merge_review_status(None, "review") == "pending"
     assert merge_review_status(None, "clean") == "not-required"
+    assert FIDELITY_DATABASE_FIELDS[-1] == "note"
+    with tempfile.TemporaryDirectory(prefix="mant-roff-layout-self-check-") as directory:
+        database = Path(directory) / "fidelity.csv"
+        database.write_text(
+            "\n".join(
+                [
+                    ",".join(FIDELITY_DATABASE_FIELDS),
+                    f"known,man/man1/known.1,1,{'0' * 64},clean,not-required,",
+                    f"skipped,man/man1/skipped.1,1,{'1' * 64},skipped,pending,",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        assert read_fidelity_records(database) == {
+            ("known", "man/man1/known.1", "0" * 64)
+        }
     assert valid_layout(
         {
             "shared_anchors": 2,
@@ -511,6 +587,14 @@ def main(argv: Sequence[str]) -> int:
                 if records[path][1] is not None
                 and (corpus, records[path][0], records[path][1]) in database
             ]
+        elif arguments.replay_fidelity_records:
+            fidelity_records = read_fidelity_records(arguments.fidelity_db)
+            pages = [
+                path for path in pages
+                if records[path][1] is not None
+                and (corpus, records[path][0], records[path][1]) in fidelity_records
+                and (corpus, records[path][0], records[path][1]) not in database
+            ]
         elif not arguments.recheck_recorded:
             pages = [
                 path for path in pages
@@ -537,6 +621,8 @@ def main(argv: Sequence[str]) -> int:
     print(f"  roots:     {', '.join(str(root) for root in roots)}")
     print(f"  pages:     {len(pages)}")
     print(f"  corpus:    {corpus}")
+    if arguments.replay_fidelity_records:
+        print(f"  replay:    completed rows from {arguments.fidelity_db}")
     print("  contract:  source-gated line boundaries, spacing, and relative indentation")
     print()
 
@@ -583,6 +669,10 @@ def main(argv: Sequence[str]) -> int:
                     "corpus": corpus,
                     "roots": [str(root) for root in roots],
                     "reference": arguments.reference,
+                    "replay_fidelity_records": arguments.replay_fidelity_records,
+                    "fidelity_db": str(arguments.fidelity_db)
+                    if arguments.replay_fidelity_records
+                    else None,
                     "summary": dict(summary),
                     "findings": [asdict(findings[relative_label(path, roots)]) for path in pages],
                 },

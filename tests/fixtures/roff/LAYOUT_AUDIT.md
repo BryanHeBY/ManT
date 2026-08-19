@@ -41,6 +41,17 @@ python3 scripts/audit-roff-layout.py --manpath /tmp/new-release/share/man \
   --json /tmp/mant-layout.json --findings-only
 ```
 
+To add layout evidence for exactly the source bytes already completed in the
+content-fidelity ledger, select that corpus explicitly. The content ledger is
+only read as an immutable identity index; it is neither re-rendered nor
+rewritten:
+
+```sh
+python3 scripts/audit-roff-layout.py --manpath /tmp/old-release/share/man \
+  --corpus old-release-amd64 --replay-fidelity-records \
+  --json /tmp/mant-layout-old-release.json --findings-only
+```
+
 Use `--recheck-recorded` only when changing this layout probe or deliberately
 revisiting a renderer result. Keep reviewed third-party output in a local
 scratch directory; commit the compact ledger conclusion and a focused licensed

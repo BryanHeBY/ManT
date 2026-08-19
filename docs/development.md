@@ -323,6 +323,11 @@ python3 scripts/audit-roff-layout.py --manpath /tmp/new-release/share/man \
   --json /tmp/mant-layout.json --findings-only
 ```
 
+For a new layout pass over the exact bytes already completed by the existing
+content audit, use `--replay-fidelity-records` with that corpus. This reads
+`FIDELITY_AUDIT.csv` only as a source-identity index; the prior audit results
+remain immutable while the new observations enter `LAYOUT_AUDIT.csv`.
+
 [`LAYOUT_AUDIT.csv`](../tests/fixtures/roff/LAYOUT_AUDIT.csv) begins empty on
 purpose: it is evidence for newly selected renderer-layout sweeps, not a claim
 that older content/structure samples were retroactively checked. Its
