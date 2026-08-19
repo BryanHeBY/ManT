@@ -52,7 +52,7 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `MT`, `ME` | Inline email link; a label and its address both remain visible without splitting the surrounding sentence |
 | `MR` | Typed manual-page reference |
 
-`br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
+`br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. In a no-fill display, a run of raw blank input lines is one visual separator, while an explicit `sp` retains its requested separation. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
 
 `OP`, `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
 

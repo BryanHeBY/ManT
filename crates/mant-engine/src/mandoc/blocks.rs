@@ -245,8 +245,12 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         }
         if let Some(lines) = lower_no_fill_lines(node, self.context.default_name) {
             for line in lines {
-                self.state
-                    .push_preformatted(line.nodes, line.source, line.continues_line);
+                self.state.push_preformatted(
+                    line.nodes,
+                    line.source,
+                    line.continues_line,
+                    self.context,
+                );
             }
             return;
         }
@@ -1241,6 +1245,7 @@ struct BlockState {
     paragraph_last_line: Option<u32>,
     preformatted: Vec<Inline>,
     pre_source: Option<mant_ir::SourceSpan>,
+    preformatted_last_line: Option<u32>,
     preformatted_tight_boundary: bool,
     indent_columns: u16,
     spacing_enabled: bool,
@@ -1255,6 +1260,7 @@ impl BlockState {
             paragraph_last_line: None,
             preformatted: Vec::new(),
             pre_source: None,
+            preformatted_last_line: None,
             preformatted_tight_boundary: false,
             indent_columns,
             spacing_enabled,
@@ -1334,6 +1340,7 @@ impl BlockState {
         nodes: Vec<Inline>,
         source: Option<mant_ir::SourceSpan>,
         continues_line: bool,
+        context: &LoweringContext<'_>,
     ) {
         self.flush_paragraph();
         if nodes.is_empty() {
@@ -1344,9 +1351,20 @@ impl BlockState {
         }
         if !self.preformatted.is_empty() && !self.preformatted_tight_boundary {
             self.preformatted.push(Inline::LineBreak);
+            let blank_rows = context.no_fill_blank_rows_between(
+                self.preformatted_last_line,
+                source.map(|span| span.line),
+            );
+            self.preformatted.extend(std::iter::repeat_n(
+                Inline::LineBreak,
+                usize::from(blank_rows),
+            ));
         }
         self.preformatted.extend(nodes);
         self.preformatted_tight_boundary = continues_line;
+        if let Some(source_line) = source.map(|span| span.line) {
+            self.preformatted_last_line = Some(source_line);
+        }
         if self.pre_source.is_none() {
             self.pre_source = source;
         }
@@ -1370,6 +1388,7 @@ impl BlockState {
             &mut self.pre_source,
             self.indent_columns,
         );
+        self.preformatted_last_line = None;
         self.preformatted_tight_boundary = false;
     }
 
@@ -1906,7 +1925,7 @@ fn preformatted_blocks(
             inline_run.push(child);
         }
     }
-    let mut inlines = preformatted_inlines_refs(&inline_run, context.default_name);
+    let mut inlines = preformatted_inlines_refs(&inline_run, context);
 
     // mdoc validation can move a closing delimiter out of the display body
     // while leaving it as a direct child of the display block.  It still
@@ -1944,7 +1963,7 @@ fn push_preformatted_inline_run(
     if nodes.is_empty() {
         return;
     }
-    let children = preformatted_inlines_refs(nodes, context.default_name);
+    let children = preformatted_inlines_refs(nodes, context);
     let source = nodes.first().and_then(|node| source_span(node));
     nodes.clear();
     if !children.is_empty() {
@@ -1957,31 +1976,54 @@ fn push_preformatted_inline_run(
     }
 }
 
-fn preformatted_inlines(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
+fn preformatted_inlines(nodes: &[Node], context: &LoweringContext<'_>) -> Vec<Inline> {
     let nodes = nodes.iter().collect::<Vec<_>>();
-    preformatted_inlines_refs(&nodes, default_name)
+    preformatted_inlines_refs(&nodes, context)
 }
 
-fn preformatted_inlines_refs(nodes: &[&Node], default_name: Option<&str>) -> Vec<Inline> {
+/// Assemble a no-fill run into visible rows.
+///
+/// libmandoc represents physical blank input lines as empty text nodes.  The
+/// terminal formatter collapses consecutive raw blank lines to one separator,
+/// while an explicit `.sp` request can ask for more.  Work from the adjacent
+/// visible source lines so the AST's empty placeholders do not create a
+/// growing stack of `LineBreak`s.
+fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> Vec<Inline> {
     let mut output = Vec::new();
     let mut line = InlineBuilder::new();
-    let mut previous_line = None;
+    let mut previous_visible_line = None;
     for node in nodes {
         if node.kind == NodeKind::Comment || node.flags.no_print {
             continue;
         }
-        if previous_line.is_some_and(|previous| node.line > previous) {
+
+        // Do not give every empty AST placeholder its own rendered row.  Its
+        // source-line distance is accounted for when the next printable node
+        // is appended below.
+        if node.kind == NodeKind::Text && node.text.as_deref().is_some_and(str::is_empty) {
+            continue;
+        }
+
+        if previous_visible_line.is_some_and(|previous| node.line > previous) {
             output.extend(std::mem::replace(&mut line, InlineBuilder::new()).finish());
         }
-        if previous_line.is_some_and(|previous| node.line > previous) && !output.is_empty() {
-            output.push(Inline::LineBreak);
+        if let Some(previous) = previous_visible_line.filter(|previous| node.line > *previous) {
+            if !output.is_empty() {
+                output.push(Inline::LineBreak);
+                let extra_rows =
+                    context.no_fill_blank_rows_between(Some(previous), Some(node.line));
+                output.extend(std::iter::repeat_n(
+                    Inline::LineBreak,
+                    usize::from(extra_rows),
+                ));
+            }
         }
         if node.kind == NodeKind::Text || node.macro_name.is_some() {
-            append_inline_node(&mut line, node, default_name);
+            append_inline_node(&mut line, node, context.default_name);
         } else {
-            line.append(preformatted_inlines(&node.children, default_name));
+            line.append(preformatted_inlines(&node.children, context));
         }
-        previous_line = Some(node.line);
+        previous_visible_line = Some(node.line);
     }
     output.extend(line.finish());
     output

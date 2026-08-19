@@ -276,6 +276,39 @@ impl<'a> LoweringContext<'a> {
             .then(|| source_line.split('\t').collect())
     }
 
+    /// Return explicitly requested blank rows between two visible no-fill
+    /// source lines.
+    ///
+    /// Some structural AST forms omit blank physical input rows.  That is
+    /// normally the right tree representation, but no-fill displays make the
+    /// rows observable.  Source spans let lowering restore raw blank runs and
+    /// `.sp` requests, without mistaking comments or hidden state changes for
+    /// vertical content.  Consecutive empty input lines are one visual
+    /// separator in roff no-fill output, so they must not accumulate.
+    pub(super) fn no_fill_blank_rows_between(
+        &self,
+        previous_line: Option<u32>,
+        current_line: Option<u32>,
+    ) -> u16 {
+        let Some((previous, current)) = previous_line.zip(current_line) else {
+            return 0;
+        };
+        if current <= previous.saturating_add(1) {
+            return 0;
+        }
+        let Some(source) = self.source else {
+            return 0;
+        };
+        source
+            .lines()
+            .enumerate()
+            .skip(usize::try_from(previous).unwrap_or(usize::MAX))
+            .take(usize::try_from(current.saturating_sub(previous).saturating_sub(1)).unwrap_or(0))
+            .map(|(_, line)| no_fill_vertical_rows(line))
+            .max()
+            .unwrap_or(0)
+    }
+
     fn section_id(&mut self, title: &str) -> String {
         let sequence = self.next_section_id;
         self.next_section_id += 1;
@@ -362,6 +395,29 @@ impl<'a> LoweringContext<'a> {
     fn take_diagnostics(&self) -> Vec<Diagnostic> {
         self.diagnostics.take()
     }
+}
+
+/// Return the largest explicit vertical separation requested by one source
+/// line.  A raw blank line is a single separator; `no_fill_blank_rows_between`
+/// deliberately takes the maximum across adjacent source lines because groff
+/// collapses a run of blank input lines in a no-fill display.
+fn no_fill_vertical_rows(line: &str) -> u16 {
+    if line.trim().is_empty() {
+        return 1;
+    }
+    let Some(request) = line.trim_start().strip_prefix(['.', '\'']) else {
+        return 0;
+    };
+    let (name, arguments) = request
+        .split_once(char::is_whitespace)
+        .unwrap_or((request, ""));
+    if name != "sp" {
+        return 0;
+    }
+    let Some(argument) = arguments.split_whitespace().next() else {
+        return 1;
+    };
+    argument.trim_end_matches('v').parse::<u16>().unwrap_or(1)
 }
 
 fn source_span(node: &Node) -> Option<SourceSpan> {
@@ -649,6 +705,67 @@ mod tests {
                 .filter(|inline| matches!(inline, Inline::LineBreak))
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    fn preserves_explicit_blank_rows_inside_no_fill_displays() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-fill-blank-row.7"),
+            b".TH NO-FILL-BLANK-ROW 7\n\
+.SH EXAMPLE\n\
+.EX\n\
+first line\n\
+\n\
+second line\n\
+.EE\n",
+        )
+        .expect("lower no-fill blank row");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "no-fill display must remain preformatted: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), "first line\n\nsecond line");
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn collapses_a_no_fill_blank_line_run_to_one_visual_separator() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-fill-blank-run.7"),
+            b".TH NO-FILL-BLANK-RUN 7\n\
+.SH EXAMPLE\n\
+.EX\n\
+first line\n\
+\n\
+\n\
+second line\n\
+.EE\n",
+        )
+        .expect("lower no-fill blank run");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "no-fill display must remain preformatted: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), "first line\n\nsecond line");
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            2
         );
     }
 
