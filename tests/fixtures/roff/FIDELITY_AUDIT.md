@@ -28,10 +28,26 @@ to presentation differences such as wrapping, table traversal, generated
 headers, or reference-renderer token concatenation. `confirmed-fixed` is
 reserved for a real ManT defect with a focused Rust regression.
 
-The initial ledger covers the host Arch Linux manual tree and the independently
-installed Miniconda manual trees. A `skipped` row is historical, incomplete
-coverage rather than an accepted disposition. Normal incremental runs select
-such a row again even when its content hash is unchanged.
+The ledger began with the host Arch Linux manual tree and independently
+installed Miniconda manual trees. It also records pinned package corpora so a
+distribution comparison can be repeated without confusing package drift with
+a parser regression:
+
+| Corpus | Package inputs | Exact source coverage | Human disposition |
+| --- | --- | ---: | --- |
+| `debian-sid-2026-07-21-amd64` | Debian packages `cpio 2.15+dfsg-2.1`, `dash 0.5.12-12`, and `groff 1.24.1-1` | 52 pages, 49 distinct decompressed sources | 45 clean; 7 reviewed renderer/device-condition differences |
+| `fedora44-2026-07-20-x86_64` | Fedora packages `bash 5.3.9-3.fc44`, `clang 22.1.1-2.fc44`, `gcc 16.0.1-0.10.fc44`, `git-core-doc 2.53.0-1.fc44`, and `tar 1.35-8.fc44` | 258 pages discovered; 257 rendered; 1 exact source reused from an earlier completed corpus | 202 clean; 55 reviewed aliases whose embedded `.so` chains are deliberately not expanded by ManT |
+
+The Debian review found two real, general `tbl` gaps before the final counts:
+tables nested in an unfilled mdoc display were discarded, and a legal
+`T}\tT{` boundary failed to open the next multiline cell. Both now have
+minimal Rust regressions; the ledger records the corrected page bytes rather
+than retaining stale failures. The remaining review rows state the precise
+false-positive reason instead of acting as a generic allowlist.
+
+A `skipped` row is historical, incomplete coverage rather than an accepted
+disposition. Normal incremental runs select such a row again even when its
+content hash is unchanged.
 
 Pages containing `.so` requests are rendered through the indexed-manual query
 path with an exact derived `MANT_MANPATH`. Localized hierarchies remain isolated

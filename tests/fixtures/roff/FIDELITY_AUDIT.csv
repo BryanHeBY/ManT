@@ -5194,6 +5194,315 @@ archlinux-host,man/zh_CN/man8/groupdel.8.gz,8,0d02f4ec1adb368632673939a9b993a927
 archlinux-host,man/zh_CN/man8/pwunconv.8.gz,8,0539b1de083c315e22edaaf6e11fe532da5376df7cc7bcf71ec76660be31a990,clean,not-required,
 archlinux-host,man/zh_TW/man5/passwd.5.gz,5,7e304af3155dc1492f6489f72bcf4b519fe7eaca82efb8ba2ec088f622c07aef,review,false-positive,"The manual deliberately displays roff escape syntax; the visible bracketed escape is source content, not a parser leak."
 archlinux-host,man/zh_TW/man8/groupdel.8.gz,8,529310d99ff9d72146986dd8636ccd7c56201f6dfb4c22889ee1fa76abdcaaf1,clean,not-required,
+debian-sid-2026-07-21-amd64,cpio/usr/share/man/man1/cpio.1.gz,1,97b7194312c177ed26e32d45b833dbd6903fd72c8238144e6aff31fb1f9da65a,clean,not-required,
+debian-sid-2026-07-21-amd64,cpio/usr/share/man/man1/mt-gnu.1.gz,1,0ad3bafacc7edfc9611da0a730826f460fd2c6aeaa33bcee7a7bbd8adb31c65e,clean,not-required,
+debian-sid-2026-07-21-amd64,dash/usr/share/man/man1/dash.1.gz,1,0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1,clean,not-required,
+debian-sid-2026-07-21-amd64,dash/usr/share/man/man1/sh.1.gz,1,0f6252ae51279e02e6b6f461f5ab17099f477ccc2f0086d3ab455f837356a1a1,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/addftinfo.1.gz,1,6618bd978bf3091435713e8fae11e22d73040b0cb0cfd79cde465fe76b831c54,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/afmtodit.1.gz,1,6c3100d19937705657e57a6b7414896f4fa6859ecd1b0c443246ec70a85eb385,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/chem.1.gz,1,a44beb1caf7bbf32571a8e820977b19636359a7bf535c9fdba0758a8c6705c32,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/eqn2graph.1.gz,1,f8bd5fa68ecfb3c222758c56442d635b8f30c258396fab1b58b832736993f9ea,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/gdiffmk.1.gz,1,c4502275a376a3fc8976da48e0644cdbdd49142d28eec203e706c8b3d94c1e72,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/glilypond.1.gz,1,95182d91cade9366b0d52cb53797624d519b5d819b01d78ae03e6da07287f5ee,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/gperl.1.gz,1,97281438b9c93b778bb3e958a2044e33ce2de1181e11401a680dd201788d7f7d,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/gpinyin.1.gz,1,9679a214c15d6bc1e46095db921cb4bfdf649ba1b621e45d7cede258643b6c6d,review,false-positive,reference selects the utf8-device conditional tone table; ManT preserves the source's explicit unknown-device fallback
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/grap2graph.1.gz,1,566ac4aff98c2ccaecd983f954a7e757ef4a52cf42135f0a4364a1047f3fd079,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/grn.1.gz,1,c2c24dc7577e6112e3683eca8101f6b488acf84d5163b27a21939528fad11fb5,review,false-positive,reference inserts a line-wrap space inside /usr/share/groff/1.24.1/font; ManT preserves the continuous path
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/grodvi.1.gz,1,42d987b876ed9bb1e5ac51d821a16df0114a415918505b43bec6f8c43089144c,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/grohtml.1.gz,1,35b2e9cb9b37f0da0caafc9f4ca9ccadbdb9e3563157d9a7a7d72064466b9874,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/grolbp.1.gz,1,c4ab4b6e63804de154515ca76a88f60383de50caeec1c7c610d7087c070ceccd,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/grolj4.1.gz,1,2bb32be81cca8caa2206d3b28199af6e2f73eeabd419f19f5a0ab021c8b5c0f4,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/gropdf.1.gz,1,cee6f49c6949f33fbc2471bf1a9050051e42291dd67956f296eb449dcdb85f14,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/gxditview.1.gz,1,1faf1da7608f3bde27d0c0f42531b585c563036f7ecd9016f7a9ed3418bbb080,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/hpftodit.1.gz,1,359b94de13047757512091b5643c59b8aeb0d40bd700f6369312b11d1637f3eb,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/indxbib.1.gz,1,d3ccbc9d3778b9e30d9fc2ed1d691e16e68aaf9489293a4f000be52ffea636fe,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/lkbib.1.gz,1,6145c003db612ae74422fc990a8e72c8e7c2390fdd3ee5e56073f2b89e01636a,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/lookbib.1.gz,1,6c89b4394d179c020f43f7953870fbed56e027461a9a78601bf0f077ceb6ede3,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/mmroff.1.gz,1,364a71da81dde6e851ef021b4399bec5779af38da3bb3a24cd8a94d00ea116f7,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/pdfmom.1.gz,1,4f732b479836013648c45d06461a47bee556dd2f83b1b01de0d155f7faa34a7e,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/pfbtops.1.gz,1,81f71cc0885f57bccdafa7a85a52a04149eee3c287eb17edf020f834db1adc39,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/pic2graph.1.gz,1,eae4d361e6782c2e9eb6e0fc8a62ac35dad39f09887dc1a8ab559cfeda9b7701,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/post-grohtml.1.gz,1,35b2e9cb9b37f0da0caafc9f4ca9ccadbdb9e3563157d9a7a7d72064466b9874,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/pre-grohtml.1.gz,1,35b2e9cb9b37f0da0caafc9f4ca9ccadbdb9e3563157d9a7a7d72064466b9874,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/refer.1.gz,1,da29290a73311f90dd891d230d1e5f21626bcdaf37978761f7cadfd52828083d,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/tfmtodit.1.gz,1,84821f8d05cc8a5b9ae6ea1ada5a8d21828b896b491505d59ef08c8a89f72927,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man1/xtotroff.1.gz,1,9aaa4446fce0f597d20b0766d303b286099ef0b157dbfcbe185a7407799b8ba9,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man5/groff_font.5.gz,5,77cf0e9382edc404f057e2005e327ffaa14ca567a4a5a6ea427037fcabd93392,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man5/groff_out.5.gz,5,60b0486e3b645b06ab143286cfa54fc093ce04bdde1ec24ad897a1caddfdf704,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man5/groff_tmac.5.gz,5,2c18fb365dd1be84c5d68b9be41233ec5992887913136d84897d0b954b94f1c6,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff.7.gz,7,4e099405417be8b5aa700d42662f5c47332f824e2fb146ba91a1bc74443e735c,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_char.7.gz,7,54f181e232ba4bb0f0b1e644598637fc4e97db4fe853e8f5cbf2166ec7d1715d,review,false-positive,documented literal Unicode escapes and ligature spellings differ from reference device glyph expansion; all source content remains visible
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_diff.7.gz,7,0702e8133184cc61b57fe4cc1c098530fb34ec0cf74af0c6ac039af27c48bfa2,review,false-positive,structured equation rendering preserves every operand with explicit operators; the detector expects groff's compact equation tokenization; author link labels also differ
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_hdtbl.7.gz,7,470af47a1f60b6b6e81fbc36fa8d7a4b5acda955edf11d53b98c4c0e71c20b42,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_man.7.gz,7,06b3c537065a25a9ad3b267037abd2a0a641769820ee524c217c8586d9b19f38,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_man_style.7.gz,7,ed7a60482e27fecfab69e715e490a7ad9e5b134774ecb485fde93ab15a7fcd5d,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_mdoc.7.gz,7,d1d70ad837ee15a6b0ed2081ab629ae91e3762486b3424407b816a63735e9618,review,false-positive,reference expands groff mdoc package strings unavailable to libmandoc; ManT preserves their source spellings with a manual.unexpanded-table-cell diagnostic; remaining compact-token findings are layout only
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_me.7.gz,7,dd0ccb9f517711997a06ac952c776cace6d576a616e27db348ef2718e4e8bf65,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_mm.7.gz,7,255b95fcb8e16b6b5c95743d5ecb94c06c4640757b17e025638f2e48dca60ec7,review,false-positive,reference line wrapping splits installed paths and omits explicit author link labels; ManT preserves both
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_mom.7.gz,7,d3e74f184352ae977ab0f45ddb5ba06a9241df089b406dd4c7c503040dc0d559,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_ms.7.gz,7,4ca528456786cad102cb5b6c6d5864af23ba0071295cb9a7eb5e023cd24fccb8,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_rfc1345.7.gz,7,5a44214f5274b0ab670999d847db6611688e19af7077c32f3df0185b4c1b0fa0,review,false-positive,"the page intentionally documents literal bracketed Unicode escapes, which ManT preserves exactly"
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_trace.7.gz,7,d6a09ab34cb315abb226ebf520943a32bd8e8fcf25ff4b9acbc2b34d8bc0eb49,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/groff_www.7.gz,7,579287ffe342b724cd03b2fce4066f36afe740e254ed61d2cb40436aecd012bc,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/man7/roff.7.gz,7,938fa69bcc30faf504c98276fa980138ccee17e11f449c50687493421d71d6fd,clean,not-required,
+debian-sid-2026-07-21-amd64,groff/usr/share/man/sv/man7/groff_mmse.7.gz,7,9f544905d1b5b2f52b4516fd54b63667c3881d171a59a8c5f8d4cfec344d535b,clean,not-required,
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/..1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/:.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/[.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/alias.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/bash.1.gz,1,a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1,clean,not-required,
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/bashbug-64.1.gz,1,e32a1b4f1ca110bd2bf232a49a68ac2c151048dd29d5bde49864b94931022af0,clean,not-required,
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/bashbug.1.gz,1,e32a1b4f1ca110bd2bf232a49a68ac2c151048dd29d5bde49864b94931022af0,clean,not-required,
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/bg.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/bind.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/break.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/builtin.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/builtins.1.gz,1,4db35dcd71225a0074b8a2425ed6eab3fea066128eb378419cdab572512f77f2,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/caller.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/cd.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/command.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/compgen.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/complete.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/compopt.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/continue.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/declare.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/dirs.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/disown.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/enable.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/eval.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/exec.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/exit.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/export.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/fc.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/fg.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/getopts.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/hash.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/help.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/history.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/jobs.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/let.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/local.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/logout.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/mapfile.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/popd.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/pushd.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/read.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/readarray.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/readonly.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/return.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/set.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/sh.1.gz,1,a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1,clean,not-required,
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/shift.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/shopt.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/source.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/suspend.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/times.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/trap.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/type.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/typeset.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/ulimit.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/umask.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/unalias.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/unset.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,bash/usr/share/man/man1/wait.1.gz,1,889a63bd2e6b0015eb432792d8b38c7dd069cdbe656285726514eddbcdbe1b49,review,false-positive,GNU man expands packaged embedded .so chains into bash(1); ManT intentionally denies embedded includes and preserves the wrapper with a diagnostic
+fedora44-2026-07-20-x86_64,clang/usr/share/man/man1/clang++-22.1.gz,1,8f727b7a3966a90989f474259bab124fdb3935913dffcb6912c1237a63b2b241,clean,not-required,
+fedora44-2026-07-20-x86_64,clang/usr/share/man/man1/clang++.1.gz,1,8f727b7a3966a90989f474259bab124fdb3935913dffcb6912c1237a63b2b241,clean,not-required,
+fedora44-2026-07-20-x86_64,clang/usr/share/man/man1/clang-22.1.gz,1,8f727b7a3966a90989f474259bab124fdb3935913dffcb6912c1237a63b2b241,clean,not-required,
+fedora44-2026-07-20-x86_64,clang/usr/share/man/man1/clang.1.gz,1,8f727b7a3966a90989f474259bab124fdb3935913dffcb6912c1237a63b2b241,clean,not-required,
+fedora44-2026-07-20-x86_64,gcc/usr/share/man/man1/gcc.1.gz,1,531ca21b660c1fbd294218e921d834adfaccd61c6f400a2a5d844759f40fc034,clean,not-required,
+fedora44-2026-07-20-x86_64,gcc/usr/share/man/man1/gcov-dump.1.gz,1,7bba07ba2ef7eeef0cb8b50af38390e32221bc6ba7030574ff7158f755c51793,clean,not-required,
+fedora44-2026-07-20-x86_64,gcc/usr/share/man/man1/gcov-tool.1.gz,1,24842dbd0c4c32102ad5cb0897d19ebcbd14f7767ad2ad23a1b573c43611712a,clean,not-required,
+fedora44-2026-07-20-x86_64,gcc/usr/share/man/man1/gcov.1.gz,1,5e94b53cbbb99b5ee38f75440276bb1aefb3a4a0f930ee67e5879a683829a6cc,clean,not-required,
+fedora44-2026-07-20-x86_64,gcc/usr/share/man/man1/lto-dump.1.gz,1,a58e9ee6adcdaf61828217bb622dbf55228b8161bcf6e47473036ed79175d542,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-add.1.gz,1,7c3bc75bad087fd4ff2b7d3ca472e3963faa6680a6ba72c1103f5c48a4e644f8,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-am.1.gz,1,01aab6c90b94300117528097d36c3e12831f35b13dff451abd83482f6e1d6c75,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-annotate.1.gz,1,90169183a4eb311634f13a7d6eb67473fd7cddc1e70df0e722fe4c9784e87d6b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-apply.1.gz,1,7414fefe7281497fafef7c03c1c2bd449e244272bb8d26a76a88aea4139130f5,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-archive.1.gz,1,beb3b29ae12e0cf5b91605e64c2fb812f76faabd09f15badb386d295882abfde,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-backfill.1.gz,1,af376386392afc04676cbad25f39c6e6a5ee43d3ca10fdce27b5cfee2908ddb0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-bisect.1.gz,1,417d11ab498d187325d9d872321b0defdf968a360e05ca52987315b54ad9a73b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-blame.1.gz,1,2c51c56cfc04a1cf7a0b0519b17a3bed20c2810c6a1e58f0fc0223155a39b9e0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-branch.1.gz,1,bf97c82194d9a3a6fab38ca7c9667dbe158281e0b62af8ff7518642c0c2934bd,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-bugreport.1.gz,1,5f861a186a78210e222b209229025185d67bf323ea84cf82bef1c90aa9ceb22c,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-bundle.1.gz,1,7297c112abce58cc39d906b9b2e423feffd285ac9d6572c6aa64a254f2e8743d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-cat-file.1.gz,1,4f35c549188b68e2212555fab12a37b6c44c614e805d46bdf44325249e698307,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-check-attr.1.gz,1,6b8b74c4df864a5db761702290cb61fb0981355165ec37ffbbcbd669107224c7,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-check-ignore.1.gz,1,9391c2ea42d6ee4ba55838aa55e72893788de100fcb876762a2afd556ba8ba14,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-check-mailmap.1.gz,1,6a966e34b4b0baa0f0af10026d37c6d793f7fbb6a93c18ad914e2f6b27959da9,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-check-ref-format.1.gz,1,c6e097d4cdbdb051492838eb1d83abb7a7d4c129471da3e21cf894590b671510,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-checkout-index.1.gz,1,ee4f392c2bdd144586119651014bd24951fe14143cdf8f00f772ba09f1694928,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-checkout.1.gz,1,60aa093495ec5bbfd780b49dc4289f13591dbc521dc49a247658b70e2a4f933f,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-cherry-pick.1.gz,1,3953aa1e8238411b60ceefe3793cf36377a1984dd3365f5e799ef2e97b403e4c,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-cherry.1.gz,1,88a8f622d07e6f2b4d896797ccb27767ec29f27e16b00462206ea2ea18e35947,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-clean.1.gz,1,153276b46afc9c411f3fa3f9e68d20ed08c2f164f885eeef78495329919f096b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-clone.1.gz,1,a20580c00e078d814dc50fe1bd74388045b065dc74560e90401b4a96b4e8fd11,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-column.1.gz,1,705e4a124707f619011609765db27545ca8adc13578e199fe288ac9d19adafc2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-commit-graph.1.gz,1,0de66a858dd552751e0e179ba14bddb25b25d492abb5fd6f2157d621e94b7686,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-commit-tree.1.gz,1,8538cdc49fb20ccd6db39b2794c7a43eea46d045cd349ff3b7280c3b328a98d2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-commit.1.gz,1,a4e84763f83e5a2eb9aa4572545bbe518e502f21880c63a06d9e56961e8b61ba,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-config.1.gz,1,9f22b48869c3202c2d4add538b246fcd0cf6ee2e1c5f42f9f4bb28238b0796cc,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-count-objects.1.gz,1,46c37c3283eef7fd15f48597e7cd6c84281bbca024a7e543a756d6ab09e7c19d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-credential-cache--daemon.1.gz,1,2e03c5da2613007a212fe242c8209c15c2f3a12b560144e1559e8aea5cd2a4c7,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-credential-cache.1.gz,1,83eb307ec37f691693dafb77409d0729c2ee52a8c449bd2e9a5bdecfaeab6e67,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-credential-store.1.gz,1,93bd61e85750d65e9aa1c605272a053ee850fd46df90458e4961ef7b4147bd68,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-credential.1.gz,1,ca9c2564a816789d1b11e03518680462359b855d915a58513b35fdfb66f367f4,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-describe.1.gz,1,d2a5551583032340bc93fad1412cd7c98d54222b48572f23f7c6924b62194859,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-diagnose.1.gz,1,1b0deda00d9b1392faf8b024ac668ee6c2095fedbae5613a3678e148e71046d2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-diff-files.1.gz,1,429bf437a6550494b7252cdbf16bc06ae067d0d69ce953add02577cf059ca208,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-diff-index.1.gz,1,52f116534565122a9621f821e03bf328aa57b64c62e5460fdff8edbe2b2e665b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-diff-pairs.1.gz,1,f20eda537ccad75e8f309e8845d8360f6931bca63fcd1ea2a8df5569e746acdd,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-diff-tree.1.gz,1,d76157898b32baf360686c7cacdec137e53257ce364e046b03b402793475a017,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-diff.1.gz,1,60b65fb826d4f9b0de0d01f484e4080a5ccf1ad41a3aa5fd850b706dc7748fec,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-difftool.1.gz,1,07cca72537d368fa5d3175be940bb8242f2090d4593d6bab496eaac2c2de6dab,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fast-export.1.gz,1,5e6b4e3a8da1c9b5d376c5200fa406d35e4708da5deffacc4576dd9190ac62f3,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fast-import.1.gz,1,4fcadddf3ca4261d8c2abacb737e96f174bb739116d5dad68e378c33df681b11,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fetch-pack.1.gz,1,c7bfe8605c82d54dc2f7f725bdaccbb1e692f6c6c81c3c7c98e67d33bcb1cc68,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fetch.1.gz,1,725bb03c8f125121e3847ce4da934c5e48cce834c5613084711e59e0c44be6af,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fmt-merge-msg.1.gz,1,d335dff1ccda00138b576db4f5aae3934f77b6e39ccabff3d3f8805462708fe9,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-for-each-ref.1.gz,1,f64939a6b3d542117b4cec80a2d3e7c2bca549477a51b113c8fca429a2ea3e00,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-for-each-repo.1.gz,1,87731c69be6f3eb8691cac446dd22765a957d156d0610ca0f34a9e84936107f0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-format-patch.1.gz,1,3a268170a583b01f6ee5f4d2f2453fc1e9a4c2ba3f09abb5532e598cd92fc878,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fsck-objects.1.gz,1,98c26f214870e708604530c7ef16a44b2fac4115076397799a5fc5793adf8abe,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fsck.1.gz,1,65b8fa129b70273513380b9f590d0641ef0d1e24d2ff68b1993655c8f5d638e9,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-fsmonitor--daemon.1.gz,1,d87214288fdb9a3295e6a61e5025b62a26631636b1238d18e6cf0518bf9f00e4,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-gc.1.gz,1,0f703369f5b50efd39a3f7598b69ed27e6109eb92b8291f5815a120f7d006131,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-get-tar-commit-id.1.gz,1,a5d4187abc8fb9afd40cf92fa3e97656f920c41c89f5a6a4c92eaa33b6ce9b8c,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-grep.1.gz,1,0c3b5a92613bdd487f44045e9b7f8017e60e09b604c987ed500fe670de28fa77,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-hash-object.1.gz,1,e7dcb7259620cbbddb971fb5747cd73cf84c5d7d6f5c371da9e749ee60ca04b2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-help.1.gz,1,6bb7fd14d895f91a0dfc6019ebca433cc430d8024ee740cc771ee7dfe1e56c3b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-hook.1.gz,1,73f00f7a79c7310e303b2ba94ed16c1f5ee8a0f6b33ba2a3e86b2852584de1ad,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-http-backend.1.gz,1,45f4b13fe7d04ad03a0ecdd58424fca7450113196875927a6c3af0af31776c25,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-http-fetch.1.gz,1,b6144172bb180a644374a35e8b8e56b8884e241302ca8ffba100b065bb66d55d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-http-push.1.gz,1,635fe7f394e066dda4da9ae6daa08fed14b59cf023453c03237f773a1a0a2911,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-imap-send.1.gz,1,31d5623991a733f410e77b1a1ed7c3d45445566dc4b2d666dd4b0a495643a08a,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-index-pack.1.gz,1,a465f9d9f5f35a76f7cf90a701809b0ad83ceebdc8f931a869278ffd3f4fe7bb,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-init-db.1.gz,1,fb0448a38e7ae40a522ff5f6bc6d3efd0e9b02110fecc24edee39e6091852402,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-init.1.gz,1,bdc1b5873c5f0e978fd633f6d3389de0cdab889425f6c623ae305181f8a55979,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-interpret-trailers.1.gz,1,2a767c4802eefcab265e96d4042a1aed338ec6ba399f2de57d1bd8ff5e8c45cd,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-last-modified.1.gz,1,8347195f11948796bf31ddf568132dee76c2d77d63b360f67c7a194a12144a6a,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-log.1.gz,1,fedc66648fcf262298293689c6e1a8dda946c6f940f8ea033928f9bf1bd5829c,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-ls-files.1.gz,1,d047196225262b7af83065d414327cf8dd512bd282e84c264537775b6932394f,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-ls-remote.1.gz,1,b353a77e6e20bc100e5a12889d2f9922f4a84ef8b24728c33be4a7205cd890b6,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-ls-tree.1.gz,1,76a30709f0691faa7cdc7cdec1cb5f98e32bbf910b1da2f15af737ed34882341,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-mailinfo.1.gz,1,c927ab1183218b600e1511155fbe35ebd780b1f85e8271fd68532fc76a8ba1c0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-mailsplit.1.gz,1,03cf07091570461c8aa31a69e0eead7db87d1b9c353fe2dc9777dc3372a5a254,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-maintenance.1.gz,1,e5c08753eb4e54a08559af443387bd5ec01ca583ac225f4d0a13a8e2368cf148,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-merge-base.1.gz,1,2ac333adeebe16a74fbeb62ac87de0235be25de2a92cd793354f5e7b6f35250c,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-merge-file.1.gz,1,b40590bd9de76d425ce25545d563201482fe1b4d695e6efe38b4f183c362c13d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-merge-index.1.gz,1,0ddb799efb991a20d7f3b5cb227d75cbf18474f5c2759ea681686f12d84ce078,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-merge-one-file.1.gz,1,8a44f3c973ef7ee3f11f643af6d8e83ae2b4c190d45624d3e5173e7ba6748441,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-merge-tree.1.gz,1,6b145878ac996bde5f919ecea0150bafadc726a5c981ab586dc189aec3f07a5f,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-merge.1.gz,1,19a2cb18bd5ae144cd2e1722c396c39d183346eb19122eff248d4f5c75cf905b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-mergetool--lib.1.gz,1,f7063d201e9150a268ab56b056407b23c8776af309a3240ac6464e799fbe0b06,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-mergetool.1.gz,1,1c3c0fb7caf3142906027640cdcb1428ecc608eddeb6b2935dc857752737a9db,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-mktag.1.gz,1,4f5032700f98ba014dd032d12cb4ce61808942ba465831ad6d39dc4c6dc6ab72,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-mktree.1.gz,1,6f93528533a9a7c31021bf9f98ff60fc63e4a32e0d1f5c8da26b990c6c3ae055,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-multi-pack-index.1.gz,1,31078b42c2ff4823f0ab9f36d0bc0bada93cb63e91d7576f315b26630203491d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-mv.1.gz,1,dd876488440ab425b4b94625fc9e8db19e93606bdb99dd5ec2f8a7c5c5280788,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-name-rev.1.gz,1,b1e9cf4346c76a71b5ac7f8f7392f9703f3d20430cd496d33ebf1878c5b190d0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-notes.1.gz,1,d3c09a413de1f839b041a78fdd505061855528dc55fe30fa6a742492152e07ed,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-pack-objects.1.gz,1,5e4bebdb9d575f6c152e7e19aef675eca989c889404b3956684530acc947fe4e,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-pack-redundant.1.gz,1,d9199eeec4d16820c4ff654ad6a92fc5c46eb6e12029c42c86106c08a8e7be0e,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-pack-refs.1.gz,1,d0a964a12f7093edce31038cf78491067331fbf818c826db8aae1fd01823a738,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-patch-id.1.gz,1,0841660ed6275e78c66c795a6e697a3c5f6f8bacfccf9567a00fbc3831d04d13,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-prune-packed.1.gz,1,248445d62492a3e5ab2a3131f3ba161b70f484bf26c8e09370dd79e385b18e3c,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-prune.1.gz,1,0d9ed35d2003425d1d1fcd7f2e453974c4470cdca3e8bde7103273f31848160a,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-pull.1.gz,1,65955031875b0be9deccb1a0565e2b9d21f52e0f40e9ba9b4d43076eec972599,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-push.1.gz,1,afa475a177a7e24f6891d9ce659c64d6087c0c9ae8cee970b856916669292399,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-quiltimport.1.gz,1,07477cde5e5760f5ae53d0fbb5b63706bb7533e832e9fb762d5312428dfd9768,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-range-diff.1.gz,1,fd6fec053b8ababd42aa7e3bfe50a419b5ba9d8979a87ff7ea03765d283a72d8,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-read-tree.1.gz,1,5547d226a7dcff440761d23c3a02d5efe784cde1782b6c24c46ed8251bb51ea9,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-rebase.1.gz,1,15c5484880936b3fcb259c66a3615d43529d29995b8a1a373156613c1f374ab7,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-receive-pack.1.gz,1,195f22a83046f1e78ba6c4b6af2b851e3844f0b75b7c28d076e2411881158e87,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-reflog.1.gz,1,32ed2f5c7964f64df5901fa3fb89346ea1b547b7a7c14d32b1c195255df4b50f,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-refs.1.gz,1,2ee01e792e3edd937ea1d19003a34a180912a7a3924418a5f0f25f96ac5414d0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-remote-ext.1.gz,1,65f8c1c1e48b11811a8bae9993a56ac876f719a92c3390c839812fa1209ebdc5,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-remote-fd.1.gz,1,2a4fa1a3ccc06fcccffd9b59465099c9a3de7a617cbe847b9910c0c8c5931107,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-remote.1.gz,1,d268ce139c8fdf8e0c071c714577c7175f74ad5e048ea22650000948f9b02e72,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-repack.1.gz,1,3e3be18e65f6dd20557e4d66545f2be69413ba368f1fffe30f69c104b38050c2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-replace.1.gz,1,1deec415123320088e2452a42c0d4d870505325b14d9a2fcaac36aa519089b8b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-replay.1.gz,1,e9da280cba89ee57c09883cc6ea03538f76bf62c4d1b63b6c3c47c1118795023,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-repo.1.gz,1,c5601c8ab1cbedb673179c8df4a372f2c2a2a0e294e0fd20e4a5abe0bca70f91,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-rerere.1.gz,1,77581a13878d4d9c7a193c5c924db01e3cbad2cfc1a02c18f292dc5b2d52283d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-reset.1.gz,1,a603cc6fd9e087b0ec731bfedd796483f89e25edfd1389834caa858a48b9639b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-restore.1.gz,1,d17a0a4582d53de984fddc87eaf64bb668b235558f07dc3ebe5fbf6139062ae8,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-rev-list.1.gz,1,64c26769bdcef4c17459ac194b30cedb9d9a55e565de909f723ac835704182ad,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-rev-parse.1.gz,1,2bdd36c168167f012206a736bb9c5e46c68973c58041a9131cdc1db711fb3783,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-revert.1.gz,1,8a84e0e2c6152373b1008569662cb64a48b6d3b04f1f71c4d9c18bbd94c4fdc2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-rm.1.gz,1,fa9b94611ff1283c90f777a21cae2397ecb9d4828febe113c4bbdf4c612e2fc6,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-send-pack.1.gz,1,cb8fa140ef3bae1a7fc7ab3ab8b1890c9b3fe315b3ff0d80ff826dbde7764f96,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-sh-i18n--envsubst.1.gz,1,19f2a393d9417b304c69b781d16203396e57cd52237de543829e9d841ba07ab2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-sh-i18n.1.gz,1,68a9a9f480d780c4c453e6d72d14828c7057427f1bf81565fecb495e23a11920,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-sh-setup.1.gz,1,a62e300cd95f64143146f0def445cc606d39ad035388430f705ef936dcb50b99,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-shell.1.gz,1,ad915a4be5d571982bd7ed59073c5be2f61f4d6c1b84c55dfebee643bcec4648,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-shortlog.1.gz,1,cc9e9fdfafd548436976fdec48591edeb3f85d11907612b6621c0b90435d288d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-show-branch.1.gz,1,2b56737bb62bda4646cfcd33032d0c3bc984aff653d1577629808b89935c2854,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-show-index.1.gz,1,8f4089bb2d411a7b96c60f667f1c2603c48c103d4e81996f44f6fe203f229944,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-show-ref.1.gz,1,3e7aa5a13f1b6df65f247cad096659eee4fb6c53295dd890848c6c4d94db5151,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-show.1.gz,1,f0224a51998c32fe1590866d82d5c87c455a32dbadbf14baefbddef60f57e24c,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-sparse-checkout.1.gz,1,ef630c9650b33af5f4d902c37db261e35131c8d0f7d08ae1ff5a20e6780aaa02,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-stage.1.gz,1,c04d14d7ce8c077a94f812f36da0f570758e1e6e9e176d1b956d2ca0e700c3e9,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-stash.1.gz,1,aaeb6d7af8c68300541137c6f28588840ab85180e4401c629e124779575bc864,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-status.1.gz,1,5bbb0d6dd2140e15466920f6266accf9ad2246b4a42c9c88b3859ed72856613b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-stripspace.1.gz,1,fa77b53a42a5200ac25458532c365e8a5c17a9eb912886afc738de70c77b31b8,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-submodule.1.gz,1,bb6a92ae43829cd9cc840403f7175613f4f448eee215b8d078e234bcb8b4eb94,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-switch.1.gz,1,5a5c310b0267486c1299145e03da1c67ead175655707083127c5bb0d2ef7e723,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-symbolic-ref.1.gz,1,3dfa21db8e0c6077c63f51c8ea3eccbaf3d711fefbc665ba01b4fdb1a4045fb6,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-tag.1.gz,1,e40489a537414c24af38877fb97df1e29ac1cb43dd0302c9845a400b47ede45d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-unpack-file.1.gz,1,4beb5ec91d255f23bb5482730850b410c814417e353eaa612895ea3d840b3dd6,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-unpack-objects.1.gz,1,15d496c277442b75ae143291dd8d9a350c6ecc9e64b479a504b025547cc5b360,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-update-index.1.gz,1,98b59195117014fcbd40d8d66981298df1a0e4cb082245eef6ed844051064c60,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-update-ref.1.gz,1,4820392028c1de907d9b7113b47895e9fb96d7cabae536c980d3209382ca1f4f,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-update-server-info.1.gz,1,626e258636bf7f09199e63bb097ec7f7faf1ce346fd406adedef0fbe9b0e11ff,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-upload-archive.1.gz,1,96deab74ed61a16604eacfd85efe1c74246791b31cb24c38b75ece2d2338750a,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-upload-pack.1.gz,1,07f554b48c8876cb6bab45fb7ea549827da4963d5df1b57b0778d472a2dde021,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-var.1.gz,1,d67c25f78fa8ecc0d75d9f0e8761388d6af47acecc58531a5e4e844abf6de9b2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-verify-commit.1.gz,1,99e0a3600c04d93250308a73fce637a29d2a5a7f2168e757c35447616766f55a,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-verify-pack.1.gz,1,cccd41df63f69b1a7600ca47d6f36b297beed2eb66f8fbcfa3d8a6a64ba172b8,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-verify-tag.1.gz,1,a4ae586634ee0d281ff801182af4e975fb5d9dec0d2fc1d2c1b3cf014fe243f0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-version.1.gz,1,35f14f37a30a188066b7cae84d2c55ec8cb953f5e1b139c56836ff8a86692992,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-web--browse.1.gz,1,bd46c8a6979f1c8e5e4bc9897b5d6d0d6aad7cf8ecc6bf71929ab0a7fad934f7,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-whatchanged.1.gz,1,304d4e6b9aff8a11edc99fd725f1206431d7e6de7f93b6efb776380cb5803d65,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-worktree.1.gz,1,43446314909ddeed28b1c1a23f757f5a3b32578514be469ce7cad432ea0e6952,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git-write-tree.1.gz,1,0816585e9dfd94edec2ba290edf49bdf8a3a91ac046790b2011c245a5c1dfcd3,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/git.1.gz,1,2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27eb4bb9369c415f3351c1,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man1/scalar.1.gz,1,a5b798de249ec38b3591ec9c5dc7205061b71422996b625dbf6229d4b564a39b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitattributes.5.gz,5,5943ec6605bb04c32a67dff2e6564b5a078626b29a5778557fff143c6e04b544,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitformat-bundle.5.gz,5,7096715c8da7ce6aea9ead31d8d3a61730d026da135802dfc70f079c75ad624d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitformat-chunk.5.gz,5,556b112d949b001748be04b7cff8ae6bff894e1a96d3eb9bd80784ae2022a8fb,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitformat-commit-graph.5.gz,5,dc80e113c51856b242603b5cd280ddb416a80ab407236da84155a333899b8c5a,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitformat-index.5.gz,5,e6e708efd576e564ffe64084a33a3b0e6a7b750e3e8db5de2b10a22c71118544,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitformat-loose.5.gz,5,186c953f83723ade2903de1fa406d771e2c172b64be1cb10a73d10b7c2abfb9b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitformat-pack.5.gz,5,db28d81843eed48e1e01ea01d6cbfb33e3e1037b432736527c653c8583e835d2,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitformat-signature.5.gz,5,fcf9297703d297c6529ceecff4d4394727736fab8061e82ae622b4843d3889bd,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/githooks.5.gz,5,2f4b92c277e382d79d3ff95950b5a02b33b41611eebf54935159cc8541b733fe,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitignore.5.gz,5,f76652a4c67b1cd5636035463bb033f24f9b406f33da780611d69c95c068a1c3,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitmailmap.5.gz,5,e7906b678c6741733d5a63afd12a7c8b2c353c8842c32ea6e5044c365e07b674,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitmodules.5.gz,5,c6d25aa6282eddf34771b774af375832e82d2d7642b7f33e456f4d1335e98206,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitprotocol-capabilities.5.gz,5,a72ff10a773b9dc6525767d27333c412046b7f21f2c0b1e45931268262262839,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitprotocol-common.5.gz,5,92d6bff184950c1ac1e44eb58f83e19d49681dd978928da5af0496aefcd7c381,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitprotocol-http.5.gz,5,15b6177b6d2d282ba4a2c1b6a69548c6a92ef7792e2b5e7f6989fdd7eefd3a92,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitprotocol-pack.5.gz,5,964736adb507bed7dd70a9840337550f174cdc2ee26c1be08afde8738893f30b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitprotocol-v2.5.gz,5,db4315eb607d62af76311969af54be5b4cfe26d26c0bc8984083a9724bc083dd,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man5/gitrepository-layout.5.gz,5,3b35ee722dcdfaf76b8ce675a67cd3af741d4bb0d9fd5f5087f76eb3edc13984,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitcli.7.gz,7,0b153434ab1204f70dc79049e7f1e5f08685fc08444f09dc9dd75f120f802bc0,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitcore-tutorial.7.gz,7,6f37378508391e35b92b4fd09367fad6db9d48a91df406baec4f61f091980c25,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitcredentials.7.gz,7,a7ca556a8d02f79d80a6eafba967320c395d0be60bfb9865f34b5e9d72575955,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitcvs-migration.7.gz,7,4a7794ff0a45d03fe57b621cef6a68d92b505a1ee4779816b8de362ccdd93967,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitdatamodel.7.gz,7,d1f7a97a197efc5fd65296a81678372f58583e161ec323ace5bce6f2d575af8a,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitdiffcore.7.gz,7,d4dea34c30f544f9127ab54607d96a4c85dc842120469176fbc327c1c98ea1da,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/giteveryday.7.gz,7,d1f199260a2d3ea248b4a9563075cedf6440df6c5824b90f03b2f2b17db35eab,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitfaq.7.gz,7,e511c9906b6b431ab01b75d716f1b2d94328ebda1dc7198df6386b89f052384d,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitglossary.7.gz,7,002fbc950bb71c9ae24d316039a6f8efcc5d4215aa4f9727fbd5a531b68b3bcd,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitnamespaces.7.gz,7,fe0872502f029ea6b0e42efeec4a043561fa930f8a5bb8c7ca5df17a4d776987,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitpacking.7.gz,7,d0b912f462c1189c396b543a59830ac6d01e5e8a0fc253a1bdf07b4e058481ba,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitremote-helpers.7.gz,7,b9ca2319aa9f7d359b0fc00ba1824d47fcb5c9c136d08b599de9b7ecfb2a8b54,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitrevisions.7.gz,7,3a9a45767a477624740e4c636368be971e3aa526bd15c8eced17b46644519f5b,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitsubmodules.7.gz,7,e4db5927231d3f3e65ba0eabf7dc8f4fc0fcbfa22b3b9d194530576aef24b7ee,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gittutorial-2.7.gz,7,fec51e8c15dd26f6a79ddef9c04a34f055bb4f336b2f391d008f2d7ced697eda,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gittutorial.7.gz,7,1297f85a9740c4e02d05a0461ac65b105053a2718f8bf72c67413822c2083874,clean,not-required,
+fedora44-2026-07-20-x86_64,git-core-doc/usr/share/man/man7/gitworkflows.7.gz,7,976c9a2deb995ed75ecb44da20d80799a46596f45bdd3109c46c6587a3763e94,clean,not-required,
+fedora44-2026-07-20-x86_64,tar/usr/share/man/man1/gtar.1.gz,1,3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee,clean,not-required,
 miniconda-host,man/man1/bzcmp.1,1,172cde42c47a6d50c244e39d993097dcd3882427d57303078643849cf10a81c4,clean,not-required,
 miniconda-host,man/man1/bzdiff.1,1,32d1a7cd115430398e58537532584ef2ab76343c9f094dcd1253d9c4c0f705bf,clean,not-required,
 miniconda-host,man/man1/bzegrep.1,1,cf1c98d3fa055506c8af2f8bba4da9c17d367c6409c6ad83a2bc67ccb6630182,clean,not-required,
