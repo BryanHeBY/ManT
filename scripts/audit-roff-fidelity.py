@@ -54,7 +54,7 @@ TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+:/-]{2,}")
 # slash at the end of an unrelated token (for example Perl's `tr//` followed
 # by a new sentence) must not consume the semantic line boundary.
 URL_WRAP = re.compile(
-    r"(https?://[^\s\n]*/)[ \t]*\n[ \t]*(?=[A-Za-z0-9_.~-])"
+    r"(https?://[^\s\n]*/)[ \t]*\n[ \t]*(?=[^\s\n]*[./_~?&=%-])"
 )
 DEHYPHENATE = re.compile(r"-[ \t]*\n[ \t]*")
 BORDERS = re.compile(r"[\u2500-\u257f\u2022\u00b7]")
@@ -63,6 +63,9 @@ UNICODE_ESCAPE = re.compile(
 )
 GLUED_MARKER = re.compile(r"^[ \t]*\u2022[A-Za-z(\"']", re.MULTILINE)
 INTERNAL_MARKER = re.compile("[\u001d-\u001f]")
+MDOC_NAME_DESCRIPTION = re.compile(r"^[.']Nd(?:\s|$)", re.MULTILINE)
+MDOC_FUNCTION_DECLARATION = re.compile(r"^[.'](?:Fn|Fo)(?:\s|$)", re.MULTILINE)
+EM_DASH_ATTACHED_TO_WORD = re.compile(r"—(?=\w)")
 
 TRANSLATION = str.maketrans(
     {
@@ -171,6 +174,15 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         action="append",
         metavar="SECTION",
         help="audit only an exact manual section; may be repeated",
+    )
+    parser.add_argument(
+        "--source-pattern",
+        action="append",
+        metavar="REGEX",
+        help=(
+            "audit only sources matching this multiline regular expression; "
+            "repeat to require every pattern"
+        ),
     )
     parser.add_argument(
         "--seed",
@@ -296,6 +308,16 @@ def positive_integer(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be one or greater")
     return parsed
+
+
+def compile_source_patterns(values: Sequence[str] | None) -> list[re.Pattern[str]]:
+    patterns = []
+    for value in values or []:
+        try:
+            patterns.append(re.compile(value, re.MULTILINE))
+        except re.error as error:
+            raise ValueError(f"invalid --source-pattern {value!r}: {error}") from error
+    return patterns
 
 
 def discover_pages(roots: Sequence[Path]) -> list[Path]:
@@ -867,6 +889,38 @@ def fidelity_signatures(value: str) -> tuple[list[str], list[str]]:
     return hard, review
 
 
+def differential_signatures(
+    source: str, reference: str, mant: str
+) -> list[str]:
+    """Return source-conditioned rendering differences worth human review.
+
+    Token presence deliberately ignores punctuation and whitespace. These
+    probes cover formatter-owned mdoc syntax where those characters carry
+    semantics, while keeping the general comparison tolerant of wrapping and
+    layout differences.
+    """
+    review = []
+    reference = strip_terminal_formatting(reference)
+    mant = strip_terminal_formatting(mant)
+    if MDOC_NAME_DESCRIPTION.search(source):
+        reference_attached = len(EM_DASH_ATTACHED_TO_WORD.findall(reference))
+        mant_attached = len(EM_DASH_ATTACHED_TO_WORD.findall(mant))
+        if mant_attached > reference_attached:
+            review.append(
+                "mdoc Nd separator is attached to its description "
+                f"(reference={reference_attached}, mant={mant_attached})"
+            )
+    if MDOC_FUNCTION_DECLARATION.search(source):
+        reference_terminators = reference.count(");")
+        mant_terminators = mant.count(");")
+        if reference_terminators > mant_terminators:
+            review.append(
+                "mdoc synopsis function terminators may be missing "
+                f"(reference={reference_terminators}, mant={mant_terminators})"
+            )
+    return review
+
+
 def source_bytes(path: Path) -> bytes | None:
     try:
         if path.name.endswith(".gz"):
@@ -889,6 +943,24 @@ def source_bytes(path: Path) -> bytes | None:
         return path.read_bytes()
     except OSError:
         return None
+
+
+def filter_pages_by_source(
+    pages: Sequence[Path], patterns: Sequence[re.Pattern[str]]
+) -> tuple[list[Path], list[Path]]:
+    if not patterns:
+        return list(pages), []
+    selected = []
+    unreadable = []
+    for path in pages:
+        raw = source_bytes(path)
+        if raw is None:
+            unreadable.append(path)
+            continue
+        source = raw.decode("utf-8", errors="replace")
+        if all(pattern.search(source) for pattern in patterns):
+            selected.append(path)
+    return selected, unreadable
 
 
 def source_digest(path: Path) -> str | None:
@@ -1130,6 +1202,15 @@ def audit_page(
     missing = missing_token_candidates(reference_tokens, mant_tokens)
     phrases = broken_phrase_candidates(reference_lines, mant_tokens, ngram)
     hard_signatures, review_signatures = fidelity_signatures(mant_output)
+    raw_source = source_bytes(path)
+    if raw_source is not None:
+        review_signatures.extend(
+            differential_signatures(
+                raw_source.decode("utf-8", errors="replace"),
+                reference_output,
+                mant_output,
+            )
+        )
     if not mant_output.strip():
         hard_signatures.append("ManT produced empty output")
     signatures = hard_signatures + review_signatures
@@ -1327,6 +1408,14 @@ def self_check() -> None:
     assert missing_token_candidates(["PATHList"], ["PATH", "List"]) == []
     assert missing_token_candidates(["CPANCPAN"], ["CPAN"]) == []
     assert tokens("tr//\nA new feature") == ["tr//", "new", "feature"]
+    assert tokens("https://example.test/path/\nW3C title") == [
+        "https://example.test/path/",
+        "W3C",
+        "title",
+    ]
+    assert tokens("https://example.test/path/\nnext-part") == [
+        "https://example.test/path/next-part"
+    ]
     assert broken_phrase_candidates(
         [["one", "two", "three", "four"]],
         ["one", "two", "inserted", "three", "four"],
@@ -1342,6 +1431,20 @@ def self_check() -> None:
     assert review == [
         "bracketed Unicode escape is visible; verify documented syntax"
     ]
+    assert differential_signatures(
+        ".Nd description\n", "name — description", "name —description"
+    ) == [
+        "mdoc Nd separator is attached to its description (reference=0, mant=1)"
+    ]
+    assert differential_signatures(
+        ".Fo function\n.Fc\n", "function();", "function()"
+    ) == [
+        "mdoc synopsis function terminators may be missing (reference=1, mant=0)"
+    ]
+    assert not differential_signatures(
+        ".Fn function\n", "function();", "function();"
+    )
+    assert len(compile_source_patterns([r"^\.Dd", r"^\.Fn"])) == 2
     clean = AuditRecord(
         "host", "man/demo.1", "1", "0" * 64, "clean", "not-required", ""
     )
@@ -1413,6 +1516,10 @@ def main(argv: Sequence[str]) -> int:
             all_pages = [
                 path for path in all_pages if manual_section(path) in selected_sections
             ]
+        source_patterns = compile_source_patterns(arguments.source_pattern)
+        all_pages, source_filter_errors = filter_pages_by_source(
+            all_pages, source_patterns
+        )
         pages = list(all_pages)
         corpus = arguments.corpus or (
             "fixtures" if not arguments.manpath else "local-manpath"
@@ -1512,6 +1619,12 @@ def main(argv: Sequence[str]) -> int:
         print(f"syntax report: {arguments.syntax_report}")
     if arguments.syntax_cache:
         print(f"syntax cache:  {arguments.syntax_cache}")
+    for path in source_filter_errors:
+        print(
+            "audit-roff-fidelity: source pattern could not inspect unreadable path: "
+            f"{path}",
+            file=sys.stderr,
+        )
     if not pages and arguments.audit_db and completed:
         print(
             "audit-roff-fidelity: no new or changed manual pages; "
@@ -1535,7 +1648,12 @@ def main(argv: Sequence[str]) -> int:
         )
     if arguments.man_section:
         print(f"  sections:  {', '.join(arguments.man_section)}")
-    print("  contract:  visible tokens and token continuity; layout is intentionally ignored")
+    if arguments.source_pattern:
+        print(f"  source:    {' AND '.join(arguments.source_pattern)}")
+    print(
+        "  contract:  visible tokens, continuity, and source-conditioned punctuation; "
+        "layout is intentionally ignored"
+    )
     print()
 
     findings: list[Finding] = []

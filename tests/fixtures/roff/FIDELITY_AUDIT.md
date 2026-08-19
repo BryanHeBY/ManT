@@ -88,3 +88,27 @@ keyed by corpus, relative path, and decompressed-source hash, so a package
 upgrade is profiled again while unchanged pages are reused. AST coverage guides
 which pages deserve comparison; only a human-reviewed finding plus a focused
 fixture and Rust assertion becomes a regression contract.
+
+When a syntax family is rare or a known lowering policy must be rechecked over
+every occurrence, select it from the decompressed source before sampling:
+
+```sh
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
+  --source-pattern '^[.]Dd' --recheck-recorded \
+  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
+  --corpus archlinux-host --findings-only
+```
+
+Repeated `--source-pattern` expressions are ANDed and use multiline regular
+expression semantics. Unreadable paths are reported explicitly instead of
+being counted as selected coverage. Source selection complements AST coverage:
+AST sampling finds rare shapes, while a complete source-directed sweep can
+catch a wrong lowering branch in a common, already-covered macro.
+
+The automated comparison has multiple detector families. Token presence and
+token continuity remain tolerant of renderer layout; source-conditioned
+probes additionally compare formatter-owned whitespace or punctuation where
+those characters are semantic, such as the `.Nd` separator and synopsis
+function terminators. A general punctuation skeleton is intentionally not a
+contract because tables, wrapping, and renderer typography would make it a
+moving allowlist.
