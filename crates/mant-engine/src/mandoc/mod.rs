@@ -2042,6 +2042,33 @@ gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
     }
 
     #[test]
+    fn keeps_command_names_in_extended_mdoc_synopsis_terms() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("extended-synopsis.8"),
+            b".Dd August 19, 2026\n.Dt EXTENDED-SYNOPSIS 8\n.Os\n.Sh NAME\n\
+.Nm zinject\n.Nd inject faults\n.Sh SYNOPSIS\n.Bl -tag -width Ds\n\
+.It Xo\n.Nm zinject\n.Xc\nList injections.\n\
+.It Xo\n.Nm zinject\n.Fl b Ar bookmark\n.Xc\nInject a bookmark.\n.El\n",
+        )
+        .expect("lower extended mdoc synopsis terms");
+
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("expected synopsis definition list");
+        };
+        assert_eq!(inline_text(&items[0].terms[0]), "zinject");
+        assert_eq!(inline_text(&items[1].terms[0]), "zinject -b bookmark");
+        assert!(matches!(
+            items[0].terms[0].as_slice(),
+            [Inline::Strong { .. }]
+        ));
+        assert!(
+            items[1].terms[0]
+                .iter()
+                .any(|inline| matches!(inline, Inline::Strong { .. }))
+        );
+    }
+
+    #[test]
     fn decodes_named_characters_inside_equations() {
         let document = parse_manual_bytes(
             std::path::Path::new("equation-characters.1"),

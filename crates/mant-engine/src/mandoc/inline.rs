@@ -276,6 +276,9 @@ fn lower_inline_node(
     }
 
     let macro_name = node.macro_name.as_deref();
+    if macro_name == Some("Nm") && node.kind == NodeKind::Block {
+        return lower_structural_name(node, default_name, spacing_enabled);
+    }
     let children = inline_children(node);
     // man(7) alternating-font macros concatenate their arguments without
     // inserting spaces. Each argument switches to the next named font.
@@ -367,6 +370,41 @@ fn lower_inline_node(
         output.insert(0, anchor);
     }
     output
+}
+
+/// Lower the block form of an mdoc `Nm` synopsis without losing its head.
+///
+/// In an extended `It Xo ... Xc` term, libmandoc places the command in the
+/// `Nm` head and the following options in its body.  Treating that wrapper as
+/// an ordinary inline `Nm` selects only the body, omits the command whenever
+/// options exist, and wraps every option in the command's strong style.  An
+/// empty body takes the opposite fallback path and lowers both structural
+/// parts, duplicating the command.  Keep the two parts explicit instead:
+/// style the head as the command and append the body with its own semantics.
+fn lower_structural_name(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    let head = lower_inline_nodes_with_spacing(
+        first_part_children(node, NodeKind::Head),
+        default_name,
+        spacing_enabled,
+    );
+    let head = if head.is_empty() {
+        default_name.map_or_else(Vec::new, text_node)
+    } else {
+        head
+    };
+    let body = lower_inline_nodes_with_spacing(
+        first_part_children(node, NodeKind::Body),
+        default_name,
+        spacing_enabled,
+    );
+    let mut builder = InlineBuilder::with_spacing(spacing_enabled);
+    builder.append(wrap_strong(head));
+    builder.append(body);
+    builder.finish()
 }
 
 fn lower_function_element(
