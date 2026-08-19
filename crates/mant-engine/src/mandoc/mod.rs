@@ -1129,6 +1129,33 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     }
 
     #[test]
+    fn preserves_mdoc_command_names_in_each_synopsis_form() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("fido2-cred.1"),
+            b".Dd August 19, 2026\n.Dt FIDO2-CRED 1\n.Os\n.Sh NAME\n.Nm fido2-cred\n.Nd make a credential\n.Sh SYNOPSIS\n.Nm\n.Fl M\n.Op Fl i Ar input_file\n.Nm fido2-cred\n.Fl V\n.Nm helper\n.Op Fl q\n",
+        )
+        .expect("lower mdoc synopsis names");
+        let synopsis = &document.sections[1];
+        let rendered = synopsis
+            .blocks
+            .iter()
+            .map(|block| match block {
+                Block::Paragraph { children, .. } => inline_text(children),
+                block => panic!("expected synopsis paragraph, got {block:?}"),
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered,
+            [
+                "fido2-cred -M [-i input_file]",
+                "fido2-cred -V",
+                "helper [-q]",
+            ]
+        );
+    }
+
+    #[test]
     fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
         let mut report = Parser::default()
             .parse_bytes(

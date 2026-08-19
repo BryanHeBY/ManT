@@ -395,7 +395,9 @@ fn lower_structural_node(
             );
             extend_transparent_blocks(output, nested, *paragraph_distance);
         }
-        Some("SY") => lower_man_synopsis(output, node, context, indent_columns, paragraph_distance),
+        Some("SY" | "Nm") => {
+            lower_synopsis_head(output, node, context, indent_columns, paragraph_distance);
+        }
         Some("Fo") => lower_mdoc_function(output, node, context, indent_columns),
         _ if node.kind == NodeKind::Table => {
             append_table_row(output, node, indent_columns);
@@ -465,7 +467,14 @@ fn equation_block(node: &Node, indent_columns: u16) -> Block {
     }
 }
 
-fn lower_man_synopsis(
+/// Join a synopsis command head to the body that libmandoc groups beneath it.
+///
+/// Both man(7) `.SY command` and an mdoc(7) `.Nm` in SYNOPSIS become
+/// structural blocks. Their printable command lives in the head while all
+/// following options live in the body. The generic structural fallback keeps
+/// only the body, which would silently turn a command synopsis into a bare
+/// option list.
+fn lower_synopsis_head(
     output: &mut Vec<Block>,
     node: &Node,
     context: &LoweringContext<'_>,
@@ -1331,7 +1340,7 @@ fn flush_preformatted(
 fn is_inline(node: &Node) -> bool {
     matches!(node.kind, NodeKind::Text | NodeKind::Element)
         || is_enclosure_macro(node.macro_name.as_deref())
-        || matches!(node.macro_name.as_deref(), Some("Nm" | "Nd"))
+        || node.macro_name.as_deref() == Some("Nd")
 }
 
 fn is_nonprinting_request(node: &Node) -> bool {
