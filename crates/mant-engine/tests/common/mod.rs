@@ -413,6 +413,7 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
             assert!(
                 !value.contains("\\f")
                     && !value.contains("\\(")
+                    && !value.contains("\\[u")
                     && !value.contains("\\*")
                     && !value.contains("m[blue]")
                     && !value.contains("m[]")

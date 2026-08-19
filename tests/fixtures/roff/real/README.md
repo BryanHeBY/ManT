@@ -25,6 +25,8 @@ ManT's bundled libmandoc path. Its header records the total scan breadth; the
 neighbouring README records the package provenance and observed parser
 behaviour.
 
+The same fixed pages can be compared with a local `man(1)`/groff renderer by running `python3 scripts/audit-roff-fidelity.py --fixtures` from the repository root. This optional audit searches for missing visible tokens, broken token continuity, and known control-syntax leaks without treating reference layout as a ManT contract. Confirmed findings become focused tests in the existing source-specific Rust modules; the external reference renderer is intentionally not required by ordinary CI.
+
 ### `VERIFIED_TOPICS.txt` purpose and principles
 
 These summaries show **which upstream packages have actually been exercised**

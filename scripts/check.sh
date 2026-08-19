@@ -36,6 +36,7 @@ run "check protocol snapshot script syntax" bash -n scripts/update-protocol-sche
 run "check screenshot script syntax" bash -n scripts/update-reader-screenshot.sh
 run "check product build script syntax" bash -n scripts/build-and-smoke.sh
 run "check CI verification script syntax" bash -n scripts/find-successful-ci.sh
+run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
 run "test Rust workspace" cargo test --locked --workspace
 run "check read-only engine feature boundary" \
   cargo check --locked --package mant-engine --no-default-features

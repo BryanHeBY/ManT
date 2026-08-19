@@ -255,3 +255,17 @@ when fixing parser or lowering behavior. Add the smallest redistributable real
 source that reproduces the problem, record its origin and license under
 `tests/fixtures/roff/real/`, and assert the normalized structure rather than a
 terminal screenshot. Renderer tests then verify the same IR independently.
+
+### Roff fidelity audit
+
+The existing real-fixture catalogue also feeds an optional differential audit against the host `man(1)` and groff renderer:
+
+```sh
+cargo build --package mant
+python3 scripts/audit-roff-fidelity.py --fixtures --json /tmp/mant-fidelity.json
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages 100
+```
+
+The audit compares normalized visible tokens and contiguous token phrases. It deliberately ignores line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable sampling uses the path and `--seed`, so repeating a bounded local scan selects the same pages.
+
+The full oracle is a local and release-time discovery tool, not a per-push CI dependency. Ordinary CI runs only its dependency-free self-check plus the focused Rust regressions derived from confirmed findings. When the audit exposes real semantic loss, add the smallest licensed page to the existing source catalogue, document its provenance, and encode the confirmed behavior in the corresponding `crates/mant-engine/tests/<source>/` module or a shared assertion. Do not add an allowlist merely to silence an unexplained candidate.
