@@ -84,8 +84,10 @@ python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
 The profiler reads the real libmandoc AST in batches. Its report distinguishes
 features already represented in completed ledger rows, features added by the
 current selection, and structures still absent after selection. The cache is
-keyed by corpus, relative path, and decompressed-source hash, so a package
-upgrade is profiled again while unchanged pages are reused. AST coverage guides
+keyed by corpus, relative path, and decompressed-source hash, and records the
+profiler feature-schema identity. A package upgrade is profiled again while
+unchanged pages are reused; changing the profiler's observed AST shapes
+invalidates and rebuilds the old cache. AST coverage guides
 which pages deserve comparison; only a human-reviewed finding plus a focused
 fixture and Rust assertion becomes a regression contract.
 

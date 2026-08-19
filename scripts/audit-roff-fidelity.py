@@ -34,7 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_MANT = ROOT / "target/debug/mant"
 DEFAULT_SYNTAX_PROFILER = ROOT / "target/debug/examples/roff_ast_profile"
-SYNTAX_CACHE_VERSION = 1
+SYNTAX_PROFILE_SCHEMA = "mant.roff-ast-profile/v1"
+SYNTAX_CACHE_VERSION = 2
 AUDIT_DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -58,6 +59,11 @@ URL_WRAP = re.compile(
 )
 DEHYPHENATE = re.compile(r"-[ \t]*\n[ \t]*")
 BORDERS = re.compile(r"[\u2500-\u257f\u2022\u00b7]")
+ANGLE_LINK = re.compile(r"<((?:https?|mailto):[^<>]{1,4096})>", re.DOTALL)
+RUNNING_HEADER = re.compile(
+    r"^\s*(?P<label>\S+\([^)\s]+\))\s+.+\s+(?P=label)\s*$",
+    re.IGNORECASE,
+)
 UNICODE_ESCAPE = re.compile(
     r"\\\[u[0-9A-Fa-f]{4,6}(?:_[0-9A-Fa-f]{4,6})*\]"
 )
@@ -416,11 +422,16 @@ def read_syntax_cache(
             payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"cannot read syntax cache {path}: {error}") from error
-    if payload.get("version") != SYNTAX_CACHE_VERSION:
-        raise ValueError(
-            f"unsupported syntax cache version in {path}; "
-            f"expected {SYNTAX_CACHE_VERSION}"
+    if (
+        payload.get("version") != SYNTAX_CACHE_VERSION
+        or payload.get("profileSchema") != SYNTAX_PROFILE_SCHEMA
+    ):
+        print(
+            f"warning: ignoring incompatible syntax cache {path}; "
+            "the profiler feature schema changed",
+            file=sys.stderr,
         )
+        return {}
     profiles: dict[tuple[str, str, str], SyntaxProfile] = {}
     for number, row in enumerate(payload.get("profiles", []), 1):
         try:
@@ -471,6 +482,7 @@ def write_syntax_cache(
     payload = {
         "tool": "mant-roff-ast-profile-cache",
         "version": SYNTAX_CACHE_VERSION,
+        "profileSchema": SYNTAX_PROFILE_SCHEMA,
         "profiles": rows,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -530,7 +542,8 @@ def run_syntax_profile_batch(
             ) from error
         request_id = response.get("id")
         if (
-            not isinstance(request_id, str)
+            response.get("schema") != SYNTAX_PROFILE_SCHEMA
+            or not isinstance(request_id, str)
             or request_id not in requests
             or request_id in responses
         ):
@@ -758,11 +771,21 @@ def strip_reference_chrome(value: str) -> str:
     if len(visible) >= 3:
         lines[visible[0]] = ""
         lines[visible[-1]] = ""
+        for index in visible[:4]:
+            if RUNNING_HEADER.fullmatch(lines[index]):
+                lines[index] = ""
     return "\n".join(lines)
+
+
+def unwrap_angle_links(value: str) -> str:
+    return ANGLE_LINK.sub(
+        lambda match: re.sub(r"[ \t]*\n[ \t]*", "", match.group(1)), value
+    )
 
 
 def normalized_visible_text(value: str) -> str:
     value = strip_terminal_formatting(value).translate(TRANSLATION)
+    value = unwrap_angle_links(value)
     value = URL_WRAP.sub(r"\1", value)
     value = DEHYPHENATE.sub("", value)
     value = BORDERS.sub(" ", value)
@@ -775,6 +798,7 @@ def tokens(value: str) -> list[str]:
 
 def token_lines(value: str) -> list[list[str]]:
     value = strip_terminal_formatting(value).translate(TRANSLATION)
+    value = unwrap_angle_links(value)
     value = URL_WRAP.sub(r"\1", value)
     value = DEHYPHENATE.sub("", value)
     value = BORDERS.sub(" ", value)
@@ -1363,6 +1387,12 @@ def write_syntax_report(
 
 
 def self_check() -> None:
+    assert strip_reference_chrome(
+        "delim $$\nMM2GV(1) General Commands Manual MM2GV(1)\ncontent\nfooter\n"
+    ).strip() == "content"
+    assert normalized_visible_text(
+        "read <https://example.test/api/\nversion.3.html> now"
+    ) == "read https://example.test/api/version.3.html now"
     assert token_key("line-break") == token_key("linebreak")
     assert manual_section(Path("git.1.gz")) == "1"
     assert manual_section(Path("SSL_read.3ssl")) == "3ssl"

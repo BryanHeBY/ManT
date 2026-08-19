@@ -21,6 +21,8 @@ use libmandoc_rs::{
 };
 use serde_json::{Value, json};
 
+const PROFILE_SCHEMA: &str = "mant.roff-ast-profile/v1";
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("roff_ast_profile: {error}");
@@ -38,6 +40,7 @@ fn run() -> Result<(), String> {
         }
         let response = profile_request(&line).unwrap_or_else(|error| {
             json!({
+                "schema": PROFILE_SCHEMA,
                 "id": request_id(&line),
                 "error": error,
             })
@@ -95,6 +98,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
         ));
     }
     Ok(json!({
+        "schema": PROFILE_SCHEMA,
         "id": id,
         "features": features,
         "diagnostics": report.diagnostics.len(),
