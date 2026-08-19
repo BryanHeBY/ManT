@@ -236,6 +236,22 @@ mod tests {
         assert!(document.metadata.has_body);
     }
 
+    #[test]
+    fn parser_preserves_infix_eqn_operators() {
+        let report = Parser::default()
+            .parse_bytes(
+                "equation.3",
+                b".TH EQUATION 3\n.SH DESCRIPTION\n.EQ\nx + {width over 2}\ny sub 1 sup 2\n.EN\n",
+            )
+            .expect("parse infix eqn operators");
+        let equation = find_kind(&report.document.root, NodeKind::Equation)
+            .and_then(|node| node.equation.as_deref())
+            .expect("normalized equation");
+
+        assert!(equation.contains("width / 2"), "{equation}");
+        assert!(equation.contains("y _ 1 ^ 2"), "{equation}");
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_parser_decompresses_gzip_before_calling_libmandoc() {

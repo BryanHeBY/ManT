@@ -1680,7 +1680,7 @@ Sean\n\
         let path = temporary_source(
             "table-equation",
             ".TH PAYLOAD 1\n.SH TABLE\n.TS\ntab(|);\nl r.\nleft|right\n.TE\n\
-             .SH EQUATION\n.EQ\nx sup 2\n.EN\n",
+             .SH EQUATION\n.EQ\nx + {width over 2}\n.EN\n",
         );
 
         let document = parse_manual_source(&path).expect("lower table and equation");
@@ -1692,7 +1692,7 @@ Sean\n\
         ));
         assert!(matches!(
             document.sections[1].blocks[0],
-            Block::Equation { ref value, .. } if value.contains('x')
+            Block::Equation { ref value, .. } if value == "x + width / 2"
         ));
     }
 

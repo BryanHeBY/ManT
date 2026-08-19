@@ -754,6 +754,7 @@ static int
 append_equation(struct text_buffer *buffer, const struct eqn_box *box, int depth)
 {
 	const struct eqn_box	*child;
+	const char		*operator;
 
 	if (box == NULL)
 		return append_text(buffer, "");
@@ -770,18 +771,41 @@ append_equation(struct text_buffer *buffer, const struct eqn_box *box, int depth
 		return 0;
 	if (!append_text(buffer, box->left) || !append_text(buffer, box->text))
 		return 0;
-	for (child = box->first; child != NULL; child = child->next) {
-		if (child != box->first && !append_text(buffer, " "))
+	child = box->first;
+	if (box->pos == EQNPOS_SQRT) {
+		if (child != NULL && !append_equation(buffer, child, depth + 1))
 			return 0;
+	} else if (box->type == EQN_SUBEXPR && child != NULL &&
+	    box->pos != EQNPOS_NONE) {
 		if (!append_equation(buffer, child, depth + 1))
 			return 0;
+		operator = box->pos == EQNPOS_OVER ? " / " :
+		    box->pos == EQNPOS_SUP || box->pos == EQNPOS_TO ? " ^ " : " _ ";
+		if (!append_text(buffer, operator))
+			return 0;
+		child = child->next;
+		if (child != NULL && !append_equation(buffer, child, depth + 1))
+			return 0;
+		if (child != NULL &&
+		    (box->pos == EQNPOS_FROMTO || box->pos == EQNPOS_SUBSUP)) {
+			child = child->next;
+			if (child != NULL &&
+			    (!append_text(buffer, " ^ ") ||
+			     !append_equation(buffer, child, depth + 1)))
+				return 0;
+		}
+	} else {
+		for (; child != NULL; child = child->next) {
+			if (child != box->first && !append_text(buffer, " "))
+				return 0;
+			if (!append_equation(buffer, child, depth + 1))
+				return 0;
+		}
 	}
 	if (!append_text(buffer, box->right))
 		return 0;
 	if (box->pos == EQNPOS_SQRT)
 		return append_text(buffer, ")");
-	if (box->pos == EQNPOS_OVER)
-		return append_text(buffer, " / ");
 	return 1;
 }
 
