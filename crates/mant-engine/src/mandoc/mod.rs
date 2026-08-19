@@ -248,6 +248,14 @@ impl<'a> LoweringContext<'a> {
         blocks
     }
 
+    fn tab_separated_table_cells(&self, line: u32) -> Option<Vec<&'a str>> {
+        let line = usize::try_from(line).ok()?.checked_sub(1)?;
+        let source_line = self.source?.lines().nth(line)?;
+        source_line
+            .contains('\t')
+            .then(|| source_line.split('\t').collect())
+    }
+
     fn section_id(&mut self, title: &str) -> String {
         let sequence = self.next_section_id;
         self.next_section_id += 1;
@@ -299,6 +307,28 @@ impl<'a> LoweringContext<'a> {
             level: DiagnosticLevel::Warning,
             code: Some("manual.unhandled-table-text-block".to_owned()),
             message: "tbl text block contains semantic roff that could not be retained".to_owned(),
+            source: Some(SourceSpan {
+                byte_range: None,
+                line,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
+        });
+    }
+
+    fn warn_unexpanded_table_cell(&self, line: u32) {
+        let mut diagnostics = self.diagnostics.borrow_mut();
+        if diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell"))
+        {
+            return;
+        }
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Unsupported,
+            code: Some("manual.unexpanded-table-cell".to_owned()),
+            message: "one or more tbl cells contain formatter strings that could not be expanded; their source spellings were preserved".to_owned(),
             source: Some(SourceSpan {
                 byte_range: None,
                 line,
@@ -1829,6 +1859,56 @@ Sean\n\
             document.sections[1].blocks[0],
             Block::Equation { ref value, .. } if value == "x + width / 2"
         ));
+    }
+
+    #[test]
+    fn preserves_tbl_rows_nested_in_unfilled_mdoc_displays() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("unfilled-table.7"),
+            b".Dd August 19, 2026\n.Dt UNFILLED-TABLE 7\n.Os\n.Sh DESCRIPTION\n\
+.Bd -unfilled -offset indent\n.TS\ntab(@);\nl l.\nleft@right\nnext@value\n.TE\n.Ed\n",
+        )
+        .expect("lower table nested in an unfilled display");
+
+        let table = document.sections[0]
+            .blocks
+            .iter()
+            .find_map(|block| match block {
+                Block::Table { rows, .. } => Some(rows),
+                _ => None,
+            })
+            .expect("nested table must remain structured");
+        assert_eq!(table.len(), 2);
+        assert_eq!(table[0].cells.len(), 2);
+        assert!(
+            document.sections[0]
+                .blocks
+                .iter()
+                .all(|block| !matches!(block, Block::Preformatted { children, .. } if children.is_empty())),
+            "the surrounding display must not leave an empty placeholder"
+        );
+    }
+
+    #[test]
+    fn keeps_unexpanded_tabular_cells_visible_with_a_diagnostic() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("unexpanded-table-cell.7"),
+            b".TH UNEXPANDED-TABLE-CELL 7\n.SH DESCRIPTION\n.TS\nl l.\n1\t\\*[unknown-label]\n.TE\n",
+        )
+        .expect("lower unresolved formatter string in a table cell");
+
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a structured table");
+        };
+        assert_eq!(rows[0].cells.len(), 2);
+        let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
+            panic!("expected one recovered table-cell paragraph");
+        };
+        assert_eq!(inline_text(children), r"\*[unknown-label]");
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.level == DiagnosticLevel::Unsupported
+                && diagnostic.code.as_deref() == Some("manual.unexpanded-table-cell")
+        }));
     }
 
     #[test]

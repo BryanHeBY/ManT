@@ -501,12 +501,12 @@ fn lower_structural_node(
             extend_blocks_with_spacing(output, nested, spacing_before);
         }
         Some("Bd" | "D1" | "Dl") => {
-            let mut block =
-                preformatted_block(node, context, indent_columns + display_indent(node));
+            let mut nested =
+                preformatted_blocks(node, context, indent_columns + display_indent(node));
             if node.macro_name.as_deref() == Some("Bd") && !output.is_empty() && !node.compact {
-                set_block_spacing(&mut block, 1);
+                add_leading_spacing(&mut nested, 1);
             }
-            output.push(block);
+            output.extend(nested);
         }
         Some("Rs") => {
             let children = lower_inline_nodes(
@@ -812,12 +812,16 @@ fn append_table_row(
         return;
     }
     let mut text_block_index = 0;
+    let source_cells = context.tab_separated_table_cells(node.line);
+    let cell_count = node
+        .table_cells
+        .len()
+        .max(source_cells.as_ref().map_or(0, Vec::len));
     let row = TableRow {
-        cells: node
-            .table_cells
-            .iter()
-            .map(|cell| {
-                let text_block = if cell.text_block {
+        cells: (0..cell_count)
+            .map(|index| {
+                let cell = node.table_cells.get(index);
+                let text_block = if cell.is_some_and(|cell| cell.text_block) {
                     let block =
                         embedding.and_then(|embedding| embedding.blocks.get(text_block_index));
                     text_block_index += 1;
@@ -825,24 +829,40 @@ fn append_table_row(
                 } else {
                     None
                 };
-                AstTableCell {
-                    blocks: vec![Block::Paragraph {
-                        children: lower_table_cell(
+                let raw_source = source_cells
+                    .as_ref()
+                    .and_then(|cells| cells.get(index))
+                    .copied();
+                let children = cell.map_or_else(
+                    || lower_missing_table_cell(raw_source, node, context),
+                    |cell| {
+                        let lowered = lower_table_cell(
                             cell,
                             node,
                             context,
                             text_block,
                             embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
-                        ),
+                        );
+                        if lowered.is_empty() && raw_source.is_some_and(|source| !source.is_empty())
+                        {
+                            lower_missing_table_cell(raw_source, node, context)
+                        } else {
+                            lowered
+                        }
+                    },
+                );
+                AstTableCell {
+                    blocks: vec![Block::Paragraph {
+                        children,
                         layout: LayoutHint::default(),
                         source: source_span(node),
                     }],
-                    column_span: cell.column_span,
-                    row_span: cell.row_span,
-                    alignment: Some(match cell.alignment {
-                        MandocTableAlignment::Left => AstTableAlignment::Left,
-                        MandocTableAlignment::Center => AstTableAlignment::Center,
-                        MandocTableAlignment::Right => AstTableAlignment::Right,
+                    column_span: cell.map_or(1, |cell| cell.column_span),
+                    row_span: cell.map_or(1, |cell| cell.row_span),
+                    alignment: Some(match cell.map(|cell| cell.alignment) {
+                        None | Some(MandocTableAlignment::Left) => AstTableAlignment::Left,
+                        Some(MandocTableAlignment::Center) => AstTableAlignment::Center,
+                        Some(MandocTableAlignment::Right) => AstTableAlignment::Right,
                     }),
                 }
             })
@@ -857,6 +877,25 @@ fn append_table_row(
             source: source_span(node),
         });
     }
+}
+
+fn lower_missing_table_cell(
+    source: Option<&str>,
+    node: &Node,
+    context: &LoweringContext<'_>,
+) -> Vec<Inline> {
+    let source = source.unwrap_or_default().trim();
+    if source.is_empty() {
+        return Vec::new();
+    }
+    let lowered = parse_roff_text(source);
+    if !lowered.is_empty() {
+        return lowered;
+    }
+    context.warn_unexpanded_table_cell(node.line);
+    vec![Inline::Code {
+        value: source.to_owned(),
+    }]
 }
 
 fn lower_table_cell(
@@ -1531,7 +1570,11 @@ fn extend_blocks_with_spacing(output: &mut Vec<Block>, mut nested: Vec<Block>, l
     output.extend(nested);
 }
 
-fn preformatted_block(node: &Node, context: &LoweringContext<'_>, indent_columns: u16) -> Block {
+fn preformatted_blocks(
+    node: &Node,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+) -> Vec<Block> {
     let body_index = node
         .children
         .iter()
@@ -1540,7 +1583,27 @@ fn preformatted_block(node: &Node, context: &LoweringContext<'_>, indent_columns
         || node.children.as_slice(),
         |index| node.children[index].children.as_slice(),
     );
-    let mut inlines = preformatted_inlines(children, context.default_name);
+    let (table_embeddings, embedded_nodes) = table_embeddings(children, context);
+    let mut output = Vec::new();
+    let mut inline_run = Vec::new();
+    for (index, child) in children.iter().enumerate() {
+        if embedded_nodes[index] {
+            continue;
+        }
+        if child.kind == NodeKind::Table {
+            push_preformatted_inline_run(&mut output, &mut inline_run, context, indent_columns);
+            append_table_row(
+                &mut output,
+                child,
+                context,
+                indent_columns,
+                table_embeddings[index].as_ref(),
+            );
+        } else {
+            inline_run.push(child);
+        }
+    }
+    let mut inlines = preformatted_inlines_refs(&inline_run, context.default_name);
 
     // mdoc validation can move a closing delimiter out of the display body
     // while leaving it as a direct child of the display block.  It still
@@ -1558,15 +1621,45 @@ fn preformatted_block(node: &Node, context: &LoweringContext<'_>, indent_columns
             inlines.extend(lower_inline_nodes(&tail[..tail_len], context.default_name));
         }
     }
-    Block::Preformatted {
-        children: inlines,
-        language: None,
-        layout: layout(indent_columns),
-        source: source_span(node),
+    if !inlines.is_empty() {
+        output.push(Block::Preformatted {
+            children: inlines,
+            language: None,
+            layout: layout(indent_columns),
+            source: source_span(node),
+        });
+    }
+    output
+}
+
+fn push_preformatted_inline_run(
+    output: &mut Vec<Block>,
+    nodes: &mut Vec<&Node>,
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+) {
+    if nodes.is_empty() {
+        return;
+    }
+    let children = preformatted_inlines_refs(nodes, context.default_name);
+    let source = nodes.first().and_then(|node| source_span(node));
+    nodes.clear();
+    if !children.is_empty() {
+        output.push(Block::Preformatted {
+            children,
+            language: None,
+            layout: layout(indent_columns),
+            source,
+        });
     }
 }
 
 fn preformatted_inlines(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
+    let nodes = nodes.iter().collect::<Vec<_>>();
+    preformatted_inlines_refs(&nodes, default_name)
+}
+
+fn preformatted_inlines_refs(nodes: &[&Node], default_name: Option<&str>) -> Vec<Inline> {
     let mut output = Vec::new();
     let mut line = InlineBuilder::new();
     let mut previous_line = None;

@@ -110,7 +110,7 @@ Displays lower as follows:
 
 | Macros | ManT result |
 | --- | --- |
-| `Bd -literal`, `Bd -unfilled` | Preformatted block |
+| `Bd -literal`, `Bd -unfilled` | Preformatted flow; nested `tbl` rows remain structured tables |
 | `Bd -filled`, `Bd -ragged`, `Bd -centered` | Filled blocks; device alignment is not retained |
 | `D1`, `Dl` | Single preformatted display |
 | `Bf -emphasis` | Emphasis applied to contained blocks |
@@ -224,9 +224,11 @@ Color, point size, vertical or non-literal motion, drawing, overstrike, register
 
 ## Tables
 
-`tbl(7)` rows become IR tables. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
+`tbl(7)` rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
 
 Cell text passes through the same roff inline decoder as ordinary prose. ManT also recognizes a `T{`/`T}` text block containing `.Nm`, because libmandoc 1.14.6 otherwise exposes that cell as empty; an omitted argument resolves to the validated document name. Other complex nested block markup may flatten to the visible cell payload exposed by libmandoc. If an empty semantic text block cannot be recovered from the bounded input source, ManT emits `manual.unhandled-table-text-block` instead of claiming silent fidelity.
+
+Some formatter-specific strings disappear before libmandoc exposes a cell. For ordinary tab-separated rows, ManT compares the validated cells with the bounded source row and retains an otherwise missing cell in its original escaped spelling. It emits one `manual.unexpanded-table-cell` diagnostic for the document rather than presenting an empty table or pretending that the formatter-specific value was evaluated.
 
 ## Equations
 
