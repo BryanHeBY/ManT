@@ -2042,6 +2042,50 @@ gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
     }
 
     #[test]
+    fn restores_nested_mdoc_requests_inside_tbl_text_blocks() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("table-mdoc-requests.8"),
+            b".Dd August 19, 2026\n.Dt TABLE-MDOC-REQUESTS 8\n.Os\n.Sh DESCRIPTION\n\
+.TS\ntab(@);\nl l.\nT{\n.Cm sip Ar addr Ns Op / Ns Ar mask\nT}@T{\n\
+bitwise and of the address with\n.Ar mask\nequals\n.Ar addr .\n.Ar addr\n\
+can be an IPv4 or IPv6 address.\nT}\n.TE\n",
+        )
+        .expect("lower nested mdoc requests in table text blocks");
+
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a structured table");
+        };
+        let [left, right] = rows[0].cells.as_slice() else {
+            panic!("expected two reconstructed table cells");
+        };
+        let [Block::Paragraph { children: left, .. }] = left.blocks.as_slice() else {
+            panic!("expected reconstructed selector cell");
+        };
+        let [
+            Block::Paragraph {
+                children: right, ..
+            },
+        ] = right.blocks.as_slice()
+        else {
+            panic!("expected reconstructed description cell");
+        };
+        assert_eq!(inline_text(left), "sip addr[/mask]");
+        assert_eq!(
+            inline_text(right),
+            "bitwise and of the address with mask equals addr. addr can be an IPv4 or IPv6 address."
+        );
+        assert!(
+            left.iter()
+                .any(|inline| matches!(inline, Inline::Strong { .. }))
+        );
+        assert!(
+            right
+                .iter()
+                .any(|inline| matches!(inline, Inline::Emphasis { .. }))
+        );
+    }
+
+    #[test]
     fn keeps_command_names_in_extended_mdoc_synopsis_terms() {
         let document = parse_manual_bytes(
             std::path::Path::new("extended-synopsis.8"),

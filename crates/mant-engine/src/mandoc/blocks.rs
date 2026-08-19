@@ -14,7 +14,7 @@ use super::{
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
         lower_inline_nodes_with_spacing, lower_man_link, lower_source_alternating_fonts,
-        parse_roff_text, plain_text, terms_fit_inline, updated_spacing,
+        lower_source_mdoc_request, parse_roff_text, plain_text, terms_fit_inline, updated_spacing,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -1137,20 +1137,7 @@ fn source_table_inline(source_line: &str, default_name: Option<&str>) -> Option<
     if matches!(name, "BI" | "BR" | "IB" | "IR" | "RB" | "RI") {
         return lower_source_alternating_fonts(name, argument);
     }
-    let children = if name == "Nm" && argument.is_empty() {
-        default_name.map(|name| {
-            vec![Inline::Text {
-                value: name.to_owned(),
-            }]
-        })?
-    } else {
-        parse_roff_text(argument)
-    };
-    match name {
-        "Nm" | "B" | "SB" => Some(vec![Inline::Strong { children }]),
-        "I" => Some(vec![Inline::Emphasis { children }]),
-        _ => None,
-    }
+    lower_source_mdoc_request(name, argument, default_name)
 }
 
 struct BlockState {
