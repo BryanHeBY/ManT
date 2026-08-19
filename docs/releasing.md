@@ -33,7 +33,17 @@ releases; publishing remains a deliberate human action.
    refresh an existing-version snapshot merely to silence a compatibility
    failure.
 
-4. Inspect the publishable file list for all seven crates. Each package must
+4. Run a broad local roff fidelity audit before freezing the release. Use the
+   syntax-priority, source-directed, and recorded-corpus workflows in the
+   [development guide](development.md#roff-fidelity-audit), inspect every new
+   candidate and hard failure, and promote each confirmed ManT defect to a
+   licensed fixture with a focused Rust regression before tagging. Record the
+   corpus identities, exact audit command, result summary, and reviewed ledger
+   diff in the release preparation commit or pull request. This is required
+   release evidence, but remains a maintainer-run discovery check rather than
+   a host-dependent per-push CI gate.
+
+5. Inspect the publishable file list for all seven crates. Each package must
    contain its applicable complete license texts and no unexpected fixture or
    documentation assets:
 
@@ -43,7 +53,7 @@ releases; publishing remains a deliberate human action.
    done
    ```
 
-5. Commit every release change, sync that exact commit to `main`, and ensure
+6. Commit every release change, sync that exact commit to `main`, and ensure
    the main branch CI is green. The recommended installers and agent prompt
    read their scripts and documentation from `main`, so do not publish a tag
    that is ahead of the default branch.

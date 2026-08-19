@@ -300,3 +300,12 @@ The optional CSV audit database makes successive local runs incremental. A page 
 Pages containing `.so` requests use the indexed-manual path with an exact derived `MANT_MANPATH`, so aliases exercise the product resolver and localized hierarchies do not fall through to the default language. Renderer failures and empty comparison surfaces are hard audit failures rather than silently accepted coverage. Automated candidates enter as `review_status=pending`; a later clean recheck clears that automated state. After inspecting the source and both renderings, mark durable conclusions `false-positive`, `confirmed-open`, or `confirmed-fixed` and explain the decision in `note`. `--retry-skipped` migrates historical gaps, `--pending-only` revisits unresolved signals, `--recheck-recorded` deliberately ignores the completion index, and `--recorded-only` re-runs every unchanged page represented by that corpus. For multiple roots, paths are relative to their common parent so same-named `man/` directories remain distinguishable. The CSV records corpus exploration; fixed fixtures and focused Rust tests, rather than the host database, remain the CI regression boundary.
 
 The full oracle is a local and release-time discovery tool, not a per-push CI dependency. Ordinary CI runs only its dependency-free self-check plus the focused Rust regressions derived from confirmed findings. When the audit exposes real semantic loss, add the smallest licensed page to the existing source catalogue, document its provenance, and encode the confirmed behavior in the corresponding `crates/mant-engine/tests/<source>/` module or a shared assertion. Do not add an allowlist merely to silence an unexplained candidate.
+
+ManT intentionally does not expose this comparison as a user-facing
+`mant --verify` fidelity certificate. A reference renderer is unavailable on
+some supported platforms, installed macro packages and pages are host state,
+and groff/mandoc presentation differences require human interpretation. A
+successful comparison therefore cannot certify an arbitrary excerpt. For a
+specific statement that will be quoted or published, use a source-directed
+audit over the owning page, inspect the source and both renderings, and turn
+any durable semantic invariant into a repository fixture.
