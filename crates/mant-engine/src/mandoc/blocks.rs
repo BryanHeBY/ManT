@@ -13,8 +13,8 @@ use super::{
     LoweringContext, TableTextBlock, first_part_children,
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
-        lower_man_link, lower_source_alternating_fonts, parse_roff_text, plain_text,
-        terms_fit_inline, updated_spacing,
+        lower_inline_nodes_with_spacing, lower_man_link, lower_source_alternating_fonts,
+        parse_roff_text, plain_text, terms_fit_inline, updated_spacing,
     },
     layout::{
         add_leading_spacing, block_indent, display_indent, horizontal_distance_columns, layout,
@@ -162,8 +162,19 @@ fn lower_blocks(
     indent_columns: u16,
     paragraph_distance: &mut u16,
 ) -> Vec<Block> {
+    lower_blocks_with_spacing(nodes, context, indent_columns, paragraph_distance, true)
+}
+
+fn lower_blocks_with_spacing(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+    spacing_enabled: bool,
+) -> Vec<Block> {
     let (table_embeddings, embedded_nodes) = table_embeddings(nodes, context);
-    let mut lowerer = BlockLowerer::new(context, indent_columns, paragraph_distance);
+    let mut lowerer =
+        BlockLowerer::new(context, indent_columns, paragraph_distance, spacing_enabled);
     for (index, node) in nodes.iter().enumerate() {
         if !embedded_nodes[index] {
             lowerer.push(node, table_embeddings[index].as_ref());
@@ -182,7 +193,6 @@ struct BlockLowerer<'a, 'source> {
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
     definition_hanging_width: usize,
     split_authors: bool,
-    spacing_enabled: bool,
 }
 
 impl<'a, 'source> BlockLowerer<'a, 'source> {
@@ -190,15 +200,15 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         context: &'a LoweringContext<'source>,
         indent_columns: u16,
         paragraph_distance: &'a mut u16,
+        spacing_enabled: bool,
     ) -> Self {
         Self {
             context,
             indent_columns,
             paragraph_distance,
-            state: BlockState::new(indent_columns),
+            state: BlockState::new(indent_columns, spacing_enabled),
             definition_hanging_width: 7,
             split_authors: false,
-            spacing_enabled: true,
         }
     }
 
@@ -209,7 +219,6 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             &mut self.state,
             self.paragraph_distance,
             &mut self.split_authors,
-            &mut self.spacing_enabled,
         ) {
             return;
         }
@@ -267,40 +276,52 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         } else if node.macro_name.as_deref() == Some("br") {
             self.state.hard_break();
         } else if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-            push_man_link(&mut self.state, node, self.context.default_name);
-        } else if participates_in_inline_flow(node) {
-            let source = source_span(node);
-            if node.flags.delimiter_close || node.macro_name.as_deref() == Some("Ns") {
-                self.state.tighten_next_boundary();
-            }
-            if !self.spacing_enabled {
-                self.state.tighten_same_line_boundary(source.as_ref());
-            }
-            self.state.push_inline(
-                lower_inline_nodes(std::slice::from_ref(node), self.context.default_name),
-                source,
-                starts_indented_filled_line(node),
-                ends_with_line_continuation(node),
+            let spacing_enabled = self.state.spacing_enabled();
+            push_man_link(
+                &mut self.state,
+                node,
+                self.context.default_name,
+                spacing_enabled,
             );
-            if node.macro_name.as_deref() == Some("Pf") {
-                self.state.tighten_next_boundary();
-            }
+        } else if participates_in_inline_flow(node) {
+            self.push_inline_node(node);
         } else {
             self.state.flush_paragraph();
-            lower_structural_node(
-                node,
-                self.context,
-                self.indent_columns,
-                self.paragraph_distance,
-                &mut self.state.output,
-                &mut self.definition_hanging_width,
-                table_embedding,
-            );
+            let spacing_enabled = self.state.spacing_enabled();
+            StructuralLowerer {
+                context: self.context,
+                indent_columns: self.indent_columns,
+                paragraph_distance: self.paragraph_distance,
+                output: &mut self.state.output,
+                definition_hanging_width: &mut self.definition_hanging_width,
+                spacing_enabled,
+            }
+            .push(node, table_embedding);
         }
     }
 
     fn finish(self) -> Vec<Block> {
         self.state.finish()
+    }
+
+    fn push_inline_node(&mut self, node: &Node) {
+        let source = source_span(node);
+        if node.flags.delimiter_close || node.macro_name.as_deref() == Some("Ns") {
+            self.state.tighten_next_boundary();
+        }
+        self.state.push_inline(
+            lower_inline_nodes_with_spacing(
+                std::slice::from_ref(node),
+                self.context.default_name,
+                self.state.spacing_enabled(),
+            ),
+            source,
+            starts_indented_filled_line(node),
+            ends_with_line_continuation(node),
+        );
+        if node.macro_name.as_deref() == Some("Pf") {
+            self.state.tighten_next_boundary();
+        }
     }
 }
 
@@ -357,7 +378,6 @@ fn consume_block_control(
     state: &mut BlockState,
     paragraph_distance: &mut u16,
     split_authors: &mut bool,
-    spacing_enabled: &mut bool,
 ) -> bool {
     match node.macro_name.as_deref() {
         Some("PD") => update_paragraph_distance(node, paragraph_distance),
@@ -372,7 +392,7 @@ fn consume_block_control(
         },
         Some("Sm") => {
             let setting = plain_text(&lower_inline_nodes(&node.children, context.default_name));
-            *spacing_enabled = updated_spacing(*spacing_enabled, setting.trim());
+            state.set_spacing(setting.trim());
         }
         _ => return false,
     }
@@ -380,9 +400,14 @@ fn consume_block_control(
 }
 
 /// Keep man-ext links inside the surrounding filled flow.
-fn push_man_link(state: &mut BlockState, node: &Node, default_name: Option<&str>) {
+fn push_man_link(
+    state: &mut BlockState,
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) {
     state.push_inline(
-        lower_man_link(node, default_name),
+        lower_man_link(node, default_name, spacing_enabled),
         source_span(node),
         starts_indented_filled_line(node),
         ends_with_line_continuation(node),
@@ -438,108 +463,166 @@ fn lower_no_fill_lines(node: &Node, default_name: Option<&str>) -> Option<Vec<Lo
     Some(lines)
 }
 
-fn lower_structural_node(
-    node: &Node,
-    context: &LoweringContext<'_>,
+struct StructuralLowerer<'a, 'source, 'state> {
+    context: &'a LoweringContext<'source>,
     indent_columns: u16,
-    paragraph_distance: &mut u16,
-    output: &mut Vec<Block>,
-    definition_hanging_width: &mut usize,
-    table_embedding: Option<&TableEmbedding<'_>>,
-) {
-    match node.macro_name.as_deref() {
-        Some("PP" | "P" | "LP" | "HP") => {
-            let spacing_before = if output.is_empty() {
-                0
-            } else {
-                *paragraph_distance
-            };
-            let nested = lower_blocks(
-                first_part_children(node, NodeKind::Body),
-                context,
-                indent_columns,
-                paragraph_distance,
-            );
-            extend_blocks_with_spacing(output, nested, spacing_before);
+    paragraph_distance: &'state mut u16,
+    output: &'state mut Vec<Block>,
+    definition_hanging_width: &'state mut usize,
+    spacing_enabled: bool,
+}
+
+impl StructuralLowerer<'_, '_, '_> {
+    fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
+        if self.lower_transparent_container(node) {
+            return;
         }
-        Some("TP" | "IP" | "TQ") => {
-            lower_man_definition(
+        match node.macro_name.as_deref() {
+            Some("TP" | "IP" | "TQ") => {
+                lower_man_definition(
+                    node,
+                    self.context,
+                    self.indent_columns,
+                    self.paragraph_distance,
+                    self.output,
+                    self.definition_hanging_width,
+                    self.spacing_enabled,
+                );
+            }
+            Some("Bl") => {
+                let mut block = lower_mdoc_list(
+                    node,
+                    self.context,
+                    self.indent_columns,
+                    self.paragraph_distance,
+                    self.spacing_enabled,
+                );
+                if !self.output.is_empty() && !node.compact {
+                    set_block_spacing(&mut block, 1);
+                }
+                self.output.push(block);
+            }
+            Some("Bd" | "D1" | "Dl") => {
+                let mut nested = preformatted_blocks(
+                    node,
+                    self.context,
+                    self.indent_columns + display_indent(node),
+                );
+                if node.macro_name.as_deref() == Some("Bd")
+                    && !self.output.is_empty()
+                    && !node.compact
+                {
+                    add_leading_spacing(&mut nested, 1);
+                }
+                self.output.extend(nested);
+            }
+            Some("Rs") => {
+                let children = lower_inline_nodes_with_spacing(
+                    first_part_children(node, NodeKind::Body),
+                    self.context.default_name,
+                    self.spacing_enabled,
+                );
+                if !children.is_empty() {
+                    self.output.push(Block::Paragraph {
+                        children,
+                        layout: layout_with_spacing(
+                            self.indent_columns,
+                            u16::from(!self.output.is_empty()),
+                        ),
+                        source: source_span(node),
+                    });
+                }
+            }
+            Some("SY" | "Nm") => lower_synopsis_head(
+                self.output,
                 node,
-                context,
-                indent_columns,
-                paragraph_distance,
-                output,
-                definition_hanging_width,
-            );
-        }
-        Some("Bl") => {
-            let mut block = lower_mdoc_list(node, context, indent_columns, paragraph_distance);
-            if !output.is_empty() && !node.compact {
-                set_block_spacing(&mut block, 1);
+                self.context,
+                self.indent_columns,
+                self.paragraph_distance,
+                self.spacing_enabled,
+            ),
+            Some("Fo") => lower_mdoc_function(
+                self.output,
+                node,
+                self.context,
+                self.indent_columns,
+                self.spacing_enabled,
+            ),
+            _ if node.kind == NodeKind::Table => append_table_row(
+                self.output,
+                node,
+                self.context,
+                self.indent_columns,
+                table_embedding,
+            ),
+            _ if node.kind == NodeKind::Equation => {
+                self.output.push(equation_block(node, self.indent_columns));
             }
-            output.push(block);
+            _ => lower_structural_fallback(
+                self.output,
+                node,
+                self.context,
+                self.indent_columns,
+                self.paragraph_distance,
+                self.spacing_enabled,
+            ),
         }
-        Some("Bf") => {
-            let mut nested = lower_blocks(
-                first_part_children(node, NodeKind::Body),
-                context,
-                indent_columns,
-                paragraph_distance,
-            );
-            if let Some(font) = node.font {
-                apply_normalized_font(&mut nested, font);
+    }
+
+    fn lower_transparent_container(&mut self, node: &Node) -> bool {
+        match node.macro_name.as_deref() {
+            Some("PP" | "P" | "LP" | "HP") => {
+                let spacing_before = if self.output.is_empty() {
+                    0
+                } else {
+                    *self.paragraph_distance
+                };
+                let nested = lower_blocks_with_spacing(
+                    first_part_children(node, NodeKind::Body),
+                    self.context,
+                    self.indent_columns,
+                    self.paragraph_distance,
+                    self.spacing_enabled,
+                );
+                extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
-            extend_transparent_blocks(output, nested, *paragraph_distance);
-        }
-        Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
-            let spacing_before = u16::from(!output.is_empty() && !node.compact);
-            let nested = lower_blocks(
-                first_part_children(node, NodeKind::Body),
-                context,
-                indent_columns + display_indent(node),
-                paragraph_distance,
-            );
-            extend_blocks_with_spacing(output, nested, spacing_before);
-        }
-        Some("Bd" | "D1" | "Dl") => {
-            let mut nested =
-                preformatted_blocks(node, context, indent_columns + display_indent(node));
-            if node.macro_name.as_deref() == Some("Bd") && !output.is_empty() && !node.compact {
-                add_leading_spacing(&mut nested, 1);
+            Some("Bf") => {
+                let mut nested = lower_blocks_with_spacing(
+                    first_part_children(node, NodeKind::Body),
+                    self.context,
+                    self.indent_columns,
+                    self.paragraph_distance,
+                    self.spacing_enabled,
+                );
+                if let Some(font) = node.font {
+                    apply_normalized_font(&mut nested, font);
+                }
+                extend_transparent_blocks(self.output, nested, *self.paragraph_distance);
             }
-            output.extend(nested);
-        }
-        Some("Rs") => {
-            let children = lower_inline_nodes(
-                first_part_children(node, NodeKind::Body),
-                context.default_name,
-            );
-            if !children.is_empty() {
-                output.push(Block::Paragraph {
-                    children,
-                    layout: layout_with_spacing(indent_columns, u16::from(!output.is_empty())),
-                    source: source_span(node),
-                });
+            Some("Bd") if node.display_kind == Some(DisplayKind::Filled) => {
+                let spacing_before = u16::from(!self.output.is_empty() && !node.compact);
+                let nested = lower_blocks_with_spacing(
+                    first_part_children(node, NodeKind::Body),
+                    self.context,
+                    self.indent_columns + display_indent(node),
+                    self.paragraph_distance,
+                    self.spacing_enabled,
+                );
+                extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
+            Some("RS") => {
+                let nested = lower_blocks_with_spacing(
+                    first_part_children(node, NodeKind::Body),
+                    self.context,
+                    self.indent_columns + 4,
+                    self.paragraph_distance,
+                    self.spacing_enabled,
+                );
+                extend_transparent_blocks(self.output, nested, *self.paragraph_distance);
+            }
+            _ => return false,
         }
-        Some("RS") => {
-            let nested = lower_blocks(
-                first_part_children(node, NodeKind::Body),
-                context,
-                indent_columns + 4,
-                paragraph_distance,
-            );
-            extend_transparent_blocks(output, nested, *paragraph_distance);
-        }
-        Some("SY" | "Nm") => {
-            lower_synopsis_head(output, node, context, indent_columns, paragraph_distance);
-        }
-        Some("Fo") => lower_mdoc_function(output, node, context, indent_columns),
-        _ if node.kind == NodeKind::Table => {
-            append_table_row(output, node, context, indent_columns, table_embedding);
-        }
-        _ if node.kind == NodeKind::Equation => output.push(equation_block(node, indent_columns)),
-        _ => lower_structural_fallback(output, node, context, indent_columns, paragraph_distance),
+        true
     }
 }
 
@@ -549,6 +632,7 @@ fn lower_structural_fallback(
     context: &LoweringContext<'_>,
     indent_columns: u16,
     paragraph_distance: &mut u16,
+    spacing_enabled: bool,
 ) {
     let heads = part_child_groups(node, NodeKind::Head).collect::<Vec<_>>();
     let bodies = part_child_groups(node, NodeKind::Body).collect::<Vec<_>>();
@@ -562,19 +646,21 @@ fn lower_structural_fallback(
         context.warn_unhandled_structural_parts(node);
     }
     if bodies.is_empty() {
-        output.extend(lower_blocks(
+        output.extend(lower_blocks_with_spacing(
             node.children.as_slice(),
             context,
             indent_columns,
             paragraph_distance,
+            spacing_enabled,
         ));
     } else {
         for body in bodies {
-            output.extend(lower_blocks(
+            output.extend(lower_blocks_with_spacing(
                 body,
                 context,
                 indent_columns,
                 paragraph_distance,
+                spacing_enabled,
             ));
         }
     }
@@ -591,8 +677,13 @@ fn lower_mdoc_function(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
+    spacing_enabled: bool,
 ) {
-    let children = lower_inline_nodes(std::slice::from_ref(node), context.default_name);
+    let children = lower_inline_nodes_with_spacing(
+        std::slice::from_ref(node),
+        context.default_name,
+        spacing_enabled,
+    );
     if children.is_empty() {
         return;
     }
@@ -629,16 +720,19 @@ fn lower_synopsis_head(
     context: &LoweringContext<'_>,
     indent_columns: u16,
     paragraph_distance: &mut u16,
+    spacing_enabled: bool,
 ) {
-    let head = lower_inline_nodes(
+    let head = lower_inline_nodes_with_spacing(
         first_part_children(node, NodeKind::Head),
         context.default_name,
+        spacing_enabled,
     );
-    let mut nested = lower_blocks(
+    let mut nested = lower_blocks_with_spacing(
         first_part_children(node, NodeKind::Body),
         context,
         indent_columns,
         paragraph_distance,
+        spacing_enabled,
     );
     if head.is_empty() {
         output.extend(nested);
@@ -651,7 +745,7 @@ fn lower_synopsis_head(
     }) = nested.first_mut()
     {
         let body = std::mem::take(children);
-        let mut synopsis = InlineBuilder::new();
+        let mut synopsis = InlineBuilder::with_spacing(spacing_enabled);
         synopsis.append(head);
         synopsis.append(body);
         *children = synopsis.finish();
@@ -770,6 +864,7 @@ fn lower_man_definition(
     paragraph_distance: &mut u16,
     output: &mut Vec<Block>,
     definition_hanging_width: &mut usize,
+    spacing_enabled: bool,
 ) {
     // Capture the distance before lowering the body: a `.PD` request that
     // follows this item can live inside libmandoc's block scope and updates
@@ -781,7 +876,14 @@ fn lower_man_definition(
     };
     update_man_definition_width(node, definition_hanging_width);
     let max_width = definition_hanging_width.saturating_sub(1);
-    let item = definition_item(node, context, indent_columns, paragraph_distance, max_width);
+    let item = definition_item(
+        node,
+        context,
+        indent_columns,
+        paragraph_distance,
+        max_width,
+        spacing_enabled,
+    );
     if node.macro_name.as_deref() == Some("IP") && is_ip_bullet_item(&item) {
         append_ip_bullet(
             output,
@@ -982,10 +1084,15 @@ fn lower_table_text_block(
                 continue;
             }
             for node in nodes {
+                let spacing_enabled = builder.spacing_enabled();
                 let lowered = if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
-                    lower_man_link(node, context.default_name)
+                    lower_man_link(node, context.default_name, spacing_enabled)
                 } else {
-                    lower_inline_nodes(std::slice::from_ref(node), context.default_name)
+                    lower_inline_nodes_with_spacing(
+                        std::slice::from_ref(node),
+                        context.default_name,
+                        spacing_enabled,
+                    )
                 };
                 builder.append_filled(lowered, FilledBoundary::Word);
             }
@@ -1041,20 +1148,31 @@ struct BlockState {
     pre_source: Option<mant_ir::SourceSpan>,
     preformatted_tight_boundary: bool,
     indent_columns: u16,
+    spacing_enabled: bool,
 }
 
 impl BlockState {
-    const fn new(indent_columns: u16) -> Self {
+    const fn new(indent_columns: u16, spacing_enabled: bool) -> Self {
         Self {
             output: Vec::new(),
-            paragraph: InlineBuilder::new(),
+            paragraph: InlineBuilder::with_spacing(spacing_enabled),
             paragraph_source: None,
             paragraph_last_line: None,
             preformatted: Vec::new(),
             pre_source: None,
             preformatted_tight_boundary: false,
             indent_columns,
+            spacing_enabled,
         }
+    }
+
+    const fn spacing_enabled(&self) -> bool {
+        self.spacing_enabled
+    }
+
+    fn set_spacing(&mut self, setting: &str) {
+        self.paragraph.set_spacing(setting);
+        self.spacing_enabled = updated_spacing(self.spacing_enabled, setting);
     }
 
     fn push_inline(
@@ -1102,16 +1220,6 @@ impl BlockState {
         self.paragraph.tighten_next_boundary();
     }
 
-    fn tighten_same_line_boundary(&mut self, source: Option<&mant_ir::SourceSpan>) {
-        if self
-            .paragraph_last_line
-            .zip(source.map(|span| span.line))
-            .is_some_and(|(previous, current)| previous == current)
-        {
-            self.paragraph.tighten_next_boundary();
-        }
-    }
-
     fn push_preformatted(
         &mut self,
         nodes: Vec<Inline>,
@@ -1141,6 +1249,7 @@ impl BlockState {
             &mut self.paragraph,
             &mut self.paragraph_source,
             self.indent_columns,
+            self.spacing_enabled,
         );
         self.paragraph_last_line = None;
     }
@@ -1207,18 +1316,16 @@ fn lower_mdoc_list(
     context: &LoweringContext<'_>,
     indent_columns: u16,
     paragraph_distance: &mut u16,
+    initial_spacing: bool,
 ) -> Block {
-    let items: Vec<&Node> = first_part_children(node, NodeKind::Body)
-        .iter()
-        .filter(|child| child.macro_name.as_deref() == Some("It"))
-        .collect();
+    let items = mdoc_list_items(node, initial_spacing, context.default_name);
     let is_definition = matches!(
         node.list_kind,
         Some(NormalizedListKind::Definition | NormalizedListKind::Column)
     ) || (node.list_kind.is_none()
         && items
             .iter()
-            .any(|item| !first_part_children(item, NodeKind::Head).is_empty()));
+            .any(|item| !first_part_children(item.node, NodeKind::Head).is_empty()));
     let list_indent = indent_columns + display_indent(node);
     if node.list_kind == Some(NormalizedListKind::Column) {
         return lower_mdoc_column_list(
@@ -1241,11 +1348,12 @@ fn lower_mdoc_list(
                 .into_iter()
                 .map(|item| {
                     definition_item(
-                        item,
+                        item.node,
                         context,
                         list_indent,
                         paragraph_distance,
                         max_term_width,
+                        item.spacing_enabled,
                     )
                 })
                 .collect(),
@@ -1265,11 +1373,16 @@ fn lower_mdoc_list(
             items: items
                 .into_iter()
                 .map(|item| ListItem {
-                    blocks: lower_blocks(
-                        first_part_children(item, NodeKind::Body),
+                    blocks: lower_blocks_with_spacing(
+                        first_part_children(item.node, NodeKind::Body),
                         context,
                         list_indent,
                         paragraph_distance,
+                        spacing_after_nodes(
+                            first_part_children(item.node, NodeKind::Head),
+                            item.spacing_enabled,
+                            context.default_name,
+                        ),
                     ),
                 })
                 .collect(),
@@ -1277,6 +1390,58 @@ fn lower_mdoc_list(
             source: source_span(node),
         }
     }
+}
+
+#[derive(Clone, Copy)]
+struct MdocListItem<'a> {
+    node: &'a Node,
+    spacing_enabled: bool,
+}
+
+/// Pair each mdoc list item with the formatter spacing state active at its
+/// source position.
+///
+/// libmandoc keeps state-only `.Sm` requests as siblings of `.It` blocks.
+/// Filtering the body directly to items therefore erased precisely the state
+/// needed to render compact forms such as `Odevice`, `:S/old/new/`, and
+/// `@newuser name:uid`. Walking the structural stream once also lets an
+/// intentionally unbalanced transition inside an item affect later items.
+fn mdoc_list_items<'a>(
+    node: &'a Node,
+    initial_spacing: bool,
+    default_name: Option<&str>,
+) -> Vec<MdocListItem<'a>> {
+    let mut spacing_enabled = initial_spacing;
+    let mut items = Vec::new();
+    for child in first_part_children(node, NodeKind::Body) {
+        if child.macro_name.as_deref() == Some("It") {
+            items.push(MdocListItem {
+                node: child,
+                spacing_enabled,
+            });
+        }
+        spacing_enabled = spacing_after_node(child, spacing_enabled, default_name);
+    }
+    items
+}
+
+fn spacing_after_nodes(
+    nodes: &[Node],
+    mut spacing_enabled: bool,
+    default_name: Option<&str>,
+) -> bool {
+    for node in nodes {
+        spacing_enabled = spacing_after_node(node, spacing_enabled, default_name);
+    }
+    spacing_enabled
+}
+
+fn spacing_after_node(node: &Node, spacing_enabled: bool, default_name: Option<&str>) -> bool {
+    if node.macro_name.as_deref() == Some("Sm") {
+        let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
+        return updated_spacing(spacing_enabled, setting.trim());
+    }
+    spacing_after_nodes(&node.children, spacing_enabled, default_name)
 }
 
 /// Preserve every body sibling of an mdoc `Bl -column` item as one table cell.
@@ -1287,7 +1452,7 @@ fn lower_mdoc_list(
 /// silently discarded every cell after the first.
 fn lower_mdoc_column_list(
     node: &Node,
-    items: Vec<&Node>,
+    items: Vec<MdocListItem<'_>>,
     context: &LoweringContext<'_>,
     indent_columns: u16,
     cell_indent: u16,
@@ -1296,16 +1461,27 @@ fn lower_mdoc_column_list(
     let rows = items
         .into_iter()
         .map(|item| {
-            let mut cells = part_child_groups(item, NodeKind::Body)
+            let body_spacing = spacing_after_nodes(
+                first_part_children(item.node, NodeKind::Head),
+                item.spacing_enabled,
+                context.default_name,
+            );
+            let mut cells = part_child_groups(item.node, NodeKind::Body)
                 .map(|body| AstTableCell {
-                    blocks: lower_blocks(body, context, cell_indent, paragraph_distance),
+                    blocks: lower_blocks_with_spacing(
+                        body,
+                        context,
+                        cell_indent,
+                        paragraph_distance,
+                        body_spacing,
+                    ),
                     column_span: 1,
                     row_span: 1,
                     alignment: Some(AstTableAlignment::Left),
                 })
                 .collect::<Vec<_>>();
-            if item.flags.deep_link_target
-                && let Some(id) = item.tag.as_deref()
+            if item.node.flags.deep_link_target
+                && let Some(id) = item.node.tag.as_deref()
                 && let Some(Block::Paragraph { children, .. }) =
                     cells.first_mut().and_then(|cell| cell.blocks.first_mut())
             {
@@ -1328,8 +1504,10 @@ fn definition_item(
     indent_columns: u16,
     paragraph_distance: &mut u16,
     max_term_width: usize,
+    spacing_enabled: bool,
 ) -> DefinitionItem {
-    let mut term = lower_inline_nodes(visible_definition_head(node), context.default_name);
+    let head = visible_definition_head(node);
+    let mut term = lower_inline_nodes_with_spacing(head, context.default_name, spacing_enabled);
     if let Some(id) = definition_head_anchor(node, &term) {
         term.insert(0, Inline::Anchor { id: id.into() });
     }
@@ -1338,11 +1516,12 @@ fn definition_item(
         identity: None,
         inline_term: terms_fit_inline(&terms, max_term_width),
         terms,
-        description: lower_blocks(
+        description: lower_blocks_with_spacing(
             first_part_children(node, NodeKind::Body),
             context,
             indent_columns + 4,
             paragraph_distance,
+            spacing_after_nodes(head, spacing_enabled, context.default_name),
         ),
         spacing_before_lines: None,
     }
@@ -1699,8 +1878,10 @@ fn flush_paragraph(
     paragraph: &mut InlineBuilder,
     source: &mut Option<mant_ir::SourceSpan>,
     indent_columns: u16,
+    spacing_enabled: bool,
 ) {
-    let current = std::mem::replace(paragraph, InlineBuilder::new()).finish();
+    let current =
+        std::mem::replace(paragraph, InlineBuilder::with_spacing(spacing_enabled)).finish();
     if current.is_empty() {
         *source = None;
     } else {

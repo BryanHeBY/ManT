@@ -17,6 +17,7 @@ pub(super) struct InlineBuilder {
     nodes: Vec<Inline>,
     tight_next_boundary: bool,
     spacing_enabled: bool,
+    preserve_next_boundary: bool,
 }
 
 /// Semantic boundary between two inline fragments in filled roff mode.
@@ -39,6 +40,16 @@ impl InlineBuilder {
             nodes: Vec::new(),
             tight_next_boundary: false,
             spacing_enabled: true,
+            preserve_next_boundary: false,
+        }
+    }
+
+    pub(super) const fn with_spacing(spacing_enabled: bool) -> Self {
+        Self {
+            nodes: Vec::new(),
+            tight_next_boundary: false,
+            spacing_enabled,
+            preserve_next_boundary: false,
         }
     }
 
@@ -50,8 +61,21 @@ impl InlineBuilder {
         self.tight_next_boundary
     }
 
+    pub(super) const fn spacing_enabled(&self) -> bool {
+        self.spacing_enabled
+    }
+
     pub(super) fn set_spacing(&mut self, setting: &str) {
-        self.spacing_enabled = updated_spacing(self.spacing_enabled, setting);
+        let updated = updated_spacing(self.spacing_enabled, setting);
+        if updated == self.spacing_enabled {
+            return;
+        }
+        // `.Sm off` changes spacing *after* the request. If printable
+        // content precedes the transition, retain its ordinary boundary to
+        // the first following fragment, then concatenate subsequent macro
+        // arguments until spacing is enabled again.
+        self.preserve_next_boundary = !updated && !self.nodes.is_empty();
+        self.spacing_enabled = updated;
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -100,7 +124,8 @@ impl InlineBuilder {
         } else {
             needs_space(&self.nodes, incoming)
         };
-        if self.spacing_enabled && !self.tight_next_boundary && add_space {
+        let preserve_boundary = std::mem::take(&mut self.preserve_next_boundary);
+        if (self.spacing_enabled || preserve_boundary) && !self.tight_next_boundary && add_space {
             push_text(&mut self.nodes, " ".to_owned());
         }
         self.tight_next_boundary = false;
@@ -116,7 +141,15 @@ impl InlineBuilder {
 }
 
 pub(super) fn lower_inline_nodes(nodes: &[Node], default_name: Option<&str>) -> Vec<Inline> {
-    let mut builder = InlineBuilder::new();
+    lower_inline_nodes_with_spacing(nodes, default_name, true)
+}
+
+pub(super) fn lower_inline_nodes_with_spacing(
+    nodes: &[Node],
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    let mut builder = InlineBuilder::with_spacing(spacing_enabled);
     for (index, node) in nodes.iter().enumerate() {
         if node.macro_name.as_deref() == Some("Sm") {
             let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
@@ -175,7 +208,11 @@ pub(super) fn append_inline_node(
         // the following sibling. Treating it like the empty `Ns` request
         // silently discarded constructs such as `.Pf [\-]ddd Cm \&.`.
         Some("Pf") => {
-            builder.append(lower_inline_node(node, default_name));
+            builder.append(lower_inline_node(
+                node,
+                default_name,
+                builder.spacing_enabled(),
+            ));
             builder.tighten_next_boundary();
         }
         // A roff break ends the current output line, not the paragraph.
@@ -197,7 +234,11 @@ pub(super) fn append_inline_node(
             builder.append(vec![Inline::Text { value: "'".into() }]);
             builder.tighten_next_boundary();
         }
-        _ => builder.append(lower_inline_node(node, default_name)),
+        _ => builder.append(lower_inline_node(
+            node,
+            default_name,
+            builder.spacing_enabled(),
+        )),
     }
     if node.flags.delimiter_open || node.flags.line_continuation || ends_with_no_space_control(node)
     {
@@ -222,7 +263,11 @@ fn ends_with_no_space_control(node: &Node) -> bool {
         .is_some_and(ends_with_no_space_control)
 }
 
-fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
+fn lower_inline_node(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
     if node.flags.no_print || node.kind == NodeKind::Comment {
         return Vec::new();
     }
@@ -235,8 +280,10 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
     // man(7) alternating-font macros concatenate their arguments without
     // inserting spaces. Each argument switches to the next named font.
     let lowered = alternating_font_pair(macro_name).map_or_else(
-        || lower_inline_nodes(children, default_name),
-        |(first, second)| lower_alternating_fonts(children, default_name, first, second),
+        || lower_inline_nodes_with_spacing(children, default_name, spacing_enabled),
+        |(first, second)| {
+            lower_alternating_fonts(children, default_name, first, second, spacing_enabled)
+        },
     );
     let anchor = navigation_anchor(node, &lowered);
     let mut output = match macro_name {
@@ -261,9 +308,9 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
         Some("In") if !lowered.is_empty() => vec![Inline::Code {
             value: format!("#include <{}>", plain_text(&lowered)),
         }],
-        Some("Xr" | "MR") => lower_manual_reference(children, default_name),
-        Some("Lk") => lower_link(children, default_name, false),
-        Some("Mt") => lower_link(children, default_name, true),
+        Some("Xr" | "MR") => lower_manual_reference(children, default_name, spacing_enabled),
+        Some("Lk") => lower_link(children, default_name, false, spacing_enabled),
+        Some("Mt") => lower_link(children, default_name, true, spacing_enabled),
         // Keep the heading text as a private unresolved target until the
         // complete section tree is available. The document post-pass replaces
         // it with the stable Section::id or degrades it to ordinary text.
@@ -283,12 +330,20 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
             content.extend(lowered);
             content
         }
-        Some("Fn") => lower_function_element(node, default_name),
-        Some("Fo") => lower_function_declaration(node, default_name),
+        Some("Fn") => lower_function_element(node, default_name, spacing_enabled),
+        Some("Fo") => lower_function_declaration(node, default_name, spacing_enabled),
         Some("Eo") => surround_fragments(
-            lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name),
+            lower_inline_nodes_with_spacing(
+                first_part_children(node, NodeKind::Head),
+                default_name,
+                spacing_enabled,
+            ),
             lowered,
-            lower_inline_nodes(first_part_children(node, NodeKind::Tail), default_name),
+            lower_inline_nodes_with_spacing(
+                first_part_children(node, NodeKind::Tail),
+                default_name,
+                spacing_enabled,
+            ),
         ),
         Some("En") => match node.enclosure.as_ref() {
             Some(enclosure) => surround(
@@ -314,17 +369,25 @@ fn lower_inline_node(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
     output
 }
 
-fn lower_function_element(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
+fn lower_function_element(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
     let Some((name, arguments)) = inline_children(node).split_first() else {
         return Vec::new();
     };
-    let mut declaration = wrap_strong(lower_inline_node(name, default_name));
+    let mut declaration = wrap_strong(lower_inline_node(name, default_name, spacing_enabled));
     declaration.push(Inline::Text { value: "(".into() });
     for (index, argument) in arguments.iter().enumerate() {
         if index > 0 {
             declaration.push(Inline::Text { value: ", ".into() });
         }
-        declaration.extend(wrap_emphasis(lower_inline_node(argument, default_name)));
+        declaration.extend(wrap_emphasis(lower_inline_node(
+            argument,
+            default_name,
+            spacing_enabled,
+        )));
     }
     declaration.push(Inline::Text {
         value: function_closing(node.flags.synopsis_pretty).into(),
@@ -332,11 +395,19 @@ fn lower_function_element(node: &Node, default_name: Option<&str>) -> Vec<Inline
     declaration
 }
 
-fn lower_function_declaration(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
-    let head = lower_inline_nodes(first_part_children(node, NodeKind::Head), default_name);
+fn lower_function_declaration(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    let head = lower_inline_nodes_with_spacing(
+        first_part_children(node, NodeKind::Head),
+        default_name,
+        spacing_enabled,
+    );
     let body = first_part_children(node, NodeKind::Body);
     if head.is_empty() {
-        return lower_inline_nodes(body, default_name);
+        return lower_inline_nodes_with_spacing(body, default_name, spacing_enabled);
     }
 
     let mut declaration = vec![Inline::Strong { children: head }];
@@ -345,9 +416,10 @@ fn lower_function_declaration(node: &Node, default_name: Option<&str>) -> Vec<In
         if index > 0 {
             declaration.push(Inline::Text { value: ", ".into() });
         }
-        declaration.extend(lower_inline_nodes(
+        declaration.extend(lower_inline_nodes_with_spacing(
             std::slice::from_ref(argument),
             default_name,
+            spacing_enabled,
         ));
     }
     let synopsis_pretty = node.flags.synopsis_pretty
@@ -413,17 +485,21 @@ fn inline_children(node: &Node) -> &[Node] {
     }
 }
 
-fn lower_manual_reference(children: &[Node], default_name: Option<&str>) -> Vec<Inline> {
+fn lower_manual_reference(
+    children: &[Node],
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
     let Some(name_node) = children.first() else {
         return Vec::new();
     };
-    let name = plain_text(&lower_inline_node(name_node, default_name));
+    let name = plain_text(&lower_inline_node(name_node, default_name, spacing_enabled));
     if name.is_empty() {
         return Vec::new();
     }
     let section = children
         .get(1)
-        .map(|child| plain_text(&lower_inline_node(child, default_name)))
+        .map(|child| plain_text(&lower_inline_node(child, default_name, spacing_enabled)))
         .filter(|value| !value.is_empty());
     let display = section
         .as_ref()
@@ -437,20 +513,25 @@ fn lower_manual_reference(children: &[Node], default_name: Option<&str>) -> Vec<
         children: text_node(&display),
     }];
     for child in children.iter().skip(2) {
-        output.extend(lower_inline_node(child, default_name));
+        output.extend(lower_inline_node(child, default_name, spacing_enabled));
     }
     output
 }
 
-fn lower_link(children: &[Node], default_name: Option<&str>, email: bool) -> Vec<Inline> {
+fn lower_link(
+    children: &[Node],
+    default_name: Option<&str>,
+    email: bool,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
     let Some(first) = children.first() else {
         return Vec::new();
     };
-    let address = plain_text(&lower_inline_node(first, default_name));
+    let address = plain_text(&lower_inline_node(first, default_name, spacing_enabled));
     if address.is_empty() {
         return Vec::new();
     }
-    let label = lower_inline_nodes(&children[1..], default_name);
+    let label = lower_inline_nodes_with_spacing(&children[1..], default_name, spacing_enabled);
     let children = if label.is_empty() {
         text_node(&address)
     } else {
@@ -474,16 +555,29 @@ fn lower_link(children: &[Node], default_name: Option<&str>, email: bool) -> Vec
 /// a body, but they do not start a paragraph in man(7). A descriptive label
 /// keeps the target visible after the link so text search and citation views
 /// retain both pieces of source information.
-pub(super) fn lower_man_link(node: &Node, default_name: Option<&str>) -> Vec<Inline> {
-    let target = plain_text(&lower_inline_nodes(
+pub(super) fn lower_man_link(
+    node: &Node,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    let target = plain_text(&lower_inline_nodes_with_spacing(
         first_part_children(node, NodeKind::Head),
         default_name,
+        spacing_enabled,
     ));
     if target.is_empty() {
-        return lower_inline_nodes(first_part_children(node, NodeKind::Body), default_name);
+        return lower_inline_nodes_with_spacing(
+            first_part_children(node, NodeKind::Body),
+            default_name,
+            spacing_enabled,
+        );
     }
 
-    let label = lower_inline_nodes(first_part_children(node, NodeKind::Body), default_name);
+    let label = lower_inline_nodes_with_spacing(
+        first_part_children(node, NodeKind::Body),
+        default_name,
+        spacing_enabled,
+    );
     let has_label = !label.is_empty();
     let children = if has_label { label } else { text_node(&target) };
     let link_target = if node.macro_name.as_deref() == Some("MT") {
@@ -505,9 +599,10 @@ pub(super) fn lower_man_link(node: &Node, default_name: Option<&str>) -> Vec<Inl
             value: format!(" ⟨{target}⟩"),
         });
     }
-    output.extend(lower_inline_nodes(
+    output.extend(lower_inline_nodes_with_spacing(
         first_part_children(node, NodeKind::Tail),
         default_name,
+        spacing_enabled,
     ));
     output
 }
@@ -531,6 +626,7 @@ fn lower_alternating_fonts(
     default_name: Option<&str>,
     first: Font,
     second: Font,
+    spacing_enabled: bool,
 ) -> Vec<Inline> {
     let mut output = Vec::new();
     for (index, child) in children.iter().enumerate() {
@@ -542,7 +638,10 @@ fn lower_alternating_fonts(
         let lowered = if child.kind == NodeKind::Text {
             lower_text_node(child, font)
         } else {
-            apply_font(lower_inline_node(child, default_name), font)
+            apply_font(
+                lower_inline_node(child, default_name, spacing_enabled),
+                font,
+            )
         };
         output.extend(lowered);
     }

@@ -2088,6 +2088,37 @@ gperl$T{\npopulates\n.I groff\nregisters using\n.MR perl 1 ;\nT}\n.TE\n",
         );
     }
 
+    #[test]
+    fn carries_mdoc_spacing_state_across_list_item_boundaries() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("list-spacing.8"),
+            b".Dd August 19, 2026\n.Dt LIST-SPACING 8\n.Os\n.Sh COMMANDS\n\
+.Bl -tag -width Ds\n.Sm off\n.It Ic O Ar device\n.Sm on\n.It Ic done\nFinished.\n.El\n",
+        )
+        .expect("lower list-scoped mdoc spacing controls");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a command definition list");
+        };
+        assert_eq!(inline_text(&items[0].terms[0]), "Odevice");
+        assert_eq!(inline_text(&items[1].terms[0]), "done");
+    }
+
+    #[test]
+    fn preserves_the_boundary_that_enters_a_compact_mdoc_term() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("spacing-transition.5"),
+            b".Dd August 19, 2026\n.Dt SPACING-TRANSITION 5\n.Os\n.Sh KEYWORDS\n\
+.Bl -tag -width Ds\n.It Xo\n.Cm @newuser\n.Sm off\n.Ar name : uid : gid\n.Sm on\n.Xc\nCreate a user.\n.El\n",
+        )
+        .expect("lower an mdoc spacing transition inside a term");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected a keyword definition list");
+        };
+        assert_eq!(inline_text(&items[0].terms[0]), "@newuser name:uid:gid");
+    }
+
     fn inline_text(children: &[Inline]) -> String {
         children
             .iter()
