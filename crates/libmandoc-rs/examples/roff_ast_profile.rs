@@ -166,6 +166,9 @@ fn collect_node_features(node: &Node, parent: Option<&Node>, features: &mut BTre
             if cell.text_block {
                 properties.insert("table:text-block".to_owned());
             }
+            if cell.vertical_continuation {
+                properties.insert("table:vertical-continuation".to_owned());
+            }
             properties.insert(format!(
                 "table:alignment:{}",
                 table_alignment_name(cell.alignment)

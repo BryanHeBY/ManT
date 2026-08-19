@@ -31,6 +31,7 @@
 struct mant_mandoc_table_cell {
 	char			*text;
 	int			 text_block;
+	int			 vertical_continuation;
 	unsigned int		 column_span;
 	unsigned int		 row_span;
 	int			 alignment;
@@ -703,6 +704,16 @@ copy_table_cells(const struct tbl_span *span)
 			break;
 		(*next)->text = copy_string(source->string);
 		(*next)->text_block = source->block;
+		/*
+		 * tbl accepts both a `^' layout cell and a literal `\\^'
+		 * data cell as a vertical continuation.  Keep that parser fact
+		 * separate from its printable string so downstream AST users do
+		 * not need to duplicate libmandoc's private tbl rules.
+		 */
+		(*next)->vertical_continuation =
+		    (source->layout != NULL &&
+		     source->layout->pos == TBL_CELL_DOWN) ||
+		    (source->string != NULL && !strcmp(source->string, "\\^"));
 		(*next)->column_span = source->hspans < 0 ? 1U :
 		    (unsigned int)source->hspans + 1U;
 		(*next)->row_span = source->vspans < 0 ? 1U :
@@ -1084,6 +1095,13 @@ int
 mant_mandoc_table_cell_is_text_block(const struct mant_mandoc_table_cell *cell)
 {
 	return cell == NULL ? 0 : cell->text_block;
+}
+
+int
+mant_mandoc_table_cell_is_vertical_continuation(
+	const struct mant_mandoc_table_cell *cell)
+{
+	return cell == NULL ? 0 : cell->vertical_continuation;
 }
 
 unsigned int

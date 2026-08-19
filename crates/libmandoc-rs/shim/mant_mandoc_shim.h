@@ -118,6 +118,8 @@ const char *mant_mandoc_table_cell_text(
     const struct mant_mandoc_table_cell *);
 int mant_mandoc_table_cell_is_text_block(
     const struct mant_mandoc_table_cell *);
+int mant_mandoc_table_cell_is_vertical_continuation(
+    const struct mant_mandoc_table_cell *);
 unsigned int mant_mandoc_table_cell_column_span(
     const struct mant_mandoc_table_cell *);
 unsigned int mant_mandoc_table_cell_row_span(

@@ -124,6 +124,11 @@ pub struct TableCell {
     pub text: Option<String>,
     /// The cell was written using a multiline tbl(7) `T{`/`T}` text block.
     pub text_block: bool,
+    /// This cell continues a vertical span owned by a cell in an earlier row.
+    ///
+    /// tbl(7) permits both a `^` layout cell and a literal `\^` data cell for
+    /// this purpose. Neither spelling produces printable cell content.
+    pub vertical_continuation: bool,
     /// Number of logical columns occupied by the cell.
     pub column_span: u16,
     /// Number of logical rows occupied by the cell.

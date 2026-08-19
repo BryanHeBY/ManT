@@ -107,6 +107,42 @@ from those inputs and compares it with `vendor/`. Semantic parser changes need
 a Rust test with the smallest useful roff input; portability patches are
 covered by the relevant target CI jobs.
 
+### Local vendor patches
+
+The checked-in vendor tree differs from the official 1.14.6 snapshot only by
+the ordered patches in `patches/series`:
+
+- `0001-memory-only-input.patch` adds the buffer-only entry point used on
+  Windows and makes denied `.so` requests explicit rather than opening files.
+- `0002-man-mr.patch` recognizes the modern man(7) `MR` reference macro.
+- `0003-pandoc-verbatim-fonts.patch` recognizes Pandoc's `\f[V]`, `\f[VB]`,
+  and `\f[VI]` font escapes.
+- `0004-libbsd-library-name.patch` adds libbsd to libmandoc's recognized
+  library-name catalog.
+- `0005-modern-standards.patch` adds POSIX.1-2024 and C23 standard aliases.
+
+Each is a narrow parser or portability correction. They are not a forked
+renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the
+official snapshot plus exactly this series.
+
+### C shim and Rust AST extensions
+
+The C shim is deliberately separate from `vendor/`: it copies libmandoc's
+private, process-scoped structures into owned Rust data after parsing. In
+addition to the upstream tree, `libmandoc-rs` exposes renderer-neutral facts
+that are already resolved by libmandoc but unavailable through a public C API:
+
+- normalized mdoc enclosures, list/display/font/author roles, source flags,
+  table cells and spans, equations, and validated tags;
+- tbl multiline-cell and vertical-continuation flags, including both tbl(7)
+  spellings of vertical continuation;
+- structured diagnostics and explicit source/include/compression policy.
+
+These extensions never reinterpret source into `ManT`'s document IR. For
+example, semantic reconstruction of roff requests inside tbl `T{ … T}` cells
+belongs to `mant-engine`, because libmandoc intentionally retains that payload
+as table text rather than a nested public syntax tree.
+
 ## Build requirements and supported targets
 
 The source package vendors libmandoc 1.14.6 and compiles it with the `cc`

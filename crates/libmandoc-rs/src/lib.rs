@@ -521,6 +521,29 @@ mod tests {
     }
 
     #[test]
+    fn parser_marks_both_tbl_vertical_continuation_forms() {
+        let document = Parser::default()
+            .parse_bytes(
+                "tbl-vertical-continuations.1",
+                b".TH TBL-VERTICAL-CONTINUATIONS 1\n.SH TABLES\n.TS\nl l.\nfirst\tvalue\n\\^\tcontinued\n.TE\n.TS\nl l,\n^ l.\nfirst\tvalue\n\tcontinued\n.TE\n",
+            )
+            .expect("parse tbl vertical continuations")
+            .document;
+
+        let explicit = find_node(&document.root, &|node| {
+            node.kind == NodeKind::Table && node.line == 6
+        })
+        .expect("explicit continuation row");
+        assert!(explicit.table_cells[0].vertical_continuation);
+
+        let layout = find_node(&document.root, &|node| {
+            node.kind == NodeKind::Table && node.line == 12
+        })
+        .expect("layout continuation row");
+        assert!(layout.table_cells[0].vertical_continuation);
+    }
+
+    #[test]
     fn parser_session_reports_file_errors_as_values() {
         let path = source_path("missing-mandoc-session");
         let error = parse_file(&path, false).expect_err("missing source must fail");

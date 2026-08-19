@@ -1021,7 +1021,7 @@ fn append_table_row(
         cells: (0..cell_count)
             .map(|index| {
                 let cell = node.table_cells.get(index);
-                let vertical_continuation = cell.is_some_and(is_vertical_table_continuation);
+                let vertical_continuation = cell.is_some_and(|cell| cell.vertical_continuation);
                 let text_block = if cell.is_some_and(|cell| cell.text_block) {
                     let block =
                         embedding.and_then(|embedding| embedding.blocks.get(text_block_index));
@@ -1088,10 +1088,6 @@ fn append_table_row(
             source: source_span(node),
         });
     }
-}
-
-fn is_vertical_table_continuation(cell: &libmandoc_rs::TableCell) -> bool {
-    cell.text.as_deref() == Some(r"\^")
 }
 
 fn lower_missing_table_cell(
