@@ -67,7 +67,7 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Nm`, `Nd` | Strong document name and NAME description dash |
 | `Pp` | Explicit vertical paragraph separation |
 | `Tg` | Zero-width navigation anchor when validated by libmandoc |
-| `Sx` | Resolved same-document section link or visible text when unresolved |
+| `Sx` | Resolved same-document section link, including one unique parenthetical heading qualifier, or visible text when unresolved |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
 | `Bx` | BSD lifecycle forms such as `-alpha`, `-beta`, and `-devel` expand to their portable descriptive text; version forms render as canonical `versionBSD` names with an optional release |

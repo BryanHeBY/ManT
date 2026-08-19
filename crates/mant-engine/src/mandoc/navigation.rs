@@ -261,10 +261,10 @@ fn resolve_inlines(
                 mut children,
             } => {
                 resolve_inlines(&mut children, targets, explicit_targets, diagnostics);
-                if let Some(Some(section_id)) = targets.get(id.as_str()) {
+                if let Some(section_id) = resolve_section_target(targets, id.as_str()) {
                     resolved.push(Inline::Link {
                         target: LinkTarget::Section {
-                            id: section_id.as_str().into(),
+                            id: section_id.into(),
                         },
                         title,
                         children,
@@ -301,11 +301,74 @@ fn resolve_inlines(
     *nodes = resolved;
 }
 
+/// Resolve an `.Sx` title without guessing across arbitrary headings.
+///
+/// Most mdoc sources name a heading exactly.  Some established manual pages
+/// use the stable leading title while their target adds a parenthetical
+/// qualifier, for example `White Space Splitting` for `White Space Splitting
+/// (Field Splitting)`.  Accept that form only when it identifies one target;
+/// every other prefix remains unresolved rather than becoming a surprising
+/// navigation jump.
+fn resolve_section_target(targets: &SectionTargets, reference: &str) -> Option<String> {
+    match targets.get(reference) {
+        Some(Some(section_id)) => return Some(section_id.clone()),
+        Some(None) => return None,
+        None => {}
+    }
+    let mut candidates = targets.iter().filter_map(|(title, section_id)| {
+        is_parenthetical_section_qualification(reference, title)
+            .then_some(section_id.as_deref())
+            .flatten()
+    });
+    let candidate = candidates.next()?;
+    candidates.next().is_none().then(|| candidate.to_owned())
+}
+
+fn is_parenthetical_section_qualification(reference: &str, title: &str) -> bool {
+    title
+        .strip_prefix(reference)
+        .is_some_and(|suffix| suffix.starts_with('(') || suffix.starts_with(" ("))
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use mant_ir::Inline;
 
-    use super::promote_manual_reference_inlines;
+    use super::{SectionTargets, promote_manual_reference_inlines, resolve_section_target};
+
+    #[test]
+    fn resolves_one_parenthetically_qualified_section_title() {
+        let targets: SectionTargets = HashMap::from([
+            (
+                "White Space Splitting (Field Splitting)".to_owned(),
+                Some("white-space-splitting-field-splitting-36".to_owned()),
+            ),
+            ("Other".to_owned(), Some("other-2".to_owned())),
+        ]);
+
+        assert_eq!(
+            resolve_section_target(&targets, "White Space Splitting"),
+            Some("white-space-splitting-field-splitting-36".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_parenthetically_qualified_section_titles() {
+        let targets: SectionTargets = HashMap::from([
+            (
+                "Examples (basic)".to_owned(),
+                Some("examples-basic-2".to_owned()),
+            ),
+            (
+                "Examples (advanced)".to_owned(),
+                Some("examples-advanced-3".to_owned()),
+            ),
+        ]);
+
+        assert_eq!(resolve_section_target(&targets, "Examples"), None);
+    }
 
     #[test]
     fn promotes_traditional_see_also_pairs_without_consuming_punctuation() {

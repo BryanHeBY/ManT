@@ -1793,6 +1793,40 @@ Sean\n\
     }
 
     #[test]
+    fn resolves_a_unique_parenthetically_qualified_mdoc_section_reference() {
+        let path = temporary_source(
+            "mdoc-qualified-navigation",
+            ".Dd July 19, 2026\n\
+             .Dt NAVIGATION 1\n\
+             .Os\n\
+             .Sh DESCRIPTION\n\
+             See\n\
+             .Sx White Space Splitting\n\
+             .Sh \"White Space Splitting (Field Splitting)\"\n\
+             Target content.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower qualified navigation source");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let Block::Paragraph { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected navigation paragraph");
+        };
+        assert!(children.iter().any(|inline| matches!(
+            inline,
+            Inline::Link {
+                target: mant_ir::LinkTarget::Section { id },
+                children,
+                ..
+            } if id == "white-space-splitting-field-splitting-2"
+                && inline_text(children) == "White Space Splitting"
+        )));
+        assert!(document.diagnostics.iter().all(|diagnostic| {
+            diagnostic.code.as_deref() != Some("unresolved-section-reference")
+        }));
+    }
+
+    #[test]
     fn degrades_unresolved_mdoc_section_references_to_text() {
         let path = temporary_source(
             "mdoc-missing-section",
