@@ -263,6 +263,12 @@ impl Decoder {
             self.text.push_str(value);
             return;
         }
+        if let Some(value) = unicode_special_characters(name) {
+            for character in value.chars() {
+                push_terminal_safe(&mut self.text, character);
+            }
+            return;
+        }
         match libmandoc_rs::special_character(name) {
             Some(SpecialCharacter::Visible(character)) => {
                 push_terminal_safe(&mut self.text, character);
@@ -386,6 +392,28 @@ impl Decoder {
         self.index = end;
         value
     }
+}
+
+/// Decode groff's bracketed Unicode character names.
+///
+/// libmandoc's input pre-converter represents raw UTF-8 with the same
+/// `uXXXX` names, so this one boundary handles both explicit `\[uXXXX]`
+/// escapes and ordinary non-ASCII source text. Composite names use one base
+/// scalar followed by underscore-separated combining scalars.
+fn unicode_special_characters(name: &str) -> Option<String> {
+    let encoded = name.strip_prefix('u')?;
+    let mut output = String::new();
+    for component in encoded.split('_') {
+        if !(4..=6).contains(&component.len())
+            || !component
+                .chars()
+                .all(|character| character.is_ascii_hexdigit())
+        {
+            return None;
+        }
+        output.push(char::from_u32(u32::from_str_radix(component, 16).ok()?)?);
+    }
+    (!output.is_empty()).then_some(output)
 }
 
 /// Recognize a positive literal relative advance without attempting to
@@ -544,6 +572,23 @@ mod tests {
         let source = format!("git{ASCII_HYPH}config{ASCII_NBRSP}(1){ASCII_BREAK}next\\&.\\|.\\|.");
 
         assert_eq!(visible_text(&source), "git-config (1)next...");
+    }
+
+    #[test]
+    fn decodes_bracketed_unicode_and_composite_character_names() {
+        assert_eq!(
+            visible_text(r"Ma\[u0161]l\[u00E1] \[u2014] \[u01F642]"),
+            "Mašlá — 🙂"
+        );
+        assert_eq!(visible_text(r"\[u0061_0301]"), "a\u{301}");
+    }
+
+    #[test]
+    fn retains_invalid_unicode_names_as_visible_fallbacks() {
+        assert_eq!(
+            visible_text(r"\[uD800] \[u110000] \[u12]"),
+            r"\[uD800] \[u110000] \[u12]"
+        );
     }
 
     #[test]

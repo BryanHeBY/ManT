@@ -964,6 +964,24 @@ unknown=\\[future-glyph]\n",
     }
 
     #[test]
+    fn round_trips_raw_and_bracketed_unicode_manual_text() {
+        let source = ".TH UNICODE 7\n\
+.SH TEST\n\
+Raw UTF-8: Mašláňová café — naïve.\n\
+Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
+        let document = parse_manual_bytes(std::path::Path::new("unicode.7"), source.as_bytes())
+            .expect("lower raw and escaped Unicode");
+
+        let [Block::Paragraph { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one Unicode paragraph");
+        };
+        let rendered = inline_text(children);
+        assert!(rendered.contains("Raw UTF-8: Mašláňová café — naïve."));
+        assert!(rendered.contains("Escaped: Mašlá and — dash."));
+        assert!(!rendered.contains(r"\[u"));
+    }
+
+    #[test]
     fn preserves_explicit_mdoc_function_and_enclosure_structure() {
         let document = parse_manual_bytes(
             std::path::Path::new("explicit-mdoc.1"),
