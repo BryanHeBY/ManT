@@ -4,7 +4,9 @@ use std::fmt::Write as _;
 
 use anstyle::{AnsiColor, Style};
 use mant_engine::QueryViewResult;
-use mant_ir::{Block, DefinitionRole, Inline, ResolvedContent, Section, SourceFormat};
+use mant_ir::{
+    Block, DefinitionRole, DocumentMeta, Inline, ResolvedContent, Section, SourceFormat,
+};
 use mant_protocol::{
     ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse,
     ScopeQueryResult, sanitize_terminal_text,
@@ -328,24 +330,44 @@ fn document_label(document: &str, section: Option<&str>) -> String {
 fn terminal_content(query: &ResolvedContent) -> ResolvedContent {
     let mut query = query.clone();
     query.label = sanitize_terminal_text(&query.label).into_owned();
-    if let Some(document) = query.document.as_mut()
-        && let Some(section) = document.meta.manual_section.as_mut()
-    {
-        *section = sanitize_terminal_text(section).into_owned();
+    if let Some(document) = query.document.as_mut() {
+        sanitize_terminal_meta(&mut document.meta);
     }
     query
+}
+
+fn terminal_outline(outline: &QueryOutline) -> QueryOutline {
+    let mut outline = outline.clone();
+    outline.label = sanitize_terminal_text(&outline.label).into_owned();
+    if let Some(meta) = outline.meta.as_mut() {
+        sanitize_terminal_meta(meta);
+    }
+    outline
 }
 
 /// Copy an excerpt with its terminal-visible document identity made safe.
 fn terminal_excerpt(excerpt: &QueryExcerpt) -> QueryExcerpt {
     let mut excerpt = excerpt.clone();
     excerpt.label = sanitize_terminal_text(&excerpt.label).into_owned();
-    if let Some(meta) = excerpt.meta.as_mut()
-        && let Some(section) = meta.manual_section.as_mut()
-    {
-        *section = sanitize_terminal_text(section).into_owned();
+    if let Some(meta) = excerpt.meta.as_mut() {
+        sanitize_terminal_meta(meta);
     }
     excerpt
+}
+
+fn terminal_search(search: &QuerySearch) -> QuerySearch {
+    let mut search = search.clone();
+    search.label = sanitize_terminal_text(&search.label).into_owned();
+    if let Some(meta) = search.meta.as_mut() {
+        sanitize_terminal_meta(meta);
+    }
+    search
+}
+
+fn sanitize_terminal_meta(meta: &mut DocumentMeta) {
+    if let Some(section) = meta.manual_section.as_mut() {
+        *section = sanitize_terminal_text(section).into_owned();
+    }
 }
 
 pub(super) fn render_query_result(
@@ -354,10 +376,16 @@ pub(super) fn render_query_result(
     pretty: bool,
     preserve_anchors: bool,
     color: bool,
+    output_terminal: bool,
 ) -> Result<String, Failure> {
     match result {
-        QueryViewResult::Full(query) => render_full_query(query, format, pretty, preserve_anchors),
+        QueryViewResult::Full(query) => {
+            render_full_query(query, format, pretty, preserve_anchors, output_terminal)
+        }
         QueryViewResult::Outline(outline) => match format {
+            QueryFormat::Markdown if output_terminal => Ok(mant_engine::render_outline_markdown(
+                &terminal_outline(outline),
+            )),
             QueryFormat::Markdown => Ok(mant_engine::render_outline_markdown(outline)),
             QueryFormat::Text => Ok(render_terminal_outline(outline, color)),
             QueryFormat::Man => Err(Failure::usage(
@@ -367,10 +395,18 @@ pub(super) fn render_query_result(
                 mant_engine::render_outline_json(outline, pretty).map_err(Failure::operational)
             }
         },
-        QueryViewResult::Excerpt(excerpt) => {
-            render_excerpt(excerpt, format, pretty, preserve_anchors, color)
-        }
+        QueryViewResult::Excerpt(excerpt) => render_excerpt(
+            excerpt,
+            format,
+            pretty,
+            preserve_anchors,
+            color,
+            output_terminal,
+        ),
         QueryViewResult::Search(search) => match format {
+            QueryFormat::Markdown if output_terminal => Ok(mant_engine::render_search_markdown(
+                &terminal_search(search),
+            )),
             QueryFormat::Markdown => Ok(mant_engine::render_search_markdown(search)),
             QueryFormat::Text => Ok(render_terminal_search(search, color)),
             QueryFormat::Man => Err(Failure::usage(
@@ -389,6 +425,7 @@ pub(super) fn render_scope_query_result(
     pretty: bool,
     preserve_anchors: bool,
     color: bool,
+    output_terminal: bool,
 ) -> Result<String, Failure> {
     if format == QueryFormat::Json {
         return render_json(response, pretty);
@@ -407,13 +444,22 @@ pub(super) fn render_scope_query_result(
                 if index > 0 {
                     output.push_str("\n\n");
                 }
-                write_scope_heading(&mut output, &found.address.catalog_path(), format, color);
+                write_scope_heading(
+                    &mut output,
+                    &found.address.catalog_path(),
+                    format,
+                    color,
+                    output_terminal,
+                );
                 output.push('\n');
                 let rendered = match format {
-                    QueryFormat::Markdown => mant_engine::render_excerpt_markdown_with_options(
-                        &found.excerpt,
-                        mant_engine::MarkdownOptions { preserve_anchors },
-                    ),
+                    QueryFormat::Markdown => {
+                        let excerpt = output_terminal.then(|| terminal_excerpt(&found.excerpt));
+                        mant_engine::render_excerpt_markdown_with_options(
+                            excerpt.as_ref().unwrap_or(&found.excerpt),
+                            mant_engine::MarkdownOptions { preserve_anchors },
+                        )
+                    }
                     QueryFormat::Text => render_terminal_excerpt(&found.excerpt, color),
                     QueryFormat::Json | QueryFormat::Man => unreachable!(),
                 };
@@ -423,9 +469,19 @@ pub(super) fn render_scope_query_result(
                 if !output.is_empty() {
                     output.push_str("\n\n");
                 }
-                write_scope_heading(&mut output, &failure.address.catalog_path(), format, color);
+                write_scope_heading(
+                    &mut output,
+                    &failure.address.catalog_path(),
+                    format,
+                    color,
+                    output_terminal,
+                );
                 output.push('\n');
-                output.push_str(&sanitize_terminal_text(&failure.reason));
+                if format == QueryFormat::Text || output_terminal {
+                    output.push_str(&sanitize_terminal_text(&failure.reason));
+                } else {
+                    output.push_str(&failure.reason);
+                }
             }
         }
         ScopeQueryResult::Search { search } => {
@@ -433,10 +489,21 @@ pub(super) fn render_scope_query_result(
                 if index > 0 {
                     output.push_str("\n\n");
                 }
-                write_scope_heading(&mut output, &found.address.catalog_path(), format, color);
+                write_scope_heading(
+                    &mut output,
+                    &found.address.catalog_path(),
+                    format,
+                    color,
+                    output_terminal,
+                );
                 output.push('\n');
                 let rendered = match format {
-                    QueryFormat::Markdown => mant_engine::render_search_markdown(&found.search),
+                    QueryFormat::Markdown => {
+                        let search = output_terminal.then(|| terminal_search(&found.search));
+                        mant_engine::render_search_markdown(
+                            search.as_ref().unwrap_or(&found.search),
+                        )
+                    }
                     QueryFormat::Text => render_terminal_search(&found.search, color),
                     QueryFormat::Json | QueryFormat::Man => unreachable!(),
                 };
@@ -447,8 +514,18 @@ pub(super) fn render_scope_query_result(
     Ok(output)
 }
 
-fn write_scope_heading(output: &mut String, address: &str, format: QueryFormat, color: bool) {
-    let address = sanitize_terminal_text(address);
+fn write_scope_heading(
+    output: &mut String,
+    address: &str,
+    format: QueryFormat,
+    color: bool,
+    output_terminal: bool,
+) {
+    let address = if format == QueryFormat::Text || output_terminal {
+        sanitize_terminal_text(address)
+    } else {
+        std::borrow::Cow::Borrowed(address)
+    };
     match format {
         QueryFormat::Markdown => {
             output.push_str("## ");
@@ -469,12 +546,16 @@ fn render_excerpt(
     pretty: bool,
     preserve_anchors: bool,
     color: bool,
+    output_terminal: bool,
 ) -> Result<String, Failure> {
     match format {
-        QueryFormat::Markdown => Ok(mant_engine::render_excerpt_markdown_with_options(
-            excerpt,
-            mant_engine::MarkdownOptions { preserve_anchors },
-        )),
+        QueryFormat::Markdown => {
+            let terminal_copy = output_terminal.then(|| terminal_excerpt(excerpt));
+            Ok(mant_engine::render_excerpt_markdown_with_options(
+                terminal_copy.as_ref().unwrap_or(excerpt),
+                mant_engine::MarkdownOptions { preserve_anchors },
+            ))
+        }
         QueryFormat::Text => Ok(render_terminal_excerpt(excerpt, color)),
         QueryFormat::Man => Err(Failure::usage(
             "--format man applies only to full documents",
@@ -490,12 +571,16 @@ fn render_full_query(
     format: QueryFormat,
     pretty: bool,
     preserve_anchors: bool,
+    output_terminal: bool,
 ) -> Result<String, Failure> {
     match format {
-        QueryFormat::Markdown => Ok(mant_engine::render_markdown_with_options(
-            query,
-            mant_engine::MarkdownOptions { preserve_anchors },
-        )),
+        QueryFormat::Markdown => {
+            let terminal_copy = output_terminal.then(|| terminal_content(query));
+            Ok(mant_engine::render_markdown_with_options(
+                terminal_copy.as_ref().unwrap_or(query),
+                mant_engine::MarkdownOptions { preserve_anchors },
+            ))
+        }
         QueryFormat::Text => {
             let query = terminal_content(query);
             Ok(mant_engine::render_query_text(&query))
@@ -567,9 +652,9 @@ The selected color is visible in terminal output.
         ] {
             let query = query_markdown_text(PAGE, None).expect("Markdown query");
             let result = project_query_view(query, &view).expect("query projection");
-            let plain = render_query_result(&result, QueryFormat::Text, true, false, false)
+            let plain = render_query_result(&result, QueryFormat::Text, true, false, false, false)
                 .expect("plain terminal text");
-            let colored = render_query_result(&result, QueryFormat::Text, true, false, true)
+            let colored = render_query_result(&result, QueryFormat::Text, true, false, true, true)
                 .expect("colored terminal text");
             assert!(colored.contains("\x1b["));
             assert_eq!(strip_ansi(&colored), plain);
@@ -587,7 +672,7 @@ The selected color is visible in terminal output.
         )
         .expect("explanation");
         for format in [QueryFormat::Markdown, QueryFormat::Json] {
-            let rendered = render_query_result(&result, format, true, false, true)
+            let rendered = render_query_result(&result, format, true, false, true, false)
                 .expect("deterministic output");
             assert!(!rendered.contains("\x1b["));
         }
@@ -620,11 +705,50 @@ The selected color is visible in terminal output.
             let query = query_markdown_text(PAGE, Some(source_path.clone()))
                 .expect("Markdown query with hostile label");
             let result = project_query_view(query, &view).expect("query projection");
-            let rendered = render_query_result(&result, QueryFormat::Text, true, false, false)
-                .expect("plain terminal text");
+            let rendered =
+                render_query_result(&result, QueryFormat::Text, true, false, false, true)
+                    .expect("plain terminal text");
 
             assert!(!rendered.contains('\u{1b}'));
             assert!(rendered.contains("ev�[31mil.md"));
+        }
+    }
+
+    #[test]
+    fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() {
+        let source_path = "ris\u{1b}c.md".to_owned();
+        for view in [
+            QueryView::Full {},
+            QueryView::Outline {
+                detail: OutlineDetail::Entries,
+            },
+            QueryView::Explain {
+                entry: "--color".to_owned(),
+            },
+            QueryView::Search {
+                pattern: "color".to_owned(),
+                syntax: mant_protocol::SearchSyntax::Literal,
+                case: mant_protocol::SearchCase::Insensitive,
+                scope: mant_protocol::SearchScope::Visible,
+                word: false,
+                context_lines: 1,
+                limit: 100,
+                offset: 0,
+            },
+        ] {
+            let query = query_markdown_text(PAGE, Some(source_path.clone()))
+                .expect("Markdown query with hostile label");
+            let result = project_query_view(query, &view).expect("query projection");
+            let redirected =
+                render_query_result(&result, QueryFormat::Markdown, true, false, false, false)
+                    .expect("redirected Markdown");
+            let terminal =
+                render_query_result(&result, QueryFormat::Markdown, true, false, false, true)
+                    .expect("terminal Markdown");
+
+            assert!(redirected.contains('\u{1b}'));
+            assert!(!terminal.contains('\u{1b}'));
+            assert!(terminal.contains("ris�c.md"));
         }
     }
 

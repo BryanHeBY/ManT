@@ -249,6 +249,7 @@ pub async fn run_process(arguments: &[String]) -> u8 {
         &mut diagnostics,
         &host,
         true,
+        terminal.output,
     )
 }
 
@@ -277,7 +278,7 @@ fn run_paged_catalog(
         Command::Catalog { grouped: false, .. } => "mant --find",
         _ => unreachable!("pager accepts only catalog commands"),
     };
-    let rendered = match execute(command, &mut io::empty(), host) {
+    let rendered = match execute(command, &mut io::empty(), host, false) {
         Ok(rendered) => rendered,
         Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
@@ -368,7 +369,15 @@ fn run_with_host(
         Err(error) => return report_argument_error(&error, diagnostics),
     };
 
-    run_command(command, input, output, diagnostics, host, diagnostics_color)
+    run_command(
+        command,
+        input,
+        output,
+        diagnostics,
+        host,
+        diagnostics_color,
+        false,
+    )
 }
 
 fn run_command(
@@ -378,6 +387,7 @@ fn run_command(
     diagnostics: &mut dyn Write,
     host: &dyn CliHost,
     diagnostics_color: bool,
+    output_terminal: bool,
 ) -> u8 {
     if matches!(command, Command::Mcp) {
         return report_failure(
@@ -449,7 +459,7 @@ fn run_command(
             };
             (rendered, status)
         }
-        command => match execute(command, input, host) {
+        command => match execute(command, input, host, output_terminal) {
             Ok(rendered) => (rendered, 0),
             Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
         },
@@ -462,7 +472,12 @@ fn run_command(
     }
 }
 
-fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result<String, Failure> {
+fn execute(
+    command: Command,
+    input: &mut dyn Read,
+    host: &dyn CliHost,
+    output_terminal: bool,
+) -> Result<String, Failure> {
     match command {
         Command::Help(help) => Ok(help),
         Command::ProtocolVersion { pretty } => render_json(
@@ -558,6 +573,7 @@ fn execute(command: Command, input: &mut dyn Read, host: &dyn CliHost) -> Result
             },
             input,
             host,
+            output_terminal,
         ),
     }
 }
@@ -567,6 +583,7 @@ fn execute_query(
     command: QueryExecution,
     input: &mut dyn Read,
     host: &dyn CliHost,
+    output_terminal: bool,
 ) -> Result<String, Failure> {
     let QueryExecution {
         source,
@@ -585,6 +602,7 @@ fn execute_query(
                 policy,
                 preserve_anchors,
                 host,
+                output_terminal,
             );
         }
         QuerySource::StdinJson => match read_native_request(input)? {
@@ -596,6 +614,7 @@ fn execute_query(
                     pretty,
                     preserve_anchors,
                     host,
+                    output_terminal,
                 );
             }
         },
@@ -666,6 +685,7 @@ fn execute_query(
         pretty,
         preserve_anchors,
         color == ColorMode::Always,
+        output_terminal,
     )
 }
 
@@ -677,6 +697,7 @@ fn execute_scope_arguments(
     policy: QueryPolicy,
     preserve_anchors: bool,
     host: &dyn CliHost,
+    output_terminal: bool,
 ) -> Result<String, Failure> {
     let Some(view) = view else {
         return Err(Failure::usage(
@@ -693,7 +714,14 @@ fn execute_scope_arguments(
         scope,
         view,
     };
-    execute_scope_request(&request, presentation, pretty, preserve_anchors, host)
+    execute_scope_request(
+        &request,
+        presentation,
+        pretty,
+        preserve_anchors,
+        host,
+        output_terminal,
+    )
 }
 
 fn execute_scope_request(
@@ -702,6 +730,7 @@ fn execute_scope_request(
     pretty: bool,
     preserve_anchors: bool,
     host: &dyn CliHost,
+    output_terminal: bool,
 ) -> Result<String, Failure> {
     let response = host.query_scope(request)?;
     let (format, color) = match presentation {
@@ -719,6 +748,7 @@ fn execute_scope_request(
         pretty,
         preserve_anchors,
         color == ColorMode::Always,
+        output_terminal,
     )
 }
 

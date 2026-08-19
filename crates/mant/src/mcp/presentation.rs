@@ -59,6 +59,7 @@ pub(super) fn render_scope_explain(
         false,
         false,
         false,
+        false,
     )
     .map_err(crate::error::Failure::into_message)?;
     if matches.is_empty() && failures.is_empty() {
@@ -89,6 +90,7 @@ pub(super) fn render_scope_search(
     let mut text = crate::presentation::render_scope_query_result(
         response,
         QueryFormat::Text,
+        false,
         false,
         false,
         false,

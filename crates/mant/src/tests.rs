@@ -21,7 +21,8 @@ use super::{
     CLI_PROTOCOL_VERSION, CatalogQuery, CliHost, DocumentAddress, DocumentCatalog, Failure,
     MarkdownOrigin, QueryPolicy, TerminalCapabilities, TerminalKind,
     arguments::{self, ColorMode, Command, QueryFormat, QueryPresentation},
-    request_for_address, resolve_process_presentation, run_with_host, should_page_catalog,
+    request_for_address, resolve_process_presentation, run_command, run_with_host,
+    should_page_catalog,
 };
 
 struct FakeHost {
@@ -438,6 +439,53 @@ fn invoke(arguments: &[&str], input: &[u8], host: &FakeHost) -> (u8, String, Str
         String::from_utf8(output).expect("UTF-8 output"),
         String::from_utf8(diagnostics).expect("UTF-8 diagnostics"),
     )
+}
+
+fn invoke_with_terminal_output(
+    arguments: &[&str],
+    input: &[u8],
+    host: &FakeHost,
+) -> (u8, String, String) {
+    let arguments = arguments
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let command = arguments::parse(&arguments).expect("valid terminal command");
+    let mut input = input;
+    let mut output = Vec::new();
+    let mut diagnostics = Vec::new();
+    let status = run_command(
+        command,
+        &mut input,
+        &mut output,
+        &mut diagnostics,
+        host,
+        false,
+        true,
+    );
+    (
+        status,
+        String::from_utf8(output).expect("UTF-8 output"),
+        String::from_utf8(diagnostics).expect("UTF-8 diagnostics"),
+    )
+}
+
+#[test]
+fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exact() {
+    let host = FakeHost::with_semantic_markdown();
+    let path = "ris\u{1b}c.md";
+    let arguments = ["--input", path, "--format", "markdown"];
+
+    let (status, redirected, diagnostics) = invoke(&arguments, b"", &host);
+    assert_eq!(status, 0);
+    assert!(diagnostics.is_empty());
+    assert!(redirected.contains('\u{1b}'));
+
+    let (status, terminal, diagnostics) = invoke_with_terminal_output(&arguments, b"", &host);
+    assert_eq!(status, 0);
+    assert!(diagnostics.is_empty());
+    assert!(!terminal.contains('\u{1b}'));
+    assert!(terminal.contains("ris�c.md"));
 }
 
 fn manual() -> Document {
