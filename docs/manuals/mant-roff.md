@@ -48,8 +48,8 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `BI`, `BR`, `IB`, `IR`, `RB`, `RI` | Alternating inline font runs without inserted spaces |
 | `EX`, `EE` | Preformatted no-fill region through libmandoc's fill state |
 | `SY`, `YS` | Synopsis head plus body; inside `EX` the source lines remain one preformatted block |
-| `UR`, `UE` | External link block |
-| `MT`, `ME` | Email link block |
+| `UR`, `UE` | Inline external link; a label and its target both remain visible without splitting the surrounding sentence |
+| `MT`, `ME` | Inline email link; a label and its address both remain visible without splitting the surrounding sentence |
 | `MR` | Typed manual-page reference |
 
 `br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
@@ -192,11 +192,11 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\c` at the end of an input line | Suppress the implicit space or line break before the next input line |
 | `\h'N'` with a positive literal relative distance | Preserve at least one visible word boundary; exact horizontal geometry is not reproduced |
 | `\p` | Inline line break |
-| `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned libmandoc catalog; an unknown name remains visible in escaped source form |
+| `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned libmandoc catalog; bracketed `uXXXX` Unicode names and `_`-joined scalar sequences are decoded, while an unknown name remains visible in escaped source form |
 | `\E` | Copy-mode-safe nested escape |
 | `\X'tty: link URI'` | External terminal link start; `\X'tty: link'` ends it |
 
-Named characters resolve through the complete character catalog compiled from the pinned libmandoc source. ManT deliberately applies copy-friendly compatibility folds to common quotes and symbols; other catalog entries use their declared Unicode scalar. A name absent from that catalog is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
+Named characters resolve through the complete character catalog compiled from the pinned libmandoc source. ManT deliberately applies copy-friendly compatibility folds to common quotes and symbols; other catalog entries use their declared Unicode scalar. Groff-style bracketed Unicode names such as `\[u2192]` and composite names such as `\[u0061_0301]` are decoded independently of that catalog. A name absent from both forms is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
 
 Font names map as follows:
 

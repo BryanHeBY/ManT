@@ -659,8 +659,10 @@ explanations, and search results use semantic ANSI roles without changing their
 visible text. `auto` emits styling only to a capable terminal and respects
 `NO_COLOR`, `CLICOLOR`, and `TERM=dumb`; `always` and `never` explicitly
 override automatic detection. JSON, Markdown, man-format, MCP, and native
-protocol results remain deterministic data rather than decorated terminal
-output.
+protocol results never gain ANSI presentation styling. When Markdown is written
+directly to a terminal, control characters in dynamic document identities are
+masked so a path or catalog label cannot issue terminal commands. Redirected
+Markdown preserves those data bytes exactly.
 
 ## Diagnostics
 

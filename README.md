@@ -114,6 +114,8 @@ Human-facing help, diagnostics, and tldr output use terminal-aware
 colour. `--color auto|always|never` controls the shared policy; automatic mode
 honours terminal capabilities, `NO_COLOR`, and `TERM=dumb`. Structured formats
 and redirected automatic output never gain presentation escape sequences.
+Terminal-bound Markdown additionally masks control characters in dynamic
+document identities; redirected Markdown preserves the underlying data exactly.
 
 ## Structured discovery and queries
 
