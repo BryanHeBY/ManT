@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import bz2
+import csv
 import gzip
 import hashlib
 import json
@@ -28,21 +29,33 @@ from typing import Iterable, Sequence
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_MANT = ROOT / "target/debug/mant"
+AUDIT_DATABASE_FIELDS = [
+    "corpus",
+    "path",
+    "section",
+    "source_sha256",
+    "scan_status",
+    "review_status",
+    "note",
+]
 
 MANUAL_SUFFIX = re.compile(
-    r"\.(?:[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$"
+    r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$"
 )
 ANSI = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+:/-]{2,}")
-URL_WRAP = re.compile(r"(?<=/)[ \t]*\n[ \t]*")
+# Only join a wrapped URL/path component after a non-slash component. A bare
+# slash at the end of an unrelated token (for example Perl's `tr//` followed
+# by a new sentence) must not consume the semantic line boundary.
+URL_WRAP = re.compile(
+    r"(https?://[^\s\n]*/)[ \t]*\n[ \t]*(?=[A-Za-z0-9_.~-])"
+)
 DEHYPHENATE = re.compile(r"-[ \t]*\n[ \t]*")
 BORDERS = re.compile(r"[\u2500-\u257f\u2022\u00b7]")
 UNICODE_ESCAPE = re.compile(
     r"\\\[u[0-9A-Fa-f]{4,6}(?:_[0-9A-Fa-f]{4,6})*\]"
 )
-GLUED_MARKER = re.compile(
-    r"^[ \t]*((?:\u2022|\d{1,3}[.)])[A-Za-z(\"'])", re.MULTILINE
-)
+GLUED_MARKER = re.compile(r"^[ \t]*\u2022[A-Za-z(\"']", re.MULTILINE)
 INTERNAL_MARKER = re.compile("[\u001d-\u001f]")
 
 TRANSLATION = str.maketrans(
@@ -85,6 +98,17 @@ class AuditSummary:
     skipped: int = 0
 
 
+@dataclass(frozen=True)
+class AuditRecord:
+    corpus: str
+    path: str
+    section: str
+    digest: str
+    scan_status: str
+    review_status: str
+    note: str
+
+
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -116,11 +140,24 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         default="man",
         help="man(1)-compatible reference command (default: man)",
     )
-    parser.add_argument(
+    sampling = parser.add_mutually_exclusive_group()
+    sampling.add_argument(
         "--max-pages",
         type=non_negative_integer,
         default=0,
         help="stable sample size; zero audits every discovered page",
+    )
+    sampling.add_argument(
+        "--max-pages-per-section",
+        type=positive_integer,
+        default=0,
+        help="stable sample size for each discovered manual section",
+    )
+    parser.add_argument(
+        "--man-section",
+        action="append",
+        metavar="SECTION",
+        help="audit only an exact manual section; may be repeated",
     )
     parser.add_argument(
         "--seed",
@@ -140,6 +177,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="maximum token and phrase candidates printed per page",
     )
     parser.add_argument(
+        "--findings-only",
+        action="store_true",
+        help="print only REVIEW and HARD pages while retaining the full summary and JSON",
+    )
+    parser.add_argument(
         "--timeout",
         type=positive_integer,
         default=30,
@@ -150,6 +192,30 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         type=Path,
         metavar="FILE",
         help="also write the complete machine-readable report",
+    )
+    parser.add_argument(
+        "--audit-db",
+        type=Path,
+        metavar="FILE",
+        help=(
+            "skip unchanged pages already listed in the CSV database and merge "
+            "this run into it"
+        ),
+    )
+    parser.add_argument(
+        "--corpus",
+        metavar="NAME",
+        help="stable source name stored in --audit-db (default: fixtures or local-manpath)",
+    )
+    parser.add_argument(
+        "--recheck-recorded",
+        action="store_true",
+        help="audit pages already present in --audit-db instead of skipping them",
+    )
+    parser.add_argument(
+        "--recorded-only",
+        action="store_true",
+        help="audit only unchanged pages already present in --audit-db",
     )
     parser.add_argument(
         "--self-check",
@@ -194,6 +260,27 @@ def stable_sample(pages: Sequence[Path], maximum: int, seed: str) -> list[Path]:
         ).digest(),
     )
     return sorted(ranked[:maximum], key=lambda path: path.as_posix())
+
+
+def manual_section(path: Path) -> str | None:
+    match = MANUAL_SUFFIX.search(path.name)
+    return match.group("section") if match is not None else None
+
+
+def stable_sample_by_section(
+    pages: Sequence[Path], maximum: int, seed: str
+) -> list[Path]:
+    grouped: dict[str, list[Path]] = {}
+    for path in pages:
+        section = manual_section(path)
+        if section is not None:
+            grouped.setdefault(section, []).append(path)
+    sampled = [
+        path
+        for section in sorted(grouped)
+        for path in stable_sample(grouped[section], maximum, f"{seed}\0{section}")
+    ]
+    return sorted(sampled, key=lambda path: path.as_posix())
 
 
 def run_renderer(
@@ -255,7 +342,7 @@ def strip_reference_chrome(value: str) -> str:
 
 def normalized_visible_text(value: str) -> str:
     value = strip_terminal_formatting(value).translate(TRANSLATION)
-    value = URL_WRAP.sub("", value)
+    value = URL_WRAP.sub(r"\1", value)
     value = DEHYPHENATE.sub("", value)
     value = BORDERS.sub(" ", value)
     return " ".join(value.split())
@@ -267,7 +354,7 @@ def tokens(value: str) -> list[str]:
 
 def token_lines(value: str) -> list[list[str]]:
     value = strip_terminal_formatting(value).translate(TRANSLATION)
-    value = URL_WRAP.sub("", value)
+    value = URL_WRAP.sub(r"\1", value)
     value = DEHYPHENATE.sub("", value)
     value = BORDERS.sub(" ", value)
     return [TOKEN.findall(line) for line in value.splitlines()]
@@ -289,9 +376,12 @@ def reference_font_escape_key(value: str) -> str | None:
 
 
 def reference_glued_words(value: str, mine_keys: set[str]) -> bool:
-    """Recognize reference-renderer joins at a lower-to-uppercase boundary."""
-    parts = re.split(r"(?<=[a-z])(?=[A-Z])", value)
-    return len(parts) > 1 and all(token_key(part) in mine_keys for part in parts)
+    """Recognize two ManT tokens glued together by reference layout."""
+    return any(
+        token_key(value[:offset]) in mine_keys
+        and token_key(value[offset:]) in mine_keys
+        for offset in range(1, len(value))
+    )
 
 
 def missing_token_candidates(reference: Sequence[str], mine: Sequence[str]) -> list[str]:
@@ -367,7 +457,10 @@ def fidelity_signatures(value: str) -> tuple[list[str], list[str]]:
     hard: list[str] = []
     review: list[str] = []
     if UNICODE_ESCAPE.search(value):
-        hard.append("bracketed Unicode escape leaked")
+        # Manuals about roff deliberately print Unicode escape examples. A
+        # visible escape is evidence to inspect, not proof that the parser
+        # leaked control syntax.
+        review.append("bracketed Unicode escape is visible; verify documented syntax")
     if INTERNAL_MARKER.search(value):
         hard.append("internal libmandoc marker leaked")
     if GLUED_MARKER.search(value):
@@ -399,6 +492,84 @@ def source_bytes(path: Path) -> bytes | None:
         return None
 
 
+def source_digest(path: Path) -> str | None:
+    source = source_bytes(path)
+    return hashlib.sha256(source).hexdigest() if source is not None else None
+
+
+def read_audit_database(
+    path: Path,
+) -> dict[tuple[str, str, str], AuditRecord]:
+    if not path.exists():
+        return {}
+    entries: dict[tuple[str, str, str], AuditRecord] = {}
+    with path.open(encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != AUDIT_DATABASE_FIELDS:
+            raise ValueError(
+                f"invalid audit database header in {path}; expected "
+                f"{','.join(AUDIT_DATABASE_FIELDS)}"
+            )
+        for number, row in enumerate(reader, 2):
+            status = row["scan_status"]
+            review_status = row["review_status"]
+            digest = row["source_sha256"]
+            if status not in {"clean", "review", "hard-failure", "skipped"}:
+                raise ValueError(f"invalid scan status at {path}:{number}: {status}")
+            if review_status not in {
+                "not-required",
+                "pending",
+                "false-positive",
+                "confirmed-open",
+                "confirmed-fixed",
+            }:
+                raise ValueError(
+                    f"invalid review status at {path}:{number}: {review_status}"
+                )
+            if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError(f"invalid source digest at {path}:{number}")
+            entry = AuditRecord(
+                corpus=row["corpus"],
+                path=row["path"],
+                section=row["section"],
+                digest=digest,
+                scan_status=status,
+                review_status=review_status,
+                note=row["note"],
+            )
+            entries[(entry.corpus, entry.path, entry.digest)] = entry
+    return entries
+
+
+def write_audit_database(
+    path: Path,
+    entries: Iterable[AuditRecord],
+) -> None:
+    rows = sorted(entries, key=lambda entry: (entry.corpus, entry.path, entry.digest))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    with temporary.open("w", encoding="utf-8", newline="") as destination:
+        writer = csv.DictWriter(
+            destination,
+            fieldnames=AUDIT_DATABASE_FIELDS,
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for entry in rows:
+            writer.writerow(
+                {
+                    "corpus": entry.corpus,
+                    "path": entry.path,
+                    "section": entry.section,
+                    "source_sha256": entry.digest,
+                    "scan_status": entry.scan_status,
+                    "review_status": entry.review_status,
+                    "note": entry.note,
+                }
+            )
+    temporary.replace(path)
+
+
 def redirect_only_stub(path: Path) -> bool:
     source = source_bytes(path)
     if source is None:
@@ -412,13 +583,51 @@ def redirect_only_stub(path: Path) -> bool:
     return len(lines) == 1 and lines[0].startswith(".so ")
 
 
+def contains_embedded_include(path: Path) -> bool:
+    """Return whether a non-redirect page asks roff to include another file.
+
+    Standalone input intentionally has no trusted manual hierarchy and rejects
+    embedded .so requests. The local differential audit therefore records
+    these pages as outside its input contract rather than reporting a parser
+    failure.
+    """
+    source = source_bytes(path)
+    if source is None:
+        return False
+    return any(
+        re.match(rb"^[.']so(?:[ \t]|$)", line) is not None
+        for line in source.splitlines()
+    )
+
+
 def relative_label(path: Path, roots: Sequence[Path]) -> str:
+    common = Path(os.path.commonpath(roots)) if len(roots) > 1 else None
     for root in roots:
         try:
-            return f"{root.name}/{path.relative_to(root).as_posix()}"
+            relative = path.relative_to(root)
         except ValueError:
             continue
+        prefix = root.relative_to(common) if common is not None else Path(root.name)
+        return (prefix / relative).as_posix()
     return path.as_posix()
+
+
+def merged_review_status(
+    previous: AuditRecord | None,
+    scan_status: str,
+) -> str:
+    if previous is None:
+        return (
+            "pending"
+            if scan_status in {"review", "hard-failure"}
+            else "not-required"
+        )
+    if (
+        previous.review_status == "not-required"
+        and scan_status in {"review", "hard-failure"}
+    ):
+        return "pending"
+    return previous.review_status
 
 
 def audit_page(
@@ -431,6 +640,12 @@ def audit_page(
 ) -> Finding:
     if redirect_only_stub(path):
         return Finding(path=label, status="skipped", detail="redirect-only .so page")
+    if contains_embedded_include(path):
+        return Finding(
+            path=label,
+            status="skipped",
+            detail="embedded .so include requires an indexed manual hierarchy",
+        )
 
     environment = reference_environment()
     mant_status, mant_output, mant_error = run_renderer(
@@ -557,12 +772,22 @@ def write_json_report(
 
 def self_check() -> None:
     assert token_key("line-break") == token_key("linebreak")
+    assert manual_section(Path("git.1.gz")) == "1"
+    assert manual_section(Path("SSL_read.3ssl")) == "3ssl"
+    assert relative_label(
+        Path("/opt/tools/share/man/man1/demo.1"),
+        [Path("/opt/tools/man"), Path("/opt/tools/share/man")],
+    ) == "share/man/man1/demo.1"
+    assert source_digest(Path(__file__)) is not None
     assert token_key("alloca.") == token_key("alloca")
     assert token_key("docs.example/path") != token_key("docs.example")
     assert tokens("one line-\nbreak here") == ["one", "linebreak", "here"]
     assert missing_token_candidates(["alpha", "missing"], ["alpha"]) == ["missing"]
     assert missing_token_candidates(["fBpackage.json"], ["package.json"]) == []
     assert missing_token_candidates(["defsReport"], ["defs", "Report"]) == []
+    assert missing_token_candidates(["PATHList"], ["PATH", "List"]) == []
+    assert missing_token_candidates(["CPANCPAN"], ["CPAN"]) == []
+    assert tokens("tr//\nA new feature") == ["tr//", "new", "feature"]
     assert broken_phrase_candidates(
         [["one", "two", "three", "four"]],
         ["one", "two", "inserted", "three", "four"],
@@ -574,8 +799,15 @@ def self_check() -> None:
         4,
     ) == ["one two three four"]
     hard, review = fidelity_signatures(r"text \[u2192]")
-    assert hard == ["bracketed Unicode escape leaked"]
-    assert not review
+    assert not hard
+    assert review == [
+        "bracketed Unicode escape is visible; verify documented syntax"
+    ]
+    clean = AuditRecord(
+        "host", "man/demo.1", "1", "0" * 64, "clean", "not-required", ""
+    )
+    assert merged_review_status(None, "review") == "pending"
+    assert merged_review_status(clean, "hard-failure") == "pending"
 
 
 def validate_tools(mant: Path, reference: str) -> None:
@@ -593,14 +825,50 @@ def main(argv: Sequence[str]) -> int:
         return 0
 
     try:
+        if arguments.recorded_only and arguments.audit_db is None:
+            raise ValueError("--recorded-only requires --audit-db")
+        if arguments.recorded_only and arguments.recheck_recorded:
+            raise ValueError("--recorded-only and --recheck-recorded are mutually exclusive")
         validate_tools(arguments.mant, arguments.reference)
         roots = [path.resolve() for path in arguments.manpath] if arguments.manpath else [FIXTURE_ROOT]
-        pages = stable_sample(
-            discover_pages(roots), arguments.max_pages, arguments.seed
+        pages = discover_pages(roots)
+        if arguments.man_section:
+            selected_sections = set(arguments.man_section)
+            pages = [path for path in pages if manual_section(path) in selected_sections]
+        corpus = arguments.corpus or (
+            "fixtures" if not arguments.manpath else "local-manpath"
+        )
+        database = (
+            read_audit_database(arguments.audit_db) if arguments.audit_db else {}
+        )
+        page_records = {
+            path: (relative_label(path, roots), source_digest(path)) for path in pages
+        }
+        recorded = {
+            path
+            for path, (label, digest) in page_records.items()
+            if digest is not None and (corpus, label, digest) in database
+        }
+        if arguments.recorded_only:
+            pages = [path for path in pages if path in recorded]
+        elif not arguments.recheck_recorded:
+            pages = [path for path in pages if path not in recorded]
+        pages = (
+            stable_sample_by_section(
+                pages, arguments.max_pages_per_section, arguments.seed
+            )
+            if arguments.max_pages_per_section
+            else stable_sample(pages, arguments.max_pages, arguments.seed)
         )
     except ValueError as error:
         print(f"audit-roff-fidelity: {error}", file=sys.stderr)
         return 2
+    if not pages and arguments.audit_db and recorded:
+        print(
+            "audit-roff-fidelity: no new or changed manual pages; "
+            f"{len(recorded)} unchanged pages are already recorded"
+        )
+        return 0
     if not pages:
         print("audit-roff-fidelity: no manual pages discovered", file=sys.stderr)
         return 2
@@ -610,15 +878,23 @@ def main(argv: Sequence[str]) -> int:
     print(f"  reference: {arguments.reference}")
     print(f"  roots:     {', '.join(str(root) for root in roots)}")
     print(f"  pages:     {len(pages)}")
+    if arguments.audit_db:
+        print(
+            f"  audit db:  {arguments.audit_db} "
+            f"({len(recorded)} unchanged pages skipped from {corpus})"
+        )
+    if arguments.man_section:
+        print(f"  sections:  {', '.join(arguments.man_section)}")
     print("  contract:  visible tokens and token continuity; layout is intentionally ignored")
     print()
 
     findings: list[Finding] = []
     summary = AuditSummary()
     for path in pages:
+        label, digest = page_records[path]
         finding = audit_page(
             path,
-            relative_label(path, roots),
+            label,
             arguments.mant,
             arguments.reference,
             arguments.timeout,
@@ -626,7 +902,20 @@ def main(argv: Sequence[str]) -> int:
         )
         findings.append(finding)
         update_summary(summary, finding)
-        print_finding(finding, arguments.show)
+        if not arguments.findings_only or finding.status in {"review", "hard-failure"}:
+            print_finding(finding, arguments.show)
+        if arguments.audit_db and digest is not None:
+            key = (corpus, label, digest)
+            previous = database.get(key)
+            database[key] = AuditRecord(
+                corpus=corpus,
+                path=label,
+                section=manual_section(path) or "",
+                digest=digest,
+                scan_status=finding.status,
+                review_status=merged_review_status(previous, finding.status),
+                note=previous.note if previous is not None else "",
+            )
 
     print()
     print(
@@ -645,6 +934,9 @@ def main(argv: Sequence[str]) -> int:
             findings,
         )
         print(f"report: {arguments.json}")
+    if arguments.audit_db:
+        write_audit_database(arguments.audit_db, database.values())
+        print(f"audit database: {arguments.audit_db}")
     return 1 if summary.hard_failures else 0
 
 

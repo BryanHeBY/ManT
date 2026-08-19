@@ -264,8 +264,15 @@ The existing real-fixture catalogue also feeds an optional differential audit ag
 cargo build --package mant
 python3 scripts/audit-roff-fidelity.py --fixtures --json /tmp/mant-fidelity.json
 python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages 100
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages-per-section 25 --findings-only
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages-per-section 25 \
+  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
+python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --recorded-only \
+  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
 ```
 
-The audit compares normalized visible tokens and contiguous token phrases. It deliberately ignores line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable sampling uses the path and `--seed`, so repeating a bounded local scan selects the same pages.
+The audit compares normalized visible tokens and contiguous token phrases. It deliberately ignores line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable sampling uses the path and `--seed`, so repeating a bounded local scan selects the same pages. Use `--max-pages-per-section` when broad coverage matters more than matching the host corpus distribution, and repeat `--man-section` to focus on selected exact section suffixes such as `1`, `3ssl`, or `8`.
+
+The optional CSV audit database makes successive local runs incremental. A page is skipped only when its corpus name, relative path, and decompressed-source SHA-256 all match a previous row; an upgraded page is therefore scanned again. Automated candidates enter as `review_status=pending`. After inspecting the source and both renderings, mark them `false-positive`, `confirmed-open`, or `confirmed-fixed` and explain the decision in `note`. `--recheck-recorded` deliberately ignores the skip index and samples the complete discovered corpus; `--recorded-only` instead re-runs exactly the unchanged pages already represented by that corpus in the CSV. For multiple roots, paths are relative to their common parent so same-named `man/` directories remain distinguishable. The CSV records corpus exploration; fixed fixtures and focused Rust tests, rather than the host database, remain the CI regression boundary.
 
 The full oracle is a local and release-time discovery tool, not a per-push CI dependency. Ordinary CI runs only its dependency-free self-check plus the focused Rust regressions derived from confirmed findings. When the audit exposes real semantic loss, add the smallest licensed page to the existing source catalogue, document its provenance, and encode the confirmed behavior in the corresponding `crates/mant-engine/tests/<source>/` module or a shared assertion. Do not add an allowlist merely to silence an unexplained candidate.
