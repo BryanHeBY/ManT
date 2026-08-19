@@ -10,7 +10,7 @@ use mant_ir::{
 };
 
 use super::{
-    LoweringContext, first_part_children,
+    LoweringContext, TableTextBlock, first_part_children,
     inline::{
         FilledBoundary, InlineBuilder, append_inline_node, is_enclosure_macro, lower_inline_nodes,
         lower_man_link, parse_roff_text, plain_text, terms_fit_inline, updated_spacing,
@@ -162,6 +162,7 @@ fn lower_blocks(
     paragraph_distance: &mut u16,
 ) -> Vec<Block> {
     let mut state = BlockState::new(indent_columns);
+    let (table_embeddings, embedded_nodes) = table_embeddings(nodes, context);
     // man(7) starts each section or relative-indent scope with a seven-column
     // hanging margin. Explicit `.TP`/`.IP` widths update it for following
     // tagged paragraphs, exactly as mandoc's terminal renderer does.
@@ -169,7 +170,10 @@ fn lower_blocks(
     let mut split_authors = false;
     let mut spacing_enabled = true;
 
-    for node in nodes {
+    for (index, node) in nodes.iter().enumerate() {
+        if embedded_nodes[index] {
+            continue;
+        }
         if consume_block_control(
             node,
             context,
@@ -260,10 +264,57 @@ fn lower_blocks(
                 paragraph_distance,
                 &mut state.output,
                 &mut definition_hanging_width,
+                table_embeddings[index].as_ref(),
             );
         }
     }
     state.finish()
+}
+
+struct TableEmbedding<'a> {
+    blocks: Vec<TableTextBlock>,
+    nodes: Vec<&'a Node>,
+}
+
+fn table_embeddings<'a>(
+    nodes: &'a [Node],
+    context: &LoweringContext<'_>,
+) -> (Vec<Option<TableEmbedding<'a>>>, Vec<bool>) {
+    let mut embeddings = (0..nodes.len()).map(|_| None).collect::<Vec<_>>();
+    let mut consumed = vec![false; nodes.len()];
+    for (index, node) in nodes.iter().enumerate() {
+        if node.kind != NodeKind::Table {
+            continue;
+        }
+        let blocks = context.table_text_blocks(
+            node.line,
+            node.table_cells
+                .iter()
+                .filter(|cell| cell.text_block)
+                .count(),
+        );
+        let Some(last_line) = blocks.iter().map(|block| block.end_line).max() else {
+            continue;
+        };
+        let mut semantic_nodes = Vec::new();
+        for (candidate_index, candidate) in nodes.iter().enumerate().skip(index + 1) {
+            if candidate.line > last_line {
+                break;
+            }
+            if blocks
+                .iter()
+                .any(|block| block.contains_line(candidate.line))
+            {
+                consumed[candidate_index] = true;
+                semantic_nodes.push(candidate);
+            }
+        }
+        embeddings[index] = Some(TableEmbedding {
+            blocks,
+            nodes: semantic_nodes,
+        });
+    }
+    (embeddings, consumed)
 }
 
 /// Consume state-only roff requests before printable block lowering.
@@ -361,6 +412,7 @@ fn lower_structural_node(
     paragraph_distance: &mut u16,
     output: &mut Vec<Block>,
     definition_hanging_width: &mut usize,
+    table_embedding: Option<&TableEmbedding<'_>>,
 ) {
     match node.macro_name.as_deref() {
         Some("PP" | "P" | "LP" | "HP") => {
@@ -451,7 +503,7 @@ fn lower_structural_node(
         }
         Some("Fo") => lower_mdoc_function(output, node, context, indent_columns),
         _ if node.kind == NodeKind::Table => {
-            append_table_row(output, node, context, indent_columns);
+            append_table_row(output, node, context, indent_columns, table_embedding);
         }
         _ if node.kind == NodeKind::Equation => output.push(equation_block(node, indent_columns)),
         _ => lower_structural_fallback(output, node, context, indent_columns, paragraph_distance),
@@ -520,7 +572,11 @@ fn lower_mdoc_function(
 
 fn equation_block(node: &Node, indent_columns: u16) -> Block {
     Block::Equation {
-        value: node.equation.clone().unwrap_or_default(),
+        // Equation boxes carry the same named-character escapes as ordinary
+        // roff text, but they bypass inline-node lowering. Decode them here so
+        // values such as `\[*p]` and `\[mi]` cannot leak into every output
+        // projection.
+        value: visible_text(node.equation.as_deref().unwrap_or_default()),
         display: true,
         layout: layout(indent_columns),
         source: source_span(node),
@@ -718,44 +774,45 @@ fn append_table_row(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
+    embedding: Option<&TableEmbedding<'_>>,
 ) {
     if node.table_cells.is_empty() {
         return;
     }
-    let mut text_blocks = context
-        .table_text_blocks(
-            node.line,
-            node.table_cells
-                .iter()
-                .filter(|cell| cell.text_block)
-                .count(),
-        )
-        .into_iter();
+    let mut text_block_index = 0;
     let row = TableRow {
         cells: node
             .table_cells
             .iter()
-            .map(|cell| AstTableCell {
-                blocks: vec![Block::Paragraph {
-                    children: lower_table_cell(
-                        cell,
-                        node,
-                        context,
-                        cell.text_block
-                            .then(|| text_blocks.next())
-                            .flatten()
-                            .as_deref(),
-                    ),
-                    layout: LayoutHint::default(),
-                    source: source_span(node),
-                }],
-                column_span: cell.column_span,
-                row_span: cell.row_span,
-                alignment: Some(match cell.alignment {
-                    MandocTableAlignment::Left => AstTableAlignment::Left,
-                    MandocTableAlignment::Center => AstTableAlignment::Center,
-                    MandocTableAlignment::Right => AstTableAlignment::Right,
-                }),
+            .map(|cell| {
+                let text_block = if cell.text_block {
+                    let block =
+                        embedding.and_then(|embedding| embedding.blocks.get(text_block_index));
+                    text_block_index += 1;
+                    block
+                } else {
+                    None
+                };
+                AstTableCell {
+                    blocks: vec![Block::Paragraph {
+                        children: lower_table_cell(
+                            cell,
+                            node,
+                            context,
+                            text_block,
+                            embedding.map_or(&[], |embedding| embedding.nodes.as_slice()),
+                        ),
+                        layout: LayoutHint::default(),
+                        source: source_span(node),
+                    }],
+                    column_span: cell.column_span,
+                    row_span: cell.row_span,
+                    alignment: Some(match cell.alignment {
+                        MandocTableAlignment::Left => AstTableAlignment::Left,
+                        MandocTableAlignment::Center => AstTableAlignment::Center,
+                        MandocTableAlignment::Right => AstTableAlignment::Right,
+                    }),
+                }
             })
             .collect(),
     };
@@ -774,8 +831,22 @@ fn lower_table_cell(
     cell: &libmandoc_rs::TableCell,
     node: &Node,
     context: &LoweringContext<'_>,
-    text_block: Option<&str>,
+    text_block: Option<&TableTextBlock>,
+    semantic_nodes: &[&Node],
 ) -> Vec<Inline> {
+    if let Some(text_block) = text_block {
+        let semantic_nodes = semantic_nodes
+            .iter()
+            .copied()
+            .filter(|candidate| text_block.contains_line(candidate.line))
+            .collect::<Vec<_>>();
+        if cell.text.as_deref().is_none_or(str::is_empty) || !semantic_nodes.is_empty() {
+            let reconstructed = lower_table_text_block(text_block, &semantic_nodes, context);
+            if !reconstructed.is_empty() {
+                return reconstructed;
+            }
+        }
+    }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
         return parse_roff_text(cell.text.as_deref().unwrap_or_default());
     }
@@ -783,8 +854,13 @@ fn lower_table_cell(
         return Vec::new();
     }
 
-    let request =
-        text_block.and_then(|source| source.lines().map(str::trim).find(|line| !line.is_empty()));
+    let request = text_block.and_then(|block| {
+        block
+            .source
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+    });
     let name = request
         .and_then(|line| {
             line.strip_prefix(".Nm")
@@ -809,6 +885,66 @@ fn lower_table_cell(
 
     context.warn_unhandled_table_text_block(node);
     Vec::new()
+}
+
+fn lower_table_text_block(
+    block: &TableTextBlock,
+    semantic_nodes: &[&Node],
+    context: &LoweringContext<'_>,
+) -> Vec<Inline> {
+    let mut builder = InlineBuilder::new();
+    for (offset, source_line) in block.source.lines().enumerate() {
+        let line = block
+            .start_line
+            .saturating_add(u32::try_from(offset).unwrap_or(u32::MAX));
+        let nodes = semantic_nodes
+            .iter()
+            .copied()
+            .filter(|node| node.line == line)
+            .collect::<Vec<_>>();
+        if !nodes.is_empty() {
+            for node in nodes {
+                let lowered = if matches!(node.macro_name.as_deref(), Some("UR" | "MT")) {
+                    lower_man_link(node, context.default_name)
+                } else {
+                    lower_inline_nodes(std::slice::from_ref(node), context.default_name)
+                };
+                builder.append_filled(lowered, FilledBoundary::Word);
+            }
+            continue;
+        }
+
+        let source_line = source_line.trim();
+        if source_line.is_empty() {
+            continue;
+        }
+        if let Some(name) = source_table_name(source_line, context.default_name) {
+            builder.append_filled(
+                vec![Inline::Strong { children: name }],
+                FilledBoundary::Word,
+            );
+        } else if source_line.starts_with('.') || source_line.starts_with('\'') {
+            context.warn_unhandled_table_text_block_line(line);
+        } else {
+            builder.append_filled(parse_roff_text(source_line), FilledBoundary::Word);
+        }
+    }
+    builder.finish()
+}
+
+fn source_table_name(source_line: &str, default_name: Option<&str>) -> Option<Vec<Inline>> {
+    let rest = source_line
+        .strip_prefix(".Nm")
+        .or_else(|| source_line.strip_prefix("'Nm"))?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let argument = rest.trim();
+    if argument.is_empty() {
+        default_name.map(|name| vec![Inline::Text { value: name.into() }])
+    } else {
+        Some(parse_roff_text(argument))
+    }
 }
 
 struct BlockState {

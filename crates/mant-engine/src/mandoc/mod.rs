@@ -187,6 +187,19 @@ struct LoweringContext<'a> {
     diagnostics: RefCell<Vec<Diagnostic>>,
 }
 
+#[derive(Debug)]
+struct TableTextBlock {
+    source: String,
+    start_line: u32,
+    end_line: u32,
+}
+
+impl TableTextBlock {
+    const fn contains_line(&self, line: u32) -> bool {
+        line >= self.start_line && line <= self.end_line
+    }
+}
+
 impl<'a> LoweringContext<'a> {
     const fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
@@ -197,7 +210,7 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn table_text_blocks(&self, line: u32, maximum: usize) -> Vec<String> {
+    fn table_text_blocks(&self, line: u32, maximum: usize) -> Vec<TableTextBlock> {
         let Some(start) = usize::try_from(line)
             .ok()
             .and_then(|line| line.checked_sub(1))
@@ -208,11 +221,16 @@ impl<'a> LoweringContext<'a> {
             return Vec::new();
         };
         let mut blocks = Vec::new();
-        let mut current = None::<String>;
-        for line in source.lines().skip(start) {
-            if let Some(content) = current.as_mut() {
+        let mut current = None::<(String, u32)>;
+        for (index, line) in source.lines().enumerate().skip(start) {
+            let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
+            if let Some((content, start_line)) = current.as_mut() {
                 if line.trim_start().starts_with("T}") {
-                    blocks.push(std::mem::take(content));
+                    blocks.push(TableTextBlock {
+                        source: std::mem::take(content),
+                        start_line: *start_line,
+                        end_line: line_number.saturating_sub(1),
+                    });
                     current = None;
                     if blocks.len() == maximum {
                         break;
@@ -223,11 +241,8 @@ impl<'a> LoweringContext<'a> {
                     }
                     content.push_str(line);
                 }
-            } else if line
-                .split(|character: char| character.is_whitespace())
-                .any(|field| field == "T{")
-            {
-                current = Some(String::new());
+            } else if line.trim_end().ends_with("T{") {
+                current = Some((String::new(), line_number.saturating_add(1)));
             }
         }
         blocks
@@ -276,6 +291,21 @@ impl<'a> LoweringContext<'a> {
             code: Some("manual.unhandled-table-text-block".to_owned()),
             message: "tbl text block contains semantic roff that could not be retained".to_owned(),
             source: source_span(node),
+        });
+    }
+
+    fn warn_unhandled_table_text_block_line(&self, line: u32) {
+        self.diagnostics.borrow_mut().push(Diagnostic {
+            level: DiagnosticLevel::Warning,
+            code: Some("manual.unhandled-table-text-block".to_owned()),
+            message: "tbl text block contains semantic roff that could not be retained".to_owned(),
+            source: Some(SourceSpan {
+                byte_range: None,
+                line,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
         });
     }
 
@@ -1820,6 +1850,57 @@ T{\n.Nm\nT}\tMT-Safe\n.TE\n",
         };
         assert_eq!(inline_text(children), "table-text-block");
         assert!(matches!(children.as_slice(), [Inline::Strong { .. }]));
+    }
+
+    #[test]
+    fn keeps_semantic_links_inside_tbl_text_blocks() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("table-text-link.1"),
+            b".TH TABLE-TEXT-LINK 1\n\
+.nr do-fallback 0\n\
+.if !\\n(.f .nr do-fallback 1\n\
+.if \\n[do-fallback] \\{\\\n\
+.  de MR\n\
+.    ie \\\\n(.$=1 \\\n\
+.      I \\%\\\\$1\n\
+.    el \\\n\
+.      IR \\%\\\\$1 (\\\\$2)\\\\$3\n\
+.  .\n\
+.\\}\n\
+.rr do-fallback\n\
+.SH DESCRIPTION\n\
+.TS\ntab($);\nl l.\ngrn$T{\nrenders\n.MR gremlin 1\ndiagrams;\nT}\n.TE\n",
+        )
+        .expect("lower semantic tbl text block");
+
+        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("semantic table content must not escape into a separate paragraph");
+        };
+        let [Block::Paragraph { children, .. }] = rows[0].cells[1].blocks.as_slice() else {
+            panic!("expected semantic table cell paragraph");
+        };
+        assert_eq!(inline_text(children), "renders gremlin(1) diagrams;");
+        assert!(children.iter().any(|child| matches!(
+            child,
+            Inline::Link {
+                target: mant_ir::LinkTarget::Manual { name, manual_section },
+                ..
+            } if name == "gremlin" && manual_section.as_deref() == Some("1")
+        )));
+    }
+
+    #[test]
+    fn decodes_named_characters_inside_equations() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("equation-characters.1"),
+            b".TH EQUATION-CHARACTERS 1\n.SH EQUATION\n.EQ\n\\[*p] \\[mi] x\n.EN\n",
+        )
+        .expect("lower equation characters");
+
+        assert!(matches!(
+            document.sections[0].blocks[0],
+            Block::Equation { ref value, .. } if value == "\u{03c0} \u{2212} x"
+        ));
     }
 
     #[test]
