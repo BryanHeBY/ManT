@@ -37,6 +37,12 @@ a parser regression:
 | --- | --- | ---: | --- |
 | `debian-sid-2026-07-21-amd64` | Debian packages `cpio 2.15+dfsg-2.1`, `dash 0.5.12-12`, and `groff 1.24.1-1` | 52 pages, 49 distinct decompressed sources | 45 clean; 7 reviewed renderer/device-condition differences |
 | `fedora44-2026-07-20-x86_64` | Fedora packages `bash 5.3.9-3.fc44`, `clang 22.1.1-2.fc44`, `gcc 16.0.1-0.10.fc44`, `git-core-doc 2.53.0-1.fc44`, and `tar 1.35-8.fc44` | 258 pages discovered; 257 rendered; 1 exact source reused from an earlier completed corpus | 202 clean; 55 reviewed aliases whose embedded `.so` chains are deliberately not expanded by ManT |
+| `openbsd-7.9-amd64` | Official OpenBSD 7.9 `man79.tgz` for amd64 | 150 syntax-prioritized pages from 2,902 distinct sources | 139 clean after fixes; 11 reviewed formatter and Pod token-boundary differences |
+| `netbsd-10.1-amd64` | Official NetBSD 10.1 amd64 `man.tar.xz` set | 146 syntax-prioritized pages from 2,544 distinct sources | 138 clean after fixes; 8 reviewed formatter and terminal-layout differences |
+| `apple-oss-manpages-pinned` | Apple `bsdmanpages-56` and `man-171` source tags | 36 syntax-prioritized pages | 34 clean; 2 aliases whose targets are absent from the individual official source repositories |
+| `apple-oss-command-repos-pinned` | Apple `shell_cmds-329`, `file_cmds-479`, and `system_cmds-1042.120.1` source tags | 70 syntax-prioritized pages from 185 sources | 66 clean; 1 real request-lowering defect fixed; 3 source-layout or formatter differences reviewed |
+| `generator-ronn-scdoc-pinned` | ronn-ng `v0.10.1` committed output and scdoc `1.9.7` locally generated output | All 4 generated pages | 4 clean; no candidate findings |
+| `generator-clap-mangen-0.3.0` | Official `clap_mangen-v0.3.0` roff snapshots | All 21 generated pages | 21 clean; no candidate findings |
 
 The Debian review found two real, general `tbl` gaps before the final counts:
 tables nested in an unfilled mdoc display were discarded, and a legal
@@ -44,6 +50,28 @@ tables nested in an unfilled mdoc display were discarded, and a legal
 minimal Rust regressions; the ledger records the corrected page bytes rather
 than retaining stale failures. The remaining review rows state the precise
 false-positive reason instead of acting as a generic allowlist.
+
+The BSD and Apple expansion found four general compatibility gaps. Stateful
+mdoc `Sm` spacing now crosses list-item and structural boundaries correctly;
+`Rs` bibliography entries retain formatter-generated terminal punctuation;
+the device-only `ti` argument is no longer exposed as document text; and the
+pinned parser recognizes the current `-isoC-2023` and `-p1003.1-2024`
+standard names. Each change has a minimal Rust regression. Remaining BSD
+findings were checked against the source and both visible outputs before being
+classified. In particular, differences in historical `St` wording, `Bx`
+typography, Pod term/body joining, URL punctuation, and terminal table layout
+do not represent discarded source content.
+
+The pinned inputs can be independently identified as follows:
+
+- OpenBSD `man79.tgz` SHA-256: `7a5e66facf678b41b6b4722b073c357d1eea27facaf4610701ffbec1c80751af`.
+- NetBSD `man.tar.xz` SHA-512: `79f523d692c734a3a18921a4ec9cc7e0c2d1ae567bf4911a04f85dc78281c15f0b0fd68d201e9050daba498068df2c59660d3633e3abdbbc3d651ea8a26dd5a3`.
+- Apple tags resolve to commits `c62819a460dcc7906465c4c213a7fc0211148960`, `d798e66636621e416604cdeacc01ca45d964ad2d`, `298787009e5432c5e4c378a077f98267077e3495`, `659a8a301e2acf0343f8b8673a154a2ca4d07084`, and `15832a892bdd86cf3e3f2fde9265142f714437c8` in the table's repository order.
+- ronn-ng `v0.10.1`, scdoc `1.9.7`, and `clap_mangen-v0.3.0` resolve to commits `bc667fe55b2df9fe54bd34d8f589ab58a3e81371`, `5c782cda95427e7170bab7a9d7eef19c7c2d12d0`, and `f0d30d961d26f8fb636b33242256fca73a717f77` respectively.
+
+The generator sources are MIT or Apache-2.0/MIT licensed. Their outputs were
+used as local discovery inputs and were not copied into the repository, so no
+new third-party fixture or redistribution notice is required.
 
 A `skipped` row is historical, incomplete coverage rather than an accepted
 disposition. Normal incremental runs select such a row again even when its

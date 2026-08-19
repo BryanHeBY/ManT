@@ -160,6 +160,11 @@ The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds 
 
 Other standard mdoc semantic macros, including `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
 
+The pinned parser's `St` name catalogue includes the upstream OpenBSD entries
+for C23 (`-isoC-2023`) and POSIX.1-2024 (`-p1003.1-2024`). The resulting
+standard title is formatter-owned text; older BSD formatters can use slightly
+different wording for the same source key.
+
 ## Roff Requests
 
 libmandoc preprocesses macro definitions, strings, registers, conditionals, loops, translations, and supported compatibility requests before ManT receives the owned tree. ManT does not expose that formatter state as IR.
