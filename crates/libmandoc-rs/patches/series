@@ -13,3 +13,4 @@
 0004-libbsd-library-name.patch
 0005-modern-standards.patch
 0006-thread-local-parser-state.patch
+0007-thread-safe-date-conversion.patch

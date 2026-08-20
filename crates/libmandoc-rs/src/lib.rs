@@ -41,12 +41,10 @@ mod tests {
     use std::io::Write;
 
     use super::{
-        AuthorMode, Compression, DisplayKind, Document, IncludePolicy, MacroSet, Node, NodeKind,
-        NormalizedFont, NormalizedListKind, ParseError, ParseOptions, Parser, TableAlignment,
+        AuthorMode, Compression, DiagnosticLevel, DisplayKind, Document, IncludePolicy, MacroSet,
+        Node, NodeKind, NormalizedFont, NormalizedListKind, ParseError, ParseOptions, Parser,
+        TableAlignment,
     };
-
-    #[cfg(windows)]
-    use super::DiagnosticLevel;
 
     fn source_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mant-{label}-{}.1", process::id()))
@@ -313,9 +311,8 @@ mod tests {
         assert_eq!(report.document.metadata.title.as_deref(), Some("GZIP-MANT"));
     }
 
-    #[cfg(windows)]
     #[test]
-    fn windows_parser_accepts_the_date_formats_used_by_libmandoc() {
+    fn parser_accepts_the_date_formats_used_by_libmandoc() {
         for (date, normalized, normalized_with_style) in [
             ("2026-07-20", "2026-07-20", false),
             ("Jul 20, 2026", "July 20, 2026", true),

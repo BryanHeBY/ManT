@@ -1,0 +1,110 @@
+diff --git a/mandoc.c b/mandoc.c
+--- a/mandoc.c
++++ b/mandoc.c
+@@ -35,7 +35,9 @@
+ #include "roff_int.h"
+ 
+ static	int	 a2time(time_t *, const char *, const char *);
+-static	char	*time2a(time_t);
++static	int	 date_is_future(time_t);
++static	char	*time2a(time_t, int);
++static	int	 time2tm(time_t, int, struct tm *);
+ 
+ 
+ enum mandoc_esc
+@@ -498,7 +500,12 @@ a2time(time_t *t, const char *fmt, const char *p)
+ 	pp = strptime(p, fmt, &tm);
+ #endif
+	if (NULL != pp && '\0' == *pp) {
+-		*t = mktime(&tm);
++		/* Manual dates are calendar values without a timezone. */
++#if defined(_WIN32)
++		*t = _mkgmtime64(&tm);
++#else
++		*t = timegm(&tm);
++#endif
+ 		return 1;
+ 	}
+ 
+@@ -506,17 +513,17 @@ a2time(time_t *t, const char *fmt, const char *p)
+ }
+ 
+ static char *
+-time2a(time_t t)
++time2a(time_t t, int utc)
+ {
+-	struct tm	*tm;
++	struct tm	 tm_storage, *tm;
+ 	char		*buf, *p;
+ 	size_t		 ssz;
+ 	int		 isz;
+ 
+ 	buf = NULL;
+-	tm = localtime(&t);
+-	if (tm == NULL)
++	if (time2tm(t, utc, &tm_storage) == 0)
+ 		goto fail;
++	tm = &tm_storage;
+ 
+ 	/*
+ 	 * Reserve space:
+@@ -554,6 +561,32 @@ fail:
+ 	return mandoc_strdup("");
+ }
+ 
++static int
++time2tm(time_t t, int utc, struct tm *tm)
++{
++#if defined(_WIN32)
++	return (utc ? gmtime_s(tm, &t) : localtime_s(tm, &t)) == 0;
++#else
++	return (utc ? gmtime_r(&t, tm) : localtime_r(&t, tm)) != NULL;
++#endif
++}
++
++static int
++date_is_future(time_t t)
++{
++	struct tm	 date, tomorrow;
++	time_t		 cutoff;
++
++	/* Compare calendar days while retaining the user's local "tomorrow". */
++	cutoff = time(NULL) + 86400;
++	if (time2tm(t, 1, &date) == 0 ||
++	    time2tm(cutoff, 0, &tomorrow) == 0)
++		return t > cutoff;
++	return date.tm_year > tomorrow.tm_year ||
++	    (date.tm_year == tomorrow.tm_year &&
++	    date.tm_yday > tomorrow.tm_yday);
++}
++
+ char *
+ mandoc_normdate(struct roff_node *nch, struct roff_node *nbl)
+ {
+@@ -576,14 +609,14 @@ mandoc_normdate(struct roff_node *nch, struct roff_node *nbl)
+ 		return mandoc_strdup("");
+ 	}
+ 	if (strcmp(nch->string, "$" "Mdocdate$") == 0)
+-		return time2a(time(NULL));
++		return time2a(time(NULL), 0);
+ 
+ 	/* Valid mdoc(7) date format. */
+ 
+ 	if (a2time(&t, "$" "Mdocdate: %b %d %Y $", nch->string) ||
+ 	    a2time(&t, "%b %d, %Y", nch->string)) {
+-		cp = time2a(t);
+-		if (t > time(NULL) + 86400)
++		cp = time2a(t, 1);
++		if (date_is_future(t))
+ 			mandoc_msg(MANDOCERR_DATE_FUTURE, nch->line,
+ 			    nch->pos, "%s %s", roff_name[nbl->tok], cp);
+ 		else if (*nch->string != '$' &&
+@@ -598,7 +631,7 @@ mandoc_normdate(struct roff_node *nch, struct roff_node *nbl)
+ 	if (a2time(&t, "%Y-%m-%d", nch->string) == 0)
+ 		mandoc_msg(MANDOCERR_DATE_BAD, nch->line, nch->pos,
+ 		    "%s %s", roff_name[nbl->tok], nch->string);
+-	else if (t > time(NULL) + 86400)
++	else if (date_is_future(t))
+ 		mandoc_msg(MANDOCERR_DATE_FUTURE, nch->line, nch->pos,
+ 		    "%s %s", roff_name[nbl->tok], nch->string);
+ 	else if (nbl->tok == MDOC_Dd)
