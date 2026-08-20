@@ -236,7 +236,7 @@ fn escape_plain_text(value: &str) -> String {
             && characters
                 .peek()
                 .is_some_and(|character| character.is_alphanumeric());
-        if matches!(character, '\\' | '*' | '[' | ']' | '<' | '>')
+        if matches!(character, '\\' | '`' | '*' | '[' | ']' | '<' | '>')
             || (character == '_' && !intraword_underscore)
         {
             output.push('\\');
@@ -255,7 +255,8 @@ fn protect_block_prefix(line: &str) -> String {
         || bytes.starts_with(b"- ")
         || bytes.starts_with(b"+ ")
         || bytes.starts_with(b"* ")
-        || (bytes.len() >= 3 && bytes.iter().all(|byte| *byte == b'-'))
+        || (!bytes.is_empty() && bytes.iter().all(|byte| *byte == b'-'))
+        || (!bytes.is_empty() && bytes.iter().all(|byte| *byte == b'='))
     {
         Some(0)
     } else {
@@ -317,5 +318,13 @@ mod tests {
         ] {
             assert_eq!(escape_plain_text(source), expected, "{source}");
         }
+    }
+
+    #[test]
+    fn plain_text_escapes_literal_backticks() {
+        assert_eq!(
+            escape_plain_text("`bold' and ```"),
+            "\\`bold' and \\`\\`\\`"
+        );
     }
 }

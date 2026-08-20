@@ -461,6 +461,18 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
                 Inline::Text {
                     value: "# not a heading".to_owned(),
                 },
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "-".to_owned(),
+                },
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "===".to_owned(),
+                },
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "```".to_owned(),
+                },
             ])],
             Vec::new(),
         )])),
@@ -469,9 +481,121 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 
     let markdown = render_markdown(&query);
     assert!(
-        markdown.contains("\\- not a list  \n1\\. not an ordered list  \n\\# not a heading"),
+        markdown.contains(
+            "\\- not a list  \n1\\. not an ordered list  \n\\# not a heading  \n\\-  \n\\===  \n\\`\\`\\`"
+        ),
         "{markdown}"
     );
+    let headings = Parser::new(&markdown)
+        .filter(|event| matches!(event, Event::Start(Tag::Heading { .. })))
+        .count();
+    assert_eq!(headings, 2, "only the document and TEXT headings may exist");
+    assert!(!Parser::new(&markdown).any(|event| matches!(event, Event::Start(Tag::CodeBlock(_)))));
+}
+
+#[test]
+fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
+    let definitions = Block::DefinitionList {
+        items: vec![DefinitionItem {
+            identity: None,
+            inline_term: true,
+            terms: vec![vec![Inline::Text {
+                value: "plain".to_owned(),
+            }]],
+            description: vec![Block::Preformatted {
+                children: vec![Inline::Text {
+                    value: "code_line();".to_owned(),
+                }],
+                language: None,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            spacing_before_lines: None,
+        }],
+        compact: true,
+        layout: LayoutHint::default(),
+        source: None,
+    };
+    let query = ResolvedContent {
+        address: None,
+        label: "definition".to_owned(),
+        document: Some(manual(vec![section("TEXT", vec![definitions], Vec::new())])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(
+        markdown.contains("- plain\n  ```\n  code_line();\n  ```"),
+        "{markdown}"
+    );
+    assert!(!markdown.contains("plain ```"));
+    assert_eq!(
+        Parser::new(&markdown)
+            .filter(|event| matches!(event, Event::Start(Tag::CodeBlock(_))))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn escapes_literal_roff_quote_backticks_without_hiding_styles() {
+    let query = ResolvedContent {
+        address: None,
+        label: "quote".to_owned(),
+        document: Some(manual(vec![section(
+            "TEXT",
+            vec![paragraph(vec![
+                Inline::Text {
+                    value: "For example, `".to_owned(),
+                },
+                Inline::Strong {
+                    children: vec![Inline::Text {
+                        value: "!".to_owned(),
+                    }],
+                },
+                Inline::Text {
+                    value: "' remains bold.".to_owned(),
+                },
+            ])],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(
+        markdown.contains("For example, \\`**!**' remains bold."),
+        "{markdown}"
+    );
+    assert!(Parser::new(&markdown).any(|event| matches!(event, Event::Start(Tag::Strong))));
+    assert!(!Parser::new(&markdown).any(|event| matches!(event, Event::Code(_))));
+}
+
+#[test]
+fn uses_markdown_document_title_without_changing_its_logical_label() {
+    let mut document = manual(Vec::new());
+    document.source.format = SourceFormat::Markdown;
+    document.meta.title = Some("Actual Doc Title".to_owned());
+    document.blocks = vec![paragraph(vec![Inline::Text {
+        value: "body".to_owned(),
+    }])];
+    let query = ResolvedContent {
+        address: None,
+        label: "filename.md".to_owned(),
+        document: Some(document),
+        tldr: None,
+    };
+
+    assert!(render_markdown(&query).starts_with("# Actual Doc Title\n\nbody"));
+    let outline = render_outline_markdown(&build_outline(&query).expect("outline"));
+    assert!(
+        outline.starts_with("# Actual Doc Title outline"),
+        "{outline}"
+    );
+    let excerpt = render_excerpt_markdown(
+        &select_excerpt(&query, &["root".to_owned()]).expect("root excerpt"),
+    );
+    assert!(excerpt.starts_with("# Actual Doc Title"), "{excerpt}");
 }
 
 #[test]

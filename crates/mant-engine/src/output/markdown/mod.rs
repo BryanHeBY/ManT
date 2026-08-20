@@ -6,8 +6,8 @@ mod inline;
 use std::ops::Range;
 
 use mant_ir::{
-    Block, DefinitionCase, DefinitionRole, LayoutHint, NodeId, OutlinePath, Section, SourceSpan,
-    TldrCommandPart, TldrDocument, TldrOrigin,
+    Block, DefinitionCase, DefinitionRole, DocumentMeta, DocumentSource, LayoutHint, NodeId,
+    OutlinePath, Section, SourceFormat, SourceSpan, TldrCommandPart, TldrDocument, TldrOrigin,
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, OutlineReference, QueryExcerpt, QueryOutline};
 
@@ -88,7 +88,14 @@ pub(crate) fn render_addressable_markdown(query: &ResolvedContent) -> MarkdownAr
 
 fn render_markdown_artifact(query: &ResolvedContent, options: MarkdownOptions) -> MarkdownArtifact {
     let mut output = ArtifactBuilder::default();
-    output.push(&heading(1, &query.label));
+    output.push(&heading(
+        1,
+        document_title(
+            &query.label,
+            query.document.as_ref().map(|document| &document.source),
+            query.document.as_ref().map(|document| &document.meta),
+        ),
+    ));
 
     if let Some(tldr) = &query.tldr {
         for (index, block) in render_tldr(tldr).into_iter().enumerate() {
@@ -286,7 +293,11 @@ fn render_artifact_sections(
 #[must_use]
 pub fn render_outline_markdown(outline: &QueryOutline) -> String {
     let label = document_label(
-        &outline.label,
+        document_title(
+            &outline.label,
+            outline.source.as_ref(),
+            outline.meta.as_ref(),
+        ),
         outline
             .meta
             .as_ref()
@@ -312,7 +323,11 @@ pub fn render_excerpt_markdown_with_options(
     options: MarkdownOptions,
 ) -> String {
     let label = document_label(
-        &excerpt.label,
+        document_title(
+            &excerpt.label,
+            excerpt.source.as_ref(),
+            excerpt.meta.as_ref(),
+        ),
         excerpt
             .meta
             .as_ref()
@@ -470,8 +485,22 @@ fn heading(depth: usize, title: &str) -> String {
     format!("{} {}", "#".repeat(depth.clamp(1, 6)), escape_text(title))
 }
 
-fn document_label(label: &str, section: Option<&str>) -> String {
-    section.map_or_else(|| label.to_owned(), |section| format!("{label}({section})"))
+fn document_title<'a>(
+    label: &'a str,
+    source: Option<&DocumentSource>,
+    meta: Option<&'a DocumentMeta>,
+) -> &'a str {
+    if source.is_some_and(|source| source.format == SourceFormat::Markdown) {
+        meta.and_then(|meta| meta.title.as_deref())
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or(label)
+    } else {
+        label
+    }
+}
+
+fn document_label(title: &str, section: Option<&str>) -> String {
+    section.map_or_else(|| title.to_owned(), |section| format!("{title}({section})"))
 }
 
 #[cfg(test)]

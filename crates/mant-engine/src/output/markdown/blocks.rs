@@ -183,7 +183,17 @@ fn render_definition_list(
             let description = render_blocks(&item.description, options).join("\n\n");
             let content = match (terms.is_empty(), description.is_empty()) {
                 (false, false) => {
-                    let sep = if item.inline_term { " " } else { "\n" };
+                    // A definition term can share a physical line only with
+                    // inline prose. Gluing a fenced code block, nested list,
+                    // table, or display equation to the term produces invalid
+                    // CommonMark and changes the block's meaning.
+                    let sep = if item.inline_term
+                        && matches!(item.description.first(), Some(Block::Paragraph { .. }))
+                    {
+                        " "
+                    } else {
+                        "\n"
+                    };
                     format!("{terms}{sep}{description}")
                 }
                 (false, true) => terms,

@@ -14,10 +14,12 @@ use mant_engine::{
     render_outline_text, render_query_json, render_query_man, render_query_text,
     render_search_text, search_query, select_excerpt,
 };
+use mant_ir::{Block, Section};
 use mant_protocol::{
     OutlineDetail, OutlineNode, SearchCase, SearchQuery, SearchScope, SearchSyntax,
     default_search_limit,
 };
+use pulldown_cmark::{Event, Parser, Tag};
 
 fn hostile_fixture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -40,6 +42,7 @@ fn exercise(label: &str, source: &str) {
     };
 
     let rendered = render_markdown(&query);
+    verify_commonmark_topology(label, &query, &rendered);
     let _ = render_query_text(&query);
     let _ = render_query_man(&query);
     render_query_json(&query, true).expect(label);
@@ -128,6 +131,78 @@ fn exercise(label: &str, source: &str) {
             "{label}: sampled word {word:?} from the render must be found"
         );
     }
+}
+
+/// Treat the public Markdown projection as a second parser boundary. A
+/// successful reparse is insufficient: accidental setext headings and
+/// malformed fences are valid CommonMark that silently change the document
+/// topology. Compare the structural events with the IR that was serialized.
+fn verify_commonmark_topology(label: &str, query: &mant_engine::ResolvedContent, markdown: &str) {
+    let Some(document) = &query.document else {
+        return;
+    };
+    let actual_headings = Parser::new(markdown)
+        .filter(|event| matches!(event, Event::Start(Tag::Heading { .. })))
+        .count();
+    let actual_code_blocks = Parser::new(markdown)
+        .filter(|event| matches!(event, Event::Start(Tag::CodeBlock(_))))
+        .count();
+    let tldr_headings = query
+        .tldr
+        .as_ref()
+        .map_or(0, |page| 1 + usize::from(!page.examples.is_empty()));
+    let tldr_fences = query.tldr.as_ref().map_or(0, |page| page.examples.len());
+    assert_eq!(
+        actual_headings,
+        1 + tldr_headings + section_count(&document.sections),
+        "{label}: CommonMark headings must correspond exactly to IR headings"
+    );
+    assert_eq!(
+        actual_code_blocks,
+        tldr_fences
+            + fenced_block_count(&document.blocks)
+            + section_fenced_block_count(&document.sections),
+        "{label}: every serialized fence must correspond to one IR block"
+    );
+}
+
+fn section_count(sections: &[Section]) -> usize {
+    sections
+        .iter()
+        .map(|section| 1 + section_count(&section.children))
+        .sum()
+}
+
+fn section_fenced_block_count(sections: &[Section]) -> usize {
+    sections
+        .iter()
+        .map(|section| {
+            fenced_block_count(&section.blocks) + section_fenced_block_count(&section.children)
+        })
+        .sum()
+}
+
+fn fenced_block_count(blocks: &[Block]) -> usize {
+    blocks
+        .iter()
+        .map(|block| match block {
+            Block::Preformatted { .. } | Block::Table { .. } => 1,
+            Block::Equation { display: true, .. } => 1,
+            Block::List { items, .. } => items
+                .iter()
+                .map(|item| fenced_block_count(&item.blocks))
+                .sum(),
+            Block::DefinitionList { items, .. } => items
+                .iter()
+                .map(|item| fenced_block_count(&item.description))
+                .sum(),
+            Block::Paragraph { .. }
+            | Block::Equation { display: false, .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. }
+            | Block::Unsupported { .. } => 0,
+        })
+        .sum()
 }
 
 fn verify_search_result(
