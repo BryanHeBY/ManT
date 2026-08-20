@@ -322,7 +322,24 @@ python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
   --source-pattern '^[.]nf$' --recheck-recorded --findings-only
 ```
 
-[`STRUCTURE_AUDIT.csv`](../tests/fixtures/roff/STRUCTURE_AUDIT.csv) is an independent incremental ledger, while its [guide](../tests/fixtures/roff/STRUCTURE_AUDIT.md) defines the review lifecycle. The `roff_structure_profile` example and both audit scripts are development tools: no host corpus, renderer, or batch profile is part of normal CI. CI runs only their dependency-free self-checks and the focused Rust regressions that follow a confirmed finding.
+[`STRUCTURE_AUDIT.csv`](../tests/fixtures/roff/STRUCTURE_AUDIT.csv) is an independent incremental ledger, while its [guide](../tests/fixtures/roff/STRUCTURE_AUDIT.md) defines the review lifecycle. The batch profilers and audit scripts are development tools: no host corpus, renderer, or batch profile is part of normal CI. CI runs only their dependency-free self-checks and the focused Rust regressions that follow a confirmed finding.
+
+The separate CommonMark projection oracle catches valid-but-wrong Markdown
+topology after lowering has already succeeded:
+
+```sh
+cargo build --package mant-engine --example roff_projection_profile
+python3 scripts/audit-roff-projection.py --fixtures \
+  --json /tmp/mant-projection.json
+python3 scripts/audit-roff-projection.py --manpath /usr/share/man \
+  --corpus archlinux-host --replay-fidelity-records --findings-only
+```
+
+It reparses full renders and a deterministic first/middle/last section sample,
+then compares section trees, list nesting, and fenced-block nesting. Its
+independent [`PROJECTION_AUDIT.csv`](../tests/fixtures/roff/PROJECTION_AUDIT.csv)
+and [guide](../tests/fixtures/roff/PROJECTION_AUDIT.md) prevent a projection
+finding from being mistaken for an AST-to-IR lowering failure.
 
 ### Roff renderer-layout audit
 

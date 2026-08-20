@@ -22,6 +22,8 @@ rust-lcov.info
 # Temporary / scratch files
 tmp-*
 *.tmp
+__pycache__/
+*.py[cod]
 
 # Cargo workspace output. Cargo.lock remains tracked for reproducible builds.
 target/

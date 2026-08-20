@@ -26,7 +26,7 @@ mapping. A `review` row is useful precisely because it may identify an
 unanticipated topology loss; inspect source, AST/IR JSON, and both ManT text
 renderers before deciding whether to add a Rust regression.
 
-## What v2 verifies
+## What v3 verifies
 
 The profiler retains compact topology signatures in the JSON report. An mdoc
 `Bl` is matched to the IR container at the same source line and must retain its
@@ -49,13 +49,27 @@ strictly checked.
 No-fill source text that begins an input line is a hard-line-boundary
 obligation; standalone roff font-switch lines are intentionally excluded
 because they have no printable glyph. Relative `RS` nesting is deliberately
-weaker: roff distances are not terminal columns, so v2 reports a candidate
+weaker: roff distances are not terminal columns, so v3 reports a candidate
 only if a document with an `RS` scope produces no indented IR block at all.
 Paragraph-boundary and raw
 `.br` counts remain report telemetry rather than failure conditions: empty or
 stateful requests can legitimately have no independent output block. Typed
 manual, external, email, and section links are checked independently, so a
 surviving link cannot mask degradation to a different target class.
+
+Equation topology is source-addressed by line and context. A non-empty
+line-start `.EQ` node must remain one display equation block; an inline
+delimited equation must remain an inline code-valued expression without
+splitting its paragraph; and an equation carried by a tbl cell must remain in
+that cell. The normalized value must match as well as the placement. An empty
+configuration-only `.EQ delim … .EN` is counted as parser state and must not
+invent a display block. For table-cell delimiter expressions that libmandoc
+keeps as opaque text, the profiler reads the bounded source, finds expressions
+using the active delimiter pair, and normalizes each fragment through the same
+pinned eqn parser. It never implements a second equation grammar merely to
+guess their meaning. Missing optional host decompressors only omit this extra
+table check for `.xz`/`.bz2` inputs; plain, gzip, and zstd inputs are
+self-contained.
 
 This distinction is intentional. The ledger should surface credible lowering
 loss, not prescribe byte-for-byte formatter emulation or turn normal
@@ -66,6 +80,20 @@ Build the profiler and scan the reproducible real fixtures:
 ```sh
 cargo build -p mant-engine --example roff_structure_profile
 python3 scripts/audit-roff-structure.py --fixtures --json /tmp/mant-structure.json
+```
+
+The ManT-authored `real/mant-audit/equation-contexts.7` fixture makes every
+equation placement class observable on this reproducible run. For a complete
+host sweep, select every `.EQ` page; combine `.TS` with exact eqn operator
+tokens for the table-focused intersection:
+
+```sh
+python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+  --corpus current-host-eqn --source-pattern '^\.EQ(?:\s|$)' --findings-only
+python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+  --corpus current-host-table-eqn --source-pattern '^\.TS(?:\s|$)' \
+  --source-pattern '(^|[^A-Za-z])(sub|sup|over|ldots)([^A-Za-z]|$)' \
+  --findings-only
 ```
 
 For a local corpus whose previous content-audit rows should be replayed under

@@ -38,7 +38,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v2"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v3"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -522,7 +522,10 @@ def valid_structure_topology(value: object) -> bool:
         topology = value.get(side)
         if not isinstance(topology, dict):
             return False
-        if not all(isinstance(topology.get(field), list) for field in ("lists", "tableRows")):
+        if not all(
+            isinstance(topology.get(field), list)
+            for field in ("lists", "tableRows", "equations")
+        ):
             return False
     return True
 

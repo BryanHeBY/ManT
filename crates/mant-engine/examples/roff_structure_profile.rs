@@ -12,20 +12,23 @@
 
 use std::{
     collections::BTreeMap,
-    io::{self, BufRead, BufWriter, Write},
-    path::PathBuf,
+    fs,
+    io::{self, BufRead, BufWriter, Read, Write},
+    path::{Path, PathBuf},
+    process::Command,
 };
 
+use flate2::read::GzDecoder;
 use libmandoc_rs::{
     Compression, DisplayKind, IncludePolicy, Node, NodeKind, NormalizedListKind, ParseOptions,
-    Parser,
+    Parser, SpecialCharacter, special_character,
 };
 use mant_engine::{ManualPage, parse_manual_page};
 use mant_ir::{Block, Document, Inline, LinkTarget, Section};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v2";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v3";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +46,10 @@ struct AstStructure {
     external_links: usize,
     email_links: usize,
     section_links: usize,
+    equation_configurations: usize,
+    display_equations: usize,
+    inline_equations: usize,
+    table_equations: usize,
 }
 
 #[derive(Default, Serialize)]
@@ -61,6 +68,9 @@ struct IrStructure {
     external_links: usize,
     email_links: usize,
     section_links: usize,
+    display_equations: usize,
+    inline_equation_candidates: usize,
+    table_equation_candidates: usize,
 }
 
 /// Source-addressable topology for semantic containers.  Counts catch broad
@@ -71,6 +81,7 @@ struct IrStructure {
 struct AstTopology {
     lists: Vec<AstListTopology>,
     table_rows: Vec<AstTableRowTopology>,
+    equations: Vec<AstEquationTopology>,
 }
 
 #[derive(Default, Serialize)]
@@ -78,6 +89,41 @@ struct AstTopology {
 struct IrTopology {
     lists: Vec<IrListTopology>,
     table_rows: Vec<IrTableRowTopology>,
+    equations: Vec<IrEquationTopology>,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum EquationContext {
+    Display,
+    Inline,
+    TableCell,
+}
+
+impl EquationContext {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Display => "display",
+            Self::Inline => "inline",
+            Self::TableCell => "table-cell",
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AstEquationTopology {
+    source_line: u32,
+    context: EquationContext,
+    value: String,
+}
+
+#[derive(Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IrEquationTopology {
+    source_line: u32,
+    context: EquationContext,
+    value: String,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize)]
@@ -196,7 +242,33 @@ fn profile_request(line: &str) -> Result<Value, String> {
     })
     .parse_file(&path)
     .map_err(|error| error.to_string())?;
-    let (expected, expected_topology) = ast_profile(&report.document.root);
+    let (mut expected, mut expected_topology) = ast_profile(&report.document.root);
+    if let Some(source) = read_source(&path)? {
+        for (line, expression) in source_table_equations(&String::from_utf8_lossy(&source)) {
+            let value = normalize_equation_fragment(&expression)?;
+            if value.is_empty()
+                || expected_topology.equations.iter().any(|equation| {
+                    equation.source_line == line
+                        && equation.context == EquationContext::TableCell
+                        && equation.value == value
+                })
+            {
+                continue;
+            }
+            expected.table_equations += 1;
+            expected_topology.equations.push(AstEquationTopology {
+                source_line: line,
+                context: EquationContext::TableCell,
+                value,
+            });
+        }
+        expected_topology.equations.sort_by_key(|equation| {
+            (
+                equation.source_line,
+                equation_context_order(equation.context),
+            )
+        });
+    }
     let document = parse_manual_page(&ManualPage {
         name: "audit".to_owned(),
         section: "1".to_owned(),
@@ -237,20 +309,27 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
 fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
-    collect_ast_structure(root, false, 0, &mut profile, &mut no_fill_lines);
+    collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
     profile.no_fill_lines = no_fill_lines
         .values()
         .filter(|continues_line| !**continues_line)
         .count();
     let mut topology = AstTopology::default();
-    collect_ast_topology(root, &mut topology);
+    collect_ast_topology(root, false, &mut topology);
     topology.lists.sort_by_key(|list| list.source_line);
+    topology.equations.sort_by_key(|equation| {
+        (
+            equation.source_line,
+            equation_context_order(equation.context),
+        )
+    });
     (profile, topology)
 }
 
 fn collect_ast_structure(
     node: &Node,
     inherited_nonprinting: bool,
+    inside_table: bool,
     relative_indent_depth: usize,
     profile: &mut AstStructure,
     no_fill_lines: &mut BTreeMap<u32, bool>,
@@ -322,6 +401,15 @@ fn collect_ast_structure(
             .filter(|cell| cell.column_span > 1 || cell.row_span > 1)
             .count();
     }
+    if node.kind == NodeKind::Equation {
+        match node.equation.as_deref().map(str::trim) {
+            None | Some("") => profile.equation_configurations += 1,
+            Some(_) if inside_table => profile.table_equations += 1,
+            Some(_) if node.flags.line_start => profile.display_equations += 1,
+            Some(_) => profile.inline_equations += 1,
+        }
+    }
+    let child_inside_table = inside_table || node.kind == NodeKind::Table;
     let child_indent_depth = relative_indent_depth
         + usize::from(node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("RS"));
     profile.max_relative_indent_depth = profile.max_relative_indent_depth.max(child_indent_depth);
@@ -329,6 +417,7 @@ fn collect_ast_structure(
         collect_ast_structure(
             child,
             nonprinting,
+            child_inside_table,
             child_indent_depth,
             profile,
             no_fill_lines,
@@ -491,7 +580,23 @@ fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
         .collect()
 }
 
-fn collect_ast_topology(node: &Node, topology: &mut AstTopology) {
+fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopology) {
+    if node.kind == NodeKind::Equation
+        && let Some(value) = node.equation.as_deref().map(str::trim)
+        && !value.is_empty()
+    {
+        topology.equations.push(AstEquationTopology {
+            source_line: node.line,
+            context: if inside_table {
+                EquationContext::TableCell
+            } else if node.flags.line_start {
+                EquationContext::Display
+            } else {
+                EquationContext::Inline
+            },
+            value: equation_visible_text(value),
+        });
+    }
     if node.kind == NodeKind::Block
         && mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table)
         && node.line > 0
@@ -527,30 +632,45 @@ fn collect_ast_topology(node: &Node, topology: &mut AstTopology) {
             });
             continue;
         }
-        collect_ast_topology(child, topology);
+        collect_ast_topology(
+            child,
+            inside_table || node.kind == NodeKind::Table,
+            topology,
+        );
     }
 }
 
 fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
     let mut profile = IrStructure::default();
     let mut topology = IrTopology::default();
-    collect_blocks(&document.blocks, &mut profile, &mut topology);
+    collect_blocks(&document.blocks, false, &mut profile, &mut topology);
     for section in &document.sections {
         collect_section(section, &mut profile, &mut topology);
     }
     topology.lists.sort_by_key(|list| list.source_line);
+    topology.equations.sort_by_key(|equation| {
+        (
+            equation.source_line,
+            equation_context_order(equation.context),
+        )
+    });
     (profile, topology)
 }
 
 fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut IrTopology) {
-    collect_blocks(&section.blocks, profile, topology);
+    collect_blocks(&section.blocks, false, profile, topology);
     for child in &section.children {
         collect_section(child, profile, topology);
     }
 }
 
 #[allow(clippy::too_many_lines)]
-fn collect_blocks(blocks: &[Block], profile: &mut IrStructure, topology: &mut IrTopology) {
+fn collect_blocks(
+    blocks: &[Block],
+    inside_table: bool,
+    profile: &mut IrStructure,
+    topology: &mut IrTopology,
+) {
     for block in blocks {
         match block {
             Block::Paragraph {
@@ -558,10 +678,32 @@ fn collect_blocks(blocks: &[Block], profile: &mut IrStructure, topology: &mut Ir
             } => {
                 profile.paragraph_blocks += 1;
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
-                collect_inlines(children, profile);
+                collect_inlines(
+                    children,
+                    source_line(block),
+                    inside_table,
+                    profile,
+                    topology,
+                );
             }
-            Block::Unsupported { layout, .. } | Block::Equation { layout, .. } => {
+            Block::Unsupported { layout, .. } => {
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
+            }
+            Block::Equation {
+                value,
+                display,
+                layout,
+                source,
+            } => {
+                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
+                if *display {
+                    profile.display_equations += 1;
+                    topology.equations.push(IrEquationTopology {
+                        source_line: source.map_or(0, |span| span.line),
+                        context: EquationContext::Display,
+                        value: value.clone(),
+                    });
+                }
             }
             Block::Preformatted {
                 children, layout, ..
@@ -572,7 +714,13 @@ fn collect_blocks(blocks: &[Block], profile: &mut IrStructure, topology: &mut Ir
                     profile.preformatted_lines += 1;
                 }
                 profile.preformatted_lines += line_break_count(children);
-                collect_inlines(children, profile);
+                collect_inlines(
+                    children,
+                    source_line(block),
+                    inside_table,
+                    profile,
+                    topology,
+                );
             }
             Block::List {
                 items,
@@ -590,7 +738,7 @@ fn collect_blocks(blocks: &[Block], profile: &mut IrStructure, topology: &mut Ir
                     });
                 }
                 for item in items {
-                    collect_blocks(&item.blocks, profile, topology);
+                    collect_blocks(&item.blocks, inside_table, profile, topology);
                 }
             }
             Block::DefinitionList {
@@ -610,9 +758,9 @@ fn collect_blocks(blocks: &[Block], profile: &mut IrStructure, topology: &mut Ir
                 }
                 for item in items {
                     for term in &item.terms {
-                        collect_inlines(term, profile);
+                        collect_inlines(term, 0, inside_table, profile, topology);
                     }
-                    collect_blocks(&item.description, profile, topology);
+                    collect_blocks(&item.description, inside_table, profile, topology);
                 }
             }
             Block::Table { rows, layout, .. } => {
@@ -638,7 +786,7 @@ fn collect_blocks(blocks: &[Block], profile: &mut IrStructure, topology: &mut Ir
                         .filter(|cell| cell.column_span > 1 || cell.row_span > 1)
                         .count();
                     for cell in &row.cells {
-                        collect_blocks(&cell.blocks, profile, topology);
+                        collect_blocks(&cell.blocks, true, profile, topology);
                     }
                 }
             }
@@ -657,11 +805,17 @@ fn has_visible_inline(inlines: &[Inline]) -> bool {
     })
 }
 
-fn collect_inlines(inlines: &[Inline], profile: &mut IrStructure) {
+fn collect_inlines(
+    inlines: &[Inline],
+    source_line: u32,
+    inside_table: bool,
+    profile: &mut IrStructure,
+    topology: &mut IrTopology,
+) {
     for inline in inlines {
         match inline {
             Inline::Strong { children } | Inline::Emphasis { children } => {
-                collect_inlines(children, profile);
+                collect_inlines(children, source_line, inside_table, profile, topology);
             }
             Inline::Link {
                 target, children, ..
@@ -673,10 +827,26 @@ fn collect_inlines(inlines: &[Inline], profile: &mut IrStructure) {
                     LinkTarget::Section { .. } => profile.section_links += 1,
                     LinkTarget::Document { .. } => {}
                 }
-                collect_inlines(children, profile);
+                collect_inlines(children, source_line, inside_table, profile, topology);
             }
             Inline::LineBreak => profile.hard_breaks += 1,
-            Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => {}
+            Inline::Code { value } => {
+                if inside_table {
+                    profile.table_equation_candidates += 1;
+                } else {
+                    profile.inline_equation_candidates += 1;
+                }
+                topology.equations.push(IrEquationTopology {
+                    source_line,
+                    context: if inside_table {
+                        EquationContext::TableCell
+                    } else {
+                        EquationContext::Inline
+                    },
+                    value: value.clone(),
+                });
+            }
+            Inline::Text { .. } | Inline::Anchor { .. } => {}
         }
     }
 }
@@ -706,6 +876,12 @@ fn compare_structure(
         "no-fill-lines",
         expected.no_fill_lines,
         observed.preformatted_lines,
+    );
+    exact(
+        &mut violations,
+        "display-equations",
+        expected.display_equations,
+        observed.display_equations,
     );
     underflow(
         &mut violations,
@@ -771,7 +947,260 @@ fn compare_structure(
         &expected_topology.table_rows,
         &observed_topology.table_rows,
     );
+    compare_equation_topology(
+        &mut violations,
+        &expected_topology.equations,
+        &observed_topology.equations,
+    );
     violations
+}
+
+fn compare_equation_topology(
+    violations: &mut Vec<String>,
+    expected: &[AstEquationTopology],
+    observed: &[IrEquationTopology],
+) {
+    let mut used = vec![false; observed.len()];
+    for equation in expected {
+        let candidate = observed.iter().enumerate().position(|(index, candidate)| {
+            !used[index]
+                && candidate.context == equation.context
+                && candidate.value == equation.value
+                && (equation.context != EquationContext::Display
+                    || candidate.source_line == equation.source_line)
+        });
+        if let Some(index) = candidate {
+            used[index] = true;
+            continue;
+        }
+        violations.push(format!(
+            "{}-equation at line {}: expected normalized value {:?}, observed no matching IR value",
+            equation.context.as_str(),
+            equation.source_line,
+            equation.value,
+        ));
+    }
+}
+
+const fn equation_context_order(context: EquationContext) -> u8 {
+    match context {
+        EquationContext::Display => 0,
+        EquationContext::Inline => 1,
+        EquationContext::TableCell => 2,
+    }
+}
+
+fn source_line(block: &Block) -> u32 {
+    match block {
+        Block::Paragraph { source, .. }
+        | Block::Preformatted { source, .. }
+        | Block::List { source, .. }
+        | Block::DefinitionList { source, .. }
+        | Block::Table { source, .. }
+        | Block::Equation { source, .. }
+        | Block::VerticalSpace { source, .. }
+        | Block::ThematicBreak { source, .. }
+        | Block::Unsupported { source, .. } => source.map_or(0, |span| span.line),
+    }
+}
+
+fn equation_visible_text(source: &str) -> String {
+    let source = strip_equation_font_escapes(source);
+    let mut output = String::with_capacity(source.len());
+    let mut rest = source.as_str();
+    while let Some(index) = rest.find("\\[") {
+        output.push_str(&rest[..index]);
+        let after_open = &rest[index + 2..];
+        let Some(end) = after_open.find(']') else {
+            output.push_str(&rest[index..]);
+            return output;
+        };
+        let name = &after_open[..end];
+        match special_character(name) {
+            Some(SpecialCharacter::Visible(character)) => output.push(character),
+            Some(SpecialCharacter::ZeroWidth) => {}
+            None => output.push_str(&rest[index..=index + 2 + end]),
+        }
+        rest = &after_open[end + 1..];
+    }
+    output.push_str(rest);
+    output
+}
+
+fn strip_equation_font_escapes(source: &str) -> String {
+    let mut output = String::with_capacity(source.len());
+    let mut rest = source;
+    while let Some(index) = rest.find("\\f") {
+        output.push_str(&rest[..index]);
+        let operand = &rest[index + 2..];
+        if let Some(bracketed) = operand.strip_prefix('[') {
+            let Some(end) = bracketed.find(']') else {
+                output.push_str(&rest[index..]);
+                return output;
+            };
+            rest = &bracketed[end + 1..];
+        } else if let Some(character) = operand.chars().next() {
+            rest = &operand[character.len_utf8()..];
+        } else {
+            break;
+        }
+    }
+    output.push_str(rest);
+    output
+}
+
+fn read_source(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    let extension = path.extension().and_then(|extension| extension.to_str());
+    if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("gz")) {
+        let source = fs::File::open(path).map_err(|error| error.to_string())?;
+        let mut decoder = GzDecoder::new(source);
+        let mut output = Vec::new();
+        decoder
+            .read_to_end(&mut output)
+            .map_err(|error| error.to_string())?;
+        return Ok(Some(output));
+    }
+    if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("zst")) {
+        let source = fs::File::open(path).map_err(|error| error.to_string())?;
+        let mut decoder =
+            zstd::stream::read::Decoder::new(source).map_err(|error| error.to_string())?;
+        let mut output = Vec::new();
+        decoder
+            .read_to_end(&mut output)
+            .map_err(|error| error.to_string())?;
+        return Ok(Some(output));
+    }
+    if extension.is_some_and(|extension| {
+        extension.eq_ignore_ascii_case("xz") || extension.eq_ignore_ascii_case("bz2")
+    }) {
+        let program = if extension.is_some_and(|extension| extension.eq_ignore_ascii_case("xz")) {
+            "xz"
+        } else {
+            "bzip2"
+        };
+        let output = Command::new(program).args(["-dc", "--"]).arg(path).output();
+        return match output {
+            Ok(output) if output.status.success() => Ok(Some(output.stdout)),
+            Ok(_) | Err(_) => Ok(None),
+        };
+    }
+    fs::read(path).map(Some).map_err(|error| error.to_string())
+}
+
+#[derive(Clone, Copy)]
+enum EquationDelimiters {
+    Enabled(char, char),
+    Disabled,
+}
+
+fn source_table_equations(source: &str) -> Vec<(u32, String)> {
+    let mut output = Vec::new();
+    let mut inside_equation = false;
+    let mut pending = None;
+    let mut active = None;
+    let mut inside_table = false;
+
+    for (index, line) in source.lines().enumerate() {
+        let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix(".EQ")
+            && rest.chars().next().is_none_or(char::is_whitespace)
+        {
+            inside_equation = true;
+            pending = parse_equation_delimiters(rest.trim());
+            continue;
+        }
+        if inside_equation {
+            if trimmed == ".EN" || trimmed.starts_with(".EN ") {
+                if let Some(change) = pending.take() {
+                    active = match change {
+                        EquationDelimiters::Enabled(opening, closing) => Some((opening, closing)),
+                        EquationDelimiters::Disabled => None,
+                    };
+                }
+                inside_equation = false;
+            } else if let Some(change) = parse_equation_delimiters(trimmed) {
+                pending = Some(change);
+            }
+            continue;
+        }
+        if trimmed == ".TS" || trimmed.starts_with(".TS ") {
+            inside_table = true;
+            continue;
+        }
+        if trimmed == ".TE" || trimmed.starts_with(".TE ") {
+            inside_table = false;
+            continue;
+        }
+        if !inside_table || trimmed.starts_with('.') {
+            continue;
+        }
+        if let Some((opening, closing)) = active {
+            output.extend(
+                delimited_expressions(line, opening, closing)
+                    .into_iter()
+                    .map(|expression| (line_number, expression)),
+            );
+        }
+    }
+    output
+}
+
+fn parse_equation_delimiters(value: &str) -> Option<EquationDelimiters> {
+    let value = value.strip_prefix("delim")?.trim_start();
+    if value == "off" {
+        return Some(EquationDelimiters::Disabled);
+    }
+    let mut delimiters = value.chars();
+    let opening = delimiters.next()?;
+    let closing = delimiters.next()?;
+    Some(EquationDelimiters::Enabled(opening, closing))
+}
+
+fn delimited_expressions(source: &str, opening: char, closing: char) -> Vec<String> {
+    let mut output = Vec::new();
+    let mut remainder = source;
+    while let Some(opening_index) = remainder.find(opening) {
+        let after_opening = &remainder[opening_index + opening.len_utf8()..];
+        let Some(closing_index) = after_opening.find(closing) else {
+            break;
+        };
+        let expression = after_opening[..closing_index].trim();
+        if !expression.is_empty() {
+            output.push(expression.to_owned());
+        }
+        remainder = &after_opening[closing_index + closing.len_utf8()..];
+    }
+    output
+}
+
+fn normalize_equation_fragment(source: &str) -> Result<String, String> {
+    let synthetic = format!(".TH AUDIT 7\n.EQ\n{source}\n.EN\n");
+    let report = Parser::new(ParseOptions {
+        includes: IncludePolicy::Deny,
+        compression: Compression::Plain,
+    })
+    .parse_bytes("audit-equation.7", synthetic.as_bytes())
+    .map_err(|error| error.to_string())?;
+    find_equation(&report.document.root)
+        .map(equation_visible_text)
+        .ok_or_else(|| format!("could not normalize table equation {source:?}"))
+}
+
+fn find_equation(node: &Node) -> Option<&str> {
+    if node.kind == NodeKind::Equation
+        && let Some(value) = node.equation.as_deref()
+        && !value.trim().is_empty()
+    {
+        return Some(value.trim());
+    }
+    node.children.iter().find_map(find_equation)
+}
+
+fn exact(violations: &mut Vec<String>, label: &str, expected: usize, observed: usize) {
+    if expected != observed {
+        violations.push(format!("{label}: expected {expected}, observed {observed}"));
+    }
 }
 
 fn compare_list_topology(

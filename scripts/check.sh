@@ -40,6 +40,8 @@ run "check CI native dependency script syntax" \
   bash -n scripts/install-ci-native-dependencies.sh
 run "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check
 run "check roff structure audit" python3 scripts/audit-roff-structure.py --self-check
+run "check roff CommonMark projection audit" \
+  python3 scripts/audit-roff-projection.py --self-check
 run "check roff renderer-layout audit" python3 scripts/audit-roff-layout.py --self-check
 run "test Rust workspace" cargo test --locked --workspace
 run "check read-only engine feature boundary" \
