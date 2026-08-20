@@ -6,7 +6,8 @@ use mant_ir::{
 
 use super::MarkdownOptions;
 use super::inline::{
-    code_span, escape_text, fenced_code, flatten_inline, html_anchor, render_inline,
+    code_span, escape_text, fenced_code, flatten_inline, html_anchor, protect_block_prefix,
+    render_inline,
 };
 use crate::definitions::definition_entries;
 
@@ -181,7 +182,8 @@ fn render_definition_list(
                 .collect::<Vec<_>>()
                 .join(", ");
             let description = render_blocks(&item.description, options).join("\n\n");
-            let content = match (terms.is_empty(), description.is_empty()) {
+            let has_terms = !terms.is_empty();
+            let mut content = match (terms.is_empty(), description.is_empty()) {
                 (false, false) => {
                     // A definition term can share a physical line only with
                     // inline prose. Gluing a fenced code block, nested list,
@@ -200,6 +202,14 @@ fn render_definition_list(
                 (true, false) => description,
                 (true, true) => return None,
             };
+            // `render_inline` protects block markers visible inside one inline
+            // run, but a hanging definition can assemble the marker only when
+            // its term and description are joined (`1.` + ` text`). Protect
+            // that final first line so a semantic definition cannot reparse as
+            // a nested ordered list in the public CommonMark projection.
+            if has_terms {
+                content = protect_block_prefix(&content);
+            }
             prefix_item(&content, "- ").map(|content| (content, item.spacing_before_lines))
         })
         .collect::<Vec<_>>();

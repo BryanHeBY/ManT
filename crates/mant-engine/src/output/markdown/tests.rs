@@ -494,6 +494,42 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 }
 
 #[test]
+fn protects_hanging_definition_terms_from_becoming_nested_lists() {
+    let query = ResolvedContent {
+        address: None,
+        label: "definition-markers".to_owned(),
+        document: Some(manual(vec![section(
+            "NOTES",
+            vec![Block::DefinitionList {
+                items: vec![DefinitionItem {
+                    identity: None,
+                    terms: vec![vec![Inline::Text {
+                        value: "1.".to_owned(),
+                    }]],
+                    description: vec![paragraph(vec![Inline::Text {
+                        value: "first reference".to_owned(),
+                    }])],
+                    inline_term: true,
+                    spacing_before_lines: None,
+                }],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("- 1\\. first reference"), "{markdown}");
+    let lists = Parser::new(&markdown)
+        .filter(|event| matches!(event, Event::Start(Tag::List(_))))
+        .count();
+    assert_eq!(lists, 1, "the definition owns one bullet list only");
+}
+
+#[test]
 fn keeps_block_definition_descriptions_on_their_own_commonmark_line() {
     let definitions = Block::DefinitionList {
         items: vec![DefinitionItem {

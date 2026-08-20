@@ -247,7 +247,7 @@ fn escape_plain_text(value: &str) -> String {
     output
 }
 
-fn protect_block_prefix(line: &str) -> String {
+pub(super) fn protect_block_prefix(line: &str) -> String {
     let bytes = line.as_bytes();
     let hashes = bytes.iter().take_while(|byte| **byte == b'#').count();
     let insertion = if (hashes > 0 && bytes.get(hashes).is_none_or(u8::is_ascii_whitespace))
