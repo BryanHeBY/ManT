@@ -494,6 +494,66 @@ fn protects_paragraph_lines_from_accidental_block_syntax() {
 }
 
 #[test]
+fn preserves_literal_html_entity_spellings_across_commonmark() {
+    let query = ResolvedContent {
+        address: None,
+        label: "entities".to_owned(),
+        document: Some(manual(vec![section(
+            "ENTITY TEXT",
+            vec![paragraph(vec![Inline::Text {
+                value: "literal a & b; spellings &amp;, &pound;, &#163;, and &notreal;".to_owned(),
+            }])],
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(markdown.contains("a &amp; b"), "{markdown}");
+    assert!(markdown.contains("&amp;amp;"), "{markdown}");
+    assert!(markdown.contains("&amp;pound;"), "{markdown}");
+    assert!(markdown.contains("&amp;#163;"), "{markdown}");
+    assert!(markdown.contains("&amp;notreal;"), "{markdown}");
+    let visible = Parser::new(&markdown)
+        .filter_map(|event| match event {
+            Event::Text(value) => Some(value.into_string()),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(
+        visible.contains("literal a & b; spellings &amp;, &pound;, &#163;, and &notreal;"),
+        "{visible}"
+    );
+}
+
+#[test]
+fn escapes_literal_dollars_that_would_be_reparsed_as_math() {
+    let query = ResolvedContent {
+        address: None,
+        label: "variables".to_owned(),
+        document: Some(manual(vec![section(
+            "$info = summary ([$conf])",
+            Vec::new(),
+            Vec::new(),
+        )])),
+        tldr: None,
+    };
+
+    let markdown = render_markdown(&query);
+    assert!(
+        markdown.contains("## \\$info = summary (\\[\\$conf\\])"),
+        "{markdown}"
+    );
+    let headings = Parser::new(&markdown)
+        .filter_map(|event| match event {
+            Event::Text(value) => Some(value.into_string()),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(headings.contains("$info = summary ([$conf])"), "{headings}");
+}
+
+#[test]
 fn protects_hanging_definition_terms_from_becoming_nested_lists() {
     let query = ResolvedContent {
         address: None,

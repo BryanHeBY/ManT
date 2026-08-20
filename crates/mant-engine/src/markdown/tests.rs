@@ -125,6 +125,64 @@ fn main() {}
 }
 
 #[test]
+fn heading_attributes_consume_only_an_explicit_id() {
+    let document = parse_document(
+        "# API Reference\n\n\
+         ## GET /users/{id}\n\
+         ## POST /orders/{orderId}/items/{itemId}\n\
+         ## Config {#config-anchor}\n\
+         ## Template {{placeholder}}\n\
+         ## Route /users/{#id}\n\
+         ## Shell ${HOME} expansion\n",
+        None,
+    );
+    let titles = document
+        .sections
+        .iter()
+        .map(|section| (section.title.as_str(), section.id.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        titles,
+        vec![
+            ("GET /users/{id}", "get-users-id"),
+            (
+                "POST /orders/{orderId}/items/{itemId}",
+                "post-orders-orderid-items-itemid"
+            ),
+            ("Config", "config-anchor"),
+            ("Template {{placeholder}}", "template-placeholder"),
+            ("Route /users/{#id}", "route-users-id"),
+            ("Shell ${HOME} expansion", "shell-home-expansion"),
+        ]
+    );
+}
+
+#[test]
+fn unsupported_math_does_not_leak_markdown_bracket_escapes() {
+    let document = parse_document(
+        "# Variables\n\n\
+         ## $a (\\[$b\\])\n\
+         ## a (\\[$b\\])\n\
+         ## $a (\\[b\\])\n\
+         ## \\[$b\\]\n\
+         ## $a \\[$b\\]\n",
+        None,
+    );
+    assert_eq!(
+        document
+            .sections
+            .iter()
+            .map(|section| section.title.as_str())
+            .collect::<Vec<_>>(),
+        vec!["$a ([$b])", "a ([$b])", "$a ([b])", "[$b]", "$a [$b]"]
+    );
+    assert!(document.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_deref() == Some("markdown.unsupported")
+            && diagnostic.message.contains("math")
+    }));
+}
+
+#[test]
 fn lowers_hierarchical_markdown_links_into_same_source_document_references() {
     let document = parse_document(
         "[Start](Start-Process.md) [Guide](about_Profiles.markdown#examples) [Nested](../other.md)\n",

@@ -289,12 +289,20 @@ fn lower_document_structure(
         }) = event
         {
             let _ = cursor.next();
-            let (children, end) = parse_inlines(
+            let (mut children, end) = parse_inlines(
                 &mut cursor,
                 source,
                 &mut diagnostics,
                 TagEnd::Heading(level),
             );
+            // `pulldown-cmark` treats every trailing brace group as heading
+            // attributes and removes it before reporting whether it contains
+            // a useful attribute.  ManT only consumes one explicit `#id`, so
+            // recognize that narrow extension ourselves and leave ordinary
+            // API paths such as `/users/{id}` in the title.
+            let explicit_id = explicit_id
+                .map(pulldown_cmark::CowStr::into_string)
+                .or_else(|| take_explicit_heading_id(&mut children));
             let heading = inline_text(&children);
             if heading.is_empty() {
                 diagnostics.push(Diagnostic {
@@ -372,7 +380,6 @@ fn markdown_options() -> Options {
         | Options::ENABLE_FOOTNOTES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_HEADING_ATTRIBUTES
         | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
         | Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS
         | Options::ENABLE_MATH
@@ -381,6 +388,44 @@ fn markdown_options() -> Options {
         | Options::ENABLE_SUPERSCRIPT
         | Options::ENABLE_SUBSCRIPT
         | Options::ENABLE_WIKILINKS
+}
+
+fn take_explicit_heading_id(children: &mut Vec<Inline>) -> Option<String> {
+    let (id, empty) = {
+        let Inline::Text { value } = children.last_mut()? else {
+            return None;
+        };
+        let trimmed = value.trim_end();
+        let opening = trimmed.rfind("{#")?;
+        if !trimmed.ends_with('}') {
+            return None;
+        }
+        if opening != 0
+            && !trimmed[..opening]
+                .chars()
+                .next_back()
+                .is_some_and(char::is_whitespace)
+        {
+            return None;
+        }
+        let id = trimmed
+            .get(opening + 2..trimmed.len().checked_sub(1)?)?
+            .to_owned();
+        if id.is_empty()
+            || id.bytes().any(|byte| {
+                byte.is_ascii_whitespace() || matches!(byte, b'{' | b'}' | b'\\' | b'<' | b'>')
+            })
+        {
+            return None;
+        }
+        let title_end = trimmed[..opening].trim_end().len();
+        value.truncate(title_end);
+        (id, value.is_empty())
+    };
+    if empty {
+        children.pop();
+    }
+    Some(id)
 }
 
 fn heading_level(level: HeadingLevel) -> u8 {

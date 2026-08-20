@@ -16,7 +16,7 @@ Headings from H1 through H6 form a recursive section tree. The first heading, wh
 
 Heading levels determine ancestry. Skipped levels are accepted; depth follows the nearest preceding heading with a lower level. Duplicate titles receive distinct document-local IDs.
 
-An explicit heading attribute such as `{#configuration}` becomes a link alias. Automatic IDs use lower-case Unicode alphanumeric characters and underscores, replace other runs with `-`, and receive numeric suffixes when needed. Reserved selectors are moved out of the selector namespace while retaining their source alias.
+An explicit heading ID written as a whitespace-separated final `{#configuration}` becomes a link alias. This is the complete supported heading-attribute grammar: class-only blocks, custom key/value attributes, attached brace groups, and ordinary trailing brace text are retained as title text rather than consumed. Consequently headings such as `GET /users/{id}` and `Route /users/{#id}` preserve the path parameter. Automatic IDs use lower-case Unicode alphanumeric characters and underscores, replace other runs with `-`, and receive numeric suffixes when needed. Reserved selectors are moved out of the selector namespace while retaining their source alias.
 
 ## Supported Blocks
 
@@ -123,7 +123,7 @@ The parser recognizes several CommonMark or GFM extensions that ManT does not as
 | Task list | Complete list source |
 | Footnote definition or reference | Exact source |
 | Definition list extension | Complete source block |
-| Math span or block | Exact source |
+| Math span or block | Delimiters retained; CommonMark punctuation escapes become their visible characters |
 | Strikethrough | Exact source |
 | Superscript or subscript | Exact source |
 | Wiki link | Exact source |

@@ -140,10 +140,12 @@ fn parse_inline_sequence(
                 let raw = source.unsupported_inline(name, whole, diagnostics);
                 push_text(&mut output, raw);
             }
+            Event::InlineMath(_) | Event::DisplayMath(_) => {
+                let raw = source.unsupported_inline("math", range, diagnostics);
+                push_text(&mut output, unescape_commonmark_punctuation(&raw));
+            }
             Event::InlineHtml(_)
             | Event::Html(_)
-            | Event::InlineMath(_)
-            | Event::DisplayMath(_)
             | Event::FootnoteReference(_)
             | Event::TaskListMarker(_)
             | Event::Rule => {
@@ -155,6 +157,19 @@ fn parse_inline_sequence(
     }
 
     (output, end_offset)
+}
+
+fn unescape_commonmark_punctuation(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut characters = value.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character == '\\' && characters.peek().is_some_and(char::is_ascii_punctuation) {
+            output.push(characters.next().expect("peeked punctuation remains"));
+        } else {
+            output.push(character);
+        }
+    }
+    output
 }
 
 fn markdown_document_reference(destination: &str) -> Option<(String, Option<String>)> {

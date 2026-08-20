@@ -236,7 +236,17 @@ fn escape_plain_text(value: &str) -> String {
             && characters
                 .peek()
                 .is_some_and(|character| character.is_alphanumeric());
-        if matches!(character, '\\' | '`' | '*' | '[' | ']' | '<' | '>')
+        if character == '&' {
+            // A source entity spelling is prose, not serializer markup.  A
+            // bare `&amp;` would be decoded by the next CommonMark consumer and
+            // change the text the manual is documenting.  Entity-encoding the
+            // ampersand keeps both ordinary `a & b` and literal `&amp;` source
+            // text stable after reparsing.
+            output.push_str("&amp;");
+            previous = Some(character);
+            continue;
+        }
+        if matches!(character, '\\' | '`' | '*' | '[' | ']' | '<' | '>' | '$')
             || (character == '_' && !intraword_underscore)
         {
             output.push('\\');
