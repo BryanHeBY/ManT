@@ -941,13 +941,7 @@ fn apply_normalized_font(blocks: &mut [Block], font: NormalizedFont) {
                 if content.is_empty() {
                     continue;
                 }
-                children.push(match font {
-                    NormalizedFont::Emphasis => Inline::Emphasis { children: content },
-                    NormalizedFont::Literal => Inline::Code {
-                        value: plain_text(&content),
-                    },
-                    NormalizedFont::Symbolic => Inline::Strong { children: content },
-                });
+                *children = style_preformatted_inlines(content, font);
             }
             Block::List { items, .. } => {
                 for item in items {
@@ -959,13 +953,7 @@ fn apply_normalized_font(blocks: &mut [Block], font: NormalizedFont) {
                     for term in &mut item.terms {
                         let content = std::mem::take(term);
                         if !content.is_empty() {
-                            term.push(match font {
-                                NormalizedFont::Emphasis => Inline::Emphasis { children: content },
-                                NormalizedFont::Literal => Inline::Code {
-                                    value: plain_text(&content),
-                                },
-                                NormalizedFont::Symbolic => Inline::Strong { children: content },
-                            });
+                            *term = style_preformatted_inlines(content, font);
                         }
                     }
                     apply_normalized_font(&mut item.description, font);
@@ -2166,7 +2154,30 @@ fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> 
                 usize::from(extra_rows),
             ));
         }
-        if node.kind == NodeKind::Text || node.macro_name.is_some() {
+        if node.macro_name.as_deref() == Some("Bf") {
+            let body = first_part_children(node, NodeKind::Body)
+                .iter()
+                .collect::<Vec<_>>();
+            let nested = preformatted_inlines_refs(&body, context);
+            line.append(if let Some(font) = node.font {
+                style_preformatted_inlines(nested, font)
+            } else {
+                nested
+            });
+        } else if node.kind == NodeKind::Block
+            && matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
+        {
+            // Malformed but deployed mdoc sometimes opens another literal
+            // display before closing the current one.  libmandoc retains the
+            // nested container; treating it as an inline macro collapses all
+            // of its physical rows.  A preformatted parent can safely make
+            // the nested display transparent while preserving its row
+            // boundaries.
+            let body = first_part_children(node, NodeKind::Body)
+                .iter()
+                .collect::<Vec<_>>();
+            line.append(preformatted_inlines_refs(&body, context));
+        } else if node.kind == NodeKind::Text || node.macro_name.is_some() {
             append_inline_node(&mut line, node, context.default_name);
         } else {
             line.append(preformatted_inlines(&node.children, context));
@@ -2175,6 +2186,39 @@ fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> 
     }
     output.extend(line.finish());
     output
+}
+
+fn style_preformatted_inlines(nodes: Vec<Inline>, font: NormalizedFont) -> Vec<Inline> {
+    let mut output = Vec::new();
+    let mut line = Vec::new();
+    for node in nodes {
+        if node == Inline::LineBreak {
+            append_styled_preformatted_line(&mut output, &mut line, font);
+            output.push(Inline::LineBreak);
+        } else {
+            line.push(node);
+        }
+    }
+    append_styled_preformatted_line(&mut output, &mut line, font);
+    output
+}
+
+fn append_styled_preformatted_line(
+    output: &mut Vec<Inline>,
+    line: &mut Vec<Inline>,
+    font: NormalizedFont,
+) {
+    let content = std::mem::take(line);
+    if content.is_empty() {
+        return;
+    }
+    output.push(match font {
+        NormalizedFont::Emphasis => Inline::Emphasis { children: content },
+        NormalizedFont::Literal => Inline::Code {
+            value: plain_text(&content),
+        },
+        NormalizedFont::Symbolic => Inline::Strong { children: content },
+    });
 }
 
 fn flush_paragraph(

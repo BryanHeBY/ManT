@@ -540,7 +540,8 @@ fn parse_equation_delimiters(value: &str) -> Option<EquationDelimiterDirective> 
 /// deliberately takes the maximum across adjacent source lines because groff
 /// collapses a run of blank input lines in a no-fill display.
 fn no_fill_vertical_rows(line: &str) -> u16 {
-    if line.trim().is_empty() {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || roff_zero_width_blank_line(trimmed) {
         return 1;
     }
     let Some(request) = line.trim_start().strip_prefix(['.', '\'']) else {
@@ -556,6 +557,23 @@ fn no_fill_vertical_rows(line: &str) -> u16 {
         return 1;
     };
     argument.trim_end_matches('v').parse::<u16>().unwrap_or(1)
+}
+
+/// Whether a no-fill input row contains only roff's zero-width guard escape.
+///
+/// POD-generated manuals use `\&` instead of an empty physical input line.
+/// libmandoc correctly lowers that escape to no glyph, but the row itself is
+/// still observable inside a verbatim display. Keep this deliberately narrow:
+/// font switches and other state-only input do not independently request a
+/// visual row, while `\c` explicitly suppresses the line boundary.
+fn roff_zero_width_blank_line(line: &str) -> bool {
+    let mut remainder = line;
+    let mut found = false;
+    while let Some(rest) = remainder.strip_prefix(r"\&") {
+        found = true;
+        remainder = rest.trim();
+    }
+    found && remainder.is_empty()
 }
 
 fn source_span(node: &Node) -> Option<SourceSpan> {
@@ -870,6 +888,135 @@ second line\n\
             );
         };
         assert_eq!(inline_text(children), "first line\n\nsecond line");
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn preserves_zero_width_guard_rows_inside_no_fill_displays() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("no-fill-zero-width-row.7"),
+            b".TH NO-FILL-ZERO-WIDTH-ROW 7\n\
+.SH EXAMPLE\n\
+.EX\n\
+first line\n\
+\\&\n\
+second line\n\
+.EE\n",
+        )
+        .expect("lower no-fill zero-width row");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "no-fill display must remain preformatted: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), "first line\n\nsecond line");
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn preserves_lines_inside_font_blocks_nested_in_literal_displays() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("literal-font-block.7"),
+            b".Dd August 20, 2026\n\
+.Dt LITERAL-FONT-BLOCK 7\n\
+.Os\n\
+.Sh EXAMPLE\n\
+.Bd -literal\n\
+.Bf Sy\n\
+first line\n\
+second line\n\
+.Ef\n\
+.Ed\n",
+        )
+        .expect("lower font block inside literal display");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "literal display must remain one preformatted block: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), "first line\nsecond line");
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn preserves_literal_display_lines_inside_literal_font_blocks() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("literal-display-inside-font-block.7"),
+            b".Dd August 21, 2026\n\
+.Dt LITERAL-DISPLAY-INSIDE-FONT-BLOCK 7\n\
+.Os\n\
+.Sh EXAMPLE\n\
+.Bf Li\n\
+.Bd -literal\n\
+first line\n\
+second line\n\
+.Ed\n\
+.Ef\n",
+        )
+        .expect("lower literal display inside literal font block");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "fonted literal display must remain preformatted: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), "first line\nsecond line");
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn preserves_lines_inside_nested_literal_displays() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("nested-literal-display.7"),
+            b".Dd August 21, 2026\n\
+.Dt NESTED-LITERAL-DISPLAY 7\n\
+.Os\n\
+.Sh EXAMPLE\n\
+.Bd -literal\n\
+first line\n\
+.Bd -literal\n\
+second line\n\
+third line\n\
+.Ed\n",
+        )
+        .expect("lower nested literal display");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "nested literal displays must remain one preformatted block: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(inline_text(children), "first line\nsecond line\nthird line");
         assert_eq!(
             children
                 .iter()
