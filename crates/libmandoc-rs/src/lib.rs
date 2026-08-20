@@ -291,6 +291,21 @@ mod tests {
         assert!(equation.contains("y _ 1 ^ 2"), "{equation}");
     }
 
+    #[test]
+    fn parser_normalizes_the_common_gnu_ldots_equation_macro() {
+        let report = Parser::default()
+            .parse_bytes(
+                "equation-ldots.3",
+                b".TH EQUATION 3\n.SH DESCRIPTION\n.EQ\nx sub 1 ldots x sub n\n.EN\n",
+            )
+            .expect("parse GNU ldots equation macro");
+        let equation = find_kind(&report.document.root, NodeKind::Equation)
+            .and_then(|node| node.equation.as_deref())
+            .expect("normalized equation");
+
+        assert_eq!(equation, "x _ 1 ... x _ n");
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_parser_decompresses_gzip_before_calling_libmandoc() {

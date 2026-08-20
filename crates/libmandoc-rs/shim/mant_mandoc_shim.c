@@ -810,7 +810,9 @@ append_equation(struct text_buffer *buffer, const struct eqn_box *box, int depth
 		return 1;
 	if (box->pos == EQNPOS_SQRT && !append_text(buffer, "sqrt("))
 		return 0;
-	if (!append_text(buffer, box->left) || !append_text(buffer, box->text))
+	if (!append_text(buffer, box->left) ||
+	    !append_text(buffer, box->text != NULL &&
+	    strcmp(box->text, "ldots") == 0 ? "..." : box->text))
 		return 0;
 	child = box->first;
 	if (box->pos == EQNPOS_SQRT) {

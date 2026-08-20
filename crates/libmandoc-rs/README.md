@@ -179,6 +179,8 @@ that are already resolved by libmandoc but unavailable through a public C API:
 
 - normalized mdoc enclosures, list/display/font/author roles, source flags,
   table cells and spans, equations, and validated tags;
+- normalized eqn operators plus the common GNU `ldots` macro, which the
+  pinned parser otherwise retains as an unexpanded identifier;
 - tbl multiline-cell and vertical-continuation flags, including both tbl(7)
   spellings of vertical continuation;
 - structured diagnostics and explicit source/include/compression policy.

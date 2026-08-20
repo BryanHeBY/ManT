@@ -238,7 +238,9 @@ Some formatter-specific strings disappear before libmandoc exposes a cell. For o
 
 ## Equations
 
-`eqn(7)` input becomes an `equation` block containing libmandoc's normalized expression text. ManT preserves the expression for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor.
+Display `eqn(7)` input becomes an `equation` block containing libmandoc's normalized expression text. Delimiter-selected equations inside filled prose remain inline symbolic tokens rather than splitting the paragraph. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through the pinned eqn parser. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common GNU `ldots` macro is normalized to `...`.
+
+ManT preserves these expressions for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
 
 Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix, so pathological input cannot overflow later recursive consumers; descendants beyond that defensive cap are omitted rather than reported as a whole-document parse failure.
 

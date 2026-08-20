@@ -314,6 +314,15 @@ fn lower_inline_node(
     if node.kind == NodeKind::Text {
         return lower_text_node(node, Font::Regular);
     }
+    if node.kind == NodeKind::Equation {
+        return node
+            .equation
+            .as_deref()
+            .map(visible_text)
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| vec![Inline::Code { value }])
+            .unwrap_or_default();
+    }
 
     let macro_name = node.macro_name.as_deref();
     if macro_name == Some("Nm") && node.kind == NodeKind::Block {

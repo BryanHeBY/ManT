@@ -10,7 +10,7 @@ mod reference;
 mod roff_escape;
 mod source;
 
-use std::{cell::RefCell, path::Path};
+use std::{cell::RefCell, collections::BTreeMap, path::Path};
 
 use libmandoc_rs::{
     Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseOptions,
@@ -30,6 +30,8 @@ use crate::text_safety::mask_terminal_control_bytes;
 
 pub use error::{ManualError, ManualErrorKind};
 pub use source::MAX_MANUAL_BYTES;
+
+const MAX_INLINE_EQUATION_NORMALIZATIONS: usize = 256;
 
 /// Parse and normalize one standalone man or mdoc source file.
 ///
@@ -183,8 +185,16 @@ fn normalize_metadata(value: Option<&str>) -> Option<String> {
 struct LoweringContext<'a> {
     default_name: Option<&'a str>,
     source: Option<&'a str>,
+    equation_delimiters: Vec<EquationDelimiterChange>,
+    normalized_equations: RefCell<BTreeMap<String, String>>,
     next_section_id: usize,
     diagnostics: RefCell<Vec<Diagnostic>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct EquationDelimiterChange {
+    line: u32,
+    delimiters: Option<(char, char)>,
 }
 
 #[derive(Debug)]
@@ -201,13 +211,52 @@ impl TableTextBlock {
 }
 
 impl<'a> LoweringContext<'a> {
-    const fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
+    fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
             default_name,
             source,
+            equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
+            normalized_equations: RefCell::new(BTreeMap::new()),
             next_section_id: 1,
             diagnostics: RefCell::new(Vec::new()),
         }
+    }
+
+    fn equation_delimiters_at(&self, line: u32) -> Option<(char, char)> {
+        self.equation_delimiters
+            .iter()
+            .rev()
+            .find(|change| change.line <= line)
+            .and_then(|change| change.delimiters)
+    }
+
+    /// Normalize an eqn fragment through the same pinned parser used for
+    /// display equations. tbl retains delimiter-wrapped cell text as an
+    /// opaque string, so reparsing only that bounded fragment is the sole way
+    /// to avoid a second, incomplete eqn grammar in the lowering layer.
+    fn normalize_equation(&self, source: &str, line: u32) -> String {
+        {
+            let normalized = self.normalized_equations.borrow();
+            if let Some(value) = normalized.get(source) {
+                return value.clone();
+            }
+            if normalized.len() >= MAX_INLINE_EQUATION_NORMALIZATIONS {
+                drop(normalized);
+                self.warn_inline_equation_budget(line);
+                return visible_text(source);
+            }
+        }
+        let synthetic = format!(".TH MANT-EQN 7\n.EQ\n{source}\n.EN\n");
+        let normalized = Parser::default()
+            .parse_bytes(Path::new("mant-inline-eqn.7"), synthetic.as_bytes())
+            .ok()
+            .and_then(|report| first_equation(&report.document.root).map(visible_text))
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| visible_text(source));
+        self.normalized_equations
+            .borrow_mut()
+            .insert(source.to_owned(), normalized.clone());
+        normalized
     }
 
     fn table_text_blocks(&self, line: u32, maximum: usize) -> Vec<TableTextBlock> {
@@ -392,9 +441,92 @@ impl<'a> LoweringContext<'a> {
         });
     }
 
+    fn warn_inline_equation_budget(&self, line: u32) {
+        let mut diagnostics = self.diagnostics.borrow_mut();
+        if diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code.as_deref() == Some("manual.inline-equation-budget"))
+        {
+            return;
+        }
+        diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Unsupported,
+            code: Some("manual.inline-equation-budget".to_owned()),
+            message: format!(
+                "more than {MAX_INLINE_EQUATION_NORMALIZATIONS} distinct inline table equations; later source spellings were retained without normalization"
+            ),
+            source: Some(SourceSpan {
+                byte_range: None,
+                line,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }),
+        });
+    }
+
     fn take_diagnostics(&self) -> Vec<Diagnostic> {
         self.diagnostics.take()
     }
+}
+
+fn first_equation(node: &Node) -> Option<&str> {
+    node.equation
+        .as_deref()
+        .or_else(|| node.children.iter().find_map(first_equation))
+}
+
+/// Track active inline eqn delimiters at each source line.
+///
+/// eqn configures delimiters inside an `.EQ`/`.EN` block; they take effect on
+/// following prose and tbl cells. Keeping the change points makes lookup
+/// logarithm-free and deterministic without replaying the whole source for
+/// every table cell.
+fn equation_delimiter_changes(source: &str) -> Vec<EquationDelimiterChange> {
+    let mut changes = Vec::new();
+    let mut in_equation = false;
+    let mut pending = None;
+    for (index, source_line) in source.lines().enumerate() {
+        let line = u32::try_from(index + 1).unwrap_or(u32::MAX);
+        let trimmed = source_line.trim();
+        if trimmed.starts_with(".\\\"") || trimmed.starts_with("'\\\"") {
+            continue;
+        }
+        if let Some(rest) = trimmed
+            .strip_prefix(".EQ")
+            .or_else(|| trimmed.strip_prefix("'EQ"))
+            .filter(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+        {
+            in_equation = true;
+            pending = parse_equation_delimiters(rest.trim()).or(pending);
+            continue;
+        }
+        if in_equation {
+            if trimmed == ".EN" || trimmed == "'EN" {
+                if let Some(delimiters) = pending.take() {
+                    changes.push(EquationDelimiterChange {
+                        line: line.saturating_add(1),
+                        delimiters,
+                    });
+                }
+                in_equation = false;
+            } else if let Some(delimiters) = parse_equation_delimiters(trimmed) {
+                pending = Some(delimiters);
+            }
+        }
+    }
+    changes
+}
+
+fn parse_equation_delimiters(value: &str) -> Option<Option<(char, char)>> {
+    let value = value.strip_prefix("delim")?.trim_start();
+    if value == "off" {
+        return Some(None);
+    }
+    let mut delimiters = value.chars();
+    let opening = delimiters.next()?;
+    let closing = delimiters.next()?;
+    Some(Some((opening, closing)))
 }
 
 /// Return the largest explicit vertical separation requested by one source
@@ -456,7 +588,10 @@ mod tests {
 
     use mant_ir::{Block, DiagnosticLevel, Inline, SourceFormat};
 
-    use super::{Parser, lower_mandoc_document, parse_manual_bytes, parse_manual_source};
+    use super::{
+        MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document, parse_manual_bytes,
+        parse_manual_source,
+    };
 
     fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
@@ -2135,6 +2270,94 @@ Sean\n\
             document.sections[1].blocks[0],
             Block::Equation { ref value, .. } if value == "x + width / 2"
         ));
+    }
+
+    #[test]
+    fn keeps_inline_equations_in_macro_arguments_and_filled_prose() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("inline-equation.7"),
+            b".TH EQNPROBE2 7\n.SH DESCRIPTION\n.EQ\ndelim $$\n.EN\n.TP\n.BR Dp\\~ \"$dx sub 1 ~ ldots ~ dx sub n$\"\nDraw a polygon with,\nfor $i = 1 , ldots , n + 1$,\nits vertex.\n",
+        )
+        .expect("lower inline equations");
+
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "expected one definition list: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        let [item] = items.as_slice() else {
+            panic!("expected one equation definition");
+        };
+        assert_eq!(inline_text(&item.terms[0]), "Dp dx _ 1 ... dx _ n");
+        let [Block::Paragraph { children, .. }] = item.description.as_slice() else {
+            panic!("expected one filled description: {:?}", item.description);
+        };
+        assert_eq!(
+            inline_text(children),
+            "Draw a polygon with, for i = 1 , ... , n + 1, its vertex."
+        );
+        assert!(children.iter().any(
+            |child| matches!(child, Inline::Code { value } if value == "i = 1 , ... , n + 1")
+        ));
+    }
+
+    #[test]
+    fn normalizes_inline_equations_retained_as_tbl_cell_text() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("table-inline-equation.3"),
+            b".TH TABLE-EQN 3\n.SH DESCRIPTION\n.EQ\ndelim %%\n.EN\n.TS\nl l.\n%0%\tfor values in % [ 0 , ~pi over 2 ]%\n.TE\n",
+        )
+        .expect("lower table equations");
+
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected equation table");
+        };
+        let [left, right] = rows[0].cells.as_slice() else {
+            panic!("expected two cells");
+        };
+        let [Block::Paragraph { children: left, .. }] = left.blocks.as_slice() else {
+            panic!("expected left paragraph");
+        };
+        let [
+            Block::Paragraph {
+                children: right, ..
+            },
+        ] = right.blocks.as_slice()
+        else {
+            panic!("expected right paragraph");
+        };
+        assert!(matches!(left.as_slice(), [Inline::Code { value }] if value == "0"));
+        assert_eq!(inline_text(right), "for values in [ 0 , π / 2 ]");
+        assert!(
+            right
+                .iter()
+                .any(|child| matches!(child, Inline::Code { .. }))
+        );
+    }
+
+    #[test]
+    fn bounds_distinct_tbl_equation_normalization_work() {
+        let mut source =
+            String::from(".TH TABLE-EQN-BUDGET 3\n.SH DESCRIPTION\n.EQ\ndelim %%\n.EN\n.TS\nl.\n");
+        for index in 0..=MAX_INLINE_EQUATION_NORMALIZATIONS {
+            source.push_str(&format!("%x{index}%\n"));
+        }
+        source.push_str(".TE\n");
+
+        let document = parse_manual_bytes(
+            std::path::Path::new("table-inline-equation-budget.3"),
+            source.as_bytes(),
+        )
+        .expect("lower a bounded number of table equations");
+
+        assert!(document.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_deref() == Some("manual.inline-equation-budget")
+        }));
+        let Block::Table { rows, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected equation table");
+        };
+        assert_eq!(rows.len(), MAX_INLINE_EQUATION_NORMALIZATIONS + 1);
     }
 
     #[test]

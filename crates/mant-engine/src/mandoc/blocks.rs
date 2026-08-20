@@ -177,7 +177,10 @@ fn lower_blocks_with_spacing(
     let mut lowerer =
         BlockLowerer::new(context, indent_columns, paragraph_distance, spacing_enabled);
     for (index, node) in nodes.iter().enumerate() {
-        if !embedded_nodes[index] {
+        if !embedded_nodes[index] && !is_inline_equation_quote_artifact(nodes, index) {
+            if follows_inline_equation_punctuation(nodes, index) {
+                lowerer.state.tighten_next_boundary();
+            }
             lowerer.push(node, table_embeddings[index].as_ref());
         }
     }
@@ -229,6 +232,16 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             || node.kind == NodeKind::Comment
             || is_section(node, false)
             || is_nonprinting_request(node)
+        {
+            return;
+        }
+        // A configuration-only `.EQ delim XX .EN` produces an empty equation
+        // syntax node. It changes parser state but owns no printable block.
+        if node.kind == NodeKind::Equation
+            && node
+                .equation
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
         {
             return;
         }
@@ -815,6 +828,52 @@ fn equation_block(node: &Node, indent_columns: u16) -> Block {
     }
 }
 
+fn is_inline_equation(node: &Node) -> bool {
+    node.kind == NodeKind::Equation
+        && !node.flags.line_start
+        && node
+            .equation
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+}
+
+/// libmandoc terminates a quoted man-macro argument containing inline eqn by
+/// moving the equation beside the macro and retaining the closing source quote
+/// as a `\&"` text sibling. The quote is parser scaffolding, not output.
+fn is_inline_equation_quote_artifact(nodes: &[Node], index: usize) -> bool {
+    let Some(node) = nodes.get(index) else {
+        return false;
+    };
+    let Some(previous) = index.checked_sub(1).and_then(|index| nodes.get(index)) else {
+        return false;
+    };
+    is_inline_equation(previous)
+        && previous.line == node.line
+        && node.kind == NodeKind::Text
+        && node
+            .text
+            .as_deref()
+            .is_some_and(|text| visible_text(text).trim() == "\"")
+}
+
+fn follows_inline_equation_punctuation(nodes: &[Node], index: usize) -> bool {
+    let Some(node) = nodes.get(index) else {
+        return false;
+    };
+    let Some(previous) = index.checked_sub(1).and_then(|index| nodes.get(index)) else {
+        return false;
+    };
+    is_inline_equation(previous)
+        && previous.line == node.line
+        && node.kind == NodeKind::Text
+        && node
+            .text
+            .as_deref()
+            .map(visible_text)
+            .and_then(|text| text.chars().next())
+            .is_some_and(|character| matches!(character, '.' | ',' | ':' | ';' | '!' | '?'))
+}
+
 /// Join a synopsis command head to the body that libmandoc groups beneath it.
 ///
 /// Both man(7) `.SY command` and an mdoc(7) `.Nm` in SYNOPSIS become
@@ -1110,7 +1169,7 @@ fn lower_missing_table_cell(
     if source.is_empty() {
         return Vec::new();
     }
-    let lowered = parse_roff_text(source);
+    let lowered = lower_table_cell_text(source, node.line, context);
     if !lowered.is_empty() {
         return lowered;
     }
@@ -1143,7 +1202,7 @@ fn lower_table_cell(
         }
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
-        return parse_roff_text(cell.text.as_deref().unwrap_or_default());
+        return lower_table_cell_text(cell.text.as_deref().unwrap_or_default(), node.line, context);
     }
     if !cell.text_block {
         return Vec::new();
@@ -1180,6 +1239,30 @@ fn lower_table_cell(
 
     context.warn_unhandled_table_text_block(node);
     Vec::new()
+}
+
+fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>) -> Vec<Inline> {
+    let Some((opening, closing)) = context.equation_delimiters_at(line) else {
+        return parse_roff_text(source);
+    };
+    let mut output = Vec::new();
+    let mut remainder = source;
+    while let Some(opening_index) = remainder.find(opening) {
+        let after_opening = &remainder[opening_index + opening.len_utf8()..];
+        let Some(closing_index) = after_opening.find(closing) else {
+            break;
+        };
+        output.extend(parse_roff_text(&remainder[..opening_index]));
+        let expression = &after_opening[..closing_index];
+        if !expression.trim().is_empty() {
+            output.push(Inline::Code {
+                value: context.normalize_equation(expression, line),
+            });
+        }
+        remainder = &after_opening[closing_index + closing.len_utf8()..];
+    }
+    output.extend(parse_roff_text(remainder));
+    output
 }
 
 fn lower_table_text_block(
@@ -1623,7 +1706,22 @@ fn definition_item(
     spacing_enabled: bool,
 ) -> DefinitionItem {
     let head = visible_definition_head(node);
-    let mut term = lower_inline_nodes_with_spacing(head, context.default_name, spacing_enabled);
+    let body = first_part_children(node, NodeKind::Body);
+    let (displaced_equations, body) = displaced_definition_equations(head, body);
+    let mut term_builder = InlineBuilder::with_spacing(spacing_enabled);
+    term_builder.append(lower_inline_nodes_with_spacing(
+        head,
+        context.default_name,
+        spacing_enabled,
+    ));
+    for equation in displaced_equations {
+        term_builder.append(lower_inline_nodes_with_spacing(
+            std::slice::from_ref(equation),
+            context.default_name,
+            spacing_enabled,
+        ));
+    }
+    let mut term = term_builder.finish();
     if let Some(id) = definition_head_anchor(node, &term) {
         term.insert(0, Inline::Anchor { id: id.into() });
     }
@@ -1633,7 +1731,7 @@ fn definition_item(
         inline_term: terms_fit_inline(&terms, max_term_width),
         terms,
         description: lower_blocks_with_spacing(
-            first_part_children(node, NodeKind::Body),
+            body,
             context,
             indent_columns + 4,
             paragraph_distance,
@@ -1641,6 +1739,46 @@ fn definition_item(
         ),
         spacing_before_lines: None,
     }
+}
+
+/// Recover inline eqn arguments that libmandoc moved from a man macro head to
+/// the beginning of its owning definition body.
+fn displaced_definition_equations<'a>(
+    head: &[Node],
+    body: &'a [Node],
+) -> (Vec<&'a Node>, &'a [Node]) {
+    let Some(head_line) = head.iter().map(maximum_node_line).max() else {
+        return (Vec::new(), body);
+    };
+    let mut equations = Vec::new();
+    let mut consumed = 0;
+    while let Some(candidate) = body
+        .get(consumed)
+        .filter(|candidate| candidate.line == head_line)
+    {
+        if is_inline_equation(candidate) {
+            equations.push(candidate);
+            consumed += 1;
+            continue;
+        }
+        if consumed > 0 && is_inline_equation_quote_artifact(body, consumed) {
+            consumed += 1;
+            continue;
+        }
+        break;
+    }
+    if equations.is_empty() {
+        (equations, body)
+    } else {
+        (equations, &body[consumed..])
+    }
+}
+
+fn maximum_node_line(node: &Node) -> u32 {
+    node.children
+        .iter()
+        .map(maximum_node_line)
+        .fold(node.line, u32::max)
 }
 
 /// Split alternatives embedded in one extended mdoc definition head.
@@ -2081,6 +2219,7 @@ fn flush_preformatted(
 /// its command head.
 fn participates_in_inline_flow(node: &Node) -> bool {
     matches!(node.kind, NodeKind::Text | NodeKind::Element)
+        || is_inline_equation(node)
         || is_enclosure_macro(node.macro_name.as_deref())
         || node.macro_name.as_deref() == Some("Nd")
 }
