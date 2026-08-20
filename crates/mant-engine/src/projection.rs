@@ -401,9 +401,22 @@ fn resolve_explanation_candidate<'a>(
     located: &'a [LocatedNode<'a>],
     selector: &str,
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
-    if let Some(candidate) = located.iter().find(|candidate| {
-        !candidate.is_section() && (candidate.matches_path(selector) || candidate.id() == selector)
-    }) {
+    if let Some(candidate) = located
+        .iter()
+        .find(|candidate| candidate.matches_path(selector))
+    {
+        if !candidate.is_section() {
+            return Ok(candidate);
+        }
+        return Err(ProjectionError::ExplanationRequiresEntry {
+            document: query.label.clone(),
+            selector: selector.to_owned(),
+        });
+    }
+    if let Some(candidate) = located
+        .iter()
+        .find(|candidate| !candidate.is_section() && candidate.id() == selector)
+    {
         return Ok(candidate);
     }
 
@@ -457,8 +470,11 @@ fn resolve_candidate<'a>(
 ) -> Result<&'a LocatedNode<'a>, ProjectionError> {
     if let Some(candidate) = located
         .iter()
-        .find(|candidate| candidate.matches_path(selector) || candidate.id() == selector)
+        .find(|candidate| candidate.matches_path(selector))
     {
+        return Ok(candidate);
+    }
+    if let Some(candidate) = located.iter().find(|candidate| candidate.id() == selector) {
         return Ok(candidate);
     }
 
@@ -866,8 +882,9 @@ fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
 mod tests {
     use crate::ResolvedContent;
     use mant_ir::{
-        Block, Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline,
-        LayoutHint, Section, SourceFormat, TldrDocument, TldrOrigin,
+        Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
+        DiagnosticLevel, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section,
+        SourceFormat, TldrDocument, TldrOrigin,
     };
     use mant_protocol::{ExcerptSelection, OutlineNode};
 
@@ -1076,6 +1093,42 @@ mod tests {
         assert_eq!(outline.title(), "Other options");
         assert_eq!(outline.ancestors[0].path, "2");
         assert_eq!(outline.ancestors[0].title, "OPTIONS");
+    }
+
+    #[test]
+    fn structural_paths_take_precedence_over_colliding_entry_ids() {
+        let mut query = query();
+        query.document.as_mut().expect("document").sections[1]
+            .blocks
+            .push(Block::DefinitionList {
+                items: vec![DefinitionItem {
+                    identity: Some(DefinitionIdentity {
+                        id: "3".into(),
+                        role: DefinitionRole::Option,
+                        case: DefinitionCase::Sensitive,
+                        names: vec!["-3".to_owned()],
+                    }),
+                    terms: vec![vec![Inline::Code {
+                        value: "-3".to_owned(),
+                    }]],
+                    description: Vec::new(),
+                    inline_term: false,
+                    spacing_before_lines: None,
+                }],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            });
+
+        let excerpt = select_excerpt(&query, &["3"]).expect("section path wins");
+        assert!(matches!(
+            excerpt.selections.as_slice(),
+            [ExcerptSelection::DocumentSection { outline, .. }] if outline.path() == "3"
+        ));
+        assert!(matches!(
+            super::select_explanation(&query, "3"),
+            Err(ProjectionError::ExplanationRequiresEntry { .. })
+        ));
     }
 
     #[test]
