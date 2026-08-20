@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use libmandoc_rs::{Node, NodeKind};
 use mant_ir::Inline;
 
+use crate::inline::{first_visible_character, has_printable_character, last_visible_character};
 pub(crate) use crate::inline::{plain_text, terms_fit_inline};
 
 use super::{
@@ -18,6 +19,8 @@ pub(super) struct InlineBuilder {
     tight_next_boundary: bool,
     spacing_enabled: bool,
     preserve_next_boundary: bool,
+    last_visible_character: Option<char>,
+    has_printable_content: bool,
 }
 
 /// Semantic boundary between two inline fragments in filled roff mode.
@@ -41,6 +44,8 @@ impl InlineBuilder {
             tight_next_boundary: false,
             spacing_enabled: true,
             preserve_next_boundary: false,
+            last_visible_character: None,
+            has_printable_content: false,
         }
     }
 
@@ -50,6 +55,8 @@ impl InlineBuilder {
             tight_next_boundary: false,
             spacing_enabled,
             preserve_next_boundary: false,
+            last_visible_character: None,
+            has_printable_content: false,
         }
     }
 
@@ -97,17 +104,14 @@ impl InlineBuilder {
     /// leading, repeated, or trailing rows around the paragraph.
     pub(super) fn hard_break(&mut self) {
         self.tight_next_boundary = false;
-        if plain_text(&self.nodes)
-            .chars()
-            .any(|character| character != '\n')
-            && !matches!(self.nodes.last(), Some(Inline::LineBreak))
-        {
+        if self.has_printable_content && !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.push(Inline::LineBreak);
+            self.last_visible_character = Some('\n');
         }
     }
 
     pub(super) fn append(&mut self, mut incoming: Vec<Inline>) {
-        self.append_at_boundary(&mut incoming, false);
+        self.append_at_boundary(&mut incoming);
     }
 
     /// Append content using the formatter-level boundary selected by the
@@ -117,7 +121,7 @@ impl InlineBuilder {
             FilledBoundary::SameLine => self.append(incoming),
             FilledBoundary::Word => {
                 let mut incoming = incoming;
-                self.append_at_boundary(&mut incoming, true);
+                self.append_at_boundary(&mut incoming);
             }
             FilledBoundary::LineBreak => {
                 self.hard_break();
@@ -126,21 +130,26 @@ impl InlineBuilder {
         }
     }
 
-    fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>, source_line_changed: bool) {
+    fn append_at_boundary(&mut self, incoming: &mut Vec<Inline>) {
         if incoming.is_empty() {
             return;
         }
-        let add_space = if source_line_changed {
-            needs_filled_line_space(&self.nodes, incoming)
-        } else {
-            needs_space(&self.nodes, incoming)
-        };
+        let incoming_first = first_visible_character(incoming);
+        let incoming_last = last_visible_character(incoming);
+        let incoming_has_printable = has_printable_character(incoming);
+        let add_space = needs_boundary_space(self.last_visible_character, incoming_first);
         let preserve_boundary = std::mem::take(&mut self.preserve_next_boundary);
         if (self.spacing_enabled || preserve_boundary) && !self.tight_next_boundary && add_space {
             push_text(&mut self.nodes, " ".to_owned());
+            self.last_visible_character = Some(' ');
+            self.has_printable_content = true;
         }
         self.tight_next_boundary = false;
         self.nodes.append(incoming);
+        if incoming_last.is_some() {
+            self.last_visible_character = incoming_last;
+        }
+        self.has_printable_content |= incoming_has_printable;
     }
 
     pub(super) fn finish(mut self) -> Vec<Inline> {
@@ -1374,20 +1383,8 @@ fn styled_segment(value: String, font: Font) -> Inline {
     }
 }
 
-fn needs_space(existing: &[Inline], incoming: &[Inline]) -> bool {
-    let left = plain_text(existing).chars().next_back();
-    let right = plain_text(incoming).chars().next();
+fn needs_boundary_space(left: Option<char>, right: Option<char>) -> bool {
     matches!((left, right), (Some(left), Some(right)) if !left.is_whitespace() && !right.is_whitespace())
-}
-
-fn needs_filled_line_space(existing: &[Inline], incoming: &[Inline]) -> bool {
-    matches!(
-        (
-            plain_text(existing).chars().next_back(),
-            plain_text(incoming).chars().next(),
-        ),
-        (Some(left), Some(right)) if !left.is_whitespace() && !right.is_whitespace()
-    )
 }
 
 fn push_text(nodes: &mut Vec<Inline>, value: String) {
@@ -1401,9 +1398,38 @@ fn push_text(nodes: &mut Vec<Inline>, value: String) {
 #[cfg(test)]
 mod tests {
     use super::{
-        Font, parse_roff_text, parse_roff_text_with_font, plain_text, source_external_link,
+        FilledBoundary, Font, InlineBuilder, parse_roff_text, parse_roff_text_with_font,
+        plain_text, source_external_link,
     };
     use mant_ir::Inline;
+
+    #[test]
+    fn inline_builder_tracks_nested_visible_boundaries_incrementally() {
+        let mut builder = InlineBuilder::new();
+        builder.append(vec![Inline::Anchor {
+            id: "start".to_owned().into(),
+        }]);
+        builder.append(vec![Inline::Strong {
+            children: vec![Inline::Text {
+                value: "first".to_owned(),
+            }],
+        }]);
+        builder.append_filled(
+            vec![Inline::Emphasis {
+                children: vec![Inline::Text {
+                    value: "second".to_owned(),
+                }],
+            }],
+            FilledBoundary::Word,
+        );
+        builder.hard_break();
+        builder.hard_break();
+        builder.append(vec![Inline::Code {
+            value: "third".to_owned(),
+        }]);
+
+        assert_eq!(plain_text(&builder.finish()), "first second\nthird");
+    }
 
     #[test]
     fn decodes_fonts_hyphens_and_renderer_links() {

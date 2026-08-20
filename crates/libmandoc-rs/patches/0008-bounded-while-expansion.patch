@@ -1,0 +1,45 @@
+diff --git a/read.c b/read.c
+--- a/read.c
++++ b/read.c
+@@ -57,6 +57,7 @@
+ #include "tag.h"
+ 
+ #define	REPARSE_LIMIT	1000
++#define	WHILE_LIMIT	10000
+ 
+ struct	mparse {
+ 	struct roff	 *roff; /* roff parser (!NULL) */
+@@ -69,6 +70,7 @@ struct	mparse {
+ 	int		  gzip; /* current input file is gzipped */
+ 	int		  filenc; /* encoding of the current file */
+ 	int		  reparse_count; /* finite interp. stack */
++	int		  while_count; /* finite .while expansion */
+ 	int		  line; /* line number in the file */
+ };
+ 
+@@ -324,6 +326,7 @@ rerun:
+ 			}
+ 			curp->loop = thisln;
+ 			loop = NULL;
++			curp->while_count = 1;
+ 			inloop = 1;
+ 			break;
+ 		case ROFF_LOOPCONT:
+@@ -339,8 +342,15 @@ rerun:
+ 				curp->loop = loop = NULL;
+ 				break;
+ 			}
+-			if (line_result & ROFF_LOOPCONT)
+-				loop = curp->loop;
++			if (line_result & ROFF_LOOPCONT) {
++				if (++curp->while_count > WHILE_LIMIT) {
++					mandoc_msg(MANDOCERR_ROFFLOOP,
++					    curp->line, pos, NULL);
++					curp->loop = loop = NULL;
++					inloop = 0;
++				} else
++					loop = curp->loop;
++			}
+			else {
+				curp->loop = loop = NULL;
+				inloop = 0;

@@ -14,3 +14,4 @@
 0005-modern-standards.patch
 0006-thread-local-parser-state.patch
 0007-thread-safe-date-conversion.patch
+0008-bounded-while-expansion.patch

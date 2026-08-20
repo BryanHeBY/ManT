@@ -849,6 +849,35 @@ mod tests {
     }
 
     #[test]
+    fn infinite_while_loop_is_bounded_with_a_diagnostic() {
+        let report = Parser::default()
+            .parse_bytes(
+                "loop.1",
+                b".TH LOOP 1\n.SH BODY\n.while 1 \\{\\\nloop\n.\\}\n.SH AFTER\nretained\n",
+            )
+            .expect("return the finite prefix of a looping manual");
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("infinite loop")),
+            "loop budget must remain observable: {:?}",
+            report.diagnostics
+        );
+        assert!(
+            visible.contains(&"retained"),
+            "parsing must continue after the bounded loop"
+        );
+        assert!(
+            visible.iter().filter(|value| **value == "loop").count() <= 10_000,
+            "the loop body must not exceed the documented budget"
+        );
+    }
+
+    #[test]
     fn deeply_nested_input_is_bounded_instead_of_overflowing_the_stack() {
         // Far more nesting than the copy cap; the parse must return a finite
         // tree rather than recursing without limit while copying it out.

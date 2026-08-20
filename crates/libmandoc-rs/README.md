@@ -165,6 +165,9 @@ the ordered patches in `patches/series`:
 - `0007-thread-safe-date-conversion.patch` makes ordinary manual dates
   timezone-independent and uses reentrant conversion for the special current
   date form.
+- `0008-bounded-while-expansion.patch` limits each roff `.while` loop to
+  10,000 iterations, retains the finite prefix, and emits libmandoc's existing
+  infinite-loop diagnostic instead of allowing hostile input to parse forever.
 
 Each is a narrow parser or portability correction. They are not a forked
 renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the

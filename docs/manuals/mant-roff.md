@@ -170,6 +170,12 @@ different wording for the same source key.
 
 libmandoc preprocesses macro definitions, strings, registers, conditionals, loops, translations, and supported compatibility requests before ManT receives the owned tree. ManT does not expose that formatter state as IR.
 
+Each `.while` loop is limited to 10,000 body executions per parse. Reaching
+that limit keeps the finite prefix, emits libmandoc's infinite-loop diagnostic,
+and continues with the source after the loop. This bound applies equally to
+discovered manuals and direct roff `--input`, so hostile formatter control flow
+cannot hold a CLI or MCP parser session indefinitely.
+
 Requests with direct lowering behavior are:
 
 | Request | ManT result |
