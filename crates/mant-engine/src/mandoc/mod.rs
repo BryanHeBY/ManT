@@ -197,6 +197,21 @@ struct EquationDelimiterChange {
     delimiters: Option<(char, char)>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum EquationDelimiterDirective {
+    Enable(char, char),
+    Disable,
+}
+
+impl EquationDelimiterDirective {
+    const fn delimiters(self) -> Option<(char, char)> {
+        match self {
+            Self::Enable(opening, closing) => Some((opening, closing)),
+            Self::Disable => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct TableTextBlock {
     source: String,
@@ -506,7 +521,7 @@ fn equation_delimiter_changes(source: &str) -> Vec<EquationDelimiterChange> {
                 if let Some(delimiters) = pending.take() {
                     changes.push(EquationDelimiterChange {
                         line: line.saturating_add(1),
-                        delimiters,
+                        delimiters: delimiters.delimiters(),
                     });
                 }
                 in_equation = false;
@@ -518,15 +533,15 @@ fn equation_delimiter_changes(source: &str) -> Vec<EquationDelimiterChange> {
     changes
 }
 
-fn parse_equation_delimiters(value: &str) -> Option<Option<(char, char)>> {
+fn parse_equation_delimiters(value: &str) -> Option<EquationDelimiterDirective> {
     let value = value.strip_prefix("delim")?.trim_start();
     if value == "off" {
-        return Some(None);
+        return Some(EquationDelimiterDirective::Disable);
     }
     let mut delimiters = value.chars();
     let opening = delimiters.next()?;
     let closing = delimiters.next()?;
-    Some(Some((opening, closing)))
+    Some(EquationDelimiterDirective::Enable(opening, closing))
 }
 
 /// Return the largest explicit vertical separation requested by one source
@@ -584,7 +599,7 @@ fn part_child_groups(node: &Node, kind: libmandoc_rs::NodeKind) -> impl Iterator
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, process};
+    use std::{fmt::Write as _, fs, process};
 
     use mant_ir::{Block, DiagnosticLevel, Inline, SourceFormat};
 
@@ -2341,7 +2356,7 @@ Sean\n\
         let mut source =
             String::from(".TH TABLE-EQN-BUDGET 3\n.SH DESCRIPTION\n.EQ\ndelim %%\n.EN\n.TS\nl.\n");
         for index in 0..=MAX_INLINE_EQUATION_NORMALIZATIONS {
-            source.push_str(&format!("%x{index}%\n"));
+            writeln!(source, "%x{index}%").expect("write fixture row");
         }
         source.push_str(".TE\n");
 

@@ -395,10 +395,11 @@ fn sanitize_terminal_meta(meta: &mut DocumentMeta) {
         &mut meta.os,
         &mut meta.arch,
         &mut meta.alias_target,
-    ] {
-        if let Some(value) = value {
-            *value = sanitize_terminal_text(value).into_owned();
-        }
+    ]
+    .into_iter()
+    .flatten()
+    {
+        *value = sanitize_terminal_text(value).into_owned();
     }
     if let Some(section) = meta.manual_section.as_mut() {
         *section = sanitize_terminal_text(section).into_owned();

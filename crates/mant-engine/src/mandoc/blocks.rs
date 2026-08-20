@@ -219,41 +219,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn push(&mut self, node: &Node, table_embedding: Option<&TableEmbedding<'_>>) {
-        if consume_block_control(
-            node,
-            self.context,
-            &mut self.state,
-            self.paragraph_distance,
-            &mut self.split_authors,
-        ) {
-            return;
-        }
-        if node.flags.no_print
-            || node.kind == NodeKind::Comment
-            || is_section(node, false)
-            || is_nonprinting_request(node)
-        {
-            return;
-        }
-        // A configuration-only `.EQ delim XX .EN` produces an empty equation
-        // syntax node. It changes parser state but owns no printable block.
-        if node.kind == NodeKind::Equation
-            && node
-                .equation
-                .as_deref()
-                .is_none_or(|value| value.trim().is_empty())
-        {
-            return;
-        }
-        if node.kind == NodeKind::Text
-            && node.text.as_deref().is_some_and(str::is_empty)
-            && !node.flags.no_fill
-        {
-            self.state.flush_paragraph();
-            self.state.output.push(Block::VerticalSpace {
-                lines: 1,
-                source: source_span(node),
-            });
+        if self.consume_control_or_empty_block(node) {
             return;
         }
         if self.push_no_fill_lines(node) {
@@ -323,6 +289,44 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
             self.state.spacing_enabled(),
             self.context.default_name,
         ));
+    }
+
+    fn consume_control_or_empty_block(&mut self, node: &Node) -> bool {
+        if consume_block_control(
+            node,
+            self.context,
+            &mut self.state,
+            self.paragraph_distance,
+            &mut self.split_authors,
+        ) || node.flags.no_print
+            || node.kind == NodeKind::Comment
+            || is_section(node, false)
+            || is_nonprinting_request(node)
+        {
+            return true;
+        }
+        // A configuration-only `.EQ delim XX .EN` produces an empty equation
+        // syntax node. It changes parser state but owns no printable block.
+        if node.kind == NodeKind::Equation
+            && node
+                .equation
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+        {
+            return true;
+        }
+        if node.kind == NodeKind::Text
+            && node.text.as_deref().is_some_and(str::is_empty)
+            && !node.flags.no_fill
+        {
+            self.state.flush_paragraph();
+            self.state.output.push(Block::VerticalSpace {
+                lines: 1,
+                source: source_span(node),
+            });
+            return true;
+        }
+        false
     }
 
     fn finish(self) -> Vec<Block> {

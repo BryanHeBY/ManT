@@ -135,7 +135,7 @@ fn exercise(label: &str, source: &str) {
 
 /// Treat the public Markdown projection as a second parser boundary. A
 /// successful reparse is insufficient: accidental setext headings and
-/// malformed fences are valid CommonMark that silently change the document
+/// malformed fences are valid `CommonMark` that silently change the document
 /// topology. Compare the structural events with the IR that was serialized.
 fn verify_commonmark_topology(label: &str, query: &mant_engine::ResolvedContent, markdown: &str) {
     let Some(document) = &query.document else {
@@ -186,8 +186,9 @@ fn fenced_block_count(blocks: &[Block]) -> usize {
     blocks
         .iter()
         .map(|block| match block {
-            Block::Preformatted { .. } | Block::Table { .. } => 1,
-            Block::Equation { display: true, .. } => 1,
+            Block::Preformatted { .. }
+            | Block::Table { .. }
+            | Block::Equation { display: true, .. } => 1,
             Block::List { items, .. } => items
                 .iter()
                 .map(|item| fenced_block_count(&item.blocks))

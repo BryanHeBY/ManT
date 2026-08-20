@@ -16,11 +16,43 @@ use super::{
 
 pub(super) struct InlineBuilder {
     nodes: Vec<Inline>,
-    tight_next_boundary: bool,
-    spacing_enabled: bool,
-    preserve_next_boundary: bool,
+    boundary: PendingBoundary,
+    spacing: SpacingMode,
     last_visible_character: Option<char>,
     has_printable_content: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PendingBoundary {
+    Ordinary,
+    Tight,
+    Preserved,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SpacingMode {
+    Enabled,
+    Disabled,
+}
+
+impl SpacingMode {
+    const fn enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+
+    const fn from_enabled(enabled: bool) -> Self {
+        if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+}
+
+impl From<bool> for SpacingMode {
+    fn from(enabled: bool) -> Self {
+        Self::from_enabled(enabled)
+    }
 }
 
 /// Semantic boundary between two inline fragments in filled roff mode.
@@ -41,9 +73,8 @@ impl InlineBuilder {
     pub(super) const fn new() -> Self {
         Self {
             nodes: Vec::new(),
-            tight_next_boundary: false,
-            spacing_enabled: true,
-            preserve_next_boundary: false,
+            boundary: PendingBoundary::Ordinary,
+            spacing: SpacingMode::Enabled,
             last_visible_character: None,
             has_printable_content: false,
         }
@@ -52,37 +83,40 @@ impl InlineBuilder {
     pub(super) const fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
-            tight_next_boundary: false,
-            spacing_enabled,
-            preserve_next_boundary: false,
+            boundary: PendingBoundary::Ordinary,
+            spacing: SpacingMode::from_enabled(spacing_enabled),
             last_visible_character: None,
             has_printable_content: false,
         }
     }
 
     pub(super) fn tighten_next_boundary(&mut self) {
-        self.tight_next_boundary = true;
+        self.boundary = PendingBoundary::Tight;
     }
 
     pub(super) const fn has_tight_boundary(&self) -> bool {
-        self.tight_next_boundary
+        matches!(self.boundary, PendingBoundary::Tight)
     }
 
     pub(super) const fn spacing_enabled(&self) -> bool {
-        self.spacing_enabled
+        self.spacing.enabled()
     }
 
     pub(super) fn set_spacing(&mut self, setting: &str) {
-        let updated = updated_spacing(self.spacing_enabled, setting);
-        if updated == self.spacing_enabled {
+        let updated = updated_spacing(self.spacing.enabled(), setting);
+        if updated == self.spacing.enabled() {
             return;
         }
         // `.Sm off` changes spacing *after* the request. If printable
         // content precedes the transition, retain its ordinary boundary to
         // the first following fragment, then concatenate subsequent macro
         // arguments until spacing is enabled again.
-        self.preserve_next_boundary = !updated && !self.nodes.is_empty();
-        self.spacing_enabled = updated;
+        self.boundary = match (updated, self.nodes.is_empty(), self.boundary) {
+            (_, _, PendingBoundary::Tight) => PendingBoundary::Tight,
+            (false, false, _) => PendingBoundary::Preserved,
+            _ => PendingBoundary::Ordinary,
+        };
+        self.spacing = SpacingMode::from(updated);
     }
 
     /// Carry formatter state out of a nested structural wrapper.
@@ -92,8 +126,10 @@ impl InlineBuilder {
     /// replaying `set_spacing` here would invent a preserved boundary after a
     /// nested `Sm off` request.
     pub(super) fn inherit_spacing(&mut self, spacing_enabled: bool) {
-        self.spacing_enabled = spacing_enabled;
-        self.preserve_next_boundary = false;
+        self.spacing = SpacingMode::from(spacing_enabled);
+        if matches!(self.boundary, PendingBoundary::Preserved) {
+            self.boundary = PendingBoundary::Ordinary;
+        }
     }
 
     pub(super) fn is_empty(&self) -> bool {
@@ -103,7 +139,7 @@ impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
     pub(super) fn hard_break(&mut self) {
-        self.tight_next_boundary = false;
+        self.boundary = PendingBoundary::Ordinary;
         if self.has_printable_content && !matches!(self.nodes.last(), Some(Inline::LineBreak)) {
             self.nodes.push(Inline::LineBreak);
             self.last_visible_character = Some('\n');
@@ -138,13 +174,15 @@ impl InlineBuilder {
         let incoming_last = last_visible_character(incoming);
         let incoming_has_printable = has_printable_character(incoming);
         let add_space = needs_boundary_space(self.last_visible_character, incoming_first);
-        let preserve_boundary = std::mem::take(&mut self.preserve_next_boundary);
-        if (self.spacing_enabled || preserve_boundary) && !self.tight_next_boundary && add_space {
+        let boundary = std::mem::replace(&mut self.boundary, PendingBoundary::Ordinary);
+        if (self.spacing.enabled() || matches!(boundary, PendingBoundary::Preserved))
+            && !matches!(boundary, PendingBoundary::Tight)
+            && add_space
+        {
             push_text(&mut self.nodes, " ".to_owned());
             self.last_visible_character = Some(' ');
             self.has_printable_content = true;
         }
-        self.tight_next_boundary = false;
         self.nodes.append(incoming);
         if incoming_last.is_some() {
             self.last_visible_character = incoming_last;
@@ -347,7 +385,29 @@ fn lower_inline_node(
         },
     );
     let anchor = navigation_anchor(node, &lowered);
-    let mut output = match macro_name {
+    let mut output = lower_macro_inline(
+        node,
+        macro_name,
+        children,
+        lowered,
+        default_name,
+        spacing_enabled,
+    );
+    if let Some(anchor) = anchor {
+        output.insert(0, anchor);
+    }
+    output
+}
+
+fn lower_macro_inline(
+    node: &Node,
+    macro_name: Option<&str>,
+    children: &[Node],
+    lowered: Vec<Inline>,
+    default_name: Option<&str>,
+    spacing_enabled: bool,
+) -> Vec<Inline> {
+    match macro_name {
         Some("Nm") => wrap_strong(if lowered.is_empty() {
             default_name.map_or_else(Vec::new, text_node)
         } else {
@@ -430,11 +490,7 @@ fn lower_inline_node(
             content
         }
         _ => lowered,
-    };
-    if let Some(anchor) = anchor {
-        output.insert(0, anchor);
     }
-    output
 }
 
 /// Retain punctuation that libmandoc moves behind an implicit enclosure body.
