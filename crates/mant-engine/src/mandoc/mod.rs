@@ -9,6 +9,7 @@ mod navigation;
 mod reference;
 mod roff_escape;
 mod source;
+mod source_lines;
 
 use std::{cell::RefCell, collections::BTreeMap, path::Path};
 
@@ -24,6 +25,7 @@ use mant_ir::{
 use self::{
     roff_escape::visible_text,
     source::{load_manual_source, redirect_target, resolve_manual_redirects},
+    source_lines::SourceLineIndex,
 };
 use crate::ManualPage;
 use crate::text_safety::mask_terminal_control_bytes;
@@ -184,7 +186,7 @@ fn normalize_metadata(value: Option<&str>) -> Option<String> {
 
 struct LoweringContext<'a> {
     default_name: Option<&'a str>,
-    source: Option<&'a str>,
+    source_lines: Option<SourceLineIndex<'a>>,
     equation_delimiters: Vec<EquationDelimiterChange>,
     normalized_equations: RefCell<BTreeMap<String, String>>,
     next_section_id: usize,
@@ -229,7 +231,7 @@ impl<'a> LoweringContext<'a> {
     fn new(default_name: Option<&'a str>, source: Option<&'a str>) -> Self {
         Self {
             default_name,
-            source,
+            source_lines: source.map(SourceLineIndex::new),
             equation_delimiters: source.map_or_else(Vec::new, equation_delimiter_changes),
             normalized_equations: RefCell::new(BTreeMap::new()),
             next_section_id: 1,
@@ -281,19 +283,12 @@ impl<'a> LoweringContext<'a> {
         if maximum == 0 {
             return Vec::new();
         }
-        let Some(start) = usize::try_from(line)
-            .ok()
-            .and_then(|line| line.checked_sub(1))
-        else {
-            return Vec::new();
-        };
-        let Some(source) = self.source else {
+        let Some(source_lines) = self.source_lines.as_ref() else {
             return Vec::new();
         };
         let mut blocks = Vec::new();
         let mut current = None::<(String, u32)>;
-        for (index, line) in source.lines().enumerate().skip(start) {
-            let line_number = u32::try_from(index + 1).unwrap_or(u32::MAX);
+        for (line_number, line) in source_lines.lines_from(line) {
             let trimmed = line.trim_start();
             // `.\\"` comments are not tbl control lines, even when their
             // prose contains a disabled `T{` or `T}` marker.  Ignore them
@@ -333,8 +328,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn tab_separated_table_cells(&self, line: u32) -> Option<Vec<&'a str>> {
-        let line = usize::try_from(line).ok()?.checked_sub(1)?;
-        let source_line = self.source?.lines().nth(line)?;
+        let source_line = self.source_lines.as_ref()?.line(line)?;
         source_line
             .contains('\t')
             .then(|| source_line.split('\t').collect())
@@ -360,15 +354,12 @@ impl<'a> LoweringContext<'a> {
         if current <= previous.saturating_add(1) {
             return 0;
         }
-        let Some(source) = self.source else {
+        let Some(source_lines) = self.source_lines.as_ref() else {
             return 0;
         };
-        source
-            .lines()
-            .enumerate()
-            .skip(usize::try_from(previous).unwrap_or(usize::MAX))
-            .take(usize::try_from(current.saturating_sub(previous).saturating_sub(1)).unwrap_or(0))
-            .map(|(_, line)| no_fill_vertical_rows(line))
+        source_lines
+            .lines_between(previous, current)
+            .map(no_fill_vertical_rows)
             .max()
             .unwrap_or(0)
     }
@@ -916,6 +907,38 @@ second line\n\
                 .filter(|inline| matches!(inline, Inline::LineBreak))
                 .count(),
             2
+        );
+    }
+
+    #[test]
+    fn adjacent_no_fill_regions_scale_without_changing_their_topology() {
+        const REGION_COUNT: usize = 2_048;
+        let mut source = String::from(".TH NO-FILL-SCALE 7\n.SH EXAMPLE\n");
+        for index in 0..REGION_COUNT {
+            writeln!(source, ".nf\nline {index}\n.fi").expect("append no-fill region");
+        }
+
+        let document =
+            parse_manual_bytes(std::path::Path::new("no-fill-scale.7"), source.as_bytes())
+                .expect("lower adjacent no-fill regions");
+
+        let [Block::Preformatted { children, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!(
+                "adjacent regions must remain one preformatted block: {:?}",
+                document.sections[0].blocks
+            );
+        };
+        assert_eq!(
+            children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak))
+                .count(),
+            REGION_COUNT - 1
+        );
+        assert!(inline_text(children).starts_with("line 0\nline 1\n"));
+        assert!(
+            inline_text(children).ends_with(&format!("line {}", REGION_COUNT - 1)),
+            "last no-fill region must remain visible"
         );
     }
 
@@ -2319,6 +2342,36 @@ Sean\n\
         assert!(matches!(
             document.sections[1].blocks[0],
             Block::Equation { ref value, .. } if value == "x + width / 2"
+        ));
+    }
+
+    #[test]
+    fn large_tbl_rows_scale_without_changing_their_topology() {
+        const ROW_COUNT: usize = 2_048;
+        let mut source = String::from(".TH TABLE-SCALE 7\n.SH TABLE\n.TS\nl l.\n");
+        for index in 0..ROW_COUNT {
+            writeln!(source, "left {index}\tright {index}").expect("append table row");
+        }
+        source.push_str(".TE\n");
+
+        let document = parse_manual_bytes(std::path::Path::new("table-scale.7"), source.as_bytes())
+            .expect("lower large table");
+
+        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("large tbl input must remain one table");
+        };
+        assert_eq!(rows.len(), ROW_COUNT);
+        assert!(matches!(
+            rows.first().and_then(|row| row.cells.first()),
+            Some(mant_ir::TableCell { blocks, .. })
+                if matches!(blocks.as_slice(), [Block::Paragraph { children, .. }]
+                    if inline_text(children) == "left 0")
+        ));
+        assert!(matches!(
+            rows.last().and_then(|row| row.cells.get(1)),
+            Some(mant_ir::TableCell { blocks, .. })
+                if matches!(blocks.as_slice(), [Block::Paragraph { children, .. }]
+                    if inline_text(children) == format!("right {}", ROW_COUNT - 1))
         ));
     }
 
