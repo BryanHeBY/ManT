@@ -388,8 +388,23 @@ fn terminal_search(search: &QuerySearch) -> QuerySearch {
 }
 
 fn sanitize_terminal_meta(meta: &mut DocumentMeta) {
+    for value in [
+        &mut meta.title,
+        &mut meta.date,
+        &mut meta.volume,
+        &mut meta.os,
+        &mut meta.arch,
+        &mut meta.alias_target,
+    ] {
+        if let Some(value) = value {
+            *value = sanitize_terminal_text(value).into_owned();
+        }
+    }
     if let Some(section) = meta.manual_section.as_mut() {
         *section = sanitize_terminal_text(section).into_owned();
+    }
+    for name in &mut meta.names {
+        *name = sanitize_terminal_text(name).into_owned();
     }
 }
 
@@ -751,7 +766,6 @@ The selected color is visible in terminal output.
 
     #[test]
     fn terminal_markdown_masks_dynamic_controls_without_rewriting_redirected_data() {
-        let source_path = "ris\u{1b}c.md".to_owned();
         for view in [
             QueryView::Full {},
             QueryView::Outline {
@@ -771,8 +785,10 @@ The selected color is visible in terminal output.
                 offset: 0,
             },
         ] {
-            let query = query_markdown_text(PAGE, Some(source_path.clone()))
+            let mut query = query_markdown_text(PAGE, Some("ris\u{1b}c.md".to_owned()))
                 .expect("Markdown query with hostile label");
+            query.document.as_mut().expect("parsed document").meta.title =
+                Some("ris\u{1b}c".to_owned());
             let result = project_query_view(query, &view).expect("query projection");
             let redirected = render_query_result(
                 &result,
@@ -785,9 +801,9 @@ The selected color is visible in terminal output.
             )
             .expect("terminal Markdown");
 
-            assert!(redirected.contains('\u{1b}'));
-            assert!(!terminal.contains('\u{1b}'));
-            assert!(terminal.contains("ris�c.md"));
+            assert!(redirected.contains('\u{1b}'), "{view:?}: {redirected:?}");
+            assert!(!terminal.contains('\u{1b}'), "{view:?}: {terminal:?}");
+            assert!(terminal.contains("ris�c"));
         }
     }
 

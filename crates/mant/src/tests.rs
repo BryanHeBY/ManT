@@ -472,8 +472,13 @@ fn invoke_with_terminal_output(
 
 #[test]
 fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exact() {
-    let host = FakeHost::with_semantic_markdown();
-    let path = "ris\u{1b}c.md";
+    let mut document = semantic_markdown();
+    document.meta.title = Some("ris\u{1b}c".to_owned());
+    let host = FakeHost {
+        document: Some(document),
+        ..FakeHost::new()
+    };
+    let path = "input.md";
     let arguments = ["--input", path, "--format", "markdown"];
 
     let (status, redirected, diagnostics) = invoke(&arguments, b"", &host);
@@ -485,7 +490,7 @@ fn terminal_markdown_masks_direct_input_controls_but_redirected_markdown_is_exac
     assert_eq!(status, 0);
     assert!(diagnostics.is_empty());
     assert!(!terminal.contains('\u{1b}'));
-    assert!(terminal.contains("ris�c.md"));
+    assert!(terminal.contains("ris�c"));
 }
 
 fn manual() -> Document {
