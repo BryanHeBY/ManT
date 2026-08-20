@@ -55,7 +55,13 @@ fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").expect("target operating system");
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     let memory_only = target_os == "windows";
+    let thread_sanitizer = env::var_os("LIBMANDOC_RS_TSAN").is_some();
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
+
+    assert!(
+        !thread_sanitizer || matches!(target_os.as_str(), "linux" | "macos"),
+        "libmandoc-rs ThreadSanitizer instrumentation supports Linux and macOS targets"
+    );
 
     fs::copy(crate_dir.join(config), out_dir.join("config.h"))
         .expect("copy checked mandoc target configuration");
@@ -76,6 +82,15 @@ fn main() {
         // flag_if_supported, while GCC development output remains readable.
         .flag_if_supported("-Wno-maybe-uninitialized")
         .flag_if_supported("-Wno-unused-parameter");
+    if thread_sanitizer {
+        // Rust's sanitizer flag does not instrument the separately compiled
+        // vendored C parser. Keep this explicit opt-in paired with the local
+        // runner so a passing test covers both sides of the FFI boundary.
+        build
+            .flag("-fsanitize=thread")
+            .flag("-fno-omit-frame-pointer")
+            .flag("-g");
+    }
     if !memory_only {
         // The local libmandoc patch uses C11 thread-local storage for the
         // parser's mutable static state. Windows/MSVC uses its native static
@@ -104,6 +119,7 @@ fn main() {
         println!("cargo:rustc-link-lib=z");
     }
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_TSAN");
     // Target selection lives here and is pulled in via #[path]; Cargo does not
     // discover that dependency, so track it explicitly or edits to the config
     // map would reuse a stale config.h and source list on incremental builds.
