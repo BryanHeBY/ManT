@@ -16,3 +16,4 @@
 0007-thread-safe-date-conversion.patch
 0008-bounded-while-expansion.patch
 0009-preserve-unknown-encoding.patch
+0010-reset-roff-session-state.patch

@@ -172,6 +172,10 @@ the ordered patches in `patches/series`:
   spellings and retains automatic UTF-8/Latin-1 detection when a `coding:`
   declaration names an unsupported charset, avoiding irreversible `?`
   replacement for bytes the bundled converter cannot interpret explicitly.
+- `0010-reset-roff-session-state.patch` clears unfinished input-trap and
+  centering state at every parser-session boundary, preventing a page ending
+  with an armed request from carrying dangling native pointers into the next
+  parse in a long-lived process.
 
 Each is a narrow parser or portability correction. They are not a forked
 renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the

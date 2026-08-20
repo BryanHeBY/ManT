@@ -633,6 +633,27 @@ MANT_THREAD_LOCAL struct roff_node *roffce_node; /* active request */
 MANT_THREAD_LOCAL int roffit_lines; /* number of lines to delay */
 MANT_THREAD_LOCAL char *roffit_macro; /* nil-terminated macro line */
 
+/*
+ * Reset parser-session state that upstream keeps in file-static variables.
+ *
+ * A document can end while an input trap or centering request is still
+ * armed.  The corresponding node belongs to the tree being freed and the
+ * trap macro is heap allocated, so carrying either into the next parse on
+ * this thread is a dangling-pointer use.  This was mostly hidden when mandoc
+ * was used as a one-shot process, but libmandoc-rs intentionally supports
+ * repeated parses in one long-lived process.
+ */
+static void
+roff_session_reset(void)
+{
+
+	roffce_lines = 0;
+	roffce_node = NULL;
+	roffit_lines = 0;
+	free(roffit_macro);
+	roffit_macro = NULL;
+}
+
 
 /* --- request table ------------------------------------------------------ */
 
@@ -780,10 +801,7 @@ roff_reset(struct roff *r)
 	r->format = r->options & (MPARSE_MDOC | MPARSE_MAN);
 	r->control = '\0';
 	r->escape = '\\';
-	roffce_lines = 0;
-	roffce_node = NULL;
-	roffit_lines = 0;
-	roffit_macro = NULL;
+	roff_session_reset();
 }
 
 void
@@ -797,6 +815,7 @@ roff_free(struct roff *r)
 	free(r->mstack);
 	roffhash_free(r->reqtab);
 	free(r);
+	roff_session_reset();
 }
 
 struct roff *
@@ -804,6 +823,7 @@ roff_alloc(int options)
 {
 	struct roff	*r;
 
+	roff_session_reset();
 	r = mandoc_calloc(1, sizeof(struct roff));
 	r->reqtab = roffhash_alloc(0, ROFF_RENAMED);
 	r->options = options | MPARSE_COMMENT;
@@ -1776,6 +1796,7 @@ roff_parsetext(struct roff *r, struct buf *buf, int pos, int *offs)
 		buf->sz = isz + 1;
 		*offs = 0;
 		free(roffit_macro);
+		roffit_macro = NULL;
 		roffit_lines = 0;
 		return ROFF_REPARSE;
 	} else if (roffit_lines > 1)

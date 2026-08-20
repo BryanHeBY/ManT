@@ -568,6 +568,35 @@ mod tests {
     }
 
     #[test]
+    fn parser_sessions_reset_unfinished_roff_requests() {
+        let parser = Parser::default();
+        for round in 0..32 {
+            parser
+                .parse_bytes(
+                    format!("unfinished-trap-{round}.1"),
+                    b".TH UNFINISHED-TRAP 1\n.it 2 br\n",
+                )
+                .expect("parse page ending with an armed input trap");
+            parser
+                .parse_bytes(
+                    format!("unfinished-center-{round}.1"),
+                    b".TH UNFINISHED-CENTER 1\n.ce 2\nonly-one-line\n",
+                )
+                .expect("parse page ending with an active centering request");
+            let next = parser
+                .parse_bytes(
+                    format!("clean-session-{round}.1"),
+                    b".TH CLEAN-SESSION 1\n.SH NAME\nclean-session \\- independent state\n",
+                )
+                .expect("subsequent parser session must remain independent");
+            assert_eq!(
+                next.document.metadata.title.as_deref(),
+                Some("CLEAN-SESSION")
+            );
+        }
+    }
+
+    #[test]
     fn concurrent_callers_keep_thread_local_parser_state_isolated() {
         const WORKERS: usize = 8;
         const ROUNDS: usize = 16;
@@ -724,6 +753,58 @@ mod tests {
         assert_eq!(
             expanded.document.metadata.title.as_deref(),
             Some("EXPLICIT-ROOT")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_root_resolves_compressed_includes_beside_the_source() {
+        use std::io::Write;
+
+        use flate2::{Compression as GzipCompression, write::GzEncoder};
+
+        let root = std::env::temp_dir().join(format!(
+            "libmandoc-rs-compressed-relative-include-{}",
+            process::id()
+        ));
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).expect("create explicit manual section");
+        let mut target = GzEncoder::new(Vec::new(), GzipCompression::fast());
+        target
+            .write_all(b".SH INCLUDED\ncompressed relative content\n")
+            .expect("compress included source");
+        fs::write(
+            man1.join("target.1.gz"),
+            target.finish().expect("finish included source"),
+        )
+        .expect("write compressed included source");
+        let source = man1.join("source.1.gz");
+        let mut source_bytes = GzEncoder::new(Vec::new(), GzipCompression::fast());
+        source_bytes
+            .write_all(b".TH SOURCE 1\n.SH NAME\nsource \\- include fixture\n.so target.1\n")
+            .expect("compress source manual");
+        fs::write(
+            &source,
+            source_bytes.finish().expect("finish source manual"),
+        )
+        .expect("write source manual");
+
+        let report = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(root.clone()),
+            compression: Compression::Auto,
+        })
+        .parse_file(&source)
+        .expect("resolve compressed include beside source");
+        fs::remove_dir_all(root).expect("remove temporary manual tree");
+
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+        assert!(visible.contains(&"compressed relative content"));
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| { !diagnostic.message.contains(".so request failed") })
         );
     }
 
