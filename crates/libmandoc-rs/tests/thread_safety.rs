@@ -1,11 +1,16 @@
 //! Stress probes run under the mixed Rust/C `ThreadSanitizer` build.
 
 use std::{
-    env, fs, process,
+    env,
     sync::{Arc, Barrier},
 };
 
-use libmandoc_rs::{IncludePolicy, ParseOptions, Parser};
+#[cfg(unix)]
+use std::{fs, process};
+
+use libmandoc_rs::Parser;
+#[cfg(unix)]
+use libmandoc_rs::{IncludePolicy, ParseOptions};
 
 const WORKERS: usize = 8;
 const DEFAULT_ROUNDS: usize = 64;
