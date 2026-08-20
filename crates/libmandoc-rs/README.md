@@ -168,6 +168,10 @@ the ordered patches in `patches/series`:
 - `0008-bounded-while-expansion.patch` limits each roff `.while` loop to
   10,000 iterations, retains the finite prefix, and emits libmandoc's existing
   infinite-loop diagnostic instead of allowing hostile input to parse forever.
+- `0009-preserve-unknown-encoding.patch` recognizes common Latin-1 declaration
+  spellings and retains automatic UTF-8/Latin-1 detection when a `coding:`
+  declaration names an unsupported charset, avoiding irreversible `?`
+  replacement for bytes the bundled converter cannot interpret explicitly.
 
 Each is a narrow parser or portability correction. They are not a forked
 renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the

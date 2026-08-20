@@ -849,6 +849,27 @@ mod tests {
     }
 
     #[test]
+    fn coding_declarations_never_disable_available_byte_decoding() {
+        for declaration in ["latin-1", "ISO-8859-9"] {
+            let mut source =
+                format!(".\\\" -*- coding: {declaration} -*-\n.TH CD 1\n.SH BODY\nText: ")
+                    .into_bytes();
+            source.extend_from_slice(b"e\xf0itmen ba\xfelat\xfdr.\n");
+            let report = Parser::default()
+                .parse_bytes("coding.1", &source)
+                .expect("unsupported coding declaration retains a best-effort parse");
+            let mut visible = Vec::new();
+            collect_visible_text(&report.document.root, &mut visible);
+            let visible = visible.join(" ");
+            assert!(
+                visible.contains("e\\[u00F0]itmen ba\\[u00FE]lat\\[u00FD]r."),
+                "{declaration}: {visible}"
+            );
+            assert!(!visible.contains('?'), "{declaration}: {visible}");
+        }
+    }
+
+    #[test]
     fn infinite_while_loop_is_bounded_with_a_diagnostic() {
         let report = Parser::default()
             .parse_bytes(
