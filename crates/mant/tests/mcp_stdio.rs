@@ -228,7 +228,7 @@ fn assert_tool_replies(replies: &[Value]) {
     assert_eq!(search.matches("needle").count(), 1);
 
     let read = successful_text(reply(replies, 5));
-    assert!(read.starts_with("# documents/mcp-registered"), "{read}");
+    assert!(read.starts_with("# MCP registered"), "{read}");
     assert!(read.contains("Read the MCP needle."));
 
     let outline = successful_text(reply(replies, 6));
