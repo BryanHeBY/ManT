@@ -18,7 +18,6 @@ import csv
 import hashlib
 import json
 import re
-import subprocess
 import sys
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -35,6 +34,7 @@ from roff_audit_common import (
     positive_integer,
     read_fidelity_identities,
     relative_label,
+    run_jsonl_profile_batch,
     source_digest,
     stable_sample,
     stable_sample_by_section,
@@ -46,7 +46,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_projection_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/PROJECTION_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-projection-profile/v2"
+PROFILE_SCHEMA = "mant.roff-projection-profile/v3"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-projection-profile/v[1-9][0-9]*$")
 DATABASE_FIELDS = [
     "corpus",
@@ -251,35 +251,7 @@ def audit_exit_status(summary: Counter[str], verify: bool) -> int:
 def run_profile_batch(
     profiler: Path, requests: dict[str, dict[str, str]], timeout: int
 ) -> dict[str, dict[str, object]]:
-    payload = "".join(json.dumps(request, ensure_ascii=False) + "\n" for request in requests.values())
-    try:
-        result = subprocess.run(
-            [str(profiler)],
-            input=payload,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise ValueError(f"projection profiler timed out after {timeout}s") from error
-    if result.returncode != 0:
-        detail = result.stderr.strip() or f"exit status {result.returncode}"
-        raise ValueError(f"projection profiler failed: {detail}")
-    responses = {}
-    for number, line in enumerate(result.stdout.splitlines(), 1):
-        try:
-            response = json.loads(line)
-        except json.JSONDecodeError as error:
-            raise ValueError(f"projection profiler returned invalid JSON on line {number}") from error
-        request_id = response.get("id")
-        if not isinstance(request_id, str):
-            raise ValueError(f"projection profiler returned an invalid id on line {number}")
-        responses[request_id] = response
-    for request_id in requests:
-        responses.setdefault(request_id, {"id": request_id, "error": "profiler returned no response"})
-    return responses
+    return run_jsonl_profile_batch(profiler, requests, timeout, "projection")
 
 
 def valid_counts(value: object) -> bool:

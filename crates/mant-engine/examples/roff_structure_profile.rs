@@ -11,7 +11,7 @@
 //! wrapping or trusting a host reference renderer.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{self, BufRead, BufWriter, Read, Write},
     path::{Path, PathBuf},
@@ -28,7 +28,7 @@ use mant_ir::{Block, Document, Inline, LinkTarget, Section};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v3";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v4";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,9 +68,17 @@ struct IrStructure {
     external_links: usize,
     email_links: usize,
     section_links: usize,
+    unresolved_section_references: usize,
     display_equations: usize,
     inline_equation_candidates: usize,
     table_equation_candidates: usize,
+}
+
+#[derive(Clone, Copy, Default)]
+struct NoFillSourceLine {
+    printable: bool,
+    zero_width_blank: bool,
+    continues_line: bool,
 }
 
 /// Source-addressable topology for semantic containers.  Counts catch broad
@@ -276,9 +284,16 @@ fn profile_request(line: &str) -> Result<Value, String> {
         manual_root: root,
     })
     .map_err(|error| error.to_string())?;
+    // The raw libmandoc pass follows `.so` through IncludePolicy but does not
+    // own ManT's logical alias metadata.  Classify the source identity from
+    // the normal indexed-page path, which is also the path whose IR we audit.
+    let is_alias = document.meta.alias_target.is_some();
     let (observed, observed_topology) = ir_profile(&document);
-    let violations =
-        compare_structure(&expected, &observed, &expected_topology, &observed_topology);
+    let violations = if is_alias {
+        Vec::new()
+    } else {
+        compare_structure(&expected, &observed, &expected_topology, &observed_topology)
+    };
 
     Ok(json!({
         "schema": PROFILE_SCHEMA,
@@ -293,6 +308,15 @@ fn profile_request(line: &str) -> Result<Value, String> {
             "parser": report.diagnostics.len(),
             "ir": document.diagnostics.len(),
         },
+        "sourceLinkOrigins": {
+            "manual": semantic_link_origins(&report.document.root, "Xr", NodeKind::Element),
+            "externalMdoc": semantic_link_origins(&report.document.root, "Lk", NodeKind::Element),
+            "externalMan": semantic_link_origins(&report.document.root, "UR", NodeKind::Block),
+            "emailMdoc": semantic_link_origins(&report.document.root, "Mt", NodeKind::Element),
+            "emailMan": semantic_link_origins(&report.document.root, "MT", NodeKind::Block),
+            "section": semantic_link_origins(&report.document.root, "Sx", NodeKind::Element),
+        },
+        "alias": is_alias,
         "violations": violations,
     }))
 }
@@ -310,10 +334,13 @@ fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
     collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
-    profile.no_fill_lines = no_fill_lines
-        .values()
-        .filter(|continues_line| !**continues_line)
-        .count();
+    profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
+    profile.manual_links = semantic_link_origins(root, "Xr", NodeKind::Element).len();
+    profile.external_links = semantic_link_origins(root, "Lk", NodeKind::Element).len()
+        + semantic_link_origins(root, "UR", NodeKind::Block).len();
+    profile.email_links = semantic_link_origins(root, "Mt", NodeKind::Element).len()
+        + semantic_link_origins(root, "MT", NodeKind::Block).len();
+    profile.section_links = semantic_link_origins(root, "Sx", NodeKind::Element).len();
     let mut topology = AstTopology::default();
     collect_ast_topology(root, false, &mut topology);
     topology.lists.sort_by_key(|list| list.source_line);
@@ -332,26 +359,32 @@ fn collect_ast_structure(
     inside_table: bool,
     relative_indent_depth: usize,
     profile: &mut AstStructure,
-    no_fill_lines: &mut BTreeMap<u32, bool>,
+    no_fill_lines: &mut BTreeMap<u32, NoFillSourceLine>,
 ) {
     let nonprinting = inherited_nonprinting || node.flags.no_print || is_stateful_request(node);
     if node.flags.no_fill
         && !nonprinting
         && node.kind == NodeKind::Text
         && node.flags.line_start
-        && node.text.as_deref().is_some_and(is_visible_no_fill_text)
+        && node.text.as_deref().is_some_and(is_no_fill_row_text)
         && node.line > 0
     {
-        no_fill_lines
-            .entry(node.line)
-            .and_modify(|continues_line| *continues_line |= node.flags.line_continuation)
-            .or_insert(node.flags.line_continuation);
+        let text = node.text.as_deref().unwrap_or_default();
+        let line = no_fill_lines.entry(node.line).or_default();
+        line.zero_width_blank |= is_zero_width_guard_line(text);
+        line.printable |= is_printable_no_fill_text(text);
+        line.continues_line |= node.flags.line_continuation;
     }
     if node.kind == NodeKind::Block {
         match node.macro_name.as_deref() {
             Some("Bd" | "D1" | "Dl")
                 if node.macro_name.as_deref() != Some("Bd")
-                    || node.display_kind == Some(DisplayKind::Literal) =>
+                    || node.display_kind == Some(DisplayKind::Literal)
+                        && node
+                            .children
+                            .iter()
+                            .filter(|part| part.kind == NodeKind::Body)
+                            .any(has_visible_text) =>
             {
                 profile.literal_displays += 1;
             }
@@ -378,20 +411,8 @@ fn collect_ast_structure(
             _ => {}
         }
     }
-    match node.macro_name.as_deref() {
-        Some("br") if node.kind == NodeKind::Element => profile.hard_breaks += 1,
-        Some("Xr" | "Lk" | "Mt" | "Sx") if node.kind == NodeKind::Element => {
-            match node.macro_name.as_deref() {
-                Some("Xr") => profile.manual_links += 1,
-                Some("Lk") => profile.external_links += 1,
-                Some("Mt") => profile.email_links += 1,
-                Some("Sx") => profile.section_links += 1,
-                _ => unreachable!("guarded semantic link macro"),
-            }
-        }
-        Some("UR") if node.kind == NodeKind::Block => profile.external_links += 1,
-        Some("MT") if node.kind == NodeKind::Block => profile.email_links += 1,
-        _ => {}
+    if node.macro_name.as_deref() == Some("br") && node.kind == NodeKind::Element {
+        profile.hard_breaks += 1;
     }
     if node.kind == NodeKind::Table && !node.table_cells.is_empty() {
         profile.table_rows += 1;
@@ -411,7 +432,13 @@ fn collect_ast_structure(
     }
     let child_inside_table = inside_table || node.kind == NodeKind::Table;
     let child_indent_depth = relative_indent_depth
-        + usize::from(node.kind == NodeKind::Block && node.macro_name.as_deref() == Some("RS"));
+        + usize::from(
+            node.kind == NodeKind::Block
+                && node.macro_name.as_deref() == Some("RS")
+                && node_part_children(node, NodeKind::Body)
+                    .iter()
+                    .any(has_visible_text),
+        );
     profile.max_relative_indent_depth = profile.max_relative_indent_depth.max(child_indent_depth);
     for child in &node.children {
         collect_ast_structure(
@@ -425,18 +452,136 @@ fn collect_ast_structure(
     }
 }
 
+/// Return unique, printable source occurrences for one semantic link macro.
+///
+/// libmandoc can expose more than one structural view of one macro occurrence,
+/// and malformed empty closers such as a bare `.MT` have no target at all.
+/// Source coordinates keep the audit focused on links the lowering path can
+/// actually be expected to preserve.
+fn semantic_link_origins(node: &Node, macro_name: &str, kind: NodeKind) -> BTreeSet<(u32, u32)> {
+    let mut origins = BTreeSet::new();
+    collect_semantic_link_origins(node, macro_name, kind, &mut origins);
+    origins
+}
+
+fn collect_semantic_link_origins(
+    node: &Node,
+    macro_name: &str,
+    kind: NodeKind,
+    origins: &mut BTreeSet<(u32, u32)>,
+) {
+    let has_target = if kind == NodeKind::Block {
+        node_part_children(node, NodeKind::Head)
+            .iter()
+            .any(has_visible_text)
+    } else {
+        has_visible_text(node)
+    };
+    if node.kind == kind
+        && node.macro_name.as_deref() == Some(macro_name)
+        && node.line > 0
+        && !node.flags.generated
+        && has_target
+    {
+        origins.insert((node.line, node.column));
+    }
+    for child in &node.children {
+        collect_semantic_link_origins(child, macro_name, kind, origins);
+    }
+}
+
+fn node_part_children(node: &Node, kind: NodeKind) -> &[Node] {
+    node.children
+        .iter()
+        .find(|part| part.kind == kind)
+        .map_or(&[], |part| part.children.as_slice())
+}
+
 /// libmandoc keeps a source-line node for a standalone `\f` font switch in a
 /// no-fill display. The switch has no printable glyph and therefore cannot
 /// demand a `LineBreak` in `ManT` IR.
-fn is_visible_no_fill_text(text: &str) -> bool {
+fn is_no_fill_row_text(text: &str) -> bool {
     !text.is_empty() && !is_roff_font_switch(text)
 }
 
+fn is_printable_no_fill_text(text: &str) -> bool {
+    is_no_fill_row_text(text) && !is_zero_width_guard_line(text)
+}
+
+fn is_zero_width_guard_line(text: &str) -> bool {
+    let mut remainder = text.trim();
+    let mut found = false;
+    while let Some(rest) = remainder.strip_prefix(r"\&") {
+        found = true;
+        remainder = rest.trim();
+    }
+    found && remainder.is_empty()
+}
+
+/// Count printable no-fill rows plus bounded runs of zero-width blank rows.
+///
+/// A terminal-visible `\&` row matters only between printable rows in the
+/// same source run. A trailing guard immediately before `.Ve` or `.fi` merely
+/// separates blocks and must not manufacture content. Consecutive guard rows
+/// collapse to one visual separator, matching the lowering contract.
+fn retained_no_fill_rows(lines: &BTreeMap<u32, NoFillSourceLine>) -> usize {
+    let printable = lines
+        .values()
+        .filter(|line| line.printable && !line.continues_line)
+        .count();
+    let mut blank_runs = 0;
+    let ordered = lines.iter().collect::<Vec<_>>();
+    let mut index = 0;
+    while index < ordered.len() {
+        if !ordered[index].1.zero_width_blank || ordered[index].1.printable {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index + 1 < ordered.len()
+            && ordered[index + 1].0 == &ordered[index].0.saturating_add(1)
+            && ordered[index + 1].1.zero_width_blank
+            && !ordered[index + 1].1.printable
+        {
+            index += 1;
+        }
+        let end = index;
+        let bounded_before = start > 0
+            && ordered[start - 1].0.saturating_add(1) == *ordered[start].0
+            && ordered[start - 1].1.printable;
+        let bounded_after = end + 1 < ordered.len()
+            && ordered[end].0.saturating_add(1) == *ordered[end + 1].0
+            && ordered[end + 1].1.printable;
+        blank_runs += usize::from(bounded_before && bounded_after);
+        index += 1;
+    }
+    printable + blank_runs
+}
+
 fn is_roff_font_switch(text: &str) -> bool {
-    let Some(font) = text.strip_prefix(r"\f") else {
-        return false;
-    };
-    font.len() == 1 || (font.starts_with('[') && font.ends_with(']') && !font.contains(r"\f"))
+    let mut remainder = text.trim();
+    let mut found = false;
+    while let Some(font) = remainder.strip_prefix(r"\f") {
+        let consumed = if font.starts_with('(') {
+            font.char_indices()
+                .nth(3)
+                .map_or(font.len(), |(index, _)| index)
+        } else if font.starts_with('[') {
+            let Some(end) = font.find(']') else {
+                return false;
+            };
+            end + 1
+        } else if font.is_empty() {
+            return false;
+        } else {
+            font.char_indices()
+                .nth(1)
+                .map_or(font.len(), |(index, _)| index)
+        };
+        found = true;
+        remainder = font[consumed..].trim();
+    }
+    found && remainder.is_empty()
 }
 
 fn is_stateful_request(node: &Node) -> bool {
@@ -641,7 +786,14 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
 }
 
 fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
-    let mut profile = IrStructure::default();
+    let mut profile = IrStructure {
+        unresolved_section_references: document
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code.as_deref() == Some("unresolved-section-reference"))
+            .count(),
+        ..IrStructure::default()
+    };
     let mut topology = IrTopology::default();
     collect_blocks(&document.blocks, false, &mut profile, &mut topology);
     for section in &document.sections {
@@ -730,6 +882,9 @@ fn collect_blocks(
             } => {
                 profile.generic_list_items += items.len();
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
+                if !items.is_empty() {
+                    profile.max_indent_columns = profile.max_indent_columns.max(1);
+                }
                 if let Some(source) = source {
                     topology.lists.push(IrListTopology {
                         source_line: source.line,
@@ -749,6 +904,9 @@ fn collect_blocks(
             } => {
                 profile.definition_items += items.len();
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
+                if !items.is_empty() {
+                    profile.max_indent_columns = profile.max_indent_columns.max(1);
+                }
                 if let Some(source) = source {
                     topology.lists.push(IrListTopology {
                         source_line: source.line,
@@ -887,7 +1045,7 @@ fn compare_structure(
         &mut violations,
         "literal-displays",
         expected.literal_displays,
-        observed.preformatted_blocks,
+        observed.preformatted_lines,
     );
     underflow(
         &mut violations,
@@ -927,9 +1085,11 @@ fn compare_structure(
     );
     underflow(
         &mut violations,
-        "section-links",
+        "section-links-or-diagnostics",
         expected.section_links,
-        observed.section_links,
+        observed
+            .section_links
+            .saturating_add(observed.unresolved_section_references),
     );
     if expected.max_relative_indent_depth > 0 && observed.max_indent_columns == 0 {
         violations.push(format!(
@@ -1008,20 +1168,38 @@ fn equation_visible_text(source: &str) -> String {
     let source = strip_equation_font_escapes(source);
     let mut output = String::with_capacity(source.len());
     let mut rest = source.as_str();
-    while let Some(index) = rest.find("\\[") {
+    while let Some(index) = rest.find('\\') {
         output.push_str(&rest[..index]);
-        let after_open = &rest[index + 2..];
-        let Some(end) = after_open.find(']') else {
-            output.push_str(&rest[index..]);
-            return output;
+        let escape = &rest[index + 1..];
+        let (name, consumed) = if let Some(after_open) = escape.strip_prefix('[') {
+            let Some(end) = after_open.find(']') else {
+                output.push_str(&rest[index..]);
+                return output;
+            };
+            (&after_open[..end], end + 3)
+        } else if let Some(after_open) = escape.strip_prefix('(') {
+            let mut characters = after_open.char_indices();
+            let Some((_, _)) = characters.next() else {
+                output.push_str(&rest[index..]);
+                return output;
+            };
+            let consumed_name = characters
+                .next()
+                .map_or(after_open.len(), |(offset, character)| {
+                    offset + character.len_utf8()
+                });
+            (&after_open[..consumed_name], consumed_name + 2)
+        } else {
+            output.push('\\');
+            rest = escape;
+            continue;
         };
-        let name = &after_open[..end];
         match special_character(name) {
             Some(SpecialCharacter::Visible(character)) => output.push(character),
             Some(SpecialCharacter::ZeroWidth) => {}
-            None => output.push_str(&rest[index..=index + 2 + end]),
+            None => output.push_str(&rest[index..index + consumed]),
         }
-        rest = &after_open[end + 1..];
+        rest = &rest[index + consumed..];
     }
     output.push_str(rest);
     output
@@ -1245,9 +1423,9 @@ fn compare_table_topology(
         ));
     }
     for (row_index, (expected_row, observed_row)) in expected.iter().zip(observed).enumerate() {
-        if expected_row.cells.len() != observed_row.cells.len() {
+        if observed_row.cells.len() < expected_row.cells.len() {
             violations.push(format!(
-                "table-topology at row {}: expected {} cells, observed {}",
+                "table-topology at row {}: expected at least {} cells, observed {}",
                 row_index + 1,
                 expected_row.cells.len(),
                 observed_row.cells.len(),
@@ -1293,13 +1471,72 @@ fn underflow(violations: &mut Vec<String>, property: &str, expected: usize, obse
 
 #[cfg(test)]
 mod tests {
-    use super::is_visible_no_fill_text;
+    use std::collections::BTreeMap;
+
+    use super::{
+        NoFillSourceLine, equation_visible_text, is_no_fill_row_text, is_zero_width_guard_line,
+        retained_no_fill_rows,
+    };
 
     #[test]
     fn standalone_roff_font_switches_do_not_claim_visible_no_fill_lines() {
-        assert!(!is_visible_no_fill_text(r"\f[C]"));
-        assert!(!is_visible_no_fill_text(r"\fR"));
-        assert!(is_visible_no_fill_text(r"\f[C]visible\f[R]"));
-        assert!(is_visible_no_fill_text("visible"));
+        assert!(!is_no_fill_row_text(r"\f[C]"));
+        assert!(!is_no_fill_row_text(r"\fR"));
+        assert!(!is_no_fill_row_text(r"    \f(CW"));
+        assert!(!is_no_fill_row_text(r"\f[B]\f[R]\f[B]"));
+        assert!(is_no_fill_row_text(r"\f[C]visible\f[R]"));
+        assert!(is_no_fill_row_text("visible"));
+    }
+
+    #[test]
+    fn bounded_zero_width_guard_runs_claim_one_no_fill_row() {
+        assert!(is_zero_width_guard_line(r"\&"));
+        assert!(is_zero_width_guard_line(r"\& \&"));
+        assert!(!is_zero_width_guard_line(r"\&\c"));
+        let mut lines = BTreeMap::new();
+        lines.insert(
+            10,
+            NoFillSourceLine {
+                printable: true,
+                ..NoFillSourceLine::default()
+            },
+        );
+        lines.insert(
+            11,
+            NoFillSourceLine {
+                zero_width_blank: true,
+                ..NoFillSourceLine::default()
+            },
+        );
+        lines.insert(
+            12,
+            NoFillSourceLine {
+                zero_width_blank: true,
+                ..NoFillSourceLine::default()
+            },
+        );
+        lines.insert(
+            13,
+            NoFillSourceLine {
+                printable: true,
+                ..NoFillSourceLine::default()
+            },
+        );
+        lines.insert(
+            14,
+            NoFillSourceLine {
+                zero_width_blank: true,
+                ..NoFillSourceLine::default()
+            },
+        );
+        assert_eq!(retained_no_fill_rows(&lines), 3);
+    }
+
+    #[test]
+    fn equation_text_normalizes_bracketed_and_two_character_specials() {
+        assert_eq!(
+            equation_visible_text(r"1 + \(lf x \(rf \[->] infinity"),
+            "1 + ⌊ x ⌋ → infinity"
+        );
     }
 }

@@ -14,12 +14,15 @@ projection, reparses that text with ManT's CommonMark parser, and compares:
   containers may legally merge);
 - fenced-block order, language, section, and owning-list nesting depth; and
 - source HTML entity spellings in their original order, so CommonMark entity
-  decoding cannot hide inside otherwise-correct topology; and
+  decoding cannot hide inside otherwise-correct topology;
 - the first, middle, and last addressable section through the same excerpt
   renderer used by `--node`.
 
-The current profiler schema is `mant.roff-projection-profile/v2`; v2 adds the
-entity-spelling oracle to the original topology checks.
+The current profiler schema is `mant.roff-projection-profile/v3`. v2 added the
+entity-spelling oracle to the original topology checks. v3 treats an empty
+roff section heading as a transparent formatter wrapper: CommonMark has no
+addressable empty heading, but blocks and non-empty descendants below it remain
+part of the topology comparison.
 
 Tables and preformatted input both intentionally project to ordinary fenced
 blocks. Display equations project to `math` fences. The audit therefore checks

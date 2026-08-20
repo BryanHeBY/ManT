@@ -22,7 +22,7 @@ use pulldown_cmark::{Event, Parser};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-projection-profile/v2";
+const PROFILE_SCHEMA: &str = "mant.roff-projection-profile/v3";
 
 #[derive(Default, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -275,9 +275,20 @@ fn commonmark_decodes_entity(spelling: &str) -> bool {
 }
 
 fn collect_sections(sections: &[Section], parent: &[usize], topology: &mut ProjectionTopology) {
-    for (index, section) in sections.iter().enumerate() {
+    let mut projected_index = 0;
+    for section in sections {
+        // An empty man(7) `.SH`/`.SS` is commonly emitted as a spacing
+        // request. CommonMark has no addressable empty heading, and ManT's
+        // Markdown parser deliberately ignores one. Treat the wrapper as
+        // transparent while still checking every block and child below it.
+        if section.title.trim().is_empty() {
+            collect_blocks(&section.blocks, parent, &mut Vec::new(), topology);
+            collect_sections(&section.children, parent, topology);
+            continue;
+        }
+        projected_index += 1;
         let mut path = parent.to_vec();
-        path.push(index + 1);
+        path.push(projected_index);
         topology.sections.push(SectionTopology {
             path: path.clone(),
             depth: path.len() + 1,
@@ -578,9 +589,15 @@ fn flatten_sections<'a>(
     parent: &[usize],
     output: &mut Vec<(Vec<usize>, &'a Section)>,
 ) {
-    for (index, section) in sections.iter().enumerate() {
+    let mut projected_index = 0;
+    for section in sections {
+        if section.title.trim().is_empty() {
+            flatten_sections(&section.children, parent, output);
+            continue;
+        }
+        projected_index += 1;
         let mut path = parent.to_vec();
-        path.push(index + 1);
+        path.push(projected_index);
         output.push((path.clone(), section));
         flatten_sections(&section.children, &path, output);
     }

@@ -395,6 +395,14 @@ The full oracle is a local and release-time discovery tool, not a per-push CI de
 
 Every new corpus expansion also has a manual review budget. Inspect every `REVIEW` and `HARD` result, then inspect representative clean pages that collectively cover the corpus's table forms, no-fill or display content, font changes, links or includes, and its dominant macro dialect (`man` or `mdoc`). Compare the source, the reference renderer, ManT text, and the structured result when a layout difference could hide an IR error. Record each candidate's durable conclusion in `FIDELITY_AUDIT.csv`; record the corpus-level scope and any confirmed fixes in `tests/fixtures/roff/FIDELITY_AUDIT.md`. When that review establishes that ManT preserves the source semantics more usefully than the observed terminal reference, add the exact source-hash-specific evidence to `tests/fixtures/roff/REFERENCE_RENDERER_DEVIATIONS.csv` instead of loosely calling the host formatter “wrong”. This makes the ledger evidence of both automated breadth and deliberate human inspection without turning host-specific presentation into a CI gate.
 
+The audit routes share an explicit source-identity baseline rather than merely
+similar row counts. Structure and CommonMark projection cover every recorded
+fidelity identity; renderer-layout covers the fidelity rows with a completed
+two-renderer comparison. Independent targeted sweeps may remain supersets. See
+the [coverage contract](../tests/fixtures/roff/AUDIT_COVERAGE.md) and run
+`python3 scripts/check-roff-audit-coverage.py` before concluding a local audit
+expansion.
+
 ManT intentionally does not expose this comparison as a user-facing
 `mant --verify` fidelity certificate. A reference renderer is unavailable on
 some supported platforms, installed macro packages and pages are host state,

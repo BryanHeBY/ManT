@@ -1,7 +1,8 @@
 """Shared discovery and identity helpers for local roff audit drivers.
 
-The module owns only deterministic, renderer-independent mechanics. Audit
-contracts, ledgers, subprocess protocols, and human-review policy remain in
+The module owns only deterministic, renderer-independent mechanics plus the
+shared failure-isolating JSON-lines transport used by native profilers. Audit
+contracts, ledgers, response interpretation, and human-review policy remain in
 their individual drivers so evolving one oracle cannot silently change
 another oracle's interpretation.
 """
@@ -12,6 +13,7 @@ import argparse
 import bz2
 import gzip
 import hashlib
+import json
 import lzma
 import os
 import re
@@ -185,3 +187,73 @@ def read_fidelity_identities(path: Path, corpus: str) -> set[tuple[str, str]]:
             if row["corpus"] == corpus:
                 identities.add((row["path"], row["source_sha256"]))
     return identities
+
+
+def run_jsonl_profile_batch(
+    profiler: Path,
+    requests: dict[str, dict[str, str]],
+    timeout: int,
+    profile_name: str,
+) -> dict[str, dict[str, object]]:
+    """Run a JSON-lines profiler and isolate abnormal exits to one request."""
+    if not requests:
+        return {}
+    payload = "".join(
+        json.dumps(request, ensure_ascii=False) + "\n" for request in requests.values()
+    )
+    try:
+        result = subprocess.run(
+            [str(profiler)],
+            input=payload,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        result = None
+    if result is None or result.returncode != 0:
+        if len(requests) == 1:
+            request_id = next(iter(requests))
+            detail = (
+                f"{profile_name} profiler timed out after {timeout}s"
+                if result is None
+                else result.stderr.strip()
+                or f"{profile_name} profiler exited with status {result.returncode}"
+            )
+            return {request_id: {"id": request_id, "error": detail}}
+        items = list(requests.items())
+        midpoint = len(items) // 2
+        return {
+            **run_jsonl_profile_batch(
+                profiler, dict(items[:midpoint]), timeout, profile_name
+            ),
+            **run_jsonl_profile_batch(
+                profiler, dict(items[midpoint:]), timeout, profile_name
+            ),
+        }
+
+    responses: dict[str, dict[str, object]] = {}
+    for number, line in enumerate(result.stdout.splitlines(), 1):
+        try:
+            response = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"{profile_name} profiler returned invalid JSON on line {number}"
+            ) from error
+        request_id = response.get("id")
+        if (
+            not isinstance(request_id, str)
+            or request_id not in requests
+            or request_id in responses
+        ):
+            raise ValueError(
+                f"{profile_name} profiler returned an invalid id on line {number}"
+            )
+        responses[request_id] = response
+    for request_id in requests:
+        responses.setdefault(
+            request_id, {"id": request_id, "error": "profiler returned no response"}
+        )
+    return responses

@@ -32,13 +32,15 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from roff_audit_common import run_jsonl_profile_batch
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v3"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v4"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -432,35 +434,7 @@ def merge_review_status(previous: AuditRecord | None, status: str) -> str:
 def run_profile_batch(
     profiler: Path, requests: dict[str, dict[str, str]], timeout: int
 ) -> dict[str, dict[str, object]]:
-    payload = "".join(json.dumps(request, ensure_ascii=False) + "\n" for request in requests.values())
-    try:
-        result = subprocess.run(
-            [str(profiler)],
-            input=payload,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise ValueError(f"structure profiler timed out after {timeout}s") from error
-    if result.returncode != 0:
-        detail = result.stderr.strip() or f"exit status {result.returncode}"
-        raise ValueError(f"structure profiler failed: {detail}")
-    responses: dict[str, dict[str, object]] = {}
-    for number, line in enumerate(result.stdout.splitlines(), 1):
-        try:
-            response = json.loads(line)
-        except json.JSONDecodeError as error:
-            raise ValueError(f"structure profiler returned invalid JSON on line {number}") from error
-        request_id = response.get("id")
-        if not isinstance(request_id, str):
-            raise ValueError(f"structure profiler returned an invalid id on line {number}")
-        responses[request_id] = response
-    for request_id in requests:
-        responses.setdefault(request_id, {"id": request_id, "error": "profiler returned no response"})
-    return responses
+    return run_jsonl_profile_batch(profiler, requests, timeout, "structure")
 
 
 def profile_findings(

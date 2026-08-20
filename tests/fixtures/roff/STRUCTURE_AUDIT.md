@@ -26,18 +26,20 @@ mapping. A `review` row is useful precisely because it may identify an
 unanticipated topology loss; inspect source, AST/IR JSON, and both ManT text
 renderers before deciding whether to add a Rust regression.
 
-## What v3 verifies
+## What v4 verifies
 
 The profiler retains compact topology signatures in the JSON report. An mdoc
 `Bl` is matched to the IR container at the same source line and must retain its
 generic-versus-definition kind and direct item count. Native tbl(7) rows and
-mdoc `Bl -column` rows are compared in document order; they must retain cells
-and column/row spans. tbl vertical continuations must lower to an empty
-continuation cell. Table wrappers may be transparently merged by the lowering
-path, so the audit deliberately checks row topology rather than requiring a
-particular intermediate parent block. These checks catch a container being
-flattened or given the wrong semantic kind even when its global count happens
-to match.
+mdoc `Bl -column` rows are compared in document order; they must retain every
+parser-reported cell and its column/row spans. The source-aware lowering path
+may recover additional cells when pinned libmandoc retains fewer cells than
+the tbl format declares, so enrichment is accepted while cell loss is not.
+tbl vertical continuations must lower to an empty continuation cell. Table
+wrappers may be transparently merged by the lowering path, so the audit
+deliberately checks row topology rather than requiring a particular
+intermediate parent block. These checks catch a container being flattened or
+given the wrong semantic kind even when its global count happens to match.
 
 The corresponding man(7) `.TP`/`.IP` totals remain telemetry rather than a
 strict equality test. A run of hanging tags can legally be folded into one
@@ -47,15 +49,30 @@ the generic IR. Real mdoc definition lists *are* source-addressable and remain
 strictly checked.
 
 No-fill source text that begins an input line is a hard-line-boundary
-obligation; standalone roff font-switch lines are intentionally excluded
-because they have no printable glyph. Relative `RS` nesting is deliberately
-weaker: roff distances are not terminal columns, so v3 reports a candidate
-only if a document with an `RS` scope produces no indented IR block at all.
-Paragraph-boundary and raw
-`.br` counts remain report telemetry rather than failure conditions: empty or
-stateful requests can legitimately have no independent output block. Typed
-manual, external, email, and section links are checked independently, so a
-surviving link cannot mask degradation to a different target class.
+obligation; bounded runs of POD-style zero-width `\&` rows count as one blank
+row, while trailing guards and standalone sequences of roff font switches do
+not claim printable content. Literal display wrappers may be transparently
+coalesced, so their minimum-presence check is made against retained
+preformatted rows rather than the number of IR containers. Relative `RS`
+nesting is deliberately weaker: roff distances are not terminal columns, so
+v4 reports a candidate only if a non-empty `RS` scope produces neither an
+indented block nor a semantic list/definition container whose renderer owns
+the indentation. Paragraph-boundary and raw `.br` counts remain report
+telemetry rather than failure conditions: empty or stateful requests can
+legitimately have no
+independent output block. Typed manual, external, email, and section links are
+checked independently by unique printable source occurrence, so duplicated
+AST views and empty closing macros cannot manufacture an obligation while a
+surviving link still cannot mask degradation to a different target class. An
+unresolvable `.Sx` is allowed to degrade to visible text only when the normal
+lowering path also emits its structured
+`unresolved-section-reference` diagnostic; the audit therefore detects silent
+loss without pretending that a cross-document or absent section is a valid
+same-document target.
+
+JSON reports retain the exact source coordinates for each link macro family
+under `sourceLinkOrigins`; this makes a count candidate manually auditable
+without turning local paths or the verbose topology into a product protocol.
 
 Equation topology is source-addressed by line and context. A non-empty
 line-start `.EQ` node must remain one display equation block; an inline
@@ -74,6 +91,11 @@ self-contained.
 This distinction is intentional. The ledger should surface credible lowering
 loss, not prescribe byte-for-byte formatter emulation or turn normal
 libmandoc normalisation into a review queue.
+
+A valid pure `.so` alias is recorded as covered but does not inherit the
+target page's AST obligations. Its source identity owns only the redirect;
+the resolved target has its own fidelity/structure identity. Missing targets
+remain hard failures, so this rule does not hide incomplete manual trees.
 
 Build the profiler and scan the reproducible real fixtures:
 
