@@ -6,8 +6,9 @@ structure and reference-renderer ledgers. It reparses ManT's public Markdown
 projection and checks section identity/order, list kind/item ownership, fenced
 block language/ownership, and a deterministic sample of node excerpts.
 
-The output is a review queue. Ordinary CI runs only ``--self-check`` and the
-focused Rust regressions derived from confirmed findings.
+The ordinary output is a review queue. ``--verify`` turns the selected corpus
+into a read-only gate: both review candidates and hard failures make the command
+fail, while the audit ledger remains untouched.
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_projection_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/PROJECTION_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-projection-profile/v1"
+PROFILE_SCHEMA = "mant.roff-projection-profile/v2"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-projection-profile/v[1-9][0-9]*$")
 DATABASE_FIELDS = [
     "corpus",
@@ -157,6 +158,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="scan unchanged inputs recorded for this corpus in the fidelity ledger",
     )
     parser.add_argument("--findings-only", action="store_true")
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="do not update the ledger and fail unless every selected page is clean",
+    )
     parser.add_argument("--json", type=Path, metavar="FILE")
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
@@ -234,6 +240,14 @@ def merge_review_status(previous: AuditRecord | None, status: str) -> str:
     return previous.review_status
 
 
+def audit_exit_status(summary: Counter[str], verify: bool) -> int:
+    if summary["hard-failure"]:
+        return 1
+    if verify and summary["review"]:
+        return 1
+    return 0
+
+
 def run_profile_batch(
     profiler: Path, requests: dict[str, dict[str, str]], timeout: int
 ) -> dict[str, dict[str, object]]:
@@ -271,7 +285,7 @@ def run_profile_batch(
 def valid_counts(value: object) -> bool:
     return (
         isinstance(value, dict)
-        and set(value) == {"sections", "listItems", "fences"}
+        and set(value) == {"sections", "listItems", "fences", "entitySpellings"}
         and all(isinstance(count, int) and count >= 0 for count in value.values())
     )
 
@@ -285,7 +299,7 @@ def valid_topology(value: object) -> bool:
             return False
         if not all(
             isinstance(topology.get(field), list)
-            for field in ("sections", "listItems", "fences")
+            for field in ("sections", "listItems", "fences", "entitySpellings")
         ):
             return False
     return True
@@ -347,11 +361,27 @@ def self_check() -> None:
     ) == Path("/usr/share/man/fr")
     assert merge_review_status(None, "clean") == "not-required"
     assert merge_review_status(None, "review") == "pending"
-    assert valid_counts({"sections": 1, "listItems": 2, "fences": 3})
+    assert audit_exit_status(Counter({"clean": 1}), verify=True) == 0
+    assert audit_exit_status(Counter({"review": 1}), verify=False) == 0
+    assert audit_exit_status(Counter({"review": 1}), verify=True) == 1
+    assert audit_exit_status(Counter({"hard-failure": 1}), verify=False) == 1
+    assert valid_counts(
+        {"sections": 1, "listItems": 2, "fences": 3, "entitySpellings": 4}
+    )
     assert valid_topology(
         {
-            "expected": {"sections": [], "listItems": [], "fences": []},
-            "observed": {"sections": [], "listItems": [], "fences": []},
+            "expected": {
+                "sections": [],
+                "listItems": [],
+                "fences": [],
+                "entitySpellings": [],
+            },
+            "observed": {
+                "sections": [],
+                "listItems": [],
+                "fences": [],
+                "entitySpellings": [],
+            },
         }
     )
 
@@ -459,8 +489,11 @@ def main(argv: Sequence[str]) -> int:
         f"hard={summary['hard-failure']}, excerpts={sum(item.excerpt_checks for item in findings)}"
     )
     print("REVIEW is a projection candidate until the generated CommonMark is inspected.")
-    write_database(arguments.audit_db, database.values())
-    print(f"projection database: {arguments.audit_db}")
+    if arguments.verify:
+        print("projection database: unchanged (verification mode)")
+    else:
+        write_database(arguments.audit_db, database.values())
+        print(f"projection database: {arguments.audit_db}")
     if arguments.json:
         arguments.json.parent.mkdir(parents=True, exist_ok=True)
         arguments.json.write_text(
@@ -479,7 +512,7 @@ def main(argv: Sequence[str]) -> int:
             encoding="utf-8",
         )
         print(f"report: {arguments.json}")
-    return 1 if summary["hard-failure"] else 0
+    return audit_exit_status(summary, arguments.verify)
 
 
 if __name__ == "__main__":

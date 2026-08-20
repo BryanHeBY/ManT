@@ -44,6 +44,11 @@ run "check roff CommonMark projection audit" \
   python3 scripts/audit-roff-projection.py --self-check
 run "check roff renderer-layout audit" python3 scripts/audit-roff-layout.py --self-check
 run "test Rust workspace" cargo test --locked --workspace
+run "build roff CommonMark projection profiler" \
+  cargo build --locked --package mant-engine --example roff_projection_profile
+run "gate roff fixtures through the CommonMark projection" \
+  python3 scripts/audit-roff-projection.py --fixtures --recheck-recorded \
+  --verify --findings-only
 run "check read-only engine feature boundary" \
   cargo check --locked --package mant-engine --no-default-features
 run "build docs.rs documentation" \

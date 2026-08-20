@@ -10,3 +10,12 @@ third-party manual.
 equations, a display equation, and delimiter-driven tbl cells. Focused Rust
 tests remain the behavioral gate; the fixture proves that the corpus profiler
 itself observes each placement class.
+
+`projection-escapes.7` locks source entity spellings, trailing brace text in a
+heading, and dollar-prefixed variable text across the native-IR-to-CommonMark
+boundary.
+
+`tq-aliases.7` and `macro-recursion.7` retain reproducible evidence for two
+source-specific cases where ManT preserves more programmatic semantics than
+GNU groff's terminal result: alias ownership and the complete finite document
+around a recursively defined macro.

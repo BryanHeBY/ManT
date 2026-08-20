@@ -1127,6 +1127,41 @@ The next line.\n",
     }
 
     #[test]
+    fn tq_terms_share_one_semantic_option_identity() {
+        let path = temporary_source(
+            "tq-aliases",
+            ".TH TQ-ALIASES 7\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             .B \\-\\-alpha\n\
+             .TQ\n\
+             .B \\-a\n\
+             .TQ\n\
+             .B \\-\\-ALPHA\n\
+             Enable alpha mode.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower TQ aliases");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0]
+                .terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>(),
+            ["-a", "--alpha", "--ALPHA"]
+        );
+        assert_eq!(
+            items[0].identity.as_ref().expect("option identity").names,
+            ["-a", "--alpha", "--ALPHA"]
+        );
+    }
+
+    #[test]
     fn preserves_man_paragraph_distance_between_indented_paragraphs() {
         let path = temporary_source(
             "paragraph-distance",

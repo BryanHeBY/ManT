@@ -17,11 +17,12 @@ use mant_engine::{
     ManualPage, parse_manual_page, parse_markdown, render_excerpt_markdown, render_markdown,
     select_excerpt,
 };
-use mant_ir::{Block, Document, ListKind, ResolvedContent, Section};
+use mant_ir::{Block, Document, Inline, ListKind, ResolvedContent, Section};
+use pulldown_cmark::{Event, Parser};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-const PROFILE_SCHEMA: &str = "mant.roff-projection-profile/v1";
+const PROFILE_SCHEMA: &str = "mant.roff-projection-profile/v2";
 
 #[derive(Default, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +30,7 @@ struct ProjectionTopology {
     sections: Vec<SectionTopology>,
     list_items: Vec<ListItemTopology>,
     fences: Vec<FenceTopology>,
+    entity_spellings: Vec<String>,
 }
 
 #[derive(Eq, PartialEq, Serialize)]
@@ -68,6 +70,7 @@ struct ProjectionCounts {
     sections: usize,
     list_items: usize,
     fences: usize,
+    entity_spellings: usize,
 }
 
 fn main() {
@@ -168,7 +171,107 @@ fn projection_topology(document: &Document) -> ProjectionTopology {
     let mut topology = ProjectionTopology::default();
     collect_blocks(&document.blocks, &[], &mut Vec::new(), &mut topology);
     collect_sections(&document.sections, &[], &mut topology);
+    collect_entity_blocks(&document.blocks, &mut topology.entity_spellings);
+    collect_entity_sections(&document.sections, &mut topology.entity_spellings);
     topology
+}
+
+fn collect_entity_sections(sections: &[Section], output: &mut Vec<String>) {
+    for section in sections {
+        extend_entity_spellings(&section.title, output);
+        collect_entity_blocks(&section.blocks, output);
+        collect_entity_sections(&section.children, output);
+    }
+}
+
+fn collect_entity_blocks(blocks: &[Block], output: &mut Vec<String>) {
+    for block in blocks {
+        match block {
+            Block::Paragraph { children, .. } => {
+                collect_entity_inlines(children, output);
+            }
+            Block::List { items, .. } => {
+                for item in items {
+                    collect_entity_blocks(&item.blocks, output);
+                }
+            }
+            Block::DefinitionList { items, .. } => {
+                for item in items {
+                    for term in &item.terms {
+                        collect_entity_inlines(term, output);
+                    }
+                    collect_entity_blocks(&item.description, output);
+                }
+            }
+            Block::Table { rows, .. } => {
+                for row in rows {
+                    for cell in &row.cells {
+                        collect_entity_blocks(&cell.blocks, output);
+                    }
+                }
+            }
+            Block::Unsupported { text, .. } => extend_entity_spellings(text, output),
+            Block::Preformatted { .. }
+            | Block::Equation { .. }
+            | Block::VerticalSpace { .. }
+            | Block::ThematicBreak { .. } => {}
+        }
+    }
+}
+
+fn collect_entity_inlines(inlines: &[Inline], output: &mut Vec<String>) {
+    for inline in inlines {
+        match inline {
+            Inline::Text { value } => extend_entity_spellings(value, output),
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => collect_entity_inlines(children, output),
+            Inline::Code { .. } | Inline::Anchor { .. } | Inline::LineBreak => {}
+        }
+    }
+}
+
+fn extend_entity_spellings(value: &str, output: &mut Vec<String>) {
+    let bytes = value.as_bytes();
+    let mut start = 0;
+    while let Some(relative) = bytes[start..].iter().position(|byte| *byte == b'&') {
+        let ampersand = start + relative;
+        let search_end = ampersand.saturating_add(64).min(bytes.len());
+        let Some(relative_end) = bytes[ampersand + 1..search_end]
+            .iter()
+            .position(|byte| *byte == b';')
+        else {
+            start = ampersand + 1;
+            continue;
+        };
+        let end = ampersand + relative_end + 2;
+        let body = &bytes[ampersand + 1..end - 1];
+        let named = !body.is_empty() && body.iter().all(u8::is_ascii_alphanumeric);
+        let decimal = body
+            .strip_prefix(b"#")
+            .is_some_and(|digits| !digits.is_empty() && digits.iter().all(u8::is_ascii_digit));
+        let hexadecimal = body
+            .strip_prefix(b"#x")
+            .or_else(|| body.strip_prefix(b"#X"))
+            .is_some_and(|digits| !digits.is_empty() && digits.iter().all(u8::is_ascii_hexdigit));
+        if (named || decimal || hexadecimal) && value.is_char_boundary(end) {
+            let spelling = &value[ampersand..end];
+            if commonmark_decodes_entity(spelling) {
+                output.push(spelling.to_owned());
+            }
+        }
+        start = end;
+    }
+}
+
+fn commonmark_decodes_entity(spelling: &str) -> bool {
+    let visible = Parser::new(spelling)
+        .filter_map(|event| match event {
+            Event::Text(value) => Some(value.into_string()),
+            _ => None,
+        })
+        .collect::<String>();
+    visible != spelling
 }
 
 fn collect_sections(sections: &[Section], parent: &[usize], topology: &mut ProjectionTopology) {
@@ -261,6 +364,7 @@ fn counts(topology: &ProjectionTopology) -> ProjectionCounts {
         sections: topology.sections.len(),
         list_items: topology.list_items.len(),
         fences: topology.fences.len(),
+        entity_spellings: topology.entity_spellings.len(),
     }
 }
 
@@ -284,7 +388,27 @@ fn compare_topology(
         &mut violations,
     );
     compare_fences(scope, &expected.fences, &observed.fences, &mut violations);
+    compare_entity_spellings(
+        scope,
+        &expected.entity_spellings,
+        &observed.entity_spellings,
+        &mut violations,
+    );
     violations
+}
+
+fn compare_entity_spellings(
+    scope: &str,
+    expected: &[String],
+    observed: &[String],
+    violations: &mut Vec<String>,
+) {
+    if expected == observed {
+        return;
+    }
+    violations.push(format!(
+        "{scope} entity spellings: expected {expected:?}, observed {observed:?}"
+    ));
 }
 
 fn compare_list_items(

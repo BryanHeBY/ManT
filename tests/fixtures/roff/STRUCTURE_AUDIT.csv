@@ -28,6 +28,9 @@ fixtures,real/fedora44/git.1.zst,1,2ee1c5dd84a69dfc91d84840e943e7df0ee06b86bf27e
 fixtures,real/fedora44/sh.1.zst,1,a3de526eb64c1f066d50899fa6ba2a7e63eb77b977aa881c67599d89978debf1,mant.roff-structure-profile/v3,clean,not-required,
 fixtures,real/fedora44/tar.1.zst,1,3a85ebdd1601114e7c8c1dfa35726f8394d59412887242ffc6ef49ec021017ee,mant.roff-structure-profile/v3,clean,not-required,
 fixtures,real/mant-audit/equation-contexts.7,7,61b65f6ac3608d549fb47dd5a8e0e298561dcc9bf8569998a9ca12bdf8f124d0,mant.roff-structure-profile/v3,clean,not-required,
+fixtures,real/mant-audit/macro-recursion.7,7,ab9675337c6de80df24e8e998c73ef2c2793e7ad0ad43dbbce67d58bda5d5e7a,mant.roff-structure-profile/v3,clean,not-required,
+fixtures,real/mant-audit/projection-escapes.7,7,ea11a4522e13e370bbb88e30b3bac88dbbc95827247e03977f453dea37f802a7,mant.roff-structure-profile/v3,clean,not-required,
+fixtures,real/mant-audit/tq-aliases.7,7,be4df069fed83885de2175a4f54533b7067b328f11455060c24eb27796b57a4e,mant.roff-structure-profile/v3,clean,not-required,
 fixtures,real/windows-releases/npm.1.zst,1,34557de7f44cfdaf1bccdc05621bae7108df3bf58c49d24b1688292b82cff158,mant.roff-structure-profile/v3,clean,not-required,
 fixtures,real/windows-releases/rclone.1.zst,1,f35de3b3008f684a7db141a7626db68b08c46e5b3d45c97726bc6d97eebade4e,mant.roff-structure-profile/v3,clean,false-positive,standalone no-fill font switches excluded by profiler regression
 fixtures,real/windows-releases/rg.1.zst,1,e83d82c28bb2683cf71500e5fb8d9746a162bb24b08a6396a15ab2ed1d96cb45,mant.roff-structure-profile/v3,clean,not-required,

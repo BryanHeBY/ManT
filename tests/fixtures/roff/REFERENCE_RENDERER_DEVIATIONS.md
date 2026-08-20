@@ -22,6 +22,13 @@ Add a row only after a reviewer has inspected all of the following:
    definition term into its body, exposing a device artifact, or collapsing an
    equation operator.
 
+Third-party pages inherit their exact source identity from the fidelity ledger.
+Small project-authored `real/mant-audit` fixtures may instead establish that
+identity directly when the raw source, SHA-256, reference command, and focused
+ManT regression all live in this repository. This exception keeps a narrowly
+reproducible renderer limitation from requiring a synthetic fidelity-corpus
+row.
+
 Wrapping, typography, headers, alternative historical standard names, and a
 mere preference for ManT link decoration do **not** qualify. Those remain
 ordinary `false-positive` review dispositions in
@@ -61,6 +68,22 @@ to issue #26 and the equation findings in issue #27:
 
 These rows assert preservation of operands and mathematical relations, not
 equivalence of terminal equation geometry.
+
+Two project-authored issue-#36 fixtures make additional above-parity behavior
+fully replayable with GNU groff 1.24.1:
+
+- `.TP` followed by two `.TQ` requests produces three stacked terms in the
+  terminal reference. ManT retains the same visible spellings and additionally
+  exposes them as aliases of one semantic option identity, so any spelling can
+  select the shared description without guessing ownership.
+- A directly recursive user macro makes groff stop at its input-stack limit
+  with exit status 4 after emitting more than one million blank lines and no
+  following section. ManT bounds expansion, emits a diagnostic, and retains the
+  finite tail of the document.
+
+These are deliberately different claims: the first is extra semantic structure
+over the same visible content; the second is bounded recovery from hostile or
+broken input. Neither is generalized beyond the recorded fixture and toolchain.
 
 ## Above-parity survey reconciliation
 

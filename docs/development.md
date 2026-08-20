@@ -331,15 +331,20 @@ topology after lowering has already succeeded:
 cargo build --package mant-engine --example roff_projection_profile
 python3 scripts/audit-roff-projection.py --fixtures \
   --json /tmp/mant-projection.json
+python3 scripts/audit-roff-projection.py --fixtures --recheck-recorded \
+  --verify --findings-only
 python3 scripts/audit-roff-projection.py --manpath /usr/share/man \
   --corpus archlinux-host --replay-fidelity-records --findings-only
 ```
 
 It reparses full renders and a deterministic first/middle/last section sample,
-then compares section trees, list nesting, and fenced-block nesting. Its
+then compares section trees, list nesting, fenced-block nesting, and literal
+entity spellings that CommonMark would otherwise decode. Its
 independent [`PROJECTION_AUDIT.csv`](../tests/fixtures/roff/PROJECTION_AUDIT.csv)
 and [guide](../tests/fixtures/roff/PROJECTION_AUDIT.md) prevent a projection
 finding from being mistaken for an AST-to-IR lowering failure.
+The `--verify` form is read-only and gates every checked-in roff fixture in the
+Unix CI boundary; local host corpora remain incremental and non-gating.
 
 ### Roff renderer-layout audit
 

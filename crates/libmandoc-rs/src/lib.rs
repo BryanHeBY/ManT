@@ -899,6 +899,30 @@ mod tests {
     }
 
     #[test]
+    fn recursive_user_macro_retains_content_after_the_cycle() {
+        let report = Parser::default()
+            .parse_bytes(
+                "recursive.7",
+                b".TH RECUR 7\n.SH NAME\nrecur \\- x\n.de R\n.  R\n..\n.R\n.SH DESC\ntail marker ZZTAIL\n",
+            )
+            .expect("return the complete document around recursive macro input");
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("infinite loop")),
+            "recursion limit must remain observable: {:?}",
+            report.diagnostics
+        );
+        let visible = visible.join(" ");
+        assert!(visible.contains("recur"), "{visible}");
+        assert!(visible.contains("tail marker ZZTAIL"), "{visible}");
+    }
+
+    #[test]
     fn deeply_nested_input_is_bounded_instead_of_overflowing_the_stack() {
         // Far more nesting than the copy cap; the parse must return a finite
         // tree rather than recursing without limit while copying it out.
