@@ -1,9 +1,10 @@
 /*
  * Owned compatibility layer for the pinned libmandoc parser.
  *
- * libmandoc's syntax tree and diagnostic writer are private, process-global
- * implementation details.  Copying a completed parse into these small opaque
- * structures lets Rust release the parser before crossing the FFI boundary.
+ * libmandoc's syntax tree and diagnostic writer are private implementation
+ * details with session-local lifetime. Copying a completed parse into these
+ * small opaque structures lets Rust release the parser before crossing the
+ * FFI boundary.
  */
 #include "config.h"
 #include "mant_thread_local.h"

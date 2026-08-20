@@ -174,9 +174,18 @@ checked memory-only configuration instead of exposing POSIX file transport to
 C. ManT invokes libmandoc with native includes denied after Rust has resolved
 the source chain.
 
-Libmandoc 1.14.6 has process-global character, diagnostic, tag, and recursion
-state, so parser sessions are serialized. Initialization happens once and each
-request receives isolated diagnostic reset and capture.
+The pinned libmandoc 1.14.6 snapshot originally kept character, diagnostic,
+tag, roff-request, and recursion state in process globals. The local vendor
+patch makes those parser-session slots thread-local, and the shim keeps source
+roots and diagnostic capture thread-local as well. Independent parser calls
+therefore run concurrently without a process-wide lock; one-time native
+initialization remains synchronized. Date conversion avoids process-global
+timezone mutation and uses reentrant platform APIs where local time is
+required. Recursive re-entry on one thread is not supported, and the owned
+node and equation copies stop after 256 levels so hostile nesting cannot carry
+an unbounded C tree into recursive Rust consumers. A mixed Rust/C
+ThreadSanitizer runner guards this boundary locally because instrumenting only
+Rust would miss races inside the vendored parser.
 
 ### Markdown and installed sources
 

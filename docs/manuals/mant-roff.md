@@ -240,7 +240,7 @@ Some formatter-specific strings disappear before libmandoc exposes a cell. For o
 
 `eqn(7)` input becomes an `equation` block containing libmandoc's normalized expression text. ManT preserves the expression for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor.
 
-Deeply nested equations and document trees are bounded before recursive Rust lowering. Excessive nesting fails safely rather than overflowing the process stack.
+Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix, so pathological input cannot overflow later recursive consumers; descendants beyond that defensive cap are omitted rather than reported as a whole-document parse failure.
 
 ## Diagnostics and Fallback
 

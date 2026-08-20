@@ -241,6 +241,23 @@ it.
 `libmandoc-rs` also has a self-contained package boundary: its parser,
 compression, include-policy, diagnostics, and optional `serde` tests must pass
 from Cargo's staged package directory without fixtures from sibling crates.
+Its heavier concurrency check stays outside routine CI and must instrument
+both languages across the FFI boundary:
+
+```sh
+rustup toolchain install nightly --profile minimal
+rustup component add rust-src --toolchain nightly
+crates/libmandoc-rs/scripts/check-thread-safety
+```
+
+The runner recompiles `std` with TSAN, explicitly instruments the vendored C
+objects, uses an isolated target directory, and exercises both in-memory
+parsing and concurrent source-relative `.so` resolution. Use `--rounds N` for
+a longer local soak. It supports `x86_64` and `aarch64` Linux/glibc and macOS;
+Windows retains ordinary concurrent regression coverage in CI but is outside
+this TSAN runner. The sanitizer runner, patch series, and upstream checksum are
+repository maintenance inputs and are intentionally absent from the published
+crate, which ships only the resulting buildable vendor tree.
 
 When changing a versioned IR projection or protocol type, update the Rust contract,
 generated-schema, process, and projection tests in the same change. External

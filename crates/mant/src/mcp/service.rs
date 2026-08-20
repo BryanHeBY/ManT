@@ -17,8 +17,9 @@ pub(super) struct QueryService {
 impl QueryService {
     pub(super) fn new() -> Self {
         Self {
-            // Native libmandoc parsing remains serialized by its own parser
-            // lock; independent Markdown and catalog reads need not block it.
+            // Bound blocking filesystem and parser work. Patched libmandoc
+            // sessions can run concurrently, but neither native parsing nor
+            // independent Markdown/catalog reads should grow without limit.
             gate: Arc::new(Semaphore::new(4)),
         }
     }

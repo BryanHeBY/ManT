@@ -26,10 +26,17 @@ pub enum IncludePolicy {
     /// Reject `.so` expansion. This is the safe default for arbitrary input.
     #[default]
     Deny,
-    /// Resolve `.so` files using the parsed source's manual tree.
+    /// Resolve `.so` files using Unix libmandoc-compatible source-tree and
+    /// process-working-directory lookup.
+    ///
+    /// This compatibility policy is for trusted manual trees, not strict
+    /// containment, and is unavailable on Windows.
     SourceTree,
     /// Resolve `.so` files below one caller-approved directory without
-    /// traversing symbolic links beneath that root.
+    /// traversing symbolic links beneath that root or falling back elsewhere.
+    ///
+    /// The approved root itself may be a symbolic link. This strict policy is
+    /// currently unavailable on Windows.
     Root(PathBuf),
 }
 
@@ -37,8 +44,11 @@ pub enum IncludePolicy {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Compression {
-    /// Let file parsing use libmandoc's native gzip handling and recognize
-    /// zstd frames before sending a staged buffer to libmandoc.
+    /// Detect supported compression at the relevant input boundary.
+    ///
+    /// File input uses a `.zst` suffix for zstd. Windows additionally uses a
+    /// `.gz` suffix for gzip; other Unix file input goes through libmandoc's
+    /// native reader. Byte input recognizes zstd magic but not gzip.
     #[default]
     Auto,
     /// Treat the source bytes as uncompressed roff input.
@@ -107,7 +117,8 @@ impl std::error::Error for ParseError {}
 ///
 /// Independent calls may run concurrently. The bundled C parser keeps its
 /// mutable session state in static thread-local storage; this type does not
-/// support recursive re-entry on one OS thread.
+/// support recursive re-entry on one OS thread. Owned node and equation copies
+/// stop after 256 levels and omit deeper descendants from pathological input.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Parser {
     options: ParseOptions,
@@ -128,8 +139,10 @@ impl Parser {
 
     /// Parse one source path into an owned document.
     ///
-    /// Auto-detected file input supports libmandoc's native gzip handling and
-    /// zstd files.  `.so` expansion is governed by [`IncludePolicy`].
+    /// Auto-detected file input selects Rust zstd decoding for `.zst`; Windows
+    /// also selects Rust gzip decoding for `.gz`, while other Unix paths use
+    /// libmandoc's native reader. `.so` expansion is governed by
+    /// [`IncludePolicy`].
     ///
     /// # Errors
     ///
@@ -153,8 +166,9 @@ impl Parser {
     /// Parse caller-owned source bytes under a logical source path.
     ///
     /// Byte input is useful when a caller owns its transport or decompression
-    /// layer.  In auto mode zstd magic is recognized; gzip byte input should
-    /// use [`Parser::parse_file`] so libmandoc can open it natively.
+    /// layer. In auto mode zstd magic is recognized. Callers must decompress
+    /// gzip byte input themselves, or pass a gzip file to
+    /// [`Parser::parse_file`].
     ///
     /// # Errors
     ///

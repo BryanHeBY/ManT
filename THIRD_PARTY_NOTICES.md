@@ -15,10 +15,12 @@ locked multi-platform graph.
 ## Bundled parser
 
 `crates/libmandoc-rs/vendor/mandoc-1.14.6/` is a pinned mandoc 1.14.6 source
-snapshot. Its upstream inventory, exact exception mapping, and complete
-reusable terms are documented in
+snapshot with an ordered local patch series. Its upstream inventory, local
+modification summary, exact exception mapping, and complete reusable terms are
+documented in
 [`crates/libmandoc-rs/THIRD_PARTY_NOTICES.md`](crates/libmandoc-rs/THIRD_PARTY_NOTICES.md)
-and [`crates/libmandoc-rs/LICENSES/`](crates/libmandoc-rs/LICENSES/).
+and [`crates/libmandoc-rs/LICENSES/`](crates/libmandoc-rs/LICENSES/); the exact
+reproducible patch inputs remain in the repository beside the vendored tree.
 Original source headers remain intact. Native release archives carry the
 notices required by the parser sources compiled into their executable.
 
