@@ -477,7 +477,9 @@ line breaks.
 It receives path `0` and alias `tldr`, uses the same renderer and search model
 as cached tldr-pages data, and records document-owned provenance without
 claiming tldr-pages licence attribution. Ordinary headings named `TLDR` have
-no special meaning.
+no special meaning. Community tldr-pages content carries its `CC BY 4.0`
+attribution in Markdown, plain-text, and interactive terminal presentations;
+embedded document-owned quick references do not claim that attribution.
 
 ### Preserved Unsupported Syntax
 

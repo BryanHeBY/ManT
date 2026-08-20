@@ -2,7 +2,7 @@
 
 use mant_ir::{
     Block, DefinitionItem, Inline, ListItem, ListKind, Section, TableCell, TldrCommandPart,
-    TldrDocument,
+    TldrDocument, TldrOrigin,
 };
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
@@ -143,6 +143,12 @@ fn render_tldr_text(tldr: &TldrDocument) -> String {
         } else {
             command
         });
+    }
+    if tldr.origin == TldrOrigin::TldrPages {
+        lines.push(format!(
+            "tldr-pages · CC BY 4.0 · {} · {}",
+            tldr.platform, tldr.language
+        ));
     }
     lines.join("\n\n")
 }
@@ -501,8 +507,28 @@ mod tests {
         let excerpt = select_excerpt(&query, &["tldr".to_owned()]).expect("tldr excerpt");
         assert_eq!(
             render_excerpt_text(&excerpt),
-            "demo\n\nOutline 0: TLDR QUICK REFERENCE\n\nTLDR\n\nA small demonstration."
+            "demo\n\nOutline 0: TLDR QUICK REFERENCE\n\nTLDR\n\nA small demonstration.\n\ntldr-pages · CC BY 4.0 · common · en"
         );
+    }
+
+    #[test]
+    fn attributes_only_community_tldr_in_plain_text() {
+        let mut community = query();
+        community.tldr = Some(TldrDocument {
+            title: "demo".to_owned(),
+            description: vec!["A small demonstration.".to_owned()],
+            more_information: None,
+            examples: Vec::new(),
+            platform: "common".to_owned(),
+            language: "en".to_owned(),
+            source_path: "/cache/tldr/demo.md".to_owned(),
+            origin: TldrOrigin::TldrPages,
+        });
+        assert!(render_query_text(&community).contains("tldr-pages · CC BY 4.0 · common · en"));
+
+        let mut embedded = community;
+        embedded.tldr.as_mut().expect("tldr").origin = TldrOrigin::Embedded;
+        assert!(!render_query_text(&embedded).contains("CC BY 4.0"));
     }
 
     #[test]
