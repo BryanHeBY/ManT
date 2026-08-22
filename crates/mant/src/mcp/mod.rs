@@ -77,7 +77,7 @@ impl MantMcpServer {
             .query_service
             .discover(catalog_query(&parameters))
             .await?;
-        Ok(finish_page(render_find(&catalog, parameters.page)))
+        Ok(finish_page(&render_find(&catalog, parameters.page)))
     }
 
     /// Return a selectable hierarchy; sections are the compact default.
@@ -103,7 +103,7 @@ impl MantMcpServer {
             unreachable!("outline request materializes an outline")
         };
         prepare_outline(&mut outline);
-        Ok(finish_page(render_outline(&outline, page)))
+        Ok(finish_page(&render_outline(&outline, page)))
     }
 
     /// Read complete content for one or more outline selectors as `CommonMark`.
@@ -129,7 +129,7 @@ impl MantMcpServer {
             unreachable!("read request materializes an excerpt")
         };
         prepare_excerpt(&mut excerpt);
-        Ok(finish_page(render_excerpt(&excerpt, page)))
+        Ok(finish_page(&render_excerpt(&excerpt, page)))
     }
 
     /// Explain one semantic entry across one or more bounded documents.
@@ -154,7 +154,7 @@ impl MantMcpServer {
         };
         let mut response = self.query_scope(request).await?;
         prepare_scope(&mut response);
-        Ok(finish_page(render_scope_explain(&response, page)?))
+        Ok(finish_page(&render_scope_explain(&response, page)?))
     }
 
     /// Search visible text across one or more bounded documents.
@@ -186,10 +186,12 @@ impl MantMcpServer {
         };
         let mut response = self.query_scope(request).await?;
         prepare_scope(&mut response);
-        Ok(finish_page(render_scope_search(&response, page)?))
+        Ok(finish_page(&render_scope_search(&response, page)?))
     }
 }
 
+// `rmcp` generates an immediately-ready async trait method for this router.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for MantMcpServer {
     fn get_info(&self) -> ServerInfo {

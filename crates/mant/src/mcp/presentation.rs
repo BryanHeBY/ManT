@@ -1,5 +1,7 @@
 //! Compact, bounded presentations for the agent-facing MCP boundary.
 
+use std::fmt::Write as _;
+
 use mant_protocol::{
     DocumentCatalog, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse, ScopeQueryResult,
     TraversalLimit, sanitize_terminal_text,
@@ -20,7 +22,7 @@ pub(super) struct TextPage {
 pub(super) fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
     let mut text = format!("{} matches", catalog.total);
     if catalog.returned < catalog.total {
-        text.push_str(&format!("; {} returned", catalog.returned));
+        let _ = write!(text, "; {} returned", catalog.returned);
     }
     let records = mant_protocol::render_catalog_text(catalog, false);
     if !records.is_empty() {
@@ -171,13 +173,13 @@ fn append_status_line(text: &mut String, status: &str) {
 }
 
 /// Attach the stable, model-visible page metadata to a successful result.
-pub(super) fn finish_page(page: TextPage) -> String {
+pub(super) fn finish_page(page: &TextPage) -> String {
     let mut output = format!(
         "[mant-page chars={}..{} totalChars={}",
         page.start_char, page.end_char, page.total_chars
     );
     if page.end_char < page.total_chars {
-        output.push_str(&format!(" nextChar={}", page.end_char));
+        let _ = write!(output, " nextChar={}", page.end_char);
     }
     output.push(']');
     if !page.text.is_empty() {
@@ -284,7 +286,7 @@ mod tests {
         );
         assert_eq!(first.text.chars().count(), 17);
         let next = first.end_char;
-        let rendered = finish_page(first);
+        let rendered = finish_page(&first);
         assert!(rendered.starts_with(&format!(
             "[mant-page chars=0..17 totalChars={} nextChar=17]",
             source.chars().count()

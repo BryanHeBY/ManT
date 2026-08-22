@@ -138,6 +138,17 @@ fn request_document_tools(input: &mut impl Write) {
             "pattern": "needle"
         }),
     );
+    request_compatibility_and_page_tools(input);
+    #[cfg(windows)]
+    call_tool(
+        input,
+        9,
+        "mant_outline",
+        &json!({ "document": "mcp-suffix" }),
+    );
+}
+
+fn request_compatibility_and_page_tools(input: &mut impl Write) {
     call_tool(
         input,
         11,
@@ -178,13 +189,6 @@ fn request_document_tools(input: &mut impl Write) {
             "startChar": 3,
             "maxChars": 7
         }),
-    );
-    #[cfg(windows)]
-    call_tool(
-        input,
-        9,
-        "mant_outline",
-        &json!({ "document": "mcp-suffix" }),
     );
 }
 
