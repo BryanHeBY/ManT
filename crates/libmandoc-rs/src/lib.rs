@@ -33,6 +33,7 @@ struct RawDocument {
 #[cfg(test)]
 mod tests {
     use std::{
+        fmt::Write as _,
         fs, process,
         sync::{Arc, Barrier},
     };
@@ -571,7 +572,7 @@ mod tests {
     fn parser_replaces_repeated_input_traps_without_losing_following_content() {
         let mut source = String::from(".TH TRAPS 1\n.SH BODY\n");
         for index in 0..1_024 {
-            source.push_str(&format!(".it 100000 trap-{index}\n"));
+            writeln!(&mut source, ".it 100000 trap-{index}").expect("write test trap");
         }
         source.push_str(".SH TAIL\nretained tail marker\n");
         let report = Parser::default()
