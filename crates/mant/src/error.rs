@@ -66,7 +66,12 @@ impl Failure {
 }
 
 fn sanitized_message(message: impl std::fmt::Display) -> String {
-    sanitize_terminal_text(&message.to_string()).into_owned()
+    message
+        .to_string()
+        .split('\n')
+        .map(sanitize_terminal_text)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub(super) fn query_failure(error: QueryError) -> Failure {
@@ -210,9 +215,9 @@ mod tests {
     #[test]
     fn failure_messages_mask_dynamic_terminal_controls() {
         let error = Failure::operational("bad\u{1b}[2J\nnext\rline");
-        assert_eq!(error.message(), "bad�[2J�next�line");
+        assert_eq!(error.message(), "bad�[2J\nnext�line");
 
-        let error = Failure::usage_lines("first\u{1b}[31m", ["hint: next\nline"]);
+        let error = Failure::usage_lines("first\u{1b}[31m", ["hint: next\tline"]);
         let mut diagnostics = Vec::new();
         assert_eq!(report_failure(&error, &mut diagnostics, false), 2);
         assert_eq!(
