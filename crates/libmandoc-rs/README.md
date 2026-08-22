@@ -133,6 +133,7 @@ rustup toolchain install nightly --profile minimal
 rustup component add rust-src --toolchain nightly
 ./scripts/check-thread-safety
 ./scripts/check-thread-safety --rounds 256
+./scripts/check-address-safety
 ```
 
 The runner supports `x86_64` and `aarch64` Linux/glibc and macOS hosts, uses
@@ -141,6 +142,10 @@ the C archive contains TSAN callbacks. Its tests are ignored by ordinary
 `cargo test` because an uninstrumented stress pass cannot establish race
 freedom. Windows runs ordinary cross-thread regression tests in CI, but this
 TSAN runner does not support Windows.
+
+`check-address-safety` uses the same mixed Rust/C sanitizer setup for exact
+memory-only input boundaries, including truncated UTF-8 at the final source
+byte. It is likewise a local maintainer check rather than a routine CI job.
 
 The published crate contains the already-patched vendor tree needed to build,
 but deliberately omits the repository maintenance inputs under `scripts/`,
@@ -176,6 +181,12 @@ the ordered patches in `patches/series`:
   centering state at every parser-session boundary, preventing a page ending
   with an armed request from carrying dangling native pointers into the next
   parse in a long-lived process.
+- `0011-bound-memory-input-utf8.patch` falls back to Latin-1 for a truncated
+  UTF-8 sequence at a caller-owned buffer boundary instead of reading past the
+  supplied memory.
+- `0012-replace-input-traps.patch` frees the superseded `.it` trap macro when
+  a page replaces it, preventing repeated trap declarations from accumulating
+  memory in a long-lived parser process.
 
 Each is a narrow parser or portability correction. They are not a forked
 renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the

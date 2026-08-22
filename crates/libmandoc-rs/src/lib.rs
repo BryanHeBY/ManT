@@ -568,6 +568,21 @@ mod tests {
     }
 
     #[test]
+    fn parser_replaces_repeated_input_traps_without_losing_following_content() {
+        let mut source = String::from(".TH TRAPS 1\n.SH BODY\n");
+        for index in 0..1_024 {
+            source.push_str(&format!(".it 100000 trap-{index}\n"));
+        }
+        source.push_str(".SH TAIL\nretained tail marker\n");
+        let report = Parser::default()
+            .parse_bytes("traps.1", source.as_bytes())
+            .expect("replacing input traps must retain a finite parse");
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+        assert!(visible.join(" ").contains("retained tail marker"));
+    }
+
+    #[test]
     fn parser_sessions_reset_unfinished_roff_requests() {
         let parser = Parser::default();
         for round in 0..32 {
@@ -947,6 +962,24 @@ mod tests {
                 "{declaration}: {visible}"
             );
             assert!(!visible.contains('?'), "{declaration}: {visible}");
+        }
+    }
+
+    #[test]
+    fn parser_decodes_truncated_utf8_tails_without_reading_past_memory_input() {
+        for byte in [0xc2, 0xe2, 0xf0] {
+            let mut source = b".TH TRUNCATED 1\n.SH BODY\n".to_vec();
+            source.push(byte);
+            let source = source.into_boxed_slice();
+            let report = Parser::default()
+                .parse_bytes("truncated.1", &source)
+                .expect("truncated UTF-8 tail must retain a best-effort parse");
+            let mut visible = Vec::new();
+            collect_visible_text(&report.document.root, &mut visible);
+            assert!(
+                visible.join(" ").contains(&format!("\\[u{byte:04X}]")),
+                "byte {byte:#x} was not preserved as Latin-1: {visible:?}"
+            );
         }
     }
 

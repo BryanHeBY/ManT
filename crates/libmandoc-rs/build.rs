@@ -56,11 +56,20 @@ fn main() {
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     let memory_only = target_os == "windows";
     let thread_sanitizer = env::var_os("LIBMANDOC_RS_TSAN").is_some();
+    let address_sanitizer = env::var_os("LIBMANDOC_RS_ASAN").is_some();
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
 
     assert!(
+        !(thread_sanitizer && address_sanitizer),
+        "libmandoc-rs cannot enable ThreadSanitizer and AddressSanitizer together"
+    );
+    assert!(
         !thread_sanitizer || matches!(target_os.as_str(), "linux" | "macos"),
         "libmandoc-rs ThreadSanitizer instrumentation supports Linux and macOS targets"
+    );
+    assert!(
+        !address_sanitizer || matches!(target_os.as_str(), "linux" | "macos"),
+        "libmandoc-rs AddressSanitizer instrumentation supports Linux and macOS targets"
     );
 
     fs::copy(crate_dir.join(config), out_dir.join("config.h"))
@@ -88,6 +97,14 @@ fn main() {
         // runner so a passing test covers both sides of the FFI boundary.
         build
             .flag("-fsanitize=thread")
+            .flag("-fno-omit-frame-pointer")
+            .flag("-g");
+    }
+    if address_sanitizer {
+        // Match Rust's opt-in AddressSanitizer build so reads in the vendored
+        // C parser are checked at the FFI boundary too.
+        build
+            .flag("-fsanitize=address")
             .flag("-fno-omit-frame-pointer")
             .flag("-g");
     }
@@ -127,6 +144,7 @@ fn main() {
     println!("cargo:rerun-if-changed=config");
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
+    println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_ASAN");
 }
 
 /// Generate the Rust lookup from the same pinned table compiled into

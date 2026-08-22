@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Run a focused memory-input regression with Rust and vendored C under ASan.
+
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+cd "$ROOT"
+
+if ! command -v rustup >/dev/null || ! command -v nm >/dev/null; then
+  echo "check-address-safety: rustup and nm are required" >&2
+  exit 1
+fi
+if ! rustup toolchain list | grep -Eq '^nightly(-|[[:space:]])'; then
+  echo "check-address-safety: install a nightly toolchain with 'rustup toolchain install nightly'" >&2
+  exit 1
+fi
+if ! rustup component list --toolchain nightly | grep -Eq '^rust-src .*\(installed\)$'; then
+  echo "check-address-safety: install rust-src with 'rustup component add rust-src --toolchain nightly'" >&2
+  exit 1
+fi
+
+target=$(rustc +nightly -vV | sed -n 's/^host: //p')
+case "$target" in
+  x86_64-unknown-linux-gnu | aarch64-unknown-linux-gnu | \
+    x86_64-apple-darwin | aarch64-apple-darwin) ;;
+  *)
+    echo "check-address-safety: unsupported AddressSanitizer host '$target'" >&2
+    exit 1
+    ;;
+esac
+
+if [[ -n ${CARGO_TARGET_DIR:-} ]]; then
+  sanitizer_target_dir="$CARGO_TARGET_DIR/libmandoc-rs-asan"
+else
+  sanitizer_target_dir="$ROOT/target/libmandoc-rs-asan"
+fi
+# LeakSanitizer requires ptrace on Linux, which is not available in many
+# containers. Callers that can support it may override this complete setting.
+sanitizer_options="${ASAN_OPTIONS:-halt_on_error=1:abort_on_error=1:detect_leaks=0}"
+
+printf 'AddressSanitizer target: %s\n' "$target"
+env \
+  CARGO_TARGET_DIR="$sanitizer_target_dir" \
+  LIBMANDOC_RS_ASAN=1 \
+  RUSTFLAGS=-Zsanitizer=address \
+  RUSTDOCFLAGS=-Zsanitizer=address \
+  ASAN_OPTIONS="$sanitizer_options" \
+  cargo +nightly test --locked -Zbuild-std --target "$target" \
+    --package libmandoc-rs parser_decodes_truncated_utf8_tails_without_reading_past_memory_input
+
+archive=$(find "$sanitizer_target_dir/$target/debug/build" \
+  -name libmant_mandoc.a -print -quit)
+if [[ -z "$archive" ]]; then
+  echo "check-address-safety: could not locate the vendored C archive" >&2
+  exit 1
+fi
+instrumented_symbols=$(nm -u "$archive" | grep -E '__asan_(load|report)' || true)
+if [[ -z "$instrumented_symbols" ]]; then
+  echo "check-address-safety: vendored C objects were not instrumented" >&2
+  exit 1
+fi
+
+printf 'AddressSanitizer passed; Rust std, Rust crate code, and vendored C were instrumented.\n'
