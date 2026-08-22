@@ -14,7 +14,7 @@ categories = ["data-structures", "text-processing"]
 include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [dependencies]
-mant-ir = { path = "../mant-ir", version = "=0.8.0" }
+mant-ir = { path = "../mant-ir", version = "=0.8.1" }
 schemars.workspace = true
 serde.workspace = true
 
