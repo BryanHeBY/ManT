@@ -79,6 +79,12 @@ share the update lock, validate each directory against its recorded source
 identity, and never cross into personal root documents. These mutating
 operations remain outside MCP.
 
+Hosts that need a read-only installation-health view can call
+`inspect_document_sources`. It reports effective paths, configured source
+transport, priority, revision, document count, installation status, and safe
+prune eligibility for unconfigured entries without creating directories,
+taking an update lock, starting a process, or accessing the network.
+
 Upstream source trees may be recursive, and activation preserves each selected
 Markdown file's relative path. Repeated leaf names in different directories
 are valid; case-only logical-path collisions and an empty selection are

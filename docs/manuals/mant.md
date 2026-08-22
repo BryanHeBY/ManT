@@ -83,7 +83,7 @@ pagination. Inside one relevance tier, candidates preserving the query's exact
 case rank before candidates found only through case folding. Plain `--find`
 output is tab-separated as
 the canonical catalog path and `kind`, while `--format json` returns
-`mant.catalog/v0.8`. `--list` groups the same hierarchy beneath `documents`,
+`mant.catalog/v0.9`. `--list` groups the same hierarchy beneath `documents`,
 `sources/SOURCE`, or `manual/SECTION`.
 
 An empty name match stays silent in ordinary text output. If an explicit source
@@ -687,7 +687,7 @@ a native CLI interface and is not exposed through the read-only MCP server.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v0.8` or `mant.scope-request/v0.8` object from standard input.
+- `--request-json`: Read one closed `mant.request/v0.9` or `mant.scope-request/v0.9` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Successful calls
@@ -700,22 +700,22 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v0.8",
-  "nativeApiVersion": "0.8",
-  "requestSchema": "mant.request/v0.8",
-  "querySchema": "mant.query/v0.8",
-  "documentSchema": "mant.document/v0.8",
-  "outlineSchema": "mant.outline/v0.8",
-  "excerptSchema": "mant.excerpt/v0.8",
-  "searchSchema": "mant.search/v0.8",
-  "scopeRequestSchema": "mant.scope-request/v0.8",
-  "scopeQuerySchema": "mant.scope-query/v0.8",
-  "catalogSchema": "mant.catalog/v0.8"
+  "protocol": "mant.cli/v0.9",
+  "nativeApiVersion": "0.9",
+  "requestSchema": "mant.request/v0.9",
+  "querySchema": "mant.query/v0.9",
+  "documentSchema": "mant.document/v0.9",
+  "outlineSchema": "mant.outline/v0.9",
+  "excerptSchema": "mant.excerpt/v0.9",
+  "searchSchema": "mant.search/v0.9",
+  "scopeRequestSchema": "mant.scope-request/v0.9",
+  "scopeQuerySchema": "mant.scope-query/v0.9",
+  "catalogSchema": "mant.catalog/v0.9"
 }
 ```
 
 The native request and response family follows ManT's pre-stable minor release
-line: ManT 0.8.x uses v0.8, and patch releases keep the same wire shape. The
+line: ManT 0.9.x uses v0.9, and patch releases keep the same wire shape. The
 former experimental bare v1 through v7 query schemas are no longer accepted.
 Excerpt and search results now share a complete outline trail, so both human
 output and structured consumers receive the same ancestor chain and terminal

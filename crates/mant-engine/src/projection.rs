@@ -214,7 +214,7 @@ pub fn build_outline_with_detail(
         nodes.extend(outline_nodes(&manual.sections, &[], detail));
     }
     Ok(QueryOutline {
-        schema: OutlineSchema::V0Dot8,
+        schema: OutlineSchema::V0Dot9,
         detail,
         label: query.label.clone(),
         source: query
@@ -315,7 +315,7 @@ pub fn select_excerpt<S: AsRef<str>>(
     selections.extend(selected.into_iter().map(LocatedNode::selection));
 
     Ok(QueryExcerpt {
-        schema: ExcerptSchema::V0Dot8,
+        schema: ExcerptSchema::V0Dot9,
         label: query.label.clone(),
         producer: document.map(mant_protocol::Producer::for_document),
         source: document.map(|document| document.source.clone()),

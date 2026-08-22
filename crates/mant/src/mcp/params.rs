@@ -513,7 +513,7 @@ pub(super) fn catalog_query(parameters: &ValidatedFindParams) -> CatalogQuery {
 
 pub(super) fn request_for(document: String, view: QueryView) -> QueryRequest {
     QueryRequest {
-        schema: mant_protocol::RequestSchema::V0Dot8,
+        schema: mant_protocol::RequestSchema::V0Dot9,
         input: QueryInput::Document {
             selector: document,
             source: None,

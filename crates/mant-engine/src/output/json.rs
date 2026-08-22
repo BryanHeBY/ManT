@@ -87,7 +87,7 @@ mod tests {
         let compact = render_query_json(&query, false).expect("compact JSON");
         let pretty = render_query_json(&query, true).expect("pretty JSON");
 
-        assert_eq!(compact, r#"{"schema":"mant.query/v0.8","label":"ls"}"#);
+        assert_eq!(compact, r#"{"schema":"mant.query/v0.9","label":"ls"}"#);
         assert!(pretty.contains("\n  \"label\": \"ls\""));
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&compact).expect("compact value"),

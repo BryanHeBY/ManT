@@ -48,6 +48,8 @@ DocumentResolver ──> Markdown parser or libmandoc lowering
 | Reuse one stable discovery snapshot | `DocumentResolver` |
 | Resolve a complete typed request | `resolve_query_with_policy` |
 | Resolve and project its requested view | `execute_query` |
+| Resolve a bounded multi-document scope | `DocumentResolver::resolve_scope` |
+| Resolve and project a scope request | `DocumentResolver::execute_scope_query` |
 | Parse in-memory Markdown without discovery | `parse_markdown` or `query_markdown_text` |
 | Parse in-memory roff without discovery | `parse_manual_bytes` or `query_roff_bytes` |
 | Build a focused result from existing content | `build_outline_with_detail`, `select_excerpt`, `search_query` |
@@ -80,6 +82,11 @@ request's `view` through one engine boundary. Use `parse_markdown` when the
 caller needs the parsed document and tldr preface without query composition.
 `DocumentResolver` can be reused when several operations must share one lazy
 filesystem snapshot; constructing a new resolver refreshes discovery.
+
+`resolve_scope` and `execute_scope_query` keep linked-document traversal,
+aggregate content budgets, and breadth-first projections at that same engine
+boundary. Process and MCP adapters should pass a `ScopeQueryRequest` rather
+than reimplementing scope traversal.
 
 Named resolution treats the full document and command quick reference as two
 orthogonal facets. A manual section selects an exact native full document; it

@@ -184,7 +184,7 @@ mod tests {
     fn producer() -> Producer {
         Producer {
             name: "mant".to_owned(),
-            version: "0.8.0".to_owned(),
+            version: "0.9.0".to_owned(),
             engine: None,
         }
     }
@@ -222,7 +222,7 @@ mod tests {
             serde_json::to_value(report).expect("doctor report"),
             json!({
                 "schema": "mant.doctor/v1",
-                "producer": { "name": "mant", "version": "0.8.0" },
+                "producer": { "name": "mant", "version": "0.9.0" },
                 "outcome": "warning",
                 "environment": {
                     "os": "linux",

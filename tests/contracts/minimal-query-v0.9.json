@@ -1,0 +1,147 @@
+{
+  "schema": "mant.query/v0.9",
+  "label": "ls",
+  "document": {
+    "schema": "mant.document/v0.9",
+    "producer": {
+      "name": "mant-native",
+      "version": "0.2.0",
+      "engine": {
+        "name": "libmandoc",
+        "version": "1.14.6"
+      }
+    },
+    "source": {
+      "format": "man",
+      "path": "/usr/share/man/man1/ls.1.gz"
+    },
+    "meta": {
+      "title": "LS",
+      "manualSection": "1",
+      "names": ["ls"]
+    },
+    "sections": [
+      {
+        "id": "section-0",
+        "title": "NAME",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "children": [
+              {
+                "type": "strong",
+                "children": [
+                  { "type": "text", "value": "ls" }
+                ]
+              },
+              { "type": "text", "value": " - list directory contents; see " },
+              {
+                "type": "link",
+                "target": {
+                  "kind": "manual",
+                  "name": "dir",
+                  "manualSection": "1"
+                },
+                "children": [
+                  { "type": "text", "value": "dir(1)" }
+                ]
+              },
+              { "type": "text", "value": "; visit " },
+              {
+                "type": "link",
+                "target": {
+                  "kind": "external",
+                  "uri": "https://example.test/ls"
+                },
+                "title": "Project documentation",
+                "children": [
+                  { "type": "text", "value": "the project site" }
+                ]
+              },
+              { "type": "text", "value": ", contact " },
+              {
+                "type": "link",
+                "target": {
+                  "kind": "email",
+                  "address": "docs@example.test"
+                },
+                "children": [
+                  { "type": "text", "value": "the documentation team" }
+                ]
+              },
+              { "type": "text", "value": ", or read " },
+              {
+                "type": "link",
+                "target": {
+                  "kind": "section",
+                  "id": "options-1"
+                },
+                "children": [
+                  { "type": "text", "value": "OPTIONS" }
+                ]
+              }
+            ]
+          }
+        ],
+        "children": []
+      },
+      {
+        "id": "options-1",
+        "title": "OPTIONS",
+        "blocks": [
+          {
+            "type": "paragraph",
+            "children": [
+              { "type": "anchor", "id": "all-option" },
+              { "type": "code", "value": "--all" },
+              { "type": "text", "value": " includes hidden entries." }
+            ]
+          },
+          {
+            "type": "definition-list",
+            "items": [
+              {
+                "identity": {
+                  "id": "almost-all-option",
+                  "role": "option",
+                  "case": "sensitive",
+                  "names": ["-A", "--almost-all"]
+                },
+                "terms": [
+                  [
+                    { "type": "anchor", "id": "almost-all-option" },
+                    { "type": "strong", "children": [{ "type": "text", "value": "-A, --almost-all" }] }
+                  ]
+                ],
+                "description": [
+                  {
+                    "type": "paragraph",
+                    "children": [{ "type": "text", "value": "Do not list implied dot entries." }]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "children": []
+      }
+    ]
+  },
+  "tldr": {
+    "title": "ls",
+    "description": ["List directory contents."],
+    "moreInformation": "https://www.gnu.org/software/coreutils/manual/html_node/ls-invocation.html",
+    "examples": [
+      {
+        "description": "List all files:",
+        "command": "ls --all",
+        "commandParts": [
+          { "type": "text", "value": "ls --all" }
+        ]
+      }
+    ],
+    "platform": "common",
+    "language": "en",
+    "sourcePath": "/cache/tldr/pages/common/ls.md"
+  }
+}

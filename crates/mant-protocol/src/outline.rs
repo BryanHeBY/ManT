@@ -13,14 +13,14 @@ use crate::{NodePath, Producer};
 /// Exact schema marker for a query outline response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum OutlineSchema {
-    /// Version 0.8 of the pre-stable outline protocol.
-    #[serde(rename = "mant.outline/v0.8")]
-    V0Dot8,
+    /// Version 0.9 of the pre-stable outline protocol.
+    #[serde(rename = "mant.outline/v0.9")]
+    V0Dot9,
 }
 
 impl OutlineSchema {
     /// Serialized identifier of the current outline contract.
-    pub const ID: &'static str = "mant.outline/v0.8";
+    pub const ID: &'static str = "mant.outline/v0.9";
 }
 
 /// Amount of semantic detail included in an outline projection.
@@ -36,7 +36,7 @@ pub enum OutlineDetail {
 /// A block-free tree used to discover selectable query content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:outline:v0.8"))]
+#[schemars(extend("$id" = "urn:mant:outline:v0.9"))]
 pub struct QueryOutline {
     /// Exact response schema discriminator.
     pub schema: OutlineSchema,
@@ -174,20 +174,20 @@ impl OutlineNode {
 /// Exact schema marker for selected query content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum ExcerptSchema {
-    /// Version 0.8 of the pre-stable excerpt protocol.
-    #[serde(rename = "mant.excerpt/v0.8")]
-    V0Dot8,
+    /// Version 0.9 of the pre-stable excerpt protocol.
+    #[serde(rename = "mant.excerpt/v0.9")]
+    V0Dot9,
 }
 
 impl ExcerptSchema {
     /// Serialized identifier of the current excerpt contract.
-    pub const ID: &'static str = "mant.excerpt/v0.8";
+    pub const ID: &'static str = "mant.excerpt/v0.9";
 }
 
 /// One or more independently selected nodes from a complete query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:excerpt:v0.8"))]
+#[schemars(extend("$id" = "urn:mant:excerpt:v0.9"))]
 pub struct QueryExcerpt {
     /// Exact response schema discriminator.
     pub schema: ExcerptSchema,

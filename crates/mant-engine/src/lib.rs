@@ -73,6 +73,6 @@ mod tests {
 
     #[test]
     fn exposes_the_native_api_version() {
-        assert_eq!(native_api_version(), "0.8");
+        assert_eq!(native_api_version(), "0.9");
     }
 }

@@ -64,9 +64,12 @@ event loop can construct `mant_ui::App`, route input through its handlers, and
 invoke `App::draw` from their frame callback instead.
 
 Use `run_with_catalog` when cross-document discovery and navigation are
-required. Its callbacks receive versioned catalog queries, exact logical
-document addresses, and already-classified external URIs; callback failures
-return to the UI as notices rather than giving the frontend hidden authority.
+required. Use `run_with_catalog_and_scope` when interactive search must begin
+with an already-resolved document set; its first bundle remains the initial
+page while catalog discovery stays global. Their callbacks receive versioned
+catalog queries, exact logical document addresses, and already-classified
+external URIs; callback failures return to the UI as notices rather than
+giving the frontend hidden authority.
 
 ## Platform behavior
 

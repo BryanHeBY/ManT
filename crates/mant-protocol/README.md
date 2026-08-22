@@ -32,13 +32,13 @@ local inspection ─────────────────────
 
 | Family | Current discriminator | Purpose |
 | --- | --- | --- |
-| Process framing | `mant.cli/v0.8` | Advertised by the `mant` executable |
-| Request | `mant.request/v0.8` | Closed input accepted by `--request-json` |
-| Scope request/result | `mant.scope-request/v0.8`, `mant.scope-query/v0.8` | Bounded multi-document search and explanation |
-| Full query | `mant.query/v0.8` | Document plus optional tldr content |
-| Document | `mant.document/v0.8` | Versioned projection of the normalized document |
-| Catalog | `mant.catalog/v0.8` | Registered Markdown and native-manual discovery |
-| Outline, excerpt, search | `mant.outline/v0.8`, `mant.excerpt/v0.8`, `mant.search/v0.8` | Focused query projections |
+| Process framing | `mant.cli/v0.9` | Advertised by the `mant` executable |
+| Request | `mant.request/v0.9` | Closed input accepted by `--request-json` |
+| Scope request/result | `mant.scope-request/v0.9`, `mant.scope-query/v0.9` | Bounded multi-document search and explanation |
+| Full query | `mant.query/v0.9` | Document plus optional tldr content |
+| Document | `mant.document/v0.9` | Versioned projection of the normalized document |
+| Catalog | `mant.catalog/v0.9` | Registered Markdown and native-manual discovery |
+| Outline, excerpt, search | `mant.outline/v0.9`, `mant.excerpt/v0.9`, `mant.search/v0.9` | Focused query projections |
 | Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
 
 The schemas generated from the Rust types are authoritative. Request schemas
@@ -61,7 +61,7 @@ use mant_protocol::{
 };
 
 let request = QueryRequest {
-    schema: RequestSchema::V0Dot8,
+    schema: RequestSchema::V0Dot9,
     input: QueryInput::Document {
         selector: "git".to_owned(),
         source: None,
@@ -72,15 +72,15 @@ let request = QueryRequest {
     },
 };
 
-assert_eq!(NATIVE_API_VERSION, "0.8");
-assert_eq!(request.schema, RequestSchema::V0Dot8);
+assert_eq!(NATIVE_API_VERSION, "0.9");
+assert_eq!(request.schema, RequestSchema::V0Dot9);
 let _schema = query_request_json_schema();
 ```
 
 The native query family follows `ManT`'s pre-stable minor release line: `ManT`
-0.8.x uses `v0.8`, and patch releases retain the same wire shape. The former
+0.9.x uses `v0.9`, and patch releases retain the same wire shape. The former
 bare `v1` through `v7` schemas were experimental and are intentionally not
-accepted by 0.8. Historical tags preserve those contracts; the first stable
+accepted by 0.9. Historical tags preserve those contracts; the first stable
 native protocol will use a `v1.0` release line. Independent contracts such as
 `mant.doctor/v1` and `mant.markdown/v1` keep their own identifiers. Clients
 must therefore compare complete discriminators.
@@ -93,7 +93,7 @@ changes outside a patch-compatible addition.
 `DefinitionIdentity`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a
 Serde change to any of them is also a protocol change. CI compares every
-generated structural schema with the checked-in v0.8 snapshot, so an accidental
+generated structural schema with the checked-in v0.9 snapshot, so an accidental
 IR representation change fails until compatibility is restored or the
 affected protocol discriminator is advanced explicitly. Rustdoc descriptions
 and schema titles are excluded from that structural comparison.

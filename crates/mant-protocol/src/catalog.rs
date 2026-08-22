@@ -10,14 +10,14 @@ use crate::{SearchCase, SearchSyntax};
 /// Exact schema marker for a local document catalog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum CatalogSchema {
-    /// Version 0.8 of the pre-stable document-catalog protocol.
-    #[serde(rename = "mant.catalog/v0.8")]
-    V0Dot8,
+    /// Version 0.9 of the pre-stable document-catalog protocol.
+    #[serde(rename = "mant.catalog/v0.9")]
+    V0Dot9,
 }
 
 impl CatalogSchema {
     /// Serialized identifier of the current catalog contract.
-    pub const ID: &'static str = "mant.catalog/v0.8";
+    pub const ID: &'static str = "mant.catalog/v0.9";
 }
 
 /// Optional family filter for catalog discovery.
@@ -113,7 +113,7 @@ impl DocumentSummary {
 /// Deterministically ordered page of discoverable local documents.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[schemars(extend("$id" = "urn:mant:catalog:v0.8"))]
+#[schemars(extend("$id" = "urn:mant:catalog:v0.9"))]
 pub struct DocumentCatalog {
     /// Exact response schema discriminator.
     pub schema: CatalogSchema,
@@ -139,7 +139,7 @@ pub struct DocumentCatalog {
 impl Default for DocumentCatalog {
     fn default() -> Self {
         Self {
-            schema: CatalogSchema::V0Dot8,
+            schema: CatalogSchema::V0Dot9,
             query: CatalogQuery::default(),
             coverage: CatalogCoverage::default(),
             total: 0,

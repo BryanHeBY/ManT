@@ -94,7 +94,7 @@ mutable caches in the tree. Syn-style `Visit` and `VisitMut` traits keep
 cross-cutting passes exhaustive as the IR evolves.
 
 At a structured integration boundary, `mant-protocol::DocumentResponse` adds
-the exact `mant.document/v0.8` discriminator and producer metadata. `mant.query/v0.8`
+the exact `mant.document/v0.9` discriminator and producer metadata. `mant.query/v0.9`
 combines an optional document response with an optional tldr quick reference
 while preserving their different origins and licences.
 

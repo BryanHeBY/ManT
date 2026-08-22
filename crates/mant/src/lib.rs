@@ -708,7 +708,7 @@ fn execute_scope_arguments(
         ));
     }
     let request = ScopeQueryRequest {
-        schema: ScopeRequestSchema::V0Dot8,
+        schema: ScopeRequestSchema::V0Dot9,
         scope,
         view,
     };
@@ -887,7 +887,7 @@ fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy)
     };
     (
         QueryRequest {
-            schema: RequestSchema::V0Dot8,
+            schema: RequestSchema::V0Dot9,
             input: QueryInput::Document {
                 selector: name,
                 source,

@@ -415,7 +415,7 @@ fn chooses_safe_fences_and_preserves_native_table_and_equation_content() {
 fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("tests/contracts/minimal-query-v0.8.json");
+        .join("tests/contracts/minimal-query-v0.9.json");
     let query = serde_json::from_str::<QueryBundle>(
         &std::fs::read_to_string(fixture).expect("shared query fixture"),
     )
@@ -434,7 +434,7 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     assert!(markdown.contains(", or read OPTIONS"));
     assert!(!markdown.contains("[OPTIONS](#options-1)"));
     assert!(!markdown.contains("<a "));
-    assert!(!markdown.contains("mant.query/v0.8"));
+    assert!(!markdown.contains("mant.query/v0.9"));
 
     let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
     assert!(addressable.contains("[OPTIONS](#options-1)"));

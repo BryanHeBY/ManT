@@ -641,7 +641,8 @@ pub struct DocumentResolver {
 }
 
 impl DocumentResolver {
-    /// Capture the native manual index and lazily snapshot Markdown registration.
+    /// Capture native manual roots and lazily snapshot the manual index and
+    /// Markdown registration.
     #[must_use]
     pub fn from_system() -> Self {
         Self {

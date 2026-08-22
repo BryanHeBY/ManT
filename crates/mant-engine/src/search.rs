@@ -138,7 +138,7 @@ pub fn search_query(
     let truncated = consumed < total;
 
     Ok(QuerySearch {
-        schema: SearchSchema::V0Dot8,
+        schema: SearchSchema::V0Dot9,
         label: query.label.clone(),
         source: query
             .document
