@@ -4,6 +4,7 @@ use std::io::Write;
 
 use anstyle::{AnsiColor, Style};
 use mant_engine::{ProjectionError, QueryError, QueryExecutionError, SearchError};
+use mant_protocol::sanitize_terminal_text;
 
 const ERROR_STYLE: Style = AnsiColor::Red.on_default().bold();
 const WARNING_STYLE: Style = AnsiColor::Yellow.on_default().bold();
@@ -25,14 +26,32 @@ impl Failure {
     pub(super) fn usage(message: impl std::fmt::Display) -> Self {
         Self {
             kind: FailureKind::Usage,
-            message: message.to_string(),
+            message: sanitized_message(message),
         }
     }
 
     pub(super) fn operational(message: impl std::fmt::Display) -> Self {
         Self {
             kind: FailureKind::Operational,
-            message: message.to_string(),
+            message: sanitized_message(message),
+        }
+    }
+
+    /// Construct an intentional multi-line usage diagnostic from independently
+    /// sanitized lines. Dynamic data may not create a new terminal line.
+    pub(super) fn usage_lines<I, T>(first: impl std::fmt::Display, lines: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        T: std::fmt::Display,
+    {
+        let mut message = sanitized_message(first);
+        for line in lines {
+            message.push('\n');
+            message.push_str(&sanitized_message(line));
+        }
+        Self {
+            kind: FailureKind::Usage,
+            message,
         }
     }
 
@@ -44,6 +63,10 @@ impl Failure {
     pub(super) fn message(&self) -> &str {
         &self.message
     }
+}
+
+fn sanitized_message(message: impl std::fmt::Display) -> String {
+    sanitize_terminal_text(&message.to_string()).into_owned()
 }
 
 pub(super) fn query_failure(error: QueryError) -> Failure {
@@ -73,23 +96,29 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
 fn projection_failure(error: ProjectionError) -> Failure {
     match error {
         ProjectionError::MissingContent { .. } => Failure::operational(error),
-        ProjectionError::UnknownSelector { document, selector } => Failure::usage(format!(
-            "document '{document}' has no outline node '{selector}'\nhint: run `mant {document} --outline=entries --format json` for available selectors and diagnostics"
-        )),
+        ProjectionError::UnknownSelector { document, selector } => Failure::usage_lines(
+            format!("document '{document}' has no outline node '{selector}'"),
+            [format!(
+                "hint: run `mant {document} --outline=entries --format json` for available selectors and diagnostics"
+            )],
+        ),
         ProjectionError::SelectorFoundOnlyInText {
             document,
             selector,
             path,
             title,
             line,
-        } => Failure::usage(format!(
-            "document '{document}' has no semantic entry '{selector}'\nnote: that text appears in outline node {path} ({title}) at line {line}\nhint: use --search to inspect the matching document text"
-        )),
-        ProjectionError::ExplanationRequiresEntry { document, selector } => {
-            Failure::usage(format!(
-                "document '{document}' outline node '{selector}' is not a semantic entry\nhint: use --node to read sections"
-            ))
-        }
+        } => Failure::usage_lines(
+            format!("document '{document}' has no semantic entry '{selector}'"),
+            [
+                format!("note: that text appears in outline node {path} ({title}) at line {line}"),
+                "hint: use --search to inspect the matching document text".to_owned(),
+            ],
+        ),
+        ProjectionError::ExplanationRequiresEntry { document, selector } => Failure::usage_lines(
+            format!("document '{document}' outline node '{selector}' is not a semantic entry"),
+            ["hint: use --node to read sections"],
+        ),
         ProjectionError::EmptySelection
         | ProjectionError::EmptySelector
         | ProjectionError::AmbiguousSelector { .. } => Failure::usage(error),
@@ -172,4 +201,23 @@ pub(super) fn report_process_argument_error(error: &clap::Error) -> u8 {
     let status = u8::try_from(error.exit_code()).unwrap_or(2);
     let _ = error.print();
     status
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Failure, report_failure};
+
+    #[test]
+    fn failure_messages_mask_dynamic_terminal_controls() {
+        let error = Failure::operational("bad\u{1b}[2J\nnext\rline");
+        assert_eq!(error.message(), "bad�[2J�next�line");
+
+        let error = Failure::usage_lines("first\u{1b}[31m", ["hint: next\nline"]);
+        let mut diagnostics = Vec::new();
+        assert_eq!(report_failure(&error, &mut diagnostics, false), 2);
+        assert_eq!(
+            String::from_utf8(diagnostics).expect("diagnostics UTF-8"),
+            "mant: first�[31m\nhint: next�line\nTry 'mant --help' for more information.\n"
+        );
+    }
 }
