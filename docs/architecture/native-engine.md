@@ -269,10 +269,10 @@ presentation.
 five read-only local discovery and query tools. Closed input schemas derive
 from Rust parameter types. MCP accepts logical document identities rather than
 arbitrary host paths, never invokes Git or HTTP, and reads current local state
-on each call. Successful results contain one bounded text block, with opaque
-continuation cursors when required; they omit ASTs, schema metadata, physical
-paths, and ordinary lowering diagnostics. CLI JSON remains the structured
-diagnostic inspection surface.
+on each call. Successful results contain one bounded text block with
+Unicode-scalar page metadata and no server-side paging state; they omit ASTs,
+schema metadata, physical paths, and ordinary lowering diagnostics. CLI JSON
+remains the structured diagnostic inspection surface.
 
 ## Layout ownership
 

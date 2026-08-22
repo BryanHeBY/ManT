@@ -69,7 +69,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
-    let replies = (0..(10 + usize::from(cfg!(windows))))
+    let replies = (0..(11 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -88,7 +88,7 @@ fn request_document_tools(input: &mut impl Write) {
             "pattern": "needle",
             "word": true,
             "contextLines": 1,
-            "limit": 1
+            "maxMatches": 1
         }),
     );
     call_tool(
@@ -147,7 +147,7 @@ fn request_document_tools(input: &mut impl Write) {
             "pattern": "needle",
             "word": "true",
             "contextLines": "1",
-            "limit": "1"
+            "maxMatches": "1"
         }),
     );
     call_tool(
@@ -166,6 +166,17 @@ fn request_document_tools(input: &mut impl Write) {
         &json!({
             "documents": "[\"documents/mcp-registered\",\"documents/mcp-suffix.exe\"]",
             "entry": "query"
+        }),
+    );
+    call_tool(
+        input,
+        14,
+        "mant_read",
+        &json!({
+            "document": "documents/mcp-registered",
+            "selectors": ["root"],
+            "startChar": 3,
+            "maxChars": 7
         }),
     );
     #[cfg(windows)]
@@ -198,6 +209,9 @@ fn assert_tool_catalog(tools: &[Value]) {
         assert!(tool.get("outputSchema").is_none());
         assert_eq!(tool["annotations"]["readOnlyHint"], true);
         assert_eq!(tool["annotations"]["openWorldHint"], false);
+        assert!(tool["inputSchema"]["properties"]["startChar"].is_object());
+        assert!(tool["inputSchema"]["properties"]["maxChars"].is_object());
+        assert!(tool["inputSchema"]["properties"].get("cursor").is_none());
         if matches!(tool["name"].as_str(), Some("mant_outline" | "mant_read")) {
             assert!(tool["inputSchema"]["properties"]["document"].is_object());
             assert!(tool["inputSchema"]["properties"].get("name").is_none());
@@ -212,32 +226,44 @@ fn assert_tool_catalog(tools: &[Value]) {
             assert!(tool["inputSchema"]["properties"]["followLinks"].is_object());
             assert!(tool["inputSchema"]["properties"].get("document").is_none());
         }
+        if tool["name"] == "mant_find" {
+            assert!(tool["inputSchema"]["properties"]["maxResults"].is_object());
+        }
+        if tool["name"] == "mant_search" {
+            assert!(tool["inputSchema"]["properties"]["maxMatches"].is_object());
+            assert!(tool["inputSchema"]["properties"].get("limit").is_none());
+        }
     }
 }
 
 fn assert_tool_replies(replies: &[Value]) {
     let find = reply(replies, 3);
     let find = successful_text(find);
+    assert_page_header(find);
     assert!(find.contains("documents/mcp-registered\tmarkdown"));
     assert!(find.contains("manual/1/mcp-manual\tmanual"));
     assert!(find.contains("documents/mcp-suffix.exe\tmarkdown"));
 
     let search = successful_text(reply(replies, 4));
+    assert_page_header(search);
     assert!(search.contains("needle"));
     assert_eq!(search.matches("Outline root").count(), 1);
     assert_eq!(search.matches("needle").count(), 1);
 
     let read = successful_text(reply(replies, 5));
-    assert!(read.starts_with("# MCP registered"), "{read}");
+    assert_page_header(read);
+    assert!(read.contains("# MCP registered"), "{read}");
     assert!(read.contains("Read the MCP needle."));
 
     let outline = successful_text(reply(replies, 6));
+    assert_page_header(outline);
     assert!(outline.contains("[command-query] query"));
     assert!(outline.contains("[option-s] /S"));
     assert!(outline.contains("[environment-path] PATH, $env:PATH"));
     assert!(!outline.contains("mant.outline/v0.8"));
 
     let explain = successful_text(reply(replies, 7));
+    assert_page_header(explain);
     assert!(explain.contains("Query registry data."));
     assert!(
         explain.contains("[explain: matched=1, missed=1, failed=0]"),
@@ -270,6 +296,20 @@ fn assert_tool_replies(replies: &[Value]) {
         compatible_explain.contains("Query registry data."),
         "{compatible_explain}"
     );
+    let random_page = successful_text(reply(replies, 14));
+    assert!(
+        random_page.starts_with("[mant-page chars=3..10 totalChars="),
+        "{random_page}"
+    );
+    assert_eq!(
+        random_page
+            .split_once("\n\n")
+            .expect("page body")
+            .1
+            .chars()
+            .count(),
+        7
+    );
 
     #[cfg(windows)]
     assert!(successful_text(reply(replies, 9)).contains("Suffix details"));
@@ -283,6 +323,15 @@ fn assert_tool_replies(replies: &[Value]) {
         assert!(!encoded.contains("sourcePath"));
         assert!(!encoded.contains('\u{1b}'));
     }
+}
+
+fn assert_page_header(text: &str) {
+    assert!(text.starts_with("[mant-page chars="), "{text}");
+    assert!(
+        text.lines()
+            .next()
+            .is_some_and(|line| line.contains("totalChars="))
+    );
 }
 
 fn successful_text(reply: &Value) -> &str {

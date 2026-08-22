@@ -734,8 +734,10 @@ used by external process integrations. MCP exposes `mant_find`, `mant_outline`,
 Markdown candidates with the native manual index and returns canonical logical
 IDs. Focused tools accept one unqualified selector or canonical ID, never an
 arbitrary local path. Successful calls contain one bounded plain-text or
-CommonMark result rather than a complete AST or schema envelope; opaque cursors
-continue larger results. MCP reads current local files only, has no update
+CommonMark result rather than a complete AST or schema envelope. Every result
+starts with `chars`, `totalChars`, and optional `nextChar` metadata;
+`startChar` and `maxChars` let the client select any Unicode-scalar range.
+Paging is stateless: MCP reads current local files on every call, has no update
 tool, and makes no cross-call snapshot guarantee.
 
 ## Data

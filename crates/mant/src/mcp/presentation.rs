@@ -5,22 +5,23 @@ use mant_protocol::{
     TraversalLimit, sanitize_terminal_text,
 };
 
+use super::params::PageRequest;
 use crate::arguments::QueryFormat;
 
-/// Maximum UTF-8 bytes returned by one successful tool call.
-pub(super) const MAX_OUTPUT_BYTES: usize = 32 * 1024;
-const CURSOR_FOOTER_RESERVE: usize = 320;
-const PAGE_BODY_BYTES: usize = MAX_OUTPUT_BYTES - CURSOR_FOOTER_RESERVE;
-
-/// One bounded rendered page before an opaque continuation token is attached.
+/// One stateless character page of a canonical rendered result.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct TextPage {
     pub(super) text: String,
-    pub(super) next_byte: Option<u32>,
+    pub(super) start_char: usize,
+    pub(super) end_char: usize,
+    pub(super) total_chars: usize,
 }
 
-pub(super) fn render_find(catalog: &DocumentCatalog, byte: u32) -> Result<TextPage, String> {
+pub(super) fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
     let mut text = format!("{} matches", catalog.total);
+    if catalog.returned < catalog.total {
+        text.push_str(&format!("; {} returned", catalog.returned));
+    }
     let records = mant_protocol::render_catalog_text(catalog, false);
     if !records.is_empty() {
         text.push('\n');
@@ -29,20 +30,20 @@ pub(super) fn render_find(catalog: &DocumentCatalog, byte: u32) -> Result<TextPa
         text.push_str("; ");
         text.push_str(&coverage.replace('\n', "; "));
     }
-    page_text(&text, byte)
+    page_text(&text, page)
 }
 
-pub(super) fn render_outline(outline: &QueryOutline, byte: u32) -> Result<TextPage, String> {
-    page_text(&mant_engine::render_outline_text(outline), byte)
+pub(super) fn render_outline(outline: &QueryOutline, page: PageRequest) -> TextPage {
+    page_text(&mant_engine::render_outline_text(outline), page)
 }
 
-pub(super) fn render_excerpt(excerpt: &QueryExcerpt, byte: u32) -> Result<TextPage, String> {
-    page_text(&mant_engine::render_excerpt_markdown(excerpt), byte)
+pub(super) fn render_excerpt(excerpt: &QueryExcerpt, page: PageRequest) -> TextPage {
+    page_text(&mant_engine::render_excerpt_markdown(excerpt), page)
 }
 
 pub(super) fn render_scope_explain(
     response: &ScopeQueryResponse,
-    byte: u32,
+    page: PageRequest,
 ) -> Result<TextPage, String> {
     let ScopeQueryResult::Explain {
         entry,
@@ -79,12 +80,12 @@ pub(super) fn render_scope_explain(
         ),
     );
     append_scope_status(&mut text, response);
-    page_text(&text, byte)
+    Ok(page_text(&text, page))
 }
 
 pub(super) fn render_scope_search(
     response: &ScopeQueryResponse,
-    byte: u32,
+    page: PageRequest,
 ) -> Result<TextPage, String> {
     let ScopeQueryResult::Search { search } = &response.result else {
         return Err("scope response does not contain search results".to_owned());
@@ -106,8 +107,15 @@ pub(super) fn render_scope_search(
             response.scope.documents.len()
         );
     }
+    append_status_line(
+        &mut text,
+        &format!(
+            "[search: returned={}, total={}]",
+            search.returned, search.total
+        ),
+    );
     append_scope_status(&mut text, response);
-    page_text(&text, byte)
+    Ok(page_text(&text, page))
 }
 
 fn append_scope_status(text: &mut String, response: &ScopeQueryResponse) {
@@ -162,58 +170,46 @@ fn append_status_line(text: &mut String, status: &str) {
     text.push_str(status);
 }
 
-/// Attach the only transport-specific framing used by successful results.
-pub(super) fn finish_page(mut page: TextPage, cursor: Option<&str>) -> String {
-    if let Some(cursor) = cursor {
-        if !page.text.is_empty() {
-            page.text.push_str("\n\n");
-        }
-        page.text.push_str("[more cursor=");
-        page.text.push_str(cursor);
-        page.text.push(']');
+/// Attach the stable, model-visible page metadata to a successful result.
+pub(super) fn finish_page(page: TextPage) -> String {
+    let mut output = format!(
+        "[mant-page chars={}..{} totalChars={}",
+        page.start_char, page.end_char, page.total_chars
+    );
+    if page.end_char < page.total_chars {
+        output.push_str(&format!(" nextChar={}", page.end_char));
     }
-    debug_assert!(page.text.len() <= MAX_OUTPUT_BYTES);
-    page.text
+    output.push(']');
+    if !page.text.is_empty() {
+        output.push_str("\n\n");
+        output.push_str(&page.text);
+    }
+    output
 }
 
-pub(super) fn page_text(text: &str, byte: u32) -> Result<TextPage, String> {
-    let start = usize::try_from(byte).map_err(|_| "cursor position is too large".to_owned())?;
-    if start > text.len() || !text.is_char_boundary(start) {
-        return Err("cursor no longer addresses this result; restart without it".to_owned());
+pub(super) fn page_text(text: &str, page: PageRequest) -> TextPage {
+    let total_chars = text.chars().count();
+    let requested_start = usize::try_from(page.start_char).unwrap_or(usize::MAX);
+    let start_char = requested_start.min(total_chars);
+    let max_chars = usize::try_from(page.max_chars).unwrap_or(usize::MAX);
+    let end_char = start_char.saturating_add(max_chars).min(total_chars);
+    let start_byte = char_offset_to_byte(text, start_char, total_chars);
+    let end_byte = char_offset_to_byte(text, end_char, total_chars);
+    TextPage {
+        text: text[start_byte..end_byte].to_owned(),
+        start_char,
+        end_char,
+        total_chars,
     }
-    if start == text.len() {
-        return Ok(TextPage {
-            text: String::new(),
-            next_byte: None,
-        });
-    }
-
-    let hard_end = text.len().min(start.saturating_add(PAGE_BODY_BYTES));
-    let mut end = floor_char_boundary(text, hard_end);
-    if end < text.len() {
-        let minimum = start + (end - start) / 2;
-        if let Some(boundary) = text[minimum..end].rfind("\n\n") {
-            end = minimum + boundary + 2;
-        } else if let Some(boundary) = text[minimum..end].rfind('\n') {
-            end = minimum + boundary + 1;
-        }
-    }
-    if end == start {
-        end = floor_char_boundary(text, hard_end.max(start + 1));
-    }
-
-    Ok(TextPage {
-        text: text[start..end].to_owned(),
-        next_byte: (end < text.len()).then(|| u32::try_from(end).unwrap_or(u32::MAX)),
-    })
 }
 
-fn floor_char_boundary(text: &str, mut index: usize) -> usize {
-    index = index.min(text.len());
-    while index > 0 && !text.is_char_boundary(index) {
-        index -= 1;
+fn char_offset_to_byte(text: &str, offset: usize, total_chars: usize) -> usize {
+    if offset >= total_chars {
+        return text.len();
     }
-    index
+    text.char_indices()
+        .nth(offset)
+        .map_or(text.len(), |(byte, _)| byte)
 }
 
 pub(super) fn prepare_excerpt(excerpt: &mut QueryExcerpt) {
@@ -273,43 +269,84 @@ mod tests {
         ScopeQueryResponse, ScopeQueryResult, ScopeQuerySchema, ScopedQueryFailure,
     };
 
-    use super::{MAX_OUTPUT_BYTES, finish_page, page_text, prepare_scope};
+    use super::{finish_page, page_text, prepare_scope};
+    use crate::mcp::params::PageRequest;
 
     #[test]
     fn text_pages_are_utf8_safe_bounded_and_continuable() {
-        let source = "段落 → content\n\n".repeat(4_000);
-        let first = page_text(&source, 0).expect("first page");
-        let next = first.next_byte.expect("continuation");
-        let token = "c1-r-0000000000000000-0000000000000001";
-        let rendered = finish_page(first, Some(token));
-        assert!(rendered.len() <= MAX_OUTPUT_BYTES);
-        assert!(rendered.ends_with(&format!("[more cursor={token}]")));
+        let source = "段落 → content\n\n".repeat(40);
+        let first = page_text(
+            &source,
+            PageRequest {
+                start_char: 0,
+                max_chars: 17,
+            },
+        );
+        assert_eq!(first.text.chars().count(), 17);
+        let next = first.end_char;
+        let rendered = finish_page(first);
+        assert!(rendered.starts_with(&format!(
+            "[mant-page chars=0..17 totalChars={} nextChar=17]",
+            source.chars().count()
+        )));
 
-        let second = page_text(&source, next).expect("second page");
-        assert!(!second.text.is_empty());
+        let second = page_text(
+            &source,
+            PageRequest {
+                start_char: u32::try_from(next).expect("small fixture"),
+                max_chars: 17,
+            },
+        );
+        assert_eq!(second.text.chars().count(), 17);
     }
 
     #[test]
     fn text_pages_preserve_all_whitespace_across_continuations() {
         let source = "code  \n\tindented\n\n".repeat(4_000);
         let mut reconstructed = String::new();
-        let mut byte = 0;
+        let mut start_char = 0;
         loop {
-            let page = page_text(&source, byte).expect("page");
+            let page = page_text(
+                &source,
+                PageRequest {
+                    start_char,
+                    max_chars: 997,
+                },
+            );
             reconstructed.push_str(&page.text);
-            let Some(next) = page.next_byte else {
+            if page.end_char == page.total_chars {
                 break;
-            };
-            byte = next;
+            }
+            start_char = u32::try_from(page.end_char).expect("small fixture");
         }
 
         assert_eq!(reconstructed, source);
     }
 
     #[test]
-    fn stale_byte_positions_are_rejected() {
-        assert!(page_text("é", 1).is_err());
-        assert!(page_text("short", 99).is_err());
+    fn character_offsets_are_unicode_scalar_based_and_past_end_is_empty() {
+        let page = page_text(
+            "aé中→z",
+            PageRequest {
+                start_char: 1,
+                max_chars: 3,
+            },
+        );
+        assert_eq!(page.text, "é中→");
+        assert_eq!(
+            (page.start_char, page.end_char, page.total_chars),
+            (1, 4, 5)
+        );
+
+        let empty = page_text(
+            "short",
+            PageRequest {
+                start_char: 99,
+                max_chars: 10,
+            },
+        );
+        assert!(empty.text.is_empty());
+        assert_eq!((empty.start_char, empty.end_char), (5, 5));
     }
 
     #[test]

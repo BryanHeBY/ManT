@@ -9,16 +9,18 @@ use serde::{Deserialize, de::DeserializeOwned};
 
 /// Maximum accepted logical document selector length.
 pub(super) const MAX_DOCUMENT_BYTES: usize = mant_protocol::MAX_DOCUMENT_SELECTOR_BYTES;
-/// Maximum accepted continuation token length.
-pub(super) const MAX_CURSOR_BYTES: usize = 256;
 /// Maximum selectors accepted by one focused read.
 pub(super) const MAX_SELECTORS: usize = 16;
-/// Fixed catalog page size for agent discovery.
-pub(super) const FIND_PAGE_SIZE: u32 = 50;
-/// Default match-line page size for in-document search.
-pub(super) const DEFAULT_SEARCH_PAGE_SIZE: u32 = 20;
-/// Maximum match-line page size exposed to an MCP client.
-pub(super) const MAX_SEARCH_PAGE_SIZE: u32 = 100;
+/// Default number of catalog rows materialized by discovery.
+pub(super) const DEFAULT_FIND_RESULTS: u32 = 50;
+/// Default number of matching line groups materialized by search.
+pub(super) const DEFAULT_SEARCH_MATCHES: u32 = 20;
+/// Maximum semantic rows materialized by one agent query.
+pub(super) const MAX_QUERY_RESULTS: u32 = 10_000;
+/// Default Unicode scalar values returned by one successful tool call.
+pub(super) const DEFAULT_PAGE_CHARS: u32 = 16 * 1024;
+/// Maximum Unicode scalar values returned by one successful tool call.
+pub(super) const MAX_PAGE_CHARS: u32 = 32 * 1024;
 pub(super) const MAX_FIND_QUERY_BYTES: usize = 1024;
 const MAX_SOURCE_BYTES: usize = 128;
 pub(super) const MAX_MANUAL_SECTION_BYTES: usize = 32;
@@ -39,9 +41,17 @@ pub(super) struct FindParams {
     /// Restrict native manuals to one exact manual section.
     #[schemars(length(min = 1))]
     pub(super) manual_section: Option<String>,
-    /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1))]
-    pub(super) cursor: Option<String>,
+    /// Maximum matching catalog rows included in the canonical result text.
+    #[schemars(range(min = 1, max = 10_000))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
+    pub(super) max_results: Option<u32>,
+    /// Zero-based Unicode scalar offset into the canonical result text.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) start_char: u32,
+    /// Maximum Unicode scalar values returned from `startChar`.
+    #[schemars(range(min = 1, max = 32_768))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
+    pub(super) max_chars: Option<u32>,
 }
 
 /// Parameters shared by focused document tools.
@@ -53,9 +63,13 @@ pub(super) struct OutlineParams {
     pub(super) document: String,
     /// Include sections only (the default), or semantic entries as well.
     pub(super) detail: Option<OutlineDetail>,
-    /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1))]
-    pub(super) cursor: Option<String>,
+    /// Zero-based Unicode scalar offset into the canonical result text.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) start_char: u32,
+    /// Maximum Unicode scalar values returned from `startChar`.
+    #[schemars(range(min = 1, max = 32_768))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
+    pub(super) max_chars: Option<u32>,
 }
 
 /// Retrieve one or more nodes selected from a document outline.
@@ -69,9 +83,13 @@ pub(super) struct ReadParams {
     #[schemars(length(min = 1, max = 16))]
     #[serde(deserialize_with = "deserialize_selectors")]
     pub(super) selectors: Vec<NodeSelector>,
-    /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1))]
-    pub(super) cursor: Option<String>,
+    /// Zero-based Unicode scalar offset into the canonical result text.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) start_char: u32,
+    /// Maximum Unicode scalar values returned from `startChar`.
+    #[schemars(range(min = 1, max = 32_768))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
+    pub(super) max_chars: Option<u32>,
 }
 
 /// Resolve one semantic command, option, variable, or environment entry.
@@ -96,9 +114,13 @@ pub(super) struct ExplainParams {
     /// Exact alias, outline path, or stable ID of the entry.
     #[schemars(length(min = 1))]
     pub(super) entry: String,
-    /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1))]
-    pub(super) cursor: Option<String>,
+    /// Zero-based Unicode scalar offset into the canonical result text.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) start_char: u32,
+    /// Maximum Unicode scalar values returned from `startChar`.
+    #[schemars(range(min = 1, max = 32_768))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
+    pub(super) max_chars: Option<u32>,
 }
 
 /// Search visible document text with bounded result pages.
@@ -134,13 +156,23 @@ pub(super) struct SearchParams {
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     #[schemars(range(max = 5))]
     pub(super) context_lines: u16,
-    /// Maximum matching line groups returned before a continuation cursor.
-    #[schemars(range(min = 1, max = 100))]
+    /// Maximum matching line groups included in the canonical result text.
+    #[schemars(range(min = 1, max = 10_000))]
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
-    pub(super) limit: Option<u32>,
-    /// Opaque continuation token returned by an earlier identical call.
-    #[schemars(length(min = 1))]
-    pub(super) cursor: Option<String>,
+    pub(super) max_matches: Option<u32>,
+    /// Zero-based Unicode scalar offset into the canonical result text.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) start_char: u32,
+    /// Maximum Unicode scalar values returned from `startChar`.
+    #[schemars(range(min = 1, max = 32_768))]
+    #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
+    pub(super) max_chars: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct PageRequest {
+    pub(super) start_char: u32,
+    pub(super) max_chars: u32,
 }
 
 pub(super) struct ValidatedFindParams {
@@ -148,25 +180,26 @@ pub(super) struct ValidatedFindParams {
     pub(super) kind: Option<CatalogDocumentKind>,
     pub(super) source: Option<String>,
     pub(super) manual_section: Option<String>,
-    pub(super) cursor: Option<String>,
+    pub(super) max_results: u32,
+    pub(super) page: PageRequest,
 }
 
 pub(super) struct ValidatedOutlineParams {
     pub(super) document: String,
     pub(super) detail: OutlineDetail,
-    pub(super) cursor: Option<String>,
+    pub(super) page: PageRequest,
 }
 
 pub(super) struct ValidatedReadParams {
     pub(super) document: String,
     pub(super) selectors: Vec<NodeSelector>,
-    pub(super) cursor: Option<String>,
+    pub(super) page: PageRequest,
 }
 
 pub(super) struct ValidatedExplainParams {
     pub(super) scope: DocumentScope,
     pub(super) entry: String,
-    pub(super) cursor: Option<String>,
+    pub(super) page: PageRequest,
 }
 
 pub(super) struct ValidatedSearchParams {
@@ -176,8 +209,8 @@ pub(super) struct ValidatedSearchParams {
     pub(super) case: SearchCase,
     pub(super) word: bool,
     pub(super) context_lines: u16,
-    pub(super) limit: u32,
-    pub(super) cursor: Option<String>,
+    pub(super) max_matches: u32,
+    pub(super) page: PageRequest,
 }
 
 /// Preserve the canonical array schema while accepting collection spellings
@@ -279,7 +312,9 @@ impl FindParams {
             "manualSection",
             MAX_MANUAL_SECTION_BYTES,
         )?;
-        validate_cursor(self.cursor.as_deref())?;
+        let max_results =
+            validate_result_limit(self.max_results, DEFAULT_FIND_RESULTS, "maxResults")?;
+        let page = validate_page(self.start_char, self.max_chars)?;
         if source.is_some() && manual_section.is_some() {
             return Err("source and manualSection cannot be combined".to_owned());
         }
@@ -288,18 +323,18 @@ impl FindParams {
             kind: self.kind,
             source,
             manual_section,
-            cursor: self.cursor,
+            max_results,
+            page,
         })
     }
 }
 
 impl OutlineParams {
     pub(super) fn validate(self) -> Result<ValidatedOutlineParams, String> {
-        validate_cursor(self.cursor.as_deref())?;
         Ok(ValidatedOutlineParams {
             document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
             detail: self.detail.unwrap_or(OutlineDetail::Sections),
-            cursor: self.cursor,
+            page: validate_page(self.start_char, self.max_chars)?,
         })
     }
 }
@@ -319,18 +354,16 @@ impl ReadParams {
                     .map(NodeSelector::new)
             })
             .collect::<Result<_, _>>()?;
-        validate_cursor(self.cursor.as_deref())?;
         Ok(ValidatedReadParams {
             document: bounded_normalized(&self.document, "document", MAX_DOCUMENT_BYTES)?,
             selectors,
-            cursor: self.cursor,
+            page: validate_page(self.start_char, self.max_chars)?,
         })
     }
 }
 
 impl ExplainParams {
     pub(super) fn validate(self) -> Result<ValidatedExplainParams, String> {
-        validate_cursor(self.cursor.as_deref())?;
         Ok(ValidatedExplainParams {
             scope: validate_scope(
                 self.documents,
@@ -343,7 +376,7 @@ impl ExplainParams {
                 "entry",
                 mant_protocol::MAX_SEMANTIC_ENTRY_BYTES,
             )?,
-            cursor: self.cursor,
+            page: validate_page(self.start_char, self.max_chars)?,
         })
     }
 }
@@ -353,13 +386,8 @@ impl SearchParams {
         if self.context_lines > 5 {
             return Err("contextLines must be between 0 and 5".to_owned());
         }
-        let limit = self.limit.unwrap_or(DEFAULT_SEARCH_PAGE_SIZE);
-        if !(1..=MAX_SEARCH_PAGE_SIZE).contains(&limit) {
-            return Err(format!(
-                "limit must be between 1 and {MAX_SEARCH_PAGE_SIZE}"
-            ));
-        }
-        validate_cursor(self.cursor.as_deref())?;
+        let max_matches =
+            validate_result_limit(self.max_matches, DEFAULT_SEARCH_MATCHES, "maxMatches")?;
         Ok(ValidatedSearchParams {
             scope: validate_scope(
                 self.documents,
@@ -372,10 +400,29 @@ impl SearchParams {
             case: self.case.unwrap_or_default(),
             word: self.word,
             context_lines: self.context_lines,
-            limit,
-            cursor: self.cursor,
+            max_matches,
+            page: validate_page(self.start_char, self.max_chars)?,
         })
     }
+}
+
+fn validate_result_limit(value: Option<u32>, default: u32, field: &str) -> Result<u32, String> {
+    let value = value.unwrap_or(default);
+    if !(1..=MAX_QUERY_RESULTS).contains(&value) {
+        return Err(format!("{field} must be between 1 and {MAX_QUERY_RESULTS}"));
+    }
+    Ok(value)
+}
+
+fn validate_page(start_char: u32, max_chars: Option<u32>) -> Result<PageRequest, String> {
+    let max_chars = max_chars.unwrap_or(DEFAULT_PAGE_CHARS);
+    if !(1..=MAX_PAGE_CHARS).contains(&max_chars) {
+        return Err(format!("maxChars must be between 1 and {MAX_PAGE_CHARS}"));
+    }
+    Ok(PageRequest {
+        start_char,
+        max_chars,
+    })
 }
 
 fn validate_scope(
@@ -432,7 +479,7 @@ fn validate_scope(
     })
 }
 
-pub(super) fn catalog_query(parameters: &ValidatedFindParams, offset: u32) -> CatalogQuery {
+pub(super) fn catalog_query(parameters: &ValidatedFindParams) -> CatalogQuery {
     CatalogQuery {
         pattern: parameters.query.clone(),
         syntax: SearchSyntax::Literal,
@@ -440,8 +487,8 @@ pub(super) fn catalog_query(parameters: &ValidatedFindParams, offset: u32) -> Ca
         kind: parameters.kind,
         source: parameters.source.clone(),
         manual_section: parameters.manual_section.clone(),
-        limit: FIND_PAGE_SIZE,
-        offset,
+        limit: parameters.max_results,
+        offset: 0,
     }
 }
 
@@ -455,15 +502,6 @@ pub(super) fn request_for(document: String, view: QueryView) -> QueryRequest {
         },
         view,
     }
-}
-
-fn validate_cursor(value: Option<&str>) -> Result<(), String> {
-    if value.is_some_and(|value| value.is_empty() || value.len() > MAX_CURSOR_BYTES) {
-        return Err(format!(
-            "cursor must contain between 1 and {MAX_CURSOR_BYTES} bytes"
-        ));
-    }
-    Ok(())
 }
 
 fn optional_normalized(
