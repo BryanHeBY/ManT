@@ -250,8 +250,12 @@ mod tests {
                 assert!(properties.contains_key("followLinks"));
                 assert_eq!(properties["documents"]["type"], "array");
                 assert!(schema_type_contains(&properties["maxMatches"], "integer"));
+                assert_eq!(properties["maxMatches"]["maximum"], 100);
                 assert!(!properties.contains_key("offset"));
                 assert!(!properties.contains_key("scope"));
+            }
+            if tool.name == "mant_find" {
+                assert_eq!(properties["maxResults"]["maximum"], 10_000);
             }
             if tool.name == "mant_read" {
                 assert_eq!(properties["selectors"]["type"], "array");
@@ -391,7 +395,7 @@ mod tests {
         assert!(search("needle", 6, None).validate().is_err());
         assert!(search("needle", 0, Some(0)).validate().is_err());
         assert!(
-            search("needle", 0, Some(MAX_QUERY_RESULTS + 1))
+            search("needle", 0, Some(MAX_SEARCH_MATCHES + 1))
                 .validate()
                 .is_err()
         );

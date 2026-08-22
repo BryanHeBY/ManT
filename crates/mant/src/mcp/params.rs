@@ -15,8 +15,14 @@ pub(super) const MAX_SELECTORS: usize = 16;
 pub(super) const DEFAULT_FIND_RESULTS: u32 = 50;
 /// Default number of matching line groups materialized by search.
 pub(super) const DEFAULT_SEARCH_MATCHES: u32 = 20;
-/// Maximum semantic rows materialized by one agent query.
-pub(super) const MAX_QUERY_RESULTS: u32 = 10_000;
+/// Maximum catalog rows materialized by one discovery call.
+pub(super) const MAX_FIND_RESULTS: u32 = 10_000;
+/// Maximum matching line groups materialized by one agent search.
+///
+/// Search groups retain previews, occurrences, and optional context, unlike a
+/// catalog row. Keep this separate from discovery so a compact character page
+/// cannot cause an unboundedly large in-memory search projection.
+pub(super) const MAX_SEARCH_MATCHES: u32 = 100;
 /// Default Unicode scalar values returned by one successful tool call.
 pub(super) const DEFAULT_PAGE_CHARS: u32 = 16 * 1024;
 /// Maximum Unicode scalar values returned by one successful tool call.
@@ -157,7 +163,7 @@ pub(super) struct SearchParams {
     #[schemars(range(max = 5))]
     pub(super) context_lines: u16,
     /// Maximum matching line groups included in the canonical result text.
-    #[schemars(range(min = 1, max = 10_000))]
+    #[schemars(range(min = 1, max = 100))]
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_matches: Option<u32>,
     /// Zero-based Unicode scalar offset into the canonical result text.
@@ -312,8 +318,12 @@ impl FindParams {
             "manualSection",
             MAX_MANUAL_SECTION_BYTES,
         )?;
-        let max_results =
-            validate_result_limit(self.max_results, DEFAULT_FIND_RESULTS, "maxResults")?;
+        let max_results = validate_result_limit(
+            self.max_results,
+            DEFAULT_FIND_RESULTS,
+            MAX_FIND_RESULTS,
+            "maxResults",
+        )?;
         let page = validate_page(self.start_char, self.max_chars)?;
         if source.is_some() && manual_section.is_some() {
             return Err("source and manualSection cannot be combined".to_owned());
@@ -386,8 +396,12 @@ impl SearchParams {
         if self.context_lines > 5 {
             return Err("contextLines must be between 0 and 5".to_owned());
         }
-        let max_matches =
-            validate_result_limit(self.max_matches, DEFAULT_SEARCH_MATCHES, "maxMatches")?;
+        let max_matches = validate_result_limit(
+            self.max_matches,
+            DEFAULT_SEARCH_MATCHES,
+            MAX_SEARCH_MATCHES,
+            "maxMatches",
+        )?;
         Ok(ValidatedSearchParams {
             scope: validate_scope(
                 self.documents,
@@ -406,10 +420,15 @@ impl SearchParams {
     }
 }
 
-fn validate_result_limit(value: Option<u32>, default: u32, field: &str) -> Result<u32, String> {
+fn validate_result_limit(
+    value: Option<u32>,
+    default: u32,
+    maximum: u32,
+    field: &str,
+) -> Result<u32, String> {
     let value = value.unwrap_or(default);
-    if !(1..=MAX_QUERY_RESULTS).contains(&value) {
-        return Err(format!("{field} must be between 1 and {MAX_QUERY_RESULTS}"));
+    if !(1..=maximum).contains(&value) {
+        return Err(format!("{field} must be between 1 and {maximum}"));
     }
     Ok(value)
 }

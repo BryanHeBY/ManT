@@ -1126,9 +1126,10 @@ be an independently complete Markdown construct or grapheme cluster.
 Semantic query bounds remain separate from text paging. `mant_find`
 materializes at most `maxResults` matching catalog rows, default 50;
 `mant_search` materializes at most `maxMatches` matching line groups, default
-20. Both accept 1 through 10,000. Their compact bodies report returned and
-total match counts, while `totalChars` describes only the canonical body
-produced under the requested semantic bound.
+20. `maxResults` accepts 1 through 10,000; `maxMatches` accepts 1 through
+100 because each search group retains preview, occurrence, and context data.
+Their compact bodies report returned and total match counts, while `totalChars`
+describes only the canonical body produced under the requested semantic bound.
 
 For explain and search, `followLinks: true` expands typed manual and registered
 Markdown links with the same deterministic breadth-first traversal as the
@@ -1263,7 +1264,7 @@ A structure-aware search tool call is:
 ```
 
 Search is deliberately fixed to visible document text and permits zero through
-five context lines. `maxMatches` selects 1 through 10,000 matching line groups
+five context lines. `maxMatches` selects 1 through 100 matching line groups
 for the canonical result and defaults to 20. `mant_read` and
 `mant_explain` use CommonMark; the other tools use deterministic plain text.
 Occurrences on one rendered line share a result and list their columns once;
