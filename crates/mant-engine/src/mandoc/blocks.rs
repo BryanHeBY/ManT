@@ -2281,6 +2281,7 @@ fn is_nonprinting_request(node: &Node) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use libmandoc_rs::NormalizedFont;
     use mant_ir::{Block, DefinitionItem, Inline, LayoutHint};
 
     fn text(value: &str) -> Vec<Inline> {
@@ -2322,5 +2323,75 @@ mod tests {
         assert!(super::terms_fit_inline(&[text("* / %")], 6));
         assert!(!super::terms_fit_inline(&[text("--listed-incremental")], 6));
         assert!(!super::terms_fit_inline(&[], 6));
+    }
+
+    #[test]
+    fn table_source_requests_dispatch_to_man_and_mdoc_inline_lowering() {
+        let man =
+            super::source_table_inline(".BR git (1)", None).expect("recognized man source request");
+        assert_eq!(super::plain_text(&man), "git(1)");
+
+        let mdoc = super::source_table_inline(".Xr git 1 ,", None)
+            .expect("recognized mdoc source request");
+        assert_eq!(super::plain_text(&mdoc), "git(1),");
+        assert!(matches!(
+            mdoc.first(),
+            Some(Inline::Link {
+                target:
+                    mant_ir::LinkTarget::Manual {
+                        name,
+                        manual_section: Some(section),
+                    },
+                ..
+            }) if name == "git" && section == "1"
+        ));
+    }
+
+    #[test]
+    fn extended_definition_terms_split_only_at_semantic_line_breaks() {
+        let terms = super::split_definition_terms(vec![
+            Inline::Text {
+                value: "first".to_owned(),
+            },
+            Inline::LineBreak,
+            Inline::Strong {
+                children: text("second"),
+            },
+        ]);
+
+        assert_eq!(
+            terms,
+            [
+                text("first"),
+                vec![Inline::Strong {
+                    children: text("second")
+                }]
+            ]
+        );
+    }
+
+    #[test]
+    fn preformatted_font_styling_preserves_line_boundaries() {
+        let styled = super::style_preformatted_inlines(
+            vec![
+                Inline::Text {
+                    value: "first".to_owned(),
+                },
+                Inline::LineBreak,
+                Inline::Text {
+                    value: "second".to_owned(),
+                },
+            ],
+            NormalizedFont::Symbolic,
+        );
+
+        assert!(matches!(
+            styled.as_slice(),
+            [
+                Inline::Strong { children: first },
+                Inline::LineBreak,
+                Inline::Strong { children: second },
+            ] if super::plain_text(first) == "first" && super::plain_text(second) == "second"
+        ));
     }
 }
