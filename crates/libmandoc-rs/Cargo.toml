@@ -16,6 +16,7 @@ include = [
   "/THIRD_PARTY_NOTICES.md",
   "/LICENSES/**",
   "/build.rs",
+  "/benches/**",
   "/config/**",
   "/shim/**",
   "/src/**",
@@ -52,3 +53,7 @@ serde_json.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "ast_transfer"
+harness = false
