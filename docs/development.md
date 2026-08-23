@@ -415,6 +415,39 @@ defines the narrow signal and review lifecycle. Do not add it to daily CI;
 only its self-check and focused regressions derived from confirmed findings
 belong there.
 
+### Mandoc reference replay
+
+The supplementary mandoc route reuses the same exact historical source
+identities rather than selecting a second sample. It is useful for native mdoc
+punctuation and formatter behavior, but it does not replace groff as an
+independent parser-family oracle.
+
+```sh
+python3 scripts/audit-roff-fidelity.py --manpath /tmp/exact/share/man \
+  --corpus exact-corpus --replay-source-records \
+  --reference-kind mandoc --reference mandoc \
+  --reference-id mandoc-1.14.6-1 \
+  --audit-db tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.csv --findings-only
+python3 scripts/audit-roff-layout.py --manpath /tmp/exact/share/man \
+  --corpus exact-corpus --replay-fidelity-records \
+  --reference-kind mandoc --reference mandoc \
+  --reference-id mandoc-1.14.6-1 \
+  --audit-db tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.csv --findings-only
+```
+
+The content route sends decompressed bytes directly to mandoc and records its
+package identity. It expands only pure redirect pages within the selected
+manual hierarchy; embedded include execution remains deliberately out of
+scope. Reconstruct missing corpus files from the exact official artifacts and
+verify their decompressed hashes before replay. Never commit downloaded manual
+trees or `/tmp` review bundles.
+
+The independent [mandoc content guide](../tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.md)
+and [mandoc layout guide](../tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.md) record
+the current scope, renderer identity, commands, and human conclusions. Replay
+corpora serially because atomic CSV checkpoints protect interruption, not
+concurrent writers.
+
 `--syntax-priority` replaces path-only ranking with deterministic greedy coverage over the actual owned libmandoc AST. The development-only `roff_ast_profile` example reports macro names, node roles and parent/child shapes, normalized list/display/font state, tables, equations, parser diagnostic classes, and rendering-relevant node flags without copying document text. It also reports bounded interaction features: a node or parent/child context paired with its flags and normalized attributes, plus attribute pairs on the same node. The sampler weights these combinations ahead of isolated features, first preferring shapes absent from the completed CSV ledger and then underrepresented and rarer forms. This distinguishes merely having seen `.SY`, a no-fill node, and a font from having exercised their exact combination.
 
 `--syntax-report` records per-feature corpus, ledger, reused-source, and selected-page counts plus representative paths; it measures exercised parser structure, not semantic correctness. `--syntax-cache` avoids reparsing unchanged `(corpus, path, source hash)` identities and supports compact `.json.gz` files. Both the profiler response and cache carry a feature-schema identity, so changing the set of observed AST flags or shapes invalidates and rebuilds an older cache instead of silently treating stale profiles as complete. Profiling uses bounded subprocess batches and isolates an abnormal native-parser exit down to the exact page instead of losing the whole scan. Unreadable host paths remain visible as report errors but do not masquerade as syntax features.
@@ -434,7 +467,10 @@ Every new corpus expansion also has a manual review budget. Inspect every `REVIE
 The audit routes share an explicit source-identity baseline rather than merely
 similar row counts. Structure and CommonMark projection cover every recorded
 fidelity identity; renderer-layout covers the fidelity rows with a completed
-two-renderer comparison. Independent targeted sweeps may remain supersets. See
+two-renderer comparison. The mandoc content profile exactly replays that
+historical baseline plus checked-in fixtures, and its layout profile covers
+every comparable mandoc row. Independent targeted groff/structure sweeps may
+remain supersets. See
 the [coverage contract](../tests/fixtures/roff/AUDIT_COVERAGE.md) and run
 `python3 scripts/check-roff-audit-coverage.py` before concluding a local audit
 expansion.

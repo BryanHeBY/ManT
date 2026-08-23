@@ -15,12 +15,20 @@ index keyed by immutable `(corpus, path, decompressed-source SHA-256)` identity:
 - every checked-in real fixture must appear under the current structure and
   projection schemas. These bounded fixture runs are the reproducible CI
   baseline; local distribution corpora remain development and release-time
-  evidence.
+  evidence;
+- `MANDOC_FIDELITY_AUDIT.csv` must contain every historical fidelity identity
+  plus every checked-in fixture under one explicit mandoc renderer identity;
+  and
+- `MANDOC_LAYOUT_AUDIT.csv` must cover every comparable mandoc-fidelity
+  identity and every checked-in fixture under the same renderer identity.
 
-Each ledger may contain a deliberate superset. Source-pattern sweeps, host-only
-equation probes, complete release scans, and renderer-specific layout studies
-do not need to be copied into unrelated ledgers merely to make row counts
-equal. `REFERENCE_RENDERER_DEVIATIONS.csv` is a curated conclusion index, not a
+The original structure, projection, and groff-layout ledgers may contain a
+deliberate superset. Source-pattern sweeps, host-only equation probes, complete
+release scans, and renderer-specific layout studies do not need to be copied
+into unrelated ledgers merely to make row counts equal. The aligned mandoc
+ledgers are narrower by design: content is exactly historical fidelity plus
+fixtures, and layout is exactly the comparable mandoc content set.
+`REFERENCE_RENDERER_DEVIATIONS.csv` is a curated conclusion index, not a
 coverage route.
 
 Check the set relationship without invoking a renderer or reparsing the local
@@ -44,9 +52,11 @@ python3 scripts/audit-roff-layout.py --manpath /path/to/man-root \
 
 The coverage check is cheap enough for daily CI: it validates CSV headers,
 status/schema values, duplicate and exact source identities, current schema
-coverage, pending-review totals, and the small checked-in fixture inventory.
+coverage, matching mandoc renderer identities, pending-review totals, and the
+small checked-in fixture inventory.
 It does not run groff, scan host manuals, or turn local third-party corpora
 into a CI dependency. A zero missing count certifies execution-range alignment,
-not that every newly surfaced `review` candidate has received a human
-disposition; that separate queue is printed explicitly and retained in its
-route ledger.
+and a zero pending count certify execution-range alignment and completion of
+the recorded review queue. They do not certify that a reference renderer is
+semantically authoritative; the per-row disposition still records that human
+judgment.

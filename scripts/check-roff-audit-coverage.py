@@ -6,7 +6,9 @@ CommonMark-projection audits must cover every recorded source identity. The
 renderer-layout audit needs only identities whose fidelity comparison reached
 a comparable ``clean`` or ``review`` result; it may also contain independent
 layout sweeps. Checked-in fixtures form a second, reproducible baseline shared
-by the structure and projection ledgers.
+by the structure and projection ledgers. The mandoc reference route must replay
+the complete historical fidelity baseline, cover every comparable result in
+its own layout ledger, and include every checked-in fixture in both ledgers.
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ DEFAULT_FIDELITY_DB = ROFF_ROOT / "FIDELITY_AUDIT.csv"
 DEFAULT_STRUCTURE_DB = ROFF_ROOT / "STRUCTURE_AUDIT.csv"
 DEFAULT_PROJECTION_DB = ROFF_ROOT / "PROJECTION_AUDIT.csv"
 DEFAULT_LAYOUT_DB = ROFF_ROOT / "LAYOUT_AUDIT.csv"
+DEFAULT_MANDOC_FIDELITY_DB = ROFF_ROOT / "MANDOC_FIDELITY_AUDIT.csv"
+DEFAULT_MANDOC_LAYOUT_DB = ROFF_ROOT / "MANDOC_LAYOUT_AUDIT.csv"
 
 IDENTITY_FIELDS = ["corpus", "path", "section", "source_sha256"]
 FIDELITY_FIELDS = IDENTITY_FIELDS + ["scan_status", "review_status", "note"]
@@ -45,6 +49,8 @@ LAYOUT_FIELDS = IDENTITY_FIELDS + [
     "review_status",
     "note",
 ]
+MANDOC_FIDELITY_FIELDS = ["reference_kind", "reference_id"] + FIDELITY_FIELDS
+MANDOC_LAYOUT_FIELDS = ["reference_kind", "reference_id"] + LAYOUT_FIELDS
 
 CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v4"
 CURRENT_PROJECTION_SCHEMA = "mant.roff-projection-profile/v3"
@@ -75,7 +81,11 @@ class Coverage:
     structure: frozenset[Identity]
     projection: frozenset[Identity]
     layout: frozenset[Identity]
+    mandoc_fidelity: frozenset[Identity]
+    mandoc_comparable: frozenset[Identity]
+    mandoc_layout: frozenset[Identity]
     fixture_inventory: frozenset[Identity]
+    pending: tuple[tuple[str, frozenset[Identity]], ...]
     summaries: tuple["LedgerSummary", ...]
 
 
@@ -97,6 +107,10 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--structure-db", type=Path, default=DEFAULT_STRUCTURE_DB)
     parser.add_argument("--projection-db", type=Path, default=DEFAULT_PROJECTION_DB)
     parser.add_argument("--layout-db", type=Path, default=DEFAULT_LAYOUT_DB)
+    parser.add_argument(
+        "--mandoc-fidelity-db", type=Path, default=DEFAULT_MANDOC_FIDELITY_DB
+    )
+    parser.add_argument("--mandoc-layout-db", type=Path, default=DEFAULT_MANDOC_LAYOUT_DB)
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
 
@@ -149,6 +163,18 @@ def identities(
     )
 
 
+def mandoc_renderer_identity(
+    path: Path, rows: Iterable[dict[str, str]]
+) -> tuple[str, str]:
+    identities = {(row["reference_kind"], row["reference_id"]) for row in rows}
+    if len(identities) != 1:
+        raise ValueError(f"{path} must contain exactly one mandoc renderer identity")
+    identity = next(iter(identities))
+    if identity[0] != "mandoc" or not identity[1]:
+        raise ValueError(f"invalid mandoc renderer identity in {path}")
+    return identity
+
+
 def fixture_identities() -> frozenset[Identity]:
     found = set()
     for page in discover_pages([FIXTURE_ROOT]):
@@ -183,6 +209,27 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         {"clean", "review", "hard-failure"},
         "layout_schema",
     )
+    mandoc_fidelity_rows = read_rows(
+        arguments.mandoc_fidelity_db,
+        MANDOC_FIDELITY_FIELDS,
+        {"clean", "review", "hard-failure", "skipped"},
+    )
+    mandoc_layout_rows = read_rows(
+        arguments.mandoc_layout_db,
+        MANDOC_LAYOUT_FIELDS,
+        {"clean", "review", "hard-failure"},
+        "layout_schema",
+    )
+    mandoc_fidelity_renderer = mandoc_renderer_identity(
+        arguments.mandoc_fidelity_db, mandoc_fidelity_rows
+    )
+    mandoc_layout_renderer = mandoc_renderer_identity(
+        arguments.mandoc_layout_db, mandoc_layout_rows
+    )
+    if mandoc_fidelity_renderer != mandoc_layout_renderer:
+        raise ValueError(
+            "mandoc fidelity and layout ledgers use different renderer identities"
+        )
     fidelity = identities(fidelity_rows)
     comparable = identities(
         row for row in fidelity_rows if row["scan_status"] in {"clean", "review"}
@@ -196,6 +243,17 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
     current_layout = [
         row for row in layout_rows if row["layout_schema"] == CURRENT_LAYOUT_SCHEMA
     ]
+    current_mandoc_layout = [
+        row
+        for row in mandoc_layout_rows
+        if row["layout_schema"] == CURRENT_LAYOUT_SCHEMA
+    ]
+    mandoc_fidelity = identities(mandoc_fidelity_rows)
+    mandoc_comparable = identities(
+        row
+        for row in mandoc_fidelity_rows
+        if row["scan_status"] in {"clean", "review"}
+    )
     summaries = tuple(
         LedgerSummary(
             name,
@@ -219,6 +277,22 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             ("structure", current_structure, fidelity),
             ("projection", current_projection, fidelity),
             ("layout", current_layout, comparable),
+            ("mandoc-fidelity", mandoc_fidelity_rows, mandoc_fidelity),
+            ("mandoc-layout", current_mandoc_layout, mandoc_comparable),
+        )
+    )
+    pending = tuple(
+        (
+            name,
+            identities(row for row in rows if row["review_status"] == "pending"),
+        )
+        for name, rows in (
+            ("fidelity", fidelity_rows),
+            ("structure", current_structure),
+            ("projection", current_projection),
+            ("layout", current_layout),
+            ("mandoc-fidelity", mandoc_fidelity_rows),
+            ("mandoc-layout", current_mandoc_layout),
         )
     )
     return Coverage(
@@ -231,7 +305,11 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
             current_projection
         ),
         layout=identities(current_layout),
+        mandoc_fidelity=mandoc_fidelity,
+        mandoc_comparable=mandoc_comparable,
+        mandoc_layout=identities(current_mandoc_layout),
         fixture_inventory=fixture_identities(),
+        pending=pending,
         summaries=summaries,
     )
 
@@ -243,13 +321,32 @@ def missing_sets(coverage: Coverage) -> dict[str, frozenset[Identity]]:
         "layout/comparable-fidelity": coverage.comparable - coverage.layout,
         "structure/fixtures": coverage.fixture_inventory - coverage.structure,
         "projection/fixtures": coverage.fixture_inventory - coverage.projection,
+        "mandoc-fidelity/historical-fidelity": coverage.fidelity
+        - coverage.mandoc_fidelity,
+        "mandoc-layout/comparable-mandoc-fidelity": coverage.mandoc_comparable
+        - coverage.mandoc_layout,
+        "mandoc-fidelity/fixtures": coverage.fixture_inventory
+        - coverage.mandoc_fidelity,
+        "mandoc-layout/fixtures": coverage.fixture_inventory - coverage.mandoc_layout,
+        "mandoc-fidelity/unexpected": coverage.mandoc_fidelity
+        - coverage.fidelity
+        - coverage.fixture_inventory,
+        "mandoc-layout/unexpected": coverage.mandoc_layout
+        - coverage.mandoc_comparable,
+        **{f"pending/{name}": items for name, items in coverage.pending},
     }
 
 
 def summarize(label: str, missing: frozenset[Identity]) -> None:
     by_corpus = Counter(item.corpus for item in missing)
     detail = ", ".join(f"{corpus}={count}" for corpus, count in sorted(by_corpus.items()))
-    print(f"  {label}: {len(missing)} missing" + (f" ({detail})" if detail else ""))
+    if label.startswith("pending/"):
+        noun = "unresolved"
+    elif label.endswith("/unexpected"):
+        noun = "unexpected"
+    else:
+        noun = "missing"
+    print(f"  {label}: {len(missing)} {noun}" + (f" ({detail})" if detail else ""))
 
 
 def self_check() -> None:
@@ -262,7 +359,11 @@ def self_check() -> None:
         structure=frozenset({a, b, fixture}),
         projection=frozenset({a, b, fixture}),
         layout=frozenset({a}),
+        mandoc_fidelity=frozenset({a, b, fixture}),
+        mandoc_comparable=frozenset({a, fixture}),
+        mandoc_layout=frozenset({a, fixture}),
         fixture_inventory=frozenset({fixture}),
+        pending=(("mandoc-fidelity", frozenset()),),
         summaries=(),
     )
     assert all(not missing for missing in missing_sets(aligned).values())
@@ -272,7 +373,11 @@ def self_check() -> None:
         structure=frozenset({a}),
         projection=frozenset({b}),
         layout=frozenset(),
+        mandoc_fidelity=frozenset({a}),
+        mandoc_comparable=frozenset({a}),
+        mandoc_layout=frozenset(),
         fixture_inventory=aligned.fixture_inventory,
+        pending=(("mandoc-fidelity", frozenset({a})),),
         summaries=(),
     )
     missing = missing_sets(incomplete)
@@ -281,6 +386,11 @@ def self_check() -> None:
     assert missing["layout/comparable-fidelity"] == frozenset({a})
     assert missing["structure/fixtures"] == frozenset({fixture})
     assert missing["projection/fixtures"] == frozenset({fixture})
+    assert missing["mandoc-fidelity/historical-fidelity"] == frozenset({b})
+    assert missing["mandoc-layout/comparable-mandoc-fidelity"] == frozenset({a})
+    assert missing["mandoc-fidelity/fixtures"] == frozenset({fixture})
+    assert missing["mandoc-layout/fixtures"] == frozenset({fixture})
+    assert missing["pending/mandoc-fidelity"] == frozenset({a})
 
 
 def main(argv: Sequence[str]) -> int:
