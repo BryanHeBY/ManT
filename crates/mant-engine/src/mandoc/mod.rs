@@ -2967,6 +2967,21 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
     }
 
     #[test]
+    fn carries_mdoc_spacing_state_into_display_lines() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("display-spacing.8"),
+            b".Dd August 24, 2026\n.Dt DISPLAY-SPACING 8\n.Os\n.Sh FORMAT\n\
+.Sm off\n.D1 Ar name : uid : gid\n.Sm on\n",
+        )
+        .expect("lower display-scoped mdoc spacing controls");
+
+        let Block::Preformatted { children, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected one display line");
+        };
+        assert_eq!(inline_text(children), "name:uid:gid");
+    }
+
+    #[test]
     fn carries_mdoc_spacing_state_across_list_item_boundaries() {
         let document = parse_manual_bytes(
             std::path::Path::new("list-spacing.8"),

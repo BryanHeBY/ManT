@@ -8,6 +8,7 @@ required by the third-party manuals.
 
 | Directory | Source snapshot | Stored format | Coverage purpose |
 | --- | --- | --- | --- |
+| [`bsd-closure/`](bsd-closure/README.md) | Official NetBSD 11.0 and DragonFly BSD 6.4.2 release artifacts | Exact uncompressed NetBSD member and original DragonFly gzip member | Named-character fidelity and display-scoped mdoc spacing state |
 | [`archlinux/`](archlinux/README.md) | Immutable Arch Linux Archive packages | Original gzip members and two documented lossless zstd recompressions | Direct gzip input, POSIX `sh(1p)`, zstd input, and broad real-man regression coverage |
 | [`fedora44/`](fedora44/README.md) | Fedora Linux 44 Everything packages | Lossless `*.1.zst` recompressions | zstd decoding, Bash-backed `sh(1)`, and a second current generator corpus |
 | [`debian/`](debian/README.md) | Debian sid binary packages | Original gzip package members | Third-distribution gzip input, mdoc-formatted dash `sh(1)`, and section-7 macro pages |

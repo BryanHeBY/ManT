@@ -18,6 +18,7 @@ pub(super) fn preformatted_blocks(
     node: &Node,
     context: &LoweringContext<'_>,
     indent_columns: u16,
+    mut spacing_enabled: bool,
 ) -> Vec<Block> {
     let body_index = node
         .children
@@ -35,7 +36,13 @@ pub(super) fn preformatted_blocks(
             continue;
         }
         if child.kind == NodeKind::Table {
-            push_preformatted_inline_run(&mut output, &mut inline_run, context, indent_columns);
+            push_preformatted_inline_run(
+                &mut output,
+                &mut inline_run,
+                context,
+                indent_columns,
+                &mut spacing_enabled,
+            );
             append_table_row(
                 &mut output,
                 child,
@@ -47,7 +54,7 @@ pub(super) fn preformatted_blocks(
             inline_run.push(child);
         }
     }
-    let mut inlines = preformatted_inlines_refs(&inline_run, context);
+    let (mut inlines, _) = preformatted_inlines_refs(&inline_run, context, spacing_enabled);
 
     // mdoc validation can move a closing delimiter out of the display body
     // while leaving it as a direct child of the display block.  It still
@@ -81,11 +88,13 @@ fn push_preformatted_inline_run(
     nodes: &mut Vec<&Node>,
     context: &LoweringContext<'_>,
     indent_columns: u16,
+    spacing_enabled: &mut bool,
 ) {
     if nodes.is_empty() {
         return;
     }
-    let children = preformatted_inlines_refs(nodes, context);
+    let (children, final_spacing) = preformatted_inlines_refs(nodes, context, *spacing_enabled);
+    *spacing_enabled = final_spacing;
     let source = nodes.first().and_then(|node| source_span(node));
     nodes.clear();
     if !children.is_empty() {
@@ -98,9 +107,13 @@ fn push_preformatted_inline_run(
     }
 }
 
-fn preformatted_inlines(nodes: &[Node], context: &LoweringContext<'_>) -> Vec<Inline> {
+fn preformatted_inlines(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    spacing_enabled: bool,
+) -> (Vec<Inline>, bool) {
     let nodes = nodes.iter().collect::<Vec<_>>();
-    preformatted_inlines_refs(&nodes, context)
+    preformatted_inlines_refs(&nodes, context, spacing_enabled)
 }
 
 /// Assemble a no-fill run into visible rows.
@@ -110,9 +123,13 @@ fn preformatted_inlines(nodes: &[Node], context: &LoweringContext<'_>) -> Vec<In
 /// while an explicit `.sp` request can ask for more.  Work from the adjacent
 /// visible source lines so the AST's empty placeholders do not create a
 /// growing stack of `LineBreak`s.
-fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> Vec<Inline> {
+fn preformatted_inlines_refs(
+    nodes: &[&Node],
+    context: &LoweringContext<'_>,
+    spacing_enabled: bool,
+) -> (Vec<Inline>, bool) {
     let mut output = Vec::new();
-    let mut line = InlineBuilder::new();
+    let mut line = InlineBuilder::with_spacing(spacing_enabled);
     let mut previous_visible_line = None;
     for node in nodes {
         if node.kind == NodeKind::Comment || node.flags.no_print {
@@ -127,7 +144,10 @@ fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> 
         }
 
         if previous_visible_line.is_some_and(|previous| node.line > previous) {
-            output.extend(std::mem::replace(&mut line, InlineBuilder::new()).finish());
+            let spacing_enabled = line.spacing_enabled();
+            output.extend(
+                std::mem::replace(&mut line, InlineBuilder::with_spacing(spacing_enabled)).finish(),
+            );
         }
         if let Some(previous) = previous_visible_line.filter(|previous| node.line > *previous)
             && !output.is_empty()
@@ -143,12 +163,14 @@ fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> 
             let body = first_part_children(node, NodeKind::Body)
                 .iter()
                 .collect::<Vec<_>>();
-            let nested = preformatted_inlines_refs(&body, context);
+            let (nested, final_spacing) =
+                preformatted_inlines_refs(&body, context, line.spacing_enabled());
             line.append(if let Some(font) = node.font {
                 style_preformatted_inlines(nested, font)
             } else {
                 nested
             });
+            line.inherit_spacing(final_spacing);
         } else if node.kind == NodeKind::Block
             && matches!(node.macro_name.as_deref(), Some("Bd" | "D1" | "Dl"))
         {
@@ -161,16 +183,23 @@ fn preformatted_inlines_refs(nodes: &[&Node], context: &LoweringContext<'_>) -> 
             let body = first_part_children(node, NodeKind::Body)
                 .iter()
                 .collect::<Vec<_>>();
-            line.append(preformatted_inlines_refs(&body, context));
+            let (nested, final_spacing) =
+                preformatted_inlines_refs(&body, context, line.spacing_enabled());
+            line.append(nested);
+            line.inherit_spacing(final_spacing);
         } else if node.kind == NodeKind::Text || node.macro_name.is_some() {
             append_inline_node(&mut line, node, context.default_name);
         } else {
-            line.append(preformatted_inlines(&node.children, context));
+            let (nested, final_spacing) =
+                preformatted_inlines(&node.children, context, line.spacing_enabled());
+            line.append(nested);
+            line.inherit_spacing(final_spacing);
         }
         previous_visible_line = Some(node.line);
     }
+    let final_spacing = line.spacing_enabled();
     output.extend(line.finish());
-    output
+    (output, final_spacing)
 }
 
 pub(super) fn style_preformatted_inlines(nodes: Vec<Inline>, font: NormalizedFont) -> Vec<Inline> {

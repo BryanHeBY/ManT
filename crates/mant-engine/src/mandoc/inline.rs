@@ -318,9 +318,13 @@ pub(super) fn append_inline_node(
         // Verbatim regions already retain their semantics through
         // libmandoc's no-fill flag, so leaking these arguments would only
         // create phantom paragraphs around preformatted blocks.
+        Some("Sm") => {
+            let setting = plain_text(&lower_inline_nodes(&node.children, default_name));
+            builder.set_spacing(setting.trim());
+        }
         Some(
-            "Es" | "Sm" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh"
-            | "nr" | "ta",
+            "Es" | "PD" | "ad" | "fi" | "ft" | "hy" | "in" | "na" | "ne" | "nf" | "nh" | "nr"
+            | "ta",
         ) => {}
         Some("Ap") => {
             builder.tighten_next_boundary();

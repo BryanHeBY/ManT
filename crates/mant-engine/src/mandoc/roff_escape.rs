@@ -494,6 +494,12 @@ fn dedicated_special_character(name: &str) -> Option<&'static str> {
         "ha" => Some("^"),
         "ti" => Some("~"),
         "rs" => Some("\\"),
+        // NetBSD's DRM manuals use this long-standing groff-style spelling
+        // for a lower-case c with caron.  It is absent from libmandoc
+        // 1.14.6's fixed character table, so retain the authored name rather
+        // than leaking the raw `\[vc]` escape or silently dropping it like
+        // terminal formatters that do not provide the device glyph.
+        "vc" => Some("č"),
         _ => None,
     }
 }
@@ -581,6 +587,7 @@ mod tests {
             "Mašlá — 🙂"
         );
         assert_eq!(visible_text(r"\[u0061_0301]"), "a\u{301}");
+        assert_eq!(visible_text(r"Dole\[vc]ek"), "Doleček");
     }
 
     #[test]

@@ -563,6 +563,7 @@ impl StructuralLowerer<'_, '_, '_> {
                     node,
                     self.context,
                     self.indent_columns + display_indent(node),
+                    self.spacing_enabled,
                 );
                 if node.macro_name.as_deref() == Some("Bd")
                     && !self.output.is_empty()
