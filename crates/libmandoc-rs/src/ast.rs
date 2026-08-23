@@ -1,8 +1,10 @@
-//! Owned, renderer-neutral syntax data copied from a completed libmandoc parse.
+//! Owned, renderer-neutral syntax data transferred from a completed libmandoc parse.
 //!
-//! These types contain no C pointers and remain valid after the parser session
-//! has been released.  They deliberately describe source semantics rather than
-//! imposing a presentation model on downstream renderers.
+//! The private FFI layer retains the completed parser only while it copies
+//! shallow borrowed snapshots directly into these types. No C pointer escapes
+//! that synchronous transfer, so the data remains valid after the parser
+//! session has been released. It deliberately describes source semantics
+//! rather than imposing a presentation model on downstream renderers.
 
 /// High-level macro package detected by libmandoc.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]

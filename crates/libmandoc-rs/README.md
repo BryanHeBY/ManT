@@ -50,6 +50,13 @@ locations, and tags. It is not
 semantic entries, typed links, or renderers should use `mant-engine` and
 `mant-ir` instead.
 
+The shim retains the completed native parser only during the synchronous FFI
+transfer. Each native node and table cell is exposed as a shallow borrowed
+snapshot and copied directly into the public Rust tree; no borrowed pointer
+escapes the call and no intermediate heap-owned C AST is materialized. The
+private parser handle is destroyed on the calling thread before `Parser`
+returns, while the returned report remains fully owned and freely movable.
+
 ## Basic use
 
 ```rust,no_run
@@ -113,9 +120,10 @@ The vendored parser subset and its include shim make all mutable parse state
 thread-local, so independent `Parser` calls may run concurrently. A `Parser`
 value is inexpensive immutable configuration; this guarantees parallel calls,
 not recursive re-entry through a caller callback on the same OS thread. The
-owned node and equation copies stop descending after 256 levels. Pathological
-input beyond that defensive cap still returns a successful, finite report but
-omits deeper descendants; ordinary manuals remain far below the limit.
+Rust ownership transfer and native equation expansion stop descending after
+256 levels. Pathological input beyond that defensive cap still returns a
+successful, finite report but omits deeper descendants; ordinary manuals
+remain far below the limit.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
@@ -208,8 +216,10 @@ TSAN runner does not support Windows.
 
 `check-address-safety` uses the same mixed Rust/C sanitizer setup for exact
 memory-only input boundaries, including truncated UTF-8, modeline and encoding
-declarations at the final source byte, plus exact renderer output limits. It
-is likewise a local maintainer check rather than a routine CI job.
+declarations at the final source byte, owned-tree traversal after native
+parser release across the licensed real-fixture corpus, and exact renderer
+output limits. It is likewise a local maintainer check rather than a routine
+CI job.
 
 The published crate contains the already-patched vendor tree needed to build,
 but deliberately omits the repository maintenance inputs under `scripts/`,
@@ -273,10 +283,12 @@ proves the checked-in tree is the official snapshot plus exactly this series.
 
 ### C shim and Rust AST extensions
 
-The C shim is deliberately separate from `vendor/`: it copies libmandoc's
-private parser-session structures into owned Rust data after parsing. In
-addition to the upstream tree, `libmandoc-rs` exposes renderer-neutral facts
-that are already resolved by libmandoc but unavailable through a public C API:
+The C shim is deliberately separate from `vendor/`: after parsing, it exposes
+shallow snapshots of private parser-session structures while Rust performs the
+single owned-tree transfer. The snapshots and retained parser never cross the
+private synchronous FFI call. In addition to the upstream tree,
+`libmandoc-rs` exposes renderer-neutral facts that are already resolved by
+libmandoc but unavailable through a public C API:
 
 - normalized mdoc enclosures, list/display/font/author roles, source flags,
   table cells and spans, equations, and validated tags;

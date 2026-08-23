@@ -274,12 +274,26 @@ The runner recompiles `std` with TSAN, explicitly instruments the vendored C
 objects, uses an isolated target directory, and exercises in-memory parsing,
 source-relative `.so`, virtual bundles, and all reference renderers. Use
 `--rounds N` for a longer local soak. The ASan companion checks exact
-caller-owned input tails and output-limit boundaries in both languages. The
-runners support `x86_64` and `aarch64` Linux/glibc and macOS; Windows retains
-ordinary concurrent and boundary regressions in CI but is outside these local
-sanitizer runners. The runners, patch series, and upstream checksum are
-repository maintenance inputs and are intentionally absent from the published
-crate, which ships only the resulting buildable vendor tree.
+caller-owned input tails, owned-AST access after releasing the native parser,
+and output-limit boundaries in both languages. The runners support `x86_64`
+and `aarch64` Linux/glibc and macOS; Windows retains ordinary concurrent and
+boundary regressions in CI but is outside these local sanitizer runners. The
+runners, patch series, and upstream checksum are repository maintenance inputs
+and are intentionally absent from the published crate, which ships only the
+resulting buildable vendor tree.
+
+For ownership-transfer performance work, run the dependency-free generated
+benchmark before and after the change on the same host and release profile:
+
+```sh
+cargo bench --locked --package libmandoc-rs --bench ast_transfer
+```
+
+It reports complete parse-to-owned-AST latency, input size, node count, and
+estimated owned Rust payload for small, medium, and large generated manuals.
+Treat its timing as comparative local evidence rather than a stable CI
+threshold; sanitizer and semantic regression tests remain the correctness
+gates.
 
 When changing a versioned IR projection or protocol type, update the Rust contract,
 generated-schema, process, and projection tests in the same change. External

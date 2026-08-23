@@ -167,11 +167,13 @@ target must remain inside the logical manual root. Direct `--input` pages have
 no collection root and therefore reject redirect-only aliases.
 
 `libmandoc-rs` wraps the bundled C parser behind a small private shim. Parser
-calls copy the completed native tree into owned Rust data with structured
-diagnostics; reference-renderer calls format it in the same native session
-without an unnecessary AST copy. `mant-engine` alone lowers the owned tree
-into `mant-ir`. Linux, macOS, and Windows use the same parser version; Windows
-supplies bytes through a
+calls retain the completed native session only while shallow borrowed node
+snapshots are copied directly into owned Rust data; the session is released
+before the fully owned result returns, and there is no intermediate owned C
+AST. Reference-renderer calls instead format the tree in the same native
+session without building the Rust AST. `mant-engine` alone lowers the owned
+tree into `mant-ir`. Linux, macOS, and Windows use the same parser version;
+Windows supplies bytes through a
 checked memory-only configuration instead of exposing POSIX file transport to
 C. ManT invokes libmandoc with native includes denied after Rust has resolved
 the source chain.
@@ -196,11 +198,12 @@ thread-local as well. Independent parser calls
 therefore run concurrently without a process-wide lock; one-time native
 initialization remains synchronized. Date conversion avoids process-global
 timezone mutation and uses reentrant platform APIs where local time is
-required. Recursive re-entry on one thread is not supported, and the owned
-node and equation copies stop after 256 levels so hostile nesting cannot carry
-an unbounded C tree into recursive Rust consumers. A mixed Rust/C
-ThreadSanitizer runner guards this boundary locally because instrumenting only
-Rust would miss races inside the vendored parser and optional formatters.
+required. Recursive re-entry on one thread is not supported, and the Rust
+node transfer and native equation expansion stop after 256 levels so hostile
+nesting cannot carry an unbounded C tree into recursive Rust consumers. A
+mixed Rust/C ThreadSanitizer runner guards this boundary locally because
+instrumenting only Rust would miss races inside the vendored parser and
+optional formatters.
 
 ### Markdown and installed sources
 
