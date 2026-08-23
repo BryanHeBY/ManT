@@ -25,6 +25,41 @@ struct mant_mandoc_resolved_source {
 	size_t			 length;
 };
 
+/* Borrowed scalar/string projection of one live libmandoc syntax node. */
+struct mant_mandoc_node_view {
+	int			 kind;
+	const char		*macro_name;
+	const char		*text;
+	const char		*tag;
+	int			 line;
+	int			 column;
+	unsigned int		 flags;
+	int			 list_kind;
+	int			 display_kind;
+	int			 font_kind;
+	int			 author_mode;
+	int			 compact;
+	const char		*offset;
+	const char		*width;
+	const char		*enclosure_open;
+	const char		*enclosure_close;
+	const char		*equation;
+	const struct mant_mandoc_table_cell *table_cells;
+	const struct mant_mandoc_node *child;
+	const struct mant_mandoc_node *next;
+};
+
+/* Borrowed projection of one live tbl(7) data cell. */
+struct mant_mandoc_table_cell_view {
+	const char		*text;
+	int			 text_block;
+	int			 vertical_continuation;
+	unsigned int		 column_span;
+	unsigned int		 row_span;
+	int			 alignment;
+	const struct mant_mandoc_table_cell *next;
+};
+
 typedef int (*mant_mandoc_source_resolver)(void *, const char *,
     const char *, struct mant_mandoc_resolved_source *);
 
@@ -93,6 +128,13 @@ struct mant_mandoc_document *mant_mandoc_parse_buffer(
     mant_mandoc_source_resolver, void *);
 struct mant_mandoc_document *mant_mandoc_parse_bundle(
     const char *, const struct mant_mandoc_source *, size_t, int);
+struct mant_mandoc_document *mant_mandoc_parse_file_view(
+    const char *, const char *, int, int);
+struct mant_mandoc_document *mant_mandoc_parse_buffer_view(
+    const char *, const unsigned char *, size_t, const char *, int, int,
+    mant_mandoc_source_resolver, void *);
+struct mant_mandoc_document *mant_mandoc_parse_bundle_view(
+    const char *, const struct mant_mandoc_source *, size_t, int);
 #ifdef MANT_MANDOC_RENDER
 struct mant_mandoc_document *mant_mandoc_render_file(
     const char *, const char *, int, int, int, size_t, int, size_t);
@@ -126,6 +168,13 @@ const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document 
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
+const struct mant_mandoc_node *mant_mandoc_document_view_root(
+    const struct mant_mandoc_document *);
+int mant_mandoc_node_snapshot(struct mant_mandoc_document *,
+    const struct mant_mandoc_node *, struct mant_mandoc_node_view *);
+int mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *,
+    const struct mant_mandoc_table_cell *,
+    struct mant_mandoc_table_cell_view *);
 #ifdef MANT_MANDOC_RENDER
 const unsigned char *mant_mandoc_document_output(
     const struct mant_mandoc_document *);

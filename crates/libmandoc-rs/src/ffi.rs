@@ -39,6 +39,41 @@ struct CTableCell {
 }
 
 #[repr(C)]
+struct CNodeView {
+    kind: i32,
+    macro_name: *const c_char,
+    text: *const c_char,
+    tag: *const c_char,
+    line: i32,
+    column: i32,
+    flags: u32,
+    list_kind: i32,
+    display_kind: i32,
+    font_kind: i32,
+    author_mode: i32,
+    compact: i32,
+    offset: *const c_char,
+    width: *const c_char,
+    enclosure_open: *const c_char,
+    enclosure_close: *const c_char,
+    equation: *const c_char,
+    table_cells: *const CTableCell,
+    child: *const CNode,
+    next: *const CNode,
+}
+
+#[repr(C)]
+struct CTableCellView {
+    text: *const c_char,
+    text_block: i32,
+    vertical_continuation: i32,
+    column_span: u32,
+    row_span: u32,
+    alignment: i32,
+    next: *const CTableCell,
+}
+
+#[repr(C)]
 struct CSource {
     path: *const c_char,
     data: *const u8,
@@ -84,6 +119,29 @@ unsafe extern "C" {
         resolver_context: *mut c_void,
     ) -> *mut CDocument;
     fn mant_mandoc_parse_bundle(
+        root: *const c_char,
+        sources: *const CSource,
+        source_count: usize,
+        input_format: i32,
+    ) -> *mut CDocument;
+    #[cfg(unix)]
+    fn mant_mandoc_parse_file_view(
+        path: *const c_char,
+        include_root: *const c_char,
+        allow_include: i32,
+        input_format: i32,
+    ) -> *mut CDocument;
+    fn mant_mandoc_parse_buffer_view(
+        path: *const c_char,
+        buffer: *const u8,
+        length: usize,
+        include_root: *const c_char,
+        allow_include: i32,
+        input_format: i32,
+        resolver: Option<CSourceResolver>,
+        resolver_context: *mut c_void,
+    ) -> *mut CDocument;
+    fn mant_mandoc_parse_bundle_view(
         root: *const c_char,
         sources: *const CSource,
         source_count: usize,
@@ -141,6 +199,17 @@ unsafe extern "C" {
     fn mant_mandoc_document_alias_target(document: *const CDocument) -> *const c_char;
     fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
     fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
+    fn mant_mandoc_document_view_root(document: *const CDocument) -> *const CNode;
+    fn mant_mandoc_node_snapshot(
+        document: *mut CDocument,
+        node: *const CNode,
+        view: *mut CNodeView,
+    ) -> i32;
+    fn mant_mandoc_table_cell_snapshot(
+        document: *const CDocument,
+        cell: *const CTableCell,
+        view: *mut CTableCellView,
+    ) -> i32;
     #[cfg(feature = "render")]
     fn mant_mandoc_document_output(document: *const CDocument) -> *const u8;
     #[cfg(feature = "render")]
@@ -318,6 +387,8 @@ const NODE_LINE_START: u32 = 1 << 6;
 const NODE_DELIMITER_OPEN: u32 = 1 << 7;
 const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
 const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
+const MAX_OWNED_NODE_DEPTH: usize = 256;
+const USE_BORROWED_AST_VIEW: bool = false;
 
 struct DocumentHandle(NonNull<CDocument>);
 
@@ -334,6 +405,9 @@ pub(super) fn parse_file(
     allow_includes: bool,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
+    if USE_BORROWED_AST_VIEW {
+        return parse_file_view(path, include_root, allow_includes, input_format);
+    }
     let pointer = unsafe {
         mant_mandoc_parse_file(
             path.as_ptr(),
@@ -353,6 +427,9 @@ pub(super) fn parse_buffer(
     allow_includes: bool,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
+    if USE_BORROWED_AST_VIEW {
+        return parse_buffer_view(path, buffer, include_root, allow_includes, input_format);
+    }
     let pointer = unsafe {
         mant_mandoc_parse_buffer(
             path.as_ptr(),
@@ -376,6 +453,9 @@ pub(super) fn parse_buffer(
     allow_includes: bool,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
+    if USE_BORROWED_AST_VIEW {
+        return parse_buffer_view(path, buffer, include_root, allow_includes, input_format);
+    }
     let mut resolver = include_root.map(windows_root::RootResolver::new);
     let (callback, context) = windows_root::callback_parts(resolver.as_mut());
     let pointer = unsafe {
@@ -398,6 +478,9 @@ pub(super) fn parse_bundle(
     bundle: &SourceBundle,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
+    if USE_BORROWED_AST_VIEW {
+        return parse_bundle_view(root, bundle, input_format);
+    }
     let (_paths, sources) = bundle_sources(bundle);
     let pointer = unsafe {
         mant_mandoc_parse_bundle(
@@ -408,6 +491,89 @@ pub(super) fn parse_bundle(
         )
     };
     copy_document(pointer)
+}
+
+#[cfg(unix)]
+pub(super) fn parse_file_view(
+    path: &CStr,
+    include_root: Option<&CStr>,
+    allow_includes: bool,
+    input_format: InputFormat,
+) -> Result<RawDocument, String> {
+    let pointer = unsafe {
+        mant_mandoc_parse_file_view(
+            path.as_ptr(),
+            include_root.map_or(std::ptr::null(), CStr::as_ptr),
+            i32::from(allow_includes),
+            input_format_code(input_format),
+        )
+    };
+    copy_document_view(pointer)
+}
+
+#[cfg(unix)]
+pub(super) fn parse_buffer_view(
+    path: &CStr,
+    buffer: &[u8],
+    include_root: Option<&CStr>,
+    allow_includes: bool,
+    input_format: InputFormat,
+) -> Result<RawDocument, String> {
+    let pointer = unsafe {
+        mant_mandoc_parse_buffer_view(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            include_root.map_or(std::ptr::null(), CStr::as_ptr),
+            i32::from(allow_includes),
+            input_format_code(input_format),
+            None,
+            std::ptr::null_mut(),
+        )
+    };
+    copy_document_view(pointer)
+}
+
+#[cfg(windows)]
+pub(super) fn parse_buffer_view(
+    path: &CStr,
+    buffer: &[u8],
+    include_root: Option<&Path>,
+    allow_includes: bool,
+    input_format: InputFormat,
+) -> Result<RawDocument, String> {
+    let mut resolver = include_root.map(windows_root::RootResolver::new);
+    let (callback, context) = windows_root::callback_parts(resolver.as_mut());
+    let pointer = unsafe {
+        mant_mandoc_parse_buffer_view(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            std::ptr::null(),
+            i32::from(allow_includes),
+            input_format_code(input_format),
+            callback,
+            context,
+        )
+    };
+    copy_document_view(pointer)
+}
+
+pub(super) fn parse_bundle_view(
+    root: &CStr,
+    bundle: &SourceBundle,
+    input_format: InputFormat,
+) -> Result<RawDocument, String> {
+    let (_paths, sources) = bundle_sources(bundle);
+    let pointer = unsafe {
+        mant_mandoc_parse_bundle_view(
+            root.as_ptr(),
+            sources.as_ptr(),
+            sources.len(),
+            input_format_code(input_format),
+        )
+    };
+    copy_document_view(pointer)
 }
 
 fn bundle_sources(bundle: &SourceBundle) -> (Vec<CString>, Vec<CSource>) {
@@ -504,6 +670,48 @@ fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
                 has_body: unsafe { mant_mandoc_document_has_body(document) } != 0,
             },
             root: unsafe { copy_node(root) }?,
+        },
+        diagnostics: unsafe {
+            optional_string(mant_mandoc_document_diagnostics(document)).unwrap_or_default()
+        },
+    })
+}
+
+fn copy_document_view(pointer: *mut CDocument) -> Result<RawDocument, String> {
+    let handle = DocumentHandle(
+        NonNull::new(pointer)
+            .ok_or_else(|| "libmandoc could not allocate a document".to_owned())?,
+    );
+    let document = handle.0.as_ptr();
+    if unsafe { mant_mandoc_document_ok(document) } == 0 {
+        return Err(
+            unsafe { optional_string(mant_mandoc_document_error(document)) }
+                .unwrap_or_else(|| "libmandoc could not parse the source".to_owned()),
+        );
+    }
+
+    let root = unsafe { mant_mandoc_document_view_root(document) };
+    if root.is_null() {
+        return Err("libmandoc produced no borrowed syntax tree".to_owned());
+    }
+
+    Ok(RawDocument {
+        document: Document {
+            macro_set: macro_set(unsafe { mant_mandoc_document_macroset(document) })?,
+            metadata: Metadata {
+                title: unsafe { optional_string(mant_mandoc_document_title(document)) },
+                section: unsafe { optional_string(mant_mandoc_document_section(document)) },
+                volume: unsafe { optional_string(mant_mandoc_document_volume(document)) },
+                os: unsafe { optional_string(mant_mandoc_document_os(document)) },
+                arch: unsafe { optional_string(mant_mandoc_document_arch(document)) },
+                name: unsafe { optional_string(mant_mandoc_document_name(document)) },
+                date: unsafe { optional_string(mant_mandoc_document_date(document)) },
+                alias_target: unsafe {
+                    optional_string(mant_mandoc_document_alias_target(document))
+                },
+                has_body: unsafe { mant_mandoc_document_has_body(document) } != 0,
+            },
+            root: unsafe { copy_node_view(document, root, 0) }?.0,
         },
         diagnostics: unsafe {
             optional_string(mant_mandoc_document_diagnostics(document)).unwrap_or_default()
@@ -643,6 +851,67 @@ unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
     })
 }
 
+unsafe fn copy_node_view(
+    document: *mut CDocument,
+    pointer: *const CNode,
+    depth: usize,
+) -> Result<(Node, *const CNode), String> {
+    let mut view = std::mem::MaybeUninit::<CNodeView>::uninit();
+    if unsafe { mant_mandoc_node_snapshot(document, pointer, view.as_mut_ptr()) } == 0 {
+        return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
+    }
+    let view = unsafe { view.assume_init() };
+    let text = unsafe { optional_string(view.text) };
+    let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
+    let enclosure_open = unsafe { optional_string(view.enclosure_open) };
+    let enclosure_close = unsafe { optional_string(view.enclosure_close) };
+    let mut node = Node {
+        kind: node_kind(view.kind)?,
+        macro_name: unsafe { optional_string(view.macro_name) },
+        text,
+        tag: unsafe { optional_string(view.tag) },
+        line: view.line.try_into().unwrap_or_default(),
+        column: view.column.try_into().unwrap_or_default(),
+        flags: NodeFlags {
+            generated: view.flags & NODE_GENERATED != 0,
+            sentence_end: view.flags & NODE_SENTENCE_END != 0,
+            no_print: view.flags & NODE_NO_PRINT != 0,
+            no_fill: view.flags & NODE_NO_FILL != 0,
+            deep_link_target: view.flags & NODE_DEEP_LINK_TARGET != 0,
+            permalink: view.flags & NODE_PERMALINK != 0,
+            line_start: view.flags & NODE_LINE_START != 0,
+            delimiter_open: view.flags & NODE_DELIMITER_OPEN != 0,
+            delimiter_close: view.flags & NODE_DELIMITER_CLOSE != 0,
+            synopsis_pretty: view.flags & NODE_SYNOPSIS_PRETTY != 0,
+            line_continuation,
+        },
+        list_kind: list_kind(view.list_kind)?,
+        display_kind: display_kind(view.display_kind)?,
+        font: font_kind(view.font_kind)?,
+        author_mode: author_mode(view.author_mode)?,
+        enclosure: enclosure_open.map(|opening| NormalizedEnclosure {
+            opening,
+            closing: enclosure_close,
+        }),
+        compact: view.compact != 0,
+        offset: unsafe { optional_string(view.offset) },
+        width: unsafe { optional_string(view.width) },
+        table_cells: unsafe { copy_table_cell_views(document, view.table_cells) }?,
+        equation: unsafe { optional_string(view.equation) },
+        children: Vec::new(),
+    };
+
+    if depth + 1 < MAX_OWNED_NODE_DEPTH {
+        let mut child = view.child;
+        while !child.is_null() {
+            let (owned, next) = unsafe { copy_node_view(document, child, depth + 1) }?;
+            node.children.push(owned);
+            child = next;
+        }
+    }
+    Ok((node, view.next))
+}
+
 /// Match libmandoc's `man_hasc`: only an unescaped final `\c` continues the
 /// input line. An odd number of immediately preceding backslashes escapes the
 /// candidate backslash instead.
@@ -684,4 +953,172 @@ unsafe fn copy_table_cells(mut pointer: *const CTableCell) -> Vec<TableCell> {
         pointer = unsafe { mant_mandoc_table_cell_next(pointer) };
     }
     cells
+}
+
+unsafe fn copy_table_cell_views(
+    document: *const CDocument,
+    mut pointer: *const CTableCell,
+) -> Result<Vec<TableCell>, String> {
+    let mut cells = Vec::new();
+    while !pointer.is_null() {
+        let mut view = std::mem::MaybeUninit::<CTableCellView>::uninit();
+        if unsafe { mant_mandoc_table_cell_snapshot(document, pointer, view.as_mut_ptr()) } == 0 {
+            return Err("libmandoc returned an invalid borrowed table cell".to_owned());
+        }
+        let view = unsafe { view.assume_init() };
+        cells.push(TableCell {
+            text: unsafe { optional_string(view.text) },
+            text_block: view.text_block != 0,
+            vertical_continuation: view.vertical_continuation != 0,
+            column_span: view.column_span.try_into().unwrap_or(u16::MAX),
+            row_span: view.row_span.try_into().unwrap_or(u16::MAX),
+            alignment: match view.alignment {
+                1 => TableAlignment::Center,
+                2 => TableAlignment::Right,
+                _ => TableAlignment::Left,
+            },
+        });
+        pointer = view.next;
+    }
+    Ok(cells)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        ffi::CString,
+        fs,
+        io::Read,
+        path::{Path, PathBuf},
+    };
+
+    use flate2::read::MultiGzDecoder;
+
+    use super::{InputFormat, parse_buffer, parse_buffer_view};
+
+    #[test]
+    fn borrowed_views_match_the_owned_c_mirror_for_semantic_edges() {
+        compare_transfers(
+            "semantic-man.1",
+            br".TH TRANSFER 1
+.SH NAME
+transfer \- ownership boundary
+.TS
+tab(|);
+l l.
+left|right
+.TE
+.EQ
+x sup 2
+.EN
+",
+        );
+        compare_transfers(
+            "semantic-mdoc.1",
+            br".Dd August 23, 2026
+.Dt TRANSFER 1
+.Os
+.Sh NAME
+.Nm transfer
+.Nd ownership boundary
+.Bl -bullet -compact -offset indent -width Ds
+.It item
+.El
+.Bd -literal -offset indent
+literal display
+.Ed
+.Bf -emphasis
+emphasis
+.Ef
+.Es ( )
+.En wrapped
+.An -split
+",
+        );
+
+        let mut nested = String::from(".TH DEEP 1\n");
+        for _ in 0..300 {
+            nested.push_str(".RS\n");
+        }
+        nested.push_str("bounded\n");
+        for _ in 0..300 {
+            nested.push_str(".RE\n");
+        }
+        compare_transfers("deep.1", nested.as_bytes());
+    }
+
+    #[test]
+    fn borrowed_views_match_the_owned_c_mirror_for_real_fixtures() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("tests/fixtures/roff/real");
+        if !root.is_dir() {
+            return;
+        }
+        let mut fixtures = Vec::new();
+        collect_manuals(&root, &mut fixtures);
+        fixtures.sort();
+        assert!(
+            fixtures.len() >= 20,
+            "the repository fixture corpus unexpectedly contains only {} manuals",
+            fixtures.len()
+        );
+        for fixture in fixtures {
+            let source = read_fixture(&fixture);
+            compare_transfers(&fixture.to_string_lossy(), &source);
+        }
+    }
+
+    fn compare_transfers(label: &str, source: &[u8]) {
+        let path = CString::new(label).expect("fixture labels contain no NUL bytes");
+        let legacy = parse_buffer(&path, source, None, false, InputFormat::Auto)
+            .unwrap_or_else(|error| panic!("legacy transfer failed for {label}: {error}"));
+        let borrowed = parse_buffer_view(&path, source, None, false, InputFormat::Auto)
+            .unwrap_or_else(|error| panic!("borrowed transfer failed for {label}: {error}"));
+        assert_eq!(
+            borrowed.document, legacy.document,
+            "owned syntax tree differs for {label}"
+        );
+        assert_eq!(
+            borrowed.diagnostics, legacy.diagnostics,
+            "diagnostics differ for {label}"
+        );
+    }
+
+    fn collect_manuals(directory: &Path, output: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(directory).expect("read real fixture directory") {
+            let path = entry.expect("read fixture entry").path();
+            if path.is_dir() {
+                collect_manuals(&path, output);
+            } else if is_manual(&path) {
+                output.push(path);
+            }
+        }
+    }
+
+    fn is_manual(path: &Path) -> bool {
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                matches!(extension, "gz" | "zst")
+                    || extension.as_bytes().first().is_some_and(u8::is_ascii_digit)
+            })
+    }
+
+    fn read_fixture(path: &Path) -> Vec<u8> {
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("gz") => {
+                let mut decoded = Vec::new();
+                MultiGzDecoder::new(fs::File::open(path).expect("open gzip fixture"))
+                    .read_to_end(&mut decoded)
+                    .expect("decode gzip fixture");
+                decoded
+            }
+            Some("zst") => {
+                zstd::stream::decode_all(fs::File::open(path).expect("open zstd fixture"))
+                    .expect("decode zstd fixture")
+            }
+            _ => fs::read(path).expect("read plain fixture"),
+        }
+    }
 }

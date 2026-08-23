@@ -2,9 +2,9 @@
  * Owned compatibility layer for the pinned libmandoc parser.
  *
  * libmandoc's syntax tree and diagnostic writer are private implementation
- * details with session-local lifetime. Copying a completed parse into these
- * small opaque structures lets Rust release the parser before crossing the
- * FFI boundary.
+ * details with session-local lifetime. The legacy path copies them into small
+ * opaque structures; the view path retains the parser only while Rust copies
+ * borrowed snapshots into its owned public tree.
  */
 #include "config.h"
 #include "mant_thread_local.h"
@@ -87,6 +87,9 @@ struct mant_mandoc_document {
 	char			*alias_target;
 	int			 has_body;
 	struct mant_mandoc_node	*root;
+	struct mparse		*view_parser;
+	const struct roff_node	*view_root;
+	char			*view_equation;
 #ifdef MANT_MANDOC_RENDER
 	struct mant_mandoc_output *output;
 	int			 render_status;
@@ -157,11 +160,14 @@ set_mant_progname(void)
 static char *copy_string(const char *);
 static struct mant_mandoc_document *parse_input(const char *,
     const unsigned char *, size_t, const char *, int, int, int, size_t,
-    int, size_t, mant_mandoc_source_resolver, void *);
+    int, size_t, mant_mandoc_source_resolver, void *, int);
+static struct mant_mandoc_document *parse_bundle_mode(const char *,
+    const struct mant_mandoc_source *, size_t, int, int);
 static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
 static int is_safe_bundle_path(const char *);
 static struct mant_mandoc_node *copy_node(const struct roff_node *, int);
+static unsigned int snapshot_node_flags(const struct roff_node *);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
 #ifndef MANDOC_MEMORY_ONLY
@@ -173,6 +179,8 @@ static int open_beside_source(const char *, int, mode_t);
 static int is_safe_relative_path(const char *);
 #endif
 static void copy_normalized_data(struct mant_mandoc_node *,
+    const struct roff_node *);
+static void snapshot_normalized_data(struct mant_mandoc_node_view *,
     const struct roff_node *);
 static struct mant_mandoc_table_cell *copy_table_cells(
     const struct tbl_span *);
@@ -188,7 +196,7 @@ mant_mandoc_parse_file(const char *path, const char *include_root,
     int allow_include, int input_format)
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, 0, 0, 0, 0, NULL, NULL);
+	    input_format, 0, 0, 0, 0, NULL, NULL, 0);
 }
 
 struct mant_mandoc_document *
@@ -198,13 +206,47 @@ mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
     void *resolver_context)
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format, 0, 0, 0, 0, resolver, resolver_context);
+	    input_format, 0, 0, 0, 0, resolver, resolver_context, 0);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_parse_bundle(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
     int input_format)
+{
+	return parse_bundle_mode(root, sources, source_count, input_format, 0);
+}
+
+struct mant_mandoc_document *
+mant_mandoc_parse_file_view(const char *path, const char *include_root,
+    int allow_include, int input_format)
+{
+	return parse_input(path, NULL, 0, include_root, allow_include,
+	    input_format, 0, 0, 0, 0, NULL, NULL, 1);
+}
+
+struct mant_mandoc_document *
+mant_mandoc_parse_buffer_view(const char *path,
+    const unsigned char *buffer, size_t length, const char *include_root,
+    int allow_include, int input_format,
+    mant_mandoc_source_resolver resolver, void *resolver_context)
+{
+	return parse_input(path, buffer, length, include_root, allow_include,
+	    input_format, 0, 0, 0, 0, resolver, resolver_context, 1);
+}
+
+struct mant_mandoc_document *
+mant_mandoc_parse_bundle_view(const char *root,
+    const struct mant_mandoc_source *sources, size_t source_count,
+    int input_format)
+{
+	return parse_bundle_mode(root, sources, source_count, input_format, 1);
+}
+
+static struct mant_mandoc_document *
+parse_bundle_mode(const char *root,
+    const struct mant_mandoc_source *sources, size_t source_count,
+    int input_format, int retain_parser)
 {
 	const struct mant_mandoc_source	*source;
 	struct mant_mandoc_document	*document;
@@ -232,7 +274,8 @@ mant_mandoc_parse_bundle(const char *root,
 			    "source bundle does not contain the requested root");
 	} else
 		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format, 0, 0, 0, 0, NULL, NULL);
+		    NULL, 1, input_format, 0, 0, 0, 0, NULL, NULL,
+		    retain_parser);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
 	return document;
@@ -243,7 +286,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
     const char *include_root, int allow_include, int input_format,
     int render_format, size_t render_width, int html_fragment,
     size_t output_limit, mant_mandoc_source_resolver resolver,
-    void *resolver_context)
+    void *resolver_context, int retain_parser)
 {
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
@@ -360,8 +403,15 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		document->date = copy_string(meta->date);
 		document->alias_target = copy_string(meta->sodest);
 		document->has_body = document_has_body(meta);
-		document->root = copy_node(meta->first, 0);
-		document->ok = document->root != NULL;
+		if (retain_parser) {
+			document->view_parser = parser;
+			document->view_root = meta->first;
+			parser = NULL;
+			document->ok = document->view_root != NULL;
+		} else {
+			document->root = copy_node(meta->first, 0);
+			document->ok = document->root != NULL;
+		}
 		if (!document->ok)
 			document->error = copy_string(
 			    "libmandoc produced no syntax tree");
@@ -376,7 +426,8 @@ cleanup:
 		document->diagnostics = read_diagnostics(messages);
 		fclose(messages);
 	}
-	mparse_free(parser);
+	if (parser != NULL)
+		mparse_free(parser);
 	mchars_free();
 	source_resolver = NULL;
 	source_resolver_context = NULL;
@@ -400,7 +451,7 @@ mant_mandoc_render_file(const char *path, const char *include_root,
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
 	    input_format, render_format, render_width, html_fragment,
-	    output_limit, NULL, NULL);
+	    output_limit, NULL, NULL, 0);
 }
 
 struct mant_mandoc_document *
@@ -412,7 +463,7 @@ mant_mandoc_render_buffer(const char *path, const unsigned char *buffer,
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
 	    input_format, render_format, render_width, html_fragment,
-	    output_limit, resolver, resolver_context);
+	    output_limit, resolver, resolver_context, 0);
 }
 
 struct mant_mandoc_document *
@@ -445,7 +496,7 @@ mant_mandoc_render_bundle(const char *root,
 	} else
 		document = parse_input(root, source->data, source->length,
 		    NULL, 1, input_format, render_format, render_width,
-		    html_fragment, output_limit, NULL, NULL);
+		    html_fragment, output_limit, NULL, NULL, 0);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
 	return document;
@@ -875,6 +926,9 @@ mant_mandoc_document_free(struct mant_mandoc_document *document)
 	free(document->date);
 	free(document->alias_target);
 	free_node(document->root);
+	free(document->view_equation);
+	if (document->view_parser != NULL)
+		mparse_free(document->view_parser);
 #ifdef MANT_MANDOC_RENDER
 	mant_mandoc_output_free(document->output);
 #endif
@@ -1018,26 +1072,7 @@ copy_node(const struct roff_node *source, int depth)
 		node->table_cells = copy_table_cells(source->span);
 	else if (source->type == ROFFT_EQN)
 		node->equation = copy_equation(source->eqn);
-	if (source->flags & NODE_NOSRC)
-		node->flags |= MANT_MANDOC_NODE_GENERATED;
-	if (source->flags & NODE_EOS)
-		node->flags |= MANT_MANDOC_NODE_SENTENCE_END;
-	if (source->flags & NODE_NOPRT)
-		node->flags |= MANT_MANDOC_NODE_NO_PRINT;
-	if (source->flags & NODE_NOFILL)
-		node->flags |= MANT_MANDOC_NODE_NO_FILL;
-	if (source->flags & NODE_ID)
-		node->flags |= MANT_MANDOC_NODE_DEEP_LINK_TARGET;
-	if (source->flags & NODE_HREF)
-		node->flags |= MANT_MANDOC_NODE_PERMALINK;
-	if (source->flags & NODE_LINE)
-		node->flags |= MANT_MANDOC_NODE_LINE_START;
-	if (source->flags & NODE_DELIMO)
-		node->flags |= MANT_MANDOC_NODE_DELIMITER_OPEN;
-	if (source->flags & NODE_DELIMC)
-		node->flags |= MANT_MANDOC_NODE_DELIMITER_CLOSE;
-	if (source->flags & NODE_SYNPRETTY)
-		node->flags |= MANT_MANDOC_NODE_SYNOPSIS_PRETTY;
+	node->flags = snapshot_node_flags(source);
 
 	next_child = &node->child;
 	for (source_child = source->child; source_child != NULL;
@@ -1048,6 +1083,35 @@ copy_node(const struct roff_node *source, int depth)
 		next_child = &(*next_child)->next;
 	}
 	return node;
+}
+
+static unsigned int
+snapshot_node_flags(const struct roff_node *source)
+{
+	unsigned int flags;
+
+	flags = 0;
+	if (source->flags & NODE_NOSRC)
+		flags |= MANT_MANDOC_NODE_GENERATED;
+	if (source->flags & NODE_EOS)
+		flags |= MANT_MANDOC_NODE_SENTENCE_END;
+	if (source->flags & NODE_NOPRT)
+		flags |= MANT_MANDOC_NODE_NO_PRINT;
+	if (source->flags & NODE_NOFILL)
+		flags |= MANT_MANDOC_NODE_NO_FILL;
+	if (source->flags & NODE_ID)
+		flags |= MANT_MANDOC_NODE_DEEP_LINK_TARGET;
+	if (source->flags & NODE_HREF)
+		flags |= MANT_MANDOC_NODE_PERMALINK;
+	if (source->flags & NODE_LINE)
+		flags |= MANT_MANDOC_NODE_LINE_START;
+	if (source->flags & NODE_DELIMO)
+		flags |= MANT_MANDOC_NODE_DELIMITER_OPEN;
+	if (source->flags & NODE_DELIMC)
+		flags |= MANT_MANDOC_NODE_DELIMITER_CLOSE;
+	if (source->flags & NODE_SYNPRETTY)
+		flags |= MANT_MANDOC_NODE_SYNOPSIS_PRETTY;
+	return flags;
 }
 
 static void
@@ -1239,50 +1303,69 @@ static void
 copy_normalized_data(struct mant_mandoc_node *node,
     const struct roff_node *source)
 {
+	struct mant_mandoc_node_view view;
+
+	memset(&view, 0, sizeof(view));
+	snapshot_normalized_data(&view, source);
+	node->list_kind = view.list_kind;
+	node->display_kind = view.display_kind;
+	node->font_kind = view.font_kind;
+	node->author_mode = view.author_mode;
+	node->compact = view.compact;
+	node->offset = copy_string(view.offset);
+	node->width = copy_string(view.width);
+	node->enclosure_open = copy_string(view.enclosure_open);
+	node->enclosure_close = copy_string(view.enclosure_close);
+}
+
+static void
+snapshot_normalized_data(struct mant_mandoc_node_view *view,
+    const struct roff_node *source)
+{
 	if (source->norm == NULL)
 		return;
 	if (source->tok == MDOC_Bl) {
-		node->compact = source->norm->Bl.comp;
-		node->offset = copy_string(source->norm->Bl.offs);
-		node->width = copy_string(source->norm->Bl.width);
+		view->compact = source->norm->Bl.comp;
+		view->offset = source->norm->Bl.offs;
+		view->width = source->norm->Bl.width;
 		switch (source->norm->Bl.type) {
 		case LIST_bullet:
 		case LIST_dash:
 		case LIST_hyphen:
-			node->list_kind = MANT_MANDOC_LIST_BULLET;
+			view->list_kind = MANT_MANDOC_LIST_BULLET;
 			break;
 		case LIST_enum:
-			node->list_kind = MANT_MANDOC_LIST_ORDERED;
+			view->list_kind = MANT_MANDOC_LIST_ORDERED;
 			break;
 		case LIST_diag:
 		case LIST_hang:
 		case LIST_inset:
 		case LIST_ohang:
 		case LIST_tag:
-			node->list_kind = MANT_MANDOC_LIST_DEFINITION;
+			view->list_kind = MANT_MANDOC_LIST_DEFINITION;
 			break;
 		case LIST_column:
-			node->list_kind = MANT_MANDOC_LIST_COLUMN;
+			view->list_kind = MANT_MANDOC_LIST_COLUMN;
 			break;
 		case LIST_item:
-			node->list_kind = MANT_MANDOC_LIST_PLAIN;
+			view->list_kind = MANT_MANDOC_LIST_PLAIN;
 			break;
 		case LIST__NONE:
 		case LIST_MAX:
 			break;
 		}
 	} else if (source->tok == MDOC_Bd) {
-		node->compact = source->norm->Bd.comp;
-		node->offset = copy_string(source->norm->Bd.offs);
+		view->compact = source->norm->Bd.comp;
+		view->offset = source->norm->Bd.offs;
 		switch (source->norm->Bd.type) {
 		case DISP_unfilled:
 		case DISP_literal:
-			node->display_kind = MANT_MANDOC_DISPLAY_LITERAL;
+			view->display_kind = MANT_MANDOC_DISPLAY_LITERAL;
 			break;
 		case DISP_centered:
 		case DISP_ragged:
 		case DISP_filled:
-			node->display_kind = MANT_MANDOC_DISPLAY_FILLED;
+			view->display_kind = MANT_MANDOC_DISPLAY_FILLED;
 			break;
 		case DISP__NONE:
 			break;
@@ -1290,13 +1373,13 @@ copy_normalized_data(struct mant_mandoc_node *node,
 	} else if (source->tok == MDOC_Bf) {
 		switch (source->norm->Bf.font) {
 		case FONT_Em:
-			node->font_kind = MANT_MANDOC_FONT_EMPHASIS;
+			view->font_kind = MANT_MANDOC_FONT_EMPHASIS;
 			break;
 		case FONT_Li:
-			node->font_kind = MANT_MANDOC_FONT_LITERAL;
+			view->font_kind = MANT_MANDOC_FONT_LITERAL;
 			break;
 		case FONT_Sy:
-			node->font_kind = MANT_MANDOC_FONT_SYMBOLIC;
+			view->font_kind = MANT_MANDOC_FONT_SYMBOLIC;
 			break;
 		case FONT__NONE:
 			break;
@@ -1304,21 +1387,20 @@ copy_normalized_data(struct mant_mandoc_node *node,
 	} else if (source->tok == MDOC_An) {
 		switch (source->norm->An.auth) {
 		case AUTH_split:
-			node->author_mode = MANT_MANDOC_AUTHOR_SPLIT;
+			view->author_mode = MANT_MANDOC_AUTHOR_SPLIT;
 			break;
 		case AUTH_nosplit:
-			node->author_mode = MANT_MANDOC_AUTHOR_NOSPLIT;
+			view->author_mode = MANT_MANDOC_AUTHOR_NOSPLIT;
 			break;
 		case AUTH__NONE:
 			break;
 		}
 	} else if (source->tok == MDOC_En && source->norm->Es != NULL &&
 	    source->norm->Es->child != NULL) {
-		node->enclosure_open =
-		    copy_string(source->norm->Es->child->string);
+		view->enclosure_open = source->norm->Es->child->string;
 		if (source->norm->Es->child->next != NULL)
-			node->enclosure_close =
-			    copy_string(source->norm->Es->child->next->string);
+			view->enclosure_close =
+			    source->norm->Es->child->next->string;
 	}
 }
 
@@ -1361,6 +1443,81 @@ const struct mant_mandoc_node *
 mant_mandoc_document_root(const struct mant_mandoc_document *document)
 {
 	return document == NULL ? NULL : document->root;
+}
+
+const struct mant_mandoc_node *
+mant_mandoc_document_view_root(const struct mant_mandoc_document *document)
+{
+	return document == NULL ? NULL :
+	    (const struct mant_mandoc_node *)document->view_root;
+}
+
+int
+mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
+    const struct mant_mandoc_node *node,
+    struct mant_mandoc_node_view *view)
+{
+	const struct roff_node *source;
+
+	if (document == NULL || document->view_parser == NULL || node == NULL ||
+	    view == NULL)
+		return 0;
+	source = (const struct roff_node *)node;
+	memset(view, 0, sizeof(*view));
+	view->kind = (int)source->type;
+	if (source->type != ROFFT_ROOT && source->tok != TOKEN_NONE)
+		view->macro_name = roff_name[source->tok];
+	if (source->type == ROFFT_TEXT || source->type == ROFFT_COMMENT)
+		view->text = source->string;
+	view->tag = source->tag;
+	view->line = source->line;
+	view->column = source->pos + 1;
+	view->flags = snapshot_node_flags(source);
+	snapshot_normalized_data(view, source);
+	if (source->type == ROFFT_TBL && source->span != NULL &&
+	    source->span->pos == TBL_SPAN_DATA)
+		view->table_cells =
+		    (const struct mant_mandoc_table_cell *)source->span->first;
+	else if (source->type == ROFFT_EQN) {
+		free(document->view_equation);
+		document->view_equation = copy_equation(source->eqn);
+		view->equation = document->view_equation;
+	}
+	view->child = (const struct mant_mandoc_node *)source->child;
+	view->next = (const struct mant_mandoc_node *)source->next;
+	return 1;
+}
+
+int
+mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
+    const struct mant_mandoc_table_cell *cell,
+    struct mant_mandoc_table_cell_view *view)
+{
+	const struct tbl_dat *source;
+
+	if (document == NULL || document->view_parser == NULL || cell == NULL ||
+	    view == NULL)
+		return 0;
+	source = (const struct tbl_dat *)cell;
+	memset(view, 0, sizeof(*view));
+	view->text = source->string;
+	view->text_block = source->block;
+	view->vertical_continuation =
+	    (source->layout != NULL && source->layout->pos == TBL_CELL_DOWN) ||
+	    (source->string != NULL && !strcmp(source->string, "\\^"));
+	view->column_span = source->hspans < 0 ? 1U :
+	    (unsigned int)source->hspans + 1U;
+	view->row_span = source->vspans < 0 ? 1U :
+	    (unsigned int)source->vspans + 1U;
+	if (source->layout != NULL &&
+	    source->layout->pos == TBL_CELL_CENTRE)
+		view->alignment = 1;
+	else if (source->layout != NULL &&
+	    (source->layout->pos == TBL_CELL_RIGHT ||
+	     source->layout->pos == TBL_CELL_NUMBER))
+		view->alignment = 2;
+	view->next = (const struct mant_mandoc_table_cell *)source->next;
+	return 1;
 }
 
 #ifdef MANT_MANDOC_RENDER
