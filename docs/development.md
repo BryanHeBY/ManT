@@ -464,7 +464,15 @@ The full oracle is a local and release-time discovery tool, not a per-push CI de
 
 Every new corpus expansion also has a manual review budget. Inspect every `REVIEW` and `HARD` result, then inspect representative clean pages that collectively cover the corpus's table forms, no-fill or display content, font changes, links or includes, and its dominant macro dialect (`man` or `mdoc`). Compare the source, the reference renderer, ManT text, and the structured result when a layout difference could hide an IR error. Record each candidate's durable conclusion in `FIDELITY_AUDIT.csv`; record the corpus-level scope and any confirmed fixes in `tests/fixtures/roff/FIDELITY_AUDIT.md`. When that review establishes that ManT preserves the source semantics more usefully than the observed terminal reference, add the exact source-hash-specific evidence to `tests/fixtures/roff/REFERENCE_RENDERER_DEVIATIONS.csv` instead of loosely calling the host formatter “wrong”. This makes the ledger evidence of both automated breadth and deliberate human inspection without turning host-specific presentation into a CI gate.
 
-For the aligned mandoc route, use the exact `reference_id` plus `-T utf8 -O width=200` in the deviation row. The coverage check then requires that current-renderer evidence to match a `review`/`false-positive` row in `MANDOC_FIDELITY_AUDIT.csv`; ordinary wrapping, equivalent tokenization, repeated instances of an existing class, and deliberate ManT layout policy do not qualify.
+Prefer complete, immutable release artifacts for permanent corpus rows.
+Rolling `current`, snapshot, and ports trees are useful bounded exploration,
+but keep their CSVs and review bundles under `/tmp` because their identities
+rotate. Record the verified artifact/build identity and aggregate result in the
+audit guide. Promote only a confirmed defect's exact licensed source and
+focused regression, or replay the whole tree under a stable release identity,
+into the repository ledgers.
+
+For the aligned mandoc route, use the exact `reference_id` plus `-T utf8 -O width=200` in the deviation row. The coverage check then requires that current-renderer evidence to match either a reviewed `false-positive` comparison or a `confirmed-fixed` source conclusion in `MANDOC_FIDELITY_AUDIT.csv`; ordinary wrapping, equivalent tokenization, repeated instances of an existing class, and deliberate ManT layout policy do not qualify.
 
 The audit routes share an explicit source-identity baseline rather than merely
 similar row counts. Structure and CommonMark projection cover every recorded

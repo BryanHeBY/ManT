@@ -18,6 +18,9 @@ that crate was not published for that change.
   multiple parameters to a block-form function declaration.
 - Keep later `tbl` text-block cells aligned when an earlier empty `T{ T}` cell
   is normalized away by libmandoc.
+- Carry an outer mdoc `.Sm off` state into preformatted displays, decode the
+  NetBSD `\\[vc]` named character, and retain visible digits immediately after
+  signed legacy `\\s` size escapes.
 
 ### libmandoc-rs
 
@@ -34,6 +37,9 @@ that crate was not published for that change.
   relative and gzip-compressed `.so` targets, and keeps `SourceTree` Unix-only.
 - Resolve same-directory `.so` targets correctly when both the approved root
   and top-level Windows source path are relative to the process directory.
+- Preserve populated `.TP`/`.TQ` heads ending in a `\\c` continuation when a
+  following tag starts, so long and short option spellings remain aliases
+  instead of deleting the first tag.
 - The new APIs are additive within the `0.9` compatibility line. A publication
   version will be assigned independently when this crate is released.
 
