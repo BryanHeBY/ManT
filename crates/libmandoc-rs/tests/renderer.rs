@@ -48,10 +48,8 @@ fn html_mdoc_output_matches_the_pinned_renderer_golden() {
         .with_html_fragment(true)
         .render_bytes("hello.1", MDOC_SOURCE)
         .expect("render mdoc fixture");
-    assert_eq!(
-        report.output,
-        include_str!("fixtures/render-mdoc-fragment.html")
-    );
+    let expected = include_str!("fixtures/render-mdoc-fragment.html").replace("\r\n", "\n");
+    assert_eq!(report.output, expected);
 }
 
 #[test]
