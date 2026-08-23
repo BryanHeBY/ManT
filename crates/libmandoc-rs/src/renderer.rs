@@ -22,6 +22,9 @@ use crate::{
 /// Default maximum bytes retained for one render call.
 pub const DEFAULT_RENDER_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 
+/// Default terminal width used by ASCII and UTF-8 output.
+pub const DEFAULT_RENDER_WIDTH: usize = 78;
+
 /// Hard maximum accepted output budget for one render call.
 pub const MAX_RENDER_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
 
@@ -34,7 +37,7 @@ pub const MAX_RENDER_WIDTH: usize = 1_000;
 /// Reference output format produced by [`Renderer`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RenderFormat {
-    /// Portable 7-bit terminal text with no control sequences.
+    /// Portable 7-bit terminal text using backspace overstrikes for styling.
     Ascii,
     /// Deterministic UTF-8 terminal text with Unicode cell widths.
     Utf8,
@@ -113,7 +116,7 @@ impl Renderer {
         Self {
             parser: Parser::default(),
             format,
-            width: 78,
+            width: DEFAULT_RENDER_WIDTH,
             max_output_bytes: DEFAULT_RENDER_OUTPUT_BYTES,
             html_fragment: false,
         }

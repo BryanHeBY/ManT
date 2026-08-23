@@ -25,8 +25,8 @@ pub use parser::{
 };
 #[cfg(feature = "render")]
 pub use renderer::{
-    DEFAULT_RENDER_OUTPUT_BYTES, MAX_RENDER_OUTPUT_BYTES, MAX_RENDER_WIDTH, MIN_RENDER_WIDTH,
-    RenderError, RenderErrorKind, RenderFormat, RenderReport, Renderer,
+    DEFAULT_RENDER_OUTPUT_BYTES, DEFAULT_RENDER_WIDTH, MAX_RENDER_OUTPUT_BYTES, MAX_RENDER_WIDTH,
+    MIN_RENDER_WIDTH, RenderError, RenderErrorKind, RenderFormat, RenderReport, Renderer,
 };
 pub use source_bundle::{
     MAX_SOURCE_BUNDLE_BYTES, MAX_SOURCE_BUNDLE_FILE_BYTES, MAX_SOURCE_BUNDLE_FILES, SourceBundle,
