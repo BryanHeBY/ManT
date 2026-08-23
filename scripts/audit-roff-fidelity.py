@@ -35,6 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_MANT = ROOT / "target/debug/mant"
 DEFAULT_SYNTAX_PROFILER = ROOT / "target/debug/examples/roff_ast_profile"
+DEFAULT_SOURCE_LEDGER = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
 SYNTAX_PROFILE_SCHEMA = "mant.roff-ast-profile/v2"
 SYNTAX_CACHE_VERSION = 3
 AUDIT_DATABASE_FIELDS = [
@@ -61,7 +62,7 @@ TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+:/-]{2,}")
 # slash at the end of an unrelated token (for example Perl's `tr//` followed
 # by a new sentence) must not consume the semantic line boundary.
 URL_WRAP = re.compile(
-    r"(https?://[^\s\n]*/)[ \t]*\n[ \t]*(?=[^\s\n]*[./_~?&=%-])"
+    r"(https?://[^\s\n]*/)[ \t]*\n[ \t]*(?=[A-Za-z0-9%_~?&=][^\s\n]*[./_~?&=%-])"
 )
 DEHYPHENATE = re.compile(r"-[ \t]*\n[ \t]*")
 BORDERS = re.compile(r"[\u2500-\u257f\u2022\u00b7]")
@@ -239,6 +240,24 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
             "audit the newline-delimited absolute manual paths in FILE; "
             "bypass discovery sampling and ledger selection while retaining "
             "the selected source roots"
+        ),
+    )
+    parser.add_argument(
+        "--replay-source-records",
+        action="store_true",
+        help=(
+            "audit exactly the unchanged source identities recorded for "
+            "--corpus in --source-ledger"
+        ),
+    )
+    parser.add_argument(
+        "--source-ledger",
+        type=Path,
+        default=DEFAULT_SOURCE_LEDGER,
+        metavar="FILE",
+        help=(
+            "historical source-identity ledger used only with "
+            f"--replay-source-records (default: {DEFAULT_SOURCE_LEDGER.relative_to(ROOT)})"
         ),
     )
     parser.add_argument(
@@ -994,6 +1013,72 @@ def token_lines(value: str) -> list[list[str]]:
     return [TOKEN.findall(line) for line in value.splitlines()]
 
 
+def labeled_mdoc_links(source: str) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Return ``.Lk`` destinations whose authored label remains visible.
+
+    Mandoc's terminal renderer appends a labelled link's destination after
+    the label, while ManT's text projection keeps the destination in the link
+    object and prints only its authored label.  This is not a fidelity loss.
+    Keep the label tokens as a line-local guard so an unlabelled occurrence of
+    the same URL is never ignored.
+    """
+    links = []
+    logical_lines = []
+    continued = ""
+    for physical_line in source.splitlines():
+        continued += physical_line
+        if continued.endswith("\\"):
+            continued = continued[:-1]
+            continue
+        logical_lines.append(continued)
+        continued = ""
+    if continued:
+        logical_lines.append(continued)
+
+    for line in logical_lines:
+        if not line.startswith((".", "'")):
+            continue
+        match = re.search(
+            r"(?:^[.']Lk|[ \t]Lk)[ \t]+(?:\"([^\"]+)\"|(\S+))(?:[ \t]+(.*))?$",
+            line,
+        )
+        if match is None:
+            continue
+        destination = match.group(1) or match.group(2)
+        label = (match.group(3) or "").strip()
+        # A final punctuation operand is formatter syntax, not a link label.
+        label = re.sub(r"(?:^|[ \t]+)[.,:;!?]$", "", label).strip()
+        # These transparent source escapes change neither the authored label
+        # nor mandoc's visible token boundaries.
+        label = label.replace(r"\-", "-").replace(r"\&", "")
+        label_tokens = tuple(token_key(value) for value in tokens(label))
+        destination_tokens = tuple(token_key(value) for value in tokens(destination))
+        if destination_tokens and label_tokens:
+            links.append((destination_tokens, label_tokens))
+    return links
+
+
+def omit_mandoc_labeled_link_destinations(
+    lines: Sequence[Sequence[str]], source: str
+) -> list[list[str]]:
+    """Drop mandoc-only URL display tokens beside their authored labels."""
+    labeled_links = labeled_mdoc_links(source)
+    output = []
+    for line in lines:
+        keys = [token_key(value) for value in line]
+        omitted = {
+            destination
+            for destinations, label in labeled_links
+            for destination in destinations
+            if all(value in keys for value in destinations)
+            and all(value in keys for value in label)
+        }
+        output.append(
+            [value for value in line if token_key(value) not in omitted]
+        )
+    return output
+
+
 @dataclass(frozen=True)
 class LayoutLine:
     number: int
@@ -1514,6 +1599,29 @@ def source_is_context_independent(path: Path) -> bool:
     return source is not None and source_bytes_are_context_independent(source)
 
 
+def read_source_identities(path: Path, corpus: str) -> set[tuple[str, str]]:
+    """Read exact path/hash targets from the historical groff breadth ledger."""
+    if not path.is_file():
+        raise ValueError(f"source ledger does not exist: {path}")
+    identities = set()
+    with path.open(encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != AUDIT_DATABASE_FIELDS:
+            raise ValueError(
+                f"invalid source ledger header in {path}; expected "
+                f"{','.join(AUDIT_DATABASE_FIELDS)}"
+            )
+        for number, row in enumerate(reader, 2):
+            digest = row["source_sha256"]
+            if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError(f"invalid source digest at {path}:{number}")
+            if row["corpus"] == corpus:
+                identities.add((row["path"], digest))
+    if not identities:
+        raise ValueError(f"source ledger {path} has no rows for corpus {corpus!r}")
+    return identities
+
+
 def source_bytes_are_context_independent(source: bytes) -> bool:
     return EXTERNAL_ROFF_CONTEXT.search(source) is None
 
@@ -1900,6 +2008,11 @@ def audit_page(
 
     reference_output = strip_reference_chrome(reference_output)
     reference_lines = token_lines(reference_output)
+    if reference_kind == "mandoc" and raw_source is not None:
+        reference_lines = omit_mandoc_labeled_link_destinations(
+            reference_lines,
+            raw_source.decode("utf-8", errors="replace"),
+        )
     reference_tokens = [value for line in reference_lines for value in line]
     mant_tokens = tokens(mant_output)
     if not reference_tokens:
@@ -2282,6 +2395,32 @@ def self_check() -> None:
     assert tokens("https://example.test/path/\nnext-part") == [
         "https://example.test/path/next-part"
     ]
+    assert tokens("https://example.test/path/\n- next item") == [
+        "https://example.test/path/",
+        "next",
+        "item",
+    ]
+    labeled_links = labeled_mdoc_links(
+        '.Lk https://example.test/path "Example label" .\n'
+        ".Lk https://example.test/unlabelled\n"
+    )
+    assert labeled_links == [
+        ((token_key("https://example.test/path"),), ("example", "label"))
+    ]
+    assert labeled_mdoc_links(
+        '.Lk https://example.test/continued\\\n "Continued label" .\n'
+        '.Pq Lk decode.html#peer "peer status word" .\n'
+    ) == [
+        (("https://example.test/continued",), ("continued", "label")),
+        (("decode.html", "peer"), ("peer", "status", "word")),
+    ]
+    assert omit_mandoc_labeled_link_destinations(
+        [
+            ["Example", "label:", "https://example.test/path"],
+            ["https://example.test/path"],
+        ],
+        '.Lk https://example.test/path "Example label" .',
+    ) == [["Example", "label:"], ["https://example.test/path"]]
     assert broken_phrase_candidates(
         [["one", "two", "three", "four"]],
         ["one", "two", "inserted", "three", "four"],
@@ -2413,6 +2552,16 @@ def self_check() -> None:
         target.write_bytes(b"not actually compressed")
         assert confined_redirect_target(alias, hierarchy, "man1/target.1") == target
         assert confined_redirect_target(alias, hierarchy, "../outside.1") is None
+        source_ledger = Path(temporary) / "source-ledger.csv"
+        source_ledger.write_text(
+            ",".join(AUDIT_DATABASE_FIELDS)
+            + "\n"
+            + f"known,man/man1/example.1,1,{'2' * 64},clean,not-required,\n",
+            encoding="utf-8",
+        )
+        assert read_source_identities(source_ledger, "known") == {
+            ("man/man1/example.1", "2" * 64)
+        }
     reusable_page = ROOT / "tests/fixtures/roff/nested-fl-mdoc.1"
     reusable_digest = source_digest(reusable_page)
     assert reusable_digest is not None
@@ -2471,6 +2620,8 @@ def main(argv: Sequence[str]) -> int:
             raise ValueError("--pending-only requires --audit-db")
         if arguments.dedupe_across_corpora and arguments.audit_db is None:
             raise ValueError("--dedupe-across-corpora requires --audit-db")
+        if arguments.replay_source_records and not arguments.corpus:
+            raise ValueError("--replay-source-records requires an explicit --corpus")
         if (
             arguments.reference_kind == "mandoc"
             and arguments.audit_db is not None
@@ -2513,6 +2664,18 @@ def main(argv: Sequence[str]) -> int:
                 "--pages-file cannot be combined with sampling, source filters, "
                 "syntax selection, or ledger selection options"
             )
+        if arguments.replay_source_records and (
+            arguments.max_pages
+            or arguments.max_pages_per_section
+            or arguments.man_section
+            or arguments.source_pattern
+            or arguments.syntax_priority
+            or arguments.dedupe_across_corpora
+        ):
+            raise ValueError(
+                "--replay-source-records cannot be combined with sampling, "
+                "source filters, syntax-priority selection, or cross-corpus deduplication"
+            )
         validate_tools(arguments.mant, arguments.reference)
         syntax_enabled = (
             arguments.syntax_priority
@@ -2553,6 +2716,28 @@ def main(argv: Sequence[str]) -> int:
         page_records = {
             path: (relative_label(path, roots), source_digest(path)) for path in pages
         }
+        replay_targets: set[tuple[str, str]] = set()
+        if arguments.replay_source_records:
+            replay_targets = read_source_identities(arguments.source_ledger, corpus)
+            available = {
+                (label, digest)
+                for label, digest in page_records.values()
+                if digest is not None
+            }
+            missing = sorted(replay_targets - available)
+            if missing:
+                examples = ", ".join(
+                    f"{label}@{digest[:12]}" for label, digest in missing[:5]
+                )
+                raise ValueError(
+                    f"selected roots do not reproduce {len(missing)} of "
+                    f"{len(replay_targets)} source identities for {corpus}: {examples}"
+                )
+            pages = [
+                path
+                for path in pages
+                if (page_records[path][0], page_records[path][1]) in replay_targets
+            ]
         cross_corpus_duplicates = (
             reusable_cross_corpus_sources(
                 pages, page_records, database, corpus
@@ -2686,6 +2871,11 @@ def main(argv: Sequence[str]) -> int:
     print(f"  pages:     {len(pages)}")
     if arguments.pages_file:
         print(f"  page set:  {arguments.pages_file}")
+    if arguments.replay_source_records:
+        print(
+            f"  replay:    {len(replay_targets)} exact identities from "
+            f"{arguments.source_ledger}"
+        )
     if arguments.audit_db:
         print(
             f"  audit db:  {arguments.audit_db} "
