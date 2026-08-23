@@ -334,10 +334,12 @@ impl Decoder {
 
     fn take_size_argument(&mut self) -> Option<String> {
         let mut value = String::new();
+        let mut has_sign = false;
         if matches!(
             self.characters.get(self.index),
             Some('+' | '-' | &ASCII_HYPH)
         ) {
+            has_sign = true;
             value.push(self.take_character()?);
         }
 
@@ -355,10 +357,11 @@ impl Decoder {
                 value.push_str(&self.take_delimited_argument().unwrap_or_default());
             }
             '1' | '2' | '3'
-                if self
-                    .characters
-                    .get(self.index + 1)
-                    .is_some_and(char::is_ascii_digit) =>
+                if !has_sign
+                    && self
+                        .characters
+                        .get(self.index + 1)
+                        .is_some_and(char::is_ascii_digit) =>
             {
                 value.push_str(&self.take_counted(2));
             }
@@ -571,6 +574,22 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![Some("2"), Some("-2"), Some("12"), Some("+12"), Some("+3")]
         );
+    }
+
+    #[test]
+    fn signed_legacy_size_consumes_one_digit_before_visible_text() {
+        assert_eq!(
+            decode(r"\s-20000"),
+            vec![
+                RoffInlineEvent::Presentation {
+                    kind: PresentationKind::PointSize,
+                    argument: Some("-2".to_owned()),
+                },
+                RoffInlineEvent::Text("0000".to_owned()),
+            ]
+        );
+        assert_eq!(visible_text(r"\s+300ff"), "00ff");
+        assert_eq!(visible_text(r"\s20000"), "000");
     }
 
     #[test]

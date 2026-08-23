@@ -51,3 +51,14 @@ fn dragonfly_gdb_preserves_consecutive_tp_option_aliases() {
         "aliases={aliases:?}"
     );
 }
+
+#[test]
+fn openbsd_term_preserves_digits_after_a_signed_legacy_size() {
+    let document = bsd_manual("openbsd-current-term");
+    let example = block_slice_text(&section(document, "EXAMPLE").blocks);
+
+    assert!(
+        example.contains("0000  1a 01 10 00 02 00 03 00  82 00 31 00 61 64 6d 33"),
+        "example={example:?}"
+    );
+}
