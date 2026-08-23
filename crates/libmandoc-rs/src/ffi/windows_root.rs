@@ -120,13 +120,12 @@ impl RootResolver {
     }
 
     fn open_confined(&mut self, logical: &Path) -> io::Result<File> {
-        let canonical_root = match &self.canonical_root {
-            Some(root) => root.clone(),
-            None => {
-                let root = fs::canonicalize(&self.root)?;
-                self.canonical_root = Some(root.clone());
-                root
-            }
+        let canonical_root = if let Some(root) = &self.canonical_root {
+            root.clone()
+        } else {
+            let root = fs::canonicalize(&self.root)?;
+            self.canonical_root = Some(root.clone());
+            root
         };
         let mut candidate = self.root.clone();
         for component in logical.components() {
