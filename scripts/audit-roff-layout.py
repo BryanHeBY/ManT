@@ -35,6 +35,8 @@ FIDELITY_AUDITOR = ROOT / "scripts/audit-roff-fidelity.py"
 DEFAULT_MANT = ROOT / "target/debug/mant"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/LAYOUT_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
+DEFAULT_MANDOC_AUDIT_DB = ROOT / "tests/fixtures/roff/MANDOC_LAYOUT_AUDIT.csv"
+DEFAULT_MANDOC_FIDELITY_DB = ROOT / "tests/fixtures/roff/MANDOC_FIDELITY_AUDIT.csv"
 LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
 MANUAL_SUFFIX = re.compile(r"\.(?P<section>[1-9][0-9A-Za-z]*|[ln])(?:\.(?:gz|bz2|xz|zst))?$")
 DATABASE_FIELDS = [
@@ -47,6 +49,7 @@ DATABASE_FIELDS = [
     "review_status",
     "note",
 ]
+MANDOC_DATABASE_FIELDS = ["reference_kind", "reference_id", *DATABASE_FIELDS]
 FIDELITY_DATABASE_FIELDS = [
     "corpus",
     "path",
@@ -55,6 +58,11 @@ FIDELITY_DATABASE_FIELDS = [
     "scan_status",
     "review_status",
     "note",
+]
+MANDOC_FIDELITY_DATABASE_FIELDS = [
+    "reference_kind",
+    "reference_id",
+    *FIDELITY_DATABASE_FIELDS,
 ]
 
 
@@ -68,6 +76,8 @@ class AuditRecord:
     scan_status: str
     review_status: str
     note: str
+    reference_kind: str = "man"
+    reference_id: str = ""
 
 
 @dataclass
@@ -133,7 +143,18 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--reference",
         default="man",
         metavar="COMMAND",
-        help="man(1)-compatible reference command (default: man)",
+        help="reference renderer command (default: man)",
+    )
+    parser.add_argument(
+        "--reference-kind",
+        choices=("man", "mandoc"),
+        default="man",
+        help="reference command interface passed to the fidelity auditor",
+    )
+    parser.add_argument(
+        "--reference-id",
+        metavar="IDENTITY",
+        help="stable mandoc renderer/package identity",
     )
     parser.add_argument(
         "--timeout",
@@ -145,11 +166,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--audit-db",
         type=Path,
-        default=DEFAULT_AUDIT_DB,
+        default=None,
         metavar="FILE",
         help=(
-            "independent renderer-layout ledger "
-            f"(default: {DEFAULT_AUDIT_DB.relative_to(ROOT)})"
+            "independent renderer-layout ledger (default selected by "
+            "--reference-kind)"
         ),
     )
     parser.add_argument("--corpus", metavar="NAME", help="stable ledger corpus name")
@@ -180,11 +201,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--fidelity-db",
         type=Path,
-        default=DEFAULT_FIDELITY_DB,
+        default=None,
         metavar="FILE",
         help=(
             "content-fidelity ledger used only with --replay-fidelity-records "
-            f"(default: {DEFAULT_FIDELITY_DB.relative_to(ROOT)})"
+            "(default selected by --reference-kind)"
         ),
     )
     parser.add_argument(
@@ -313,20 +334,36 @@ def stable_sample_by_section(pages: Sequence[Path], maximum: int) -> list[Path]:
     return selected
 
 
-def read_database(path: Path) -> dict[tuple[str, str, str], AuditRecord]:
+def read_database(
+    path: Path,
+    reference_kind: str = "man",
+    reference_id: str = "",
+) -> dict[tuple[str, str, str], AuditRecord]:
     if not path.exists():
         return {}
     entries: dict[tuple[str, str, str], AuditRecord] = {}
     with path.open(encoding="utf-8", newline="") as source:
         reader = csv.DictReader(source)
-        if reader.fieldnames != DATABASE_FIELDS:
+        fields = MANDOC_DATABASE_FIELDS if reference_kind == "mandoc" else DATABASE_FIELDS
+        if reader.fieldnames != fields:
             raise ValueError(
-                f"invalid layout database header in {path}; expected {','.join(DATABASE_FIELDS)}"
+                f"invalid layout database header in {path}; expected {','.join(fields)}"
             )
         for number, row in enumerate(reader, 2):
+            if reference_kind == "mandoc" and (
+                row["reference_kind"] != reference_kind
+                or row["reference_id"] != reference_id
+            ):
+                raise ValueError(
+                    f"mandoc reference identity mismatch at {path}:{number}; "
+                    f"expected {reference_kind}/{reference_id}"
+                )
             if row["layout_schema"] != LAYOUT_SCHEMA:
                 raise ValueError(f"invalid layout schema at {path}:{number}")
-            if row["scan_status"] not in {"clean", "review", "hard-failure"}:
+            statuses = {"clean", "review", "hard-failure"}
+            if reference_kind == "mandoc":
+                statuses.add("skipped")
+            if row["scan_status"] not in statuses:
                 raise ValueError(f"invalid scan status at {path}:{number}")
             if row["review_status"] not in {
                 "not-required",
@@ -347,12 +384,18 @@ def read_database(path: Path) -> dict[tuple[str, str, str], AuditRecord]:
                 row["scan_status"],
                 row["review_status"],
                 row["note"],
+                reference_kind,
+                reference_id,
             )
             entries[(entry.corpus, entry.path, entry.digest)] = entry
     return entries
 
 
-def read_fidelity_records(path: Path) -> set[tuple[str, str, str]]:
+def read_fidelity_records(
+    path: Path,
+    reference_kind: str = "man",
+    reference_id: str = "",
+) -> set[tuple[str, str, str]]:
     """Return completed content-audit identities without altering their ledger.
 
     The layout probe can deliberately revisit exactly the source bytes that
@@ -366,12 +409,25 @@ def read_fidelity_records(path: Path) -> set[tuple[str, str, str]]:
     identities: set[tuple[str, str, str]] = set()
     with path.open(encoding="utf-8", newline="") as source:
         reader = csv.DictReader(source)
-        if reader.fieldnames != FIDELITY_DATABASE_FIELDS:
+        fields = (
+            MANDOC_FIDELITY_DATABASE_FIELDS
+            if reference_kind == "mandoc"
+            else FIDELITY_DATABASE_FIELDS
+        )
+        if reader.fieldnames != fields:
             raise ValueError(
                 f"invalid content-fidelity database header in {path}; "
-                f"expected {','.join(FIDELITY_DATABASE_FIELDS)}"
+                f"expected {','.join(fields)}"
             )
         for number, row in enumerate(reader, 2):
+            if reference_kind == "mandoc" and (
+                row["reference_kind"] != reference_kind
+                or row["reference_id"] != reference_id
+            ):
+                raise ValueError(
+                    f"mandoc reference identity mismatch at {path}:{number}; "
+                    f"expected {reference_kind}/{reference_id}"
+                )
             digest = row["source_sha256"]
             status = row["scan_status"]
             if not re.fullmatch(r"[0-9a-f]{64}", digest):
@@ -383,25 +439,36 @@ def read_fidelity_records(path: Path) -> set[tuple[str, str, str]]:
     return identities
 
 
-def write_database(path: Path, entries: Iterable[AuditRecord]) -> None:
+def write_database(
+    path: Path,
+    entries: Iterable[AuditRecord],
+    reference_kind: str = "man",
+    reference_id: str = "",
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
     with temporary.open("w", encoding="utf-8", newline="") as destination:
-        writer = csv.DictWriter(destination, fieldnames=DATABASE_FIELDS, lineterminator="\n")
+        fields = MANDOC_DATABASE_FIELDS if reference_kind == "mandoc" else DATABASE_FIELDS
+        writer = csv.DictWriter(destination, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for entry in sorted(entries, key=lambda item: (item.corpus, item.path, item.digest)):
-            writer.writerow(
-                {
-                    "corpus": entry.corpus,
-                    "path": entry.path,
-                    "section": entry.section,
-                    "source_sha256": entry.digest,
-                    "layout_schema": entry.schema,
-                    "scan_status": entry.scan_status,
-                    "review_status": entry.review_status,
-                    "note": entry.note,
+            row = {
+                "corpus": entry.corpus,
+                "path": entry.path,
+                "section": entry.section,
+                "source_sha256": entry.digest,
+                "layout_schema": entry.schema,
+                "scan_status": entry.scan_status,
+                "review_status": entry.review_status,
+                "note": entry.note,
+            }
+            if reference_kind == "mandoc":
+                row = {
+                    "reference_kind": reference_kind,
+                    "reference_id": reference_id,
+                    **row,
                 }
-            )
+            writer.writerow(row)
     temporary.replace(path)
 
 
@@ -453,12 +520,16 @@ def run_layout_auditor(
             str(arguments.mant),
             "--reference",
             arguments.reference,
+            "--reference-kind",
+            arguments.reference_kind,
             "--timeout",
             str(arguments.timeout),
             "--json",
             str(report),
             "--findings-only",
         ]
+        if arguments.reference_id:
+            command.extend(["--reference-id", arguments.reference_id])
         if arguments.manpath:
             for root in roots:
                 command.extend(["--manpath", str(root)])
@@ -493,7 +564,22 @@ def run_layout_auditor(
         label = raw["path"]
         reference_status = raw.get("status")
         layout = raw.get("layout")
-        if label not in labels or reference_status not in {"clean", "review", "hard-failure"}:
+        if label not in labels or reference_status not in {
+            "clean",
+            "review",
+            "hard-failure",
+            "skipped",
+        }:
+            continue
+        if reference_status == "skipped":
+            results[label] = Finding(
+                label,
+                "skipped",
+                reference_status,
+                [],
+                None,
+                raw.get("detail") if isinstance(raw.get("detail"), str) else None,
+            )
             continue
         if reference_status == "hard-failure" or not valid_layout(layout):
             results[label] = Finding(
@@ -574,6 +660,21 @@ def main(argv: Sequence[str]) -> int:
         print("roff layout audit self-check succeeded")
         return 0
     try:
+        if arguments.reference_kind == "mandoc" and not arguments.reference_id:
+            raise ValueError("mandoc layout audits require a stable --reference-id")
+        reference_id = arguments.reference_id or arguments.reference
+        if arguments.audit_db is None:
+            arguments.audit_db = (
+                DEFAULT_MANDOC_AUDIT_DB
+                if arguments.reference_kind == "mandoc"
+                else DEFAULT_AUDIT_DB
+            )
+        if arguments.fidelity_db is None:
+            arguments.fidelity_db = (
+                DEFAULT_MANDOC_FIDELITY_DB
+                if arguments.reference_kind == "mandoc"
+                else DEFAULT_FIDELITY_DB
+            )
         if not FIDELITY_AUDITOR.is_file():
             raise ValueError(f"fidelity auditor not found: {FIDELITY_AUDITOR}")
         if not arguments.mant.is_file():
@@ -586,7 +687,11 @@ def main(argv: Sequence[str]) -> int:
             pages = [path for path in pages if manual_section(path) in sections]
         pages, unreadable = filter_pages_by_source(pages, compile_source_patterns(arguments.source_pattern))
         records = {path: (relative_label(path, roots), source_digest(path)) for path in pages}
-        database = read_database(arguments.audit_db)
+        database = read_database(
+            arguments.audit_db,
+            arguments.reference_kind,
+            reference_id,
+        )
         if arguments.recorded_only:
             pages = [
                 path for path in pages
@@ -601,7 +706,11 @@ def main(argv: Sequence[str]) -> int:
                 and record.scan_status == "review"
             ]
         elif arguments.replay_fidelity_records:
-            fidelity_records = read_fidelity_records(arguments.fidelity_db)
+            fidelity_records = read_fidelity_records(
+                arguments.fidelity_db,
+                arguments.reference_kind,
+                reference_id,
+            )
             pages = [
                 path for path in pages
                 if records[path][1] is not None
@@ -631,6 +740,7 @@ def main(argv: Sequence[str]) -> int:
     print("ManT roff renderer-layout audit")
     print(f"  mant:      {arguments.mant}")
     print(f"  reference: {arguments.reference}")
+    print(f"  profile:   {arguments.reference_kind}/{reference_id}")
     print(f"  roots:     {', '.join(str(root) for root in roots)}")
     print(f"  pages:     {len(pages)}")
     print(f"  corpus:    {corpus}")
@@ -663,17 +773,24 @@ def main(argv: Sequence[str]) -> int:
                 finding.status,
                 merge_review_status(previous, finding.status),
                 previous.note if previous is not None else "",
+                arguments.reference_kind,
+                reference_id,
             )
     print()
     print(
         "summary: "
         f"examined={len(findings)}, clean={summary['clean']}, review={summary['review']}, "
-        f"hard={summary['hard-failure']}"
+        f"hard={summary['hard-failure']}, skipped={summary['skipped']}"
     )
     if child_error:
         print(f"reference note: {child_error}")
     print("REVIEW is renderer evidence, not a regression until source and IR are inspected.")
-    write_database(arguments.audit_db, database.values())
+    write_database(
+        arguments.audit_db,
+        database.values(),
+        arguments.reference_kind,
+        reference_id,
+    )
     print(f"layout database: {arguments.audit_db}")
     if arguments.json:
         arguments.json.parent.mkdir(parents=True, exist_ok=True)
@@ -684,6 +801,8 @@ def main(argv: Sequence[str]) -> int:
                     "corpus": corpus,
                     "roots": [str(root) for root in roots],
                     "reference": arguments.reference,
+                    "referenceKind": arguments.reference_kind,
+                    "referenceId": reference_id,
                     "replay_fidelity_records": arguments.replay_fidelity_records,
                     "fidelity_db": str(arguments.fidelity_db)
                     if arguments.replay_fidelity_records
