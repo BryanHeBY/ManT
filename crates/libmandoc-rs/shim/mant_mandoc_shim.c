@@ -327,30 +327,34 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		mparse_readmem(parser, buffer, length, path);
 #endif
 	meta = mparse_result(parser);
-	document->macroset = (int)meta->macroset;
-	document->title = copy_string(meta->title);
-	document->section = copy_string(meta->msec);
-	document->volume = copy_string(meta->vol);
-	document->os = copy_string(meta->os);
-	document->arch = copy_string(meta->arch);
-	document->name = copy_string(meta->name);
-	document->date = copy_string(meta->date);
-	document->alias_target = copy_string(meta->sodest);
-	document->has_body = document_has_body(meta);
-	document->root = copy_node(meta->first, 0);
-	document->ok = document->root != NULL;
-	if (!document->ok)
-		document->error = copy_string("libmandoc produced no syntax tree");
 #ifdef MANT_MANDOC_RENDER
-	else if (render_format != 0 && !render_document(document, meta,
-	    render_format, render_width, html_fragment, output_limit))
-		document->ok = 0;
+	if (render_format != 0)
+		document->ok = render_document(document, meta, render_format,
+		    render_width, html_fragment, output_limit);
+	else
 #else
 	(void)render_format;
 	(void)render_width;
 	(void)html_fragment;
 	(void)output_limit;
 #endif
+	{
+		document->macroset = (int)meta->macroset;
+		document->title = copy_string(meta->title);
+		document->section = copy_string(meta->msec);
+		document->volume = copy_string(meta->vol);
+		document->os = copy_string(meta->os);
+		document->arch = copy_string(meta->arch);
+		document->name = copy_string(meta->name);
+		document->date = copy_string(meta->date);
+		document->alias_target = copy_string(meta->sodest);
+		document->has_body = document_has_body(meta);
+		document->root = copy_node(meta->first, 0);
+		document->ok = document->root != NULL;
+		if (!document->ok)
+			document->error = copy_string(
+			    "libmandoc produced no syntax tree");
+	}
 
 #ifndef MANDOC_MEMORY_ONLY
 cleanup:

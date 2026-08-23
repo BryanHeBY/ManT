@@ -126,7 +126,7 @@ impl Renderer {
         self
     }
 
-    /// Set the terminal width used by ASCII output.
+    /// Set the terminal width used by ASCII and UTF-8 output.
     #[must_use]
     pub const fn with_width(mut self, width: usize) -> Self {
         self.width = width;
@@ -157,6 +157,24 @@ impl Renderer {
     #[must_use]
     pub const fn format(&self) -> RenderFormat {
         self.format
+    }
+
+    /// Return the configured terminal width.
+    #[must_use]
+    pub const fn width(&self) -> usize {
+        self.width
+    }
+
+    /// Return the maximum complete output size retained by one call.
+    #[must_use]
+    pub const fn max_output_bytes(&self) -> usize {
+        self.max_output_bytes
+    }
+
+    /// Return whether HTML output is configured as a fragment.
+    #[must_use]
+    pub const fn html_fragment(&self) -> bool {
+        self.html_fragment
     }
 
     /// Render one source path.
@@ -340,7 +358,9 @@ impl Renderer {
     }
 
     fn validate(&self, path: &Path) -> Result<(), RenderError> {
-        if !(MIN_RENDER_WIDTH..=MAX_RENDER_WIDTH).contains(&self.width) {
+        if self.format != RenderFormat::Html
+            && !(MIN_RENDER_WIDTH..=MAX_RENDER_WIDTH).contains(&self.width)
+        {
             return Err(RenderError {
                 path: path.to_path_buf(),
                 kind: RenderErrorKind::InvalidOptions,
