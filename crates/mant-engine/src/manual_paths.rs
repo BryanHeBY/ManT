@@ -510,17 +510,23 @@ fn expand_path_pattern(pattern: &Path) -> Vec<PathBuf> {
     if !pattern.as_os_str().to_string_lossy().contains(['*', '?']) {
         return vec![pattern.to_path_buf()];
     }
-    let mut candidates = if pattern.is_absolute() {
-        vec![PathBuf::from(std::path::MAIN_SEPARATOR.to_string())]
-    } else {
-        vec![PathBuf::new()]
-    };
+    let mut candidates = vec![PathBuf::new()];
     for component in pattern.components() {
         match component {
             Component::Prefix(prefix) => {
-                candidates = vec![PathBuf::from(prefix.as_os_str())];
+                for candidate in &mut candidates {
+                    candidate.push(prefix.as_os_str());
+                }
             }
-            Component::RootDir | Component::CurDir => {}
+            Component::RootDir => {
+                // On Windows, the root must be appended after a drive or UNC
+                // prefix. Dropping it turns `C:\path` into the drive-relative
+                // `C:path`, whose result depends on process-global drive state.
+                for candidate in &mut candidates {
+                    candidate.push(std::path::MAIN_SEPARATOR.to_string());
+                }
+            }
+            Component::CurDir => {}
             Component::ParentDir => {
                 for candidate in &mut candidates {
                     candidate.push("..");
@@ -724,6 +730,18 @@ mod tests {
         assert!(wildcard_matches("*.conf", "perl.conf"));
         assert!(wildcard_matches("?.conf", "x.conf"));
         assert!(!wildcard_matches("?.conf", "xy.conf"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn wildcard_expansion_preserves_an_absolute_windows_root() {
+        let root = temporary_root("windows-absolute-glob");
+        fs::create_dir_all(&root).expect("create fragment root");
+        let fragment = root.join("tool.conf");
+        fs::write(&fragment, "MANPATH C:\\manuals\n").expect("write fragment");
+
+        assert_eq!(super::expand_path_pattern(&root.join("*.conf")), [fragment]);
+        fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
