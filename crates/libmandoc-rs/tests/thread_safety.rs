@@ -8,9 +8,11 @@ use std::{
 #[cfg(unix)]
 use std::{fs, process};
 
-use libmandoc_rs::Parser;
 #[cfg(unix)]
 use libmandoc_rs::{IncludePolicy, ParseOptions};
+use libmandoc_rs::{Parser, SourceBundle};
+#[cfg(feature = "render")]
+use libmandoc_rs::{RenderFormat, Renderer};
 
 const WORKERS: usize = 8;
 const DEFAULT_ROUNDS: usize = 64;
@@ -84,6 +86,76 @@ fn concurrent_memory_sessions_isolate_parser_and_diagnostic_state() {
 
     for worker in workers {
         worker.join().expect("memory parser worker must not panic");
+    }
+}
+
+#[test]
+#[ignore = "run crates/libmandoc-rs/scripts/check-thread-safety"]
+fn concurrent_virtual_source_trees_isolate_bundle_state() {
+    let start = Arc::new(Barrier::new(WORKERS));
+    let workers: Vec<_> = (0..WORKERS)
+        .map(|worker| {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                let title = format!("TSAN-BUNDLE-{worker}");
+                let mut bundle = SourceBundle::new();
+                bundle
+                    .insert("man1/alias.1", b".so target.1\n".to_vec())
+                    .expect("insert bundle alias");
+                bundle
+                    .insert(
+                        "man1/target.1",
+                        format!(".TH {title} 1\n.SH NAME\ntsan-bundle-{worker} \\- isolated\n")
+                            .into_bytes(),
+                    )
+                    .expect("insert bundle target");
+                start.wait();
+                for _ in 0..rounds() {
+                    let report = Parser::default()
+                        .parse_bundle("man1/alias.1", &bundle)
+                        .expect("concurrent bundle parse must succeed");
+                    assert_eq!(
+                        report.document.metadata.title.as_deref(),
+                        Some(title.as_str())
+                    );
+                }
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.join().expect("bundle parser worker must not panic");
+    }
+}
+
+#[cfg(feature = "render")]
+#[test]
+#[ignore = "run crates/libmandoc-rs/scripts/check-thread-safety"]
+fn concurrent_renderers_isolate_formatter_and_output_state() {
+    let start = Arc::new(Barrier::new(WORKERS));
+    let workers: Vec<_> = (0..WORKERS)
+        .map(|worker| {
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                let identity = format!("tsan-render-{worker}");
+                let source =
+                    format!(".TH TSAN-RENDER-{worker} 1\n.SH NAME\n{identity} \\- isolated\n");
+                let format = match worker % 3 {
+                    0 => RenderFormat::Ascii,
+                    1 => RenderFormat::Utf8,
+                    _ => RenderFormat::Html,
+                };
+                start.wait();
+                for _ in 0..rounds() {
+                    let report = Renderer::new(format)
+                        .render_bytes(format!("{identity}.1"), source.as_bytes())
+                        .expect("concurrent render must succeed");
+                    assert!(report.output.contains(&identity));
+                }
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.join().expect("renderer worker must not panic");
     }
 }
 

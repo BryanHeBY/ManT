@@ -67,6 +67,53 @@ fn utf8_output_preserves_unicode_scalars() {
 }
 
 #[test]
+fn renderer_address_safety_boundaries() {
+    let sources: &[(&str, &[u8])] = &[
+        ("no-newline.1", b".TH NO-NEWLINE 1\n.SH NAME\nno-newline"),
+        ("modeline-tail.1", b".\\\" -*- mode: nroff -*-"),
+        ("encoding-tail.1", b".\\\" coding: UTF-8"),
+        ("utf8-tail.1", b".TH UTF8-TAIL 1\n\xe2\x82\xac"),
+    ];
+    for format in [RenderFormat::Ascii, RenderFormat::Utf8, RenderFormat::Html] {
+        for (path, source) in sources {
+            Renderer::new(format)
+                .render_bytes(path, source)
+                .expect("render exact caller-owned buffer boundary");
+        }
+    }
+
+    let full = Renderer::new(RenderFormat::Html)
+        .render_bytes("limit.1", MAN_SOURCE)
+        .expect("measure complete output");
+    Renderer::new(RenderFormat::Html)
+        .with_max_output_bytes(full.output.len())
+        .render_bytes("limit.1", MAN_SOURCE)
+        .expect("accept an exact output limit");
+    let error = Renderer::new(RenderFormat::Html)
+        .with_max_output_bytes(full.output.len() - 1)
+        .render_bytes("limit.1", MAN_SOURCE)
+        .expect_err("reject one byte below complete output");
+    assert_eq!(error.kind, RenderErrorKind::OutputLimit);
+}
+
+#[test]
+fn repository_real_fixture_renders_when_available() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/roff/real/archlinux/archive_entry_stat.3");
+    if !path.exists() {
+        // Published crate tests are intentionally self-contained; the tagged
+        // repository supplies the separately licensed shared fixture corpus.
+        return;
+    }
+    for format in [RenderFormat::Ascii, RenderFormat::Utf8, RenderFormat::Html] {
+        let report = Renderer::new(format)
+            .render_file(&path)
+            .expect("render licensed archive_entry_stat(3) fixture");
+        assert!(report.output.contains("ARCHIVE_ENTRY_STAT"));
+    }
+}
+
+#[test]
 fn output_limit_rejects_partial_results() {
     let error = Renderer::new(RenderFormat::Ascii)
         .with_max_output_bytes(16)

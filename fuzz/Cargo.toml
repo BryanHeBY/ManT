@@ -11,6 +11,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4.13"
+libmandoc-rs = { path = "../crates/libmandoc-rs", features = ["render"] }
 mant-engine = { path = "../crates/mant-engine" }
 mant-protocol = { path = "../crates/mant-protocol" }
 

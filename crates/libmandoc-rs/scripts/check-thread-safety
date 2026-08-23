@@ -59,7 +59,7 @@ env \
   RUSTDOCFLAGS=-Zsanitizer=thread \
   TSAN_OPTIONS="$sanitizer_options" \
   cargo +nightly test --locked -Zbuild-std --target "$target" \
-    --package libmandoc-rs --test thread_safety -- \
+    --package libmandoc-rs --features render --test thread_safety -- \
     --ignored --nocapture --test-threads=1
 
 archive=$(find "$sanitizer_target_dir/$target/debug/build" \
