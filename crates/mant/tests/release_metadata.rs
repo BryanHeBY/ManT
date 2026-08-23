@@ -68,10 +68,14 @@ fn binstall_targets_match_the_published_archive_contract() {
 #[test]
 fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
     let unix = include_str!("../../../scripts/package-release.sh");
+    assert!(unix.contains("id=$(cargo pkgid -p mant)"));
+    assert!(!unix.contains("workspace_version"));
     assert!(unix.contains(r#"archive_root="mant-$version-$target""#));
     assert!(unix.contains(r#"install -m 0755 "$binary" "$package/mant""#));
 
     let windows = include_str!("../../../scripts/package-release.ps1");
+    assert!(windows.contains("cargo metadata --no-deps --format-version 1"));
+    assert!(windows.contains("Where-Object { $_.name -eq \"mant\" }"));
     assert!(windows.contains(r#"$ArchiveRoot = "mant-$Version-$Target""#));
     assert!(windows.contains(r#"Copy-Item $Binary (Join-Path $Package "mant.exe")"#));
     assert!(windows.contains(r"crates/libmandoc-rs/LICENSES/*"));
@@ -148,6 +152,18 @@ fn manual_release_retries_require_an_explicit_crates_publish_choice() {
     assert!(
         workflow.contains("(github.event_name == 'workflow_dispatch' && inputs.publish_crates)")
     );
+    assert!(workflow.contains("MANT_PUBLISH_PACKAGE: ${{ needs.verify.outputs.package }}"));
+    for tag in [
+        "mant-ir-v*.*.*",
+        "mant-protocol-v*.*.*",
+        "libmandoc-rs-v*.*.*",
+        "mant-sources-v*.*.*",
+        "mant-engine-v*.*.*",
+        "mant-ui-v*.*.*",
+    ] {
+        assert!(workflow.contains(tag), "missing crate tag trigger {tag}");
+    }
+    assert!(!workflow.contains("      - \"mant-v*.*.*\""));
 }
 
 #[test]
@@ -221,6 +237,8 @@ fn one_line_installers_follow_the_published_release_contract() {
         include_str!("../../../scripts/package-release.ps1").contains("docs/manuals/manifest.txt")
     );
     let manual_package = include_str!("../../../scripts/package-manuals.sh");
+    assert!(manual_package.contains("id=$(cargo pkgid -p mant)"));
+    assert!(!manual_package.contains("workspace_version"));
     assert!(manual_package.contains(r#"archive_root="mant-$version-manuals""#));
     assert!(manual_package.contains("done < docs/manuals/manifest.txt"));
     assert!(manual_package.contains(r#"install -m 0644 LICENSE "$package/LICENSE""#));
@@ -293,13 +311,74 @@ fn unix_installer_uninstalls_only_files_owned_by_its_receipt() {
 }
 
 #[test]
-fn crates_are_packaged_only_after_their_exact_predecessors_reach_the_registry() {
+fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
+    let root = include_str!("../../../Cargo.toml");
+    let workspace_package = root
+        .split_once("[workspace.package]")
+        .and_then(|(_, suffix)| suffix.split_once("\n[").map(|(section, _)| section))
+        .expect("workspace package section");
+    assert!(
+        !workspace_package
+            .lines()
+            .any(|line| line.starts_with("version"))
+    );
+
+    for (name, manifest) in [
+        ("mant-ir", include_str!("../../mant-ir/Cargo.toml")),
+        (
+            "mant-protocol",
+            include_str!("../../mant-protocol/Cargo.toml"),
+        ),
+        (
+            "libmandoc-rs",
+            include_str!("../../libmandoc-rs/Cargo.toml"),
+        ),
+        (
+            "mant-sources",
+            include_str!("../../mant-sources/Cargo.toml"),
+        ),
+        ("mant-engine", include_str!("../../mant-engine/Cargo.toml")),
+        ("mant-ui", include_str!("../../mant-ui/Cargo.toml")),
+        ("mant", include_str!("../Cargo.toml")),
+    ] {
+        assert!(
+            !manifest
+                .lines()
+                .any(|line| line.trim() == "version.workspace = true"),
+            "{name} inherits its version"
+        );
+        assert!(
+            manifest
+                .lines()
+                .any(|line| line.starts_with("version = \"")),
+            "{name} has no explicit package version"
+        );
+        for dependency in manifest
+            .lines()
+            .filter(|line| line.contains("path = \"../"))
+        {
+            assert!(
+                dependency.contains("version = \"^"),
+                "{name} has a non-caret internal dependency: {dependency}"
+            );
+        }
+    }
+}
+
+#[test]
+fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
     let publish = include_str!("../../../scripts/publish-crates.sh").replace("\r\n", "\n");
     assert!(publish.contains(
-        "PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant)"
+        "ALL_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant)"
     ));
+    assert!(publish.contains(
+        "CRATE_TAG_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui)"
+    ));
+    assert!(publish.contains("publish_package=${MANT_PUBLISH_PACKAGE:-}"));
+    assert!(publish.contains(r#"[[ $tag == "$publish_package-v$version" ]]"#));
+    assert!(publish.contains("version=$(package_version \"$package\")"));
     let publish_loop = publish
-        .split_once("# Exact internal dependencies make publication inherently sequential:")
+        .split_once("# A dependent crate can only be published after every version allowed by its")
         .map(|(_, suffix)| suffix)
         .expect("sequential publication explanation");
 
@@ -312,4 +391,51 @@ fn crates_are_packaged_only_after_their_exact_predecessors_reach_the_registry() 
     assert!(publish_loop.contains(
         "else\n    cargo package --locked --no-verify -p \"$package\"\n    cargo publish --locked -p \"$package\"\n  fi\n  wait_for_registry"
     ));
+}
+
+#[cfg(unix)]
+#[test]
+fn publication_tags_are_validated_before_registry_authentication() {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scripts/publish-crates.sh");
+    let ir_manifest = include_str!("../../mant-ir/Cargo.toml");
+    let ir_version = ir_manifest
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
+        .expect("mant-ir version");
+
+    for (tag, package) in [
+        (format!("v{}", env!("CARGO_PKG_VERSION")), None),
+        (format!("mant-ir-v{ir_version}"), Some("mant-ir")),
+    ] {
+        let mut command = Command::new("bash");
+        command
+            .arg(&script)
+            .env("MANT_RELEASE_TAG", tag)
+            .env_remove("CARGO_REGISTRY_TOKEN");
+        if let Some(package) = package {
+            command.env("MANT_PUBLISH_PACKAGE", package);
+        } else {
+            command.env_remove("MANT_PUBLISH_PACKAGE");
+        }
+        let output = command.output().expect("run publication validation");
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("CARGO_REGISTRY_TOKEN is required"),
+            "valid release selection failed before authentication: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let output = Command::new("bash")
+        .arg(script)
+        .env(
+            "MANT_RELEASE_TAG",
+            format!("mant-v{}", env!("CARGO_PKG_VERSION")),
+        )
+        .env("MANT_PUBLISH_PACKAGE", "mant")
+        .env_remove("CARGO_REGISTRY_TOKEN")
+        .output()
+        .expect("reject a crate-only mant release");
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown package 'mant'"));
 }

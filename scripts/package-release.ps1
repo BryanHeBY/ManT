@@ -10,20 +10,22 @@ function Fail([string]$Message) {
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-$Cargo = Get-Content (Join-Path $Root "Cargo.toml") -Raw
-$Workspace = [regex]::Match($Cargo, '(?ms)^\[workspace\.package\]\s*(.*?)(?=^\[|\z)')
-$VersionMatch = [regex]::Match($Workspace.Groups[1].Value, '(?m)^version\s*=\s*"([^"]+)"')
-if (-not $VersionMatch.Success) {
-    Fail "Cargo.toml has no workspace package version"
+$Metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) {
+    Fail "cargo metadata failed"
 }
-$Version = $VersionMatch.Groups[1].Value
+$MantPackage = $Metadata.packages | Where-Object { $_.name -eq "mant" }
+if (-not $MantPackage) {
+    Fail "the workspace has no mant package"
+}
+$Version = $MantPackage.version
 
 if ($env:MANT_RELEASE_TAG) {
     if ($env:MANT_RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$') {
         Fail "release tag '$($env:MANT_RELEASE_TAG)' must use the form vMAJOR.MINOR.PATCH"
     }
     if ($env:MANT_RELEASE_TAG.Substring(1) -ne $Version) {
-        Fail "release tag $($env:MANT_RELEASE_TAG) does not match workspace version $Version"
+        Fail "release tag $($env:MANT_RELEASE_TAG) does not match mant version $Version"
     }
 }
 

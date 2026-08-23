@@ -5,10 +5,16 @@ on:
   push:
     tags:
       - "v*.*.*"
+      - "mant-ir-v*.*.*"
+      - "mant-protocol-v*.*.*"
+      - "libmandoc-rs-v*.*.*"
+      - "mant-sources-v*.*.*"
+      - "mant-engine-v*.*.*"
+      - "mant-ui-v*.*.*"
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing vMAJOR.MINOR.PATCH tag to release
+        description: Existing product or PACKAGE-vMAJOR.MINOR.PATCH tag to release
         required: true
         type: string
       publish_crates:
@@ -35,6 +41,9 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      product: ${{ steps.release.outputs.product }}
+      package: ${{ steps.release.outputs.package }}
 
     steps:
       - name: Check out the release tag
@@ -52,23 +61,52 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - name: Require matching version and successful full CI
+      - name: Require matching package version and successful full CI
+        id: release
         shell: bash
         run: |
-          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
-          if [[ "$RELEASE_TAG" != "v$version" ]]; then
-            echo "release tag $RELEASE_TAG does not match workspace version $version" >&2
+          package_version() {
+            local id
+            id=$(cargo pkgid -p "$1")
+            printf '%s\n' "${id##*[#@]}"
+          }
+
+          packages=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui)
+          product=false
+          package=
+          if [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            version=$(package_version mant)
+            if [[ "$RELEASE_TAG" != "v$version" ]]; then
+              echo "product release tag $RELEASE_TAG does not match mant version $version" >&2
+              exit 1
+            fi
+            product=true
+          else
+            for candidate in "${packages[@]}"; do
+              version=$(package_version "$candidate")
+              if [[ "$RELEASE_TAG" == "$candidate-v$version" ]]; then
+                package=$candidate
+                break
+              fi
+            done
+          fi
+          if [[ "$product" == false && -z "$package" ]]; then
+            echo "release tag $RELEASE_TAG does not match any package version" >&2
             exit 1
           fi
+
           source_sha=$(git rev-parse HEAD)
           ci_url=$(bash .release-verification/scripts/find-successful-ci.sh "$source_sha")
           echo "verified full CI for $source_sha: $ci_url"
+          echo "product=$product" >> "$GITHUB_OUTPUT"
+          echo "package=$package" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
   build:
     name: Package (${{ matrix.target }})
     needs: verify
+    if: needs.verify.outputs.product == 'true'
     permissions:
       contents: read
       id-token: write
@@ -292,9 +330,13 @@ jobs:
   publish-crates:
     name: Publish crates.io packages
     if: >-
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_crates)
-    needs: build
+      always() &&
+      needs.verify.result == 'success' &&
+      ((needs.verify.outputs.product == 'true' && needs.build.result == 'success') ||
+       (needs.verify.outputs.product == 'false' && needs.build.result == 'skipped')) &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish_crates))
+    needs: [verify, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: crates-io
@@ -321,15 +363,17 @@ jobs:
         id: auth
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
 
-      - name: Publish the lockstep crate graph
+      - name: Publish the selected crate versions
         run: bash scripts/publish-crates.sh
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
           MANT_RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          MANT_PUBLISH_PACKAGE: ${{ needs.verify.outputs.package }}
 
   draft:
     name: Create draft GitHub release
-    needs: build
+    needs: [verify, build]
+    if: needs.verify.outputs.product == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

@@ -11,16 +11,10 @@ fail() {
   exit 1
 }
 
-workspace_version() {
-  awk '
-    /^\[workspace\.package\]$/ { workspace = 1; next }
-    workspace && /^\[/ { exit }
-    workspace && /^version[[:space:]]*=/ {
-      gsub(/^[^"]*"|".*$/, "")
-      print
-      exit
-    }
-  ' Cargo.toml
+package_version() {
+  local id
+  id=$(cargo pkgid -p mant)
+  printf '%s\n' "${id##*[#@]}"
 }
 
 archive_target() {
@@ -32,14 +26,14 @@ archive_target() {
   esac
 }
 
-version=$(workspace_version)
-[[ -n $version ]] || fail "Cargo.toml has no workspace package version"
+version=$(package_version)
+[[ -n $version ]] || fail "the mant package has no version"
 
 if [[ -n ${MANT_RELEASE_TAG:-} ]]; then
   [[ $MANT_RELEASE_TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] \
     || fail "release tag '$MANT_RELEASE_TAG' must use the form vMAJOR.MINOR.PATCH"
   [[ ${MANT_RELEASE_TAG#v} == "$version" ]] \
-    || fail "release tag $MANT_RELEASE_TAG does not match workspace version $version"
+    || fail "release tag $MANT_RELEASE_TAG does not match mant version $version"
 fi
 
 target=$(archive_target)
