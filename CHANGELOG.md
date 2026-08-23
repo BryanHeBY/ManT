@@ -16,6 +16,8 @@ that crate was not published for that change.
 
 - Preserve formatter-owned commas when one mdoc `Fa` invocation supplies
   multiple parameters to a block-form function declaration.
+- Keep later `tbl` text-block cells aligned when an earlier empty `T{ T}` cell
+  is normalized away by libmandoc.
 
 ### libmandoc-rs
 

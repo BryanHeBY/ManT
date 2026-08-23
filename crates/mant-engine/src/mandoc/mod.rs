@@ -2634,6 +2634,31 @@ Sean\n\
     }
 
     #[test]
+    fn keeps_multiline_cells_aligned_after_an_empty_text_block() {
+        let source = b".TH EMPTY-TABLE-CELL 7\n.SH TABLE\n.TS\ntab(@);\nl l l.\n\
+T{\nT}@T{\nCore\nT}@T{\nProduction-grade, first-class\nT}\n.TE\n";
+        let document = parse_manual_bytes(std::path::Path::new("empty-table-cell.7"), source)
+            .expect("lower a row beginning with an empty text block");
+
+        let [Block::Table { rows, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one table");
+        };
+        let [row] = rows.as_slice() else {
+            panic!("expected one table row");
+        };
+        let values = row
+            .cells
+            .iter()
+            .map(|cell| match cell.blocks.as_slice() {
+                [Block::Paragraph { children, .. }] => inline_text(children),
+                [] => String::new(),
+                blocks => panic!("unexpected table cell blocks: {blocks:?}"),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(values, ["", "Core", "Production-grade, first-class"]);
+    }
+
+    #[test]
     fn keeps_tbl_vertical_span_markers_out_of_visible_cells() {
         let document = parse_manual_bytes(
             std::path::Path::new("vertical-table-span.1"),

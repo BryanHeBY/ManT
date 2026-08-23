@@ -10,9 +10,10 @@ use super::super::{
     LoweringContext, TableTextBlock,
     inline::{
         FilledBoundary, InlineBuilder, lower_inline_nodes_with_spacing, lower_man_link,
-        lower_source_alternating_fonts, lower_source_mdoc_request, parse_roff_text,
+        lower_source_alternating_fonts, lower_source_mdoc_request, parse_roff_text, plain_text,
     },
     layout::layout,
+    roff_escape::visible_text,
     source_span,
 };
 
@@ -107,6 +108,8 @@ pub(super) fn append_table_row(
                         |cell| {
                             let lowered = lower_table_cell(
                                 cell,
+                                index,
+                                &node.table_cells,
                                 node,
                                 context,
                                 text_block,
@@ -172,6 +175,8 @@ fn lower_missing_table_cell(
 
 fn lower_table_cell(
     cell: &libmandoc_rs::TableCell,
+    cell_index: usize,
+    row_cells: &[libmandoc_rs::TableCell],
     node: &Node,
     context: &LoweringContext<'_>,
     text_block: Option<&TableTextBlock>,
@@ -189,7 +194,28 @@ fn lower_table_cell(
         // block first even when no printable AST siblings escaped the table.
         let reconstructed = lower_table_text_block(text_block, &semantic_nodes, context);
         if !reconstructed.is_empty() {
-            return reconstructed;
+            // libmandoc associates the row with its first physical input
+            // line, but an empty `T{ T}` cell can be normalized to an
+            // ordinary empty cell. Source recovery then has fewer semantic
+            // cells than physical text blocks and may hand the next cell's
+            // block to this one. Never replace the parser's known visible
+            // payload with unrelated recovered text; retain source-derived
+            // styles and links whenever the two representations still
+            // contain one another.
+            let reconstructed_text = plain_text(&reconstructed);
+            let agrees_with_current = cell
+                .text
+                .as_deref()
+                .is_none_or(|text| table_text_agrees(&reconstructed_text, &visible_text(text)));
+            let belongs_to_other_cell = row_cells.iter().enumerate().any(|(index, candidate)| {
+                index != cell_index
+                    && candidate.text.as_deref().is_some_and(|text| {
+                        table_text_agrees(&reconstructed_text, &visible_text(text))
+                    })
+            });
+            if agrees_with_current || !belongs_to_other_cell {
+                return reconstructed;
+            }
         }
     }
     if cell.text.as_deref().is_some_and(|text| !text.is_empty()) {
@@ -230,6 +256,21 @@ fn lower_table_cell(
 
     context.warn_unhandled_table_text_block(node);
     Vec::new()
+}
+
+fn table_text_agrees(reconstructed: &str, parsed: &str) -> bool {
+    let normalize = |value: &str| {
+        value
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>()
+    };
+    let reconstructed = normalize(reconstructed);
+    let parsed = normalize(parsed);
+    reconstructed == parsed
+        || (!reconstructed.is_empty()
+            && !parsed.is_empty()
+            && (reconstructed.contains(&parsed) || parsed.contains(&reconstructed)))
 }
 
 fn lower_table_cell_text(source: &str, line: u32, context: &LoweringContext<'_>) -> Vec<Inline> {
@@ -344,6 +385,19 @@ mod tests {
                     },
                 ..
             }) if name == "git" && section == "1"
+        ));
+    }
+
+    #[test]
+    fn unrelated_recovered_table_text_never_replaces_a_parsed_cell() {
+        assert!(super::table_text_agrees("git(1)", "git(1)"));
+        assert!(super::table_text_agrees(
+            "project documentation ⟨https://example.test⟩",
+            "project documentation"
+        ));
+        assert!(!super::table_text_agrees(
+            "Core",
+            "Production-grade, first-class"
         ));
     }
 }

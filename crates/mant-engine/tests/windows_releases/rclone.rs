@@ -93,6 +93,21 @@ fn preserves_pandoc_verbatim_font_semantics() {
 }
 
 #[test]
+fn keeps_tier_table_text_blocks_in_their_own_columns() {
+    let document = windows_release_manual("rclone");
+    let tiers = block_slice_text(&common::section(document, "Tiers").blocks);
+    for meaning in [
+        "Production-grade, first-class",
+        "Well-supported, minor gaps",
+        "Works for many uses; known caveats",
+        "Use with care; expect gaps/changes",
+        "No longer maintained or supported",
+    ] {
+        assert!(tiers.contains(meaning), "missing tier meaning {meaning:?}");
+    }
+}
+
+#[test]
 fn renders_the_reviewed_windows_path_section_without_losing_backslashes() {
     let query = windows_release_query("rclone");
     let excerpt = select_excerpt(&query, &["paths-on-windows-3225".to_owned()])
