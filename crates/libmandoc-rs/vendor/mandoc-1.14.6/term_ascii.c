@@ -39,6 +39,7 @@
 #include "term.h"
 #include "manconf.h"
 #include "main.h"
+#include "mant_mandoc_output.h"
 
 static	struct termp	 *ascii_init(enum termenc, const struct manoutput *);
 static	int		  ascii_hspan(const struct termp *,
@@ -204,13 +205,15 @@ ascii_free(void *arg)
 {
 
 	term_free((struct termp *)arg);
+	term_tab_free();
 }
 
 static void
 ascii_letter(struct termp *p, int c)
 {
+	unsigned char byte = (unsigned char)c;
 
-	putchar(c);
+	mant_mandoc_output_write(&byte, 1);
 }
 
 static void
@@ -237,7 +240,7 @@ ascii_endline(struct termp *p)
 	else
 		p->tcol->offset = 0;
 	p->ti = 0;
-	putchar('\n');
+	mant_mandoc_output_write("\n", 1);
 }
 
 static void
@@ -254,7 +257,7 @@ ascii_advance(struct termp *p, size_t len)
 	if (len > 256)
 		len = 256;
 	for (i = 0; i < len; i++)
-		putchar(' ');
+		mant_mandoc_output_write(" ", 1);
 }
 
 static int

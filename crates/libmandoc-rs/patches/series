@@ -20,3 +20,4 @@
 0011-bound-memory-input-utf8.patch
 0012-replace-input-traps.patch
 0013-memory-source-bundles.patch
+0014-isolate-renderer-output.patch

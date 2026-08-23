@@ -48,6 +48,24 @@ const LIBMANDOC_SOURCES: &[&str] = &[
     "tag.c",
 ];
 
+const RENDER_SOURCES: &[&str] = &[
+    "out.c",
+    "term.c",
+    "term_ascii.c",
+    "term_tab.c",
+    "roff_term.c",
+    "roff_html.c",
+    "man_term.c",
+    "mdoc_term.c",
+    "tbl_term.c",
+    "eqn_term.c",
+    "html.c",
+    "man_html.c",
+    "mdoc_html.c",
+    "tbl_html.c",
+    "eqn_html.c",
+];
+
 fn main() {
     let crate_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
     let vendor_dir = crate_dir.join("vendor/mandoc-1.14.6");
@@ -57,6 +75,7 @@ fn main() {
     let memory_only = target_os == "windows";
     let thread_sanitizer = env::var_os("LIBMANDOC_RS_TSAN").is_some();
     let address_sanitizer = env::var_os("LIBMANDOC_RS_ASAN").is_some();
+    let render = env::var_os("CARGO_FEATURE_RENDER").is_some();
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
 
     assert!(
@@ -125,6 +144,13 @@ fn main() {
 
     for source in LIBMANDOC_SOURCES.iter().chain(compat_sources.iter()) {
         build.file(vendor_dir.join(source));
+    }
+    if render {
+        build.define("MANT_MANDOC_RENDER", None);
+        for source in RENDER_SOURCES {
+            build.file(vendor_dir.join(source));
+        }
+        build.file(crate_dir.join("shim/mant_mandoc_output.c"));
     }
     if memory_only {
         build.file(crate_dir.join("shim/windows_compat.c"));

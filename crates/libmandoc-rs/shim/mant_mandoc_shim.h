@@ -83,6 +83,16 @@ struct mant_mandoc_document *mant_mandoc_parse_buffer(
     const char *, const unsigned char *, size_t, const char *, int, int);
 struct mant_mandoc_document *mant_mandoc_parse_bundle(
     const char *, const struct mant_mandoc_source *, size_t, int);
+#ifdef MANT_MANDOC_RENDER
+struct mant_mandoc_document *mant_mandoc_render_file(
+    const char *, const char *, int, int, int, size_t, int, size_t);
+struct mant_mandoc_document *mant_mandoc_render_buffer(
+    const char *, const unsigned char *, size_t, const char *, int, int,
+    int, size_t, int, size_t);
+struct mant_mandoc_document *mant_mandoc_render_bundle(
+    const char *, const struct mant_mandoc_source *, size_t, int, int,
+    size_t, int, size_t);
+#endif
 void mant_mandoc_document_free(struct mant_mandoc_document *);
 
 /* Called only by the patched memory parser while one bundle is active. */
@@ -106,6 +116,14 @@ const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document 
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
+#ifdef MANT_MANDOC_RENDER
+const unsigned char *mant_mandoc_document_output(
+    const struct mant_mandoc_document *);
+size_t mant_mandoc_document_output_length(
+    const struct mant_mandoc_document *);
+int mant_mandoc_document_render_status(
+    const struct mant_mandoc_document *);
+#endif
 
 int mant_mandoc_node_kind(const struct mant_mandoc_node *);
 const char *mant_mandoc_node_macro(const struct mant_mandoc_node *);

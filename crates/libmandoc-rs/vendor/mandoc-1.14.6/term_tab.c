@@ -15,10 +15,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "mandoc_aux.h"
 #include "out.h"
@@ -30,18 +33,17 @@ struct tablist {
 	size_t	 n;	/* Currently used number of positions. */
 };
 
-static struct {
+MANT_THREAD_LOCAL struct {
 	struct tablist	 a;	/* All tab positions for lookup. */
 	struct tablist	 p;	/* Periodic tab positions to add. */
 	size_t		 d;	/* Default tab width in units of n. */
 } tabs;
+MANT_THREAD_LOCAL int recording_period;
 
 
 void
 term_tab_set(const struct termp *p, const char *arg)
 {
-	static int	 recording_period;
-
 	struct roffsu	 su;
 	struct tablist	*tl;
 	size_t		 pos;
@@ -127,4 +129,13 @@ term_tab_next(size_t prev)
 		if (prev < tabs.a.t[i])
 			return tabs.a.t[i];
 	}
+}
+
+void
+term_tab_free(void)
+{
+	free(tabs.a.t);
+	free(tabs.p.t);
+	memset(&tabs, 0, sizeof(tabs));
+	recording_period = 0;
 }

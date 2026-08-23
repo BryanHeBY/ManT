@@ -19,6 +19,7 @@
  * For use by individual formatters and by the main program.
  */
 #include "config.h"
+#include "mant_thread_local.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -41,6 +42,7 @@
 #include "html.h"
 #include "manconf.h"
 #include "main.h"
+#include "mant_mandoc_output.h"
 
 struct	htmldata {
 	const char	 *name;
@@ -118,7 +120,7 @@ struct	id_entry {
 	int	 ord;	/* Ordinal number of the latest occurrence. */
 	char	 id[];	/* The id= attribute without any ordinal suffix. */
 };
-static	struct ohash	 id_unique;
+MANT_THREAD_LOCAL struct ohash id_unique;
 
 static	void	 html_reset_internal(struct html *);
 static	void	 print_byte(struct html *, char);
@@ -1005,7 +1007,7 @@ static void
 print_byte(struct html *h, char c)
 {
 	if ((h->flags & HTML_BUFFER) == 0) {
-		putchar(c);
+		mant_mandoc_output_write(&c, 1);
 		h->col++;
 		return;
 	}
@@ -1015,13 +1017,12 @@ print_byte(struct html *h, char c)
 		return;
 	}
 
-	putchar('\n');
+	mant_mandoc_output_write("\n", 1);
 	h->col = 0;
 	print_indent(h);
-	putchar(' ');
-	putchar(' ');
-	fwrite(h->buf, h->bufcol, 1, stdout);
-	putchar(c);
+	mant_mandoc_output_write("  ", 2);
+	mant_mandoc_output_write(h->buf, h->bufcol);
+	mant_mandoc_output_write(&c, 1);
 	h->col = (h->indent + 1) * 2 + h->bufcol + 1;
 	h->bufcol = 0;
 	h->flags &= ~HTML_BUFFER;
@@ -1038,11 +1039,11 @@ print_endline(struct html *h)
 		return;
 
 	if (h->bufcol) {
-		putchar(' ');
-		fwrite(h->buf, h->bufcol, 1, stdout);
+		mant_mandoc_output_write(" ", 1);
+		mant_mandoc_output_write(h->buf, h->bufcol);
 		h->bufcol = 0;
 	}
-	putchar('\n');
+	mant_mandoc_output_write("\n", 1);
 	h->col = 0;
 	h->flags |= HTML_NOSPACE;
 	h->flags &= ~HTML_BUFFER;
@@ -1064,8 +1065,8 @@ print_endword(struct html *h)
 		h->col++;
 		h->flags |= HTML_BUFFER;
 	} else if (h->bufcol) {
-		putchar(' ');
-		fwrite(h->buf, h->bufcol, 1, stdout);
+		mant_mandoc_output_write(" ", 1);
+		mant_mandoc_output_write(h->buf, h->bufcol);
 		h->col += h->bufcol + 1;
 	}
 	h->bufcol = 0;
@@ -1087,7 +1088,7 @@ print_indent(struct html *h)
 
 	h->col = h->indent * 2;
 	for (i = 0; i < h->col; i++)
-		putchar(' ');
+		mant_mandoc_output_write(" ", 1);
 }
 
 /*

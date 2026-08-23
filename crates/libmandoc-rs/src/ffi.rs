@@ -12,6 +12,9 @@ use super::{
     TableAlignment, TableCell,
 };
 
+#[cfg(feature = "render")]
+use super::RawRender;
+
 #[repr(C)]
 struct CDocument {
     _private: [u8; 0],
@@ -56,6 +59,41 @@ unsafe extern "C" {
         source_count: usize,
         input_format: i32,
     ) -> *mut CDocument;
+    #[cfg(all(feature = "render", unix))]
+    fn mant_mandoc_render_file(
+        path: *const c_char,
+        include_root: *const c_char,
+        allow_include: i32,
+        input_format: i32,
+        render_format: i32,
+        render_width: usize,
+        html_fragment: i32,
+        output_limit: usize,
+    ) -> *mut CDocument;
+    #[cfg(feature = "render")]
+    fn mant_mandoc_render_buffer(
+        path: *const c_char,
+        buffer: *const u8,
+        length: usize,
+        include_root: *const c_char,
+        allow_include: i32,
+        input_format: i32,
+        render_format: i32,
+        render_width: usize,
+        html_fragment: i32,
+        output_limit: usize,
+    ) -> *mut CDocument;
+    #[cfg(feature = "render")]
+    fn mant_mandoc_render_bundle(
+        root: *const c_char,
+        sources: *const CSource,
+        source_count: usize,
+        input_format: i32,
+        render_format: i32,
+        render_width: usize,
+        html_fragment: i32,
+        output_limit: usize,
+    ) -> *mut CDocument;
     fn mant_mandoc_document_free(document: *mut CDocument);
     fn mant_mandoc_document_ok(document: *const CDocument) -> i32;
     fn mant_mandoc_document_error(document: *const CDocument) -> *const c_char;
@@ -71,6 +109,12 @@ unsafe extern "C" {
     fn mant_mandoc_document_alias_target(document: *const CDocument) -> *const c_char;
     fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
     fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
+    #[cfg(feature = "render")]
+    fn mant_mandoc_document_output(document: *const CDocument) -> *const u8;
+    #[cfg(feature = "render")]
+    fn mant_mandoc_document_output_length(document: *const CDocument) -> usize;
+    #[cfg(feature = "render")]
+    fn mant_mandoc_document_render_status(document: *const CDocument) -> i32;
     fn mant_mandoc_node_kind(node: *const CNode) -> i32;
     fn mant_mandoc_node_macro(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_text(node: *const CNode) -> *const c_char;
@@ -98,6 +142,95 @@ unsafe extern "C" {
     fn mant_mandoc_table_cell_next(cell: *const CTableCell) -> *const CTableCell;
     fn mant_mandoc_node_child(node: *const CNode) -> *const CNode;
     fn mant_mandoc_node_next(node: *const CNode) -> *const CNode;
+}
+
+#[cfg(feature = "render")]
+pub(super) struct NativeRenderError {
+    pub(super) status: i32,
+    pub(super) message: String,
+}
+
+#[cfg(all(feature = "render", unix))]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_file(
+    path: &CStr,
+    include_root: Option<&CStr>,
+    allow_includes: bool,
+    input_format: InputFormat,
+    render_format: i32,
+    width: usize,
+    html_fragment: bool,
+    output_limit: usize,
+) -> Result<RawRender, NativeRenderError> {
+    let pointer = unsafe {
+        mant_mandoc_render_file(
+            path.as_ptr(),
+            include_root.map_or(std::ptr::null(), CStr::as_ptr),
+            i32::from(allow_includes),
+            input_format_code(input_format),
+            render_format,
+            width,
+            i32::from(html_fragment),
+            output_limit,
+        )
+    };
+    copy_render(pointer)
+}
+
+#[cfg(feature = "render")]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_buffer(
+    path: &CStr,
+    buffer: &[u8],
+    include_root: Option<&CStr>,
+    allow_includes: bool,
+    input_format: InputFormat,
+    render_format: i32,
+    width: usize,
+    html_fragment: bool,
+    output_limit: usize,
+) -> Result<RawRender, NativeRenderError> {
+    let pointer = unsafe {
+        mant_mandoc_render_buffer(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            include_root.map_or(std::ptr::null(), CStr::as_ptr),
+            i32::from(allow_includes),
+            input_format_code(input_format),
+            render_format,
+            width,
+            i32::from(html_fragment),
+            output_limit,
+        )
+    };
+    copy_render(pointer)
+}
+
+#[cfg(feature = "render")]
+pub(super) fn render_bundle(
+    root: &CStr,
+    bundle: &SourceBundle,
+    input_format: InputFormat,
+    render_format: i32,
+    width: usize,
+    html_fragment: bool,
+    output_limit: usize,
+) -> Result<RawRender, NativeRenderError> {
+    let (_paths, sources) = bundle_sources(bundle);
+    let pointer = unsafe {
+        mant_mandoc_render_bundle(
+            root.as_ptr(),
+            sources.as_ptr(),
+            sources.len(),
+            input_format_code(input_format),
+            render_format,
+            width,
+            i32::from(html_fragment),
+            output_limit,
+        )
+    };
+    copy_render(pointer)
 }
 
 const NODE_GENERATED: u32 = 1 << 0;
@@ -162,6 +295,19 @@ pub(super) fn parse_bundle(
     bundle: &SourceBundle,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
+    let (_paths, sources) = bundle_sources(bundle);
+    let pointer = unsafe {
+        mant_mandoc_parse_bundle(
+            root.as_ptr(),
+            sources.as_ptr(),
+            sources.len(),
+            input_format_code(input_format),
+        )
+    };
+    copy_document(pointer)
+}
+
+fn bundle_sources(bundle: &SourceBundle) -> (Vec<CString>, Vec<CSource>) {
     let paths = bundle
         .sources()
         .map(|(path, _)| CString::new(path).expect("source bundle paths reject NUL bytes"))
@@ -174,16 +320,8 @@ pub(super) fn parse_bundle(
             data: data.as_ptr(),
             length: data.len(),
         })
-        .collect::<Vec<_>>();
-    let pointer = unsafe {
-        mant_mandoc_parse_bundle(
-            root.as_ptr(),
-            sources.as_ptr(),
-            sources.len(),
-            input_format_code(input_format),
-        )
-    };
-    copy_document(pointer)
+        .collect();
+    (paths, sources)
 }
 
 const fn input_format_code(input_format: InputFormat) -> i32 {
@@ -192,6 +330,40 @@ const fn input_format_code(input_format: InputFormat) -> i32 {
         InputFormat::Man => 1,
         InputFormat::Mdoc => 2,
     }
+}
+
+#[cfg(feature = "render")]
+fn copy_render(pointer: *mut CDocument) -> Result<RawRender, NativeRenderError> {
+    let handle = DocumentHandle(NonNull::new(pointer).ok_or_else(|| NativeRenderError {
+        status: 2,
+        message: "libmandoc could not allocate a render result".to_owned(),
+    })?);
+    let document = handle.0.as_ptr();
+    if unsafe { mant_mandoc_document_ok(document) } == 0 {
+        return Err(NativeRenderError {
+            status: unsafe { mant_mandoc_document_render_status(document) },
+            message: unsafe { optional_string(mant_mandoc_document_error(document)) }
+                .unwrap_or_else(|| "libmandoc could not render the source".to_owned()),
+        });
+    }
+    let length = unsafe { mant_mandoc_document_output_length(document) };
+    let output = unsafe { mant_mandoc_document_output(document) };
+    if output.is_null() && length != 0 {
+        return Err(NativeRenderError {
+            status: 2,
+            message: "libmandoc returned an invalid render buffer".to_owned(),
+        });
+    }
+    Ok(RawRender {
+        output: if length == 0 {
+            Vec::new()
+        } else {
+            unsafe { std::slice::from_raw_parts(output, length) }.to_vec()
+        },
+        diagnostics: unsafe {
+            optional_string(mant_mandoc_document_diagnostics(document)).unwrap_or_default()
+        },
+    })
 }
 
 fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {

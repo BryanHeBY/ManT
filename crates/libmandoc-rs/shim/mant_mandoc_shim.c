@@ -32,6 +32,12 @@
 #include "mandoc_parse.h"
 
 #include "mant_mandoc_shim.h"
+#ifdef MANT_MANDOC_RENDER
+#include "main.h"
+#include "manconf.h"
+#include "mant_mandoc_output.h"
+#include "term_tag.h"
+#endif
 
 struct mant_mandoc_table_cell {
 	char			*text;
@@ -81,6 +87,10 @@ struct mant_mandoc_document {
 	char			*alias_target;
 	int			 has_body;
 	struct mant_mandoc_node	*root;
+#ifdef MANT_MANDOC_RENDER
+	struct mant_mandoc_output *output;
+	int			 render_status;
+#endif
 };
 
 MANT_THREAD_LOCAL const struct mant_mandoc_source *bundle_sources;
@@ -144,7 +154,8 @@ set_mant_progname(void)
 
 static char *copy_string(const char *);
 static struct mant_mandoc_document *parse_input(const char *,
-    const unsigned char *, size_t, const char *, int, int);
+    const unsigned char *, size_t, const char *, int, int, int, size_t,
+    int, size_t);
 static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
 static int is_safe_bundle_path(const char *);
@@ -165,13 +176,17 @@ static struct mant_mandoc_table_cell *copy_table_cells(
     const struct tbl_span *);
 static void free_table_cells(struct mant_mandoc_table_cell *);
 static char *copy_equation(const struct eqn_box *);
+#ifdef MANT_MANDOC_RENDER
+static int render_document(struct mant_mandoc_document *,
+    const struct roff_meta *, int, size_t, int, size_t);
+#endif
 
 struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, const char *include_root,
     int allow_include, int input_format)
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format);
+	    input_format, 0, 0, 0, 0);
 }
 
 struct mant_mandoc_document *
@@ -180,7 +195,7 @@ mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
     int input_format)
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format);
+	    input_format, 0, 0, 0, 0);
 }
 
 struct mant_mandoc_document *
@@ -214,7 +229,7 @@ mant_mandoc_parse_bundle(const char *root,
 			    "source bundle does not contain the requested root");
 	} else
 		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format);
+		    NULL, 1, input_format, 0, 0, 0, 0);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
 	return document;
@@ -222,7 +237,9 @@ mant_mandoc_parse_bundle(const char *root,
 
 static struct mant_mandoc_document *
 parse_input(const char *path, const unsigned char *buffer, size_t length,
-    const char *include_root, int allow_include, int input_format)
+    const char *include_root, int allow_include, int input_format,
+    int render_format, size_t render_width, int html_fragment,
+    size_t output_limit)
 {
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
@@ -324,6 +341,16 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	document->ok = document->root != NULL;
 	if (!document->ok)
 		document->error = copy_string("libmandoc produced no syntax tree");
+#ifdef MANT_MANDOC_RENDER
+	else if (render_format != 0 && !render_document(document, meta,
+	    render_format, render_width, html_fragment, output_limit))
+		document->ok = 0;
+#else
+	(void)render_format;
+	(void)render_width;
+	(void)html_fragment;
+	(void)output_limit;
+#endif
 
 #ifndef MANDOC_MEMORY_ONLY
 cleanup:
@@ -347,6 +374,131 @@ cleanup:
 #endif
 	return document;
 }
+
+#ifdef MANT_MANDOC_RENDER
+struct mant_mandoc_document *
+mant_mandoc_render_file(const char *path, const char *include_root,
+    int allow_include, int input_format, int render_format,
+    size_t render_width, int html_fragment, size_t output_limit)
+{
+	return parse_input(path, NULL, 0, include_root, allow_include,
+	    input_format, render_format, render_width, html_fragment,
+	    output_limit);
+}
+
+struct mant_mandoc_document *
+mant_mandoc_render_buffer(const char *path, const unsigned char *buffer,
+    size_t length, const char *include_root, int allow_include,
+    int input_format, int render_format, size_t render_width,
+    int html_fragment, size_t output_limit)
+{
+	return parse_input(path, buffer, length, include_root, allow_include,
+	    input_format, render_format, render_width, html_fragment,
+	    output_limit);
+}
+
+struct mant_mandoc_document *
+mant_mandoc_render_bundle(const char *root,
+    const struct mant_mandoc_source *sources, size_t source_count,
+    int input_format, int render_format, size_t render_width,
+    int html_fragment, size_t output_limit)
+{
+	const struct mant_mandoc_source	*source;
+	struct mant_mandoc_document	*document;
+
+	if (sources == NULL || source_count == 0)
+		return mant_mandoc_parse_bundle(root, sources, source_count,
+		    input_format);
+	if (bundle_sources != NULL) {
+		document = calloc(1, sizeof(*document));
+		if (document != NULL)
+			document->error = copy_string(
+			    "recursive libmandoc bundle entry is unsupported");
+		return document;
+	}
+	bundle_sources = sources;
+	bundle_source_count = source_count;
+	source = find_bundle_source(root);
+	if (source == NULL) {
+		document = calloc(1, sizeof(*document));
+		if (document != NULL)
+			document->error = copy_string(
+			    "source bundle does not contain the requested root");
+	} else
+		document = parse_input(root, source->data, source->length,
+		    NULL, 1, input_format, render_format, render_width,
+		    html_fragment, output_limit);
+	bundle_sources = NULL;
+	bundle_source_count = 0;
+	return document;
+}
+
+static int
+render_document(struct mant_mandoc_document *document,
+    const struct roff_meta *meta, int format, size_t width,
+    int html_fragment, size_t output_limit)
+{
+	struct manoutput options;
+	void		*renderer;
+	int		 status;
+
+	document->output = mant_mandoc_output_alloc(output_limit);
+	if (document->output == NULL ||
+	    !mant_mandoc_output_begin(document->output)) {
+		document->render_status = 2;
+		document->error = copy_string(
+		    "could not initialize isolated renderer output");
+		return 0;
+	}
+	memset(&options, 0, sizeof(options));
+	options.width = width;
+	options.fragment = html_fragment;
+	switch (format) {
+	case 1:
+		renderer = ascii_alloc(&options);
+		if (meta->macroset == MACROSET_MDOC)
+			terminal_mdoc(renderer, meta);
+		else
+			terminal_man(renderer, meta);
+		ascii_free(renderer);
+		break;
+	case 2:
+		renderer = html_alloc(&options);
+		if (meta->macroset == MACROSET_MDOC)
+			html_mdoc(renderer, meta);
+		else
+			html_man(renderer, meta);
+		html_free(renderer);
+		break;
+	default:
+		mant_mandoc_output_end();
+		document->render_status = 3;
+		document->error = copy_string("unknown renderer output format");
+		return 0;
+	}
+	mant_mandoc_output_end();
+	status = mant_mandoc_output_status(document->output);
+	if (status == 1)
+		document->render_status = 1;
+	if (status == 1)
+		document->error = copy_string(
+		    "rendered output exceeds the configured byte limit");
+	else if (status != 0) {
+		document->render_status = 2;
+		document->error = copy_string(
+		    "could not allocate isolated renderer output");
+	}
+	return status == 0;
+}
+
+/* Embedded rendering never creates pager tag files. */
+void
+term_tag_write(struct roff_node *node, size_t line)
+{
+	(void)node;
+	(void)line;
+}
+#endif
 
 int
 mant_mandoc_read_bundle(struct mparse *parser, const char *path)
@@ -652,6 +804,9 @@ mant_mandoc_document_free(struct mant_mandoc_document *document)
 	free(document->date);
 	free(document->alias_target);
 	free_node(document->root);
+#ifdef MANT_MANDOC_RENDER
+	mant_mandoc_output_free(document->output);
+#endif
 	free(document);
 }
 
@@ -1136,6 +1291,30 @@ mant_mandoc_document_root(const struct mant_mandoc_document *document)
 {
 	return document == NULL ? NULL : document->root;
 }
+
+#ifdef MANT_MANDOC_RENDER
+const unsigned char *
+mant_mandoc_document_output(const struct mant_mandoc_document *document)
+{
+	return document == NULL ? NULL :
+	    mant_mandoc_output_data(document->output);
+}
+
+size_t
+mant_mandoc_document_output_length(
+    const struct mant_mandoc_document *document)
+{
+	return document == NULL ? 0 :
+	    mant_mandoc_output_length(document->output);
+}
+
+int
+mant_mandoc_document_render_status(
+    const struct mant_mandoc_document *document)
+{
+	return document == NULL ? 2 : document->render_status;
+}
+#endif
 
 int
 mant_mandoc_node_kind(const struct mant_mandoc_node *node)

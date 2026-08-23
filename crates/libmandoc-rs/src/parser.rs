@@ -336,7 +336,7 @@ impl Parser {
         })
     }
 
-    fn include_root(&self) -> Result<(Option<CString>, bool), ParseError> {
+    pub(crate) fn include_root(&self) -> Result<(Option<CString>, bool), ParseError> {
         match &self.options.includes {
             IncludePolicy::Deny => Ok((None, false)),
             #[cfg(unix)]
@@ -364,12 +364,12 @@ impl Parser {
 }
 
 #[cfg(unix)]
-fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
+pub(crate) fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
     CString::new(path.as_os_str().as_bytes())
 }
 
 #[cfg(windows)]
-fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
+pub(crate) fn path_label(path: &Path) -> Result<CString, std::ffi::NulError> {
     CString::new(path.to_string_lossy().as_bytes())
 }
 

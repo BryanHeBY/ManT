@@ -18,10 +18,14 @@ to depend on libmandoc's private C structures or parser lifetime.
 - Structured non-fatal diagnostics and typed source/decompression failures.
 - Top-level uncompressed, gzip, and zstd manual sources.
 - Concurrent parser calls with thread-local upstream and shim state.
+- An optional `render` feature exposing bounded upstream ASCII and HTML
+  reference output without writing to process standard output.
 
-The crate is a parser layer only.  It intentionally does not render terminal
-output or HTML, locate system manual pages, interpret application-specific
-section models, or run a pager.
+The default crate remains a parser layer only. It intentionally does not
+locate system manual pages, interpret application-specific section models, or
+run a pager. The optional reference renderers format the native tree in the
+same call that parses it; they do not turn the owned Rust AST into a second
+document model, and `ManT`'s existing engine integration remains unchanged.
 
 ## Boundary model
 
@@ -94,6 +98,15 @@ omits deeper descendants; ordinary manuals remain far below the limit.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
+
+Enable the default-off `render` feature to use `Renderer`. `RenderFormat::Ascii`
+produces portable terminal text at a caller-selected width;
+`RenderFormat::Html` produces either a complete document or a fragment. Every
+call has a configurable byte cap (8 MiB by default, 64 MiB maximum), and an
+overflow returns an error rather than a partial result. Output is captured in
+a per-thread native sink, so concurrent calls neither share renderer state nor
+write to the process's `stdout`. `render_file`, `render_bytes`, and
+`render_bundle` retain the corresponding parser transport and `.so` policies.
 
 ## Compression contract
 
@@ -201,6 +214,10 @@ the ordered patches in `patches/series`:
 - `0013-memory-source-bundles.patch` lets the memory parser recursively read
   `.so` targets from the shim's per-call virtual source tree and finalizes only
   after the outermost memory source, with the same recursion bound as files.
+- `0014-isolate-renderer-output.patch` routes ASCII and HTML bytes into the
+  shim's bounded per-call sink, makes formatter ID/tab state thread-local,
+  releases per-call tab storage, and widens small integer-format buffers to
+  their complete representable sizes.
 
 Each is a narrow parser or portability correction. They are not a forked
 renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the

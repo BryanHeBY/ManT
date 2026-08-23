@@ -120,7 +120,7 @@ print_tbl(struct html *h, const struct tbl_span *sp)
 	const char		*hspans, *vspans, *halign, *valign;
 	const char		*bborder, *lborder, *rborder;
 	const char		*ccp;
-	char			 hbuf[4], vbuf[4];
+	char			 hbuf[12], vbuf[12];
 	size_t			 sz;
 	enum mandoc_esc		 save_font;
 	int			 i;
