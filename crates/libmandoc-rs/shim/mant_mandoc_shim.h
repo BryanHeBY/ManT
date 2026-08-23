@@ -128,13 +128,6 @@ struct mant_mandoc_document *mant_mandoc_parse_buffer(
     mant_mandoc_source_resolver, void *);
 struct mant_mandoc_document *mant_mandoc_parse_bundle(
     const char *, const struct mant_mandoc_source *, size_t, int);
-struct mant_mandoc_document *mant_mandoc_parse_file_view(
-    const char *, const char *, int, int);
-struct mant_mandoc_document *mant_mandoc_parse_buffer_view(
-    const char *, const unsigned char *, size_t, const char *, int, int,
-    mant_mandoc_source_resolver, void *);
-struct mant_mandoc_document *mant_mandoc_parse_bundle_view(
-    const char *, const struct mant_mandoc_source *, size_t, int);
 #ifdef MANT_MANDOC_RENDER
 struct mant_mandoc_document *mant_mandoc_render_file(
     const char *, const char *, int, int, int, size_t, int, size_t);
@@ -168,8 +161,6 @@ const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document 
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
-const struct mant_mandoc_node *mant_mandoc_document_view_root(
-    const struct mant_mandoc_document *);
 int mant_mandoc_node_snapshot(struct mant_mandoc_document *,
     const struct mant_mandoc_node *, struct mant_mandoc_node_view *);
 int mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *,
@@ -183,44 +174,6 @@ size_t mant_mandoc_document_output_length(
 int mant_mandoc_document_render_status(
     const struct mant_mandoc_document *);
 #endif
-
-int mant_mandoc_node_kind(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_macro(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_text(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_tag(const struct mant_mandoc_node *);
-int mant_mandoc_node_line(const struct mant_mandoc_node *);
-int mant_mandoc_node_column(const struct mant_mandoc_node *);
-unsigned int mant_mandoc_node_flags(const struct mant_mandoc_node *);
-int mant_mandoc_node_list_kind(const struct mant_mandoc_node *);
-int mant_mandoc_node_display_kind(const struct mant_mandoc_node *);
-int mant_mandoc_node_font_kind(const struct mant_mandoc_node *);
-int mant_mandoc_node_author_mode(const struct mant_mandoc_node *);
-int mant_mandoc_node_compact(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_offset(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_width(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_enclosure_open(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_enclosure_close(const struct mant_mandoc_node *);
-const char *mant_mandoc_node_equation(const struct mant_mandoc_node *);
-const struct mant_mandoc_table_cell *mant_mandoc_node_table_cells(
-    const struct mant_mandoc_node *);
-const char *mant_mandoc_table_cell_text(
-    const struct mant_mandoc_table_cell *);
-int mant_mandoc_table_cell_is_text_block(
-    const struct mant_mandoc_table_cell *);
-int mant_mandoc_table_cell_is_vertical_continuation(
-    const struct mant_mandoc_table_cell *);
-unsigned int mant_mandoc_table_cell_column_span(
-    const struct mant_mandoc_table_cell *);
-unsigned int mant_mandoc_table_cell_row_span(
-    const struct mant_mandoc_table_cell *);
-int mant_mandoc_table_cell_alignment(
-    const struct mant_mandoc_table_cell *);
-const struct mant_mandoc_table_cell *mant_mandoc_table_cell_next(
-    const struct mant_mandoc_table_cell *);
-const struct mant_mandoc_node *mant_mandoc_node_child(
-    const struct mant_mandoc_node *);
-const struct mant_mandoc_node *mant_mandoc_node_next(
-    const struct mant_mandoc_node *);
 
 #ifdef __cplusplus
 }

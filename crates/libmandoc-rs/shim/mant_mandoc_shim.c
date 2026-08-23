@@ -2,9 +2,8 @@
  * Owned compatibility layer for the pinned libmandoc parser.
  *
  * libmandoc's syntax tree and diagnostic writer are private implementation
- * details with session-local lifetime. The legacy path copies them into small
- * opaque structures; the view path retains the parser only while Rust copies
- * borrowed snapshots into its owned public tree.
+ * details with session-local lifetime. A parse result retains the parser only
+ * while Rust copies borrowed snapshots into its owned public tree.
  */
 #include "config.h"
 #include "mant_thread_local.h"
@@ -39,57 +38,13 @@
 #include "term_tag.h"
 #endif
 
-struct mant_mandoc_table_cell {
-	char			*text;
-	int			 text_block;
-	int			 vertical_continuation;
-	unsigned int		 column_span;
-	unsigned int		 row_span;
-	int			 alignment;
-	struct mant_mandoc_table_cell *next;
-};
-
-struct mant_mandoc_node {
-	int			 kind;
-	char			*macro;
-	char			*text;
-	char			*tag;
-	int			 line;
-	int			 column;
-	unsigned int		 flags;
-	int			 list_kind;
-	int			 display_kind;
-	int			 font_kind;
-	int			 author_mode;
-	int			 compact;
-	char			*offset;
-	char			*width;
-	char			*enclosure_open;
-	char			*enclosure_close;
-	char			*equation;
-	struct mant_mandoc_table_cell *table_cells;
-	struct mant_mandoc_node	*child;
-	struct mant_mandoc_node	*next;
-};
-
 struct mant_mandoc_document {
 	int			 ok;
 	char			*error;
 	char			*diagnostics;
-	int			 macroset;
-	char			*title;
-	char			*section;
-	char			*volume;
-	char			*os;
-	char			*arch;
-	char			*name;
-	char			*date;
-	char			*alias_target;
-	int			 has_body;
-	struct mant_mandoc_node	*root;
-	struct mparse		*view_parser;
-	const struct roff_node	*view_root;
-	char			*view_equation;
+	struct mparse		*parser;
+	const struct roff_meta	*meta;
+	char			*equation;
 #ifdef MANT_MANDOC_RENDER
 	struct mant_mandoc_output *output;
 	int			 render_status;
@@ -140,16 +95,14 @@ set_mant_progname(void)
  *
  * libmandoc bounds .so include depth but not block/inline nesting, so a
  * pathological or hostile page (thousands of nested .RS or .Bl) yields a tree
- * deep enough to overflow the stack when it is copied, freed, lowered, or
- * dropped. Capping copy_node keeps the *owned node tree* finite, which
- * transitively bounds every later recursive walk over that tree -- free_node
- * here and the lowering pass across the FFI.
+ * deep enough to overflow the stack when it is copied, lowered, or dropped.
+ * Rust caps its borrowed node walk so the resulting owned tree stays finite.
  *
  * It does not, however, bound sub-structures that hang off a node and are
  * walked from their own source tree: the eqn box tree is copied by descending
  * eqn_box->first independently of node depth, so copy_equation applies this
  * same cap itself. Any future payload with its own nested source structure
- * must do likewise -- one cap at copy_node is not automatically enough.
+ * must do likewise -- one cap on the node walk is not automatically enough.
  *
  * libmandoc's own parser is iterative and does not overflow on deep input, so
  * no pre-parse depth check is needed; the caps on our recursive walks suffice.
@@ -166,9 +119,7 @@ static struct mant_mandoc_document *parse_bundle_mode(const char *,
 static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
 static int is_safe_bundle_path(const char *);
-static struct mant_mandoc_node *copy_node(const struct roff_node *, int);
 static unsigned int snapshot_node_flags(const struct roff_node *);
-static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
 #ifndef MANDOC_MEMORY_ONLY
 static void set_source_root_from_path(const char *);
@@ -178,13 +129,8 @@ static int open_beneath_root(const char *, int, mode_t);
 static int open_beside_source(const char *, int, mode_t);
 static int is_safe_relative_path(const char *);
 #endif
-static void copy_normalized_data(struct mant_mandoc_node *,
-    const struct roff_node *);
 static void snapshot_normalized_data(struct mant_mandoc_node_view *,
     const struct roff_node *);
-static struct mant_mandoc_table_cell *copy_table_cells(
-    const struct tbl_span *);
-static void free_table_cells(struct mant_mandoc_table_cell *);
 static char *copy_equation(const struct eqn_box *);
 #ifdef MANT_MANDOC_RENDER
 static int render_document(struct mant_mandoc_document *,
@@ -196,7 +142,7 @@ mant_mandoc_parse_file(const char *path, const char *include_root,
     int allow_include, int input_format)
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, 0, 0, 0, 0, NULL, NULL, 0);
+	    input_format, 0, 0, 0, 0, NULL, NULL, 1);
 }
 
 struct mant_mandoc_document *
@@ -206,37 +152,11 @@ mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
     void *resolver_context)
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format, 0, 0, 0, 0, resolver, resolver_context, 0);
-}
-
-struct mant_mandoc_document *
-mant_mandoc_parse_bundle(const char *root,
-    const struct mant_mandoc_source *sources, size_t source_count,
-    int input_format)
-{
-	return parse_bundle_mode(root, sources, source_count, input_format, 0);
-}
-
-struct mant_mandoc_document *
-mant_mandoc_parse_file_view(const char *path, const char *include_root,
-    int allow_include, int input_format)
-{
-	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, 0, 0, 0, 0, NULL, NULL, 1);
-}
-
-struct mant_mandoc_document *
-mant_mandoc_parse_buffer_view(const char *path,
-    const unsigned char *buffer, size_t length, const char *include_root,
-    int allow_include, int input_format,
-    mant_mandoc_source_resolver resolver, void *resolver_context)
-{
-	return parse_input(path, buffer, length, include_root, allow_include,
 	    input_format, 0, 0, 0, 0, resolver, resolver_context, 1);
 }
 
 struct mant_mandoc_document *
-mant_mandoc_parse_bundle_view(const char *root,
+mant_mandoc_parse_bundle(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
     int input_format)
 {
@@ -393,28 +313,18 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	(void)output_limit;
 #endif
 	{
-		document->macroset = (int)meta->macroset;
-		document->title = copy_string(meta->title);
-		document->section = copy_string(meta->msec);
-		document->volume = copy_string(meta->vol);
-		document->os = copy_string(meta->os);
-		document->arch = copy_string(meta->arch);
-		document->name = copy_string(meta->name);
-		document->date = copy_string(meta->date);
-		document->alias_target = copy_string(meta->sodest);
-		document->has_body = document_has_body(meta);
-		if (retain_parser) {
-			document->view_parser = parser;
-			document->view_root = meta->first;
-			parser = NULL;
-			document->ok = document->view_root != NULL;
-		} else {
-			document->root = copy_node(meta->first, 0);
-			document->ok = document->root != NULL;
-		}
-		if (!document->ok)
+		if (!retain_parser) {
 			document->error = copy_string(
-			    "libmandoc produced no syntax tree");
+			    "syntax tree requested without retaining the parser");
+		} else {
+			document->parser = parser;
+			document->meta = meta;
+			parser = NULL;
+			document->ok = meta->first != NULL;
+			if (!document->ok)
+				document->error = copy_string(
+				    "libmandoc produced no syntax tree");
+		}
 	}
 
 #ifndef MANDOC_MEMORY_ONLY
@@ -917,18 +827,9 @@ mant_mandoc_document_free(struct mant_mandoc_document *document)
 		return;
 	free(document->error);
 	free(document->diagnostics);
-	free(document->title);
-	free(document->section);
-	free(document->volume);
-	free(document->os);
-	free(document->arch);
-	free(document->name);
-	free(document->date);
-	free(document->alias_target);
-	free_node(document->root);
-	free(document->view_equation);
-	if (document->view_parser != NULL)
-		mparse_free(document->view_parser);
+	free(document->equation);
+	if (document->parser != NULL)
+		mparse_free(document->parser);
 #ifdef MANT_MANDOC_RENDER
 	mant_mandoc_output_free(document->output);
 #endif
@@ -1045,46 +946,6 @@ read_diagnostics(FILE *stream)
 	return buffer;
 }
 
-static struct mant_mandoc_node *
-copy_node(const struct roff_node *source, int depth)
-{
-	const struct roff_node		*source_child;
-	struct mant_mandoc_node		*node, **next_child;
-
-	if (source == NULL)
-		return NULL;
-	/* Stop descending past the depth cap so the owned tree stays finite. */
-	if (depth >= MANT_MANDOC_MAX_COPY_DEPTH)
-		return NULL;
-	node = calloc(1, sizeof(*node));
-	if (node == NULL)
-		return NULL;
-	node->kind = (int)source->type;
-	if (source->type != ROFFT_ROOT && source->tok != TOKEN_NONE)
-		node->macro = copy_string(roff_name[source->tok]);
-	if (source->type == ROFFT_TEXT || source->type == ROFFT_COMMENT)
-		node->text = copy_string(source->string);
-	node->tag = copy_string(source->tag);
-	node->line = source->line;
-	node->column = source->pos + 1;
-	copy_normalized_data(node, source);
-	if (source->type == ROFFT_TBL)
-		node->table_cells = copy_table_cells(source->span);
-	else if (source->type == ROFFT_EQN)
-		node->equation = copy_equation(source->eqn);
-	node->flags = snapshot_node_flags(source);
-
-	next_child = &node->child;
-	for (source_child = source->child; source_child != NULL;
-	    source_child = source_child->next) {
-		*next_child = copy_node(source_child, depth + 1);
-		if (*next_child == NULL)
-			break;
-		next_child = &(*next_child)->next;
-	}
-	return node;
-}
-
 static unsigned int
 snapshot_node_flags(const struct roff_node *source)
 {
@@ -1112,83 +973,6 @@ snapshot_node_flags(const struct roff_node *source)
 	if (source->flags & NODE_SYNPRETTY)
 		flags |= MANT_MANDOC_NODE_SYNOPSIS_PRETTY;
 	return flags;
-}
-
-static void
-free_node(struct mant_mandoc_node *node)
-{
-	struct mant_mandoc_node	*next;
-
-	while (node != NULL) {
-		next = node->next;
-		free_node(node->child);
-		free(node->macro);
-		free(node->text);
-		free(node->tag);
-		free(node->offset);
-		free(node->width);
-		free(node->enclosure_open);
-		free(node->enclosure_close);
-		free(node->equation);
-		free_table_cells(node->table_cells);
-		free(node);
-		node = next;
-	}
-}
-
-static struct mant_mandoc_table_cell *
-copy_table_cells(const struct tbl_span *span)
-{
-	const struct tbl_dat		*source;
-	struct mant_mandoc_table_cell	*first, **next;
-
-	if (span == NULL || span->pos != TBL_SPAN_DATA)
-		return NULL;
-	first = NULL;
-	next = &first;
-	for (source = span->first; source != NULL; source = source->next) {
-		*next = calloc(1, sizeof(**next));
-		if (*next == NULL)
-			break;
-		(*next)->text = copy_string(source->string);
-		(*next)->text_block = source->block;
-		/*
-		 * tbl accepts both a `^' layout cell and a literal `\\^'
-		 * data cell as a vertical continuation.  Keep that parser fact
-		 * separate from its printable string so downstream AST users do
-		 * not need to duplicate libmandoc's private tbl rules.
-		 */
-		(*next)->vertical_continuation =
-		    (source->layout != NULL &&
-		     source->layout->pos == TBL_CELL_DOWN) ||
-		    (source->string != NULL && !strcmp(source->string, "\\^"));
-		(*next)->column_span = source->hspans < 0 ? 1U :
-		    (unsigned int)source->hspans + 1U;
-		(*next)->row_span = source->vspans < 0 ? 1U :
-		    (unsigned int)source->vspans + 1U;
-		if (source->layout != NULL &&
-		    source->layout->pos == TBL_CELL_CENTRE)
-			(*next)->alignment = 1;
-		else if (source->layout != NULL &&
-		    (source->layout->pos == TBL_CELL_RIGHT ||
-		     source->layout->pos == TBL_CELL_NUMBER))
-			(*next)->alignment = 2;
-		next = &(*next)->next;
-	}
-	return first;
-}
-
-static void
-free_table_cells(struct mant_mandoc_table_cell *cell)
-{
-	struct mant_mandoc_table_cell	*next;
-
-	while (cell != NULL) {
-		next = cell->next;
-		free(cell->text);
-		free(cell);
-		cell = next;
-	}
 }
 
 struct text_buffer {
@@ -1300,25 +1084,6 @@ append_text(struct text_buffer *buffer, const char *text)
 }
 
 static void
-copy_normalized_data(struct mant_mandoc_node *node,
-    const struct roff_node *source)
-{
-	struct mant_mandoc_node_view view;
-
-	memset(&view, 0, sizeof(view));
-	snapshot_normalized_data(&view, source);
-	node->list_kind = view.list_kind;
-	node->display_kind = view.display_kind;
-	node->font_kind = view.font_kind;
-	node->author_mode = view.author_mode;
-	node->compact = view.compact;
-	node->offset = copy_string(view.offset);
-	node->width = copy_string(view.width);
-	node->enclosure_open = copy_string(view.enclosure_open);
-	node->enclosure_close = copy_string(view.enclosure_close);
-}
-
-static void
 snapshot_normalized_data(struct mant_mandoc_node_view *view,
     const struct roff_node *source)
 {
@@ -1417,39 +1182,57 @@ document_has_body(const struct roff_meta *meta)
 	return 0;
 }
 
-#define DOCUMENT_INT_ACCESSOR(name, field) \
-	int name(const struct mant_mandoc_document *document) \
-	{ return document == NULL ? 0 : document->field; }
+int
+mant_mandoc_document_ok(const struct mant_mandoc_document *document)
+{
+	return document == NULL ? 0 : document->ok;
+}
 
-#define DOCUMENT_STRING_ACCESSOR(name, field) \
+const char *
+mant_mandoc_document_error(const struct mant_mandoc_document *document)
+{
+	return document == NULL ? NULL : document->error;
+}
+
+const char *
+mant_mandoc_document_diagnostics(const struct mant_mandoc_document *document)
+{
+	return document == NULL ? NULL : document->diagnostics;
+}
+
+int
+mant_mandoc_document_macroset(const struct mant_mandoc_document *document)
+{
+	return document == NULL || document->meta == NULL ? 0 :
+	    (int)document->meta->macroset;
+}
+
+#define DOCUMENT_META_STRING_ACCESSOR(name, field) \
 	const char *name(const struct mant_mandoc_document *document) \
-	{ return document == NULL ? NULL : document->field; }
+	{ return document == NULL || document->meta == NULL ? NULL : \
+	    document->meta->field; }
 
-DOCUMENT_INT_ACCESSOR(mant_mandoc_document_ok, ok)
-DOCUMENT_INT_ACCESSOR(mant_mandoc_document_macroset, macroset)
-DOCUMENT_INT_ACCESSOR(mant_mandoc_document_has_body, has_body)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_error, error)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_diagnostics, diagnostics)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_title, title)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_section, section)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_volume, volume)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_os, os)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_arch, arch)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_name, name)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_date, date)
-DOCUMENT_STRING_ACCESSOR(mant_mandoc_document_alias_target, alias_target)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_title, title)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_section, msec)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_volume, vol)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_os, os)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_arch, arch)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_name, name)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_date, date)
+DOCUMENT_META_STRING_ACCESSOR(mant_mandoc_document_alias_target, sodest)
+
+int
+mant_mandoc_document_has_body(const struct mant_mandoc_document *document)
+{
+	return document == NULL ? 0 : document_has_body(document->meta);
+}
 
 const struct mant_mandoc_node *
 mant_mandoc_document_root(const struct mant_mandoc_document *document)
 {
-	return document == NULL ? NULL : document->root;
-}
-
-const struct mant_mandoc_node *
-mant_mandoc_document_view_root(const struct mant_mandoc_document *document)
-{
 	return document == NULL ? NULL :
-	    (const struct mant_mandoc_node *)document->view_root;
+	    (const struct mant_mandoc_node *)(document->meta == NULL ? NULL :
+	    document->meta->first);
 }
 
 int
@@ -1459,7 +1242,7 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 {
 	const struct roff_node *source;
 
-	if (document == NULL || document->view_parser == NULL || node == NULL ||
+	if (document == NULL || document->parser == NULL || node == NULL ||
 	    view == NULL)
 		return 0;
 	source = (const struct roff_node *)node;
@@ -1479,9 +1262,9 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 		view->table_cells =
 		    (const struct mant_mandoc_table_cell *)source->span->first;
 	else if (source->type == ROFFT_EQN) {
-		free(document->view_equation);
-		document->view_equation = copy_equation(source->eqn);
-		view->equation = document->view_equation;
+		free(document->equation);
+		document->equation = copy_equation(source->eqn);
+		view->equation = document->equation;
 	}
 	view->child = (const struct mant_mandoc_node *)source->child;
 	view->next = (const struct mant_mandoc_node *)source->next;
@@ -1495,7 +1278,7 @@ mant_mandoc_table_cell_snapshot(const struct mant_mandoc_document *document,
 {
 	const struct tbl_dat *source;
 
-	if (document == NULL || document->view_parser == NULL || cell == NULL ||
+	if (document == NULL || document->parser == NULL || cell == NULL ||
 	    view == NULL)
 		return 0;
 	source = (const struct tbl_dat *)cell;
@@ -1543,166 +1326,3 @@ mant_mandoc_document_render_status(
 	return document == NULL ? 2 : document->render_status;
 }
 #endif
-
-int
-mant_mandoc_node_kind(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? MANT_MANDOC_ROOT : node->kind;
-}
-
-const char *
-mant_mandoc_node_macro(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->macro;
-}
-
-const char *
-mant_mandoc_node_text(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->text;
-}
-
-const char *
-mant_mandoc_node_tag(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->tag;
-}
-
-int
-mant_mandoc_node_line(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? 0 : node->line;
-}
-
-int
-mant_mandoc_node_column(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? 0 : node->column;
-}
-
-unsigned int
-mant_mandoc_node_flags(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? 0 : node->flags;
-}
-
-int
-mant_mandoc_node_list_kind(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? MANT_MANDOC_LIST_NONE : node->list_kind;
-}
-
-int
-mant_mandoc_node_display_kind(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? MANT_MANDOC_DISPLAY_NONE : node->display_kind;
-}
-
-int
-mant_mandoc_node_font_kind(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? MANT_MANDOC_FONT_NONE : node->font_kind;
-}
-
-int
-mant_mandoc_node_author_mode(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? MANT_MANDOC_AUTHOR_NONE : node->author_mode;
-}
-
-int
-mant_mandoc_node_compact(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? 0 : node->compact;
-}
-
-const char *
-mant_mandoc_node_offset(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->offset;
-}
-
-const char *
-mant_mandoc_node_width(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->width;
-}
-
-const char *
-mant_mandoc_node_enclosure_open(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->enclosure_open;
-}
-
-const char *
-mant_mandoc_node_enclosure_close(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->enclosure_close;
-}
-
-const char *
-mant_mandoc_node_equation(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->equation;
-}
-
-const struct mant_mandoc_table_cell *
-mant_mandoc_node_table_cells(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->table_cells;
-}
-
-const char *
-mant_mandoc_table_cell_text(const struct mant_mandoc_table_cell *cell)
-{
-	return cell == NULL ? NULL : cell->text;
-}
-
-int
-mant_mandoc_table_cell_is_text_block(const struct mant_mandoc_table_cell *cell)
-{
-	return cell == NULL ? 0 : cell->text_block;
-}
-
-int
-mant_mandoc_table_cell_is_vertical_continuation(
-	const struct mant_mandoc_table_cell *cell)
-{
-	return cell == NULL ? 0 : cell->vertical_continuation;
-}
-
-unsigned int
-mant_mandoc_table_cell_column_span(const struct mant_mandoc_table_cell *cell)
-{
-	return cell == NULL ? 1U : cell->column_span;
-}
-
-unsigned int
-mant_mandoc_table_cell_row_span(const struct mant_mandoc_table_cell *cell)
-{
-	return cell == NULL ? 1U : cell->row_span;
-}
-
-int
-mant_mandoc_table_cell_alignment(const struct mant_mandoc_table_cell *cell)
-{
-	return cell == NULL ? 0 : cell->alignment;
-}
-
-const struct mant_mandoc_table_cell *
-mant_mandoc_table_cell_next(const struct mant_mandoc_table_cell *cell)
-{
-	return cell == NULL ? NULL : cell->next;
-}
-
-const struct mant_mandoc_node *
-mant_mandoc_node_child(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->child;
-}
-
-const struct mant_mandoc_node *
-mant_mandoc_node_next(const struct mant_mandoc_node *node)
-{
-	return node == NULL ? NULL : node->next;
-}

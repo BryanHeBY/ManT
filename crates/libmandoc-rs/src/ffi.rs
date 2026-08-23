@@ -1,4 +1,4 @@
-//! Unsafe declarations and immediate copying for the opaque C shim.
+//! Unsafe declarations and immediate ownership transfer from the opaque C shim.
 
 use std::{
     ffi::{CStr, CString},
@@ -124,29 +124,6 @@ unsafe extern "C" {
         source_count: usize,
         input_format: i32,
     ) -> *mut CDocument;
-    #[cfg(unix)]
-    fn mant_mandoc_parse_file_view(
-        path: *const c_char,
-        include_root: *const c_char,
-        allow_include: i32,
-        input_format: i32,
-    ) -> *mut CDocument;
-    fn mant_mandoc_parse_buffer_view(
-        path: *const c_char,
-        buffer: *const u8,
-        length: usize,
-        include_root: *const c_char,
-        allow_include: i32,
-        input_format: i32,
-        resolver: Option<CSourceResolver>,
-        resolver_context: *mut c_void,
-    ) -> *mut CDocument;
-    fn mant_mandoc_parse_bundle_view(
-        root: *const c_char,
-        sources: *const CSource,
-        source_count: usize,
-        input_format: i32,
-    ) -> *mut CDocument;
     #[cfg(all(feature = "render", unix))]
     fn mant_mandoc_render_file(
         path: *const c_char,
@@ -199,7 +176,6 @@ unsafe extern "C" {
     fn mant_mandoc_document_alias_target(document: *const CDocument) -> *const c_char;
     fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
     fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
-    fn mant_mandoc_document_view_root(document: *const CDocument) -> *const CNode;
     fn mant_mandoc_node_snapshot(
         document: *mut CDocument,
         node: *const CNode,
@@ -218,33 +194,6 @@ unsafe extern "C" {
     fn mant_mandoc_document_render_status(document: *const CDocument) -> i32;
     #[cfg(all(feature = "render", test))]
     fn mant_mandoc_ctype_locale() -> *const c_char;
-    fn mant_mandoc_node_kind(node: *const CNode) -> i32;
-    fn mant_mandoc_node_macro(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_text(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_tag(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_line(node: *const CNode) -> i32;
-    fn mant_mandoc_node_column(node: *const CNode) -> i32;
-    fn mant_mandoc_node_flags(node: *const CNode) -> u32;
-    fn mant_mandoc_node_list_kind(node: *const CNode) -> i32;
-    fn mant_mandoc_node_display_kind(node: *const CNode) -> i32;
-    fn mant_mandoc_node_font_kind(node: *const CNode) -> i32;
-    fn mant_mandoc_node_author_mode(node: *const CNode) -> i32;
-    fn mant_mandoc_node_compact(node: *const CNode) -> i32;
-    fn mant_mandoc_node_offset(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_width(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_enclosure_open(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_enclosure_close(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_equation(node: *const CNode) -> *const c_char;
-    fn mant_mandoc_node_table_cells(node: *const CNode) -> *const CTableCell;
-    fn mant_mandoc_table_cell_text(cell: *const CTableCell) -> *const c_char;
-    fn mant_mandoc_table_cell_is_text_block(cell: *const CTableCell) -> i32;
-    fn mant_mandoc_table_cell_is_vertical_continuation(cell: *const CTableCell) -> i32;
-    fn mant_mandoc_table_cell_column_span(cell: *const CTableCell) -> u32;
-    fn mant_mandoc_table_cell_row_span(cell: *const CTableCell) -> u32;
-    fn mant_mandoc_table_cell_alignment(cell: *const CTableCell) -> i32;
-    fn mant_mandoc_table_cell_next(cell: *const CTableCell) -> *const CTableCell;
-    fn mant_mandoc_node_child(node: *const CNode) -> *const CNode;
-    fn mant_mandoc_node_next(node: *const CNode) -> *const CNode;
 }
 
 #[cfg(all(feature = "render", test))]
@@ -388,7 +337,6 @@ const NODE_DELIMITER_OPEN: u32 = 1 << 7;
 const NODE_DELIMITER_CLOSE: u32 = 1 << 8;
 const NODE_SYNOPSIS_PRETTY: u32 = 1 << 9;
 const MAX_OWNED_NODE_DEPTH: usize = 256;
-const USE_BORROWED_AST_VIEW: bool = false;
 
 struct DocumentHandle(NonNull<CDocument>);
 
@@ -405,9 +353,6 @@ pub(super) fn parse_file(
     allow_includes: bool,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
-    if USE_BORROWED_AST_VIEW {
-        return parse_file_view(path, include_root, allow_includes, input_format);
-    }
     let pointer = unsafe {
         mant_mandoc_parse_file(
             path.as_ptr(),
@@ -427,9 +372,6 @@ pub(super) fn parse_buffer(
     allow_includes: bool,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
-    if USE_BORROWED_AST_VIEW {
-        return parse_buffer_view(path, buffer, include_root, allow_includes, input_format);
-    }
     let pointer = unsafe {
         mant_mandoc_parse_buffer(
             path.as_ptr(),
@@ -453,9 +395,6 @@ pub(super) fn parse_buffer(
     allow_includes: bool,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
-    if USE_BORROWED_AST_VIEW {
-        return parse_buffer_view(path, buffer, include_root, allow_includes, input_format);
-    }
     let mut resolver = include_root.map(windows_root::RootResolver::new);
     let (callback, context) = windows_root::callback_parts(resolver.as_mut());
     let pointer = unsafe {
@@ -478,9 +417,6 @@ pub(super) fn parse_bundle(
     bundle: &SourceBundle,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
-    if USE_BORROWED_AST_VIEW {
-        return parse_bundle_view(root, bundle, input_format);
-    }
     let (_paths, sources) = bundle_sources(bundle);
     let pointer = unsafe {
         mant_mandoc_parse_bundle(
@@ -491,89 +427,6 @@ pub(super) fn parse_bundle(
         )
     };
     copy_document(pointer)
-}
-
-#[cfg(unix)]
-pub(super) fn parse_file_view(
-    path: &CStr,
-    include_root: Option<&CStr>,
-    allow_includes: bool,
-    input_format: InputFormat,
-) -> Result<RawDocument, String> {
-    let pointer = unsafe {
-        mant_mandoc_parse_file_view(
-            path.as_ptr(),
-            include_root.map_or(std::ptr::null(), CStr::as_ptr),
-            i32::from(allow_includes),
-            input_format_code(input_format),
-        )
-    };
-    copy_document_view(pointer)
-}
-
-#[cfg(unix)]
-pub(super) fn parse_buffer_view(
-    path: &CStr,
-    buffer: &[u8],
-    include_root: Option<&CStr>,
-    allow_includes: bool,
-    input_format: InputFormat,
-) -> Result<RawDocument, String> {
-    let pointer = unsafe {
-        mant_mandoc_parse_buffer_view(
-            path.as_ptr(),
-            buffer.as_ptr(),
-            buffer.len(),
-            include_root.map_or(std::ptr::null(), CStr::as_ptr),
-            i32::from(allow_includes),
-            input_format_code(input_format),
-            None,
-            std::ptr::null_mut(),
-        )
-    };
-    copy_document_view(pointer)
-}
-
-#[cfg(windows)]
-pub(super) fn parse_buffer_view(
-    path: &CStr,
-    buffer: &[u8],
-    include_root: Option<&Path>,
-    allow_includes: bool,
-    input_format: InputFormat,
-) -> Result<RawDocument, String> {
-    let mut resolver = include_root.map(windows_root::RootResolver::new);
-    let (callback, context) = windows_root::callback_parts(resolver.as_mut());
-    let pointer = unsafe {
-        mant_mandoc_parse_buffer_view(
-            path.as_ptr(),
-            buffer.as_ptr(),
-            buffer.len(),
-            std::ptr::null(),
-            i32::from(allow_includes),
-            input_format_code(input_format),
-            callback,
-            context,
-        )
-    };
-    copy_document_view(pointer)
-}
-
-pub(super) fn parse_bundle_view(
-    root: &CStr,
-    bundle: &SourceBundle,
-    input_format: InputFormat,
-) -> Result<RawDocument, String> {
-    let (_paths, sources) = bundle_sources(bundle);
-    let pointer = unsafe {
-        mant_mandoc_parse_bundle_view(
-            root.as_ptr(),
-            sources.as_ptr(),
-            sources.len(),
-            input_format_code(input_format),
-        )
-    };
-    copy_document_view(pointer)
 }
 
 fn bundle_sources(bundle: &SourceBundle) -> (Vec<CString>, Vec<CSource>) {
@@ -669,49 +522,7 @@ fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
                 },
                 has_body: unsafe { mant_mandoc_document_has_body(document) } != 0,
             },
-            root: unsafe { copy_node(root) }?,
-        },
-        diagnostics: unsafe {
-            optional_string(mant_mandoc_document_diagnostics(document)).unwrap_or_default()
-        },
-    })
-}
-
-fn copy_document_view(pointer: *mut CDocument) -> Result<RawDocument, String> {
-    let handle = DocumentHandle(
-        NonNull::new(pointer)
-            .ok_or_else(|| "libmandoc could not allocate a document".to_owned())?,
-    );
-    let document = handle.0.as_ptr();
-    if unsafe { mant_mandoc_document_ok(document) } == 0 {
-        return Err(
-            unsafe { optional_string(mant_mandoc_document_error(document)) }
-                .unwrap_or_else(|| "libmandoc could not parse the source".to_owned()),
-        );
-    }
-
-    let root = unsafe { mant_mandoc_document_view_root(document) };
-    if root.is_null() {
-        return Err("libmandoc produced no borrowed syntax tree".to_owned());
-    }
-
-    Ok(RawDocument {
-        document: Document {
-            macro_set: macro_set(unsafe { mant_mandoc_document_macroset(document) })?,
-            metadata: Metadata {
-                title: unsafe { optional_string(mant_mandoc_document_title(document)) },
-                section: unsafe { optional_string(mant_mandoc_document_section(document)) },
-                volume: unsafe { optional_string(mant_mandoc_document_volume(document)) },
-                os: unsafe { optional_string(mant_mandoc_document_os(document)) },
-                arch: unsafe { optional_string(mant_mandoc_document_arch(document)) },
-                name: unsafe { optional_string(mant_mandoc_document_name(document)) },
-                date: unsafe { optional_string(mant_mandoc_document_date(document)) },
-                alias_target: unsafe {
-                    optional_string(mant_mandoc_document_alias_target(document))
-                },
-                has_body: unsafe { mant_mandoc_document_has_body(document) } != 0,
-            },
-            root: unsafe { copy_node_view(document, root, 0) }?.0,
+            root: unsafe { copy_node(document, root, 0) }?.0,
         },
         diagnostics: unsafe {
             optional_string(mant_mandoc_document_diagnostics(document)).unwrap_or_default()
@@ -796,62 +607,7 @@ fn author_mode(value: i32) -> Result<Option<AuthorMode>, String> {
     }
 }
 
-unsafe fn copy_node(pointer: *const CNode) -> Result<Node, String> {
-    let raw_flags = unsafe { mant_mandoc_node_flags(pointer) };
-    let text = unsafe { optional_string(mant_mandoc_node_text(pointer)) };
-    let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
-    let mut children = Vec::new();
-    let mut child = unsafe { mant_mandoc_node_child(pointer) };
-    while !child.is_null() {
-        children.push(unsafe { copy_node(child) }?);
-        child = unsafe { mant_mandoc_node_next(child) };
-    }
-
-    let enclosure_open = unsafe { optional_string(mant_mandoc_node_enclosure_open(pointer)) };
-    let enclosure_close = unsafe { optional_string(mant_mandoc_node_enclosure_close(pointer)) };
-
-    Ok(Node {
-        kind: node_kind(unsafe { mant_mandoc_node_kind(pointer) })?,
-        macro_name: unsafe { optional_string(mant_mandoc_node_macro(pointer)) },
-        text,
-        tag: unsafe { optional_string(mant_mandoc_node_tag(pointer)) },
-        line: unsafe { mant_mandoc_node_line(pointer) }
-            .try_into()
-            .unwrap_or_default(),
-        column: unsafe { mant_mandoc_node_column(pointer) }
-            .try_into()
-            .unwrap_or_default(),
-        flags: NodeFlags {
-            generated: raw_flags & NODE_GENERATED != 0,
-            sentence_end: raw_flags & NODE_SENTENCE_END != 0,
-            no_print: raw_flags & NODE_NO_PRINT != 0,
-            no_fill: raw_flags & NODE_NO_FILL != 0,
-            deep_link_target: raw_flags & NODE_DEEP_LINK_TARGET != 0,
-            permalink: raw_flags & NODE_PERMALINK != 0,
-            line_start: raw_flags & NODE_LINE_START != 0,
-            delimiter_open: raw_flags & NODE_DELIMITER_OPEN != 0,
-            delimiter_close: raw_flags & NODE_DELIMITER_CLOSE != 0,
-            synopsis_pretty: raw_flags & NODE_SYNOPSIS_PRETTY != 0,
-            line_continuation,
-        },
-        list_kind: list_kind(unsafe { mant_mandoc_node_list_kind(pointer) })?,
-        display_kind: display_kind(unsafe { mant_mandoc_node_display_kind(pointer) })?,
-        font: font_kind(unsafe { mant_mandoc_node_font_kind(pointer) })?,
-        author_mode: author_mode(unsafe { mant_mandoc_node_author_mode(pointer) })?,
-        enclosure: enclosure_open.map(|opening| NormalizedEnclosure {
-            opening,
-            closing: enclosure_close,
-        }),
-        compact: unsafe { mant_mandoc_node_compact(pointer) } != 0,
-        offset: unsafe { optional_string(mant_mandoc_node_offset(pointer)) },
-        width: unsafe { optional_string(mant_mandoc_node_width(pointer)) },
-        table_cells: unsafe { copy_table_cells(mant_mandoc_node_table_cells(pointer)) },
-        equation: unsafe { optional_string(mant_mandoc_node_equation(pointer)) },
-        children,
-    })
-}
-
-unsafe fn copy_node_view(
+unsafe fn copy_node(
     document: *mut CDocument,
     pointer: *const CNode,
     depth: usize,
@@ -896,7 +652,7 @@ unsafe fn copy_node_view(
         compact: view.compact != 0,
         offset: unsafe { optional_string(view.offset) },
         width: unsafe { optional_string(view.width) },
-        table_cells: unsafe { copy_table_cell_views(document, view.table_cells) }?,
+        table_cells: unsafe { copy_table_cells(document, view.table_cells) }?,
         equation: unsafe { optional_string(view.equation) },
         children: Vec::new(),
     };
@@ -904,7 +660,7 @@ unsafe fn copy_node_view(
     if depth + 1 < MAX_OWNED_NODE_DEPTH {
         let mut child = view.child;
         while !child.is_null() {
-            let (owned, next) = unsafe { copy_node_view(document, child, depth + 1) }?;
+            let (owned, next) = unsafe { copy_node(document, child, depth + 1) }?;
             node.children.push(owned);
             child = next;
         }
@@ -929,33 +685,7 @@ fn ends_with_no_space_escape(text: &str) -> bool {
         == 0
 }
 
-unsafe fn copy_table_cells(mut pointer: *const CTableCell) -> Vec<TableCell> {
-    let mut cells = Vec::new();
-    while !pointer.is_null() {
-        cells.push(TableCell {
-            text: unsafe { optional_string(mant_mandoc_table_cell_text(pointer)) },
-            text_block: unsafe { mant_mandoc_table_cell_is_text_block(pointer) } != 0,
-            vertical_continuation: unsafe {
-                mant_mandoc_table_cell_is_vertical_continuation(pointer)
-            } != 0,
-            column_span: unsafe { mant_mandoc_table_cell_column_span(pointer) }
-                .try_into()
-                .unwrap_or(u16::MAX),
-            row_span: unsafe { mant_mandoc_table_cell_row_span(pointer) }
-                .try_into()
-                .unwrap_or(u16::MAX),
-            alignment: match unsafe { mant_mandoc_table_cell_alignment(pointer) } {
-                1 => TableAlignment::Center,
-                2 => TableAlignment::Right,
-                _ => TableAlignment::Left,
-            },
-        });
-        pointer = unsafe { mant_mandoc_table_cell_next(pointer) };
-    }
-    cells
-}
-
-unsafe fn copy_table_cell_views(
+unsafe fn copy_table_cells(
     document: *const CDocument,
     mut pointer: *const CTableCell,
 ) -> Result<Vec<TableCell>, String> {
@@ -994,11 +724,11 @@ mod tests {
 
     use flate2::read::MultiGzDecoder;
 
-    use super::{InputFormat, parse_buffer, parse_buffer_view};
+    use super::{InputFormat, Node, parse_buffer};
 
     #[test]
-    fn borrowed_views_match_the_owned_c_mirror_for_semantic_edges() {
-        compare_transfers(
+    fn owned_transfer_preserves_semantic_edges_after_parser_release() {
+        assert_owned_transfer(
             "semantic-man.1",
             br".TH TRANSFER 1
 .SH NAME
@@ -1013,7 +743,7 @@ x sup 2
 .EN
 ",
         );
-        compare_transfers(
+        assert_owned_transfer(
             "semantic-mdoc.1",
             br".Dd August 23, 2026
 .Dt TRANSFER 1
@@ -1044,11 +774,11 @@ emphasis
         for _ in 0..300 {
             nested.push_str(".RE\n");
         }
-        compare_transfers("deep.1", nested.as_bytes());
+        assert_owned_transfer("deep.1", nested.as_bytes());
     }
 
     #[test]
-    fn borrowed_views_match_the_owned_c_mirror_for_real_fixtures() {
+    fn owned_transfer_survives_parser_release_for_real_fixtures() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join("tests/fixtures/roff/real");
@@ -1065,24 +795,51 @@ emphasis
         );
         for fixture in fixtures {
             let source = read_fixture(&fixture);
-            compare_transfers(&fixture.to_string_lossy(), &source);
+            assert_owned_transfer(&fixture.to_string_lossy(), &source);
         }
     }
 
-    fn compare_transfers(label: &str, source: &[u8]) {
+    fn assert_owned_transfer(label: &str, source: &[u8]) {
         let path = CString::new(label).expect("fixture labels contain no NUL bytes");
-        let legacy = parse_buffer(&path, source, None, false, InputFormat::Auto)
-            .unwrap_or_else(|error| panic!("legacy transfer failed for {label}: {error}"));
-        let borrowed = parse_buffer_view(&path, source, None, false, InputFormat::Auto)
-            .unwrap_or_else(|error| panic!("borrowed transfer failed for {label}: {error}"));
-        assert_eq!(
-            borrowed.document, legacy.document,
-            "owned syntax tree differs for {label}"
+        // `parse_buffer` destroys its private native parser handle before it
+        // returns. Traversing every owned string and cell afterwards catches
+        // any borrowed pointer that accidentally escaped the FFI boundary.
+        let parsed = parse_buffer(&path, source, None, false, InputFormat::Auto)
+            .unwrap_or_else(|error| panic!("owned transfer failed for {label}: {error}"));
+        let (nodes, bytes) = touch_owned_node(&parsed.document.root);
+        assert!(
+            nodes > 1,
+            "owned syntax tree is unexpectedly empty for {label}"
         );
-        assert_eq!(
-            borrowed.diagnostics, legacy.diagnostics,
-            "diagnostics differ for {label}"
+        assert!(
+            bytes > 0,
+            "owned syntax tree has no string data for {label}"
         );
+        let _ = parsed.diagnostics.len();
+    }
+
+    fn touch_owned_node(node: &Node) -> (usize, usize) {
+        let mut bytes = node.macro_name.as_ref().map_or(0, String::len)
+            + node.text.as_ref().map_or(0, String::len)
+            + node.tag.as_ref().map_or(0, String::len)
+            + node.offset.as_ref().map_or(0, String::len)
+            + node.width.as_ref().map_or(0, String::len)
+            + node.equation.as_ref().map_or(0, String::len)
+            + node.enclosure.as_ref().map_or(0, |enclosure| {
+                enclosure.opening.len() + enclosure.closing.as_ref().map_or(0, String::len)
+            })
+            + node
+                .table_cells
+                .iter()
+                .map(|cell| cell.text.as_ref().map_or(0, String::len))
+                .sum::<usize>();
+        let mut nodes = 1;
+        for child in &node.children {
+            let (child_nodes, child_bytes) = touch_owned_node(child);
+            nodes += child_nodes;
+            bytes += child_bytes;
+        }
+        (nodes, bytes)
     }
 
     fn collect_manuals(directory: &Path, output: &mut Vec<PathBuf>) {
