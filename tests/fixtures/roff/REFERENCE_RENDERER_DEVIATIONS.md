@@ -85,6 +85,39 @@ These are deliberately different claims: the first is extra semantic structure
 over the same visible content; the second is bounded recovery from hostile or
 broken input. Neither is generalized beyond the recorded fixture and toolchain.
 
+## Mandoc-specific reproduced evidence
+
+The aligned 2026-08-24 replay also records six source-hash-specific cases for
+`mandoc-1.14.6-1 -T utf8 -O width=200`. Each row inherits an exact identity
+from `MANDOC_FIDELITY_AUDIT.csv`, where the source, native mandoc output, ManT
+text, and structured result received a durable `false-positive` review:
+
+- a wide `tbl` in `svcerr_systemerr(3)` retains source-ordered logical cells
+  in ManT while the terminal reference flattens adjacent cells into continuity
+  phrases;
+- a source-requested continuation in `bash(1)` remains one complete `PATH`
+  value in ManT but is split into terminal tokens by the recorded renderer and
+  width;
+- the `mm2gv(1)` matrix keeps the transpose relation as `M ^ T`, whereas
+  mandoc exposes the eqn source spelling `$M sup T$`;
+- the `groff_char(7)` `u006E_0303` example produces the documented `ñ` in
+  ManT while mandoc leaves the demonstrated output empty;
+- the authored `.St -p1003.1-2024` citation in FreeBSD `ps(1)` remains between
+  “described by” and “and what” instead of disappearing from the sentence; and
+- an explicit `.Ns` in `bhyve(8)` retains the executable spelling `pptN`
+  instead of changing it to `ppt N`.
+
+The coverage checker validates every row for the current mandoc renderer
+against the exact content-ledger identity, section, reviewed result, and
+renderer command. Older immutable renderer observations may remain when the
+current mandoc identity advances.
+
+The other mandoc review dispositions were intentionally not promoted. Most
+are equivalent wrapping or detector accounting, repeated examples of one
+already represented class, or the deliberate no-fill policy in which ManT
+normalizes a blank run to one semantic separator. Those remain per-row audit
+notes rather than evidence that one renderer is categorically more accurate.
+
 ## Above-parity survey reconciliation
 
 Issue #26 also carried a complete survey of the ways ManT can preserve more

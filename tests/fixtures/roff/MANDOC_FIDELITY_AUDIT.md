@@ -90,6 +90,14 @@ line continuation, labeled link destinations that remain present in ManT's
 link object, or mandoc-only token concatenation. Do not replace those notes
 with a source-hash allowlist.
 
+Six high-confidence cases where that review establishes a source-semantic
+advantage for ManT are indexed separately in
+[`REFERENCE_RENDERER_DEVIATIONS.csv`](REFERENCE_RENDERER_DEVIATIONS.csv).
+They cover representative table topology, token continuation, an equation
+operator, a Unicode composite glyph, an `.St` citation, and `.Ns` spacing. The
+deviation ledger does not promote ordinary false positives or the
+layout route's intentional blank-run normalization.
+
 The audit script checkpoints large databases atomically. It does not make
 concurrent writers to one CSV safe; replay corpora serially. Run
 `python3 scripts/check-roff-audit-coverage.py` after every expansion to prove

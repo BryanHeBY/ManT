@@ -34,6 +34,7 @@ DEFAULT_PROJECTION_DB = ROFF_ROOT / "PROJECTION_AUDIT.csv"
 DEFAULT_LAYOUT_DB = ROFF_ROOT / "LAYOUT_AUDIT.csv"
 DEFAULT_MANDOC_FIDELITY_DB = ROFF_ROOT / "MANDOC_FIDELITY_AUDIT.csv"
 DEFAULT_MANDOC_LAYOUT_DB = ROFF_ROOT / "MANDOC_LAYOUT_AUDIT.csv"
+DEFAULT_DEVIATION_DB = ROFF_ROOT / "REFERENCE_RENDERER_DEVIATIONS.csv"
 
 IDENTITY_FIELDS = ["corpus", "path", "section", "source_sha256"]
 FIDELITY_FIELDS = IDENTITY_FIELDS + ["scan_status", "review_status", "note"]
@@ -51,6 +52,17 @@ LAYOUT_FIELDS = IDENTITY_FIELDS + [
 ]
 MANDOC_FIDELITY_FIELDS = ["reference_kind", "reference_id"] + FIDELITY_FIELDS
 MANDOC_LAYOUT_FIELDS = ["reference_kind", "reference_id"] + LAYOUT_FIELDS
+DEVIATION_FIELDS = [
+    "id",
+    "category",
+    "review_state",
+    *IDENTITY_FIELDS,
+    "reference_renderer",
+    "mant_advantage",
+    "reference_limitation",
+    "scope",
+    "note",
+]
 
 CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v4"
 CURRENT_PROJECTION_SCHEMA = "mant.roff-projection-profile/v3"
@@ -65,6 +77,7 @@ REVIEW_STATUSES = {
     "confirmed-open",
     "confirmed-fixed",
 }
+DEVIATION_REVIEW_STATES = {"historical-reviewed", "reproduced"}
 
 
 @dataclass(frozen=True, order=True)
@@ -84,6 +97,7 @@ class Coverage:
     mandoc_fidelity: frozenset[Identity]
     mandoc_comparable: frozenset[Identity]
     mandoc_layout: frozenset[Identity]
+    current_mandoc_deviations: int
     fixture_inventory: frozenset[Identity]
     pending: tuple[tuple[str, frozenset[Identity]], ...]
     summaries: tuple["LedgerSummary", ...]
@@ -111,6 +125,7 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         "--mandoc-fidelity-db", type=Path, default=DEFAULT_MANDOC_FIDELITY_DB
     )
     parser.add_argument("--mandoc-layout-db", type=Path, default=DEFAULT_MANDOC_LAYOUT_DB)
+    parser.add_argument("--deviation-db", type=Path, default=DEFAULT_DEVIATION_DB)
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args(argv)
 
@@ -175,6 +190,84 @@ def mandoc_renderer_identity(
     return identity
 
 
+def read_deviation_rows(path: Path) -> list[dict[str, str]]:
+    if not path.is_file():
+        raise ValueError(f"renderer-deviation ledger does not exist: {path}")
+    with path.open(encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != DEVIATION_FIELDS:
+            raise ValueError(
+                f"invalid renderer-deviation header in {path}; "
+                f"expected {','.join(DEVIATION_FIELDS)}"
+            )
+        rows = list(reader)
+    seen: dict[str, int] = {}
+    for number, row in enumerate(rows, 2):
+        if any(not row[field] for field in DEVIATION_FIELDS):
+            raise ValueError(f"blank renderer-deviation field at {path}:{number}")
+        if row["id"] in seen:
+            raise ValueError(
+                f"duplicate renderer-deviation id at {path}:{number}; first seen "
+                f"at line {seen[row['id']]}"
+            )
+        seen[row["id"]] = number
+        if row["review_state"] not in DEVIATION_REVIEW_STATES:
+            raise ValueError(f"invalid renderer-deviation review state at {path}:{number}")
+        if SOURCE_DIGEST.fullmatch(row["source_sha256"]) is None:
+            raise ValueError(f"invalid renderer-deviation source digest at {path}:{number}")
+    return rows
+
+
+def validate_current_mandoc_deviations(
+    path: Path,
+    deviations: Iterable[dict[str, str]],
+    fidelity_rows: Iterable[dict[str, str]],
+    renderer: tuple[str, str],
+) -> int:
+    reference_kind, reference_id = renderer
+    assert reference_kind == "mandoc"
+    expected_renderer = f"{reference_id} -T utf8 -O width=200"
+    evidence = {
+        Identity(row["corpus"], row["path"], row["source_sha256"]): row
+        for row in fidelity_rows
+    }
+    current = 0
+    for number, row in enumerate(deviations, 2):
+        renderer_id = row["reference_renderer"].split(" ", 1)[0]
+        if renderer_id != reference_id:
+            continue
+        current += 1
+        if row["reference_renderer"] != expected_renderer:
+            raise ValueError(
+                f"current mandoc deviation has the wrong renderer command at "
+                f"{path}:{number}"
+            )
+        if row["review_state"] != "reproduced":
+            raise ValueError(
+                f"current mandoc deviation is not reproduced at {path}:{number}"
+            )
+        identity = Identity(row["corpus"], row["path"], row["source_sha256"])
+        source_row = evidence.get(identity)
+        if source_row is None:
+            raise ValueError(
+                f"current mandoc deviation is absent from the fidelity ledger at "
+                f"{path}:{number}"
+            )
+        if source_row["section"] != row["section"]:
+            raise ValueError(
+                f"current mandoc deviation has a mismatched section at {path}:{number}"
+            )
+        if (
+            source_row["scan_status"] != "review"
+            or source_row["review_status"] != "false-positive"
+        ):
+            raise ValueError(
+                f"current mandoc deviation lacks a reviewed false-positive source "
+                f"conclusion at {path}:{number}"
+            )
+    return current
+
+
 def fixture_identities() -> frozenset[Identity]:
     found = set()
     for page in discover_pages([FIXTURE_ROOT]):
@@ -220,6 +313,7 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         {"clean", "review", "hard-failure"},
         "layout_schema",
     )
+    deviation_rows = read_deviation_rows(arguments.deviation_db)
     mandoc_fidelity_renderer = mandoc_renderer_identity(
         arguments.mandoc_fidelity_db, mandoc_fidelity_rows
     )
@@ -230,6 +324,12 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         raise ValueError(
             "mandoc fidelity and layout ledgers use different renderer identities"
         )
+    current_mandoc_deviations = validate_current_mandoc_deviations(
+        arguments.deviation_db,
+        deviation_rows,
+        mandoc_fidelity_rows,
+        mandoc_fidelity_renderer,
+    )
     fidelity = identities(fidelity_rows)
     comparable = identities(
         row for row in fidelity_rows if row["scan_status"] in {"clean", "review"}
@@ -308,6 +408,7 @@ def load_coverage(arguments: argparse.Namespace) -> Coverage:
         mandoc_fidelity=mandoc_fidelity,
         mandoc_comparable=mandoc_comparable,
         mandoc_layout=identities(current_mandoc_layout),
+        current_mandoc_deviations=current_mandoc_deviations,
         fixture_inventory=fixture_identities(),
         pending=pending,
         summaries=summaries,
@@ -362,6 +463,7 @@ def self_check() -> None:
         mandoc_fidelity=frozenset({a, b, fixture}),
         mandoc_comparable=frozenset({a, fixture}),
         mandoc_layout=frozenset({a, fixture}),
+        current_mandoc_deviations=0,
         fixture_inventory=frozenset({fixture}),
         pending=(("mandoc-fidelity", frozenset()),),
         summaries=(),
@@ -376,6 +478,7 @@ def self_check() -> None:
         mandoc_fidelity=frozenset({a}),
         mandoc_comparable=frozenset({a}),
         mandoc_layout=frozenset(),
+        current_mandoc_deviations=0,
         fixture_inventory=aligned.fixture_inventory,
         pending=(("mandoc-fidelity", frozenset({a})),),
         summaries=(),
@@ -391,6 +494,44 @@ def self_check() -> None:
     assert missing["mandoc-fidelity/fixtures"] == frozenset({fixture})
     assert missing["mandoc-layout/fixtures"] == frozenset({fixture})
     assert missing["pending/mandoc-fidelity"] == frozenset({a})
+
+    mandoc_fidelity = {
+        "corpus": a.corpus,
+        "path": a.path,
+        "section": "1",
+        "source_sha256": a.digest,
+        "scan_status": "review",
+        "review_status": "false-positive",
+    }
+    mandoc_deviation = {
+        "corpus": a.corpus,
+        "path": a.path,
+        "section": "1",
+        "source_sha256": a.digest,
+        "reference_renderer": "mandoc-test -T utf8 -O width=200",
+        "review_state": "reproduced",
+    }
+    assert (
+        validate_current_mandoc_deviations(
+            Path("deviations.csv"),
+            [mandoc_deviation],
+            [mandoc_fidelity],
+            ("mandoc", "mandoc-test"),
+        )
+        == 1
+    )
+    invalid_deviation = {**mandoc_deviation, "section": "2"}
+    try:
+        validate_current_mandoc_deviations(
+            Path("deviations.csv"),
+            [invalid_deviation],
+            [mandoc_fidelity],
+            ("mandoc", "mandoc-test"),
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a mismatched mandoc deviation section was accepted")
 
 
 def main(argv: Sequence[str]) -> int:
@@ -409,6 +550,10 @@ def main(argv: Sequence[str]) -> int:
     print(f"  fidelity baseline:            {len(coverage.fidelity)}")
     print(f"  comparable fidelity baseline: {len(coverage.comparable)}")
     print(f"  checked-in fixture baseline:  {len(coverage.fixture_inventory)}")
+    print(
+        "  current mandoc deviations:     "
+        f"{coverage.current_mandoc_deviations}"
+    )
     print("  current ledger rows:")
     for summary in coverage.summaries:
         statuses = ", ".join(

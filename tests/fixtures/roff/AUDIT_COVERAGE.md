@@ -29,7 +29,10 @@ into unrelated ledgers merely to make row counts equal. The aligned mandoc
 ledgers are narrower by design: content is exactly historical fidelity plus
 fixtures, and layout is exactly the comparable mandoc content set.
 `REFERENCE_RENDERER_DEVIATIONS.csv` is a curated conclusion index, not a
-coverage route.
+coverage route. Even so, rows naming the current mandoc renderer are validated
+against the matching mandoc-fidelity source hash, section, renderer command,
+and completed human disposition so the curated index cannot silently drift
+from its detailed evidence.
 
 Check the set relationship without invoking a renderer or reparsing the local
 distribution corpora:
@@ -53,7 +56,9 @@ python3 scripts/audit-roff-layout.py --manpath /path/to/man-root \
 The coverage check is cheap enough for daily CI: it validates CSV headers,
 status/schema values, duplicate and exact source identities, current schema
 coverage, matching mandoc renderer identities, pending-review totals, and the
-small checked-in fixture inventory.
+small checked-in fixture inventory. It also validates the schema and unique IDs
+of the curated deviation ledger and reports how many rows reproduce the current
+mandoc renderer.
 It does not run groff, scan host manuals, or turn local third-party corpora
 into a CI dependency. A zero missing count certifies execution-range alignment,
 and a zero pending count certify execution-range alignment and completion of
