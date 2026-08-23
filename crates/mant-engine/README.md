@@ -126,6 +126,8 @@ that need the complete command or reader should install
 
 Architecture and source-resolution details are documented in the
 [ManT native-engine reference](https://github.com/BryanHeBY/ManT/blob/main/docs/architecture/native-engine.md).
+Compatibility and migration notes are recorded in the
+[crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
 ## License
 

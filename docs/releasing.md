@@ -17,6 +17,10 @@ integrators must act.
    minimum when a dependent requires a newer API, and bump the dependent crate
    because its published manifest changed. Refresh both `Cargo.lock` and the
    standalone `fuzz/Cargo.lock` before running locked checks.
+   Move each compatibility-relevant item from the root `CHANGELOG.md`
+   `Unreleased` section into a dated `<crate> X.Y.Z` entry for every selected
+   package. Product release notes may summarize those entries by outcome, but
+   must not replace crate-specific API or migration details.
 2. Regenerate and visually inspect the README screenshot:
 
    ```sh

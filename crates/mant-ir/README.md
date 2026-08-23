@@ -71,6 +71,8 @@ Versioned CLI JSON contracts and compact MCP query projections live in
 operations live in [`mant-engine`](https://crates.io/crates/mant-engine).
 The complete node and stability reference is
 [`mant-ir(7)`](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-ir.md).
+Compatibility and migration notes are recorded in the
+[crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
 ## License
 

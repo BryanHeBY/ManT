@@ -95,6 +95,8 @@ semantics are documented in the
 This crate performs no rendering, native-manual lookup, MCP transport, or
 terminal work. Those responsibilities belong to `mant-engine`, `mant`, and
 `mant-ui`.
+Compatibility and migration notes are recorded in the
+[crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
 ## License
 

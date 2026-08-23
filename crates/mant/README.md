@@ -193,6 +193,8 @@ The complete [user manual](https://github.com/BryanHeBY/ManT/blob/main/docs/manu
 [protocol reference](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-protocol.md),
 and [release archives](https://github.com/BryanHeBY/ManT/releases) live in the
 `ManT` repository.
+Compatibility and migration notes are recorded in the
+[crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
 ## License
 

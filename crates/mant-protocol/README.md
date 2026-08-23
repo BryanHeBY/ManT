@@ -110,6 +110,8 @@ Normalized document content is defined separately by
 rendering live in [`mant-engine`](https://crates.io/crates/mant-engine).
 The complete wire contract is documented by
 [`mant-protocol(5)`](https://github.com/BryanHeBY/ManT/blob/main/docs/manuals/mant-protocol.md).
+Compatibility and migration notes are recorded in the
+[crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
 ## License
 

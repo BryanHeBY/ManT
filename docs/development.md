@@ -102,6 +102,7 @@ assessment and uploads its findings to GitHub code scanning.
 
 ```text
 Cargo.toml                    Root Rust workspace and shared dependency policy
+CHANGELOG.md                  Independent crate compatibility and migration history
 deny.toml                     Dependency license, advisory, source, and ban policy
 about.toml                    Distributable Rust dependency notice policy
 LICENSE                       Apache-2.0 terms for ManT-authored work

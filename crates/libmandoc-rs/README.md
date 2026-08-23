@@ -230,3 +230,6 @@ and upstream attribution are shipped under `LICENSES/` and
 `vendor/mandoc-1.14.6/LICENSE`.
 
 This crate is not affiliated with the upstream mandoc project.
+
+Compatibility and migration notes are recorded in the
+[crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).

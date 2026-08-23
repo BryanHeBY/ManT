@@ -79,6 +79,8 @@ normalized man, mdoc, or Markdown queries.
 
 Install [`mant`](https://crates.io/crates/mant) for the complete executable.
 This component crate is a library and does not install a second command.
+Compatibility and migration notes are recorded in the
+[crate changelog](https://github.com/BryanHeBY/ManT/blob/main/CHANGELOG.md).
 
 ## License
 
