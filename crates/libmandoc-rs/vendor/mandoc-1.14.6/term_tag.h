@@ -18,6 +18,13 @@
  * For use by the mandoc(1) ASCII and UTF-8 formatters only.
  */
 
+#ifdef MANDOC_MEMORY_ONLY
+
+struct roff_node;
+void			 term_tag_write(struct roff_node *, size_t);
+
+#else
+
 struct	tag_files {
 	char	 ofn[80];	/* Output file name. */
 	char	 tfn[80];	/* Tag file name. */
@@ -32,3 +39,5 @@ struct tag_files	*term_tag_init(const char *, const char *, const char *);
 void			 term_tag_write(struct roff_node *, size_t);
 int			 term_tag_close(void);
 void			 term_tag_unlink(void);
+
+#endif

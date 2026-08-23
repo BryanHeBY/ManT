@@ -256,6 +256,9 @@ the ordered patches in `patches/series`:
 - `0015-deterministic-utf8-rendering.patch` replaces libmandoc's process-locale
   UTF-8 setup with explicit sink encoding and caller-supplied Unicode cell
   widths, giving Linux, macOS, and Windows the same locale-independent path.
+- `0016-portable-memory-renderers.patch` removes unused POSIX header and pager
+  process types from the Windows memory-only formatter build while retaining
+  the complete upstream interfaces for native Unix builds.
 
 Each is a narrow parser, renderer-boundary, or portability correction. They do
 not create a separately maintained formatter. `scripts/sync-vendor --verify`

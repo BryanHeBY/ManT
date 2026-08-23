@@ -32,7 +32,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef MANDOC_MEMORY_ONLY
 #include <unistd.h>
+#endif
 
 #include "mandoc_aux.h"
 #include "mandoc_ohash.h"

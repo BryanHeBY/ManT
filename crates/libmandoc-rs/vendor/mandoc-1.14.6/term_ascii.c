@@ -28,7 +28,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef MANDOC_MEMORY_ONLY
 #include <unistd.h>
+#endif
 #if HAVE_WCHAR
 #include <wchar.h>
 #endif
