@@ -5,11 +5,13 @@ releases; publishing remains a deliberate human action.
 
 ## Before tagging
 
-1. Choose a semantic version and update `[workspace.package].version` in
-   `Cargo.toml`. The seven Rust crates use one lockstep version, so
-   update every exact internal dependency in their manifests at the same time.
-   Refresh both `Cargo.lock` and the standalone `fuzz/Cargo.lock` before running
-   locked checks.
+1. Version the seven crates independently in their own `Cargo.toml` files.
+   A product release always bumps `crates/mant/Cargo.toml`; also bump every
+   crate whose published source or public contract changed. Internal path
+   dependencies use explicit caret requirements such as `^0.9.0`. Raise that
+   minimum when a dependent requires a newer API, and bump the dependent crate
+   because its published manifest changed. Refresh both `Cargo.lock` and the
+   standalone `fuzz/Cargo.lock` before running locked checks.
 2. Regenerate and visually inspect the README screenshot:
 
    ```sh
@@ -31,7 +33,10 @@ releases; publishing remains a deliberate human action.
    schema, update every affected discriminator first and then regenerate its
    versioned snapshot with `scripts/update-protocol-schema-snapshot.sh`. Never
    refresh an existing-version snapshot merely to silence a compatibility
-   failure.
+   failure. The `mant-protocol` crate version and native wire identifiers are
+   separate: a crate-only implementation or documentation release can retain
+   `mant.request/v0.9` and its related identifiers, while a breaking wire change
+   must choose a new protocol family regardless of the crate's current semver.
 
 4. Run a broad local roff fidelity audit before freezing the release. Use the
    syntax-priority, source-directed, and recorded-corpus workflows in the
@@ -66,7 +71,9 @@ contracts. Starting with `0.5.0`, the original five packages use one lockstep
 version; `mant-sources` joined the same graph in `0.6.0`. Version `0.7.0`
 replaces the mixed `mant-ast` package with separate `mant-ir` and
 `mant-protocol` packages, and renames `mant-core` to `mant-engine`, under the
-same lockstep policy. Publication follows this dependency order:
+same lockstep policy. Version `0.9.0` is the final lockstep release; later
+development assigns each crate its own semver while retaining this publication
+order:
 
 ```text
 mant-ir ─> mant-protocol
@@ -98,18 +105,61 @@ non-release refs, and contain no long-lived Cargo token. The release job has
 only `contents: read` and `id-token: write`; the official crates.io action
 exchanges that identity for a short-lived credential.
 
-On a tag push, `scripts/publish-crates.sh` packages and publishes `mant-ir`,
-`mant-protocol`, `libmandoc-rs`, `mant-sources`, `mant-engine`, `mant-ui`, and
-`mant` in dependency order. Exact internal dependencies require each
-predecessor to become visible in the registry before its dependent can be
-packaged, so the script validates
-each package immediately before uploading it and then waits for the index
-before continuing. It skips versions already present, making a partially
-completed job safe to rerun. Installing `mant` installs the reader, structured
-CLI, and MCP server as one executable. `mant-ui` is a reusable library crate
-and does not install a second command.
+On a product tag push, `scripts/publish-crates.sh` inspects the version of each
+crate, packages every version not already present, and publishes in dependency
+order. A package tag selects only that package. Each selected package is
+validated immediately before upload, and the script waits for its own version
+to reach the index before continuing. Existing immutable versions are skipped,
+making a partially completed job safe to rerun. Installing `mant` installs the
+reader, structured CLI, and MCP server as one executable. `mant-ui` is a
+reusable library crate and does not install a second command.
+
+An internal requirement like `^0.9.0` accepts compatible `0.9.x` releases but
+not `0.10.0`. If a lower-level crate makes a breaking pre-1.0 change, bump its
+minor version, update and bump every dependent that adopts it, then publish
+bottom-up. If a dependent starts using an API introduced in `0.9.2`, change its
+minimum to `^0.9.2` and bump that dependent even when no Rust source changed.
+Do not publish changed crate source under an existing version: the native
+product artifacts are built from workspace paths, while Cargo installations
+resolve the published crates, so failing to bump a changed package could make
+the two distributions differ.
+
+The post-0.9.0 decoupling itself changes every published manifest from an exact
+internal requirement to an explicit caret requirement. Before the next product
+release, assign a new version to every crate so those manifests are actually
+published; they may all begin at `0.9.1`, then diverge independently. This
+one-time transition is a packaging-contract change, not a return to permanent
+lockstep versioning.
 
 Never move a tag after crates.io publication. Registry versions are immutable.
+
+## Publish one crate
+
+A crate-only release uses `<package>-vMAJOR.MINOR.PATCH`, for example:
+
+```sh
+git tag mant-ir-v0.9.1
+git push origin mant-ir-v0.9.1
+```
+
+Valid package prefixes are `mant-ir`, `mant-protocol`, `libmandoc-rs`,
+`mant-sources`, `mant-engine`, and `mant-ui`. The tag version must exactly match
+that package's manifest. The same `release.yml` workflow verifies full CI for
+the tagged SHA, skips native product archives and the GitHub Release, pauses at
+the protected `crates-io` Environment, and publishes only the tagged package.
+All of its declared dependency versions must already be visible on crates.io.
+Sync the exact green release commit to `main` before tagging, as with any other
+public release checkpoint.
+
+The `mant` crate has an independent manifest version but no `mant-v*` crate-only
+tag. Its cargo-binstall metadata points at matching native GitHub assets, so it
+must be published by the product `vMAJOR.MINOR.PATCH` workflow that builds and
+attests those assets.
+
+Package tags are optional when a new crate version ships as part of a product
+release: the product `vMAJOR.MINOR.PATCH` tag already anchors every unpublished
+crate version selected from that commit. Use a package tag when publishing a
+library fix independently of a new `mant` binary release.
 
 ### One-time new-crate bootstrap for `0.7.0`
 
@@ -148,8 +198,8 @@ bootstrap after `0.7.0`.
 
 ## Tag and draft release
 
-The tag must exactly match the Cargo workspace version. Create it from the
-clean `main` release commit:
+The product tag must exactly match the version in `crates/mant/Cargo.toml`.
+Create it from the clean `main` release commit:
 
 ```sh
 git tag vMAJOR.MINOR.PATCH
@@ -163,18 +213,20 @@ Clippy, MSRV, coverage, and supply-chain jobs. After all targets pass, it
 creates a **draft** GitHub Release and independently pauses at the protected
 `crates-io` Environment before publishing crates. Review the tag and draft
 artifacts, replace the generated notes with a curated user-facing summary,
-then approve that deployment. Wait for all seven crates to become visible before
-making the GitHub Release public; the macOS installer depends on the published
-`mant` crate. A manually dispatched release rebuilds a named tag and draft but
-publishes no crates by default and can create the draft only when that tag has
-no existing GitHub Release. For a failed tag workflow that published no crate,
-enable its explicit `publish_crates` input; the protected `crates-io`
-Environment still requires approval. Leave that input disabled for artifact-only
-rebuilds. If publication partially succeeded, rerun the original failed job
-so the release script can detect and skip crates already present on crates.io.
-Manual retries always build the immutable tag's product tree while taking the
-release helpers from the trusted workflow revision on `main`. Automation fixes
-can therefore recover older tags without changing their product input.
+then approve that deployment. Wait for every newly selected crate version to
+become visible before making the GitHub Release public; the macOS installer
+depends on the published `mant` crate. A manually dispatched product release
+rebuilds a named tag and draft but publishes no crates by default and can create
+the draft only when that tag has no existing GitHub Release. A manually
+dispatched package tag likewise publishes nothing unless `publish_crates` is
+enabled. For a failed tag workflow that published no crate, enable that input;
+the protected `crates-io` Environment still requires approval. Leave it
+disabled for artifact-only product rebuilds. If publication partially
+succeeded, rerun the original failed job so the release script can detect and
+skip versions already present on crates.io. Manual retries always use the
+immutable tag's product tree while taking the release helpers from the trusted
+workflow revision on `main`. Automation fixes can therefore recover older tags
+without changing their product input.
 
 Each native archive keeps the versioned `manuals/` set beside the executable,
 and the release also publishes the same documents as the platform-independent

@@ -145,14 +145,14 @@ Add the crate when implementing an in-process parser, index, renderer, or truste
 
 ```toml
 [dependencies]
-mant-ir = "0.9"
+mant-ir = "^0.9.0"
 ```
 
 Prefer constructors and visitors from the crate over recursively rewriting public fields by hand. Use `visit::Visit` or `visit::VisitMut` for whole-document passes and run validation after transformations that can affect identities or links.
 
 ## Stability
 
-The crate follows ManT release versioning, but pre-1.0 Rust API evolution may require downstream source changes. The stable structured promise is the exact schema identifier exposed by `mant-protocol` and emitted by the executable, not semver inference from the IR crate alone.
+The crate has its own semver, independent of the `mant` executable and native wire protocol versions. Pre-1.0 Rust API evolution may require downstream source changes. The stable structured promise is the exact schema identifier exposed by `mant-protocol` and emitted by the executable, not semver inference from the IR crate alone.
 
 ## See Also
 

@@ -79,6 +79,8 @@ ManT 0.9.x uses `v0.9`, and patch releases do not change its wire shape. The
 independent Markdown coordinate and doctor contracts remain
 `mant.markdown/v1` and `mant.doctor/v1`. Clients must still compare complete
 identifiers rather than infer compatibility between independent families.
+The `mant-protocol` Rust crate has its own semver; upgrading that package does
+not by itself select a new wire discriminator.
 
 The former bare `v1` through `v7` query schemas were experimental pre-stable
 contracts. ManT 0.8 removes them rather than carrying compatibility code; a

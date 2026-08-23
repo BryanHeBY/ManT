@@ -83,7 +83,9 @@ bare `v1` through `v7` schemas were experimental and are intentionally not
 accepted by 0.9. Historical tags preserve those contracts; the first stable
 native protocol will use a `v1.0` release line. Independent contracts such as
 `mant.doctor/v1` and `mant.markdown/v1` keep their own identifiers. Clients
-must therefore compare complete discriminators.
+must therefore compare complete discriminators. The `mant-protocol` crate has
+its own semver; upgrading that Rust package does not by itself select a new
+wire discriminator.
 
 Adding or changing a Rust field does not by itself authorize a wire change.
 The native discriminator must advance whenever its serialized contract
