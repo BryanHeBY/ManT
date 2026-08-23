@@ -41,6 +41,9 @@ including the shared roff fixture suites.
 The product crates are workspace `default-members`, so a bare `cargo build`,
 `cargo test`, or `cargo clippy` works on Windows. Both platform verification
 scripts include the standalone `libmandoc-rs` package and native parser tests.
+They also run that package with `--all-features`, as does native macOS CI, so
+its default-off reference renderers and Serde contract execute on every
+supported target without enabling unrelated workspace maintenance features.
 
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,

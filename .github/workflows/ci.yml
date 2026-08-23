@@ -178,11 +178,14 @@ jobs:
           cache-bin: false
           save-if: ${{ github.event_name == 'push' }}
 
-      # Compile and test the native workspace so the macOS target family is
-      # exercised on every change, not only at release time. clang ships with
-      # the runner image, so libmandoc builds against config/macos.h.
+      # Compile and test the native workspace plus libmandoc's default-off
+      # renderer so the macOS target family is exercised on every change, not
+      # only at release time. clang ships with the runner image, so libmandoc
+      # builds against config/macos.h.
       - name: Test Rust workspace on macOS
-        run: cargo test --locked --workspace
+        run: |
+          cargo test --locked --workspace
+          cargo test --locked --package libmandoc-rs --all-features
 
   windows-native:
     # Windows builds the same memory-only libmandoc parser and manual fixtures

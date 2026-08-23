@@ -96,6 +96,8 @@ Invoke-Native -Label "check Rust formatting" -Program "cargo" `
     -Arguments @("fmt", "--all", "--check")
 Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
     -Arguments (@("test", "--locked") + $Packages)
+Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
+    -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
 Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
     -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--", "-D", "warnings"))
 & (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile
