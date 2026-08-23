@@ -57,7 +57,7 @@ The crates have deliberately asymmetric responsibilities:
 | --- | --- | --- |
 | `mant-ir` | Logical document addresses; source-neutral document and quick-reference IR; typed node IDs and ranges; visitors and derived indexes | Versioned process envelopes, parsing, files, or rendering |
 | `mant-protocol` | Shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation | Parsing, files, query execution, terminal policy, transports, or processes |
-| `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, and C build boundary | ManT types, source discovery, or output |
+| `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, C build boundary, and default-off bounded upstream reference renderers | ManT types, source discovery, or ManT's semantic presentation |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-engine` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, discovery, links, history, search, layout, and terminal lifecycle | Filesystem lookup or source mutation |
@@ -166,18 +166,29 @@ explicitly indexed leaf symlink may identify an external file, but every `.so`
 target must remain inside the logical manual root. Direct `--input` pages have
 no collection root and therefore reject redirect-only aliases.
 
-`libmandoc-rs` wraps the bundled C parser behind a small private shim and
-copies every completed parse into an owned Rust tree with structured
-diagnostics. `mant-engine` alone lowers that tree into `mant-ir`. Linux, macOS,
-and Windows use the same parser version; Windows supplies bytes through a
+`libmandoc-rs` wraps the bundled C parser behind a small private shim. Parser
+calls copy the completed native tree into owned Rust data with structured
+diagnostics; reference-renderer calls format it in the same native session
+without an unnecessary AST copy. `mant-engine` alone lowers the owned tree
+into `mant-ir`. Linux, macOS, and Windows use the same parser version; Windows
+supplies bytes through a
 checked memory-only configuration instead of exposing POSIX file transport to
 C. ManT invokes libmandoc with native includes denied after Rust has resolved
 the source chain.
 
+The standalone crate additionally offers exact `man`/`mdoc` input selection
+and a bounded `SourceBundle` virtual tree for callers that need portable
+in-memory `.so` resolution. Its default-off `render` feature exposes
+libmandoc's ASCII, locale-independent UTF-8, and HTML reference formatters
+through a per-call output sink. These are library capabilities, not a second
+ManT rendering path: `mant-engine` continues to consume the owned parser tree
+and render the shared source-neutral IR.
+
 The pinned libmandoc 1.14.6 snapshot originally kept character, diagnostic,
-tag, roff-request, and recursion state in process globals. The local vendor
-patch makes those parser-session slots thread-local, and the shim keeps source
-roots and diagnostic capture thread-local as well. Independent parser calls
+tag, roff-request, formatter-tab, HTML-ID, and recursion state in process
+globals. The local vendor patch makes those parser and formatter session slots
+thread-local, and the shim keeps source roots and diagnostic capture
+thread-local as well. Independent parser calls
 therefore run concurrently without a process-wide lock; one-time native
 initialization remains synchronized. Date conversion avoids process-global
 timezone mutation and uses reentrant platform APIs where local time is
@@ -185,7 +196,7 @@ required. Recursive re-entry on one thread is not supported, and the owned
 node and equation copies stop after 256 levels so hostile nesting cannot carry
 an unbounded C tree into recursive Rust consumers. A mixed Rust/C
 ThreadSanitizer runner guards this boundary locally because instrumenting only
-Rust would miss races inside the vendored parser.
+Rust would miss races inside the vendored parser and optional formatters.
 
 ### Markdown and installed sources
 

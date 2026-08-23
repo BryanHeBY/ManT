@@ -115,7 +115,7 @@ crates/mant-sources/          Local Markdown registry and transactional source u
 crates/mant-engine/           Resolution, lowering, projections, search, and rendering
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
-crates/libmandoc-rs/          Owned libmandoc parse API, private C shim, vendored source
+crates/libmandoc-rs/          Owned libmandoc parse/render API, private C shim, vendored source
 fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
@@ -208,8 +208,9 @@ boundaries:
 - `markdown_pipeline` exercises Markdown parsing, semantic selectors, search,
   outlines, excerpts, and every output renderer.
 - `tldr_page` covers the TLDR subset and command-token parser independently.
-- `roff_pipeline` crosses the native libmandoc boundary and then exercises the
-  same projections and renderers as Markdown.
+- `roff_pipeline` crosses the native libmandoc boundary, exercises its bounded
+  ASCII/UTF-8/HTML reference renderers, and then exercises the same semantic
+  projections and renderers as Markdown.
 - `catalog_query` covers bounded literal/regex discovery, hierarchical paths,
   relevance ordering, filters, and pagination without touching the host file
   system.
@@ -253,8 +254,9 @@ the same host toolchain. Always inspect the resulting image before committing
 it.
 
 `libmandoc-rs` also has a self-contained package boundary: its parser,
-compression, include-policy, diagnostics, and optional `serde` tests must pass
-from Cargo's staged package directory without fixtures from sibling crates.
+compression, include-policy, virtual source, diagnostics, optional `serde`,
+and optional reference-renderer tests must pass from Cargo's staged package
+directory without requiring fixtures from sibling crates.
 Its heavier concurrency check stays outside routine CI and must instrument
 both languages across the FFI boundary:
 
@@ -262,14 +264,17 @@ both languages across the FFI boundary:
 rustup toolchain install nightly --profile minimal
 rustup component add rust-src --toolchain nightly
 crates/libmandoc-rs/scripts/check-thread-safety
+crates/libmandoc-rs/scripts/check-address-safety
 ```
 
 The runner recompiles `std` with TSAN, explicitly instruments the vendored C
-objects, uses an isolated target directory, and exercises both in-memory
-parsing and concurrent source-relative `.so` resolution. Use `--rounds N` for
-a longer local soak. It supports `x86_64` and `aarch64` Linux/glibc and macOS;
-Windows retains ordinary concurrent regression coverage in CI but is outside
-this TSAN runner. The sanitizer runner, patch series, and upstream checksum are
+objects, uses an isolated target directory, and exercises in-memory parsing,
+source-relative `.so`, virtual bundles, and all reference renderers. Use
+`--rounds N` for a longer local soak. The ASan companion checks exact
+caller-owned input tails and output-limit boundaries in both languages. The
+runners support `x86_64` and `aarch64` Linux/glibc and macOS; Windows retains
+ordinary concurrent and boundary regressions in CI but is outside these local
+sanitizer runners. The runners, patch series, and upstream checksum are
 repository maintenance inputs and are intentionally absent from the published
 crate, which ships only the resulting buildable vendor tree.
 

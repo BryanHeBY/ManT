@@ -34,10 +34,13 @@ plain / gzip / zstd source
           │
           v
 Rust transport and policy ──> private C shim ──> vendored libmandoc 1.14.6
-          ^                                          │
-          └──────── owned ParseReport <──────────────┘
-                     ├─ Document syntax tree
-                     └─ structured diagnostics
+          ^                         │                 │
+          ├─ owned ParseReport <────┘                 │
+          │  ├─ Document syntax tree                  │
+          │  └─ structured diagnostics                │
+          └─ bounded RenderReport <───────────────────┘  (`render` feature)
+             ├─ complete reference output
+             └─ structured diagnostics
 ```
 
 The returned tree describes validated roff syntax: macro names, node roles,
@@ -83,6 +86,21 @@ platform, build a `SourceBundle` of normalized relative paths and call
 `parse_bundle`; exact bundle paths and paths beside the including source are
 resolved without callbacks or filesystem fallback.
 
+```rust
+use libmandoc_rs::{Parser, SourceBundle};
+
+let mut sources = SourceBundle::new();
+sources.insert("man1/hello.1", b".so shared/hello.inc\n".to_vec())?;
+sources.insert(
+    "man1/shared/hello.inc",
+    b".TH HELLO 1\n.SH NAME\nhello \\- virtual manual\n".to_vec(),
+)?;
+
+let report = Parser::default().parse_bundle("man1/hello.1", &sources)?;
+assert_eq!(report.document.metadata.title.as_deref(), Some("HELLO"));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
 `Parser::with_input_format` can force `InputFormat::Man` or
 `InputFormat::Mdoc` when the caller already knows the source language. The
 default remains compatible automatic detection, and the input selection is
@@ -100,14 +118,29 @@ Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
 
 Enable the default-off `render` feature to use `Renderer`. `RenderFormat::Ascii`
-produces portable 7-bit terminal text, `RenderFormat::Utf8` uses locked Rust
-Unicode cell widths without reading or changing the process locale, and
+produces portable 7-bit terminal text with traditional backspace overstrikes,
+`RenderFormat::Utf8` uses locked Rust Unicode cell widths without reading or
+changing the process locale, and
 `RenderFormat::Html` produces either a complete document or a fragment. Every
 call has a configurable byte cap (8 MiB by default, 64 MiB maximum), and an
 overflow returns an error rather than a partial result. Output is captured in
 a per-thread native sink, so concurrent calls neither share renderer state nor
 write to the process's `stdout`. `render_file`, `render_bytes`, and
 `render_bundle` retain the corresponding parser transport and `.so` policies.
+
+```rust,no_run
+# #[cfg(feature = "render")]
+# {
+use libmandoc_rs::{RenderFormat, Renderer};
+
+let report = Renderer::new(RenderFormat::Html)
+    .with_html_fragment(true)
+    .with_max_output_bytes(256 * 1024)
+    .render_bytes("hello.1", b".TH HELLO 1\n.SH NAME\nhello \\- example\n")?;
+assert!(report.output.contains("hello"));
+# }
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
 
 ## Compression contract
 
@@ -151,7 +184,7 @@ portability patches are covered by the relevant target CI jobs.
 The sanitizer stress suite is also repository-only and intentionally stays out
 of routine CI. It rebuilds the Rust standard library, this crate, and the
 vendored C objects with `ThreadSanitizer` instrumentation, then drives
-concurrent memory and source-tree sessions:
+concurrent memory, source-tree, virtual-bundle, and renderer sessions:
 
 ```sh
 rustup toolchain install nightly --profile minimal
@@ -169,8 +202,9 @@ freedom. Windows runs ordinary cross-thread regression tests in CI, but this
 TSAN runner does not support Windows.
 
 `check-address-safety` uses the same mixed Rust/C sanitizer setup for exact
-memory-only input boundaries, including truncated UTF-8 at the final source
-byte. It is likewise a local maintainer check rather than a routine CI job.
+memory-only input boundaries, including truncated UTF-8, modeline and encoding
+declarations at the final source byte, plus exact renderer output limits. It
+is likewise a local maintainer check rather than a routine CI job.
 
 The published crate contains the already-patched vendor tree needed to build,
 but deliberately omits the repository maintenance inputs under `scripts/`,
@@ -223,9 +257,9 @@ the ordered patches in `patches/series`:
   UTF-8 setup with explicit sink encoding and caller-supplied Unicode cell
   widths, giving Linux, macOS, and Windows the same locale-independent path.
 
-Each is a narrow parser or portability correction. They are not a forked
-renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the
-official snapshot plus exactly this series.
+Each is a narrow parser, renderer-boundary, or portability correction. They do
+not create a separately maintained formatter. `scripts/sync-vendor --verify`
+proves the checked-in tree is the official snapshot plus exactly this series.
 
 ### C shim and Rust AST extensions
 

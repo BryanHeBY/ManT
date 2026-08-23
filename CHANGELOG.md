@@ -12,6 +12,18 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### libmandoc-rs
+
+- Add compatible explicit `man`/`mdoc` input selection and bounded,
+  cross-platform `SourceBundle` trees for caller-owned `.so` resolution with
+  no host-filesystem fallback.
+- Add a default-off `render` feature for bounded libmandoc ASCII,
+  locale-independent UTF-8, and HTML reference output. Rendering never writes
+  to process standard output, rejects overflow without returning a partial
+  result, and does not replace ManT's existing owned-AST integration.
+- The new APIs are additive within the `0.9` compatibility line. A publication
+  version will be assigned independently when this crate is released.
+
 ### Workspace publication transition
 
 - The next publication will assign `0.9.1` to all seven crates once, because

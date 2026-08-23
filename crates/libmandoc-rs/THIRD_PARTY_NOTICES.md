@@ -8,8 +8,10 @@ license inventory is included verbatim at both
 `vendor/mandoc-1.14.6/LICENSE` and `LICENSES/mandoc-1.14.6.txt`.
 
 The vendored sources are locally modified by ManT's ordered patch series for
-memory-only input, parser compatibility, portability, and independent
-thread-local parser sessions. The crate README lists every semantic change;
+memory-only input and virtual bundles, parser/renderer compatibility,
+portability, bounded output capture, deterministic UTF-8, and independent
+thread-local parser and formatter sessions. The crate README lists every
+semantic change;
 the corresponding tagged repository contains the exact patches and pinned
 upstream checksum under `patches/` and `upstream/`. These modifications do not
 remove or replace upstream copyright and permission notices.
