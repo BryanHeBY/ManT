@@ -12,6 +12,11 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-engine
+
+- Preserve formatter-owned commas when one mdoc `Fa` invocation supplies
+  multiple parameters to a block-form function declaration.
+
 ### libmandoc-rs
 
 - Add compatible explicit `man`/`mdoc` input selection and bounded,

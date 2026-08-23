@@ -1852,7 +1852,7 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
             b".Dd August 19, 2026\n.Dt FUNCTION-PUNCTUATION 3\n.Os\n\
 .Sh NAME\n.Nm function-punctuation\n.Nd test generated punctuation\n\
 .Sh SYNOPSIS\n.Fn compact_call \"int value\"\n\
-.Fo explicit_call\n.Fa \"int value\"\n.Fc\n\
+.Fo explicit_call\n.Fa \"int value\" \"const char *label\"\n.Fc\n\
 .Sh DESCRIPTION\nThe\n.Fn prose_call \"int value\"\nfunction.\n",
         )
         .expect("lower mdoc generated punctuation");
@@ -1876,7 +1876,10 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
             .collect::<Vec<_>>();
         assert_eq!(
             synopsis,
-            ["compact_call(int value);", "explicit_call(int value);"]
+            [
+                "compact_call(int value);",
+                "explicit_call(int value, const char *label);"
+            ]
         );
 
         let [

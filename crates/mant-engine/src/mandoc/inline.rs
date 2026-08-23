@@ -595,15 +595,42 @@ fn lower_function_declaration(
 
     let mut declaration = vec![Inline::Strong { children: head }];
     declaration.push(Inline::Text { value: "(".into() });
-    for (index, argument) in body.iter().enumerate() {
-        if index > 0 {
-            declaration.push(Inline::Text { value: ", ".into() });
+    let mut has_argument = false;
+    for argument in body {
+        if argument.macro_name.as_deref() == Some("Fa")
+            && argument.flags.synopsis_pretty
+            && inline_children(argument).len() > 1
+        {
+            // One mdoc `Fa` invocation can declare several parameters. The
+            // formatter owns the comma between those operands just as it
+            // owns the comma between separate `Fa` invocations. Flatten the
+            // semantic operands here instead of spacing the whole `Fa` node
+            // as one argument when libmandoc marks it for synopsis-pretty
+            // formatting. Outside a synopsis, one `Fa` line remains one
+            // phrase. Validated closing delimiters remain attached to the
+            // preceding parameter and never create a phantom one.
+            for operand in inline_children(argument) {
+                if operand.flags.delimiter_close {
+                    declaration.extend(lower_inline_node(operand, default_name, spacing_enabled));
+                    continue;
+                }
+                if has_argument {
+                    declaration.push(Inline::Text { value: ", ".into() });
+                }
+                declaration.extend(wrap_emphasis(lower_inline_node(
+                    operand,
+                    default_name,
+                    spacing_enabled,
+                )));
+                has_argument = true;
+            }
+        } else {
+            if has_argument && !argument.flags.delimiter_close {
+                declaration.push(Inline::Text { value: ", ".into() });
+            }
+            declaration.extend(lower_inline_node(argument, default_name, spacing_enabled));
+            has_argument |= !argument.flags.delimiter_close;
         }
-        declaration.extend(lower_inline_nodes_with_spacing(
-            std::slice::from_ref(argument),
-            default_name,
-            spacing_enabled,
-        ));
     }
     let synopsis_pretty = node.flags.synopsis_pretty
         || node

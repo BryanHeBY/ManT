@@ -10,6 +10,7 @@ mod fixtures;
 
 mod archive_entry_stat;
 mod clang;
+mod expand_number;
 mod gawk;
 mod gcc;
 mod git;
