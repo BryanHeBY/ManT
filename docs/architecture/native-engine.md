@@ -177,8 +177,12 @@ C. ManT invokes libmandoc with native includes denied after Rust has resolved
 the source chain.
 
 The standalone crate additionally offers exact `man`/`mdoc` input selection
-and a bounded `SourceBundle` virtual tree for callers that need portable
-in-memory `.so` resolution. Its default-off `render` feature exposes
+and two least-authority `.so` boundaries: a strict caller-approved filesystem
+root on every native target, plus a bounded `SourceBundle` virtual tree with
+no host-filesystem fallback. On Windows, the strict root is resolved and read
+by Rust while the C parser remains memory-only; reparse points are rejected
+and the opened handle's final path is checked against the approved root. Its
+default-off `render` feature exposes
 libmandoc's ASCII, locale-independent UTF-8, and HTML reference formatters
 through a per-call output sink. These are library capabilities, not a second
 ManT rendering path: `mant-engine` continues to consume the owned parser tree

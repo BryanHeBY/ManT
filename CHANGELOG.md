@@ -21,6 +21,10 @@ that crate was not published for that change.
   locale-independent UTF-8, and HTML reference output. Rendering never writes
   to process standard output, rejects overflow without returning a partial
   result, and does not replace ManT's existing owned-AST integration.
+- Make the strict `IncludePolicy::Root` filesystem boundary available on
+  Windows. The Rust resolver rejects lexical escapes and reparse points,
+  verifies the opened file remains beneath the approved root, supports
+  relative and gzip-compressed `.so` targets, and keeps `SourceTree` Unix-only.
 - The new APIs are additive within the `0.9` compatibility line. A publication
   version will be assigned independently when this crate is released.
 

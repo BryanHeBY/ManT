@@ -76,13 +76,16 @@ the memory parser.
 `IncludePolicy::Deny` is the default. On Unix, `SourceTree` preserves
 libmandoc-compatible lookup beside the source, at the surrounding manual-tree
 root, and finally through the process working directory. It is intended for
-trusted installed manual trees, not as a containment boundary. `Root(path)` is
-the strict policy: it resolves `.so` requests only below a caller-approved
-directory, rejects absolute and lexical parent paths, refuses to traverse
-symbolic links below that root, and never falls back to the process working
-directory. The approved root itself may be a symbolic link. Native C file
-inclusion is Unix-only. For the same isolated behavior on every supported
-platform, build a `SourceBundle` of normalized relative paths and call
+trusted installed manual trees, not as a containment boundary, and remains
+Unix-only. `Root(path)` is the strict cross-platform policy: it resolves `.so`
+requests only below a caller-approved directory, rejects absolute and lexical
+parent paths, refuses to traverse symbolic links or Windows reparse points
+below that root, and never falls back to the process working directory. The
+approved root itself may be a link. Unix opens included files relative to
+directory descriptors; Windows reads them through the Rust boundary, verifies
+the opened file's final path remains below the approved root, and then passes
+owned bytes to memory-only libmandoc. To avoid host filesystem access
+entirely, build a `SourceBundle` of normalized relative paths and call
 `parse_bundle`; exact bundle paths and paths beside the including source are
 resolved without callbacks or filesystem fallback.
 
@@ -151,7 +154,9 @@ gzip detection. Use `Compression::Zstd` to force zstd decoding when a file has
 another suffix. For `parse_bytes`, auto mode recognizes zstd magic and plain
 input, not gzip; callers must decompress gzip byte streams themselves.
 `Compression::Plain` bypasses top-level compression detection. Other
-compression formats are not part of this crate's supported contract.
+compression formats are not part of this crate's supported contract. Under
+`IncludePolicy::Root`, an unresolved `.so name` also tries `name.gz`; Windows
+decompresses that included source in Rust before parsing it from memory.
 
 ## Vendor layering
 
@@ -217,7 +222,8 @@ The checked-in vendor tree differs from the official 1.14.6 snapshot only by
 the ordered patches in `patches/series`:
 
 - `0001-memory-only-input.patch` adds the buffer-only entry point used on
-  Windows and makes denied `.so` requests explicit rather than opening files.
+  Windows and makes `.so` requests without an explicit bundle or strict root
+  resolver fail rather than opening files implicitly.
 - `0002-man-mr.patch` recognizes the modern man(7) `MR` reference macro.
 - `0003-pandoc-verbatim-fonts.patch` recognizes Pandoc's `\f[V]`, `\f[VB]`,
   and `\f[VI]` font escapes.
@@ -247,8 +253,9 @@ the ordered patches in `patches/series`:
   a page replaces it, preventing repeated trap declarations from accumulating
   memory in a long-lived parser process.
 - `0013-memory-source-bundles.patch` lets the memory parser recursively read
-  `.so` targets from the shim's per-call virtual source tree and finalizes only
-  after the outermost memory source, with the same recursion bound as files.
+  `.so` targets through the shim's per-call source hook. That hook serves a
+  virtual bundle or the strict Windows root resolver, and finalizes only after
+  the outermost memory source with the same recursion bound as files.
 - `0014-isolate-renderer-output.patch` routes ASCII and HTML bytes into the
   shim's bounded per-call sink, makes formatter ID/tab state thread-local,
   releases per-call tab storage, and widens small integer-format buffers to
@@ -290,8 +297,9 @@ The source package vendors libmandoc 1.14.6 and compiles it with the `cc`
 crate, so a working C compiler is required. Checked configurations are
 supplied for Linux/glibc, macOS, and Windows/MSVC. Unix native-file parsing
 also requires zlib development headers; Windows builds the memory-only parser
-and does not link system zlib. Linux/musl remains rejected until it has a
-checked configuration.
+and does not link system zlib; its strict root resolver performs filesystem
+transport in Rust. Linux/musl remains rejected until it has a checked
+configuration.
 
 ## Licensing
 
