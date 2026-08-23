@@ -32,15 +32,24 @@ const MAX_WINDOWS_PATH_U16: usize = 32_768;
 pub(super) struct RootResolver {
     root: PathBuf,
     canonical_root: Option<PathBuf>,
+    top_level_path: Option<String>,
+    top_level_parent: Option<PathBuf>,
     data: Vec<u8>,
     logical_path: CString,
 }
 
 impl RootResolver {
-    pub(super) fn new(root: &Path) -> Self {
+    pub(super) fn new(root: &Path, source_path: &CStr) -> Self {
+        let root = absolute_path(root).unwrap_or_else(|_| root.to_path_buf());
+        let top_level_path = source_path.to_str().ok().map(str::to_owned);
+        let top_level_parent = top_level_path
+            .as_deref()
+            .and_then(|path| logical_source_parent(&root, Path::new(path)));
         Self {
-            root: root.to_path_buf(),
+            root,
             canonical_root: None,
+            top_level_path,
+            top_level_parent,
             data: Vec::new(),
             logical_path: CString::default(),
         }
@@ -80,23 +89,10 @@ impl RootResolver {
         let Some(current) = current else {
             return Ok(None);
         };
-        let current = Path::new(current);
-        let relative = if current.is_absolute() {
-            match current.strip_prefix(&self.root) {
-                Ok(relative) => relative.to_path_buf(),
-                Err(_) => return Ok(None),
-            }
-        } else {
-            let relative = safe_relative_path(
-                current
-                    .to_str()
-                    .ok_or_else(|| denied("current include path is not UTF-8"))?,
-            )?;
-            relative
-                .strip_prefix(&self.root)
-                .unwrap_or(&relative)
-                .to_path_buf()
-        };
+        if self.top_level_path.as_deref() == Some(current) {
+            return Ok(self.top_level_parent.clone());
+        }
+        let relative = safe_relative_path(current)?;
         Ok(relative.parent().map(Path::to_path_buf))
     }
 
@@ -227,6 +223,26 @@ fn safe_relative_path(path: &str) -> io::Result<PathBuf> {
         return Err(denied("include path escapes the approved root"));
     }
     Ok(path.to_path_buf())
+}
+
+fn absolute_path(path: &Path) -> io::Result<PathBuf> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        std::env::current_dir().map(|current_dir| current_dir.join(path))
+    }
+}
+
+fn logical_source_parent(root: &Path, source: &Path) -> Option<PathBuf> {
+    let source = absolute_path(source).ok()?;
+    let relative = source.strip_prefix(root).ok()?;
+    if relative
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return None;
+    }
+    relative.parent().map(Path::to_path_buf)
 }
 
 fn logical_label(path: &Path) -> io::Result<String> {

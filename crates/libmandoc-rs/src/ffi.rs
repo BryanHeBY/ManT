@@ -279,7 +279,7 @@ pub(super) fn render_buffer(
     html_fragment: bool,
     output_limit: usize,
 ) -> Result<RawRender, NativeRenderError> {
-    let mut resolver = include_root.map(windows_root::RootResolver::new);
+    let mut resolver = include_root.map(|root| windows_root::RootResolver::new(root, path));
     let (callback, context) = windows_root::callback_parts(resolver.as_mut());
     let pointer = unsafe {
         mant_mandoc_render_buffer(
@@ -395,7 +395,7 @@ pub(super) fn parse_buffer(
     allow_includes: bool,
     input_format: InputFormat,
 ) -> Result<RawDocument, String> {
-    let mut resolver = include_root.map(windows_root::RootResolver::new);
+    let mut resolver = include_root.map(|root| windows_root::RootResolver::new(root, path));
     let (callback, context) = windows_root::callback_parts(resolver.as_mut());
     let pointer = unsafe {
         mant_mandoc_parse_buffer(
