@@ -3,6 +3,11 @@
 This guide is for maintainers. Tagged automation builds reviewable draft
 releases; publishing remains a deliberate human action.
 
+Curated GitHub Releases are the canonical user-facing change history. Product
+release notes group changes by outcome and include a **Breaking changes**
+section with the old behavior, new behavior, and migration whenever users or
+integrators must act.
+
 ## Before tagging
 
 1. Version the seven crates independently in their own `Cargo.toml` files.

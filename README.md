@@ -368,6 +368,7 @@ layered on `mant-sources`, not part of document reads or MCP.
 - [Native engine and crate boundaries](docs/architecture/native-engine.md)
 - [Development guide and repository map](docs/development.md)
 - [Maintainer release procedure](docs/releasing.md)
+- [Release history and upgrade notes](https://github.com/BryanHeBY/ManT/releases)
 
 ## License
 

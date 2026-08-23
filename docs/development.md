@@ -119,15 +119,28 @@ fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
+scripts/check-windows.ps1    Native Windows verification sequence
 scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
 scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
 scripts/find-successful-ci.sh  Exact-commit full CI verification for automation
 scripts/generate-rust-licenses.sh  Rebuild the locked Rust license report
+scripts/finalize-cyclonedx.mjs  Normalize generated release SBOMs reproducibly
+scripts/install-ci-native-dependencies.sh  Install native Linux CI prerequisites
 scripts/install.sh           Latest-release installer for Linux and macOS
 scripts/install.ps1          Latest-release installer for Windows x64
-scripts/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
+scripts/fuzz.sh              Run selected cargo-fuzz targets for a bounded time
 scripts/package-release.sh   Reproducible Linux release archive assembly
 scripts/package-release.ps1 Windows x64 ZIP assembly
+scripts/package-manuals.sh   Reproducible platform-independent manual archive
+scripts/publish-crates.sh    Ordered independent-version crates.io publication
+scripts/update-protocol-schema-snapshot.sh  Regenerate a deliberate protocol snapshot
+scripts/update-reader-screenshot.sh  Host-stable Linux README screenshot capture
+scripts/audit-roff-fidelity.py  Visible-content differential audit
+scripts/audit-roff-structure.py  Native AST-to-IR topology audit
+scripts/audit-roff-projection.py  CommonMark round-trip topology audit
+scripts/audit-roff-layout.py  Source-gated renderer layout audit
+scripts/check-roff-audit-coverage.py  Cross-ledger corpus coverage verification
+scripts/roff_audit_common.py  Shared roff audit identities and helpers
 docs/architecture/           Design decisions and stable-boundary documentation
 docs/installation.md         User installation methods and platform requirements
 docs/sources.md              Markdown source configuration and update behavior
