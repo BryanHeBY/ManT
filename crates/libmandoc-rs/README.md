@@ -276,6 +276,10 @@ the ordered patches in `patches/series`:
 - `0016-portable-memory-renderers.patch` removes unused POSIX header and pager
   process types from the Windows memory-only formatter build while retaining
   the complete upstream interfaces for native Unix builds.
+- `0017-preserve-continued-tp-aliases.patch` closes a populated `.TP`/`.TQ`
+  head before a following tagged paragraph when the tag ends in `\\c`, so
+  legacy GNU pages retain consecutive long and short option aliases instead
+  of deleting the first tag as a broken next-line scope.
 
 Each is a narrow parser, renderer-boundary, or portability correction. They do
 not create a separately maintained formatter. `scripts/sync-vendor --verify`

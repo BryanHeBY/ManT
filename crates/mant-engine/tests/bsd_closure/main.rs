@@ -5,7 +5,7 @@
 mod common;
 mod fixtures;
 
-use common::{block_slice_text, section};
+use common::{block_slice_text, definition_items, inline_text, section};
 use fixtures::bsd_manual;
 
 #[test]
@@ -25,5 +25,29 @@ fn dragonfly_adduser_carries_sm_off_into_a_display_line() {
     assert!(
         format.contains("name:uid:gid:class:change:expire:gecos:home_dir:shell:password"),
         "format={format:?}"
+    );
+}
+
+#[test]
+fn dragonfly_gdb_preserves_consecutive_tp_option_aliases() {
+    let document = bsd_manual("dragonfly-gdb");
+    let options = section(document, "OPTIONS");
+    let aliases = definition_items(options)
+        .into_iter()
+        .map(|item| {
+            item.terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        aliases.contains(&vec!["-symbols=file".into(), "-s file".into()]),
+        "aliases={aliases:?}"
+    );
+    assert!(
+        aliases.contains(&vec!["-exec=file".into(), "-e file".into()]),
+        "aliases={aliases:?}"
     );
 }

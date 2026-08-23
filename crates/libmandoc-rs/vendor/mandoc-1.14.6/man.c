@@ -36,6 +36,7 @@
 #include "libman.h"
 
 static	char		*man_hasc(char *);
+static	char		*man_node_hasc(struct roff_node *);
 static	int		 man_ptext(struct roff_man *, int, char *, int);
 static	int		 man_pmacro(struct roff_man *, int, char *, int);
 
@@ -68,6 +69,14 @@ man_hasc(char *start)
 		if (cp[-1] != '\\')
 			break;
 	return (ep - cp) % 2 ? NULL : ep;
+}
+
+static char *
+man_node_hasc(struct roff_node *n)
+{
+	while (n->last != NULL)
+		n = n->last;
+	return n->type == ROFFT_TEXT ? man_hasc(n->string) : NULL;
 }
 
 void
@@ -228,6 +237,10 @@ man_pmacro(struct roff_man *man, int ln, char *buf, int offs)
 	 * Some macros break next-line scopes; otherwise, remember
 	 * whether we are in next-line scope for a block head.
 	 */
+	if (man->flags & MAN_BLINE &&
+	    (tok == MAN_TP || tok == MAN_TQ) &&
+	    man_node_hasc(man->last) != NULL)
+		man_descope(man, ln, ppos, NULL);
 
 	man_breakscope(man, tok);
 	bline = man->flags & MAN_BLINE;

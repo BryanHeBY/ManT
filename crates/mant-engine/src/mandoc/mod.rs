@@ -739,6 +739,41 @@ mod tests {
     }
 
     #[test]
+    fn preserves_consecutive_tp_aliases_ending_in_line_continuations() {
+        let path = temporary_source(
+            "continued-definition-aliases",
+            ".TH ALIASES 1\n\
+             .SH OPTIONS\n\
+             .TP\n\
+             .BI \"\\-symbols=\" \"file\"\\c\n\
+             .TP\n\
+             .BI \"\\-s \" \"file\"\\c\n\
+             \\&\n\
+             Read symbols.\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower consecutive TP aliases");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [Block::DefinitionList { items, .. }] = document.sections[0].blocks.as_slice() else {
+            panic!("expected one definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0]
+                .terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>(),
+            ["-symbols=file", "-s file"]
+        );
+        let Block::Paragraph { children, .. } = &items[0].description[0] else {
+            panic!("expected alias description paragraph");
+        };
+        assert_eq!(inline_text(children), "Read symbols.");
+    }
+
+    #[test]
     fn preserves_man_synopsis_flow_and_alternating_fonts() {
         let path = temporary_source(
             "man-synopsis-flow",
