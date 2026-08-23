@@ -60,6 +60,9 @@ mod tests {
     #[cfg(windows)]
     use std::io::Write;
 
+    #[cfg(windows)]
+    use windows_sys::Win32::Foundation::ERROR_PRIVILEGE_NOT_HELD;
+
     use super::{
         AuthorMode, Compression, DiagnosticLevel, DisplayKind, Document, IncludePolicy,
         InputFormat, MacroSet, Node, NodeKind, NormalizedFont, NormalizedListKind, ParseError,
@@ -1117,7 +1120,11 @@ mod tests {
         )
         .expect("write outside target");
         if let Err(error) = symlink_file(&outside, includes.join("target.1")) {
-            if error.kind() == std::io::ErrorKind::PermissionDenied {
+            let privilege_not_held = error
+                .raw_os_error()
+                .and_then(|code| u32::try_from(code).ok())
+                == Some(ERROR_PRIVILEGE_NOT_HELD);
+            if error.kind() == std::io::ErrorKind::PermissionDenied || privilege_not_held {
                 fs::remove_dir_all(base).expect("remove skipped reparse fixture");
                 return;
             }
