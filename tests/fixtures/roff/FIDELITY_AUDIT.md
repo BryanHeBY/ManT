@@ -243,3 +243,57 @@ those characters are semantic, such as the `.Nd` separator and synopsis
 function terminators. A general punctuation skeleton is intentionally not a
 contract because tables, wrapping, and renderer typography would make it a
 moving allowlist.
+
+## 2026-08-24 BSD release closure
+
+The final pre-release expansion added two complete official manual sets:
+
+- NetBSD 11.0 amd64 `binary/sets/man.tar.xz`, verified against the published
+  SHA-512
+  `1a0d59ae43d92e1880ea54caae321e3ee5e59d39145a1fbd2a1d700e2b5be63759b0a4df55f9d1834707e48934267b8e77a29878717a7e7085fb7e3c8fbdae33`;
+- DragonFly BSD 6.4.2 `dfly-x86_64-6.4.2_REL.iso.bz2`, verified against the
+  published MD5 `906095312c4a4ac0577fb91d5eb87033` and locally recorded
+  SHA-256
+  `373150a21eeb7ce0f20c7faf1b8129145bf3bf0463a45d0dc18aad274f7ed661`.
+
+NetBSD contributed 2,357 identities: 2,325 clean and 32 reviewed. DragonFly
+contributed 6,363 identities: 6,196 clean and 167 reviewed after the fixes.
+Every candidate was inspected against source, reference text, ManT text, and
+structured output where needed; no review remains pending. Most candidates
+were reference wrapping, table traversal, historical `.St` wording, no-fill
+spacing, or device-specific motion fragments.
+
+Three source defects became exact licensed fixtures and focused regressions:
+NetBSD's `\\[vc]` author-name character, DragonFly `adduser(8)` display text
+under an outer `.Sm off`, and continued `.TP` aliases in DragonFly `gdb(1)`.
+The first two are fixed in source-neutral lowering; the `.TP` scope loss is
+fixed in the vendored parser because the previous AST had already discarded
+the long option tag. The corpus rows retain their human conclusions even when
+a clean recheck no longer emits the original candidate.
+
+## Rolling BSD exploration
+
+Rolling inputs stay outside the permanent CSV breadth totals until they become
+a released corpus or produce an exact checked-in fixture. On 2026-08-24, a
+syntax-priority sample of 200 pages from the OpenBSD amd64 snapshot built
+`Sun Aug 23 04:21:40 UTC 2026` was replayed through all six audit routes. Its
+official `man80.tgz` SHA-256 was
+`213189e7db8c7cc33bcbb29d3cc87f653d3392ee1c873625c62da87415192512`.
+The content routes found one real loss: `\\s-20000` consumed two digits after
+a sign and changed the visible hexadecimal offset `0000` to `000`. The fixed
+decoder now follows roff's one-digit signed legacy form, and the exact
+`term(5)` member is a licensed fixture. Post-fix content was 198 clean plus two
+known semantic-reference differences for groff, and 196 clean plus four
+`.St -p1003.1-2024` reference omissions for mandoc; structure was 200 clean,
+projection had only the known required `&amp;` spelling, groff layout was 200
+clean, and mandoc layout had one reviewed no-fill blank-run difference.
+
+The official OpenBSD current `ports.tar.gz` retrieved the same day has local
+SHA-256
+`3d1fb309aca266b7c8b0136d763d237eae2365c3c0017809a78ae0aadf5dfd09`.
+Rather than sample arbitrary patch files, the exploration audited all 36
+self-contained files with a `.TH` or `.Dd` document header. Groff content,
+mandoc content, AST-to-IR structure, CommonMark projection, and both layout
+routes were all 36/36 clean. Temporary ledgers and third-party review bundles
+remained under `/tmp`; only the promoted fixture and durable conclusions are
+tracked.

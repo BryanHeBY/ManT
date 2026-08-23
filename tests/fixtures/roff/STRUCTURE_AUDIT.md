@@ -135,3 +135,19 @@ to run complete high-risk sweeps for `.nf`/`.fi`, `.EX`/`.EE`, `.TP`/`.IP`,
 tool, not a public CLI or MCP interface, and its host-only results never gate
 ordinary CI. Daily CI only runs the script's dependency-free `--self-check`
 plus focused Rust regressions for findings that were manually confirmed.
+
+## 2026-08-24 BSD closure result
+
+The exact NetBSD 11.0 replay was 2,357/2,357 clean. The DragonFly BSD 6.4.2
+replay was 6,359 clean and four reviewed out of 6,363 pages. Three candidates
+were mdoc subsection titles containing an `Xr` macro: the title is one string
+identity in the renderer-neutral IR while links in document content remain
+typed. The fourth was `atc(6)`, whose literal display intentionally contains
+the characters `.Bl` and `.It` rather than a semantic list. All four are
+source-confirmed false positives, with no hard failure or pending review.
+
+The independent rolling checks described in `FIDELITY_AUDIT.md` added 200/200
+clean OpenBSD current pages and 36/36 clean self-contained ports manuals to
+the temporary evidence. Released NetBSD and DragonFly identities are retained
+in this ledger; rolling identities are promoted only when a stable release or
+focused fixture makes them durable.

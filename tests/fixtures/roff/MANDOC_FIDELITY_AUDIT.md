@@ -53,9 +53,10 @@ roots must be supplied in the same order-independent set used by the original
 corpus so their relative labels remain stable. Normal incremental, pending,
 and recorded rechecks retain the same semantics as the groff ledger.
 
-The 2026-08-23/24 replay reconstructed all 9,056 historical groff identities
-plus all 31 checked-in fixtures. Distribution archives, package versions, and
-hashes are recorded in [`FIDELITY_AUDIT.md`](FIDELITY_AUDIT.md). In addition:
+The 2026-08-23/24 replay reconstructed all 17,776 historical release-corpus
+identities plus all 35 checked-in fixtures. Distribution archives, package
+versions, and hashes are recorded in
+[`FIDELITY_AUDIT.md`](FIDELITY_AUDIT.md). In addition:
 
 - the OpenBSD, NetBSD, FreeBSD, Alpine, Debian, Fedora, illumos, Apple, and
   generator inputs were restored from the exact official artifacts or pinned
@@ -69,12 +70,11 @@ hashes are recorded in [`FIDELITY_AUDIT.md`](FIDELITY_AUDIT.md). In addition:
 
 ## Recorded result
 
-The aligned ledger contains 9,087 rows: 9,024 `clean`, 54 `review`, and 9
-documented `skipped`, with no hard failure and no pending human review. The 54
-review candidates have durable dispositions: 51 renderer/tokenization
-differences, two occurrences of the existing formatter-owned `.T` device-name
-limitation in `gpinyin(1)`, and one confirmed table-column defect fixed by
-`98db676`.
+The aligned ledger contains 17,811 rows: 17,726 `clean`, 76 `review`, and 9
+documented `skipped`, with no hard failure and no pending human review. NetBSD
+11.0 contributes 2,344 clean and 13 reviewed rows; DragonFly BSD 6.4.2
+contributes 6,355 clean and 8 reviewed rows after fixes. The earlier corpus
+retains 55 reviewed rows. Every candidate has a source-specific disposition.
 
 The same run found two general mdoc punctuation defects. Multi-operand `Fa`
 requests now retain formatter-owned commas both in ordinary declarations
@@ -87,16 +87,19 @@ Human review compared the source, mandoc output, ManT text, and structured
 semantics. Remaining differences are explained per row: compact equation
 spellings, literal documented escapes, table traversal order, source-requested
 line continuation, labeled link destinations that remain present in ManT's
-link object, or mandoc-only token concatenation. Do not replace those notes
-with a source-hash allowlist.
+link object, mandoc-only token concatenation, and the established no-fill
+normalisation policy. Do not replace those notes with a source-hash allowlist.
 
-Six high-confidence cases where that review establishes a source-semantic
+Nine high-confidence cases where that review establishes a source-semantic
 advantage for ManT are indexed separately in
 [`REFERENCE_RENDERER_DEVIATIONS.csv`](REFERENCE_RENDERER_DEVIATIONS.csv).
 They cover representative table topology, token continuation, an equation
-operator, a Unicode composite glyph, an `.St` citation, and `.Ns` spacing. The
-deviation ledger does not promote ordinary false positives or the
-layout route's intentional blank-run normalization.
+operator, Unicode and named-character fidelity, an `.St` citation, `.Ns`
+spacing, and continued `.TP` aliases. A current renderer deviation may be
+backed either by a reviewed `false-positive` comparison or by a
+`confirmed-fixed` source conclusion with an exact regression; the coverage
+checker validates both. The deviation ledger does not promote ordinary false
+positives or the layout route's intentional blank-run normalization.
 
 The audit script checkpoints large databases atomically. It does not make
 concurrent writers to one CSV safe; replay corpora serially. Run

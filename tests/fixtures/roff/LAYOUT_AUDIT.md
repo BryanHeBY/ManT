@@ -66,3 +66,12 @@ After a narrowly scoped lowering fix that can only remove a known candidate,
 `--recheck-review-recorded` replays just unchanged rows whose latest layout
 status is `review`. This keeps a confirmation pass proportional to the actual
 finding set rather than rescanning an entire local corpus.
+
+## 2026-08-24 BSD closure result
+
+All 2,357 NetBSD 11.0 pages and all 6,363 DragonFly BSD 6.4.2 pages were clean
+under the groff-backed source-gated layout oracle. The temporary OpenBSD
+current sample was also 200/200 clean, and all 36 self-contained ports manuals
+were clean. These results concern authored no-fill boundaries, relative
+indentation, and source-requested spacing only; they do not redefine terminal
+wrapping or formatter margins as ManT contracts.
