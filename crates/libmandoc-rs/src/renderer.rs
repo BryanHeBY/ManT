@@ -36,6 +36,8 @@ pub const MAX_RENDER_WIDTH: usize = 1_000;
 pub enum RenderFormat {
     /// Portable 7-bit terminal text with no control sequences.
     Ascii,
+    /// Deterministic UTF-8 terminal text with Unicode cell widths.
+    Utf8,
     /// UTF-8 HTML, either a full document or a caller-selected fragment.
     Html,
 }
@@ -89,7 +91,7 @@ impl fmt::Display for RenderError {
 
 impl std::error::Error for RenderError {}
 
-/// Bounded, thread-safe access to libmandoc's ASCII and HTML renderers.
+/// Bounded, thread-safe access to libmandoc's ASCII, UTF-8, and HTML renderers.
 ///
 /// Rendering reparses the source and formats the native tree in one call;
 /// it does not reconstruct private libmandoc state from the owned Rust AST.
@@ -390,6 +392,7 @@ const fn format_code(format: RenderFormat) -> i32 {
     match format {
         RenderFormat::Ascii => 1,
         RenderFormat::Html => 2,
+        RenderFormat::Utf8 => 3,
     }
 }
 
@@ -410,5 +413,25 @@ fn decompression_error(path: &Path, error: &io::Error) -> RenderError {
         path: path.to_path_buf(),
         kind: RenderErrorKind::Decompression,
         message: format!("could not decompress zstd manual source: {error}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{RenderFormat, Renderer, ffi};
+
+    #[test]
+    fn utf8_rendering_does_not_change_process_ctype_locale() {
+        let before = ffi::ctype_locale();
+        let report = Renderer::new(RenderFormat::Utf8)
+            .render_bytes(
+                "locale.1",
+                ".TH LOCALE 1\n.SH NAME\ncafé \\(em 日本 😀\n".as_bytes(),
+            )
+            .expect("render deterministic UTF-8");
+        let after = ffi::ctype_locale();
+
+        assert_eq!(after, before);
+        assert!(report.output.contains("café — 日本 😀"));
     }
 }

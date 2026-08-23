@@ -9,6 +9,9 @@ struct mant_mandoc_output;
 struct mant_mandoc_output *mant_mandoc_output_alloc(size_t);
 int mant_mandoc_output_begin(struct mant_mandoc_output *);
 void mant_mandoc_output_write(const void *, size_t);
+void mant_mandoc_output_utf8(int);
+size_t mant_mandoc_utf8_width(int);
+const char *mant_mandoc_ctype_locale(void);
 void mant_mandoc_output_end(void);
 const unsigned char *mant_mandoc_output_data(
     const struct mant_mandoc_output *);

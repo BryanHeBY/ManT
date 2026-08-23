@@ -14,6 +14,8 @@ use super::{
 
 #[cfg(feature = "render")]
 use super::RawRender;
+#[cfg(feature = "render")]
+use unicode_width::UnicodeWidthChar;
 
 #[repr(C)]
 struct CDocument {
@@ -35,6 +37,16 @@ struct CSource {
     path: *const c_char,
     data: *const u8,
     length: usize,
+}
+
+#[cfg(feature = "render")]
+#[unsafe(no_mangle)]
+extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
+    u32::try_from(codepoint)
+        .ok()
+        .and_then(char::from_u32)
+        .and_then(UnicodeWidthChar::width)
+        .unwrap_or(0)
 }
 
 unsafe extern "C" {
@@ -115,6 +127,8 @@ unsafe extern "C" {
     fn mant_mandoc_document_output_length(document: *const CDocument) -> usize;
     #[cfg(feature = "render")]
     fn mant_mandoc_document_render_status(document: *const CDocument) -> i32;
+    #[cfg(all(feature = "render", test))]
+    fn mant_mandoc_ctype_locale() -> *const c_char;
     fn mant_mandoc_node_kind(node: *const CNode) -> i32;
     fn mant_mandoc_node_macro(node: *const CNode) -> *const c_char;
     fn mant_mandoc_node_text(node: *const CNode) -> *const c_char;
@@ -142,6 +156,11 @@ unsafe extern "C" {
     fn mant_mandoc_table_cell_next(cell: *const CTableCell) -> *const CTableCell;
     fn mant_mandoc_node_child(node: *const CNode) -> *const CNode;
     fn mant_mandoc_node_next(node: *const CNode) -> *const CNode;
+}
+
+#[cfg(all(feature = "render", test))]
+pub(crate) fn ctype_locale() -> Option<String> {
+    unsafe { optional_string(mant_mandoc_ctype_locale()) }
 }
 
 #[cfg(feature = "render")]

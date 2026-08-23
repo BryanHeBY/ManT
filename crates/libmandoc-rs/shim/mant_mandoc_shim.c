@@ -470,6 +470,14 @@ render_document(struct mant_mandoc_document *document,
 			html_man(renderer, meta);
 		html_free(renderer);
 		break;
+	case 3:
+		renderer = utf8_alloc(&options);
+		if (meta->macroset == MACROSET_MDOC)
+			terminal_mdoc(renderer, meta);
+		else
+			terminal_man(renderer, meta);
+		ascii_free(renderer);
+		break;
 	default:
 		mant_mandoc_output_end();
 		document->render_status = 3;

@@ -21,3 +21,4 @@
 0012-replace-input-traps.patch
 0013-memory-source-bundles.patch
 0014-isolate-renderer-output.patch
+0015-deterministic-utf8-rendering.patch

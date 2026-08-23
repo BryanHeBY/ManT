@@ -18,8 +18,8 @@ to depend on libmandoc's private C structures or parser lifetime.
 - Structured non-fatal diagnostics and typed source/decompression failures.
 - Top-level uncompressed, gzip, and zstd manual sources.
 - Concurrent parser calls with thread-local upstream and shim state.
-- An optional `render` feature exposing bounded upstream ASCII and HTML
-  reference output without writing to process standard output.
+- An optional `render` feature exposing bounded upstream ASCII, deterministic
+  UTF-8, and HTML reference output without writing to process standard output.
 
 The default crate remains a parser layer only. It intentionally does not
 locate system manual pages, interpret application-specific section models, or
@@ -100,7 +100,8 @@ Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
 
 Enable the default-off `render` feature to use `Renderer`. `RenderFormat::Ascii`
-produces portable terminal text at a caller-selected width;
+produces portable 7-bit terminal text, `RenderFormat::Utf8` uses locked Rust
+Unicode cell widths without reading or changing the process locale, and
 `RenderFormat::Html` produces either a complete document or a fragment. Every
 call has a configurable byte cap (8 MiB by default, 64 MiB maximum), and an
 overflow returns an error rather than a partial result. Output is captured in
@@ -218,6 +219,9 @@ the ordered patches in `patches/series`:
   shim's bounded per-call sink, makes formatter ID/tab state thread-local,
   releases per-call tab storage, and widens small integer-format buffers to
   their complete representable sizes.
+- `0015-deterministic-utf8-rendering.patch` replaces libmandoc's process-locale
+  UTF-8 setup with explicit sink encoding and caller-supplied Unicode cell
+  widths, giving Linux, macOS, and Windows the same locale-independent path.
 
 Each is a narrow parser or portability correction. They are not a forked
 renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the

@@ -3,6 +3,7 @@
 #include "mant_thread_local.h"
 
 #include <stdint.h>
+#include <locale.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -76,6 +77,43 @@ mant_mandoc_output_write(const void *data, size_t length)
 	output->capacity = capacity;
 	memcpy(output->data + output->length, data, length);
 	output->length += length;
+}
+
+void
+mant_mandoc_output_utf8(int codepoint)
+{
+	unsigned char bytes[4];
+	size_t length;
+
+	if (codepoint < 0 || codepoint > 0x10ffff ||
+	    (codepoint >= 0xd800 && codepoint <= 0xdfff))
+		codepoint = 0xfffd;
+	if (codepoint <= 0x7f) {
+		bytes[0] = (unsigned char)codepoint;
+		length = 1;
+	} else if (codepoint <= 0x7ff) {
+		bytes[0] = 0xc0 | (unsigned char)(codepoint >> 6);
+		bytes[1] = 0x80 | (unsigned char)(codepoint & 0x3f);
+		length = 2;
+	} else if (codepoint <= 0xffff) {
+		bytes[0] = 0xe0 | (unsigned char)(codepoint >> 12);
+		bytes[1] = 0x80 | (unsigned char)((codepoint >> 6) & 0x3f);
+		bytes[2] = 0x80 | (unsigned char)(codepoint & 0x3f);
+		length = 3;
+	} else {
+		bytes[0] = 0xf0 | (unsigned char)(codepoint >> 18);
+		bytes[1] = 0x80 | (unsigned char)((codepoint >> 12) & 0x3f);
+		bytes[2] = 0x80 | (unsigned char)((codepoint >> 6) & 0x3f);
+		bytes[3] = 0x80 | (unsigned char)(codepoint & 0x3f);
+		length = 4;
+	}
+	mant_mandoc_output_write(bytes, length);
+}
+
+const char *
+mant_mandoc_ctype_locale(void)
+{
+	return setlocale(LC_CTYPE, NULL);
 }
 
 void

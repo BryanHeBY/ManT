@@ -55,6 +55,18 @@ fn html_mdoc_output_matches_the_pinned_renderer_golden() {
 }
 
 #[test]
+fn utf8_output_preserves_unicode_scalars() {
+    let report = Renderer::new(RenderFormat::Utf8)
+        .render_bytes(
+            "unicode.1",
+            ".TH UNICODE 1\n.SH NAME\ncafé \\(em 日本 😀\n".as_bytes(),
+        )
+        .expect("render deterministic UTF-8");
+    assert!(report.output.contains("café — 日本 😀"));
+    assert!(report.output.is_char_boundary(report.output.len()));
+}
+
+#[test]
 fn output_limit_rejects_partial_results() {
     let error = Renderer::new(RenderFormat::Ascii)
         .with_max_output_bytes(16)
@@ -79,7 +91,7 @@ fn renderer_resolves_virtual_includes() {
 }
 
 #[test]
-fn concurrent_ascii_and_html_renderers_isolate_output_state() {
+fn concurrent_render_formats_isolate_output_state() {
     const WORKERS: usize = 8;
     let start = Arc::new(Barrier::new(WORKERS));
     let workers: Vec<_> = (0..WORKERS)
@@ -89,10 +101,10 @@ fn concurrent_ascii_and_html_renderers_isolate_output_state() {
                 let identity = format!("render-worker-{worker}");
                 let source =
                     format!(".TH WORKER-{worker} 1\n.SH NAME\n{identity} \\- isolated output\n");
-                let format = if worker % 2 == 0 {
-                    RenderFormat::Ascii
-                } else {
-                    RenderFormat::Html
+                let format = match worker % 3 {
+                    0 => RenderFormat::Ascii,
+                    1 => RenderFormat::Utf8,
+                    _ => RenderFormat::Html,
                 };
                 start.wait();
                 for _ in 0..16 {

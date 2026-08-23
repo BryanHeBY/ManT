@@ -791,6 +791,7 @@ dependencies = [
  "flate2",
  "serde",
  "serde_json",
+ "unicode-width",
  "zstd",
 ]
 

@@ -32,12 +32,13 @@ all-features = true
 
 [features]
 default = []
-render = []
+render = ["dep:unicode-width"]
 serde = ["dep:serde"]
 
 [dependencies]
 flate2.workspace = true
 serde = { workspace = true, optional = true }
+unicode-width = { workspace = true, optional = true }
 zstd.workspace = true
 
 [build-dependencies]

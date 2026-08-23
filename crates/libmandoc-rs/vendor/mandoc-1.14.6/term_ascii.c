@@ -51,6 +51,8 @@ static	void		  ascii_end(struct termp *);
 static	void		  ascii_endline(struct termp *);
 static	void		  ascii_letter(struct termp *, int);
 static	void		  ascii_setwidth(struct termp *, int, int);
+static	void		  utf8_letter(struct termp *, int);
+static	size_t		  utf8_width(const struct termp *, int);
 
 #if HAVE_WCHAR
 static	void		  locale_advance(struct termp *, size_t);
@@ -91,7 +93,7 @@ ascii_init(enum termenc enc, const struct manoutput *outopts)
 	p->width = ascii_width;
 
 #if HAVE_WCHAR
-	if (enc != TERMENC_ASCII) {
+	if (enc == TERMENC_LOCALE) {
 
 		/*
 		 * Do not change any of this to LC_ALL.  It might break
@@ -100,9 +102,7 @@ ascii_init(enum termenc enc, const struct manoutput *outopts)
 		 * worst case, it might even cause buffer overflows.
 		 */
 
-		v = enc == TERMENC_LOCALE ?
-		    setlocale(LC_CTYPE, "") :
-		    setlocale(LC_CTYPE, UTF8_LOCALE);
+		v = setlocale(LC_CTYPE, "");
 
 		/*
 		 * We only support UTF-8,
@@ -122,6 +122,13 @@ ascii_init(enum termenc enc, const struct manoutput *outopts)
 		}
 	}
 #endif
+	if (enc == TERMENC_UTF8) {
+		p->enc = TERMENC_UTF8;
+		p->advance = ascii_advance;
+		p->endline = ascii_endline;
+		p->letter = utf8_letter;
+		p->width = utf8_width;
+	}
 
 	if (outopts->mdoc) {
 		p->mdocstyle = 1;
@@ -214,6 +221,22 @@ ascii_letter(struct termp *p, int c)
 	unsigned char byte = (unsigned char)c;
 
 	mant_mandoc_output_write(&byte, 1);
+}
+
+static size_t
+utf8_width(const struct termp *p, int c)
+{
+	if (c == ASCII_NBRSP)
+		c = ' ';
+	return mant_mandoc_utf8_width(c);
+}
+
+static void
+utf8_letter(struct termp *p, int c)
+{
+	if (c == ASCII_NBRSP)
+		c = ' ';
+	mant_mandoc_output_utf8(c);
 }
 
 static void
