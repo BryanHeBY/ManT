@@ -597,18 +597,16 @@ fn lower_function_declaration(
     declaration.push(Inline::Text { value: "(".into() });
     let mut has_argument = false;
     for argument in body {
-        if argument.macro_name.as_deref() == Some("Fa")
-            && argument.flags.synopsis_pretty
-            && inline_children(argument).len() > 1
-        {
+        if argument.macro_name.as_deref() == Some("Fa") && inline_children(argument).len() > 1 {
             // One mdoc `Fa` invocation can declare several parameters. The
             // formatter owns the comma between those operands just as it
             // owns the comma between separate `Fa` invocations. Flatten the
             // semantic operands here instead of spacing the whole `Fa` node
-            // as one argument when libmandoc marks it for synopsis-pretty
-            // formatting. Outside a synopsis, one `Fa` line remains one
-            // phrase. Validated closing delimiters remain attached to the
-            // preceding parameter and never create a phantom one.
+            // as one argument. This is also required for function-pointer
+            // declarations embedded outside SYNOPSIS, where libmandoc does
+            // not set `synopsis_pretty` but `Fo` still owns a parameter list.
+            // Validated closing delimiters remain attached to the preceding
+            // parameter and never create a phantom one.
             for operand in inline_children(argument) {
                 if operand.flags.delimiter_close {
                     declaration.extend(lower_inline_node(operand, default_name, spacing_enabled));

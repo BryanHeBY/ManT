@@ -16,6 +16,11 @@ a mandoc comparison exposed a missing comma between multiple operands of one
 mdoc `Fa` invocation. It likewise stores the exact decompressed source and
 retains the complete page-specific BSD-2-Clause notice.
 
+`zip_source_function.3` was added the same day from Arch's libzip package
+after the aligned mandoc audit exposed the same operand-loss class inside an
+out-of-SYNOPSIS `Fo` function-pointer declaration. It retains the complete
+page-specific BSD-3-Clause notice.
+
 They form the primary real-man corpus for section topology, definition lists,
 preformatted blocks, inline fonts, navigation, and source-markup regressions.
 The neighbouring Fedora corpus supplies independently packaged generator
@@ -33,6 +38,7 @@ output.
 | `sh.1p.gz` | [POSIX sh], [Arch `man-pages` 6.18-1] | `usr/share/man/man1p/sh.1p.gz` | Original member | [POSIX manual notice] | `464243a5da22f585063698896dc115ab81ef10950a3d75e3f00d3d3874b3785e` |
 | `archive_entry_stat.3` | [libarchive], [Arch `libarchive` 3.8.9-1] | `usr/share/man/man3/archive_entry_stat.3.gz` | Exact decompressed source | [BSD-2-Clause] | `06311cf3566f167804ef732defd0e5d1375dd68ceb001713be666de69e58581b` |
 | `expand_number.3bsd` | [libbsd], [Arch `libbsd` 0.12.2-2] | `usr/share/man/man3/expand_number.3bsd.gz` | Exact decompressed source | [BSD-2-Clause] | `4e0d2bd2af63de49f6c55ce96ae07b52a6c2214d837f4c33eec47699ca19de03` |
+| `zip_source_function.3` | [libzip], [Arch `libzip` 1.11.4-1] | `usr/share/man/man3/zip_source_function.3.gz` | Exact decompressed source | [BSD-3-Clause] | `73a409d297a001c885fc00092a92105f30fe4e6ecca0b57d06c6fecc40b5b898` |
 
 The two recompressed fixtures preserve these exact decompressed roff hashes:
 
@@ -46,6 +52,7 @@ The corresponding immutable package archives have these SHA-256 values:
 - `rsync-3.4.3-1-x86_64.pkg.tar.zst`: `f2ad0dcc4d7022cb7f04c4da716be067b93a95fc246f2c0259cb2dbb880684e5`
 - `man-pages-6.18-1-any.pkg.tar.zst`: `f03bbc27c6c14aed6c009a4780e618cf57c0eb9cdca390a3c4eacc600d197ba3`
 - `libbsd-0.12.2-2-x86_64.pkg.tar.zst`: `e26194849786b0202828a348be3f4b90d410604cd7d48f113a4301584a49895a`
+- `libzip-1.11.4-1-x86_64.pkg.tar.zst`: `e6bc733cdc738d317d94f1906eb86229be174aa8362ad7dbb03ae68d9eb3dbf6`
 
 The GCC manual embeds its own GFDL invariant sections, front-cover text, and
 back-cover text. Those page-specific notices remain in `gcc.1.gz`; the shared
@@ -59,7 +66,8 @@ The POSIX shell page is redistributed under the IEEE and The Open Group
 permission shipped by Arch's man-pages package; its required notice is copied
 verbatim to [`POSIX-COPYRIGHT.txt`](../LICENSES/POSIX-COPYRIGHT.txt).
 The libarchive and libbsd pages retain their complete BSD-2-Clause notices at
-the start of each fixture.
+the start of each fixture. The libzip page likewise retains its complete
+BSD-3-Clause notice.
 
 ## Reproducing a fixture
 
@@ -125,6 +133,7 @@ representative topics, grouped by source package.
 [POSIX sh]: https://pubs.opengroup.org/onlinepubs/9699919799/utilities/sh.html
 [libarchive]: https://libarchive.org/
 [libbsd]: https://libbsd.freedesktop.org/
+[libzip]: https://libzip.org/
 [Arch `coreutils` 9.11-2]: https://archive.archlinux.org/packages/c/coreutils/coreutils-9.11-2-x86_64.pkg.tar.zst
 [Arch `git` 2.55.0-1]: https://archive.archlinux.org/packages/g/git/git-2.55.0-1-x86_64.pkg.tar.zst
 [Arch `gcc` 16.1.1+r346+g4e03491b401d-4]: https://archive.archlinux.org/packages/g/gcc/gcc-16.1.1%2Br346%2Bg4e03491b401d-4-x86_64.pkg.tar.zst
@@ -135,6 +144,7 @@ representative topics, grouped by source package.
 [Arch `man-pages` 6.18-1]: https://archive.archlinux.org/packages/m/man-pages/man-pages-6.18-1-any.pkg.tar.zst
 [Arch `libarchive` 3.8.9-1]: https://archive.archlinux.org/packages/l/libarchive/libarchive-3.8.9-1-x86_64.pkg.tar.zst
 [Arch `libbsd` 0.12.2-2]: https://archive.archlinux.org/packages/l/libbsd/libbsd-0.12.2-2-x86_64.pkg.tar.zst
+[Arch `libzip` 1.11.4-1]: https://archive.archlinux.org/packages/l/libzip/libzip-1.11.4-1-x86_64.pkg.tar.zst
 [GPL-2.0-only]: ../LICENSES/GPL-2.0-only.txt
 [GPL-3.0-or-later]: ../LICENSES/GPL-3.0-or-later.txt
 [GFDL-1.3-invariants-or-later]: ../LICENSES/GFDL-1.3-invariants-or-later.txt
@@ -142,3 +152,4 @@ representative topics, grouped by source package.
 [gawk manual-page permission]: ../LICENSES/GAWK-MANPAGE.txt
 [POSIX manual notice]: ../LICENSES/POSIX-COPYRIGHT.txt
 [BSD-2-Clause]: archive_entry_stat.3
+[BSD-3-Clause]: zip_source_function.3

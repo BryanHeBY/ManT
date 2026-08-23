@@ -18,3 +18,4 @@ mod ls;
 mod rsync;
 mod sh;
 mod tar;
+mod zip_source_function;
