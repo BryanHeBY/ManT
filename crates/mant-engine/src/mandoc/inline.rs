@@ -597,17 +597,29 @@ fn lower_function_declaration(
     declaration.push(Inline::Text { value: "(".into() });
     let mut has_argument = false;
     for argument in body {
-        if argument.macro_name.as_deref() == Some("Fa") && inline_children(argument).len() > 1 {
+        let operands = inline_children(argument);
+        if argument.macro_name.as_deref() == Some("Fa")
+            && operands.len() > 1
+            && operands.iter().any(|operand| {
+                operand
+                    .text
+                    .as_deref()
+                    .is_some_and(|text| text.chars().any(char::is_whitespace))
+            })
+        {
             // One mdoc `Fa` invocation can declare several parameters. The
             // formatter owns the comma between those operands just as it
             // owns the comma between separate `Fa` invocations. Flatten the
             // semantic operands here instead of spacing the whole `Fa` node
-            // as one argument. This is also required for function-pointer
-            // declarations embedded outside SYNOPSIS, where libmandoc does
-            // not set `synopsis_pretty` but `Fo` still owns a parameter list.
-            // Validated closing delimiters remain attached to the preceding
-            // parameter and never create a phantom one.
-            for operand in inline_children(argument) {
+            // as one argument. Quoting makes a multi-word source operand one
+            // owned text node; in contrast, traditional `.Fa const char *p`
+            // produces several single-word nodes that together describe one
+            // parameter and must retain spaces. This is also required for
+            // function-pointer declarations embedded outside SYNOPSIS, where
+            // libmandoc does not set `synopsis_pretty` but `Fo` still owns a
+            // parameter list. Validated closing delimiters remain attached to
+            // the preceding parameter and never create a phantom one.
+            for operand in operands {
                 if operand.flags.delimiter_close {
                     declaration.extend(lower_inline_node(operand, default_name, spacing_enabled));
                     continue;
