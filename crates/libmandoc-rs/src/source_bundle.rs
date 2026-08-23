@@ -192,7 +192,10 @@ fn error(path: String, kind: SourceBundleErrorKind, message: String) -> SourceBu
 
 #[cfg(test)]
 mod tests {
-    use super::{SourceBundle, SourceBundleErrorKind};
+    use super::{
+        MAX_SOURCE_BUNDLE_BYTES, MAX_SOURCE_BUNDLE_FILE_BYTES, MAX_SOURCE_BUNDLE_FILES,
+        SourceBundle, SourceBundleErrorKind,
+    };
 
     #[test]
     fn bundle_paths_are_exact_relative_posix_identities() {
@@ -227,5 +230,42 @@ mod tests {
             Ok(Some(b"one".to_vec()))
         );
         assert_eq!(bundle.total_bytes(), b"replacement".len());
+    }
+
+    #[test]
+    fn documented_bundle_limits_are_enforced_without_partial_mutation() {
+        let mut bundle = SourceBundle::new();
+        let error = bundle
+            .insert("oversized.1", vec![0; MAX_SOURCE_BUNDLE_FILE_BYTES + 1])
+            .expect_err("reject oversized source");
+        assert_eq!(error.kind(), SourceBundleErrorKind::SourceTooLarge);
+        assert!(bundle.is_empty());
+
+        for index in 0..MAX_SOURCE_BUNDLE_FILES {
+            bundle
+                .insert(format!("source-{index}.1"), Vec::new())
+                .expect("fill source count exactly");
+        }
+        let error = bundle
+            .insert("one-too-many.1", Vec::new())
+            .expect_err("reject source beyond count cap");
+        assert_eq!(error.kind(), SourceBundleErrorKind::TooManySources);
+        assert_eq!(bundle.len(), MAX_SOURCE_BUNDLE_FILES);
+
+        let mut aggregate = SourceBundle::new();
+        for index in 0..MAX_SOURCE_BUNDLE_BYTES / MAX_SOURCE_BUNDLE_FILE_BYTES {
+            aggregate
+                .insert(
+                    format!("large-{index}.1"),
+                    vec![0; MAX_SOURCE_BUNDLE_FILE_BYTES],
+                )
+                .expect("fill aggregate byte limit exactly");
+        }
+        let error = aggregate
+            .insert("aggregate-overflow.1", vec![0])
+            .expect_err("reject aggregate byte overflow");
+        assert_eq!(error.kind(), SourceBundleErrorKind::BundleTooLarge);
+        assert_eq!(aggregate.total_bytes(), MAX_SOURCE_BUNDLE_BYTES);
+        assert_eq!(aggregate.len(), 4);
     }
 }
