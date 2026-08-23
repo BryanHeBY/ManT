@@ -19,3 +19,4 @@
 0010-reset-roff-session-state.patch
 0011-bound-memory-input-utf8.patch
 0012-replace-input-traps.patch
+0013-memory-source-bundles.patch

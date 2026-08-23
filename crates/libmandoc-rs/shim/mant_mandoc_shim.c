@@ -83,6 +83,9 @@ struct mant_mandoc_document {
 	struct mant_mandoc_node	*root;
 };
 
+MANT_THREAD_LOCAL const struct mant_mandoc_source *bundle_sources;
+MANT_THREAD_LOCAL size_t bundle_source_count;
+
 #ifndef MANDOC_MEMORY_ONLY
 MANT_THREAD_LOCAL char *source_root;
 MANT_THREAD_LOCAL int source_root_strict;
@@ -141,8 +144,10 @@ set_mant_progname(void)
 
 static char *copy_string(const char *);
 static struct mant_mandoc_document *parse_input(const char *,
-    const unsigned char *, size_t, const char *, int);
+    const unsigned char *, size_t, const char *, int, int);
 static char *read_diagnostics(FILE *);
+static const struct mant_mandoc_source *find_bundle_source(const char *);
+static int is_safe_bundle_path(const char *);
 static struct mant_mandoc_node *copy_node(const struct roff_node *, int);
 static void free_node(struct mant_mandoc_node *);
 static int document_has_body(const struct roff_meta *);
@@ -163,21 +168,61 @@ static char *copy_equation(const struct eqn_box *);
 
 struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, const char *include_root,
-    int allow_include)
+    int allow_include, int input_format)
 {
-	return parse_input(path, NULL, 0, include_root, allow_include);
+	return parse_input(path, NULL, 0, include_root, allow_include,
+	    input_format);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
-    size_t length, const char *include_root, int allow_include)
+    size_t length, const char *include_root, int allow_include,
+    int input_format)
 {
-	return parse_input(path, buffer, length, include_root, allow_include);
+	return parse_input(path, buffer, length, include_root, allow_include,
+	    input_format);
+}
+
+struct mant_mandoc_document *
+mant_mandoc_parse_bundle(const char *root,
+    const struct mant_mandoc_source *sources, size_t source_count,
+    int input_format)
+{
+	const struct mant_mandoc_source	*source;
+	struct mant_mandoc_document	*document;
+
+	if (sources == NULL || source_count == 0) {
+		document = calloc(1, sizeof(*document));
+		if (document != NULL)
+			document->error = copy_string("source bundle is empty");
+		return document;
+	}
+	if (bundle_sources != NULL) {
+		document = calloc(1, sizeof(*document));
+		if (document != NULL)
+			document->error = copy_string(
+			    "recursive libmandoc bundle entry is unsupported");
+		return document;
+	}
+	bundle_sources = sources;
+	bundle_source_count = source_count;
+	source = find_bundle_source(root);
+	if (source == NULL) {
+		document = calloc(1, sizeof(*document));
+		if (document != NULL)
+			document->error = copy_string(
+			    "source bundle does not contain the requested root");
+	} else
+		document = parse_input(root, source->data, source->length,
+		    NULL, 1, input_format);
+	bundle_sources = NULL;
+	bundle_source_count = 0;
+	return document;
 }
 
 static struct mant_mandoc_document *
 parse_input(const char *path, const unsigned char *buffer, size_t length,
-    const char *include_root, int allow_include)
+    const char *include_root, int allow_include, int input_format)
 {
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
@@ -205,7 +250,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		    "memory-only libmandoc requires caller-owned source bytes");
 		return document;
 	}
-	if (allow_include) {
+	if (allow_include && bundle_sources == NULL) {
 		document->error = copy_string(
 		    "file inclusion is unavailable in memory-only libmandoc");
 		return document;
@@ -213,6 +258,19 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 #endif
 
 	options = MPARSE_UTF8 | MPARSE_LATIN1 | MPARSE_VALIDATE | MPARSE_COMMENT;
+	switch (input_format) {
+	case 0:
+		break;
+	case 1:
+		options |= MPARSE_MAN;
+		break;
+	case 2:
+		options |= MPARSE_MDOC;
+		break;
+	default:
+		document->error = copy_string("unknown manual input format");
+		return document;
+	}
 	if (allow_include)
 		options |= MPARSE_SO;
 
@@ -225,7 +283,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
 #ifndef MANDOC_MEMORY_ONLY
-	if (allow_include) {
+	if (allow_include && bundle_sources == NULL) {
 		free(source_path);
 		source_path = buffer == NULL ? copy_string(path) : NULL;
 		if (include_root == NULL)
@@ -288,6 +346,80 @@ cleanup:
 	source_root_strict = 0;
 #endif
 	return document;
+}
+
+int
+mant_mandoc_read_bundle(struct mparse *parser, const char *path)
+{
+	const struct mant_mandoc_source	*source;
+	const char			*current, *slash;
+	char				*beside;
+	size_t				 prefix_length;
+
+	if (bundle_sources == NULL)
+		return 0;
+	if (!is_safe_bundle_path(path)) {
+		errno = EPERM;
+		return -1;
+	}
+	source = find_bundle_source(path);
+	if (source == NULL &&
+	    (current = mandoc_msg_getinfilename()) != NULL &&
+	    (slash = strrchr(current, '/')) != NULL) {
+		prefix_length = (size_t)(slash - current + 1);
+		beside = malloc(prefix_length + strlen(path) + 1);
+		if (beside == NULL) {
+			errno = ENOMEM;
+			return -1;
+		}
+		memcpy(beside, current, prefix_length);
+		strcpy(beside + prefix_length, path);
+		source = find_bundle_source(beside);
+		free(beside);
+	}
+	if (source == NULL) {
+		errno = ENOENT;
+		return -1;
+	}
+	mparse_readmem(parser, source->data, source->length, source->path);
+	return 1;
+}
+
+static const struct mant_mandoc_source *
+find_bundle_source(const char *path)
+{
+	size_t i;
+
+	if (path == NULL)
+		return NULL;
+	for (i = 0; i < bundle_source_count; i++)
+		if (bundle_sources[i].path != NULL &&
+		    strcmp(bundle_sources[i].path, path) == 0)
+			return bundle_sources + i;
+	return NULL;
+}
+
+static int
+is_safe_bundle_path(const char *path)
+{
+	const char *component, *end;
+
+	if (path == NULL || *path == '\0' || *path == '/' ||
+	    strchr(path, '\\') != NULL)
+		return 0;
+	component = path;
+	while (*component != '\0') {
+		end = component;
+		while (*end != '\0' && *end != '/')
+			end++;
+		if (end == component ||
+		    (end - component == 1 && component[0] == '.') ||
+		    (end - component == 2 && component[0] == '.' &&
+		    component[1] == '.'))
+			return 0;
+		component = *end == '/' ? end + 1 : end;
+	}
+	return 1;
 }
 
 #ifndef MANDOC_MEMORY_ONLY

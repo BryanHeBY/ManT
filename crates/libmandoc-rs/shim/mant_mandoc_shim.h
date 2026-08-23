@@ -11,6 +11,13 @@ extern "C" {
 struct mant_mandoc_document;
 struct mant_mandoc_node;
 struct mant_mandoc_table_cell;
+struct mparse;
+
+struct mant_mandoc_source {
+	const char		*path;
+	const unsigned char	*data;
+	size_t			 length;
+};
 
 enum mant_mandoc_macroset {
 	MANT_MANDOC_MACROSET_NONE = 0,
@@ -71,10 +78,15 @@ enum mant_mandoc_author_mode {
 #define MANT_MANDOC_NODE_SYNOPSIS_PRETTY (1U << 9)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(
-    const char *, const char *, int);
+    const char *, const char *, int, int);
 struct mant_mandoc_document *mant_mandoc_parse_buffer(
-    const char *, const unsigned char *, size_t, const char *, int);
+    const char *, const unsigned char *, size_t, const char *, int, int);
+struct mant_mandoc_document *mant_mandoc_parse_bundle(
+    const char *, const struct mant_mandoc_source *, size_t, int);
 void mant_mandoc_document_free(struct mant_mandoc_document *);
+
+/* Called only by the patched memory parser while one bundle is active. */
+int mant_mandoc_read_bundle(struct mparse *, const char *);
 
 /* Internal target of the parser-only open() compile redirect. */
 int mant_mandoc_source_open(const char *, int, ...);

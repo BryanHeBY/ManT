@@ -11,6 +11,10 @@ to depend on libmandoc's private C structures or parser lifetime.
   resolved stateful enclosures, table cells, equations, and validated
   same-document tags.
 - A `Parser` API whose caller-controlled `.so` policy defaults to denial.
+- Explicit `man`/`mdoc` input selection without changing the compatible
+  `ParseOptions` shape.
+- Bounded, read-only `SourceBundle` trees for portable in-memory `.so`
+  expansion without filesystem fallback.
 - Structured non-fatal diagnostics and typed source/decompression failures.
 - Top-level uncompressed, gzip, and zstd manual sources.
 - Concurrent parser calls with thread-local upstream and shim state.
@@ -70,8 +74,15 @@ the strict policy: it resolves `.so` requests only below a caller-approved
 directory, rejects absolute and lexical parent paths, refuses to traverse
 symbolic links below that root, and never falls back to the process working
 directory. The approved root itself may be a symbolic link. Native C file
-inclusion is Unix-only; Windows callers resolve sources first and use the
-default memory-only policy.
+inclusion is Unix-only. For the same isolated behavior on every supported
+platform, build a `SourceBundle` of normalized relative paths and call
+`parse_bundle`; exact bundle paths and paths beside the including source are
+resolved without callbacks or filesystem fallback.
+
+`Parser::with_input_format` can force `InputFormat::Man` or
+`InputFormat::Mdoc` when the caller already knows the source language. The
+default remains compatible automatic detection, and the input selection is
+kept outside `ParseOptions` so existing struct literals continue to compile.
 
 The vendored parser subset and its include shim make all mutable parse state
 thread-local, so independent `Parser` calls may run concurrently. A `Parser`
@@ -187,6 +198,9 @@ the ordered patches in `patches/series`:
 - `0012-replace-input-traps.patch` frees the superseded `.it` trap macro when
   a page replaces it, preventing repeated trap declarations from accumulating
   memory in a long-lived parser process.
+- `0013-memory-source-bundles.patch` lets the memory parser recursively read
+  `.so` targets from the shim's per-call virtual source tree and finalizes only
+  after the outermost memory source, with the same recursion bound as files.
 
 Each is a narrow parser or portability correction. They are not a forked
 renderer, and `scripts/sync-vendor --verify` proves the checked-in tree is the

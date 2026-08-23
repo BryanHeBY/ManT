@@ -17,7 +17,20 @@ use std::io::Read;
 #[cfg(windows)]
 use flate2::read::MultiGzDecoder;
 
-use crate::{Diagnostic, Document, RawDocument, diagnostics, ffi};
+use crate::{Diagnostic, Document, RawDocument, SourceBundle, diagnostics, ffi};
+
+/// Selects the macro language before parsing begins.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum InputFormat {
+    /// Detect mdoc from `.Dd`, man from `.TH`, and otherwise use man.
+    #[default]
+    Auto,
+    /// Parse the source as man regardless of its first macro.
+    Man,
+    /// Parse the source as mdoc regardless of its first macro.
+    Mdoc,
+}
 
 /// Policy controlling whether `.so` requests may resolve files.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -122,19 +135,36 @@ impl std::error::Error for ParseError {}
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Parser {
     options: ParseOptions,
+    input_format: InputFormat,
 }
 
 impl Parser {
     /// Create a parser with the supplied include and compression policies.
     #[must_use]
     pub const fn new(options: ParseOptions) -> Self {
-        Self { options }
+        Self {
+            options,
+            input_format: InputFormat::Auto,
+        }
     }
 
     /// Return this parser's immutable configuration.
     #[must_use]
     pub const fn options(&self) -> &ParseOptions {
         &self.options
+    }
+
+    /// Select the input macro language without changing the existing options shape.
+    #[must_use]
+    pub const fn with_input_format(mut self, input_format: InputFormat) -> Self {
+        self.input_format = input_format;
+        self
+    }
+
+    /// Return this parser's macro-language selection.
+    #[must_use]
+    pub const fn input_format(&self) -> InputFormat {
+        self.input_format
     }
 
     /// Parse one source path into an owned document.
@@ -187,6 +217,40 @@ impl Parser {
         }
     }
 
+    /// Parse one root from a bounded, read-only virtual source tree.
+    ///
+    /// Bundle entries are uncompressed source bytes. `.so` requests resolve
+    /// first as exact bundle paths, then beside the including source, and
+    /// never fall back to the host filesystem. This boundary behaves the same
+    /// way on Unix and Windows.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] when the root is absent, its path cannot cross
+    /// the C boundary, or libmandoc rejects the root or an included source.
+    pub fn parse_bundle(
+        &self,
+        root: impl AsRef<Path>,
+        bundle: &SourceBundle,
+    ) -> Result<ParseReport, ParseError> {
+        let root = root.as_ref();
+        let root_label = root.to_str().ok_or_else(|| ParseError {
+            path: root.to_path_buf(),
+            kind: ParseErrorKind::InvalidPath,
+            message: "source bundle roots must be UTF-8 logical paths".into(),
+        })?;
+        if bundle.get(root_label).is_none() {
+            return Err(ParseError {
+                path: root.to_path_buf(),
+                kind: ParseErrorKind::Read,
+                message: "source bundle does not contain the requested root".into(),
+            });
+        }
+        self.finish(root, |c_path, _, _| {
+            ffi::parse_bundle(c_path, bundle, self.input_format)
+        })
+    }
+
     fn parse_zstd_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
         let source = File::open(path)
             .and_then(zstd::stream::decode_all)
@@ -227,7 +291,12 @@ impl Parser {
     #[cfg(unix)]
     fn parse_native_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
         self.finish(path, |c_path, include_root, allow_includes| {
-            ffi::parse_file(c_path, include_root.map(CString::as_c_str), allow_includes)
+            ffi::parse_file(
+                c_path,
+                include_root.map(CString::as_c_str),
+                allow_includes,
+                self.input_format,
+            )
         })
     }
 
@@ -238,6 +307,7 @@ impl Parser {
                 source,
                 include_root.map(CString::as_c_str),
                 allow_includes,
+                self.input_format,
             )
         })
     }

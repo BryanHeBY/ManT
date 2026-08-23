@@ -9,6 +9,7 @@ mod diagnostics;
 #[allow(unsafe_code)]
 mod ffi;
 mod parser;
+mod source_bundle;
 mod special_character;
 
 pub use ast::{
@@ -17,7 +18,12 @@ pub use ast::{
 };
 pub use diagnostics::{Diagnostic, DiagnosticLevel, SourceLocation};
 pub use parser::{
-    Compression, IncludePolicy, ParseError, ParseErrorKind, ParseOptions, ParseReport, Parser,
+    Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,
+    Parser,
+};
+pub use source_bundle::{
+    MAX_SOURCE_BUNDLE_BYTES, MAX_SOURCE_BUNDLE_FILE_BYTES, MAX_SOURCE_BUNDLE_FILES, SourceBundle,
+    SourceBundleError, SourceBundleErrorKind,
 };
 pub use special_character::{SpecialCharacter, special_character};
 
@@ -42,9 +48,9 @@ mod tests {
     use std::io::Write;
 
     use super::{
-        AuthorMode, Compression, DiagnosticLevel, DisplayKind, Document, IncludePolicy, MacroSet,
-        Node, NodeKind, NormalizedFont, NormalizedListKind, ParseError, ParseOptions, Parser,
-        TableAlignment,
+        AuthorMode, Compression, DiagnosticLevel, DisplayKind, Document, IncludePolicy,
+        InputFormat, MacroSet, Node, NodeKind, NormalizedFont, NormalizedListKind, ParseError,
+        ParseOptions, Parser, SourceBundle, TableAlignment,
     };
 
     fn source_path(label: &str) -> std::path::PathBuf {
@@ -640,6 +646,124 @@ mod tests {
             .collect();
         for worker in workers {
             worker.join().expect("parser worker must not panic");
+        }
+    }
+
+    #[test]
+    fn explicit_input_format_overrides_detection_without_changing_parse_options() {
+        let options = ParseOptions::default();
+        let man = Parser::new(options.clone()).with_input_format(InputFormat::Man);
+        let mdoc = Parser::new(options.clone()).with_input_format(InputFormat::Mdoc);
+
+        assert_eq!(man.options(), &options);
+        assert_eq!(mdoc.options(), &options);
+        assert_eq!(man.input_format(), InputFormat::Man);
+        assert_eq!(mdoc.input_format(), InputFormat::Mdoc);
+        assert_eq!(
+            man.parse_bytes("forced-man.1", b"plain input\n")
+                .expect("force man parser")
+                .document
+                .macro_set,
+            MacroSet::Man
+        );
+        assert_eq!(
+            mdoc.parse_bytes("forced-mdoc.1", b"plain input\n")
+                .expect("force mdoc parser")
+                .document
+                .macro_set,
+            MacroSet::Mdoc
+        );
+    }
+
+    #[test]
+    fn source_bundle_resolves_exact_and_same_directory_includes_without_filesystem_access() {
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert("man1/alias.1", b".so man1/redirect.1\n".to_vec())
+            .expect("insert root source");
+        bundle
+            .insert("man1/redirect.1", b".so target.1\n".to_vec())
+            .expect("insert redirect source");
+        bundle
+            .insert(
+                "man1/target.1",
+                b".TH BUNDLE-TARGET 1\n.SH NAME\nbundle-target \\- virtual source\n".to_vec(),
+            )
+            .expect("insert target source");
+
+        let report = Parser::default()
+            .parse_bundle("man1/alias.1", &bundle)
+            .expect("parse virtual source tree");
+        assert_eq!(
+            report.document.metadata.title.as_deref(),
+            Some("BUNDLE-TARGET")
+        );
+    }
+
+    #[test]
+    fn source_bundle_missing_include_is_diagnostic_not_a_host_lookup() {
+        let missing = format!("mant-bundle-missing-{}.1", process::id());
+        let mut bundle = SourceBundle::new();
+        bundle
+            .insert(
+                "man1/root.1",
+                format!(".TH BUNDLE-ROOT 1\n.SH NAME\nbundle-root \\- isolated\n.so {missing}\n")
+                    .into_bytes(),
+            )
+            .expect("insert isolated root");
+
+        let report = Parser::default()
+            .parse_bundle("man1/root.1", &bundle)
+            .expect("missing include degrades to a diagnostic");
+        assert_eq!(
+            report.document.metadata.title.as_deref(),
+            Some("BUNDLE-ROOT")
+        );
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains(&missing)),
+            "missing bundle source must be reported: {:?}",
+            report.diagnostics
+        );
+    }
+
+    #[test]
+    fn concurrent_source_bundles_keep_virtual_trees_isolated() {
+        const WORKERS: usize = 8;
+        let start = Arc::new(Barrier::new(WORKERS));
+        let workers: Vec<_> = (0..WORKERS)
+            .map(|worker| {
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    let title = format!("BUNDLE-{worker}");
+                    let mut bundle = SourceBundle::new();
+                    bundle
+                        .insert("man1/alias.1", b".so target.1\n".to_vec())
+                        .expect("insert alias");
+                    bundle
+                        .insert(
+                            "man1/target.1",
+                            format!(".TH {title} 1\n.SH NAME\nbundle-{worker} \\- isolated\n")
+                                .into_bytes(),
+                        )
+                        .expect("insert worker target");
+                    start.wait();
+                    for _ in 0..16 {
+                        let report = Parser::default()
+                            .parse_bundle("man1/alias.1", &bundle)
+                            .expect("parse concurrent bundle");
+                        assert_eq!(
+                            report.document.metadata.title.as_deref(),
+                            Some(title.as_str())
+                        );
+                    }
+                })
+            })
+            .collect();
+        for worker in workers {
+            worker.join().expect("bundle worker must not panic");
         }
     }
 

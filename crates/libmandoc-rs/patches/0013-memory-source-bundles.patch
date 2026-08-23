@@ -1,0 +1,85 @@
+--- a/read.c
++++ b/read.c
+@@ -55,6 +55,7 @@
+ #include "libmandoc.h"
+ #include "roff_int.h"
+ #include "tag.h"
++#include "mant_mandoc_shim.h"
+ 
+ #define	REPARSE_LIMIT	1000
+ #define	WHILE_LIMIT	10000
+@@ -166,7 +167,7 @@
+ 	char		*cp;
+ 	size_t		 pos; /* byte number in the ln buffer */
+ 	size_t		 spos; /* at the start of the current line parse */
+-	int		 line_result, result;
++	int		 bundle_status, line_result, result;
+ 	int		 of;
+ 	int		 lnn; /* line number in the real file */
+ #ifndef MANDOC_MEMORY_ONLY
+@@ -401,6 +402,23 @@
+ 				    mandoc_strdup(ln.buf + of);
+ 				goto out;
+ 			}
++			bundle_status = mant_mandoc_read_bundle(curp,
++			    ln.buf + of);
++			if (bundle_status > 0)
++				break;
++			if (bundle_status < 0) {
++				mandoc_msg(MANDOCERR_SO_FAIL,
++				    curp->line, of, ".so %s: %s",
++				    ln.buf + of, strerror(errno));
++				ln.sz = mandoc_asprintf(&cp,
++				    ".sp\nSee the file %s.\n.sp",
++				    ln.buf + of);
++				free(ln.buf);
++				ln.buf = cp;
++				of = 0;
++				mparse_buf_r(curp, ln, of, 0);
++				break;
++			}
+ #ifdef MANDOC_MEMORY_ONLY
+ 			mandoc_msg(MANDOCERR_SO_FAIL, curp->line, of,
+ 			    ".so %s: file inclusion disabled", ln.buf + of);
+@@ -588,17 +606,24 @@
+ mparse_readmem(struct mparse *curp, const unsigned char *data, size_t size,
+     const char *filename)
+ {
++	MANT_THREAD_LOCAL int recursion_depth;
++
+ 	struct buf	 blk;
+ 	struct buf	*save_primary;
+ 	const char	*save_filename, *cp;
+ 	size_t		 offset;
+ 	int		 save_filenc, save_lineno;
+ 
+-	if ((cp = strrchr(filename, '.')) != NULL &&
+-	    cp[1] >= '1' && cp[1] <= '9')
+-		curp->man->filesec = cp[1];
+-	else
+-		curp->man->filesec = '\0';
++	if (recursion_depth > 64) {
++		mandoc_msg(MANDOCERR_ROFFLOOP, curp->line, 0, NULL);
++		return;
++	} else if (recursion_depth == 0) {
++		if ((cp = strrchr(filename, '.')) != NULL &&
++		    cp[1] >= '1' && cp[1] <= '9')
++			curp->man->filesec = cp[1];
++		else
++			curp->man->filesec = '\0';
++	}
+ 
+ 	blk.buf = (char *)data;
+ 	blk.sz = size;
+@@ -619,8 +644,10 @@
+ 	} else
+ 		offset = 0;
+ 
++	recursion_depth++;
+ 	mparse_buf_r(curp, blk, offset, 1);
+-	mparse_end(curp);
++	if (--recursion_depth == 0)
++		mparse_end(curp);
+ 
+ 	curp->primary = save_primary;
+ 	curp->filenc = save_filenc;

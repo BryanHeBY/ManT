@@ -1,11 +1,15 @@
 //! Unsafe declarations and immediate copying for the opaque C shim.
 
-use std::{ffi::CStr, os::raw::c_char, ptr::NonNull};
+use std::{
+    ffi::{CStr, CString},
+    os::raw::c_char,
+    ptr::NonNull,
+};
 
 use super::{
-    AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
-    NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, TableAlignment,
-    TableCell,
+    AuthorMode, DisplayKind, Document, InputFormat, MacroSet, Metadata, Node, NodeFlags, NodeKind,
+    NormalizedEnclosure, NormalizedFont, NormalizedListKind, RawDocument, SourceBundle,
+    TableAlignment, TableCell,
 };
 
 #[repr(C)]
@@ -23,12 +27,20 @@ struct CTableCell {
     _private: [u8; 0],
 }
 
+#[repr(C)]
+struct CSource {
+    path: *const c_char,
+    data: *const u8,
+    length: usize,
+}
+
 unsafe extern "C" {
     #[cfg(unix)]
     fn mant_mandoc_parse_file(
         path: *const c_char,
         include_root: *const c_char,
         allow_include: i32,
+        input_format: i32,
     ) -> *mut CDocument;
     fn mant_mandoc_parse_buffer(
         path: *const c_char,
@@ -36,6 +48,13 @@ unsafe extern "C" {
         length: usize,
         include_root: *const c_char,
         allow_include: i32,
+        input_format: i32,
+    ) -> *mut CDocument;
+    fn mant_mandoc_parse_bundle(
+        root: *const c_char,
+        sources: *const CSource,
+        source_count: usize,
+        input_format: i32,
     ) -> *mut CDocument;
     fn mant_mandoc_document_free(document: *mut CDocument);
     fn mant_mandoc_document_ok(document: *const CDocument) -> i32;
@@ -105,12 +124,14 @@ pub(super) fn parse_file(
     path: &CStr,
     include_root: Option<&CStr>,
     allow_includes: bool,
+    input_format: InputFormat,
 ) -> Result<RawDocument, String> {
     let pointer = unsafe {
         mant_mandoc_parse_file(
             path.as_ptr(),
             include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
+            input_format_code(input_format),
         )
     };
     copy_document(pointer)
@@ -121,6 +142,7 @@ pub(super) fn parse_buffer(
     buffer: &[u8],
     include_root: Option<&CStr>,
     allow_includes: bool,
+    input_format: InputFormat,
 ) -> Result<RawDocument, String> {
     let pointer = unsafe {
         mant_mandoc_parse_buffer(
@@ -129,9 +151,47 @@ pub(super) fn parse_buffer(
             buffer.len(),
             include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
+            input_format_code(input_format),
         )
     };
     copy_document(pointer)
+}
+
+pub(super) fn parse_bundle(
+    root: &CStr,
+    bundle: &SourceBundle,
+    input_format: InputFormat,
+) -> Result<RawDocument, String> {
+    let paths = bundle
+        .sources()
+        .map(|(path, _)| CString::new(path).expect("source bundle paths reject NUL bytes"))
+        .collect::<Vec<_>>();
+    let sources = bundle
+        .sources()
+        .zip(&paths)
+        .map(|((_, data), path)| CSource {
+            path: path.as_ptr(),
+            data: data.as_ptr(),
+            length: data.len(),
+        })
+        .collect::<Vec<_>>();
+    let pointer = unsafe {
+        mant_mandoc_parse_bundle(
+            root.as_ptr(),
+            sources.as_ptr(),
+            sources.len(),
+            input_format_code(input_format),
+        )
+    };
+    copy_document(pointer)
+}
+
+const fn input_format_code(input_format: InputFormat) -> i32 {
+    match input_format {
+        InputFormat::Auto => 0,
+        InputFormat::Man => 1,
+        InputFormat::Mdoc => 2,
+    }
 }
 
 fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
