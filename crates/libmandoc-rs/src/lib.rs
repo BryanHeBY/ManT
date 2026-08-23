@@ -990,6 +990,43 @@ mod tests {
         }
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_relative_source_paths_resolve_beside_a_relative_root() {
+        let root = std::path::PathBuf::from("target").join(format!(
+            "libmandoc-rs-relative-windows-root-{}",
+            process::id()
+        ));
+        let section = root.join("man1");
+        fs::create_dir_all(&section).expect("create relative Windows root");
+        fs::write(
+            section.join("target.1"),
+            ".TH RELATIVE-WINDOWS-ROOT 1\n.SH NAME\nrelative-root \\- included\n",
+        )
+        .expect("write relative Windows include target");
+        let alias = section.join("alias.1");
+        fs::write(&alias, ".so target.1\n").expect("write relative Windows alias");
+
+        let report = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(root.clone()),
+            compression: Compression::Plain,
+        })
+        .parse_file(&alias)
+        .expect("resolve beside a relative source below a relative root");
+        fs::remove_dir_all(root).expect("remove relative Windows root");
+
+        assert_eq!(
+            report.document.metadata.title.as_deref(),
+            Some("RELATIVE-WINDOWS-ROOT")
+        );
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .all(|diagnostic| !diagnostic.message.contains(".so request failed"))
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn explicit_include_root_rejects_linked_target_files() {

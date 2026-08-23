@@ -87,11 +87,15 @@ impl RootResolver {
                 Err(_) => return Ok(None),
             }
         } else {
-            safe_relative_path(
+            let relative = safe_relative_path(
                 current
                     .to_str()
                     .ok_or_else(|| denied("current include path is not UTF-8"))?,
-            )?
+            )?;
+            relative
+                .strip_prefix(&self.root)
+                .unwrap_or(&relative)
+                .to_path_buf()
         };
         Ok(relative.parent().map(Path::to_path_buf))
     }

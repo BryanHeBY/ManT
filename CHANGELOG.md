@@ -25,6 +25,8 @@ that crate was not published for that change.
   Windows. The Rust resolver rejects lexical escapes and reparse points,
   verifies the opened file remains beneath the approved root, supports
   relative and gzip-compressed `.so` targets, and keeps `SourceTree` Unix-only.
+- Resolve same-directory `.so` targets correctly when both the approved root
+  and top-level Windows source path are relative to the process directory.
 - The new APIs are additive within the `0.9` compatibility line. A publication
   version will be assigned independently when this crate is released.
 
