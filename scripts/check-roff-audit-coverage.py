@@ -257,12 +257,16 @@ def validate_current_mandoc_deviations(
             raise ValueError(
                 f"current mandoc deviation has a mismatched section at {path}:{number}"
             )
-        if (
-            source_row["scan_status"] != "review"
-            or source_row["review_status"] != "false-positive"
-        ):
+        source_conclusion = (
+            source_row["scan_status"] == "review"
+            and source_row["review_status"] == "false-positive"
+        ) or (
+            source_row["scan_status"] in {"clean", "review"}
+            and source_row["review_status"] == "confirmed-fixed"
+        )
+        if not source_conclusion:
             raise ValueError(
-                f"current mandoc deviation lacks a reviewed false-positive source "
+                f"current mandoc deviation lacks a reviewed source "
                 f"conclusion at {path}:{number}"
             )
     return current
@@ -516,6 +520,20 @@ def self_check() -> None:
             Path("deviations.csv"),
             [mandoc_deviation],
             [mandoc_fidelity],
+            ("mandoc", "mandoc-test"),
+        )
+        == 1
+    )
+    fixed_fidelity = {
+        **mandoc_fidelity,
+        "scan_status": "clean",
+        "review_status": "confirmed-fixed",
+    }
+    assert (
+        validate_current_mandoc_deviations(
+            Path("deviations.csv"),
+            [mandoc_deviation],
+            [fixed_fidelity],
             ("mandoc", "mandoc-test"),
         )
         == 1

@@ -32,7 +32,9 @@ fixtures, and layout is exactly the comparable mandoc content set.
 coverage route. Even so, rows naming the current mandoc renderer are validated
 against the matching mandoc-fidelity source hash, section, renderer command,
 and completed human disposition so the curated index cannot silently drift
-from its detailed evidence.
+from its detailed evidence. The accepted source conclusions are either a
+reviewed `false-positive` comparison or `confirmed-fixed` evidence with a
+focused regression; unresolved and merely clean/unreviewed rows are rejected.
 
 Check the set relationship without invoking a renderer or reparsing the local
 distribution corpora:

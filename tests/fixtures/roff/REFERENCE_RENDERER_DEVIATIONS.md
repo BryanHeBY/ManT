@@ -87,10 +87,10 @@ broken input. Neither is generalized beyond the recorded fixture and toolchain.
 
 ## Mandoc-specific reproduced evidence
 
-The aligned 2026-08-24 replay also records six source-hash-specific cases for
+The aligned 2026-08-24 replay also records nine source-hash-specific cases for
 `mandoc-1.14.6-1 -T utf8 -O width=200`. Each row inherits an exact identity
 from `MANDOC_FIDELITY_AUDIT.csv`, where the source, native mandoc output, ManT
-text, and structured result received a durable `false-positive` review:
+text, and structured result received a durable human conclusion:
 
 - a wide `tbl` in `svcerr_systemerr(3)` retains source-ordered logical cells
   in ManT while the terminal reference flattens adjacent cells into continuity
@@ -105,12 +105,29 @@ text, and structured result received a durable `false-positive` review:
 - the authored `.St -p1003.1-2024` citation in FreeBSD `ps(1)` remains between
   “described by” and “and what” instead of disappearing from the sentence; and
 - an explicit `.Ns` in `bhyve(8)` retains the executable spelling `pptN`
-  instead of changing it to `ppt N`.
+  instead of changing it to `ppt N`;
+- NetBSD `drm(4)` retains the source-authored name `Jaromír Doleček` while the
+  renderer drops the unsupported `\\[vc]` caron;
+- NetBSD `ite(4)` honors an explicit `.Ns` and renders the authored plural
+  `ites` rather than `ite s`; and
+- DragonFly `gdb(1)` retains continued long tags such as `--symbols=file` and
+  `--exec=file`, groups each with its short alias, and makes every spelling
+  addressable; mandoc 1.14.6 drops the long tags from terminal output.
 
 The coverage checker validates every row for the current mandoc renderer
 against the exact content-ledger identity, section, reviewed result, and
-renderer command. Older immutable renderer observations may remain when the
-current mandoc identity advances.
+renderer command. Most rows are source-confirmed `false-positive` comparisons.
+The `gdb(1)` row is instead backed by a `confirmed-fixed` conclusion: the
+one-way missing-content detector is clean after the parser fix, while the
+manual source, reference output, exact fixture, and focused alias assertion
+prove the above-parity behavior. Older immutable renderer observations may
+remain when the current mandoc identity advances.
+
+The same NetBSD source identities also have independent GNU groff 1.24.1
+evidence in the CSV. Direct `-Tutf8 -mandoc -t -e` replay drops the `\\[vc]`
+caron and inserts the same unwanted `.Ns` space. Separate rows are retained
+because agreement between two reference renderers is evidence from two
+toolchains, not one universal formatter claim.
 
 The other mandoc review dispositions were intentionally not promoted. Most
 are equivalent wrapping or detector accounting, repeated examples of one
