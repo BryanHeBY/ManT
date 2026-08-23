@@ -48,8 +48,9 @@ pub enum IncludePolicy {
     /// Resolve `.so` files below one caller-approved directory without
     /// traversing symbolic links beneath that root or falling back elsewhere.
     ///
-    /// The approved root itself may be a symbolic link. This strict policy is
-    /// currently unavailable on Windows.
+    /// The approved root itself may be a symbolic link. On Windows, source
+    /// files are read by the Rust boundary and passed to memory-only
+    /// libmandoc; Unix retains its descriptor-relative native reader.
     Root(PathBuf),
 }
 
@@ -246,7 +247,7 @@ impl Parser {
                 message: "source bundle does not contain the requested root".into(),
             });
         }
-        self.finish(root, |c_path, _, _| {
+        self.finish(root, |c_path, _| {
             ffi::parse_bundle(c_path, bundle, self.input_format)
         })
     }
@@ -290,23 +291,37 @@ impl Parser {
 
     #[cfg(unix)]
     fn parse_native_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
-        self.finish(path, |c_path, include_root, allow_includes| {
+        self.finish(path, |c_path, includes| {
             ffi::parse_file(
                 c_path,
-                include_root.map(CString::as_c_str),
-                allow_includes,
+                includes.root.as_deref(),
+                includes.allow_includes,
                 self.input_format,
             )
         })
     }
 
+    #[cfg(unix)]
     fn parse_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<ParseReport, ParseError> {
-        self.finish(path, |c_path, include_root, allow_includes| {
+        self.finish(path, |c_path, includes| {
             ffi::parse_buffer(
                 c_path,
                 source,
-                include_root.map(CString::as_c_str),
-                allow_includes,
+                includes.root.as_deref(),
+                includes.allow_includes,
+                self.input_format,
+            )
+        })
+    }
+
+    #[cfg(windows)]
+    fn parse_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<ParseReport, ParseError> {
+        self.finish(path, |c_path, includes| {
+            ffi::parse_buffer(
+                c_path,
+                source,
+                includes.root.as_deref(),
+                includes.allow_includes,
                 self.input_format,
             )
         })
@@ -315,20 +330,18 @@ impl Parser {
     fn finish(
         &self,
         path: &Path,
-        parse: impl FnOnce(&CString, Option<&CString>, bool) -> Result<RawDocument, String>,
+        parse: impl FnOnce(&CString, &IncludeSettings) -> Result<RawDocument, String>,
     ) -> Result<ParseReport, ParseError> {
         let c_path = path_label(path).map_err(|_| ParseError {
             path: path.to_path_buf(),
             kind: ParseErrorKind::InvalidPath,
             message: "manual source path contains a NUL byte".into(),
         })?;
-        let (include_root, allow_includes) = self.include_root()?;
-        let raw = parse(&c_path, include_root.as_ref(), allow_includes).map_err(|message| {
-            ParseError {
-                path: path.to_path_buf(),
-                kind: ParseErrorKind::Parse,
-                message,
-            }
+        let include_settings = self.include_settings()?;
+        let raw = parse(&c_path, &include_settings).map_err(|message| ParseError {
+            path: path.to_path_buf(),
+            kind: ParseErrorKind::Parse,
+            message,
         })?;
         Ok(ParseReport {
             document: raw.document,
@@ -336,11 +349,17 @@ impl Parser {
         })
     }
 
-    pub(crate) fn include_root(&self) -> Result<(Option<CString>, bool), ParseError> {
+    pub(crate) fn include_settings(&self) -> Result<IncludeSettings, ParseError> {
         match &self.options.includes {
-            IncludePolicy::Deny => Ok((None, false)),
+            IncludePolicy::Deny => Ok(IncludeSettings {
+                root: None,
+                allow_includes: false,
+            }),
             #[cfg(unix)]
-            IncludePolicy::SourceTree => Ok((None, true)),
+            IncludePolicy::SourceTree => Ok(IncludeSettings {
+                root: None,
+                allow_includes: true,
+            }),
             #[cfg(windows)]
             IncludePolicy::SourceTree => Err(unsupported_includes(PathBuf::new())),
             IncludePolicy::Root(root) if root.as_os_str().is_empty() => Err(ParseError {
@@ -350,17 +369,30 @@ impl Parser {
             }),
             #[cfg(unix)]
             IncludePolicy::Root(root) => CString::new(root.as_os_str().as_bytes())
-                .map(Some)
-                .map(|root| (root, true))
+                .map(|root| IncludeSettings {
+                    root: Some(root),
+                    allow_includes: true,
+                })
                 .map_err(|_| ParseError {
                     path: root.clone(),
                     kind: ParseErrorKind::InvalidPath,
                     message: "manual include root contains a NUL byte".into(),
                 }),
             #[cfg(windows)]
-            IncludePolicy::Root(root) => Err(unsupported_includes(root.clone())),
+            IncludePolicy::Root(root) => Ok(IncludeSettings {
+                root: Some(root.clone()),
+                allow_includes: true,
+            }),
         }
     }
+}
+
+pub(crate) struct IncludeSettings {
+    #[cfg(unix)]
+    pub(crate) root: Option<CString>,
+    #[cfg(windows)]
+    pub(crate) root: Option<PathBuf>,
+    pub(crate) allow_includes: bool,
 }
 
 #[cfg(unix)]
@@ -378,9 +410,8 @@ fn unsupported_includes(path: PathBuf) -> ParseError {
     ParseError {
         path,
         kind: ParseErrorKind::Unsupported,
-        message:
-            "libmandoc file inclusion is unavailable on Windows; resolve .so sources before parsing"
-                .into(),
+        message: "libmandoc-compatible source-tree inclusion is unavailable on Windows; use IncludePolicy::Root or SourceBundle"
+            .into(),
     }
 }
 

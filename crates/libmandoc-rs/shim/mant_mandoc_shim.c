@@ -95,6 +95,8 @@ struct mant_mandoc_document {
 
 MANT_THREAD_LOCAL const struct mant_mandoc_source *bundle_sources;
 MANT_THREAD_LOCAL size_t bundle_source_count;
+MANT_THREAD_LOCAL mant_mandoc_source_resolver source_resolver;
+MANT_THREAD_LOCAL void *source_resolver_context;
 
 #ifndef MANDOC_MEMORY_ONLY
 MANT_THREAD_LOCAL char *source_root;
@@ -155,7 +157,7 @@ set_mant_progname(void)
 static char *copy_string(const char *);
 static struct mant_mandoc_document *parse_input(const char *,
     const unsigned char *, size_t, const char *, int, int, int, size_t,
-    int, size_t);
+    int, size_t, mant_mandoc_source_resolver, void *);
 static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
 static int is_safe_bundle_path(const char *);
@@ -186,16 +188,17 @@ mant_mandoc_parse_file(const char *path, const char *include_root,
     int allow_include, int input_format)
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, 0, 0, 0, 0);
+	    input_format, 0, 0, 0, 0, NULL, NULL);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
     size_t length, const char *include_root, int allow_include,
-    int input_format)
+    int input_format, mant_mandoc_source_resolver resolver,
+    void *resolver_context)
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format, 0, 0, 0, 0);
+	    input_format, 0, 0, 0, 0, resolver, resolver_context);
 }
 
 struct mant_mandoc_document *
@@ -229,7 +232,7 @@ mant_mandoc_parse_bundle(const char *root,
 			    "source bundle does not contain the requested root");
 	} else
 		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format, 0, 0, 0, 0);
+		    NULL, 1, input_format, 0, 0, 0, 0, NULL, NULL);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
 	return document;
@@ -239,7 +242,8 @@ static struct mant_mandoc_document *
 parse_input(const char *path, const unsigned char *buffer, size_t length,
     const char *include_root, int allow_include, int input_format,
     int render_format, size_t render_width, int html_fragment,
-    size_t output_limit)
+    size_t output_limit, mant_mandoc_source_resolver resolver,
+    void *resolver_context)
 {
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
@@ -267,12 +271,17 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		    "memory-only libmandoc requires caller-owned source bytes");
 		return document;
 	}
-	if (allow_include && bundle_sources == NULL) {
+	if (allow_include && bundle_sources == NULL && resolver == NULL) {
 		document->error = copy_string(
 		    "file inclusion is unavailable in memory-only libmandoc");
 		return document;
 	}
 #endif
+	if (resolver != NULL && source_resolver != NULL) {
+		document->error = copy_string(
+		    "recursive libmandoc source resolver entry is unsupported");
+		return document;
+	}
 
 	options = MPARSE_UTF8 | MPARSE_LATIN1 | MPARSE_VALIDATE | MPARSE_COMMENT;
 	switch (input_format) {
@@ -299,6 +308,8 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 #endif
 	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
+	source_resolver = resolver;
+	source_resolver_context = resolver_context;
 #ifndef MANDOC_MEMORY_ONLY
 	if (allow_include && bundle_sources == NULL) {
 		free(source_path);
@@ -367,6 +378,8 @@ cleanup:
 	}
 	mparse_free(parser);
 	mchars_free();
+	source_resolver = NULL;
+	source_resolver_context = NULL;
 #ifndef MANDOC_MEMORY_ONLY
 	free(source_root);
 	source_root = NULL;
@@ -387,18 +400,19 @@ mant_mandoc_render_file(const char *path, const char *include_root,
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
 	    input_format, render_format, render_width, html_fragment,
-	    output_limit);
+	    output_limit, NULL, NULL);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_render_buffer(const char *path, const unsigned char *buffer,
     size_t length, const char *include_root, int allow_include,
     int input_format, int render_format, size_t render_width,
-    int html_fragment, size_t output_limit)
+    int html_fragment, size_t output_limit,
+    mant_mandoc_source_resolver resolver, void *resolver_context)
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
 	    input_format, render_format, render_width, html_fragment,
-	    output_limit);
+	    output_limit, resolver, resolver_context);
 }
 
 struct mant_mandoc_document *
@@ -431,7 +445,7 @@ mant_mandoc_render_bundle(const char *root,
 	} else
 		document = parse_input(root, source->data, source->length,
 		    NULL, 1, input_format, render_format, render_width,
-		    html_fragment, output_limit);
+		    html_fragment, output_limit, NULL, NULL);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
 	return document;
@@ -516,15 +530,60 @@ int
 mant_mandoc_read_bundle(struct mparse *parser, const char *path)
 {
 	const struct mant_mandoc_source	*source;
+	struct mant_mandoc_resolved_source resolved;
 	const char			*current, *slash;
+	unsigned char			*resolved_data;
+	char				*resolved_path;
 	char				*beside;
 	size_t				 prefix_length;
+	int				 status;
 
-	if (bundle_sources == NULL)
+	if (bundle_sources == NULL && source_resolver == NULL)
 		return 0;
 	if (!is_safe_bundle_path(path)) {
 		errno = EPERM;
 		return -1;
+	}
+	if (bundle_sources == NULL) {
+		memset(&resolved, 0, sizeof(resolved));
+		current = mandoc_msg_getinfilename();
+		status = source_resolver(source_resolver_context, path, current,
+		    &resolved);
+		if (status <= 0) {
+			switch (status) {
+			case -2:
+				errno = EPERM;
+				break;
+			case -3:
+				errno = EIO;
+				break;
+			default:
+				errno = ENOENT;
+				break;
+			}
+			return -1;
+		}
+		if (resolved.path == NULL || resolved.data == NULL ||
+		    !is_safe_bundle_path(resolved.path)) {
+			errno = EINVAL;
+			return -1;
+		}
+		resolved_path = copy_string(resolved.path);
+		resolved_data = malloc(resolved.length == 0 ? 1 :
+		    resolved.length);
+		if (resolved_path == NULL || resolved_data == NULL) {
+			free(resolved_path);
+			free(resolved_data);
+			errno = ENOMEM;
+			return -1;
+		}
+		if (resolved.length != 0)
+			memcpy(resolved_data, resolved.data, resolved.length);
+		mparse_readmem(parser, resolved_data, resolved.length,
+		    resolved_path);
+		free(resolved_data);
+		free(resolved_path);
+		return 1;
 	}
 	source = find_bundle_source(path);
 	if (source == NULL &&

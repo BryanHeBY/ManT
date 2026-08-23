@@ -5,7 +5,9 @@ use std::{
     sync::{Arc, Barrier},
 };
 
-use libmandoc_rs::{RenderErrorKind, RenderFormat, Renderer, SourceBundle};
+use libmandoc_rs::{
+    Compression, IncludePolicy, ParseOptions, RenderErrorKind, RenderFormat, Renderer, SourceBundle,
+};
 
 const MAN_SOURCE: &[u8] = b".TH HELLO 1 \"August 23, 2026\" \"ManT\" \"User Commands\"\n\
 .SH NAME\nhello \\- render fixture\n\
@@ -132,6 +134,27 @@ fn renderer_resolves_virtual_includes() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render_bundle("man1/alias.1", &bundle)
         .expect("render virtual include");
+    assert!(report.output.contains("render fixture"));
+}
+
+#[test]
+fn renderer_resolves_includes_below_a_strict_filesystem_root() {
+    let root =
+        std::env::temp_dir().join(format!("libmandoc-rs-render-root-{}", std::process::id()));
+    let man1 = root.join("man1");
+    std::fs::create_dir_all(&man1).expect("create renderer include root");
+    std::fs::write(man1.join("target.1"), MAN_SOURCE).expect("write renderer include target");
+    let alias = man1.join("alias.1");
+
+    let report = Renderer::new(RenderFormat::Ascii)
+        .with_parser(libmandoc_rs::Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(root.clone()),
+            compression: Compression::Plain,
+        }))
+        .render_bytes(&alias, b".so target.1\n")
+        .expect("render strict-root include");
+    std::fs::remove_dir_all(root).expect("remove renderer include root");
+
     assert!(report.output.contains("render fixture"));
 }
 

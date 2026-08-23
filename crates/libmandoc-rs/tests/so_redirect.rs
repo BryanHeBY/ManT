@@ -1,5 +1,3 @@
-#![cfg(unix)]
-
 //! Regression test for bare same-directory `.so` redirect stubs.
 //!
 //! A stub such as fedora's `man1/lastb.1` containing `.so last.1` names its
@@ -17,6 +15,7 @@ fn has_macro(node: &Node, name: &str) -> bool {
         || node.children.iter().any(|child| has_macro(child, name))
 }
 
+#[cfg(unix)]
 #[test]
 fn resolves_bare_same_directory_so_target_inside_a_man_section() {
     let root = std::env::temp_dir().join(format!("libmandoc-rs-bare-so-{}", process::id()));

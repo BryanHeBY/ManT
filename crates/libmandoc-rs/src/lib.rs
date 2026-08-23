@@ -380,7 +380,7 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn windows_rejects_c_file_inclusion_but_accepts_memory_parsing() {
+    fn windows_rejects_ambient_source_tree_but_accepts_memory_parsing() {
         let report = Parser::default()
             .parse_bytes("memory.1", b".TH MEMORY 1\n.SH NAME\nmemory \\- portable\n")
             .expect("parse caller-owned bytes");
@@ -391,7 +391,7 @@ mod tests {
             compression: Compression::Plain,
         })
         .parse_bytes("memory.1", b".so target.1\n")
-        .expect_err("reject native C file inclusion");
+        .expect_err("reject ambient source-tree inclusion");
         assert_eq!(error.kind, super::ParseErrorKind::Unsupported);
     }
 
@@ -871,7 +871,6 @@ mod tests {
         assert_eq!(zstd.document.metadata.title.as_deref(), Some("BYTES"));
     }
 
-    #[cfg(unix)]
     #[test]
     fn parser_only_expands_includes_when_policy_allows_a_root() {
         let base = std::env::temp_dir().join(format!(
@@ -909,7 +908,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn explicit_root_resolves_compressed_includes_beside_the_source() {
         use std::io::Write;
@@ -961,7 +959,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn explicit_include_root_does_not_fall_back_to_process_cwd() {
         let identifier = format!("libmandoc-rs-ambient-{}", process::id());
@@ -1063,6 +1060,125 @@ mod tests {
             ),
             Err(error) => assert_eq!(error.kind, super::ParseErrorKind::Parse),
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn explicit_include_root_rejects_windows_reparse_targets() {
+        use std::os::windows::fs::symlink_file;
+
+        let base = std::env::temp_dir().join(format!(
+            "libmandoc-rs-windows-linked-include-target-{}",
+            process::id()
+        ));
+        let includes = base.join("includes");
+        fs::create_dir_all(&includes).expect("create explicit include root");
+        let outside = base.join("outside.1");
+        fs::write(
+            &outside,
+            ".TH OUTSIDE 1\n.SH NAME\noutside \\- must not be included\n",
+        )
+        .expect("write outside target");
+        if let Err(error) = symlink_file(&outside, includes.join("target.1")) {
+            if error.kind() == std::io::ErrorKind::PermissionDenied {
+                fs::remove_dir_all(base).expect("remove skipped reparse fixture");
+                return;
+            }
+            panic!("create Windows file link: {error}");
+        }
+        let alias = base.join("alias.1");
+        fs::write(&alias, ".so target.1\n").expect("write alias source");
+
+        let result = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(includes),
+            compression: Compression::Auto,
+        })
+        .parse_file(&alias);
+        fs::remove_dir_all(base).expect("remove temporary manual tree");
+
+        match result {
+            Ok(report) => assert_ne!(report.document.metadata.title.as_deref(), Some("OUTSIDE")),
+            Err(error) => assert_eq!(error.kind, super::ParseErrorKind::Parse),
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn explicit_include_root_rejects_windows_path_namespaces() {
+        let root = std::env::temp_dir().join(format!(
+            "libmandoc-rs-windows-path-namespace-{}",
+            process::id()
+        ));
+        fs::create_dir_all(&root).expect("create explicit include root");
+        for target in [
+            "C:/outside.1",
+            "target.1:stream",
+            r"\\server\share\outside.1",
+        ] {
+            let report = Parser::new(ParseOptions {
+                includes: IncludePolicy::Root(root.clone()),
+                compression: Compression::Plain,
+            })
+            .parse_bytes("alias.1", format!(".so {target}\n").as_bytes())
+            .expect("return a finite document for a denied include");
+            assert!(
+                report
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.message.contains(".so request failed")),
+                "denied Windows namespace must remain observable: {target}"
+            );
+        }
+        fs::remove_dir_all(root).expect("remove explicit include root");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_explicit_root_supports_unicode_paths_and_concurrent_sessions() {
+        const WORKERS: usize = 8;
+
+        let base =
+            std::env::temp_dir().join(format!("libmandoc-rs-windows-root-日本-{}", process::id()));
+        let roots = (0..WORKERS)
+            .map(|worker| {
+                let root = base.join(format!("文档-{worker}"));
+                let section = root.join("章节");
+                fs::create_dir_all(&section).expect("create Unicode include root");
+                fs::write(
+                    section.join("target.1"),
+                    format!(".TH WINDOWS-ROOT-{worker} 1\n.SH NAME\nroot-{worker} \\- isolated\n"),
+                )
+                .expect("write isolated include target");
+                (root, section.join("alias.1"))
+            })
+            .collect::<Vec<_>>();
+        let start = Arc::new(Barrier::new(WORKERS));
+        let workers = roots
+            .into_iter()
+            .enumerate()
+            .map(|(worker, (root, alias))| {
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    start.wait();
+                    for _ in 0..100 {
+                        let report = Parser::new(ParseOptions {
+                            includes: IncludePolicy::Root(root.clone()),
+                            compression: Compression::Plain,
+                        })
+                        .parse_bytes(&alias, b".so target.1\n")
+                        .expect("resolve isolated Windows root");
+                        assert_eq!(
+                            report.document.metadata.title.as_deref(),
+                            Some(format!("WINDOWS-ROOT-{worker}").as_str())
+                        );
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for worker in workers {
+            worker.join().expect("root resolver worker must not panic");
+        }
+        fs::remove_dir_all(base).expect("remove concurrent Windows roots");
     }
 
     #[test]

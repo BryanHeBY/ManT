@@ -41,6 +41,9 @@ serde = { workspace = true, optional = true }
 unicode-width = { workspace = true, optional = true }
 zstd.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
 [build-dependencies]
 cc = "1"
 

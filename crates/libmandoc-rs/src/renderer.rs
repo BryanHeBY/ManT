@@ -1,12 +1,14 @@
 //! Optional bounded wrappers around libmandoc's reference renderers.
 
 use std::{
-    ffi::CString,
     fmt,
     fs::File,
     io,
     path::{Path, PathBuf},
 };
+
+#[cfg(unix)]
+use std::ffi::CString;
 
 #[cfg(windows)]
 use std::io::Read;
@@ -16,7 +18,7 @@ use flate2::read::MultiGzDecoder;
 
 use crate::{
     Compression, Diagnostic, ParseError, ParseErrorKind, Parser, RawRender, SourceBundle,
-    diagnostics, ffi,
+    diagnostics, ffi, parser::IncludeSettings,
 };
 
 /// Default maximum bytes retained for one render call.
@@ -265,13 +267,13 @@ impl Renderer {
     #[cfg(unix)]
     fn render_auto_file(&self, path: &Path) -> Result<RenderReport, RenderError> {
         let c_path = native_path(path)?;
-        let (include_root, allow_includes) = self.include_settings()?;
+        let includes = self.include_settings()?;
         Self::finish(
             path,
             ffi::render_file(
                 &c_path,
-                include_root.as_deref(),
-                allow_includes,
+                includes.root.as_deref(),
+                includes.allow_includes,
                 self.parser.input_format(),
                 format_code(self.format),
                 self.width,
@@ -317,16 +319,37 @@ impl Renderer {
         self.render_plain_bytes(path, &source)
     }
 
+    #[cfg(unix)]
     fn render_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
         let c_path = native_path(path)?;
-        let (include_root, allow_includes) = self.include_settings()?;
+        let includes = self.include_settings()?;
         Self::finish(
             path,
             ffi::render_buffer(
                 &c_path,
                 source,
-                include_root.as_deref(),
-                allow_includes,
+                includes.root.as_deref(),
+                includes.allow_includes,
+                self.parser.input_format(),
+                format_code(self.format),
+                self.width,
+                self.html_fragment,
+                self.max_output_bytes,
+            ),
+        )
+    }
+
+    #[cfg(windows)]
+    fn render_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
+        let c_path = native_path(path)?;
+        let includes = self.include_settings()?;
+        Self::finish(
+            path,
+            ffi::render_buffer(
+                &c_path,
+                source,
+                includes.root.as_deref(),
+                includes.allow_includes,
                 self.parser.input_format(),
                 format_code(self.format),
                 self.width,
@@ -384,8 +407,8 @@ impl Renderer {
         Ok(())
     }
 
-    fn include_settings(&self) -> Result<(Option<CString>, bool), RenderError> {
-        self.parser.include_root().map_err(map_parse_error)
+    fn include_settings(&self) -> Result<IncludeSettings, RenderError> {
+        self.parser.include_settings().map_err(map_parse_error)
     }
 }
 

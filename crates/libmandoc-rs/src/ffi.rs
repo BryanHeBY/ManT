@@ -2,9 +2,15 @@
 
 use std::{
     ffi::{CStr, CString},
-    os::raw::c_char,
+    os::raw::{c_char, c_void},
     ptr::NonNull,
 };
+
+#[cfg(windows)]
+use std::path::Path;
+
+#[cfg(windows)]
+mod windows_root;
 
 use super::{
     AuthorMode, DisplayKind, Document, InputFormat, MacroSet, Metadata, Node, NodeFlags, NodeKind,
@@ -39,6 +45,16 @@ struct CSource {
     length: usize,
 }
 
+#[repr(C)]
+struct CResolvedSource {
+    path: *const c_char,
+    data: *const u8,
+    length: usize,
+}
+
+type CSourceResolver =
+    extern "C" fn(*mut c_void, *const c_char, *const c_char, *mut CResolvedSource) -> i32;
+
 #[cfg(feature = "render")]
 #[unsafe(no_mangle)]
 extern "C" fn mant_mandoc_utf8_width(codepoint: i32) -> usize {
@@ -64,6 +80,8 @@ unsafe extern "C" {
         include_root: *const c_char,
         allow_include: i32,
         input_format: i32,
+        resolver: Option<CSourceResolver>,
+        resolver_context: *mut c_void,
     ) -> *mut CDocument;
     fn mant_mandoc_parse_bundle(
         root: *const c_char,
@@ -94,6 +112,8 @@ unsafe extern "C" {
         render_width: usize,
         html_fragment: i32,
         output_limit: usize,
+        resolver: Option<CSourceResolver>,
+        resolver_context: *mut c_void,
     ) -> *mut CDocument;
     #[cfg(feature = "render")]
     fn mant_mandoc_render_bundle(
@@ -196,7 +216,7 @@ pub(super) fn render_file(
     copy_render(pointer)
 }
 
-#[cfg(feature = "render")]
+#[cfg(all(feature = "render", unix))]
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_buffer(
     path: &CStr,
@@ -221,6 +241,42 @@ pub(super) fn render_buffer(
             width,
             i32::from(html_fragment),
             output_limit,
+            None,
+            std::ptr::null_mut(),
+        )
+    };
+    copy_render(pointer)
+}
+
+#[cfg(all(feature = "render", windows))]
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_buffer(
+    path: &CStr,
+    buffer: &[u8],
+    include_root: Option<&Path>,
+    allow_includes: bool,
+    input_format: InputFormat,
+    render_format: i32,
+    width: usize,
+    html_fragment: bool,
+    output_limit: usize,
+) -> Result<RawRender, NativeRenderError> {
+    let mut resolver = include_root.map(windows_root::RootResolver::new);
+    let (callback, context) = windows_root::callback_parts(resolver.as_mut());
+    let pointer = unsafe {
+        mant_mandoc_render_buffer(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            std::ptr::null(),
+            i32::from(allow_includes),
+            input_format_code(input_format),
+            render_format,
+            width,
+            i32::from(html_fragment),
+            output_limit,
+            callback,
+            context,
         )
     };
     copy_render(pointer)
@@ -289,6 +345,7 @@ pub(super) fn parse_file(
     copy_document(pointer)
 }
 
+#[cfg(unix)]
 pub(super) fn parse_buffer(
     path: &CStr,
     buffer: &[u8],
@@ -304,6 +361,33 @@ pub(super) fn parse_buffer(
             include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
             input_format_code(input_format),
+            None,
+            std::ptr::null_mut(),
+        )
+    };
+    copy_document(pointer)
+}
+
+#[cfg(windows)]
+pub(super) fn parse_buffer(
+    path: &CStr,
+    buffer: &[u8],
+    include_root: Option<&Path>,
+    allow_includes: bool,
+    input_format: InputFormat,
+) -> Result<RawDocument, String> {
+    let mut resolver = include_root.map(windows_root::RootResolver::new);
+    let (callback, context) = windows_root::callback_parts(resolver.as_mut());
+    let pointer = unsafe {
+        mant_mandoc_parse_buffer(
+            path.as_ptr(),
+            buffer.as_ptr(),
+            buffer.len(),
+            std::ptr::null(),
+            i32::from(allow_includes),
+            input_format_code(input_format),
+            callback,
+            context,
         )
     };
     copy_document(pointer)

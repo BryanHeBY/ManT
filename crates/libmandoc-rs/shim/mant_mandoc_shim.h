@@ -19,6 +19,15 @@ struct mant_mandoc_source {
 	size_t			 length;
 };
 
+struct mant_mandoc_resolved_source {
+	const char		*path;
+	const unsigned char	*data;
+	size_t			 length;
+};
+
+typedef int (*mant_mandoc_source_resolver)(void *, const char *,
+    const char *, struct mant_mandoc_resolved_source *);
+
 enum mant_mandoc_macroset {
 	MANT_MANDOC_MACROSET_NONE = 0,
 	MANT_MANDOC_MACROSET_MDOC = 1,
@@ -80,7 +89,8 @@ enum mant_mandoc_author_mode {
 struct mant_mandoc_document *mant_mandoc_parse_file(
     const char *, const char *, int, int);
 struct mant_mandoc_document *mant_mandoc_parse_buffer(
-    const char *, const unsigned char *, size_t, const char *, int, int);
+    const char *, const unsigned char *, size_t, const char *, int, int,
+    mant_mandoc_source_resolver, void *);
 struct mant_mandoc_document *mant_mandoc_parse_bundle(
     const char *, const struct mant_mandoc_source *, size_t, int);
 #ifdef MANT_MANDOC_RENDER
@@ -88,14 +98,14 @@ struct mant_mandoc_document *mant_mandoc_render_file(
     const char *, const char *, int, int, int, size_t, int, size_t);
 struct mant_mandoc_document *mant_mandoc_render_buffer(
     const char *, const unsigned char *, size_t, const char *, int, int,
-    int, size_t, int, size_t);
+    int, size_t, int, size_t, mant_mandoc_source_resolver, void *);
 struct mant_mandoc_document *mant_mandoc_render_bundle(
     const char *, const struct mant_mandoc_source *, size_t, int, int,
     size_t, int, size_t);
 #endif
 void mant_mandoc_document_free(struct mant_mandoc_document *);
 
-/* Called only by the patched memory parser while one bundle is active. */
+/* Called by the patched memory parser for one active bundle or root resolver. */
 int mant_mandoc_read_bundle(struct mparse *, const char *);
 
 /* Internal target of the parser-only open() compile redirect. */
