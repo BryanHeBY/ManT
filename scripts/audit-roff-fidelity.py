@@ -27,7 +27,7 @@ import tempfile
 from collections import Counter
 from dataclasses import asdict, dataclass
 from fractions import Fraction
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
 
 
@@ -45,6 +45,11 @@ AUDIT_DATABASE_FIELDS = [
     "scan_status",
     "review_status",
     "note",
+]
+MANDOC_AUDIT_DATABASE_FIELDS = [
+    "reference_kind",
+    "reference_id",
+    *AUDIT_DATABASE_FIELDS,
 ]
 
 MANUAL_SUFFIX = re.compile(
@@ -72,6 +77,10 @@ GLUED_MARKER = re.compile(r"^[ \t]*\u2022[A-Za-z(\"']", re.MULTILINE)
 INTERNAL_MARKER = re.compile("[\u001d-\u001f]")
 MDOC_NAME_DESCRIPTION = re.compile(r"^[.']Nd(?:\s|$)", re.MULTILINE)
 MDOC_FUNCTION_DECLARATION = re.compile(r"^[.'](?:Fn|Fo)(?:\s|$)", re.MULTILINE)
+MDOC_MULTI_OPERAND_FA = re.compile(
+    r'''^[.']Fa(?:[ \t]+"(?:[^"\\]|\\.)*"){2,}[ \t]*$''',
+    re.MULTILINE,
+)
 EM_DASH_ATTACHED_TO_WORD = re.compile(r"—(?=\w)")
 EXTERNAL_ROFF_CONTEXT = re.compile(
     rb"(?:^|[ \t])[.'](?:so|mso)(?:[ \t]|$)", re.MULTILINE
@@ -191,6 +200,8 @@ class AuditRecord:
     scan_status: str
     review_status: str
     note: str
+    reference_kind: str = "man"
+    reference_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -239,7 +250,24 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--reference",
         default="man",
-        help="man(1)-compatible reference command (default: man)",
+        help="reference renderer command (default: man)",
+    )
+    parser.add_argument(
+        "--reference-kind",
+        choices=("man", "mandoc"),
+        default="man",
+        help=(
+            "reference command interface: man uses indexed topic/section or "
+            "-l; mandoc renders exact source files (default: man)"
+        ),
+    )
+    parser.add_argument(
+        "--reference-id",
+        metavar="IDENTITY",
+        help=(
+            "stable renderer/package identity recorded in mandoc reports and "
+            "ledgers, for example mandoc-1.14.6-1"
+        ),
     )
     sampling = parser.add_mutually_exclusive_group()
     sampling.add_argument(
@@ -364,6 +392,16 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help=(
             "skip unchanged pages already listed in the CSV database and merge "
             "this run into it"
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=positive_integer,
+        default=100,
+        metavar="PAGES",
+        help=(
+            "atomically checkpoint --audit-db after this many examined pages "
+            "during a long run (default: 100)"
         ),
     )
     parser.add_argument(
@@ -865,12 +903,16 @@ def rare_feature_sample_by_section(
 
 
 def run_renderer(
-    command: Sequence[str], timeout: int, environment: dict[str, str]
+    command: Sequence[str],
+    timeout: int,
+    environment: dict[str, str],
+    input_bytes: bytes | None = None,
 ) -> tuple[int, str, str]:
     try:
         result = subprocess.run(
             command,
-            stdin=subprocess.DEVNULL,
+            input=input_bytes,
+            stdin=subprocess.DEVNULL if input_bytes is None else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=environment,
@@ -1400,6 +1442,14 @@ def differential_signatures(
                 "mdoc synopsis function terminators may be missing "
                 f"(reference={reference_terminators}, mant={mant_terminators})"
             )
+    if MDOC_MULTI_OPERAND_FA.search(source):
+        reference_commas = reference.count(",")
+        mant_commas = mant.count(",")
+        if reference_commas > mant_commas:
+            review.append(
+                "mdoc multi-operand Fa separators may be missing "
+                f"(reference={reference_commas}, mant={mant_commas})"
+            )
     return review
 
 
@@ -1500,18 +1550,33 @@ def reusable_cross_corpus_sources(
 
 def read_audit_database(
     path: Path,
+    reference_kind: str = "man",
+    reference_id: str = "",
 ) -> dict[tuple[str, str, str], AuditRecord]:
     if not path.exists():
         return {}
     entries: dict[tuple[str, str, str], AuditRecord] = {}
     with path.open(encoding="utf-8", newline="") as source:
         reader = csv.DictReader(source)
-        if reader.fieldnames != AUDIT_DATABASE_FIELDS:
+        fields = (
+            MANDOC_AUDIT_DATABASE_FIELDS
+            if reference_kind == "mandoc"
+            else AUDIT_DATABASE_FIELDS
+        )
+        if reader.fieldnames != fields:
             raise ValueError(
                 f"invalid audit database header in {path}; expected "
-                f"{','.join(AUDIT_DATABASE_FIELDS)}"
+                f"{','.join(fields)}"
             )
         for number, row in enumerate(reader, 2):
+            if reference_kind == "mandoc" and (
+                row["reference_kind"] != reference_kind
+                or row["reference_id"] != reference_id
+            ):
+                raise ValueError(
+                    f"mandoc reference identity mismatch at {path}:{number}; "
+                    f"expected {reference_kind}/{reference_id}"
+                )
             status = row["scan_status"]
             review_status = row["review_status"]
             digest = row["source_sha256"]
@@ -1537,6 +1602,8 @@ def read_audit_database(
                 scan_status=status,
                 review_status=review_status,
                 note=row["note"],
+                reference_kind=reference_kind,
+                reference_id=reference_id,
             )
             entries[(entry.corpus, entry.path, entry.digest)] = entry
     return entries
@@ -1545,29 +1612,41 @@ def read_audit_database(
 def write_audit_database(
     path: Path,
     entries: Iterable[AuditRecord],
+    reference_kind: str = "man",
+    reference_id: str = "",
 ) -> None:
     rows = sorted(entries, key=lambda entry: (entry.corpus, entry.path, entry.digest))
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
     with temporary.open("w", encoding="utf-8", newline="") as destination:
+        fields = (
+            MANDOC_AUDIT_DATABASE_FIELDS
+            if reference_kind == "mandoc"
+            else AUDIT_DATABASE_FIELDS
+        )
         writer = csv.DictWriter(
             destination,
-            fieldnames=AUDIT_DATABASE_FIELDS,
+            fieldnames=fields,
             lineterminator="\n",
         )
         writer.writeheader()
         for entry in rows:
-            writer.writerow(
-                {
-                    "corpus": entry.corpus,
-                    "path": entry.path,
-                    "section": entry.section,
-                    "source_sha256": entry.digest,
-                    "scan_status": entry.scan_status,
-                    "review_status": entry.review_status,
-                    "note": entry.note,
+            row = {
+                "corpus": entry.corpus,
+                "path": entry.path,
+                "section": entry.section,
+                "source_sha256": entry.digest,
+                "scan_status": entry.scan_status,
+                "review_status": entry.review_status,
+                "note": entry.note,
+            }
+            if reference_kind == "mandoc":
+                row = {
+                    "reference_kind": reference_kind,
+                    "reference_id": reference_id,
+                    **row,
                 }
-            )
+            writer.writerow(row)
     temporary.replace(path)
 
 
@@ -1579,6 +1658,67 @@ def contains_so_request(path: Path) -> bool:
     return any(
         re.match(rb"^[.']so(?:[ \t]|$)", line) is not None
         for line in source.splitlines()
+    )
+
+
+def contains_external_request(source: bytes) -> bool:
+    return any(
+        re.match(rb"^[.'](?:so|mso)(?:[ \t]|$)", line) is not None
+        for line in source.splitlines()
+    )
+
+
+def redirect_only_target(source: bytes) -> str | None:
+    """Return the sole relative target of a redirect-only roff source.
+
+    mandoc intentionally reports a top-level ``.so`` request instead of
+    following it. Resolve only the unambiguous alias shape used by manual
+    hierarchies; embedded includes remain non-comparable rather than growing a
+    second roff interpreter in this audit script.
+    """
+    meaningful = []
+    for raw_line in source.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith((b'.\\"', b"'\\\"")):
+            continue
+        meaningful.append(line)
+    if len(meaningful) != 1:
+        return None
+    match = re.fullmatch(rb"[.']so[ \t]+([^ \t\x00]+)[ \t]*", meaningful[0])
+    if match is None:
+        return None
+    return match.group(1).decode("utf-8", errors="surrogateescape")
+
+
+def confined_redirect_target(
+    path: Path,
+    hierarchy_root: Path,
+    target: str,
+) -> Path | None:
+    """Resolve one mandoc alias target inside its owning manual hierarchy."""
+    logical = PurePosixPath(target)
+    if (
+        logical.is_absolute()
+        or not logical.parts
+        or any(part in {"", ".", ".."} for part in logical.parts)
+        or "\\" in target
+    ):
+        return None
+    base = hierarchy_root if logical.parts[0].startswith("man") else path.parent
+    candidate = base.joinpath(*logical.parts)
+    try:
+        candidate.relative_to(hierarchy_root)
+    except ValueError:
+        return None
+    candidates = [candidate]
+    if not candidate.name.endswith((".gz", ".bz2", ".xz", ".zst")):
+        candidates.extend(
+            candidate.with_name(f"{candidate.name}{suffix}")
+            for suffix in (".gz", ".bz2", ".xz", ".zst")
+        )
+    return next(
+        (value for value in candidates if value.is_file() or value.is_symlink()),
+        None,
     )
 
 
@@ -1621,15 +1761,35 @@ def mant_render_command(
 
 
 def reference_render_command(
-    path: Path, reference: str, hierarchy_root: Path | None
-) -> list[str]:
-    """Render aliases through the reference index when `man -l` cannot."""
+    path: Path,
+    reference: str,
+    reference_kind: str,
+    hierarchy_root: Path | None,
+    source: bytes | None,
+) -> tuple[list[str] | None, bytes | None, str | None]:
+    """Build a renderer invocation or explain why the source is not comparable."""
+    if reference_kind == "mandoc":
+        reference_path = path
+        if source is not None and contains_external_request(source):
+            target = redirect_only_target(source)
+            if target is None:
+                return None, None, "mandoc does not expand embedded .so/.mso requests"
+            if hierarchy_root is None:
+                return None, None, "redirect-only page has no owning manual hierarchy"
+            resolved = confined_redirect_target(path, hierarchy_root, target)
+            if resolved is None:
+                return None, None, f"redirect target is absent or outside the hierarchy: {target}"
+            reference_path = resolved
+        reference_source = source_bytes(reference_path)
+        if reference_source is None:
+            return None, None, f"cannot decompress mandoc reference source: {reference_path}"
+        return [reference, "-T", "utf8", "-O", "width=200"], reference_source, None
     if hierarchy_root is not None:
         section = manual_section(path)
         topic = manual_topic(path)
         if section is not None and topic is not None:
-            return [reference, section, topic]
-    return [reference, "-l", str(path)]
+            return [reference, section, topic], None, None
+    return [reference, "-l", str(path)], None, None
 
 
 def relative_label(path: Path, roots: Sequence[Path]) -> str:
@@ -1670,6 +1830,7 @@ def audit_page(
     roots: Sequence[Path],
     mant: Path,
     reference: str,
+    reference_kind: str,
     timeout: int,
     ngram: int,
     layout_signals: bool,
@@ -1684,6 +1845,25 @@ def audit_page(
         # ManT instead of accidentally comparing a translated alias with the
         # default-language target.
         environment["MANPATH"] = str(hierarchy_root)
+    reference_command, reference_input, skip_detail = reference_render_command(
+        path,
+        reference,
+        reference_kind,
+        hierarchy_root,
+        raw_source,
+    )
+    if reference_command is None:
+        return AuditArtifact(
+            finding=Finding(
+                path=label,
+                status="skipped",
+                signatures=["source is not comparable with the selected reference"],
+                detail=skip_detail,
+            ),
+            source=raw_source,
+            reference_output=None,
+            mant_output=None,
+        )
     mant_status, mant_output, mant_error = run_renderer(
         mant_command,
         timeout,
@@ -1703,7 +1883,7 @@ def audit_page(
         )
 
     reference_status, reference_output, reference_error = run_renderer(
-        reference_render_command(path, reference, hierarchy_root), timeout, environment
+        reference_command, timeout, environment, reference_input
     )
     if reference_status != 0:
         return AuditArtifact(
@@ -1841,6 +2021,8 @@ def write_json_report(
     roots: Sequence[Path],
     mant: Path,
     reference: str,
+    reference_kind: str,
+    reference_id: str,
     layout_signals: bool,
     summary: AuditSummary,
     findings: Sequence[Finding],
@@ -1850,6 +2032,8 @@ def write_json_report(
         "roots": [str(root) for root in roots],
         "mant": str(mant),
         "reference": reference,
+        "referenceKind": reference_kind,
+        "referenceId": reference_id,
         "layout_signals": layout_signals,
         "summary": asdict(summary),
         "findings": [asdict(finding) for finding in findings],
@@ -2126,6 +2310,13 @@ def self_check() -> None:
     assert not differential_signatures(
         ".Fn function\n", "function();", "function();"
     )
+    assert differential_signatures(
+        '.Fo function\n.Fa "int first" "int second"\n.Fc\n',
+        "function(int first, int second);",
+        "function(int first int second);",
+    )[-1] == "mdoc multi-operand Fa separators may be missing (reference=1, mant=0)"
+    assert redirect_only_target(b'.\\" alias\n.so man1/target.1\n') == "man1/target.1"
+    assert redirect_only_target(b".so man1/target.1\ntext\n") is None
     layout_source = ".EX\nplain first\n  plain second\n.EE\n"
     synopsis_source = (
         ".EX\n.SY #!\\f[I]interpreter\\f[]\n.RI [ optional-arg ]\n.YS\n.EE\n"
@@ -2191,6 +2382,37 @@ def self_check() -> None:
         assert (bundle / page["files"]["source"]).read_bytes() == artifact.source
         assert (bundle / page["files"]["reference"]).read_text(encoding="utf-8") == artifact.reference_output
         assert (bundle / page["files"]["mant"]).read_text(encoding="utf-8") == artifact.mant_output
+        mandoc_database = Path(temporary) / "mandoc.csv"
+        mandoc_record = AuditRecord(
+            "fixture",
+            "man3/example.3",
+            "3",
+            "1" * 64,
+            "clean",
+            "not-required",
+            "",
+            "mandoc",
+            "mandoc-test",
+        )
+        write_audit_database(
+            mandoc_database,
+            [mandoc_record],
+            "mandoc",
+            "mandoc-test",
+        )
+        assert read_audit_database(
+            mandoc_database,
+            "mandoc",
+            "mandoc-test",
+        ) == {("fixture", "man3/example.3", "1" * 64): mandoc_record}
+        hierarchy = Path(temporary) / "share/man"
+        alias = hierarchy / "man1/alias.1"
+        target = hierarchy / "man1/target.1.gz"
+        alias.parent.mkdir(parents=True)
+        alias.write_bytes(b".so man1/target.1\n")
+        target.write_bytes(b"not actually compressed")
+        assert confined_redirect_target(alias, hierarchy, "man1/target.1") == target
+        assert confined_redirect_target(alias, hierarchy, "../outside.1") is None
     reusable_page = ROOT / "tests/fixtures/roff/nested-fl-mdoc.1"
     reusable_digest = source_digest(reusable_page)
     assert reusable_digest is not None
@@ -2249,6 +2471,12 @@ def main(argv: Sequence[str]) -> int:
             raise ValueError("--pending-only requires --audit-db")
         if arguments.dedupe_across_corpora and arguments.audit_db is None:
             raise ValueError("--dedupe-across-corpora requires --audit-db")
+        if (
+            arguments.reference_kind == "mandoc"
+            and arguments.audit_db is not None
+            and not arguments.reference_id
+        ):
+            raise ValueError("mandoc --audit-db requires a stable --reference-id")
         if arguments.recorded_only and arguments.recheck_recorded:
             raise ValueError("--recorded-only and --recheck-recorded are mutually exclusive")
         exclusive_database_selections = sum(
@@ -2312,8 +2540,15 @@ def main(argv: Sequence[str]) -> int:
         corpus = arguments.corpus or (
             "fixtures" if not arguments.manpath else "local-manpath"
         )
+        reference_id = arguments.reference_id or arguments.reference
         database = (
-            read_audit_database(arguments.audit_db) if arguments.audit_db else {}
+            read_audit_database(
+                arguments.audit_db,
+                arguments.reference_kind,
+                reference_id,
+            )
+            if arguments.audit_db
+            else {}
         )
         page_records = {
             path: (relative_label(path, roots), source_digest(path)) for path in pages
@@ -2446,6 +2681,7 @@ def main(argv: Sequence[str]) -> int:
     print("ManT roff fidelity audit")
     print(f"  mant:      {arguments.mant}")
     print(f"  reference: {arguments.reference}")
+    print(f"  profile:   {arguments.reference_kind}/{reference_id}")
     print(f"  roots:     {', '.join(str(root) for root in roots)}")
     print(f"  pages:     {len(pages)}")
     if arguments.pages_file:
@@ -2478,6 +2714,7 @@ def main(argv: Sequence[str]) -> int:
             roots,
             arguments.mant,
             arguments.reference,
+            arguments.reference_kind,
             arguments.timeout,
             arguments.ngram,
             arguments.layout_signals,
@@ -2504,7 +2741,16 @@ def main(argv: Sequence[str]) -> int:
                 scan_status=finding.status,
                 review_status=merged_review_status(previous, finding.status),
                 note=previous.note if previous is not None else "",
+                reference_kind=arguments.reference_kind,
+                reference_id=reference_id,
             )
+            if summary.examined % arguments.checkpoint_every == 0:
+                write_audit_database(
+                    arguments.audit_db,
+                    database.values(),
+                    arguments.reference_kind,
+                    reference_id,
+                )
 
     print()
     print(
@@ -2519,6 +2765,8 @@ def main(argv: Sequence[str]) -> int:
             roots,
             arguments.mant,
             arguments.reference,
+            arguments.reference_kind,
+            reference_id,
             arguments.layout_signals,
             summary,
             findings,
@@ -2528,7 +2776,12 @@ def main(argv: Sequence[str]) -> int:
         write_review_bundle(arguments.review_dir, review_artifacts)
         print(f"review bundle: {arguments.review_dir}")
     if arguments.audit_db:
-        write_audit_database(arguments.audit_db, database.values())
+        write_audit_database(
+            arguments.audit_db,
+            database.values(),
+            arguments.reference_kind,
+            reference_id,
+        )
         print(f"audit database: {arguments.audit_db}")
     return 1 if summary.hard_failures else 0
 
