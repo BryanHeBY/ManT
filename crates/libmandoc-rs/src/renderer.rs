@@ -1,14 +1,12 @@
 //! Optional bounded wrappers around libmandoc's reference renderers.
 
 use std::{
+    ffi::CString,
     fmt,
     fs::File,
     io,
     path::{Path, PathBuf},
 };
-
-#[cfg(unix)]
-use std::ffi::CString;
 
 #[cfg(windows)]
 use std::io::Read;

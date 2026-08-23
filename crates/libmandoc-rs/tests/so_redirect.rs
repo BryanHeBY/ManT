@@ -8,8 +8,12 @@
 
 use std::{fs, process};
 
-use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
+use libmandoc_rs::{Compression, IncludePolicy, ParseOptions, Parser};
 
+#[cfg(unix)]
+use libmandoc_rs::Node;
+
+#[cfg(unix)]
 fn has_macro(node: &Node, name: &str) -> bool {
     node.macro_name.as_deref() == Some(name)
         || node.children.iter().any(|child| has_macro(child, name))
