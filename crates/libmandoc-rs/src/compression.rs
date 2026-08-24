@@ -30,7 +30,7 @@ pub(crate) fn open_auto_file(path: &Path) -> io::Result<(File, bool)> {
         )),
         Err(error)
             if error.kind() == io::ErrorKind::NotFound
-                && !path.extension().is_some_and(|extension| extension == "gz") =>
+                && path.extension().is_none_or(|extension| extension != "gz") =>
         {
             let mut compressed = path.as_os_str().to_os_string();
             compressed.push(".gz");

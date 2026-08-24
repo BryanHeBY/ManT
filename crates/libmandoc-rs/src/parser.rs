@@ -402,8 +402,11 @@ impl Parser {
 
     pub(crate) fn include_settings(
         &self,
-        _source_path: &Path,
+        source_path: &Path,
     ) -> Result<IncludeSettings, ParseError> {
+        #[cfg(unix)]
+        let _ = source_path;
+
         match &self.options.includes {
             IncludePolicy::Deny => Ok(IncludeSettings {
                 root: None,
@@ -415,7 +418,7 @@ impl Parser {
                 allow_includes: true,
             }),
             #[cfg(windows)]
-            IncludePolicy::SourceTree => Err(unsupported_includes(_source_path.to_path_buf())),
+            IncludePolicy::SourceTree => Err(unsupported_includes(source_path.to_path_buf())),
             IncludePolicy::Root(root) if root.as_os_str().is_empty() => Err(ParseError {
                 path: root.clone(),
                 kind: ParseErrorKind::InvalidPath,
