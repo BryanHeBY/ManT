@@ -3927,7 +3927,7 @@ roff_shift(ROFF_ARGS)
 static int
 roff_so(ROFF_ARGS)
 {
-	char *name, *cp;
+	char *name;
 
 	name = buf->buf + pos;
 	mandoc_msg(MANDOCERR_SO, ln, ppos, "so %s", name);
@@ -3941,12 +3941,7 @@ roff_so(ROFF_ARGS)
 
 	if (*name == '/' || strstr(name, "../") || strstr(name, "/..")) {
 		mandoc_msg(MANDOCERR_SO_PATH, ln, ppos, ".so %s", name);
-		buf->sz = mandoc_asprintf(&cp,
-		    ".sp\nSee the file %s.\n.sp", name) + 1;
-		free(buf->buf);
-		buf->buf = cp;
-		*offs = 0;
-		return ROFF_REPARSE;
+		return ROFF_IGN;
 	}
 
 	*offs = pos;

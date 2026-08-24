@@ -300,6 +300,10 @@ the ordered patches in `patches/series`:
 - `0022-keep-denied-includes-diagnostic-only.patch` keeps an embedded `.so`
   rejected by parser policy observable as a diagnostic without synthesizing
   the rejected target path into visible document prose.
+- `0023-keep-invalid-includes-diagnostic-only.patch` treats an absolute or
+  parent-traversing embedded `.so` as a diagnostic-only rejected request,
+  retaining surrounding content without inserting the invalid path into
+  visible document prose.
 
 Each is a narrow parser, renderer-boundary, or portability correction. They do
 not create a separately maintained formatter. `scripts/sync-vendor --verify`

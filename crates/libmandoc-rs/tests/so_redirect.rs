@@ -65,6 +65,35 @@ fn memory_source_retains_content_after_a_native_include() {
     );
 }
 
+#[test]
+fn invalid_parent_include_is_diagnostic_only_and_retains_surrounding_content() {
+    let rejected = "../../../etc/passwd";
+    let report = Parser::default()
+        .parse_bytes(
+            "invalid-parent.1",
+            format!(
+                ".TH INVALID-PARENT 1\n.SH BODY\nbefore invalid include\n.so {rejected}\nafter invalid include\n"
+            )
+            .as_bytes(),
+        )
+        .expect("retain surrounding content after rejecting a parent include");
+
+    let mut text = String::new();
+    visible_text(&report.document.root, &mut text);
+    assert!(text.contains("before invalid include"));
+    assert!(text.contains("after invalid include"));
+    assert!(!text.contains("See the file"));
+    assert!(!text.contains(rejected));
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains(rejected)),
+        "the rejected path must remain observable as a diagnostic: {:?}",
+        report.diagnostics
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn deny_policy_rejects_embedded_includes_without_a_cwd_fallback() {
