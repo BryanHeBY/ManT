@@ -48,6 +48,9 @@ that crate was not published for that change.
 - Carry an outer mdoc `.Sm off` state into preformatted displays, decode the
   NetBSD `\\[vc]` named character, and retain visible digits immediately after
   signed legacy `\\s` size escapes.
+- Project bounded native-tree omissions as
+  `manual.syntax-depth-truncated` and `manual.equation-depth-truncated`
+  diagnostics so structured consumers need not match warning prose.
 - Require `libmandoc-rs ^0.9.1`, the first release containing the native parser
   fixes this engine now relies on, and prepare these changes as
   `mant-engine 0.9.1`.
@@ -83,12 +86,16 @@ that crate was not published for that change.
 - Make parsing and reference rendering independent of the caller's locale,
   and let callers pin the fallback operating-system value for a bare mdoc
   `.Os` through `Parser::with_mdoc_operating_system`.
-- Normalize private libmandoc layout sentinels before exposing AST text, report
-  syntax/equation depth truncation explicitly, and fail without writing to
-  process stderr when private diagnostic capture cannot be created.
+- Normalize private libmandoc layout sentinels before exposing AST text or
+  validated tags. Report syntax/equation depth truncation through typed
+  `DiagnosticCode` values, and fail without writing to process stderr when
+  private diagnostic capture cannot be created.
 - Namespace every bundled C definition under `mant_vendored_*` so linking the
   crate no longer injects generic symbols such as `strlcpy`, `ohash_init`, or
   `mparse_alloc` into downstream binaries.
+- Scope the Rust gzip decoder to Windows production builds while retaining
+  cross-platform gzip fixtures as development dependencies; Unix production
+  file transport continues to use libmandoc's native zlib path.
 - These additive changes are prepared as `libmandoc-rs 0.9.1`.
 
 ### mant
@@ -104,7 +111,9 @@ that crate was not published for that change.
 - Route clipboard writes through OSC 52 before touching a native display in
   WSL, SSH, and VS Code remote sessions, while retaining OSC 52 as the local
   fallback when native clipboard access fails. Terminal delivery is
-  write-only and therefore cannot claim that the outer terminal accepted it.
+  write-only and therefore cannot claim that the outer terminal accepted it;
+  reject terminal payloads above 400 KiB before Base64 expansion rather than
+  reporting success for a control string common terminals will discard.
 - Require `mant-ui ^0.9.1`, the first compatible release that exposes the
   typed clipboard callback used by the executable.
 
