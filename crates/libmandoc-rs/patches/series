@@ -34,3 +34,4 @@
 0025-keep-ohash-size-unsigned.patch
 0026-initialize-number-register-sign.patch
 0027-initialize-alternating-html-tag.patch
+0028-initialize-terminal-escape-state.patch

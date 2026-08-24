@@ -335,6 +335,9 @@ the ordered patches in `patches/series`:
 - `0027-initialize-alternating-html-tag.patch` initializes the temporary tag
   pointer used by alternating-font HTML macros, making the guarded lifetime
   explicit to MSVC without changing formatter output.
+- `0028-initialize-terminal-escape-state.patch` gives terminal horizontal-line
+  byte counts and string-width escape code points explicit neutral defaults,
+  removing MSVC dataflow ambiguity without changing reachable output paths.
 - `0017-preserve-continued-tp-aliases.patch` closes a populated `.TP`/`.TQ`
   head before a following tagged paragraph when the tag ends in `\\c`, so
   legacy GNU pages retain consecutive long and short option aliases instead

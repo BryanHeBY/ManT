@@ -525,7 +525,7 @@ term_word(struct termp *p, const char *word)
 	const char	 nbrsp[2] = { ASCII_NBRSP, 0 };
 	const char	*seq, *cp;
 	int		 sz, uc;
-	size_t		 csz, lsz, ssz;
+	size_t		 csz, lsz, ssz = 0;
 	enum mandoc_esc	 esc;
 
 	if ((p->flags & TERMP_NOBUF) == 0) {
@@ -939,6 +939,7 @@ term_strlen(const struct termp *p, const char *cp)
 		case '\\':
 			cp++;
 			rhs = NULL;
+			uc = 0;
 			esc = mandoc_escape(&cp, &seq, &ssz);
 			switch (esc) {
 			case ESCAPE_UNICODE:

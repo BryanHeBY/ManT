@@ -206,6 +206,10 @@ mod tests {
 
         let man_html = include_str!("../vendor/mandoc-1.14.6/man_html.c");
         assert!(man_html.contains("struct tag\t*t = NULL;"));
+
+        let term = include_str!("../vendor/mandoc-1.14.6/term.c");
+        assert!(term.contains("size_t\t\t csz, lsz, ssz = 0;"));
+        assert!(term.contains("rhs = NULL;\n\t\t\tuc = 0;"));
     }
 
     #[test]
