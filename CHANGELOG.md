@@ -54,6 +54,13 @@ that crate was not published for that change.
 - The new APIs are additive within the `0.9` compatibility line. A publication
   version will be assigned independently when this crate is released.
 
+### mant
+
+- Sanitize dynamic newlines in single-line stderr failures so document names
+  and filesystem-derived identities cannot forge `hint:`, `warning:`, or other
+  diagnostic lines. Intentional multi-line tldr advice remains independently
+  sanitized and styled.
+
 ### Workspace publication transition
 
 - The next publication will assign `0.9.1` to all seven crates once, because

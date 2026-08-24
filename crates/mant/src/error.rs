@@ -44,15 +44,30 @@ impl Failure {
         I: IntoIterator<Item = T>,
         T: std::fmt::Display,
     {
+        Self::with_lines(FailureKind::Usage, first, lines)
+    }
+
+    /// Construct an intentional multi-line operational diagnostic from
+    /// independently sanitized lines.
+    fn operational_lines<I, T>(first: impl std::fmt::Display, lines: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        T: std::fmt::Display,
+    {
+        Self::with_lines(FailureKind::Operational, first, lines)
+    }
+
+    fn with_lines<I, T>(kind: FailureKind, first: impl std::fmt::Display, lines: I) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        T: std::fmt::Display,
+    {
         let mut message = sanitized_message(first);
         for line in lines {
             message.push('\n');
             message.push_str(&sanitized_message(line));
         }
-        Self {
-            kind: FailureKind::Usage,
-            message,
-        }
+        Self { kind, message }
     }
 
     pub(super) fn into_message(self) -> String {
@@ -66,12 +81,8 @@ impl Failure {
 }
 
 fn sanitized_message(message: impl std::fmt::Display) -> String {
-    message
-        .to_string()
-        .split('\n')
-        .map(sanitize_terminal_text)
-        .collect::<Vec<_>>()
-        .join("\n")
+    let message = message.to_string();
+    sanitize_terminal_text(&message).into_owned()
 }
 
 pub(super) fn query_failure(error: QueryError) -> Failure {
@@ -87,11 +98,16 @@ pub(super) fn query_failure(error: QueryError) -> Failure {
         | QueryError::EmptySelector
         | QueryError::EmptyEntry
         | QueryError::InvalidSearch(_) => Failure::usage(error),
+        QueryError::ManualWithTldr { error, topic } => Failure::operational_lines(
+            error,
+            [format!(
+                "hint: a tldr entry is available; run `mant {topic} --tldr`"
+            )],
+        ),
         QueryError::Markdown { .. }
         | QueryError::EmptyMarkdown { .. }
         | QueryError::Registry { .. }
         | QueryError::Manual(_)
-        | QueryError::ManualWithTldr { .. }
         | QueryError::TldrNotFound { .. }
         | QueryError::Tldr { .. }
         | QueryError::NoReadableContent { .. } => Failure::operational(error),
@@ -215,7 +231,7 @@ mod tests {
     #[test]
     fn failure_messages_mask_dynamic_terminal_controls() {
         let error = Failure::operational("bad\u{1b}[2J\nnext\rline");
-        assert_eq!(error.message(), "bad�[2J\nnext�line");
+        assert_eq!(error.message(), "bad�[2J�next�line");
 
         let error = Failure::usage_lines("first\u{1b}[31m", ["hint: next\tline"]);
         let mut diagnostics = Vec::new();
@@ -223,6 +239,15 @@ mod tests {
         assert_eq!(
             String::from_utf8(diagnostics).expect("diagnostics UTF-8"),
             "mant: first�[31m\nhint: next�line\nTry 'mant --help' for more information.\n"
+        );
+
+        let error =
+            Failure::operational_lines("could not load topic\nforged", ["hint: retry\nforged"]);
+        let mut diagnostics = Vec::new();
+        assert_eq!(report_failure(&error, &mut diagnostics, false), 1);
+        assert_eq!(
+            String::from_utf8(diagnostics).expect("diagnostics UTF-8"),
+            "mant: could not load topic�forged\nhint: retry�forged\n"
         );
     }
 }
