@@ -1215,7 +1215,9 @@ mod tests {
 
         assert_eq!(
             report.document.metadata.title.as_deref(),
-            Some("CASED-WINDOWS-ROOT")
+            Some("CASED-WINDOWS-ROOT"),
+            "diagnostics: {:#?}",
+            report.diagnostics
         );
     }
 

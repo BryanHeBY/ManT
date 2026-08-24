@@ -402,8 +402,10 @@ fn denied(message: &'static str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
+    use std::{ffi::CString, fs, process};
+
     use super::{
-        FILE_ATTRIBUTE_REPARSE_POINT, is_reparse_point, path_eq_case_insensitive,
+        FILE_ATTRIBUTE_REPARSE_POINT, RootResolver, is_reparse_point, path_eq_case_insensitive,
         path_starts_with_case_insensitive, safe_relative_path,
     };
 
@@ -439,5 +441,47 @@ mod tests {
         assert!(path_eq_case_insensitive(root, differently_cased_root));
         assert!(path_starts_with_case_insensitive(child, root));
         assert!(!path_starts_with_case_insensitive(sibling, root));
+    }
+
+    #[test]
+    fn differently_cased_roots_resolve_top_level_siblings_layer_by_layer() {
+        let root = std::env::temp_dir().join(format!(
+            "libmandoc-rs-root-resolver-layer-{}",
+            process::id()
+        ));
+        let section = root.join("man1");
+        fs::create_dir_all(&section).expect("create resolver layer fixture");
+        let target = section.join("target.1");
+        fs::write(&target, b"target body\n").expect("write resolver layer target");
+        let alias = section.join("alias.1");
+        fs::write(&alias, b".so ./target.1\n").expect("write resolver layer alias");
+        let differently_cased_root = std::path::PathBuf::from(
+            root.to_string_lossy()
+                .chars()
+                .map(|character| {
+                    if character.is_ascii_lowercase() {
+                        character.to_ascii_uppercase()
+                    } else {
+                        character.to_ascii_lowercase()
+                    }
+                })
+                .collect::<String>(),
+        );
+        let alias_label = CString::new(alias.to_string_lossy().as_bytes()).expect("alias label");
+        let mut resolver = RootResolver::new(&differently_cased_root, &alias_label);
+
+        assert_eq!(
+            resolver.top_level_parent.as_deref(),
+            Some(std::path::Path::new("man1"))
+        );
+        resolver
+            .resolve(
+                "./target.1",
+                Some(alias_label.to_str().expect("UTF-8 alias")),
+            )
+            .expect("resolve target beside differently cased root");
+        assert_eq!(resolver.data, b"target body\n");
+
+        fs::remove_dir_all(root).expect("remove resolver layer fixture");
     }
 }
