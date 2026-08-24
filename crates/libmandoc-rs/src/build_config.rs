@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn msvc_warning_baseline_is_confined_to_upstream_objects() {
         let build = include_str!("../build.rs");
-        for warning in ["4100", "4244", "4267"] {
+        for warning in ["4100", "4146", "4244", "4267"] {
             assert!(build.contains(&format!(".flag(\"/wd{warning}\")")));
         }
         assert!(build.contains("let mut upstream_build = build.clone();"));
@@ -203,6 +203,9 @@ mod tests {
             .find("start = buf->buf + pos;")
             .expect("expansion scan start");
         assert!(done < sign && sign < start);
+
+        let man_html = include_str!("../vendor/mandoc-1.14.6/man_html.c");
+        assert!(man_html.contains("struct tag\t*t = NULL;"));
     }
 
     #[test]

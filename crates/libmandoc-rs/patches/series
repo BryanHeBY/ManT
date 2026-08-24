@@ -33,3 +33,4 @@
 0024-deterministic-manual-dates.patch
 0025-keep-ohash-size-unsigned.patch
 0026-initialize-number-register-sign.patch
+0027-initialize-alternating-html-tag.patch

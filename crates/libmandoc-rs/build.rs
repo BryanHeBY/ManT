@@ -209,6 +209,7 @@ fn compile_native_archive(
         let mut upstream_build = build.clone();
         upstream_build
             .flag("/wd4100")
+            .flag("/wd4146")
             .flag("/wd4244")
             .flag("/wd4267")
             .files(upstream_sources);

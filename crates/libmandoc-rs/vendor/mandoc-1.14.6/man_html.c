@@ -339,7 +339,7 @@ static int
 man_alt_pre(MAN_ARGS)
 {
 	const struct roff_node	*nn;
-	struct tag	*t;
+	struct tag	*t = NULL;
 	int		 i;
 	enum htmltag	 fp;
 

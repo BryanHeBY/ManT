@@ -332,6 +332,9 @@ the ordered patches in `patches/series`:
 - `0026-initialize-number-register-sign.patch` gives the numeric-register
   escape state an explicit neutral default before the expansion loop,
   removing an MSVC dataflow ambiguity without changing valid escape behavior.
+- `0027-initialize-alternating-html-tag.patch` initializes the temporary tag
+  pointer used by alternating-font HTML macros, making the guarded lifetime
+  explicit to MSVC without changing formatter output.
 - `0017-preserve-continued-tp-aliases.patch` closes a populated `.TP`/`.TQ`
   head before a following tagged paragraph when the tag ends in `\\c`, so
   legacy GNU pages retain consecutive long and short option aliases instead
@@ -387,8 +390,8 @@ configuration.
 
 `ManT`'s project checks set `LIBMANDOC_RS_DENY_WARNINGS=1` to promote native C
 warnings to errors on every supported compiler. MSVC keeps an explicit
-three-warning baseline for pinned upstream 1.14.6 (`C4100`, `C4244`, and
-`C4267`), while ManT-owned shim and compatibility sources promote those
+four-warning baseline for pinned upstream 1.14.6 (`C4100`, `C4146`, `C4244`,
+and `C4267`), while ManT-owned shim and compatibility sources promote those
 families back to errors. This is opt-in rather than a downstream default so
 new compiler diagnostics do not make an existing crate release fail to build
 for consumers.

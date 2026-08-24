@@ -64,8 +64,8 @@ path, shell, packaging, and parser behavior.
 Project verification and release builds set
 `LIBMANDOC_RS_DENY_WARNINGS=1`, which promotes warnings from libmandoc's C
 build to errors on GCC, Apple Clang, and MSVC. Pinned upstream 1.14.6 retains a
-documented MSVC baseline for `C4100`, `C4244`, and `C4267`; ManT-owned C shim
-and compatibility sources re-enable those warning families as errors. The
+documented MSVC baseline for `C4100`, `C4146`, `C4244`, and `C4267`;
+ManT-owned C shim and compatibility sources do not inherit that baseline. The
 crate leaves the policy disabled for ordinary downstream builds so a new
 compiler warning cannot break an otherwise compatible published dependency;
 maintainers can opt into the same strict boundary for a focused command by
