@@ -273,6 +273,9 @@ the ordered patches in `patches/series`:
   files in one parser-owned include-depth counter, so a native `.so` target
   cannot finalize the document while its caller-owned outer buffer still has
   content to parse.
+- `0020-bound-mdoc-macro-recursion.patch` routes all mdoc macro dispatch
+  through a parser-owned 64-level nesting budget, retaining the rejected macro
+  and remaining words as visible text instead of overflowing the C stack.
 - `0014-isolate-renderer-output.patch` routes ASCII and HTML bytes into the
   shim's bounded per-call sink, makes formatter ID/tab state thread-local,
   releases per-call tab storage, and widens small integer-format buffers to

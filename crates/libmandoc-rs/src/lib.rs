@@ -1366,6 +1366,35 @@ mod tests {
     }
 
     #[test]
+    fn deeply_nested_callable_mdoc_macros_are_bounded_in_the_native_parser() {
+        let mut source = String::from(
+            ".Dd August 24, 2026\n.Dt DEEP-MDOC 1\n.Os\n.Sh NAME\n.Nm deep-mdoc\n.Nd bounded callable macros\n.Sh BODY\n.Op ",
+        );
+        for _ in 0..50_000 {
+            source.push_str("Op ");
+        }
+        source.push_str("nested tail marker\n.Sh AFTER\nretained document tail\n");
+
+        let report = Parser::default()
+            .parse_bytes("deep-mdoc.1", source.as_bytes())
+            .expect("return a finite document for deeply nested callable macros");
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+        let visible = visible.join(" ");
+
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("infinite loop")),
+            "macro depth exhaustion must remain observable: {:?}",
+            report.diagnostics
+        );
+        assert!(visible.contains("nested tail marker"), "{visible}");
+        assert!(visible.contains("retained document tail"), "{visible}");
+    }
+
+    #[test]
     fn deeply_nested_input_is_bounded_instead_of_overflowing_the_stack() {
         // Far more nesting than the copy cap; the parse must return a finite
         // tree rather than recursing without limit while copying it out.

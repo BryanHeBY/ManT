@@ -39,6 +39,8 @@ struct	roff_man {
 	struct roff_node *last_es; /* The most recent Es node. */
 	int		  quick;   /* Abort parse early. */
 	int		  flags;   /* Parse flags. */
+	int		  macro_depth; /* Nested mdoc macro calls. */
+	int		  macro_depth_reported;
 #define	ROFF_NOFILL	 (1 << 1)  /* Fill mode switched off. */
 #define	MDOC_PBODY	 (1 << 2)  /* In the document body. */
 #define	MDOC_NEWLINE	 (1 << 3)  /* First macro/text in a line. */

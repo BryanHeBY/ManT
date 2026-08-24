@@ -65,6 +65,7 @@ enum	mdelim {
 };
 
 const struct mdoc_macro *mdoc_macro(enum roff_tok);
+void		  mdoc_macro_call(MACRO_PROT_ARGS);
 
 void		  mdoc_elem_alloc(struct roff_man *, int, int,
 			enum roff_tok, struct mdoc_arg *);

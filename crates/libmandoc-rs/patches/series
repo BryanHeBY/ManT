@@ -26,3 +26,4 @@
 0017-preserve-continued-tp-aliases.patch
 0018-bound-aggregate-while-expansion.patch
 0019-share-input-recursion-depth.patch
+0020-bound-mdoc-macro-recursion.patch

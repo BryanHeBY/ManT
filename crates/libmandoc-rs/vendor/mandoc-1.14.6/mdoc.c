@@ -182,8 +182,7 @@ mdoc_ptext(struct roff_man *mdoc, int line, char *buf, int offs)
 	    (n->parent != NULL && n->parent->tok == MDOC_Bl &&
 	     n->parent->norm->Bl.type == LIST_column)) {
 		mdoc->flags |= MDOC_FREECOL;
-		(*mdoc_macro(MDOC_It)->fp)(mdoc, MDOC_It,
-		    line, offs, &offs, buf);
+		mdoc_macro_call(mdoc, MDOC_It, line, offs, &offs, buf);
 		return 1;
 	}
 
@@ -361,7 +360,7 @@ mdoc_pmacro(struct roff_man *mdoc, int ln, char *buf, int offs)
 	n = mdoc->last;
 	if (n == NULL || tok == MDOC_It || tok == MDOC_El ||
 	    roff_tok_transparent(tok)) {
-		(*mdoc_macro(tok)->fp)(mdoc, tok, ln, sv, &offs, buf);
+		mdoc_macro_call(mdoc, tok, ln, sv, &offs, buf);
 		return 1;
 	}
 
@@ -377,13 +376,13 @@ mdoc_pmacro(struct roff_man *mdoc, int ln, char *buf, int offs)
 	    (n->parent != NULL && n->parent->tok == MDOC_Bl &&
 	     n->parent->norm->Bl.type == LIST_column)) {
 		mdoc->flags |= MDOC_FREECOL;
-		(*mdoc_macro(MDOC_It)->fp)(mdoc, MDOC_It, ln, sv, &sv, buf);
+		mdoc_macro_call(mdoc, MDOC_It, ln, sv, &sv, buf);
 		return 1;
 	}
 
 	/* Normal processing of a macro. */
 
-	(*mdoc_macro(tok)->fp)(mdoc, tok, ln, sv, &offs, buf);
+	mdoc_macro_call(mdoc, tok, ln, sv, &offs, buf);
 
 	/* In quick mode (for mandocdb), abort after the NAME section. */
 

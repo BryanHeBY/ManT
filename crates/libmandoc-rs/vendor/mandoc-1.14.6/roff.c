@@ -857,6 +857,8 @@ roff_state_reset(struct roff_man *man)
 	man->last = man->meta.first;
 	man->last_es = NULL;
 	man->flags = 0;
+	man->macro_depth = 0;
+	man->macro_depth_reported = 0;
 	man->lastsec = man->lastnamed = SEC_NONE;
 	man->next = ROFF_NEXT_CHILD;
 	roff_setreg(man->roff, "nS", 0, '=');

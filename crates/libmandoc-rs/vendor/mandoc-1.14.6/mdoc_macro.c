@@ -33,6 +33,8 @@
 #include "roff_int.h"
 #include "libmdoc.h"
 
+#define	MDOC_MACRO_DEPTH_LIMIT 64
+
 static	void		blk_full(MACRO_PROT_ARGS);
 static	void		blk_exp_close(MACRO_PROT_ARGS);
 static	void		blk_part_exp(MACRO_PROT_ARGS);
@@ -209,6 +211,42 @@ mdoc_macro(enum roff_tok tok)
 {
 	assert(tok >= MDOC_Dd && tok < MDOC_MAX);
 	return mdoc_macros + (tok - MDOC_Dd);
+}
+
+/*
+ * Dispatch one mdoc macro without allowing callable inline macros to recurse
+ * through the C stack without limit.  Once the nesting budget is exhausted,
+ * keep the rejected macro and the rest of its line as literal visible words;
+ * the callers can then close their already-open scopes normally.
+ */
+void
+mdoc_macro_call(MACRO_PROT_ARGS)
+{
+	char		*p;
+	enum margserr	 ac;
+	int		 la;
+
+	if (mdoc->macro_depth < MDOC_MACRO_DEPTH_LIMIT) {
+		mdoc->macro_depth++;
+		(*mdoc_macro(tok)->fp)(mdoc, tok, line, ppos, pos, buf);
+		mdoc->macro_depth--;
+		return;
+	}
+
+	if (mdoc->macro_depth_reported == 0) {
+		mandoc_msg(MANDOCERR_ROFFLOOP, line, ppos, NULL);
+		mdoc->macro_depth_reported = 1;
+	}
+	dword(mdoc, line, ppos, roff_name[tok], DELIM_NONE, 0);
+	for (;;) {
+		la = *pos;
+		ac = mdoc_args(mdoc, line, pos, buf, TOKEN_NONE, &p);
+		if (ac == ARGS_EOLN)
+			break;
+		dword(mdoc, line, la, p, DELIM_MAX, 1);
+		if (ac == ARGS_ALLOC)
+			free(p);
+	}
 }
 
 /*
@@ -529,7 +567,7 @@ macro_or_word(MACRO_PROT_ARGS, char *p, int parsed)
 		if (tok != TOKEN_NONE &&
 		    mdoc_macro(tok)->fp == in_line_eoln)
 			rew_elem(mdoc, tok);
-		(*mdoc_macro(ntok)->fp)(mdoc, ntok, line, ppos, pos, buf);
+		mdoc_macro_call(mdoc, ntok, line, ppos, pos, buf);
 		if (tok == TOKEN_NONE)
 			append_delims(mdoc, line, pos, buf);
 		return 1;
@@ -744,7 +782,7 @@ blk_exp_close(MACRO_PROT_ARGS)
 		if (n != NULL)
 			rew_last(mdoc, n);
 		mdoc->flags &= ~MDOC_NEWLINE;
-		(*mdoc_macro(ntok)->fp)(mdoc, ntok, line, lastarg, pos, buf);
+		mdoc_macro_call(mdoc, ntok, line, lastarg, pos, buf);
 		break;
 	}
 
@@ -850,8 +888,7 @@ in_line(MACRO_PROT_ARGS)
 				mandoc_msg(MANDOCERR_MACRO_EMPTY,
 				    line, ppos, "%s", roff_name[tok]);
 			}
-			(*mdoc_macro(ntok)->fp)(mdoc, ntok,
-			    line, la, pos, buf);
+			mdoc_macro_call(mdoc, ntok, line, la, pos, buf);
 			if (nl)
 				append_delims(mdoc, line, pos, buf);
 			if (ac == ARGS_ALLOC)
@@ -1456,8 +1493,7 @@ in_line_argn(MACRO_PROT_ARGS)
 				rew_elem(mdoc, tok);
 				state = -2;
 			}
-			(*mdoc_macro(ntok)->fp)(mdoc, ntok,
-			    line, la, pos, buf);
+			mdoc_macro_call(mdoc, ntok, line, la, pos, buf);
 			if (ac == ARGS_ALLOC)
 				free(p);
 			break;
