@@ -120,6 +120,10 @@ The Edit menu can copy a complete selected Outline node as deterministic text
 or structurally complete Markdown; arbitrary visual selections deliberately
 remain plain text so wrapping cannot produce a truncated Markdown fragment.
 Presentation-only tldr panel borders are never included in visual copies.
+Local sessions use the native clipboard and fall back to OSC 52; WSL, SSH,
+and VS Code remote sessions prefer OSC 52 so a compatible outer terminal or
+multiplexer can complete the copy. OSC 52 is write-only, so a terminal that
+disables it can ignore the request without reporting failure to ManT.
 
 Human-facing help, diagnostics, and tldr output use terminal-aware
 colour. `--color auto|always|never` controls the shared policy; automatic mode

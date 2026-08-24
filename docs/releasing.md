@@ -64,6 +64,13 @@ integrators must act.
    release evidence, but remains a maintainer-run discovery check rather than
    a host-dependent per-push CI gate.
 
+   Exercise both the primary man/groff routes and the aligned mandoc fidelity
+   and layout routes for their recorded source identities. Run
+   `python3 scripts/check-roff-audit-coverage.py`, review every new
+   source-hash-specific reference deviation, and retain a deviation only when
+   the evidence shows that ManT preserves the source semantics more usefully
+   than that exact reference renderer.
+
 5. Inspect the publishable file list for all seven crates. Each package must
    contain its applicable complete license texts and no unexpected fixture or
    documentation assets. The canonical `scripts/check.sh` path also packages

@@ -101,6 +101,10 @@ that crate was not published for that change.
   interactive reader. The clipboard is initialized lazily and retained for
   the TUI session; copy payloads are rejected above 4 MiB rather than
   truncated.
+- Route clipboard writes through OSC 52 before touching a native display in
+  WSL, SSH, and VS Code remote sessions, while retaining OSC 52 as the local
+  fallback when native clipboard access fails. Terminal delivery is
+  write-only and therefore cannot claim that the outer terminal accepted it.
 - Require `mant-ui ^0.9.1`, the first compatible release that exposes the
   typed clipboard callback used by the executable.
 

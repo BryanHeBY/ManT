@@ -58,8 +58,10 @@ The reader provides a resizable outline, collapsible sections, semantic option
 nodes, settled-scroll following, typed in-page and cross-document links,
 back/forward history, full-document search, keyboard and mouse input, and
 optional tldr quick references before the full document. `Ctrl+O` opens the
-shared Markdown and native-manual catalog. Redirected output stays
-deterministic instead of emitting terminal control sequences.
+shared Markdown and native-manual catalog. The upper-right tab stack keeps
+successfully opened documents in first-open order and restores each tab's last
+selected semantic node. Redirected output stays deterministic instead of
+emitting terminal control sequences.
 
 Visual selections copy automatically, while the Edit menu can copy a complete
 semantic node as deterministic text or structurally complete `CommonMark`. Local

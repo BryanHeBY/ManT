@@ -60,8 +60,8 @@ The crates have deliberately asymmetric responsibilities:
 | `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, C build boundary, and default-off bounded upstream reference renderers | ManT types, source discovery, or ManT's semantic presentation |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
 | `mant-engine` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
-| `mant-ui` | Interactive navigation, discovery, links, history, search, layout, and terminal lifecycle | Filesystem lookup or source mutation |
-| `mant` | User-facing modes, terminal detection, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
+| `mant-ui` | Interactive navigation, document tabs, discovery, links, history, search, selection, typed copy requests, layout, and terminal lifecycle | Filesystem lookup, source mutation, or system clipboard access |
+| `mant` | User-facing modes, terminal detection, native/OSC 52 clipboard delivery, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
 `mant-ir` is deliberately the semantic center, while `mant-engine` is the
 execution layer that creates and operates on it. Interactive queries pass an
@@ -261,11 +261,14 @@ point even in the full executable.
 ### Interactive TUI
 
 `mant-ui` receives a complete typed bundle plus host callbacks for catalog
-discovery, document loading, and safe external URI handling. The state machine
-owns a hierarchical Outline tree, a complete-catalog finder, page search, typed link
-hit regions, and bounded back/forward history. Successful local jumps stay in
-memory; cross-document requests return exact `DocumentAddress` values to the
-host. Only HTTP(S) and `mailto` URIs may be delegated to the platform handler,
+discovery, document loading, copy delivery, and safe external URI handling.
+The state machine owns a hierarchical Outline tree, a bounded document tab
+stack, terminal-cell selections, a complete-catalog finder, page search, typed
+link hit regions, and bounded back/forward history. It emits plain-text visual
+selections or complete semantic-node Text/CommonMark requests without opening
+a system clipboard itself. Successful local jumps stay in memory;
+cross-document requests return exact `DocumentAddress` values to the host.
+Only HTTP(S) and `mailto` URIs may be delegated to the platform handler,
 without invoking a shell.
 
 ### CLI and request JSON
