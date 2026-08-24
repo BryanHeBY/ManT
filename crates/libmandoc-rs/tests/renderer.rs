@@ -216,8 +216,8 @@ fn concurrent_render_formats_isolate_output_state() {
 
 #[test]
 fn page_offset_state_does_not_cross_renderer_instances() {
-    let baseline_source = b".TH OFFSET 1\n.po\n.SH BODY\nbaseline marker\n";
-    let shifted_source = b".TH OFFSET 1\n.po 20\n.SH BODY\nshifted marker\n";
+    let baseline_source = b".TH OFFSET 1\n.SH BODY\nfirst line\n.po\nisolated marker\n";
+    let shifted_source = b".TH OFFSET 1\n.SH BODY\nfirst line\n.po 20\nisolated marker\n";
     let render_baseline = || {
         Renderer::new(RenderFormat::Ascii)
             .render_bytes("baseline.1", baseline_source)
@@ -231,14 +231,27 @@ fn page_offset_state_does_not_cross_renderer_instances() {
         .expect("render a page with an explicit offset")
         .output;
     let actual = render_baseline();
+    let marker_indent = |output: &str| {
+        output
+            .lines()
+            .find(|line| line.contains("isolated marker"))
+            .map(|line| line.len() - line.trim_start().len())
+            .expect("rendered marker line")
+    };
 
-    assert_ne!(shifted, expected);
+    assert_ne!(marker_indent(&shifted), marker_indent(&expected));
     assert_eq!(actual, expected);
 }
 
 #[test]
 fn concurrent_table_renderers_isolate_borders_and_centering() {
     const WORKERS: usize = 8;
+    const CONFIGURATIONS: [(RenderFormat, usize); 4] = [
+        (RenderFormat::Ascii, 78),
+        (RenderFormat::Utf8, 78),
+        (RenderFormat::Ascii, 200),
+        (RenderFormat::Utf8, 200),
+    ];
     let mut source =
         String::from(".TH TABLE 1\n.SH BODY\n.TS\ncenter,allbox;\nl l.\nleft\tright\n");
     for row in 0..64 {
@@ -246,34 +259,54 @@ fn concurrent_table_renderers_isolate_borders_and_centering() {
     }
     source.push_str(".TE\n");
     let source = Arc::new(source);
+    let baselines = CONFIGURATIONS
+        .iter()
+        .map(|&(format, width)| {
+            Renderer::new(format)
+                .with_width(width)
+                .render_bytes("table-baseline.1", source.as_bytes())
+                .expect("render a single-threaded table baseline")
+                .output
+        })
+        .collect::<Vec<_>>();
+    let border_indent = |output: &str, border| {
+        output
+            .lines()
+            .find(|line| line.contains(border))
+            .map(|line| line.len() - line.trim_start().len())
+            .expect("rendered table border")
+    };
+    assert_ne!(
+        border_indent(&baselines[0], '+'),
+        border_indent(&baselines[2], '+'),
+        "ASCII table widths must exercise different centering offsets"
+    );
+    assert_ne!(
+        border_indent(&baselines[1], '┌'),
+        border_indent(&baselines[3], '┌'),
+        "UTF-8 table widths must exercise different centering offsets"
+    );
+    let baselines = Arc::new(baselines);
     let start = Arc::new(Barrier::new(WORKERS));
     let workers: Vec<_> = (0..WORKERS)
         .map(|worker| {
             let source = Arc::clone(&source);
+            let baselines = Arc::clone(&baselines);
             let start = Arc::clone(&start);
             std::thread::spawn(move || {
-                let format = if worker % 2 == 0 {
-                    RenderFormat::Ascii
-                } else {
-                    RenderFormat::Utf8
-                };
+                let configuration = worker % CONFIGURATIONS.len();
+                let (format, width) = CONFIGURATIONS[configuration];
                 start.wait();
                 for _ in 0..32 {
                     let output = Renderer::new(format)
+                        .with_width(width)
                         .render_bytes(format!("table-{worker}.1"), source.as_bytes())
                         .expect("render an isolated centered table")
                         .output;
-                    match format {
-                        RenderFormat::Ascii => {
-                            assert!(output.contains('+'), "ASCII table lost its borders");
-                            assert!(!output.contains('┌'), "ASCII table used UTF-8 borders");
-                        }
-                        RenderFormat::Utf8 => {
-                            assert!(output.contains('┌'), "UTF-8 table lost its borders");
-                            assert!(!output.contains('+'), "UTF-8 table used ASCII borders");
-                        }
-                        RenderFormat::Html => unreachable!(),
-                    }
+                    assert_eq!(
+                        output, baselines[configuration],
+                        "{format:?} table at width {width} diverged from its isolated baseline"
+                    );
                 }
             })
         })
