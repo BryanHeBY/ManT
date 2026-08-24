@@ -16,6 +16,9 @@ that crate was not published for that change.
 
 - Prevent embedded `.so` requests from reading process-working-directory
   files when ManT parses untrusted manual content with includes denied.
+- Bound raw mdoc enclosure reconstruction inside `tbl` text cells and retain
+  overflow tokens as visible text instead of allowing deeply nested source to
+  overflow parser or renderer stacks.
 - Preserve formatter-owned commas when one mdoc `Fa` invocation supplies
   multiple parameters to a block-form function declaration.
 - Keep later `tbl` text-block cells aligned when an earlier empty `T{ T}` cell

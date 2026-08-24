@@ -10,6 +10,11 @@ use super::{
     parse_roff_text, plain_text, surround, text_node, wrap_emphasis, wrap_strong,
 };
 
+/// Source-backed reconstruction is a separate frontend and does not pass
+/// through libmandoc's owned-node depth cap. Match the Markdown frontend's
+/// nesting budget so hostile table text cannot create an unbounded call tree.
+const MAX_SOURCE_MDOC_DEPTH: usize = 64;
+
 /// Recover one mdoc inline request from source text flattened by `tbl`.
 ///
 /// libmandoc 1.14.6 exposes the textual payload of `T{ ... T}` cells but not
@@ -29,10 +34,10 @@ pub(in crate::mandoc) fn lower_source_mdoc_request(
         vec![SourceMdocCall {
             name: macro_name.to_owned(),
             arguments: Vec::new(),
-            enclosed: Some(parse_source_mdoc_calls("No", &arguments)),
+            enclosed: Some(parse_source_mdoc_calls("No", &arguments, 1)),
         }]
     } else {
-        parse_source_mdoc_calls(macro_name, &arguments)
+        parse_source_mdoc_calls(macro_name, &arguments, 0)
     };
     Some(render_source_mdoc_calls(&calls, default_name))
 }
@@ -44,7 +49,11 @@ struct SourceMdocCall {
     enclosed: Option<Vec<Self>>,
 }
 
-fn parse_source_mdoc_calls(first: &str, arguments: &[String]) -> Vec<SourceMdocCall> {
+fn parse_source_mdoc_calls(
+    first: &str,
+    arguments: &[String],
+    enclosure_depth: usize,
+) -> Vec<SourceMdocCall> {
     let mut calls = vec![SourceMdocCall {
         name: first.to_owned(),
         arguments: Vec::new(),
@@ -55,10 +64,26 @@ fn parse_source_mdoc_calls(first: &str, arguments: &[String]) -> Vec<SourceMdocC
         let argument = &arguments[index];
         if is_source_mdoc_macro(argument).is_some() {
             if enclosure_marks(argument).is_some() {
+                let remaining = &arguments[index + 1..];
+                let (arguments, enclosed) = if enclosure_depth >= MAX_SOURCE_MDOC_DEPTH {
+                    (remaining.to_vec(), None)
+                } else {
+                    (
+                        Vec::new(),
+                        Some(parse_source_mdoc_calls(
+                            "No",
+                            remaining,
+                            enclosure_depth + 1,
+                        )),
+                    )
+                };
                 calls.push(SourceMdocCall {
                     name: argument.clone(),
-                    arguments: Vec::new(),
-                    enclosed: Some(parse_source_mdoc_calls("No", &arguments[index + 1..])),
+                    // Once the frontend budget is exhausted, retain every
+                    // remaining token as ordinary roff text inside the last
+                    // enclosure instead of recursing or silently dropping it.
+                    arguments,
+                    enclosed,
                 });
                 break;
             }
@@ -271,7 +296,10 @@ fn is_source_mdoc_macro(name: &str) -> Option<()> {
 mod tests {
     use mant_ir::Inline;
 
-    use super::{lower_source_mdoc_request, source_external_link};
+    use super::{
+        MAX_SOURCE_MDOC_DEPTH, SourceMdocCall, lower_source_mdoc_request, parse_source_mdoc_calls,
+        source_external_link,
+    };
     use crate::inline::plain_text;
 
     #[test]
@@ -317,5 +345,33 @@ mod tests {
                 && plain_text(children) == "https://example.test/books"
                 && value == "."
         ));
+    }
+
+    #[test]
+    fn source_enclosures_stop_at_a_bounded_depth_and_retain_the_tail() {
+        let arguments = (0..2_000)
+            .map(|_| "Op".to_owned())
+            .chain(["tail-marker".to_owned()])
+            .collect::<Vec<_>>();
+        let calls = parse_source_mdoc_calls("No", &arguments, 0);
+
+        assert!(source_call_depth(&calls) <= MAX_SOURCE_MDOC_DEPTH + 2);
+
+        let nodes = lower_source_mdoc_request("Op", &arguments.join(" "), None)
+            .expect("recognize a bounded source enclosure");
+        let visible = plain_text(&nodes);
+        assert!(visible.contains("tail-marker"), "{visible}");
+        assert!(
+            visible.contains("Op Op"),
+            "overflow tokens must remain visible as text: {visible}"
+        );
+    }
+
+    fn source_call_depth(calls: &[SourceMdocCall]) -> usize {
+        calls
+            .iter()
+            .map(|call| 1 + call.enclosed.as_deref().map_or(0, source_call_depth))
+            .max()
+            .unwrap_or(0)
     }
 }
