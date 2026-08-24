@@ -203,13 +203,14 @@ fn compile_native_archive(
         // Pinned upstream 1.14.6 uses unused callback parameters and POSIX-
         // sized integer conversions that MSVC diagnoses much more broadly
         // than GCC or Clang. Compile that immutable source group with an
-        // explicit three-warning baseline, while compiling every ManT-owned
+        // explicit five-warning baseline, while compiling every ManT-owned
         // translation unit separately under the full /WX policy. Archive the
         // resulting objects together to retain the existing link boundary.
         let mut upstream_build = build.clone();
         upstream_build
             .flag("/wd4100")
             .flag("/wd4146")
+            .flag("/wd4200")
             .flag("/wd4244")
             .flag("/wd4267")
             .files(upstream_sources);

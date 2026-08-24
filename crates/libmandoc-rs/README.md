@@ -393,11 +393,12 @@ configuration.
 
 `ManT`'s project checks set `LIBMANDOC_RS_DENY_WARNINGS=1` to promote native C
 warnings to errors on every supported compiler. MSVC keeps an explicit
-four-warning baseline for pinned upstream 1.14.6 (`C4100`, `C4146`, `C4244`,
-and `C4267`), while ManT-owned shim and compatibility sources promote those
-families back to errors. This is opt-in rather than a downstream default so
-new compiler diagnostics do not make an existing crate release fail to build
-for consumers.
+five-warning baseline for pinned upstream 1.14.6 (`C4100`, `C4146`, `C4200`,
+`C4244`, and `C4267`). `C4200` covers its four C99 flexible-array members,
+which MSVC diagnoses as an extension even in C11 mode. ManT-owned shim and
+compatibility sources promote every baseline family back to errors. This is
+opt-in rather than a downstream default so new compiler diagnostics do not
+make an existing crate release fail to build for consumers.
 
 ## Licensing
 
