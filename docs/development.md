@@ -206,6 +206,14 @@ Fixed real roff sources in `tests/fixtures/roff/real/` are covered by native
 integration tests; their provenance and licenses are documented in that
 directory.
 
+The downstream native-symbol namespace audit uses GNU `nm --defined-only` and
+runs in Linux CI. macOS and Windows compile the same generated prefix map and
+retain strict native warning, link, parser, and renderer checks, but those jobs
+do not provide an equivalent exported-symbol inventory. The mixed-language
+TSAN and ASan commands below are deliberate maintainer/release checks rather
+than per-push gates; ordinary tests cannot substitute for their race and
+memory instrumentation.
+
 The file `docs/manuals/mant.md` is executable documentation. Tests parse it
 through the supported Markdown subset, require its embedded quick reference
 and semantic entries, and reject lossy fallback diagnostics.

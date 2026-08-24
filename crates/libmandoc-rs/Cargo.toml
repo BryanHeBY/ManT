@@ -37,18 +37,19 @@ render = ["dep:unicode-width"]
 serde = ["dep:serde"]
 
 [dependencies]
-flate2.workspace = true
 serde = { workspace = true, optional = true }
 unicode-width = { workspace = true, optional = true }
 zstd.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+flate2.workspace = true
 windows-sys.workspace = true
 
 [build-dependencies]
 cc = "1"
 
 [dev-dependencies]
+flate2.workspace = true
 serde_json.workspace = true
 
 [lints]
