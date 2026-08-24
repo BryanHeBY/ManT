@@ -15,7 +15,10 @@ use mant_ir::{
     visit::{self, Visit},
 };
 
-use crate::inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline};
+use crate::{
+    block::{block_layout, block_layout_mut},
+    inline::{DEFAULT_INLINE_TERM_MAX_WIDTH, plain_text, terms_fit_inline},
+};
 
 /// Annotate reliably recognizable command-line options and return every
 /// inline anchor that the navigation resolver must retain.
@@ -249,16 +252,7 @@ fn option_term_indent(block: &Block) -> Option<u16> {
 }
 
 fn block_indent(block: &Block) -> u16 {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => layout.indent_columns,
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => 0,
-    }
+    block_layout(block).map_or(0, |layout| layout.indent_columns)
 }
 
 fn shift_block_indent(block: &mut Block, origin: u16) {
@@ -270,19 +264,6 @@ fn shift_block_indent(block: &mut Block, origin: u16) {
 fn clear_block_spacing(block: Option<&mut Block>) {
     if let Some(layout) = block.and_then(block_layout_mut) {
         layout.spacing_before_lines = 0;
-    }
-}
-
-fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => Some(layout),
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
     }
 }
 

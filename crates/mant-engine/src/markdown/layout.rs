@@ -4,9 +4,10 @@
 //! leave blank-line presentation to HTML/CSS. `ManT` has no CSS layer, so this
 //! pass makes those semantics explicit before any renderer sees the document.
 
-use mant_ir::{Block, Inline, LayoutHint, Section, SourceSpan};
+use mant_ir::{Block, Inline, Section};
 
 use super::source::MarkdownSource;
+use crate::block::{block_layout_mut, block_source};
 
 /// Apply source-derived block spacing to the normalized document.
 pub(super) fn normalize_markdown_layout(
@@ -89,32 +90,5 @@ fn trim_code_framing_newline(children: &mut Vec<Inline>) {
         | Inline::Emphasis { .. }
         | Inline::Link { .. }
         | Inline::Anchor { .. } => {}
-    }
-}
-
-fn block_source(block: &Block) -> Option<SourceSpan> {
-    match block {
-        Block::Paragraph { source, .. }
-        | Block::Preformatted { source, .. }
-        | Block::List { source, .. }
-        | Block::DefinitionList { source, .. }
-        | Block::Table { source, .. }
-        | Block::Equation { source, .. }
-        | Block::VerticalSpace { source, .. }
-        | Block::ThematicBreak { source }
-        | Block::Unsupported { source, .. } => *source,
-    }
-}
-
-fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => Some(layout),
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
     }
 }

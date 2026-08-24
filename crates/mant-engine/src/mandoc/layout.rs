@@ -7,6 +7,8 @@
 use libmandoc_rs::Node;
 use mant_ir::{Block, LayoutHint};
 
+use crate::block::{block_layout, block_layout_mut};
+
 /// Update the current man(7) paragraph distance after a `.PD` request.
 pub(super) fn update_paragraph_distance(node: &Node, paragraph_distance: &mut u16) {
     if node.macro_name.as_deref() == Some("PD")
@@ -65,20 +67,6 @@ pub(super) fn set_block_spacing(block: &mut Block, lines: u16) {
     }
 }
 
-/// Return a block's layout when it has one.
-pub(super) fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => Some(layout),
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
-    }
-}
-
 /// Let an explicit vertical-space block exclusively own the following gap.
 ///
 /// Nested transparent wrappers can lower their first semantic child with a
@@ -97,16 +85,7 @@ pub(super) fn normalize_explicit_vertical_spacing(blocks: &mut [Block]) {
 
 /// Return a block's indentation when it has one.
 pub(super) fn block_indent(block: &Block) -> Option<u16> {
-    match block {
-        Block::Paragraph { layout, .. }
-        | Block::Preformatted { layout, .. }
-        | Block::List { layout, .. }
-        | Block::DefinitionList { layout, .. }
-        | Block::Table { layout, .. }
-        | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => Some(layout.indent_columns),
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
-    }
+    block_layout(block).map(|layout| layout.indent_columns)
 }
 
 /// Convert a `.PD` measurement to terminal rows using mandoc's unit ratios.

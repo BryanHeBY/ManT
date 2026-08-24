@@ -12,6 +12,7 @@ use mant_ir::{
     DiagnosticLevel, Inline, ListItem, ListKind, SourceSpan,
 };
 
+use crate::block::block_source;
 use crate::definitions::{option_names_from_terms, option_prefix};
 
 #[derive(Debug, Clone, Copy)]
@@ -857,20 +858,6 @@ fn is_explicit_placeholder(value: &str) -> bool {
         .strip_prefix('<')
         .and_then(|value| value.strip_suffix('>'))
         .is_some_and(is_placeholder)
-}
-
-fn block_source(block: &Block) -> Option<SourceSpan> {
-    match block {
-        Block::Paragraph { source, .. }
-        | Block::Preformatted { source, .. }
-        | Block::List { source, .. }
-        | Block::DefinitionList { source, .. }
-        | Block::Table { source, .. }
-        | Block::Equation { source, .. }
-        | Block::VerticalSpace { source, .. }
-        | Block::ThematicBreak { source }
-        | Block::Unsupported { source, .. } => *source,
-    }
 }
 
 fn dash_option_name(
