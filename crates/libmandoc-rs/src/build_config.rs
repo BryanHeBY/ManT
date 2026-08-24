@@ -103,6 +103,15 @@ mod tests {
     }
 
     #[test]
+    fn diagnostic_capture_never_falls_back_to_process_stderr() {
+        let shim = include_str!("../shim/mant_mandoc_shim.c");
+
+        assert!(!shim.contains("messages == NULL ? stderr : messages"));
+        assert!(shim.contains("could not create private diagnostic capture file"));
+        assert!(shim.contains("mandoc_msg_setoutfile(messages);"));
+    }
+
+    #[test]
     #[should_panic(expected = "Linux/musl")]
     fn unconfigured_linux_libc_is_rejected() {
         target_configuration("linux", "musl");

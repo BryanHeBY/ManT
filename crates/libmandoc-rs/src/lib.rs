@@ -43,6 +43,8 @@ pub const LIBMANDOC_VERSION: &str = "1.14.6";
 struct RawDocument {
     document: Document,
     diagnostics: String,
+    node_truncated: bool,
+    equation_truncated: bool,
 }
 
 #[cfg(feature = "render")]
@@ -230,6 +232,30 @@ mod tests {
             )
             .expect("parse an authored Os value");
         assert_eq!(authored.document.metadata.os.as_deref(), Some("AuthoredOS"));
+    }
+
+    #[test]
+    fn public_text_normalizes_native_layout_sentinels() {
+        let report = Parser::default()
+            .parse_bytes(
+                "visible-text.1",
+                b".Dd August 24, 2026\n.Dt VISIBLE-TEXT 1\n.Os ManT\n.Sh NAME\n.Nm visible-text\n.Nd well-known read-only thing\n",
+            )
+            .expect("parse hyphenated visible text");
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+
+        assert!(visible.join(" ").contains("well-known read-only thing"));
+        assert!(
+            find_node(&report.document.root, &|node| {
+                node.text.as_deref().is_some_and(|text| {
+                    text.chars()
+                        .any(|character| ['\u{1d}', '\u{1e}', '\u{1f}'].contains(&character))
+                })
+            })
+            .is_none(),
+            "public AST text must not expose libmandoc layout sentinels"
+        );
     }
 
     #[test]
@@ -1453,16 +1479,23 @@ mod tests {
         }
         source.push_str("deep\n");
 
-        let document = Parser::default()
+        let report = Parser::default()
             .parse_bytes("deep.1", source.as_bytes())
-            .expect("deeply nested source parses")
-            .document;
+            .expect("deeply nested source parses");
 
         // The owned tree stays well under the input nesting, proving the copy
         // stopped descending at the cap.
         assert!(
-            measured_depth(&document.root) <= 300,
+            measured_depth(&report.document.root) <= 300,
             "tree depth must be bounded by the copy cap"
+        );
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("syntax tree exceeded")),
+            "node truncation must remain observable: {:?}",
+            report.diagnostics
         );
     }
 
@@ -1484,12 +1517,11 @@ mod tests {
         }
         let source = format!(".TH DEEP 1\n.SH BODY\n.EQ\n{equation}\n.EN\n");
 
-        let document = Parser::default()
+        let report = Parser::default()
             .parse_bytes("deep-eqn.1", source.as_bytes())
-            .expect("deeply nested equation parses")
-            .document;
+            .expect("deeply nested equation parses");
 
-        let node = find_kind(&document.root, NodeKind::Equation).expect("equation node");
+        let node = find_kind(&report.document.root, NodeKind::Equation).expect("equation node");
         let rendered = node.equation.as_deref().expect("equation text");
         // The render stopped at the cap: the flattened text is far shorter than
         // the ~30k chars all 5000 `sqrt` levels would emit, proving it did not
@@ -1498,6 +1530,14 @@ mod tests {
             rendered.len() < 2_000,
             "equation text must be bounded by the copy cap, got {} bytes",
             rendered.len()
+        );
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("equation tree exceeded")),
+            "equation truncation must remain observable: {:?}",
+            report.diagnostics
         );
     }
 

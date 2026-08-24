@@ -181,6 +181,7 @@ unsafe extern "C" {
     fn mant_mandoc_document_date(document: *const CDocument) -> *const c_char;
     fn mant_mandoc_document_alias_target(document: *const CDocument) -> *const c_char;
     fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
+    fn mant_mandoc_document_equation_truncated(document: *const CDocument) -> i32;
     fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
     fn mant_mandoc_node_snapshot(
         document: *mut CDocument,
@@ -313,6 +314,7 @@ pub(super) fn render_buffer(
 }
 
 #[cfg(feature = "render")]
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render_bundle(
     root: &CStr,
     bundle: &SourceBundle,
@@ -528,6 +530,8 @@ fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
         return Err("libmandoc produced no syntax tree".to_owned());
     }
 
+    let mut node_truncated = false;
+    let root = unsafe { copy_node(document, root, 0, &mut node_truncated) }?.0;
     Ok(RawDocument {
         document: Document {
             macro_set: macro_set(unsafe { mant_mandoc_document_macroset(document) })?,
@@ -544,11 +548,13 @@ fn copy_document(pointer: *mut CDocument) -> Result<RawDocument, String> {
                 },
                 has_body: unsafe { mant_mandoc_document_has_body(document) } != 0,
             },
-            root: unsafe { copy_node(document, root, 0) }?.0,
+            root,
         },
         diagnostics: unsafe {
             optional_string(mant_mandoc_document_diagnostics(document)).unwrap_or_default()
         },
+        node_truncated,
+        equation_truncated: unsafe { mant_mandoc_document_equation_truncated(document) } != 0,
     })
 }
 
@@ -562,6 +568,25 @@ unsafe fn optional_string(pointer: *const c_char) -> Option<String> {
                 .into_owned(),
         )
     }
+}
+
+unsafe fn visible_string(pointer: *const c_char) -> Option<String> {
+    unsafe { optional_string(pointer) }.map(|text| {
+        if !text
+            .chars()
+            .any(|character| ['\u{1d}', '\u{1e}', '\u{1f}'].contains(&character))
+        {
+            return text;
+        }
+        text.chars()
+            .filter_map(|character| match character {
+                '\u{1d}' => None,
+                '\u{1e}' => Some('-'),
+                '\u{1f}' => Some(' '),
+                other => Some(other),
+            })
+            .collect()
+    })
 }
 
 fn macro_set(value: i32) -> Result<MacroSet, String> {
@@ -633,13 +658,14 @@ unsafe fn copy_node(
     document: *mut CDocument,
     pointer: *const CNode,
     depth: usize,
+    truncated: &mut bool,
 ) -> Result<(Node, *const CNode), String> {
     let mut view = std::mem::MaybeUninit::<CNodeView>::uninit();
     if unsafe { mant_mandoc_node_snapshot(document, pointer, view.as_mut_ptr()) } == 0 {
         return Err("libmandoc returned an invalid borrowed syntax node".to_owned());
     }
     let view = unsafe { view.assume_init() };
-    let text = unsafe { optional_string(view.text) };
+    let text = unsafe { visible_string(view.text) };
     let line_continuation = text.as_deref().is_some_and(ends_with_no_space_escape);
     let enclosure_open = unsafe { optional_string(view.enclosure_open) };
     let enclosure_close = unsafe { optional_string(view.enclosure_close) };
@@ -675,17 +701,21 @@ unsafe fn copy_node(
         offset: unsafe { optional_string(view.offset) },
         width: unsafe { optional_string(view.width) },
         table_cells: unsafe { copy_table_cells(document, view.table_cells) }?,
-        equation: unsafe { optional_string(view.equation) },
+        // The shim reuses this equation buffer on the next node snapshot, so
+        // copy it before descending into children or taking another snapshot.
+        equation: unsafe { visible_string(view.equation) },
         children: Vec::new(),
     };
 
     if depth + 1 < MAX_OWNED_NODE_DEPTH {
         let mut child = view.child;
         while !child.is_null() {
-            let (owned, next) = unsafe { copy_node(document, child, depth + 1) }?;
+            let (owned, next) = unsafe { copy_node(document, child, depth + 1, truncated) }?;
             node.children.push(owned);
             child = next;
         }
+    } else if !view.child.is_null() {
+        *truncated = true;
     }
     Ok((node, view.next))
 }
@@ -719,7 +749,7 @@ unsafe fn copy_table_cells(
         }
         let view = unsafe { view.assume_init() };
         cells.push(TableCell {
-            text: unsafe { optional_string(view.text) },
+            text: unsafe { visible_string(view.text) },
             text_block: view.text_block != 0,
             vertical_continuation: view.vertical_continuation != 0,
             column_span: view.column_span.try_into().unwrap_or(u16::MAX),

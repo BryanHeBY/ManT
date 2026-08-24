@@ -58,7 +58,7 @@ fn parsing_and_rendering_ignore_the_callers_process_locale() {
         "C.utf8",
     ]
     .into_iter()
-    .find_map(|locale| run_child_if_available(locale))
+    .find_map(run_child_if_available)
     .expect("the supported Unix targets provide a UTF-8 C locale");
 
     assert_eq!(normalize_selected_locale(&alternate), baseline);

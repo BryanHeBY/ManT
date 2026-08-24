@@ -14,7 +14,9 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(windows)]
 use std::io::Read;
 
-use crate::{Diagnostic, Document, RawDocument, SourceBundle, compression, diagnostics, ffi};
+use crate::{
+    Diagnostic, DiagnosticLevel, Document, RawDocument, SourceBundle, compression, diagnostics, ffi,
+};
 
 /// Selects the macro language before parsing begins.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -129,7 +131,8 @@ impl std::error::Error for ParseError {}
 /// Independent calls may run concurrently. The bundled C parser keeps its
 /// mutable session state in static thread-local storage; this type does not
 /// support recursive re-entry on one OS thread. Owned node and equation copies
-/// stop after 256 levels and omit deeper descendants from pathological input.
+/// stop after 256 levels, omit deeper descendants from pathological input, and
+/// report either truncation through [`ParseReport::diagnostics`].
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Parser {
     options: ParseOptions,
@@ -373,9 +376,26 @@ impl Parser {
             kind: ParseErrorKind::Parse,
             message,
         })?;
+        let mut findings = diagnostics::parse_diagnostics(&raw.diagnostics);
+        if raw.node_truncated {
+            findings.push(Diagnostic {
+                level: DiagnosticLevel::Warning,
+                message: "owned syntax tree exceeded the 256-level copy limit; deeper descendants were omitted"
+                    .into(),
+                location: None,
+            });
+        }
+        if raw.equation_truncated {
+            findings.push(Diagnostic {
+                level: DiagnosticLevel::Warning,
+                message: "equation tree exceeded the 256-level copy limit; deeper equation content was omitted"
+                    .into(),
+                location: None,
+            });
+        }
         Ok(ParseReport {
             document: raw.document,
-            diagnostics: diagnostics::parse_diagnostics(&raw.diagnostics),
+            diagnostics: findings,
         })
     }
 

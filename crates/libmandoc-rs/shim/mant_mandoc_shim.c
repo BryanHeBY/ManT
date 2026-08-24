@@ -45,6 +45,7 @@ struct mant_mandoc_document {
 	struct mparse		*parser;
 	const struct roff_meta	*meta;
 	char			*equation;
+	int			 equation_truncated;
 #ifdef MANT_MANDOC_RENDER
 	struct mant_mandoc_output *output;
 	int			 render_status;
@@ -134,7 +135,7 @@ static int is_safe_relative_path(const char *);
 #endif
 static void snapshot_normalized_data(struct mant_mandoc_node_view *,
     const struct roff_node *);
-static char *copy_equation(const struct eqn_box *);
+static char *copy_equation(const struct eqn_box *, int *);
 #ifdef MANT_MANDOC_RENDER
 static int render_document(struct mant_mandoc_document *,
     const struct roff_meta *, int, size_t, int, size_t);
@@ -270,12 +271,17 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		options |= MPARSE_SO;
 
 	messages = tmpfile();
+	if (messages == NULL) {
+		document->error = copy_string(
+		    "could not create private diagnostic capture file");
+		return document;
+	}
 #if HAVE_PROGNAME
 	pthread_once(&mant_progname_once, set_mant_progname);
 #else
 	setprogname("mant");
 #endif
-	mandoc_msg_setoutfile(messages == NULL ? stderr : messages);
+	mandoc_msg_setoutfile(messages);
 	mandoc_msg_setmin(MANDOCERR_BASE);
 	source_resolver = resolver;
 	source_resolver_context = resolver_context;
@@ -340,10 +346,8 @@ cleanup:
 #endif
 	mandoc_msg_setinfilename(NULL);
 	mandoc_msg_setoutfile(stderr);
-	if (messages != NULL) {
-		document->diagnostics = read_diagnostics(messages);
-		fclose(messages);
-	}
+	document->diagnostics = read_diagnostics(messages);
+	fclose(messages);
 	if (parser != NULL)
 		mparse_free(parser);
 	mchars_free();
@@ -1021,15 +1025,16 @@ struct text_buffer {
 };
 
 static int append_text(struct text_buffer *, const char *);
-static int append_equation(struct text_buffer *, const struct eqn_box *, int);
+static int append_equation(struct text_buffer *, const struct eqn_box *, int,
+    int *);
 
 static char *
-copy_equation(const struct eqn_box *box)
+copy_equation(const struct eqn_box *box, int *truncated)
 {
 	struct text_buffer	buffer;
 
 	memset(&buffer, 0, sizeof(buffer));
-	if (!append_equation(&buffer, box, 0)) {
+	if (!append_equation(&buffer, box, 0, truncated)) {
 		free(buffer.data);
 		return NULL;
 	}
@@ -1037,7 +1042,8 @@ copy_equation(const struct eqn_box *box)
 }
 
 static int
-append_equation(struct text_buffer *buffer, const struct eqn_box *box, int depth)
+append_equation(struct text_buffer *buffer, const struct eqn_box *box,
+    int depth, int *truncated)
 {
 	const struct eqn_box	*child;
 	const char		*operator;
@@ -1051,8 +1057,10 @@ append_equation(struct text_buffer *buffer, const struct eqn_box *box, int depth
 	 * and keep the text gathered so far; deeper eqn content is dropped, not
 	 * a whole-page failure. Real equations nest only a handful of levels.
 	 */
-	if (depth >= MANT_MANDOC_MAX_COPY_DEPTH)
+	if (depth >= MANT_MANDOC_MAX_COPY_DEPTH) {
+		*truncated = 1;
 		return 1;
+	}
 	if (box->pos == EQNPOS_SQRT && !append_text(buffer, "sqrt("))
 		return 0;
 	if (!append_text(buffer, box->left) ||
@@ -1061,32 +1069,36 @@ append_equation(struct text_buffer *buffer, const struct eqn_box *box, int depth
 		return 0;
 	child = box->first;
 	if (box->pos == EQNPOS_SQRT) {
-		if (child != NULL && !append_equation(buffer, child, depth + 1))
+		if (child != NULL &&
+		    !append_equation(buffer, child, depth + 1, truncated))
 			return 0;
 	} else if (box->type == EQN_SUBEXPR && child != NULL &&
 	    box->pos != EQNPOS_NONE) {
-		if (!append_equation(buffer, child, depth + 1))
+		if (!append_equation(buffer, child, depth + 1, truncated))
 			return 0;
 		operator = box->pos == EQNPOS_OVER ? " / " :
 		    box->pos == EQNPOS_SUP || box->pos == EQNPOS_TO ? " ^ " : " _ ";
 		if (!append_text(buffer, operator))
 			return 0;
 		child = child->next;
-		if (child != NULL && !append_equation(buffer, child, depth + 1))
+		if (child != NULL &&
+		    !append_equation(buffer, child, depth + 1, truncated))
 			return 0;
 		if (child != NULL &&
 		    (box->pos == EQNPOS_FROMTO || box->pos == EQNPOS_SUBSUP)) {
 			child = child->next;
 			if (child != NULL &&
 			    (!append_text(buffer, " ^ ") ||
-			     !append_equation(buffer, child, depth + 1)))
+			     !append_equation(buffer, child, depth + 1,
+			     truncated)))
 				return 0;
 		}
 	} else {
 		for (; child != NULL; child = child->next) {
 			if (child != box->first && !append_text(buffer, " "))
 				return 0;
-			if (!append_equation(buffer, child, depth + 1))
+			if (!append_equation(buffer, child, depth + 1,
+			    truncated))
 				return 0;
 		}
 	}
@@ -1266,6 +1278,13 @@ mant_mandoc_document_has_body(const struct mant_mandoc_document *document)
 	return document == NULL ? 0 : document_has_body(document->meta);
 }
 
+int
+mant_mandoc_document_equation_truncated(
+    const struct mant_mandoc_document *document)
+{
+	return document == NULL ? 0 : document->equation_truncated;
+}
+
 const struct mant_mandoc_node *
 mant_mandoc_document_root(const struct mant_mandoc_document *document)
 {
@@ -1301,8 +1320,11 @@ mant_mandoc_node_snapshot(struct mant_mandoc_document *document,
 		view->table_cells =
 		    (const struct mant_mandoc_table_cell *)source->span->first;
 	else if (source->type == ROFFT_EQN) {
+		/* The returned equation pointer is borrowed only until the next
+		 * node snapshot on this document replaces the shared buffer. */
 		free(document->equation);
-		document->equation = copy_equation(source->eqn);
+		document->equation = copy_equation(source->eqn,
+		    &document->equation_truncated);
 		view->equation = document->equation;
 	}
 	view->child = (const struct mant_mandoc_node *)source->child;

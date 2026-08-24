@@ -162,6 +162,8 @@ const char *mant_mandoc_document_name(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_date(const struct mant_mandoc_document *);
 const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document *);
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
+int mant_mandoc_document_equation_truncated(
+    const struct mant_mandoc_document *);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
 int mant_mandoc_node_snapshot(struct mant_mandoc_document *,

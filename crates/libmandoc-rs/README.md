@@ -91,10 +91,14 @@ below that root, and never falls back to the process working directory. The
 approved root itself may be a link. Unix opens included files relative to
 directory descriptors; Windows reads them through the Rust boundary, verifies
 the opened file's final path remains below the approved root, and then passes
-owned bytes to memory-only libmandoc. To avoid host filesystem access
-entirely, build a `SourceBundle` of normalized relative paths and call
-`parse_bundle`; exact bundle paths and paths beside the including source are
-resolved without callbacks or filesystem fallback.
+owned bytes to memory-only libmandoc. To avoid host source-file access, build a
+`SourceBundle` of normalized relative paths and call `parse_bundle`; exact
+bundle paths and paths beside the including source are resolved without
+callbacks or filesystem fallback. Diagnostic capture currently uses one
+private anonymous temporary file per native call on platforms where
+`tmpfile(3)` is filesystem-backed. If that capture cannot be created, the call
+returns a typed parse/render failure instead of writing diagnostics to the host
+process's standard error.
 
 ```rust
 use libmandoc_rs::{Parser, SourceBundle};
@@ -131,9 +135,10 @@ target configurations also lock roff syntax character classes to ASCII, and
 validated manual dates use fixed English month names, so a host process calling
 `setlocale` cannot change the owned AST, diagnostics, or renderer bytes. The
 Rust ownership transfer and native equation expansion stop descending after
-256 levels. Pathological input beyond that defensive cap still returns a
-successful, finite report but omits deeper descendants; ordinary manuals
-remain far below the limit.
+256 syntax-tree or equation-box levels. Pathological input beyond either
+defensive cap still returns a successful, finite report and omits deeper
+descendants, while appending an explicit warning to `ParseReport::diagnostics`;
+ordinary manuals remain far below both limits.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.

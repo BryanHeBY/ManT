@@ -183,7 +183,8 @@ pub struct Node {
     pub kind: NodeKind,
     /// Source macro name, without the leading dot, when applicable.
     pub macro_name: Option<String>,
-    /// Visible text carried by a text node.
+    /// Visible text carried by a text node, with libmandoc's internal break,
+    /// discretionary-hyphen, and non-breaking-space sentinels normalized.
     pub text: Option<String>,
     /// Canonical same-document tag assigned during libmandoc validation.
     pub tag: Option<String>,
