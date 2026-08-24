@@ -81,8 +81,10 @@ fn deny_policy_rejects_embedded_includes_without_a_cwd_fallback() {
     })
     .parse_bytes(
         "embedded.1",
-        format!(".TH EMBEDDED 1\n.SH BODY\nbefore\n.so {identifier}/secret.1\n.\\\" trailing\n")
-            .as_bytes(),
+        format!(
+            ".TH EMBEDDED 1\n.SH BODY\nbefore\n.so {identifier}/secret.1\nafter denied include\n"
+        )
+        .as_bytes(),
     )
     .expect("retain the surrounding manual after denying an include");
     fs::remove_dir_all(&secret_dir).expect("remove denied include directory");
@@ -90,7 +92,9 @@ fn deny_policy_rejects_embedded_includes_without_a_cwd_fallback() {
     let mut text = String::new();
     visible_text(&report.document.root, &mut text);
     assert!(text.contains("before"));
+    assert!(text.contains("after denied include"));
     assert!(!text.contains("PRIVATE-INCLUDE-MARKER"));
+    assert!(!text.contains("See the file"));
     assert!(
         report
             .diagnostics

@@ -416,6 +416,11 @@ rerun:
 				    mandoc_strdup(ln.buf + of);
 				goto out;
 			}
+			if ( ! (curp->options & MPARSE_SO)) {
+				mandoc_msg(MANDOCERR_SO_FAIL, curp->line, of,
+				    ".so %s: file inclusion disabled", ln.buf + of);
+				break;
+			}
 			bundle_status = mant_mandoc_read_bundle(curp,
 			    ln.buf + of);
 			if (bundle_status > 0)

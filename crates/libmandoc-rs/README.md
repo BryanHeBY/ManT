@@ -297,6 +297,9 @@ the ordered patches in `patches/series`:
 - `0021-isolate-terminal-renderer-state.patch` moves table borders, centered
   table offsets, and roff page-offset history from C statics into each terminal
   renderer, preventing both cross-thread races and same-thread document leaks.
+- `0022-keep-denied-includes-diagnostic-only.patch` keeps an embedded `.so`
+  rejected by parser policy observable as a diagnostic without synthesizing
+  the rejected target path into visible document prose.
 
 Each is a narrow parser, renderer-boundary, or portability correction. They do
 not create a separately maintained formatter. `scripts/sync-vendor --verify`

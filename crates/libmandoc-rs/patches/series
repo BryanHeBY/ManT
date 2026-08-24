@@ -28,3 +28,4 @@
 0019-share-input-recursion-depth.patch
 0020-bound-mdoc-macro-recursion.patch
 0021-isolate-terminal-renderer-state.patch
+0022-keep-denied-includes-diagnostic-only.patch
