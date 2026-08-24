@@ -122,6 +122,7 @@ static struct mant_mandoc_document *parse_bundle_mode(const char *,
     const struct mant_mandoc_source *, size_t, int, const char *, int);
 static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
+static char *normalize_requested_bundle_path(const char *);
 static int is_safe_bundle_path(const char *);
 static unsigned int snapshot_node_flags(const struct roff_node *);
 static int document_has_body(const struct roff_meta *);
@@ -503,23 +504,23 @@ term_tag_write(struct roff_node *node, size_t line)
 #endif
 
 int
-mant_mandoc_read_bundle(struct mparse *parser, const char *path)
+mant_mandoc_read_bundle(struct mparse *parser, const char *requested_path)
 {
 	const struct mant_mandoc_source	*source;
 	struct mant_mandoc_resolved_source resolved;
 	const char			*current, *slash;
 	unsigned char			*resolved_data;
 	char				*resolved_path;
+	char				*path;
 	char				*beside;
 	size_t				 prefix_length;
-	int				 status;
+	int				 error_number, status;
 
 	if (bundle_sources == NULL && source_resolver == NULL)
 		return 0;
-	if (!is_safe_bundle_path(path)) {
-		errno = EPERM;
+	path = normalize_requested_bundle_path(requested_path);
+	if (path == NULL)
 		return -1;
-	}
 	if (bundle_sources == NULL) {
 		memset(&resolved, 0, sizeof(resolved));
 		current = mandoc_msg_getinfilename();
@@ -528,19 +529,22 @@ mant_mandoc_read_bundle(struct mparse *parser, const char *path)
 		if (status <= 0) {
 			switch (status) {
 			case -2:
-				errno = EPERM;
+				error_number = EPERM;
 				break;
 			case -3:
-				errno = EIO;
+				error_number = EIO;
 				break;
 			default:
-				errno = ENOENT;
+				error_number = ENOENT;
 				break;
 			}
+			free(path);
+			errno = error_number;
 			return -1;
 		}
 		if (resolved.path == NULL || resolved.data == NULL ||
 		    !is_safe_bundle_path(resolved.path)) {
+			free(path);
 			errno = EINVAL;
 			return -1;
 		}
@@ -550,6 +554,7 @@ mant_mandoc_read_bundle(struct mparse *parser, const char *path)
 		if (resolved_path == NULL || resolved_data == NULL) {
 			free(resolved_path);
 			free(resolved_data);
+			free(path);
 			errno = ENOMEM;
 			return -1;
 		}
@@ -559,6 +564,7 @@ mant_mandoc_read_bundle(struct mparse *parser, const char *path)
 		    resolved_path);
 		free(resolved_data);
 		free(resolved_path);
+		free(path);
 		return 1;
 	}
 	source = find_bundle_source(path);
@@ -568,6 +574,7 @@ mant_mandoc_read_bundle(struct mparse *parser, const char *path)
 		prefix_length = (size_t)(slash - current + 1);
 		beside = malloc(prefix_length + strlen(path) + 1);
 		if (beside == NULL) {
+			free(path);
 			errno = ENOMEM;
 			return -1;
 		}
@@ -577,10 +584,12 @@ mant_mandoc_read_bundle(struct mparse *parser, const char *path)
 		free(beside);
 	}
 	if (source == NULL) {
+		free(path);
 		errno = ENOENT;
 		return -1;
 	}
 	mparse_readmem(parser, source->data, source->length, source->path);
+	free(path);
 	return 1;
 }
 
@@ -616,9 +625,60 @@ is_safe_bundle_path(const char *path)
 		    (end - component == 2 && component[0] == '.' &&
 		    component[1] == '.'))
 			return 0;
+		if (*end == '/' && end[1] == '\0')
+			return 0;
 		component = *end == '/' ? end + 1 : end;
 	}
 	return 1;
+}
+
+/* Normalize harmless current-directory components in an untrusted request. */
+static char *
+normalize_requested_bundle_path(const char *path)
+{
+	const char	*component, *end;
+	char		*normalized, *output;
+	size_t		 length;
+
+	if (path == NULL || *path == '\0' || *path == '/' ||
+	    strchr(path, '\\') != NULL) {
+		errno = EPERM;
+		return NULL;
+	}
+	length = strlen(path);
+	normalized = malloc(length + 1);
+	if (normalized == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	output = normalized;
+	component = path;
+	while (*component != '\0') {
+		end = component;
+		while (*end != '\0' && *end != '/')
+			end++;
+		if (end == component ||
+		    (end - component == 2 && component[0] == '.' &&
+		    component[1] == '.') ||
+		    (*end == '/' && end[1] == '\0'))
+			goto unsafe;
+		if (!(end - component == 1 && component[0] == '.')) {
+			if (output != normalized)
+				*output++ = '/';
+			memcpy(output, component, (size_t)(end - component));
+			output += end - component;
+		}
+		component = *end == '/' ? end + 1 : end;
+	}
+	if (output == normalized)
+		goto unsafe;
+	*output = '\0';
+	return normalized;
+
+unsafe:
+	free(normalized);
+	errno = EPERM;
+	return NULL;
 }
 
 #ifndef MANDOC_MEMORY_ONLY

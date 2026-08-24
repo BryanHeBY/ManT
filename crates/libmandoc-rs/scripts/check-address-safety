@@ -56,6 +56,15 @@ env \
   ASAN_OPTIONS="$sanitizer_options" \
   cargo +nightly test --locked -Zbuild-std --target "$target" \
     --package libmandoc-rs --features render \
+    source_bundle_normalizes_current_directory_and_resolves_same_directory_includes
+env \
+  CARGO_TARGET_DIR="$sanitizer_target_dir" \
+  LIBMANDOC_RS_ASAN=1 \
+  RUSTFLAGS=-Zsanitizer=address \
+  RUSTDOCFLAGS=-Zsanitizer=address \
+  ASAN_OPTIONS="$sanitizer_options" \
+  cargo +nightly test --locked -Zbuild-std --target "$target" \
+    --package libmandoc-rs --features render \
     owned_transfer_survives_parser_release_for_real_fixtures
 env \
   CARGO_TARGET_DIR="$sanitizer_target_dir" \

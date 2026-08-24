@@ -105,7 +105,10 @@ owned bytes to memory-only libmandoc. Both an explicit `.so target.gz` and the
 usual `.so target` fallback to `target.gz` are decoded on Windows. To avoid
 host source-file access, build a `SourceBundle` of normalized relative paths
 and call `parse_bundle`; exact bundle paths and paths beside the including
-source are resolved without callbacks or filesystem fallback. Diagnostic
+source are resolved without callbacks or filesystem fallback. Harmless `.`
+components in an `.so` request are normalized before either the virtual bundle
+or strict Windows root is consulted; `..`, absolute paths, backslashes, and
+empty components remain rejected. Diagnostic
 capture currently uses one
 private anonymous temporary file per native call on platforms where
 `tmpfile(3)` is filesystem-backed. If that capture cannot be created, the call

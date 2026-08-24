@@ -828,13 +828,13 @@ mod tests {
     }
 
     #[test]
-    fn source_bundle_resolves_exact_and_same_directory_includes_without_filesystem_access() {
+    fn source_bundle_normalizes_current_directory_and_resolves_same_directory_includes() {
         let mut bundle = SourceBundle::new();
         bundle
             .insert("man1/alias.1", b".so man1/redirect.1\n".to_vec())
             .expect("insert root source");
         bundle
-            .insert("man1/redirect.1", b".so target.1\n".to_vec())
+            .insert("man1/redirect.1", b".so ./target.1\n".to_vec())
             .expect("insert redirect source");
         bundle
             .insert(
