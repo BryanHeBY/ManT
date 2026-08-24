@@ -367,6 +367,23 @@ fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
 }
 
 #[test]
+fn mcp_sdk_and_generated_macros_use_the_same_exact_release() {
+    let root = include_str!("../../../Cargo.toml");
+    let exact_version = |prefix: &str| {
+        root.lines()
+            .find_map(|line| {
+                let suffix = line.strip_prefix(prefix)?;
+                suffix.split_once('"').map(|(version, _)| version)
+            })
+            .unwrap_or_else(|| panic!("missing exact dependency prefix {prefix}"))
+    };
+
+    let sdk = exact_version("rmcp = { version = \"=");
+    let macros = exact_version("rmcp-macros = \"=");
+    assert_eq!(sdk, macros, "rmcp and rmcp-macros releases diverged");
+}
+
+#[test]
 fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
     let publish = include_str!("../../../scripts/publish-crates.sh").replace("\r\n", "\n");
     assert!(publish.contains(

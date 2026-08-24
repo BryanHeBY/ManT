@@ -99,7 +99,7 @@ cargo deny check
 ```
 
 Native distribution notices are generated from the same locked, multi-target
-graph with cargo-about 0.9.1. After changing dependencies, regenerate the
+graph with cargo-about 0.9.2. After changing dependencies, regenerate the
 checked-in report and review its package and license mapping:
 
 ```sh

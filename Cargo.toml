@@ -49,8 +49,8 @@ minus = { version = "5.7.2", default-features = false, features = ["search", "st
 pulldown-cmark = { version = "0.13.4", default-features = false }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 # Keep the SDK and its generated glue on the same upstream release.
-rmcp = { version = "=3.1.2", default-features = false, features = ["macros", "server", "transport-io"] }
-rmcp-macros = "=3.1.2"
+rmcp = { version = "=3.1.4", default-features = false, features = ["macros", "server", "transport-io"] }
+rmcp-macros = "=3.1.4"
 schemars = "=1.2.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

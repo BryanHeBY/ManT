@@ -11,13 +11,13 @@ license_tmp=$(mktemp)
 trap 'rm -f "$license_tmp"' EXIT
 
 command -v cargo-about >/dev/null 2>&1 || {
-  printf 'cargo-about is required; install version 0.9.1\n' >&2
+  printf 'cargo-about is required; install version 0.9.2\n' >&2
   exit 1
 }
 
 about_version=$(cargo about --version)
-[[ $about_version == "cargo-about 0.9.1" ]] || {
-  printf 'cargo-about 0.9.1 is required, found: %s\n' "$about_version" >&2
+[[ $about_version == "cargo-about 0.9.2" ]] || {
+  printf 'cargo-about 0.9.2 is required, found: %s\n' "$about_version" >&2
   exit 1
 }
 
