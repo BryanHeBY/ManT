@@ -404,6 +404,36 @@ mod tests {
         assert_eq!(report.document.metadata.title.as_deref(), Some("GZIP-MANT"));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_parser_uses_native_gzip_fallback_for_top_level_files() {
+        use flate2::{Compression as GzipCompression, write::GzEncoder};
+
+        let requested = source_path("gzip-fallback-session");
+        let mut compressed_path = requested.as_os_str().to_os_string();
+        compressed_path.push(".gz");
+        let compressed_path = std::path::PathBuf::from(compressed_path);
+        let mut encoder = GzEncoder::new(Vec::new(), GzipCompression::fast());
+        encoder
+            .write_all(b".TH GZIP-FALLBACK 1\n.SH NAME\ngzip-fallback \\- compressed manual\n")
+            .expect("encode fallback source");
+        fs::write(
+            &compressed_path,
+            encoder.finish().expect("finish gzip source"),
+        )
+        .expect("write fallback source");
+
+        let report = Parser::default()
+            .parse_file(&requested)
+            .expect("parse the implicit .gz fallback");
+        fs::remove_file(compressed_path).expect("remove gzip fallback source");
+
+        assert_eq!(
+            report.document.metadata.title.as_deref(),
+            Some("GZIP-FALLBACK")
+        );
+    }
+
     #[test]
     fn parser_accepts_the_date_formats_used_by_libmandoc() {
         for (date, normalized, normalized_with_style) in [
@@ -436,6 +466,37 @@ mod tests {
         }
     }
 
+    #[test]
+    fn parser_normalizes_dates_consistently_across_supported_targets() {
+        for (date, normalized) in [
+            ("February 30, 2026", "March 2, 2026"),
+            ("Jul  2, 2026", "July 2, 2026"),
+            ("1-1-1", "1-1-1"),
+            ("0000-01-01", "0000-01-01"),
+            ("January 1, 1960", "January 1, 1960"),
+        ] {
+            let source =
+                format!(".TH PORTABLE-DATE 1 \"{date}\"\n.SH NAME\nportable-date \\- portable\n");
+            let report = Parser::default()
+                .parse_bytes("portable-date.1", source.as_bytes())
+                .expect("parse a portable manual date");
+
+            assert_eq!(
+                report.document.metadata.date.as_deref(),
+                Some(normalized),
+                "date input {date}"
+            );
+            assert!(
+                report
+                    .diagnostics
+                    .iter()
+                    .all(|diagnostic| !diagnostic.message.contains("bad date argument")),
+                "date input {date}: {:?}",
+                report.diagnostics
+            );
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_rejects_ambient_source_tree_but_accepts_memory_parsing() {
@@ -451,6 +512,7 @@ mod tests {
         .parse_bytes("memory.1", b".so target.1\n")
         .expect_err("reject ambient source-tree inclusion");
         assert_eq!(error.kind, super::ParseErrorKind::Unsupported);
+        assert_eq!(error.path, std::path::Path::new("memory.1"));
     }
 
     #[test]
@@ -1006,10 +1068,21 @@ mod tests {
             target.finish().expect("finish included source"),
         )
         .expect("write compressed included source");
+        let mut explicit = GzEncoder::new(Vec::new(), GzipCompression::fast());
+        explicit
+            .write_all(b".SH EXPLICIT\nexplicit compressed content\n")
+            .expect("compress explicitly named include");
+        fs::write(
+            man1.join("explicit.1.gz"),
+            explicit.finish().expect("finish explicit include"),
+        )
+        .expect("write explicitly named compressed include");
         let source = man1.join("source.1.gz");
         let mut source_bytes = GzEncoder::new(Vec::new(), GzipCompression::fast());
         source_bytes
-            .write_all(b".TH SOURCE 1\n.SH NAME\nsource \\- include fixture\n.so target.1\n")
+            .write_all(
+                b".TH SOURCE 1\n.SH NAME\nsource \\- include fixture\n.so target.1\n.so explicit.1.gz\n",
+            )
             .expect("compress source manual");
         fs::write(
             &source,
@@ -1028,6 +1101,7 @@ mod tests {
         let mut visible = Vec::new();
         collect_visible_text(&report.document.root, &mut visible);
         assert!(visible.contains(&"compressed relative content"));
+        assert!(visible.contains(&"explicit compressed content"));
         assert!(
             report
                 .diagnostics
@@ -1101,6 +1175,47 @@ mod tests {
                 .diagnostics
                 .iter()
                 .all(|diagnostic| !diagnostic.message.contains(".so request failed"))
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_source_paths_resolve_beside_a_differently_cased_root() {
+        let root =
+            std::env::temp_dir().join(format!("libmandoc-rs-cased-windows-root-{}", process::id()));
+        let section = root.join("man1");
+        fs::create_dir_all(&section).expect("create cased Windows root");
+        fs::write(
+            section.join("target.1"),
+            ".TH CASED-WINDOWS-ROOT 1\n.SH NAME\ncased-root \\- included\n",
+        )
+        .expect("write cased include target");
+        let alias = section.join("alias.1");
+        fs::write(&alias, ".so ./target.1\n").expect("write cased alias");
+        let differently_cased_root = std::path::PathBuf::from(
+            root.to_string_lossy()
+                .chars()
+                .map(|character| {
+                    if character.is_ascii_lowercase() {
+                        character.to_ascii_uppercase()
+                    } else {
+                        character.to_ascii_lowercase()
+                    }
+                })
+                .collect::<String>(),
+        );
+
+        let report = Parser::new(ParseOptions {
+            includes: IncludePolicy::Root(differently_cased_root),
+            compression: Compression::Plain,
+        })
+        .parse_file(&alias)
+        .expect("resolve beside a source through a differently cased root");
+        fs::remove_dir_all(root).expect("remove cased Windows root");
+
+        assert_eq!(
+            report.document.metadata.title.as_deref(),
+            Some("CASED-WINDOWS-ROOT")
         );
     }
 
@@ -1187,13 +1302,13 @@ mod tests {
         ));
         let includes = base.join("includes");
         fs::create_dir_all(&includes).expect("create explicit include root");
-        let outside = base.join("outside.1");
+        let target = includes.join("real.1");
         fs::write(
-            &outside,
-            ".TH OUTSIDE 1\n.SH NAME\noutside \\- must not be included\n",
+            &target,
+            ".TH REPARSE-TARGET 1\n.SH NAME\nreparse-target \\- must not be included\n",
         )
-        .expect("write outside target");
-        if let Err(error) = symlink_file(&outside, includes.join("target.1")) {
+        .expect("write in-root target");
+        if let Err(error) = symlink_file(&target, includes.join("target.1")) {
             let privilege_not_held = error
                 .raw_os_error()
                 .and_then(|code| u32::try_from(code).ok())
@@ -1215,7 +1330,18 @@ mod tests {
         fs::remove_dir_all(base).expect("remove temporary manual tree");
 
         match result {
-            Ok(report) => assert_ne!(report.document.metadata.title.as_deref(), Some("OUTSIDE")),
+            Ok(report) => {
+                assert_ne!(
+                    report.document.metadata.title.as_deref(),
+                    Some("REPARSE-TARGET")
+                );
+                assert!(
+                    report
+                        .diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.message.contains(".so request failed"))
+                );
+            }
             Err(error) => assert_eq!(error.kind, super::ParseErrorKind::Parse),
         }
     }

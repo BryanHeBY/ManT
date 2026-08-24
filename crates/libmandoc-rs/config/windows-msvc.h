@@ -25,6 +25,8 @@
 #define strncasecmp _strnicmp
 #define strdup _strdup
 #define strptime mant_strptime
+#define _mkgmtime64 mant_timegm
+#define gmtime_s mant_gmtime_s
 
 #define HAVE_DIRENT_NAMLEN 0
 #define HAVE_ENDIAN 0
@@ -81,3 +83,5 @@ extern char *strndup(const char *, size_t);
 extern long long strtonum(const char *, long long, long long, const char **);
 extern int vasprintf(char **, const char *, va_list);
 extern char *mant_strptime(const char *, const char *, struct tm *);
+extern time_t mant_timegm(struct tm *);
+extern int mant_gmtime_s(struct tm *, const time_t *);

@@ -2,6 +2,9 @@
 
 use std::io::{self, Read};
 
+#[cfg(windows)]
+use std::{fs::File, path::Path};
+
 /// Maximum decoded bytes retained from one Rust-managed compressed source.
 pub const MAX_DECOMPRESSED_SOURCE_BYTES: usize = 16 * 1024 * 1024;
 
@@ -16,6 +19,25 @@ pub(crate) fn decode_gzip(reader: impl Read) -> io::Result<Vec<u8>> {
         flate2::read::MultiGzDecoder::new(reader),
         MAX_DECOMPRESSED_SOURCE_BYTES,
     )
+}
+
+#[cfg(windows)]
+pub(crate) fn open_auto_file(path: &Path) -> io::Result<(File, bool)> {
+    match File::open(path) {
+        Ok(file) => Ok((
+            file,
+            path.extension().is_some_and(|extension| extension == "gz"),
+        )),
+        Err(error)
+            if error.kind() == io::ErrorKind::NotFound
+                && !path.extension().is_some_and(|extension| extension == "gz") =>
+        {
+            let mut compressed = path.as_os_str().to_os_string();
+            compressed.push(".gz");
+            File::open(compressed).map(|file| (file, true))
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn read_bounded(reader: impl Read, limit: usize) -> io::Result<Vec<u8>> {

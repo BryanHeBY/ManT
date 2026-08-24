@@ -11,6 +11,7 @@ const LINUX_COMPAT_SOURCES: &[&str] = &[
 
 const MACOS_COMPAT_SOURCES: &[&str] = &[
     "compat_ohash.c",
+    "compat_progname.c",
     "compat_reallocarray.c",
     "compat_recallocarray.c",
 ];
@@ -109,6 +110,20 @@ mod tests {
         assert!(!shim.contains("messages == NULL ? stderr : messages"));
         assert!(shim.contains("could not create private diagnostic capture file"));
         assert!(shim.contains("mandoc_msg_setoutfile(messages);"));
+    }
+
+    #[test]
+    fn target_specific_process_state_is_replaced_with_local_compatibility() {
+        let macos = include_str!("../config/macos.h");
+        assert!(MACOS_COMPAT_SOURCES.contains(&"compat_progname.c"));
+        assert!(macos.contains("#define HAVE_PROGNAME 0"));
+
+        let windows = include_str!("../config/windows-msvc.h");
+        let compatibility = include_str!("../shim/windows_compat.c");
+        assert!(windows.contains("#define _mkgmtime64 mant_timegm"));
+        assert!(windows.contains("#define gmtime_s mant_gmtime_s"));
+        assert!(compatibility.contains("mant_timegm(struct tm *value)"));
+        assert!(compatibility.contains("mant_gmtime_s(struct tm *result"));
     }
 
     #[test]

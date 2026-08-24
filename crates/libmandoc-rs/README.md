@@ -78,7 +78,8 @@ Use `Parser::parse_bytes` if the caller owns the source transport. Its auto
 mode recognizes plain input and zstd frames; callers must decompress gzip byte
 streams first or pass the file to `parse_file`. Unix can retain libmandoc's
 native gzip file transport; Windows decodes gzip files in Rust before entering
-the memory parser.
+the memory parser and preserves libmandoc's `<path>.gz` fallback when the
+requested top-level path does not exist.
 
 `IncludePolicy::Deny` is the default. On Unix, `SourceTree` preserves
 libmandoc-compatible lookup beside the source, at the surrounding manual-tree
@@ -91,10 +92,12 @@ below that root, and never falls back to the process working directory. The
 approved root itself may be a link. Unix opens included files relative to
 directory descriptors; Windows reads them through the Rust boundary, verifies
 the opened file's final path remains below the approved root, and then passes
-owned bytes to memory-only libmandoc. To avoid host source-file access, build a
-`SourceBundle` of normalized relative paths and call `parse_bundle`; exact
-bundle paths and paths beside the including source are resolved without
-callbacks or filesystem fallback. Diagnostic capture currently uses one
+owned bytes to memory-only libmandoc. Both an explicit `.so target.gz` and the
+usual `.so target` fallback to `target.gz` are decoded on Windows. To avoid
+host source-file access, build a `SourceBundle` of normalized relative paths
+and call `parse_bundle`; exact bundle paths and paths beside the including
+source are resolved without callbacks or filesystem fallback. Diagnostic
+capture currently uses one
 private anonymous temporary file per native call on platforms where
 `tmpfile(3)` is filesystem-backed. If that capture cannot be created, the call
 returns a typed parse/render failure instead of writing diagnostics to the host
@@ -133,9 +136,13 @@ value is inexpensive immutable configuration; this guarantees parallel calls,
 not recursive re-entry through a caller callback on the same OS thread. The
 target configurations also lock roff syntax character classes to ASCII, and
 validated manual dates use fixed English month names, so a host process calling
-`setlocale` cannot change the owned AST, diagnostics, or renderer bytes. The
-Rust ownership transfer and native equation expansion stop descending after
-256 syntax-tree or equation-box levels. Pathological input beyond either
+`setlocale` cannot change the owned AST, diagnostics, or renderer bytes.
+Windows supplies the same permissive date parsing, normalization, and
+pre-epoch UTC conversion used by the supported Unix targets. macOS uses the
+crate's thread-local program-name compatibility layer rather than changing the
+host process's global program name. The Rust ownership transfer and native
+equation expansion stop descending after 256 syntax-tree or equation-box
+levels. Pathological input beyond either
 defensive cap still returns a successful, finite report and omits deeper
 descendants, while appending an explicit warning to `ParseReport::diagnostics`;
 ordinary manuals remain far below both limits.
@@ -173,7 +180,9 @@ assert!(report.output.contains("hello"));
 For `parse_file`, `Compression::Auto` selects Rust zstd decoding for a `.zst`
 suffix. On Windows it also selects Rust gzip decoding for a `.gz` suffix; on
 Unix all other paths go through libmandoc's native file reader, including its
-gzip detection. Use `Compression::Zstd` to force zstd decoding when a file has
+gzip detection. If a Windows auto-mode path is absent, the same path with an
+appended `.gz` suffix is tried before returning a read error. Use
+`Compression::Zstd` to force zstd decoding when a file has
 another suffix. For `parse_bytes`, auto mode recognizes zstd magic and plain
 input, not gzip; callers must decompress gzip byte streams themselves.
 `Compression::Plain` bypasses top-level compression detection. Other

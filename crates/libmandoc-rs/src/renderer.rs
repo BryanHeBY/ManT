@@ -263,7 +263,7 @@ impl Renderer {
     #[cfg(unix)]
     fn render_auto_file(&self, path: &Path) -> Result<RenderReport, RenderError> {
         let c_path = native_path(path)?;
-        let includes = self.include_settings()?;
+        let includes = self.include_settings(path)?;
         Self::finish(
             path,
             ffi::render_file(
@@ -282,8 +282,9 @@ impl Renderer {
 
     #[cfg(windows)]
     fn render_auto_file(&self, path: &Path) -> Result<RenderReport, RenderError> {
-        let source = File::open(path).map_err(|error| read_error(path, &error))?;
-        if path.extension().is_some_and(|extension| extension == "gz") {
+        let (source, gzip) =
+            compression::open_auto_file(path).map_err(|error| read_error(path, &error))?;
+        if gzip {
             let decoded = compression::decode_gzip(source).map_err(|error| RenderError {
                 path: path.to_path_buf(),
                 kind: RenderErrorKind::Decompression,
@@ -316,7 +317,7 @@ impl Renderer {
     #[cfg(unix)]
     fn render_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
         let c_path = native_path(path)?;
-        let includes = self.include_settings()?;
+        let includes = self.include_settings(path)?;
         Self::finish(
             path,
             ffi::render_buffer(
@@ -337,7 +338,7 @@ impl Renderer {
     #[cfg(windows)]
     fn render_plain_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
         let c_path = native_path(path)?;
-        let includes = self.include_settings()?;
+        let includes = self.include_settings(path)?;
         Self::finish(
             path,
             ffi::render_buffer(
@@ -403,8 +404,10 @@ impl Renderer {
         Ok(())
     }
 
-    fn include_settings(&self) -> Result<IncludeSettings, RenderError> {
-        self.parser.include_settings().map_err(map_parse_error)
+    fn include_settings(&self, source_path: &Path) -> Result<IncludeSettings, RenderError> {
+        self.parser
+            .include_settings(source_path)
+            .map_err(map_parse_error)
     }
 }
 

@@ -298,8 +298,9 @@ impl Parser {
 
     #[cfg(windows)]
     fn parse_auto_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
-        let source = File::open(path).map_err(|error| read_error(path, &error))?;
-        if path.extension().is_some_and(|extension| extension == "gz") {
+        let (source, gzip) =
+            compression::open_auto_file(path).map_err(|error| read_error(path, &error))?;
+        if gzip {
             let decoded = compression::decode_gzip(source)
                 .map_err(|error| gzip_decompression_error(path, &error))?;
             self.parse_plain_bytes(path, &decoded)
@@ -370,7 +371,7 @@ impl Parser {
             kind: ParseErrorKind::InvalidPath,
             message: "manual source path contains a NUL byte".into(),
         })?;
-        let include_settings = self.include_settings()?;
+        let include_settings = self.include_settings(path)?;
         let raw = parse(&c_path, &include_settings).map_err(|message| ParseError {
             path: path.to_path_buf(),
             kind: ParseErrorKind::Parse,
@@ -399,7 +400,10 @@ impl Parser {
         })
     }
 
-    pub(crate) fn include_settings(&self) -> Result<IncludeSettings, ParseError> {
+    pub(crate) fn include_settings(
+        &self,
+        _source_path: &Path,
+    ) -> Result<IncludeSettings, ParseError> {
         match &self.options.includes {
             IncludePolicy::Deny => Ok(IncludeSettings {
                 root: None,
@@ -411,7 +415,7 @@ impl Parser {
                 allow_includes: true,
             }),
             #[cfg(windows)]
-            IncludePolicy::SourceTree => Err(unsupported_includes(PathBuf::new())),
+            IncludePolicy::SourceTree => Err(unsupported_includes(_source_path.to_path_buf())),
             IncludePolicy::Root(root) if root.as_os_str().is_empty() => Err(ParseError {
                 path: root.clone(),
                 kind: ParseErrorKind::InvalidPath,
