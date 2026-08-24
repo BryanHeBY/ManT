@@ -223,7 +223,7 @@ dependencies = [
 
 [[package]]
 name = "mant-ir"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "schemars",
  "serde",
@@ -231,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "mant-protocol"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "mant-ir",
  "schemars",
@@ -240,7 +240,7 @@ dependencies = [
 
 [[package]]
 name = "mant-sources"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
  "toml",

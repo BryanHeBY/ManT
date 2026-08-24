@@ -21,6 +21,13 @@ integrators must act.
    `Unreleased` section into a dated `<crate> X.Y.Z` entry for every selected
    package. Product release notes may summarize those entries by outcome, but
    must not replace crate-specific API or migration details.
+   Compare each selected crate with its latest published tag before freezing
+   versions. Use `cargo package --list -p <crate>` to identify the published
+   source set, then inspect those paths with `git diff <previous-tag>..HEAD`.
+   Any package-visible source, manifest, README, or generated documentation
+   change requires a new crate version because crates.io cannot replace an
+   existing immutable version. A clean package test proves the source set is
+   buildable; it does not prove that its version is still publishable.
 2. Regenerate and visually inspect the README screenshot:
 
    ```sh
@@ -140,13 +147,13 @@ product artifacts are built from workspace paths, while Cargo installations
 resolve the published crates, so failing to bump a changed package could make
 the two distributions differ.
 
-The post-0.9.0 decoupling changes the four dependent package manifests from
+The post-0.9.0 decoupling changed the four dependent package manifests from
 exact internal requirements to explicit caret requirements; the three
-dependency roots have no internal edge to rewrite. Before the next product
-release, publish a new version of each affected dependent. The first
-independent-version baseline may use `0.9.1` across all seven crates, after
-which they can diverge. This one-time transition is a packaging-contract
-change, not a return to permanent lockstep versioning.
+dependency roots have no internal edge to rewrite. The first independent
+version baseline is prepared as `0.9.1` across all seven crates so every
+package-visible post-0.9.0 change has a publishable identity. Later releases
+may bump only the crates that changed. This one-time transition is a
+packaging-contract change, not a return to permanent lockstep versioning.
 
 Never move a tag after crates.io publication. Registry versions are immutable.
 

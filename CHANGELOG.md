@@ -78,10 +78,11 @@ that crate was not published for that change.
 
 ### Workspace publication transition
 
-- The next publication will assign `0.9.1` to all seven crates once, because
+- The next publication is prepared as `0.9.1` for all seven crates once, because
   the four dependent package manifests must publish their internal dependency
   changes from exact `=0.9.0` requirements to explicit caret requirements,
-  while the three dependency roots establish the same independent-version
+  while every package-visible post-0.9.0 change receives a new immutable crate
+  identity. The dependency roots establish the same independent-version
   baseline. This packaging transition does not by itself change public Rust
   APIs or the
   `mant.request/v0.9` and related process protocol identifiers.
