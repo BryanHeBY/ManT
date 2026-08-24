@@ -25,6 +25,10 @@ that crate was not published for that change.
   short-lived non-modal popup, and omit presentation-only tldr panel borders
   from visual text. Size Edit menus from their complete item labels so copy
   actions remain visible and clickable.
+- Continuously scroll the document while a selection drag remains at either
+  vertical viewport edge, and let Shift-modified clicks or drags extend the
+  retained selection by preserving its true mouse-down anchor and moving its
+  active endpoint before copying it.
 
 ### mant-engine
 

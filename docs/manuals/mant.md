@@ -535,9 +535,12 @@ cross-document, and safe external links, scrolls either pane, drags
 scrollbars, resizes the Outline boundary, and selects rendered document text.
 A completed drag selection is copied immediately as plain text and shows a
 short success popup. `y`, `Ctrl+Shift+C`, or **Edit → Copy Selection** copies
-the current selection again; `Escape` clears it. Selection follows terminal
-cells, omits presentation-only tldr panel borders, and never attempts to
-reconstruct partial Markdown.
+the current selection again; `Shift+click` or `Shift+drag` retains the original
+mouse-down anchor and moves the active endpoint, matching a text editor's
+directional selection model. `Escape` clears it. Holding a drag on the first or
+last content row continuously scrolls and extends the selection. Selection follows terminal cells, omits
+presentation-only tldr panel borders, and never attempts to reconstruct partial
+Markdown.
 
 The Edit menu can also copy the complete current Outline node as deterministic
 text or structurally complete CommonMark. These node actions operate on the

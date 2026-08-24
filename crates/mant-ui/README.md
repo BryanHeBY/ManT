@@ -81,7 +81,11 @@ hidden authority.
 Completing an effective document-text drag emits its plain-text copy request
 immediately. A successful callback produces a short-lived, non-modal
 confirmation; selection extraction excludes presentation-only tldr panel
-borders. Keyboard and Edit-menu actions can copy the retained selection again.
+borders. Holding the pointer at either vertical viewport edge scrolls and
+extends the active selection until release or the document limit. Like a text
+editor, Shift-modified clicks and drags retain the original mouse-down anchor
+and move the active endpoint, while keyboard and Edit-menu actions can copy the
+retained selection again.
 
 ## Platform behavior
 
