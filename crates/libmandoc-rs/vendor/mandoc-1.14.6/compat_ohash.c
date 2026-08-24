@@ -73,7 +73,7 @@ static void
 ohash_resize(struct ohash *h)
 {
 	struct _ohash_record *n;
-	size_t ns;
+	unsigned int ns;
 	unsigned int	j;
 	unsigned int	i, incr;
 

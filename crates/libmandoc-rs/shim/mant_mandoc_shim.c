@@ -237,6 +237,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 		return document;
 	}
 #ifdef MANDOC_MEMORY_ONLY
+	(void)include_root;
 	if (buffer == NULL) {
 		document->error = copy_string(
 		    "memory-only libmandoc requires caller-owned source bytes");
