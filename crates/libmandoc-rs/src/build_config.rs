@@ -195,7 +195,14 @@ mod tests {
         assert!(build.contains("owned_build.compile_intermediates()"));
 
         let roff = include_str!("../vendor/mandoc-1.14.6/roff.c");
-        assert!(roff.contains("done = 0;\n\tsign = '\\0';\n\tstart = buf->buf + pos;"));
+        let done = roff.find("done = 0;").expect("expansion state reset");
+        let sign = roff
+            .find("sign = '\\0';")
+            .expect("neutral numeric-register sign");
+        let start = roff
+            .find("start = buf->buf + pos;")
+            .expect("expansion scan start");
+        assert!(done < sign && sign < start);
     }
 
     #[test]
