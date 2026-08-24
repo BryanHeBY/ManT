@@ -287,6 +287,8 @@ impl App {
         if activate_link {
             self.selection = None;
             self.activate_content_link(mouse.column, mouse.row);
+        } else if moved {
+            self.copy_selection();
         }
     }
 

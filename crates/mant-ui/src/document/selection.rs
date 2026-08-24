@@ -69,14 +69,32 @@ impl RenderedDocument {
         lines
             .iter()
             .enumerate()
-            .map(|(offset, line)| {
+            .filter_map(|(offset, line)| {
                 let row = start.row + offset;
+                let surface = self.surfaces.get(row).copied()?;
+                if matches!(
+                    surface,
+                    super::LineSurface::TldrTop
+                        | super::LineSurface::TldrBottom
+                        | super::LineSurface::Divider
+                ) {
+                    return None;
+                }
                 let (start_column, end_column) = selection
                     .columns_for_row(row)
                     .expect("selected row is inside normalized endpoints");
-                line_fragment(line, start_column, end_column)
-                    .trim_end_matches(' ')
-                    .to_owned()
+                let (start_column, end_column) =
+                    if surface == super::LineSurface::Tldr && line.width() >= 6 {
+                        let width = line.width();
+                        (start_column.max(2), end_column.min(width.saturating_sub(2)))
+                    } else {
+                        (start_column, end_column)
+                    };
+                Some(
+                    line_fragment(line, start_column, end_column)
+                        .trim_end_matches(' ')
+                        .to_owned(),
+                )
             })
             .collect::<Vec<_>>()
             .join("\n")

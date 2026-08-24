@@ -18,14 +18,15 @@ use mant_protocol::{
 use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
 use super::{
-    App, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag, SIDEBAR_RESIZE_FRAME_INTERVAL, UpdateOutcome,
+    App, COPY_TOAST_DURATION, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag,
+    SIDEBAR_RESIZE_FRAME_INTERVAL, UpdateOutcome,
     finder::FinderTreeRow,
     menu::{MenuAction, MenuId},
     render::sidebar_metadata,
     search::SearchMode,
 };
 use crate::{
-    CopyFormat, CopyRequest, NavKind,
+    CopyFormat, CopyRequest, NavKind, RenderedSelection, TextPosition,
     layout::{CONTENT_SCROLLBAR_GAP, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_SPLITTER_WIDTH},
     theme,
 };
@@ -1249,12 +1250,81 @@ fn dragging_document_text_emits_a_plain_text_copy_request() {
             modifiers: KeyModifiers::NONE,
         });
     }
-    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
-
     match app.take_copy_request().expect("copy request") {
         CopyRequest::Selection { text } => assert_eq!(text, "Show help"),
         CopyRequest::Node { .. } => panic!("visual selection emitted a semantic node"),
     }
+}
+
+#[test]
+fn visual_tldr_copy_omits_panel_decoration() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&tldr_bundle());
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let rendered = &app.rendered_cache[&app.content_render_width];
+    let last_row = rendered.row_count.saturating_sub(1);
+    app.selection = Some(RenderedSelection {
+        anchor: TextPosition { row: 0, column: 0 },
+        focus: TextPosition {
+            row: last_row,
+            column: usize::from(app.content_render_width.saturating_sub(1)),
+        },
+    });
+
+    app.copy_selection();
+
+    let CopyRequest::Selection { text } = app.take_copy_request().expect("copy request") else {
+        panic!("visual selection emitted a semantic node");
+    };
+    assert!(text.contains("TLDR QUICK REFERENCE"));
+    assert!(!text.contains(['│', '┌', '┐', '└', '┘', '─']));
+}
+
+#[test]
+fn edit_menu_width_fits_its_longest_item() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&navigation_bundle());
+    app.open_menu(MenuId::Edit);
+
+    terminal.draw(|frame| app.draw(frame)).expect("draw menu");
+
+    assert!(
+        terminal
+            .backend()
+            .to_string()
+            .contains("Copy Current Node as Markdown")
+    );
+}
+
+#[test]
+fn copy_success_toast_expires_at_its_deadline() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&navigation_bundle());
+    let started = Instant::now();
+    app.report_copy_success_at("Copied selection".to_owned(), started);
+
+    terminal.draw(|frame| app.draw(frame)).expect("draw toast");
+    assert!(terminal.backend().to_string().contains("Copied selection"));
+    assert_eq!(app.next_wakeup(started), Some(COPY_TOAST_DURATION));
+    assert_eq!(
+        app.tick(
+            (started + COPY_TOAST_DURATION)
+                .checked_sub(Duration::from_millis(1))
+                .expect("toast deadline follows its start"),
+        ),
+        UpdateOutcome::Unchanged
+    );
+    assert_eq!(
+        app.tick(started + COPY_TOAST_DURATION),
+        UpdateOutcome::Redraw
+    );
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("draw expired toast");
+    assert!(!terminal.backend().to_string().contains("Copied selection"));
 }
 
 #[test]

@@ -112,6 +112,8 @@ pub struct RenderedDocument {
     pub text: Text<'static>,
     /// Number of visual terminal rows before virtual viewport padding.
     pub row_count: usize,
+    /// Presentation surface associated with each visual row.
+    surfaces: Vec<LineSurface>,
     /// First visual row for each logical source row, followed by one sentinel.
     logical_rows: Vec<usize>,
     anchor_rows: HashMap<String, usize>,
@@ -249,6 +251,7 @@ impl DocumentView {
         let mut rows = Vec::new();
         let mut links = Vec::new();
         let mut search_records = Vec::new();
+        let mut surfaces = Vec::new();
         let mut logical_rows = Vec::with_capacity(self.lines.len() + 1);
 
         for line in &self.lines {
@@ -264,6 +267,7 @@ impl DocumentView {
                     end_column: link.end_column,
                 }));
                 rows.push(wrapped.line);
+                surfaces.push(line.surface);
             }
         }
         logical_rows.push(rows.len());
@@ -282,6 +286,7 @@ impl DocumentView {
         RenderedDocument {
             row_count: rows.len(),
             text: Text::from(rows),
+            surfaces,
             logical_rows,
             anchor_rows,
             links,

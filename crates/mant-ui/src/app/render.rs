@@ -73,6 +73,39 @@ impl App {
         }
         self.geometry.status = status_area;
         self.draw_overlay(frame);
+        self.draw_copy_toast(frame);
+    }
+
+    fn draw_copy_toast(&self, frame: &mut Frame<'_>) {
+        let Some(toast) = &self.copy_toast else {
+            return;
+        };
+        let message = sanitize_terminal_text(&toast.message);
+        let width = u16::try_from(message.width().saturating_add(4))
+            .unwrap_or(u16::MAX)
+            .min(frame.area().width);
+        if width < 4 || frame.area().height < 4 {
+            return;
+        }
+        let area = Rect::new(
+            frame.area().x + frame.area().width.saturating_sub(width) / 2,
+            frame.area().y + frame.area().height.saturating_sub(4),
+            width,
+            3,
+        );
+        frame.render_widget(Clear, area);
+        frame.render_widget(
+            Paragraph::new(message)
+                .alignment(Alignment::Center)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(theme::GREEN))
+                        .style(Style::default().bg(theme::BASE)),
+                )
+                .style(Style::default().fg(theme::TEXT).bg(theme::BASE)),
+            area,
+        );
     }
 
     fn draw_sidebar_splitter(&mut self, frame: &mut Frame<'_>, area: Rect) {

@@ -27,6 +27,7 @@ use crate::{
 };
 
 const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
+const COPY_TOAST_DURATION: Duration = Duration::from_millis(1_500);
 const HISTORY_LIMIT: usize = 64;
 /// Caps expensive width-dependent document reflow while the splitter moves.
 ///
@@ -59,6 +60,12 @@ struct HistoryLocation {
     address: Option<DocumentAddress>,
     fallback: Option<Arc<ResolvedContent>>,
     target: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct CopyToast {
+    message: String,
+    deadline: Instant,
 }
 
 #[derive(Debug, Clone)]
@@ -203,6 +210,7 @@ pub struct App {
     back_history: Vec<HistoryLocation>,
     forward_history: Vec<HistoryLocation>,
     notice: Option<String>,
+    copy_toast: Option<CopyToast>,
     overlay: Overlay,
     pointer_drag: PointerDrag,
     selection: Option<RenderedSelection>,
@@ -274,6 +282,7 @@ impl App {
             back_history: Vec::new(),
             forward_history: Vec::new(),
             notice: None,
+            copy_toast: None,
             overlay: Overlay::None,
             pointer_drag: PointerDrag::None,
             selection: None,
@@ -307,7 +316,7 @@ impl App {
     }
 
     pub(crate) fn report_discovery_error(&mut self, message: String) {
-        self.notice = Some(message);
+        self.report_notice(message);
     }
 
     pub(crate) fn complete_open(&mut self, bundle: &ResolvedContent, request: NavigationRequest) {
@@ -342,22 +351,23 @@ impl App {
         self.rendered_cache.clear();
         self.content_render_width = 0;
         self.notice = None;
+        self.copy_toast = None;
     }
 
     pub(super) fn copy_selection(&mut self) {
         let Some(selection) = self.selection else {
-            self.notice = Some("Drag across document text before copying".to_owned());
+            self.report_notice("Drag across document text before copying".to_owned());
             return;
         };
         let Some(rendered) = self.rendered_cache.get(&self.content_render_width) else {
-            self.notice = Some("The document is not ready to copy".to_owned());
+            self.report_notice("The document is not ready to copy".to_owned());
             return;
         };
         let text = rendered.selected_text(selection);
         if text.is_empty() {
-            self.notice = Some("The selected cells contain no text".to_owned());
+            self.report_notice("The selected cells contain no text".to_owned());
         } else if text.len() > crate::MAX_COPY_BYTES {
-            self.notice = Some("The selection exceeds the 4 MiB clipboard limit".to_owned());
+            self.report_notice("The selection exceeds the 4 MiB clipboard limit".to_owned());
         } else {
             self.pending_copy = Some(CopyRequest::Selection { text });
         }
@@ -365,11 +375,11 @@ impl App {
 
     pub(super) fn copy_selected_node(&mut self, format: CopyFormat) {
         let Some(node) = self.document.navigation().get(self.selected) else {
-            self.notice = Some("No document node is selected".to_owned());
+            self.report_notice("No document node is selected".to_owned());
             return;
         };
         if node.kind == NavKind::EntryGroup {
-            self.notice = Some("Select a complete document node before copying".to_owned());
+            self.report_notice("Select a complete document node before copying".to_owned());
             return;
         }
         self.pending_copy = Some(CopyRequest::Node {
@@ -380,11 +390,24 @@ impl App {
     }
 
     pub(crate) fn report_open_error(&mut self, message: String) {
-        self.notice = Some(message);
+        self.report_notice(message);
     }
 
     pub(crate) fn report_notice(&mut self, message: String) {
+        self.copy_toast = None;
         self.notice = Some(message);
+    }
+
+    pub(crate) fn report_copy_success(&mut self, message: String) {
+        self.report_copy_success_at(message, Instant::now());
+    }
+
+    fn report_copy_success_at(&mut self, message: String, now: Instant) {
+        self.notice = None;
+        self.copy_toast = Some(CopyToast {
+            message,
+            deadline: now + COPY_TOAST_DURATION,
+        });
     }
 
     fn current_location(&self) -> HistoryLocation {
@@ -509,6 +532,14 @@ impl App {
             self.sync_selection_to_scroll();
             outcome = UpdateOutcome::Redraw;
         }
+        if self
+            .copy_toast
+            .as_ref()
+            .is_some_and(|toast| toast.deadline <= now)
+        {
+            self.copy_toast = None;
+            outcome = UpdateOutcome::Redraw;
+        }
         outcome
     }
 
@@ -516,6 +547,7 @@ impl App {
         [
             self.navigation_sync_deadline,
             self.sidebar_resize.deadline(),
+            self.copy_toast.as_ref().map(|toast| toast.deadline),
         ]
         .into_iter()
         .flatten()

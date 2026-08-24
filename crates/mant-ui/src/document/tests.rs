@@ -994,6 +994,7 @@ fn case_folding_maps_expanding_unicode_back_to_the_source_character() {
     let rendered = RenderedDocument {
         text: Text::from(Line::from("İstanbul")),
         row_count: 1,
+        surfaces: vec![LineSurface::Normal],
         logical_rows: vec![0, 1],
         anchor_rows: HashMap::new(),
         links: Vec::new(),

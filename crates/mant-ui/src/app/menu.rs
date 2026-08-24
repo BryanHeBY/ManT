@@ -220,6 +220,22 @@ pub(super) const fn menu_entries(id: MenuId) -> &'static [MenuEntry] {
     }
 }
 
+fn menu_overlay_width(id: MenuId) -> u16 {
+    const PREFIX_WIDTH: usize = 4;
+    const HORIZONTAL_MARGIN: usize = 2;
+    let content_width = menu_entries(id)
+        .iter()
+        .map(|entry| {
+            let shortcut_gap = usize::from(!entry.shortcut.is_empty());
+            PREFIX_WIDTH + entry.label.width() + shortcut_gap + entry.shortcut.width()
+        })
+        .max()
+        .unwrap_or_default();
+    u16::try_from(content_width + HORIZONTAL_MARGIN)
+        .unwrap_or(u16::MAX)
+        .max(30)
+}
+
 impl App {
     pub(super) fn open_menu(&mut self, id: MenuId) {
         self.overlay = Overlay::Menu { id, cursor: 0 };
@@ -327,7 +343,7 @@ impl App {
             let entry = (mouse.row >= 1
                 && row < entries.len()
                 && mouse.column >= id.left()
-                && mouse.column < id.left().saturating_add(30))
+                && mouse.column < id.left().saturating_add(menu_overlay_width(id)))
             .then_some(row);
 
             return match mouse.kind {
@@ -469,7 +485,7 @@ impl App {
         let area = Rect::new(
             id.left().min(frame.area().width.saturating_sub(1)),
             1,
-            30.min(frame.area().width.saturating_sub(id.left())),
+            menu_overlay_width(id).min(frame.area().width.saturating_sub(id.left())),
             height.min(frame.area().height.saturating_sub(1)),
         );
         frame.render_widget(Clear, area);

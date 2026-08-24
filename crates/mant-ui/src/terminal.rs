@@ -179,7 +179,7 @@ where
     };
     let label = request.label();
     match copy_to_clipboard(request) {
-        Ok(()) => app.report_notice(format!("Copied {label}")),
+        Ok(()) => app.report_copy_success(format!("Copied {label}")),
         Err(message) => app.report_notice(message),
     }
     true
