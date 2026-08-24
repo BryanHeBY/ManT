@@ -67,6 +67,9 @@ mod tests {
     #[cfg(windows)]
     use windows_sys::Win32::Foundation::ERROR_PRIVILEGE_NOT_HELD;
 
+    #[cfg(feature = "serde")]
+    use super::Diagnostic;
+
     use super::{
         AuthorMode, Compression, DiagnosticCode, DiagnosticLevel, DisplayKind, Document,
         IncludePolicy, InputFormat, MacroSet, Node, NodeKind, NormalizedFont, NormalizedListKind,
@@ -1621,7 +1624,7 @@ mod tests {
             report
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::SyntaxTreeDepthLimit)),
+                .any(|diagnostic| diagnostic.code() == Some(DiagnosticCode::SyntaxTreeDepthLimit)),
             "node truncation must remain observable: {:?}",
             report.diagnostics
         );
@@ -1663,7 +1666,7 @@ mod tests {
             report
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::EquationTreeDepthLimit)),
+                .any(|diagnostic| diagnostic.code() == Some(DiagnosticCode::EquationTreeDepthLimit)),
             "equation truncation must remain observable: {:?}",
             report.diagnostics
         );
@@ -1680,6 +1683,27 @@ mod tests {
             serde_json::from_str(&encoded).expect("deserialize parse report");
 
         assert_eq!(decoded, report);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn serde_diagnostics_keep_the_patch_compatible_field_shape() {
+        let diagnostic = Diagnostic {
+            level: DiagnosticLevel::Warning,
+            message: crate::diagnostics::SYNTAX_TREE_DEPTH_MESSAGE.to_owned(),
+            location: None,
+        };
+        let encoded = serde_json::to_value(&diagnostic).expect("serialize diagnostic");
+
+        assert_eq!(
+            diagnostic.code(),
+            Some(DiagnosticCode::SyntaxTreeDepthLimit)
+        );
+        assert!(encoded.get("code").is_none());
+        assert_eq!(
+            serde_json::from_value::<Diagnostic>(encoded).expect("deserialize diagnostic"),
+            diagnostic
+        );
     }
 
     #[test]

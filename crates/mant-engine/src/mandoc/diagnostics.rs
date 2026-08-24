@@ -17,7 +17,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
                 MandocDiagnosticLevel::Warning => DiagnosticLevel::Warning,
                 MandocDiagnosticLevel::Style => DiagnosticLevel::Style,
             },
-            code: diagnostic.code.map(|code| {
+            code: diagnostic.code().map(|code| {
                 match code {
                     MandocDiagnosticCode::SyntaxTreeDepthLimit => "manual.syntax-depth-truncated",
                     MandocDiagnosticCode::EquationTreeDepthLimit => {
@@ -40,10 +40,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
 
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::{
-        Diagnostic as MandocDiagnostic, DiagnosticCode as MandocDiagnosticCode,
-        DiagnosticLevel as MandocDiagnosticLevel,
-    };
+    use libmandoc_rs::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
     use mant_ir::DiagnosticLevel;
 
     use super::lower_diagnostics;
@@ -53,20 +50,17 @@ mod tests {
         let diagnostics = lower_diagnostics(&[
             MandocDiagnostic {
                 level: MandocDiagnosticLevel::Unsupported,
-                code: None,
                 message: "unsupported roff request: ab".into(),
                 location: None,
             },
             MandocDiagnostic {
                 level: MandocDiagnosticLevel::Warning,
-                code: None,
                 message: "skipping paragraph macro".into(),
                 location: None,
             },
             MandocDiagnostic {
                 level: MandocDiagnosticLevel::Warning,
-                code: Some(MandocDiagnosticCode::SyntaxTreeDepthLimit),
-                message: "deeper descendants were omitted".into(),
+                message: "owned syntax tree exceeded the 256-level copy limit; deeper descendants were omitted".into(),
                 location: None,
             },
         ]);

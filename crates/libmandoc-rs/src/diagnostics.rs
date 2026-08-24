@@ -16,8 +16,8 @@ pub enum DiagnosticLevel {
 
 /// Stable machine-readable classification for wrapper-generated findings.
 ///
-/// Native libmandoc findings do not expose a stable code and therefore leave
-/// [`Diagnostic::code`] unset.
+/// Native libmandoc findings do not expose a stable code, so
+/// [`Diagnostic::code`] returns `None` for them.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiagnosticCode {
@@ -26,6 +26,11 @@ pub enum DiagnosticCode {
     /// Content beyond the native equation-tree depth limit was omitted.
     EquationTreeDepthLimit,
 }
+
+pub(crate) const SYNTAX_TREE_DEPTH_MESSAGE: &str =
+    "owned syntax tree exceeded the 256-level copy limit; deeper descendants were omitted";
+pub(crate) const EQUATION_TREE_DEPTH_MESSAGE: &str =
+    "equation tree exceeded the 256-level copy limit; deeper equation content was omitted";
 
 /// Optional source location extracted from a libmandoc diagnostic prefix.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -43,16 +48,25 @@ pub struct SourceLocation {
 pub struct Diagnostic {
     /// Severity classified from libmandoc's diagnostic marker.
     pub level: DiagnosticLevel,
-    /// Stable wrapper-generated classification, when one is available.
-    #[cfg_attr(
-        feature = "serde",
-        serde(default, skip_serializing_if = "Option::is_none")
-    )]
-    pub code: Option<DiagnosticCode>,
     /// Human-readable finding with the location prefix removed.
     pub message: String,
     /// Source position when libmandoc supplied a parseable prefix.
     pub location: Option<SourceLocation>,
+}
+
+impl Diagnostic {
+    /// Return the stable classification for a wrapper-generated finding.
+    ///
+    /// Native libmandoc messages have no stable upstream identifier and
+    /// therefore return `None`.
+    #[must_use]
+    pub fn code(&self) -> Option<DiagnosticCode> {
+        match self.message.as_str() {
+            SYNTAX_TREE_DEPTH_MESSAGE => Some(DiagnosticCode::SyntaxTreeDepthLimit),
+            EQUATION_TREE_DEPTH_MESSAGE => Some(DiagnosticCode::EquationTreeDepthLimit),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) fn parse_diagnostics(output: &str) -> Vec<Diagnostic> {
@@ -78,7 +92,6 @@ fn parse_diagnostic(line: &str) -> Option<Diagnostic> {
     let (prefix, message) = line.split_once(marker).unwrap_or(("", line));
     Some(Diagnostic {
         level,
-        code: None,
         message: message.to_owned(),
         location: source_location(prefix),
     })
@@ -104,7 +117,7 @@ mod tests {
 
         assert_eq!(diagnostics.len(), 2);
         assert_eq!(diagnostics[0].level, DiagnosticLevel::Unsupported);
-        assert_eq!(diagnostics[0].code, None);
+        assert_eq!(diagnostics[0].code(), None);
         assert_eq!(diagnostics[0].message, "unsupported roff request: ab");
         assert_eq!(
             diagnostics[0].location,

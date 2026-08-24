@@ -164,9 +164,11 @@ levels. Pathological input beyond either
 defensive cap still returns a successful, finite report and omits deeper
 descendants, while appending an explicit warning to `ParseReport::diagnostics`;
 ordinary manuals remain far below both limits. These wrapper-generated
-warnings carry `DiagnosticCode::SyntaxTreeDepthLimit` or
-`DiagnosticCode::EquationTreeDepthLimit`; native libmandoc findings retain
-their severity and message but do not invent a machine code.
+warnings return `DiagnosticCode::SyntaxTreeDepthLimit` or
+`DiagnosticCode::EquationTreeDepthLimit` from `Diagnostic::code()`; native
+libmandoc findings retain their severity and message but do not invent a
+machine code. The additive method keeps the existing public diagnostic fields
+and optional Serde shape unchanged for compatible patch upgrades.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
