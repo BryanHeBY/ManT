@@ -276,7 +276,7 @@ where
             .trim()
             .to_ascii_lowercase()
             .parse()
-            .map_err(|error| D::Error::custom(format!("cannot parse {text:?}: {error}"))),
+            .map_err(|_| D::Error::custom("invalid stringified scalar value")),
         other => serde_json::from_value(other).map_err(D::Error::custom),
     }
 }
@@ -298,7 +298,7 @@ where
             .to_ascii_lowercase()
             .parse()
             .map(Some)
-            .map_err(|error| D::Error::custom(format!("cannot parse {text:?}: {error}"))),
+            .map_err(|_| D::Error::custom("invalid stringified scalar value")),
         other => serde_json::from_value(other)
             .map(Some)
             .map_err(D::Error::custom),

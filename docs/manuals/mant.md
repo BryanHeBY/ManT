@@ -737,6 +737,10 @@ arbitrary local path. Successful calls contain one bounded plain-text or
 CommonMark result rather than a complete AST or schema envelope. Every result
 starts with `chars`, `totalChars`, and optional `nextChar` metadata;
 `startChar` and `maxChars` let the client select any Unicode-scalar range.
+The largest page body is 32,768 scalars and therefore at most 131,072 UTF-8
+bytes before MCP/JSON framing; it is not a 32 KiB byte page. `maxResults` and
+`maxMatches` truncate the canonical result before character paging, so callers
+must raise those limits or narrow the query to reach omitted rows or matches.
 Paging is stateless: MCP reads current local files on every call, has no update
 tool, and makes no cross-call snapshot guarantee.
 

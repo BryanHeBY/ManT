@@ -272,7 +272,7 @@ mod tests {
     };
 
     use super::{finish_page, page_text, prepare_scope};
-    use crate::mcp::params::PageRequest;
+    use crate::mcp::params::{MAX_PAGE_CHARS, PageRequest};
 
     #[test]
     fn text_pages_are_utf8_safe_bounded_and_continuable() {
@@ -300,6 +300,23 @@ mod tests {
             },
         );
         assert_eq!(second.text.chars().count(), 17);
+    }
+
+    #[test]
+    fn maximum_character_page_has_a_bounded_utf8_body() {
+        let text = "😀".repeat(MAX_PAGE_CHARS as usize + 1);
+        let page = page_text(
+            &text,
+            PageRequest {
+                start_char: 0,
+                max_chars: MAX_PAGE_CHARS,
+            },
+        );
+
+        assert_eq!(page.text.chars().count(), 32_768);
+        assert_eq!(page.text.len(), 131_072);
+        assert_eq!(page.end_char, 32_768);
+        assert_eq!(page.total_chars, 32_769);
     }
 
     #[test]

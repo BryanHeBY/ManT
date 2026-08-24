@@ -336,7 +336,9 @@ Every successful result starts with a `mant-page` header that reports its
 Unicode-scalar character interval and total size. Clients select a bounded
 `maxChars` budget and can resume with `startChar`; paging reruns the base query
 against current local state and retains no cursor. `maxResults` and
-`maxMatches` independently bound find and search materialization.
+`maxMatches` independently bound find and search materialization before
+character paging; omitted rows or matches require a larger semantic limit or a
+narrower query.
 
 `mant_explain` and `mant_search` accept several initial document IDs and can
 optionally follow typed links as a bounded breadth-first scope. Native CLI

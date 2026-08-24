@@ -1117,6 +1117,12 @@ line separating it from the body are framing and do not contribute to these
 coordinates. A start at or beyond the current end returns an empty body with
 `chars=totalChars..totalChars`.
 
+Because paging counts Unicode scalar values rather than bytes, a maximum-size
+body occupies at most 131,072 UTF-8 bytes before JSON escaping (32,768 scalars
+at four bytes each). The page header, blank separator, JSON-RPC envelope, and
+any JSON escaping are framing outside that body bound. This is intentionally
+not the former 32 KiB byte contract; scalar coordinates cannot split UTF-8.
+
 Paging is deliberately stateless. Each call reruns the same base query against
 the local files visible at that time, renders its complete UTF-8 text, and then
 applies `startChar` and `maxChars`. The server retains no cursor, result cache,
@@ -1132,6 +1138,8 @@ materializes at most `maxResults` matching catalog rows, default 50;
 100 because each search group retains preview, occurrence, and context data.
 Their compact bodies report returned and total match counts, while `totalChars`
 describes only the canonical body produced under the requested semantic bound.
+Rows or matches excluded by `maxResults` or `maxMatches` cannot be reached by
+advancing `startChar`; increase the semantic bound or narrow the query first.
 
 For explain and search, `followLinks: true` expands typed manual and registered
 Markdown links with the same deterministic breadth-first traversal as the

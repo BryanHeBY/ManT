@@ -357,6 +357,29 @@ mod tests {
     }
 
     #[test]
+    fn invalid_stringified_scalar_errors_do_not_echo_attacker_controlled_values() {
+        let attacker_value = "\\\"".repeat(100_000);
+        let error = serde_json::from_value::<SearchParams>(json!({
+            "documents": ["manual/1/tar"],
+            "pattern": "exclude",
+            "maxMatches": attacker_value
+        }))
+        .expect_err("reject a non-numeric stringified scalar")
+        .to_string();
+
+        assert!(
+            error.contains("invalid stringified scalar value"),
+            "{error}"
+        );
+        assert!(
+            error.len() < 256,
+            "scalar error grew to {} bytes",
+            error.len()
+        );
+        assert!(!error.contains("\\\"\\\"\\\""), "{error}");
+    }
+
+    #[test]
     fn focused_tool_limits_are_enforced_at_runtime() {
         let outline = |document: String, max_chars: Option<u32>| OutlineParams {
             document,

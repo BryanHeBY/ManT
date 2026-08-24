@@ -77,6 +77,34 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     assert_silent_shutdown(child, input, diagnostics, fixture_root);
 }
 
+#[test]
+fn oversized_request_lines_are_fatal_and_keep_stderr_silent() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_mant"))
+        .arg("--mcp")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start mant MCP server");
+    let mut input = child.stdin.take().expect("MCP stdin");
+    input
+        .write_all(&vec![b'x'; 256 * 1024 + 1])
+        .expect("write oversized MCP line");
+    drop(input);
+
+    let output = child.wait_with_output().expect("wait for MCP failure");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "unexpected status: {output:?}"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "fatal input emitted protocol data"
+    );
+    assert!(output.stderr.is_empty(), "fatal input emitted stderr noise");
+}
+
 fn request_document_tools(input: &mut impl Write) {
     call_tool(input, 3, "mant_find", &json!({ "query": "mcp-" }));
     call_tool(
