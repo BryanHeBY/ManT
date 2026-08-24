@@ -12,7 +12,28 @@ that crate was not published for that change.
 
 ## Unreleased
 
-### mant-ui
+No compatibility changes are pending.
+
+## 0.9.1 - 2026-08-24
+
+### mant-ir 0.9.1
+
+- Establish the first independently versioned patch baseline without changing
+  the public Rust model or its Serde representation.
+
+### mant-protocol 0.9.1
+
+- Replace the exact `mant-ir =0.9.0` package edge with `mant-ir ^0.9.0`, so
+  compatible IR patch releases can coexist in one resolved dependency graph.
+- Retain the complete v0.9 wire shape and discriminator family; this crate
+  release does not require clients to regenerate schemas or migrate requests.
+
+### mant-sources 0.9.1
+
+- Establish the first independently versioned patch baseline without changing
+  the public registry, configuration, or update contracts.
+
+### mant-ui 0.9.1
 
 - Add terminal-cell-aware mouse text selection and typed host clipboard
   requests. Visual selections remain plain text, while complete addressable
@@ -34,7 +55,7 @@ that crate was not published for that change.
   logical documents, remain transactional across host load failures, and use
   terminal-aware middle truncation plus overflow controls.
 
-### mant-engine
+### mant-engine 0.9.1
 
 - Prevent embedded `.so` requests from reading process-working-directory
   files when ManT parses untrusted manual content with includes denied.
@@ -52,10 +73,10 @@ that crate was not published for that change.
   `manual.syntax-depth-truncated` and `manual.equation-depth-truncated`
   diagnostics so structured consumers need not match warning prose.
 - Require `libmandoc-rs ^0.9.1`, the first release containing the native parser
-  fixes this engine now relies on, and prepare these changes as
+  fixes this engine now relies on, and publish these changes as
   `mant-engine 0.9.1`.
 
-### libmandoc-rs
+### libmandoc-rs 0.9.1
 
 - Enforce `IncludePolicy::Deny` at the native file-open boundary while keeping
   the caller-selected top-level file readable; an unset include root no longer
@@ -96,9 +117,9 @@ that crate was not published for that change.
 - Scope the Rust gzip decoder to Windows production builds while retaining
   cross-platform gzip fixtures as development dependencies; Unix production
   file transport continues to use libmandoc's native zlib path.
-- These additive changes are prepared as `libmandoc-rs 0.9.1`.
+- These additive changes ship as `libmandoc-rs 0.9.1`.
 
-### mant
+### mant 0.9.1
 
 - Sanitize dynamic newlines in single-line stderr failures so document names
   and filesystem-derived identities cannot forge `hint:`, `warning:`, or other
@@ -119,7 +140,7 @@ that crate was not published for that change.
 
 ### Workspace publication transition
 
-- The next publication is prepared as `0.9.1` for all seven crates once, because
+- This publication establishes `0.9.1` for all seven crates once, because
   the four dependent package manifests must publish their internal dependency
   changes from exact `=0.9.0` requirements to explicit caret requirements,
   while every package-visible post-0.9.0 change receives a new immutable crate
