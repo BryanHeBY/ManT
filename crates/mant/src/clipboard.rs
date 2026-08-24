@@ -74,11 +74,13 @@ fn write_osc52(writer: &mut impl Write, bytes: &[u8]) -> std::io::Result<()> {
     writer.flush()
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn contains_wsl_marker(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     lower.contains("microsoft") || lower.contains("wsl2") || lower.contains("-wsl")
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn is_wsl_for_env(
     os_release: Option<&str>,
     proc_version: Option<&str>,
