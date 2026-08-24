@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 mod arguments;
+mod clipboard;
 mod doctor;
 mod error;
 mod mcp;
@@ -13,6 +14,7 @@ use std::io::{self, IsTerminal, Read, Write};
 use arguments::{
     CatalogPaging, ColorMode, Command, QueryFormat, QueryPresentation, QuerySource, SchemaContract,
 };
+use clipboard::SystemClipboard;
 use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
     report_process_argument_error,
@@ -822,7 +824,8 @@ fn run_interactive(
         Ok(catalog) => catalog,
         Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
-    match mant_ui::run_with_catalog_and_scope(
+    let mut clipboard = SystemClipboard::default();
+    match mant_ui::run_with_catalog_and_scope_and_copy(
         &query,
         catalog,
         &scope_documents,
@@ -832,6 +835,7 @@ fn run_interactive(
             host.query(&request, policy).map_err(Failure::into_message)
         },
         open_external_uri,
+        |request| clipboard.copy(request),
     ) {
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),

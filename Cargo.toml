@@ -36,6 +36,7 @@ pedantic = "warn"
 [workspace.dependencies]
 anstream = "1.0.0"
 anstyle = "1.0.14"
+arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
 clap = { version = "4.6.6", default-features = false, features = ["color", "derive", "error-context", "help", "std", "suggestions", "usage"] }
 crossterm = "0.29.0"
 crossterm_winapi = "0.9.1"

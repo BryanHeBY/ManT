@@ -345,8 +345,6 @@ impl App {
     }
 
     pub(super) fn copy_selection(&mut self) {
-        const MAX_COPY_BYTES: usize = 4 * 1024 * 1024;
-
         let Some(selection) = self.selection else {
             self.notice = Some("Drag across document text before copying".to_owned());
             return;
@@ -358,7 +356,7 @@ impl App {
         let text = rendered.selected_text(selection);
         if text.is_empty() {
             self.notice = Some("The selected cells contain no text".to_owned());
-        } else if text.len() > MAX_COPY_BYTES {
+        } else if text.len() > crate::MAX_COPY_BYTES {
             self.notice = Some("The selection exceeds the 4 MiB clipboard limit".to_owned());
         } else {
             self.pending_copy = Some(CopyRequest::Selection { text });

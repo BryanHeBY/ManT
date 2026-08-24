@@ -15,7 +15,7 @@ mod theme;
 mod tldr;
 
 pub use app::{App, UpdateOutcome};
-pub use clipboard::{CopyFormat, CopyRequest};
+pub use clipboard::{CopyFormat, CopyRequest, MAX_COPY_BYTES};
 pub use document::{DocumentView, NavKind, NavNode, RenderedDocument, RenderedSearchMatch};
 pub(crate) use document::{RenderedSelection, TextPosition};
 pub use pager::page_text;

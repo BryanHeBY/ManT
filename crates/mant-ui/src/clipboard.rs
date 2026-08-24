@@ -5,6 +5,9 @@ use std::sync::Arc;
 use mant_ir::ResolvedContent;
 use mant_protocol::NodeSelector;
 
+/// Maximum clipboard payload accepted by the reader and its standard host.
+pub const MAX_COPY_BYTES: usize = 4 * 1024 * 1024;
+
 /// Presentation requested for one complete semantic document node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CopyFormat {
