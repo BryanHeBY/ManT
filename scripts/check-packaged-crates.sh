@@ -39,7 +39,10 @@ for package in "${PACKAGES[@]}"; do
   fi
 done
 
-export CARGO_TARGET_DIR="$ROOT/target/package-check"
+# Each run must compile the just-extracted sources. Reusing one target tree
+# across dirty same-version package checks can retain an artifact built from a
+# previous source set and hide, or invent, an API compatibility failure.
+export CARGO_TARGET_DIR="$PACKAGE_CHECK_ROOT/target"
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked --workspace
 cargo test --manifest-path "$PACKAGE_CHECK_ROOT/Cargo.toml" --locked \
   --package libmandoc-rs --all-features

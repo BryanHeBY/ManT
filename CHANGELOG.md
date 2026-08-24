@@ -89,6 +89,8 @@ that crate was not published for that change.
   interactive reader. The clipboard is initialized lazily and retained for
   the TUI session; copy payloads are rejected above 4 MiB rather than
   truncated.
+- Require `mant-ui ^0.9.1`, the first compatible release that exposes the
+  typed clipboard callback used by the executable.
 
 ### Workspace publication transition
 
