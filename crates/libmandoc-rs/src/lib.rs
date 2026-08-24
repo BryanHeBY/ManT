@@ -1312,9 +1312,10 @@ mod tests {
 
     #[test]
     fn aggregate_while_replays_are_bounded_across_statements() {
-        let mut source = String::from(".TH AGGREGATE 1\n.SH BODY\n");
+        let mut source =
+            String::from(".TH AGGREGATE 1\n.SH BODY\n.de M\n.while 1 \\{\\\nreplayed\n.\\}\n..\n");
         for _ in 0..3 {
-            source.push_str(".while 1 \\{\\\nreplayed\n.\\}\n");
+            source.push_str(".M\n");
         }
         source.push_str(".SH AFTER\nretained aggregate tail\n");
 
