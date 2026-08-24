@@ -5,6 +5,11 @@ use std::{ffi::OsStr, io::Write};
 use base64::Engine as _;
 use mant_ui::{CopyFormat, CopyRequest, MAX_COPY_BYTES};
 
+// Base64 plus the OSC envelope stays below xterm's default 600,000-byte
+// control-string parser limit. Native clipboard delivery retains the larger
+// reader-wide limit.
+const MAX_OSC52_COPY_BYTES: usize = 400 * 1024;
+
 #[derive(Default)]
 pub(super) struct SystemClipboard {
     clipboard: Option<arboard::Clipboard>,
@@ -67,6 +72,12 @@ fn write_terminal_clipboard(text: &str) -> Result<(), String> {
 }
 
 fn write_osc52(writer: &mut impl Write, bytes: &[u8]) -> std::io::Result<()> {
+    if bytes.len() > MAX_OSC52_COPY_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "OSC 52 clipboard content exceeds the 400 KiB terminal limit",
+        ));
+    }
     let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
     writer.write_all(b"\x1b]52;c;")?;
     writer.write_all(encoded.as_bytes())?;
@@ -158,8 +169,8 @@ mod tests {
     use mant_protocol::NodeSelector;
 
     use super::{
-        CopyFormat, CopyRequest, deliver_clipboard, is_wsl_for_env, render_copy_request,
-        should_prefer_terminal_clipboard_for_env, write_osc52,
+        CopyFormat, CopyRequest, MAX_OSC52_COPY_BYTES, deliver_clipboard, is_wsl_for_env,
+        render_copy_request, should_prefer_terminal_clipboard_for_env, write_osc52,
     };
 
     #[test]
@@ -224,6 +235,17 @@ mod tests {
         write_osc52(&mut output, "café 日本 😀".as_bytes()).expect("OSC 52 write");
 
         assert_eq!(output, b"\x1b]52;c;Y2Fmw6kg5pel5pysIPCfmIA=\x07");
+    }
+
+    #[test]
+    fn osc52_rejects_payloads_that_common_terminal_parsers_drop() {
+        let mut output = Vec::new();
+        let error = write_osc52(&mut output, &vec![b'x'; MAX_OSC52_COPY_BYTES + 1])
+            .expect_err("oversized terminal clipboard payload");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("400 KiB terminal limit"));
+        assert!(output.is_empty());
     }
 
     #[test]
