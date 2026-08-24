@@ -248,6 +248,9 @@ the ordered patches in `patches/series`:
 - `0008-bounded-while-expansion.patch` limits each roff `.while` loop to
   10,000 iterations, retains the finite prefix, and emits libmandoc's existing
   infinite-loop diagnostic instead of allowing hostile input to parse forever.
+- `0018-bound-aggregate-while-expansion.patch` shares a 10,000-replay budget
+  across every `.while` statement and user-macro call in one parser session,
+  preventing individually bounded loops from multiplying into unbounded work.
 - `0009-preserve-unknown-encoding.patch` recognizes common Latin-1 declaration
   spellings and retains automatic UTF-8/Latin-1 detection when a `coding:`
   declaration names an unsupported charset, avoiding irreversible `?`

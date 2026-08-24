@@ -1311,6 +1311,36 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_while_replays_are_bounded_across_statements() {
+        let mut source = String::from(".TH AGGREGATE 1\n.SH BODY\n");
+        for _ in 0..3 {
+            source.push_str(".while 1 \\{\\\nreplayed\n.\\}\n");
+        }
+        source.push_str(".SH AFTER\nretained aggregate tail\n");
+
+        let report = Parser::default()
+            .parse_bytes("aggregate.1", source.as_bytes())
+            .expect("return the finite prefix across multiple loops");
+        let mut visible = Vec::new();
+        collect_visible_text(&report.document.root, &mut visible);
+
+        let replayed = visible.iter().filter(|value| **value == "replayed").count();
+        assert!(
+            replayed <= 10_003,
+            "three loop statements must share one replay budget: {replayed}"
+        );
+        assert!(visible.contains(&"retained aggregate tail"));
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("infinite loop")),
+            "aggregate exhaustion must remain observable: {:?}",
+            report.diagnostics
+        );
+    }
+
+    #[test]
     fn recursive_user_macro_retains_content_after_the_cycle() {
         let report = Parser::default()
             .parse_bytes(

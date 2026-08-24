@@ -32,6 +32,9 @@ that crate was not published for that change.
 - Enforce `IncludePolicy::Deny` at the native file-open boundary while keeping
   the caller-selected top-level file readable; an unset include root no longer
   permits an implicit process-working-directory fallback.
+- Apply a 10,000-replay aggregate budget across all roff `.while` statements
+  and user-macro calls in one parse, preventing individually bounded loops from
+  multiplying into process-scale memory exhaustion.
 - Add compatible explicit `man`/`mdoc` input selection and bounded,
   cross-platform `SourceBundle` trees for caller-owned `.so` resolution with
   no host-filesystem fallback.

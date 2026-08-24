@@ -1,0 +1,63 @@
+diff --git a/read.c b/read.c
+--- a/read.c
++++ b/read.c
+@@ -59,6 +59,7 @@
+ 
+ #define	REPARSE_LIMIT	1000
+ #define	WHILE_LIMIT	10000
++#define	WHILE_TOTAL_LIMIT 10000
+ 
+ struct	mparse {
+ 	struct roff	 *roff; /* roff parser (!NULL) */
+@@ -72,6 +73,8 @@ struct	mparse {
+ 	int		  filenc; /* encoding of the current file */
+ 	int		  reparse_count; /* finite interp. stack */
+ 	int		  while_count; /* finite .while expansion */
++	int		  while_total; /* aggregate .while replays */
++	int		  while_total_reported;
+ 	int		  line; /* line number in the file */
+ };
+ 
+@@ -349,8 +352,19 @@ rerun:
+ 					    curp->line, pos, NULL);
+ 					curp->loop = loop = NULL;
+ 					inloop = 0;
+-				} else
++				} else if (curp->while_total >=
++				    WHILE_TOTAL_LIMIT) {
++					if (curp->while_total_reported == 0) {
++						mandoc_msg(MANDOCERR_ROFFLOOP,
++						    curp->line, pos, NULL);
++						curp->while_total_reported = 1;
++					}
++					curp->loop = loop = NULL;
++					inloop = 0;
++				} else {
++					curp->while_total++;
+ 					loop = curp->loop;
++				}
+ 			}
+ 			else {
+ 				curp->loop = loop = NULL;
+@@ -614,6 +628,10 @@ mparse_readmem(struct mparse *curp, const unsigned char *data, size_t size,
+ 	size_t		 offset;
+ 	int		 save_filenc, save_lineno;
+ 
++	if (recursion_depth == 0) {
++		curp->while_total = 0;
++		curp->while_total_reported = 0;
++	}
+ 	if (recursion_depth > 64) {
+ 		mandoc_msg(MANDOCERR_ROFFLOOP, curp->line, 0, NULL);
+ 		return;
+@@ -672,6 +690,10 @@ mparse_readfd(struct mparse *curp, int fd, const char *filename)
+ 	int		 save_filenc, save_lineno;
+ 	int		 with_mmap;
+ 
++	if (recursion_depth == 0) {
++		curp->while_total = 0;
++		curp->while_total_reported = 0;
++	}
+ 	if (recursion_depth > 64) {
+ 		mandoc_msg(MANDOCERR_ROFFLOOP, curp->line, 0, NULL);
+ 		return;
