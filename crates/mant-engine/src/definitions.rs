@@ -207,6 +207,12 @@ fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
         for child in &mut description {
             shift_block_indent(child, description_origin);
         }
+        // A relative-indent wrapper continues the hanging term on the next
+        // line; it does not introduce a paragraph-distance gap of its own.
+        // The outer term retains the `.PP`/`.PD` distance between entries,
+        // while an explicit leading vertical-space block would have stopped
+        // this normalization before reaching this point.
+        clear_block_spacing(description.first_mut());
         let terms = vec![children];
         normalized.push(Block::DefinitionList {
             items: vec![DefinitionItem {
@@ -256,17 +262,28 @@ fn block_indent(block: &Block) -> u16 {
 }
 
 fn shift_block_indent(block: &mut Block, origin: u16) {
-    let layout = match block {
+    if let Some(layout) = block_layout_mut(block) {
+        layout.indent_columns = layout.indent_columns.saturating_sub(origin);
+    }
+}
+
+fn clear_block_spacing(block: Option<&mut Block>) {
+    if let Some(layout) = block.and_then(block_layout_mut) {
+        layout.spacing_before_lines = 0;
+    }
+}
+
+fn block_layout_mut(block: &mut Block) -> Option<&mut LayoutHint> {
+    match block {
         Block::Paragraph { layout, .. }
         | Block::Preformatted { layout, .. }
         | Block::List { layout, .. }
         | Block::DefinitionList { layout, .. }
         | Block::Table { layout, .. }
         | Block::Equation { layout, .. }
-        | Block::Unsupported { layout, .. } => layout,
-        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => return,
-    };
-    layout.indent_columns = layout.indent_columns.saturating_sub(origin);
+        | Block::Unsupported { layout, .. } => Some(layout),
+        Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => None,
+    }
 }
 
 fn identify_item(
@@ -536,8 +553,10 @@ mod tests {
         );
         assert!(matches!(
             &items[0].description[0],
-            Block::Paragraph { layout, .. } if layout.indent_columns == 0
+            Block::Paragraph { layout, .. }
+                if layout.indent_columns == 0 && layout.spacing_before_lines == 0
         ));
+        assert_eq!(items[0].spacing_before_lines, Some(1));
         let Block::DefinitionList { items, .. } = &sections[0].blocks[1] else {
             panic!("second option should remain independently addressable");
         };

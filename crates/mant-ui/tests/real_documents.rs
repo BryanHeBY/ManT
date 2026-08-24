@@ -164,6 +164,28 @@ fn generated_git_presentation_requests_never_reach_terminal_text() {
 }
 
 #[test]
+fn generated_git_option_descriptions_follow_their_terms_without_a_blank_row() {
+    for relative in ["archlinux/git.1.gz", "fedora44/git.1.zst"] {
+        let rendered = view(relative).render(132);
+        let rows = rendered
+            .text
+            .lines
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let version = rows
+            .iter()
+            .position(|row| row.trim() == "-v, --version")
+            .unwrap_or_else(|| panic!("{relative}: visible version term"));
+        assert!(
+            rows.get(version + 1)
+                .is_some_and(|row| row.trim_start().starts_with("Prints the Git suite version")),
+            "{relative}: option description must immediately follow its term: {rows:?}",
+        );
+    }
+}
+
+#[test]
 fn real_git_command_references_are_visibly_clickable() {
     let rendered = view("archlinux/git.1.gz").render(132);
 

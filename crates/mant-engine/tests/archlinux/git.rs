@@ -80,6 +80,7 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
     assert!(common::contains_strong(option_summary, "--all"));
     assert!(common::contains_strong(option_summary, "-a"));
     assert!(common::inline_text(option_summary).contains("is given then all available"));
+    assert_git_option_descriptions_follow_terms(document);
 
     let ancillary = common::section(document, "Ancillary Commands");
     let ancillary_text = common::block_slice_text(&ancillary.blocks);
@@ -109,6 +110,24 @@ fn keeps_nested_sections_examples_and_inline_grouping() {
         .expect("git option outline");
     assert!(common::find_outline_entry(&outline.nodes, "--help").is_some());
     assert!(common::find_outline_entry(&outline.nodes, "-C").is_some());
+}
+
+fn assert_git_option_descriptions_follow_terms(document: &mant_ir::Document) {
+    let options = common::section(document, "OPTIONS");
+    for option in ["--version", "--help"] {
+        let item = common::nested_definition_items(options)
+            .into_iter()
+            .find(|item| {
+                item.identity
+                    .as_ref()
+                    .is_some_and(|identity| identity.names.iter().any(|name| name == option))
+            })
+            .unwrap_or_else(|| panic!("semantic {option} option"));
+        assert!(matches!(
+            item.description.first(),
+            Some(Block::Paragraph { layout, .. }) if layout.spacing_before_lines == 0
+        ));
+    }
 }
 
 /// V2 outlines expose sub-section ids (`git-diffs-28`) and

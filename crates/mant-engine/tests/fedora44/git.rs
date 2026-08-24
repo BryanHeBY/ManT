@@ -3,7 +3,7 @@
 use crate::common::{self, count_outline_entries, find_outline_entry, query_for_document};
 use crate::fixtures::fedora44_manual;
 use mant_engine::build_outline_with_detail;
-use mant_ir::SourceFormat;
+use mant_ir::{Block, SourceFormat};
 use mant_protocol::OutlineDetail;
 
 /// 24 sections, `os = "Git 2.53.0"`, 25 option-outline entries.
@@ -20,6 +20,19 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
         .unwrap_or_else(|error| panic!("build git option outline: {error}"));
     assert_eq!(count_outline_entries(&outline.nodes), 25);
     assert!(find_outline_entry(&outline.nodes, "--help").is_some());
+
+    let version = common::nested_definition_items(common::section(document, "OPTIONS"))
+        .into_iter()
+        .find(|item| {
+            item.identity
+                .as_ref()
+                .is_some_and(|identity| identity.names.iter().any(|name| name == "--version"))
+        })
+        .expect("semantic --version option");
+    assert!(matches!(
+        version.description.first(),
+        Some(Block::Paragraph { layout, .. }) if layout.spacing_before_lines == 0
+    ));
 
     common::assert_no_duplicate_vertical_spacing(&document.sections, "fedora44/git");
 }
