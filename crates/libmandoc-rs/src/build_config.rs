@@ -209,7 +209,12 @@ mod tests {
 
         let term = include_str!("../vendor/mandoc-1.14.6/term.c");
         assert!(term.contains("size_t\t\t csz, lsz, ssz = 0;"));
-        assert!(term.contains("rhs = NULL;\n\t\t\tuc = 0;"));
+        let rhs = term.find("rhs = NULL;").expect("escape result reset");
+        let uc = term[rhs..]
+            .find("uc = 0;")
+            .map(|offset| rhs + offset)
+            .expect("escape code point reset");
+        assert!(rhs < uc);
     }
 
     #[test]
