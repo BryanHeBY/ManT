@@ -184,6 +184,18 @@ mod tests {
     }
 
     #[test]
+    fn msvc_warning_baseline_is_confined_to_upstream_objects() {
+        let build = include_str!("../build.rs");
+        for warning in ["4100", "4244", "4267"] {
+            assert!(build.contains(&format!(".flag(\"/wd{warning}\")")));
+        }
+        assert!(build.contains("let mut upstream_build = build.clone();"));
+        assert!(build.contains("let mut owned_build = build;"));
+        assert!(build.contains("upstream_build.compile_intermediates()"));
+        assert!(build.contains("owned_build.compile_intermediates()"));
+    }
+
+    #[test]
     #[should_panic(expected = "Linux/musl")]
     fn unconfigured_linux_libc_is_rejected() {
         target_configuration("linux", "musl");

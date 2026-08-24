@@ -151,21 +151,30 @@ fn main() {
         build.define("open", "mant_mandoc_source_open");
     }
 
-    for source in LIBMANDOC_SOURCES.iter().chain(compat_sources.iter()) {
-        build.file(vendor_dir.join(source));
-    }
+    let mut upstream_sources = LIBMANDOC_SOURCES
+        .iter()
+        .chain(compat_sources.iter())
+        .map(|source| vendor_dir.join(source))
+        .collect::<Vec<_>>();
     if render {
         build.define("MANT_MANDOC_RENDER", None);
-        for source in RENDER_SOURCES {
-            build.file(vendor_dir.join(source));
-        }
-        build.file(crate_dir.join("shim/mant_mandoc_output.c"));
+        upstream_sources.extend(RENDER_SOURCES.iter().map(|source| vendor_dir.join(source)));
+    }
+    let mut owned_sources = Vec::new();
+    if render {
+        owned_sources.push(crate_dir.join("shim/mant_mandoc_output.c"));
     }
     if memory_only {
-        build.file(crate_dir.join("shim/windows_compat.c"));
+        owned_sources.push(crate_dir.join("shim/windows_compat.c"));
     }
-    build.file(crate_dir.join("shim/mant_mandoc_shim.c"));
-    build.compile("mant_mandoc");
+    owned_sources.push(crate_dir.join("shim/mant_mandoc_shim.c"));
+
+    compile_native_archive(
+        build,
+        &upstream_sources,
+        &owned_sources,
+        deny_native_warnings && target_env == "msvc",
+    );
 
     if !memory_only {
         // Unix native-file parsing retains libmandoc's gzip transport.
@@ -182,6 +191,38 @@ fn main() {
     println!("cargo:rerun-if-changed=shim");
     println!("cargo:rerun-if-changed={}", vendor_dir.display());
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_ASAN");
+}
+
+fn compile_native_archive(
+    mut build: cc::Build,
+    upstream_sources: &[PathBuf],
+    owned_sources: &[PathBuf],
+    strict_msvc: bool,
+) {
+    if strict_msvc {
+        // Pinned upstream 1.14.6 uses unused callback parameters and POSIX-
+        // sized integer conversions that MSVC diagnoses much more broadly
+        // than GCC or Clang. Compile that immutable source group with an
+        // explicit three-warning baseline, while compiling every ManT-owned
+        // translation unit separately under the full /WX policy. Archive the
+        // resulting objects together to retain the existing link boundary.
+        let mut upstream_build = build.clone();
+        upstream_build
+            .flag("/wd4100")
+            .flag("/wd4244")
+            .flag("/wd4267")
+            .files(upstream_sources);
+        let mut objects = upstream_build.compile_intermediates();
+
+        let mut owned_build = build;
+        owned_build.files(owned_sources);
+        objects.extend(owned_build.compile_intermediates());
+
+        cc::Build::new().objects(objects).compile("mant_mandoc");
+    } else {
+        build.files(upstream_sources).files(owned_sources);
+        build.compile("mant_mandoc");
+    }
 }
 
 /// Generate the Rust lookup from the same pinned table compiled into

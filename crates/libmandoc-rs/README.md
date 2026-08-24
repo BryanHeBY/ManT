@@ -383,9 +383,12 @@ transport in Rust. Linux/musl remains rejected until it has a checked
 configuration.
 
 `ManT`'s project checks set `LIBMANDOC_RS_DENY_WARNINGS=1` to promote native C
-warnings to errors on every supported compiler. This is opt-in rather than a
-downstream default so new compiler diagnostics do not make an existing crate
-release fail to build for consumers.
+warnings to errors on every supported compiler. MSVC keeps an explicit
+three-warning baseline for pinned upstream 1.14.6 (`C4100`, `C4244`, and
+`C4267`), while ManT-owned shim and compatibility sources promote those
+families back to errors. This is opt-in rather than a downstream default so
+new compiler diagnostics do not make an existing crate release fail to build
+for consumers.
 
 ## Licensing
 
