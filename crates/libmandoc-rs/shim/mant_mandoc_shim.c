@@ -59,8 +59,11 @@ MANT_THREAD_LOCAL void *source_resolver_context;
 #ifndef MANDOC_MEMORY_ONLY
 MANT_THREAD_LOCAL char *source_root;
 MANT_THREAD_LOCAL int source_root_strict;
+/* Whether the active parse may open anything beyond its top-level source. */
+MANT_THREAD_LOCAL int source_includes_allowed;
 /* Absolute top-level file path that parse_file itself is allowed to open. */
 MANT_THREAD_LOCAL char *source_path;
+MANT_THREAD_LOCAL int source_path_pending;
 /*
  * Directory that literally contains the parsed file, kept unstripped.
  *
@@ -274,9 +277,11 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	source_resolver = resolver;
 	source_resolver_context = resolver_context;
 #ifndef MANDOC_MEMORY_ONLY
+	source_includes_allowed = allow_include;
+	free(source_path);
+	source_path = buffer == NULL ? copy_string(path) : NULL;
+	source_path_pending = source_path != NULL;
 	if (allow_include && bundle_sources == NULL) {
-		free(source_path);
-		source_path = buffer == NULL ? copy_string(path) : NULL;
 		if (include_root == NULL)
 			set_source_root_from_path(path);
 		else
@@ -348,7 +353,9 @@ cleanup:
 	source_dir = NULL;
 	free(source_path);
 	source_path = NULL;
+	source_path_pending = 0;
 	source_root_strict = 0;
+	source_includes_allowed = 0;
 #endif
 	return document;
 }
@@ -744,8 +751,9 @@ open_beside_source(const char *path, int flags, mode_t mode)
 int
 mant_mandoc_source_open(const char *path, int flags, ...)
 {
-	int		 fd, saved_errno;
+	int		 fd, saved_errno, top_level_path;
 	mode_t		 mode;
+	size_t		 source_path_length;
 	va_list		 arguments;
 
 	mode = 0;
@@ -754,6 +762,29 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 		mode = (mode_t)va_arg(arguments, int);
 		va_end(arguments);
 	}
+	/*
+	 * The top-level file is caller-selected and remains readable under
+	 * IncludePolicy::Deny. Every later open comes from roff `.so` handling
+	 * and must be authorized explicitly instead of treating an unset root as
+	 * permission to fall back to the process working directory.
+	 */
+	top_level_path = 0;
+	if (source_path_pending && source_path != NULL) {
+		source_path_length = strlen(source_path);
+		top_level_path = strcmp(path, source_path) == 0 ||
+		    (strncmp(path, source_path, source_path_length) == 0 &&
+		    strcmp(path + source_path_length, ".gz") == 0);
+	}
+	if (top_level_path) {
+		fd = openat(AT_FDCWD, path, flags, mode);
+		if (fd != -1)
+			source_path_pending = 0;
+		return fd;
+	}
+	if (source_includes_allowed == 0) {
+		errno = EPERM;
+		return -1;
+	}
 	if (*path == '/') {
 		if (source_root_strict &&
 		    (source_path == NULL || strcmp(path, source_path) != 0)) {
@@ -761,6 +792,10 @@ mant_mandoc_source_open(const char *path, int flags, ...)
 			return -1;
 		}
 		return openat(AT_FDCWD, path, flags, mode);
+	}
+	if (source_root_strict && source_root == NULL) {
+		errno = ENOMEM;
+		return -1;
 	}
 	if (source_root == NULL && source_dir == NULL)
 		return openat(AT_FDCWD, path, flags, mode);

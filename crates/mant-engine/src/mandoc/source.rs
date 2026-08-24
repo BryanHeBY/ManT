@@ -355,12 +355,25 @@ mod tests {
 
     use crate::{ManualErrorKind, ManualPage};
     use flate2::{Compression as GzipCompression, write::GzEncoder};
+    use mant_ir::{Inline, visit::Visit};
 
     use super::super::{parse_manual_page, parse_manual_source};
     use super::{
         MAX_MANUAL_BYTES, MAX_SO_REDIRECTS, ManualBudget, read_capped,
         resolve_manual_redirects_with_budget,
     };
+
+    #[derive(Default)]
+    struct VisibleText(String);
+
+    impl<'ir> Visit<'ir> for VisibleText {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            match inline {
+                Inline::Text { value } | Inline::Code { value } => self.0.push_str(value),
+                _ => mant_ir::visit::walk_inline(self, inline),
+            }
+        }
+    }
 
     #[cfg(unix)]
     fn symlink_file(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
@@ -512,6 +525,10 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.message.contains(".so"))
         );
+        let mut visible = VisibleText::default();
+        visible.visit_document(&document);
+        assert!(visible.0.contains("mixed"));
+        assert!(!visible.0.contains("must not be partially included"));
     }
 
     #[test]

@@ -14,6 +14,8 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Prevent embedded `.so` requests from reading process-working-directory
+  files when ManT parses untrusted manual content with includes denied.
 - Preserve formatter-owned commas when one mdoc `Fa` invocation supplies
   multiple parameters to a block-form function declaration.
 - Keep later `tbl` text-block cells aligned when an earlier empty `T{ T}` cell
@@ -24,6 +26,9 @@ that crate was not published for that change.
 
 ### libmandoc-rs
 
+- Enforce `IncludePolicy::Deny` at the native file-open boundary while keeping
+  the caller-selected top-level file readable; an unset include root no longer
+  permits an implicit process-working-directory fallback.
 - Add compatible explicit `man`/`mdoc` input selection and bounded,
   cross-platform `SourceBundle` trees for caller-owned `.so` resolution with
   no host-filesystem fallback.
