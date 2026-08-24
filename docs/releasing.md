@@ -140,12 +140,13 @@ product artifacts are built from workspace paths, while Cargo installations
 resolve the published crates, so failing to bump a changed package could make
 the two distributions differ.
 
-The post-0.9.0 decoupling itself changes every published manifest from an exact
-internal requirement to an explicit caret requirement. Before the next product
-release, assign a new version to every crate so those manifests are actually
-published; they may all begin at `0.9.1`, then diverge independently. This
-one-time transition is a packaging-contract change, not a return to permanent
-lockstep versioning.
+The post-0.9.0 decoupling changes the four dependent package manifests from
+exact internal requirements to explicit caret requirements; the three
+dependency roots have no internal edge to rewrite. Before the next product
+release, publish a new version of each affected dependent. The first
+independent-version baseline may use `0.9.1` across all seven crates, after
+which they can diverge. This one-time transition is a packaging-contract
+change, not a return to permanent lockstep versioning.
 
 Never move a tag after crates.io publication. Registry versions are immutable.
 

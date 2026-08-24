@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "libmandoc-rs"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "cc",
  "flate2",
@@ -195,7 +195,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "mant-engine"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "flate2",
  "grep-matcher",

@@ -16,9 +16,22 @@ for package in "${PACKAGES[@]}"; do
   version=${package_id##*[#@]}
   archive="$ROOT/target/package/$package-$version.crate"
   destination="$PACKAGE_CHECK_ROOT/crates/$package"
+  dependencies=()
+  case "$package" in
+    mant-protocol) dependencies=(mant-ir) ;;
+    mant-engine) dependencies=(libmandoc-rs mant-ir mant-protocol mant-sources) ;;
+    mant-ui) dependencies=(mant-engine mant-ir mant-protocol) ;;
+    mant) dependencies=(mant-engine mant-ir mant-protocol mant-sources mant-ui) ;;
+  esac
+  package_patches=()
+  for dependency in "${dependencies[@]}"; do
+    package_patches+=(
+      --config "patch.crates-io.$dependency.path=\"$ROOT/crates/$dependency\""
+    )
+  done
 
   cargo package --manifest-path "$ROOT/Cargo.toml" --locked --no-verify \
-    --allow-dirty -p "$package"
+    --allow-dirty -p "$package" "${package_patches[@]}"
   mkdir -p "$destination"
   tar -xzf "$archive" --strip-components=1 -C "$destination"
   if [[ -f $destination/Cargo.toml.orig ]]; then

@@ -26,6 +26,9 @@ that crate was not published for that change.
 - Carry an outer mdoc `.Sm off` state into preformatted displays, decode the
   NetBSD `\\[vc]` named character, and retain visible digits immediately after
   signed legacy `\\s` size escapes.
+- Require `libmandoc-rs ^0.9.1`, the first release containing the native parser
+  fixes this engine now relies on, and prepare these changes as
+  `mant-engine 0.9.1`.
 
 ### libmandoc-rs
 
@@ -48,11 +51,23 @@ that crate was not published for that change.
   relative and gzip-compressed `.so` targets, and keeps `SourceTree` Unix-only.
 - Resolve same-directory `.so` targets correctly when both the approved root
   and top-level Windows source path are relative to the process directory.
+- Make Windows file and include handling match the supported Unix contract for
+  explicit and fallback gzip paths, `./` components, source identity, and
+  pre-epoch or permissively normalized manual dates; reject reserved devices
+  and in-root reparse points explicitly.
 - Preserve populated `.TP`/`.TQ` heads ending in a `\\c` continuation when a
   following tag starts, so long and short option spellings remain aliases
   instead of deleting the first tag.
-- The new APIs are additive within the `0.9` compatibility line. A publication
-  version will be assigned independently when this crate is released.
+- Make parsing and reference rendering independent of the caller's locale,
+  and let callers pin the fallback operating-system value for a bare mdoc
+  `.Os` through `Parser::with_mdoc_operating_system`.
+- Normalize private libmandoc layout sentinels before exposing AST text, report
+  syntax/equation depth truncation explicitly, and fail without writing to
+  process stderr when private diagnostic capture cannot be created.
+- Namespace every bundled C definition under `mant_vendored_*` so linking the
+  crate no longer injects generic symbols such as `strlcpy`, `ohash_init`, or
+  `mparse_alloc` into downstream binaries.
+- These additive changes are prepared as `libmandoc-rs 0.9.1`.
 
 ### mant
 
@@ -64,14 +79,16 @@ that crate was not published for that change.
 ### Workspace publication transition
 
 - The next publication will assign `0.9.1` to all seven crates once, because
-  every published manifest changed its internal dependencies from exact
-  `=0.9.0` requirements to explicit `^0.9.0` requirements. This packaging
-  transition does not change the public Rust APIs or the
+  the four dependent package manifests must publish their internal dependency
+  changes from exact `=0.9.0` requirements to explicit caret requirements,
+  while the three dependency roots establish the same independent-version
+  baseline. This packaging transition does not by itself change public Rust
+  APIs or the
   `mant.request/v0.9` and related process protocol identifiers.
 - Published `mant-protocol 0.9.0` still requires exactly `mant-ir 0.9.0`; a
-  consumer that also selects `mant-ir 0.9.1` can receive two distinct crate
-  versions whose Rust types are not interchangeable. Starting with the first
-  independently published `mant-protocol 0.9.1`, its `mant-ir ^0.9.0`
+  consumer that also requires `mant-ir 0.9.1` can receive an unresolvable
+  dependency graph rather than a second compatible-line copy. Starting with
+  the first independently published `mant-protocol 0.9.1`, its `mant-ir ^0.9.0`
   requirement accepts compatible `0.9.x` releases, including `0.9.1`, but not
   `0.10.0`.
 - A future dependency minimum is raised when a crate adopts a newer API. For
