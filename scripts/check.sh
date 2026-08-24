@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
+export LIBMANDOC_RS_DENY_WARNINGS=1
 
 profile=release
 if (( $# > 0 )); then

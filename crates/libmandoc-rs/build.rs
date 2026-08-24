@@ -75,6 +75,7 @@ fn main() {
     let memory_only = target_os == "windows";
     let thread_sanitizer = env::var_os("LIBMANDOC_RS_TSAN").is_some();
     let address_sanitizer = env::var_os("LIBMANDOC_RS_ASAN").is_some();
+    let deny_native_warnings = env::var_os("LIBMANDOC_RS_DENY_WARNINGS").is_some();
     let render = env::var_os("CARGO_FEATURE_RENDER").is_some();
     let (config, compat_sources) = target_configuration(&target_os, &target_env);
 
@@ -112,6 +113,13 @@ fn main() {
         // flag_if_supported, while GCC development output remains readable.
         .flag_if_supported("-Wno-maybe-uninitialized")
         .flag_if_supported("-Wno-unused-parameter");
+    if deny_native_warnings {
+        // Project verification opts into a warning-free native boundary on
+        // every supported compiler. Do not impose -Werror on ordinary
+        // downstream builds, where a newer compiler could add diagnostics
+        // independently of this crate release.
+        build.warnings_into_errors(true);
+    }
     if thread_sanitizer {
         // Rust's sanitizer flag does not instrument the separately compiled
         // vendored C parser. Keep this explicit opt-in paired with the local
@@ -164,6 +172,7 @@ fn main() {
         println!("cargo:rustc-link-lib=z");
     }
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_DENY_WARNINGS");
     println!("cargo:rerun-if-env-changed=LIBMANDOC_RS_TSAN");
     // Target selection lives here and is pulled in via #[path]; Cargo does not
     // discover that dependency, so track it explicitly or edits to the config

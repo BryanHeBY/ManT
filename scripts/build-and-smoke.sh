@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT=${MANT_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 cd "$ROOT"
+export LIBMANDOC_RS_DENY_WARNINGS=1
 
 profile=${1:-release}
 case "$profile" in

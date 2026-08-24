@@ -87,6 +87,7 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
 fn release_workflow_publishes_and_attests_target_specific_sboms() {
     let workflow = include_str!("../../../.github/workflows/release.yml");
     assert!(workflow.contains("name: Verify release commit"));
+    assert!(workflow.contains("LIBMANDOC_RS_DENY_WARNINGS: \"1\""));
     assert!(workflow.contains("scripts/find-successful-ci.sh \"$source_sha\""));
     assert!(workflow.contains("needs: verify"));
     assert!(workflow.contains("bash .release-automation/scripts/build-and-smoke.sh release"));

@@ -31,6 +31,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  LIBMANDOC_RS_DENY_WARNINGS: "1"
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:

@@ -25,6 +25,7 @@ function Invoke-Native {
 
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
+$env:LIBMANDOC_RS_DENY_WARNINGS = "1"
 $Packages = @(
     "--package", "libmandoc-rs",
     "--package", "mant-ir",

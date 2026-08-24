@@ -13,6 +13,7 @@ fn ci_reuses_only_complete_exact_sha_runs_and_avoids_release_rebuilds() {
         6
     );
     assert!(workflow.contains("name: CI verified"));
+    assert!(workflow.contains("LIBMANDOC_RS_DENY_WARNINGS: \"1\""));
     assert!(workflow.contains("bash scripts/check.sh --build-profile debug"));
     assert!(workflow.contains("./scripts/check-windows.ps1 -BuildProfile debug"));
     assert!(workflow.contains("cargo +\"$RUST_MSRV\" check --locked --workspace"));
@@ -28,8 +29,10 @@ fn ci_reuses_only_complete_exact_sha_runs_and_avoids_release_rebuilds() {
     assert!(!workflow.contains("uses: actions/cache@"));
 
     let unix = include_str!("../../../scripts/check.sh");
+    assert!(unix.contains("export LIBMANDOC_RS_DENY_WARNINGS=1"));
     assert!(unix.contains("bash scripts/build-and-smoke.sh \"$profile\""));
     let windows = include_str!("../../../scripts/check-windows.ps1");
+    assert!(windows.contains("$env:LIBMANDOC_RS_DENY_WARNINGS = \"1\""));
     assert!(windows.contains("build-and-smoke.ps1\") -BuildProfile $BuildProfile"));
 
     let verifier = include_str!("../../../scripts/find-successful-ci.sh");

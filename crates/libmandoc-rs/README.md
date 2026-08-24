@@ -379,6 +379,11 @@ and does not link system zlib; its strict root resolver performs filesystem
 transport in Rust. Linux/musl remains rejected until it has a checked
 configuration.
 
+`ManT`'s project checks set `LIBMANDOC_RS_DENY_WARNINGS=1` to promote native C
+warnings to errors on every supported compiler. This is opt-in rather than a
+downstream default so new compiler diagnostics do not make an existing crate
+release fail to build for consumers.
+
 ## Licensing
 
 The Rust wrapper and C shim are licensed under Apache-2.0.  The vendored
