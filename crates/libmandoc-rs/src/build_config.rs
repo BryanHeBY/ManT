@@ -193,6 +193,9 @@ mod tests {
         assert!(build.contains("let mut owned_build = build;"));
         assert!(build.contains("upstream_build.compile_intermediates()"));
         assert!(build.contains("owned_build.compile_intermediates()"));
+
+        let roff = include_str!("../vendor/mandoc-1.14.6/roff.c");
+        assert!(roff.contains("done = 0;\n\tsign = '\\0';\n\tstart = buf->buf + pos;"));
     }
 
     #[test]

@@ -329,6 +329,9 @@ the ordered patches in `patches/series`:
 - `0025-keep-ohash-size-unsigned.patch` keeps the compatibility hash table's
   bounded size and probe indices in their public `unsigned int` domain,
   avoiding lossy `size_t` round trips on 64-bit MSVC.
+- `0026-initialize-number-register-sign.patch` gives the numeric-register
+  escape state an explicit neutral default before the expansion loop,
+  removing an MSVC dataflow ambiguity without changing valid escape behavior.
 - `0017-preserve-continued-tp-aliases.patch` closes a populated `.TP`/`.TQ`
   head before a following tagged paragraph when the tag ends in `\\c`, so
   legacy GNU pages retain consecutive long and short option aliases instead
