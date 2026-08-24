@@ -1568,6 +1568,11 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
 fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/roff/real/archlinux/git.1.gz");
+    if !fixture.exists() {
+        // The repository owns the separately licensed real-page corpus; the
+        // published UI package keeps this integration test optional.
+        return;
+    }
     let document = mant_engine::parse_manual_source(&fixture).expect("parse real git manual");
     let bundle = ResolvedContent {
         address: Some(DocumentAddress::Manual {

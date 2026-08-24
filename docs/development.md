@@ -124,6 +124,7 @@ tests/contracts/             Stable JSON contract fixtures consumed by Rust test
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
 scripts/check-windows.ps1    Native Windows verification sequence
+scripts/check-packaged-crates.sh  Build and test exact published crate source sets
 scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
 scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
 scripts/find-successful-ci.sh  Exact-commit full CI verification for automation

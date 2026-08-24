@@ -2491,6 +2491,11 @@ Sean\n\
     fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
         let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
+        if !source.exists() {
+            // The repository supplies this separately licensed cross-crate
+            // fixture; the published mant-engine package is self-contained.
+            return;
+        }
 
         let document = parse_manual_source(&source).expect("lower vendored mandoc manual");
 

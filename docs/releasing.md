@@ -59,7 +59,10 @@ integrators must act.
 
 5. Inspect the publishable file list for all seven crates. Each package must
    contain its applicable complete license texts and no unexpected fixture or
-   documentation assets:
+   documentation assets. The canonical `scripts/check.sh` path also packages
+   all seven crates and tests their exact source sets in an isolated temporary
+   workspace, so repository-only fixtures cannot silently break downstream
+   packager tests:
 
    ```sh
    for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant; do

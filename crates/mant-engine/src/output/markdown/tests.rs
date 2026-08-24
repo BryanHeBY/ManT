@@ -416,6 +416,11 @@ fn renders_the_shared_query_contract_without_leaking_json() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("tests/contracts/minimal-query-v0.9.json");
+    if !fixture.exists() {
+        // The tagged repository owns shared process-contract fixtures; they
+        // intentionally remain outside the published engine package.
+        return;
+    }
     let query = serde_json::from_str::<QueryBundle>(
         &std::fs::read_to_string(fixture).expect("shared query fixture"),
     )
@@ -802,6 +807,11 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
 fn serializes_a_large_source_lowered_document() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
+    if !source.exists() {
+        // Published package tests must not require a sibling crate's vendor
+        // tree; repository verification still exercises the real fixture.
+        return;
+    }
     let document = crate::parse_manual_source(&source).expect("large native document");
     let query = ResolvedContent {
         address: None,
