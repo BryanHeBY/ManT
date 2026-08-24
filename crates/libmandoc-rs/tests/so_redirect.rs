@@ -8,10 +8,7 @@
 
 use std::{fs, process};
 
-use libmandoc_rs::{Compression, IncludePolicy, ParseOptions, Parser};
-
-#[cfg(unix)]
-use libmandoc_rs::Node;
+use libmandoc_rs::{Compression, IncludePolicy, Node, ParseOptions, Parser};
 
 #[cfg(unix)]
 fn has_macro(node: &Node, name: &str) -> bool {
@@ -19,7 +16,6 @@ fn has_macro(node: &Node, name: &str) -> bool {
         || node.children.iter().any(|child| has_macro(child, name))
 }
 
-#[cfg(unix)]
 fn visible_text(node: &Node, output: &mut String) {
     if let Some(value) = &node.text {
         output.push_str(value);
@@ -28,6 +24,45 @@ fn visible_text(node: &Node, output: &mut String) {
     for child in &node.children {
         visible_text(child, output);
     }
+}
+
+#[test]
+fn memory_source_retains_content_after_a_native_include() {
+    let root = std::env::temp_dir().join(format!("libmandoc-rs-mixed-input-so-{}", process::id()));
+    let man1 = root.join("man1");
+    fs::create_dir_all(&man1).expect("create temporary manual tree");
+    fs::write(
+        man1.join("target.1"),
+        ".SS INCLUDED\nincluded native marker\n",
+    )
+    .expect("write included source");
+    let alias = man1.join("alias.1");
+
+    let report = Parser::new(ParseOptions {
+        includes: IncludePolicy::Root(root.clone()),
+        compression: Compression::Plain,
+    })
+    .parse_bytes(
+        &alias,
+        b".TH MIXED 1\n.SH BODY\nbefore native include\n.so target.1\nafter native include\n",
+    )
+    .expect("parse the outer memory source after returning from its file include");
+    fs::remove_dir_all(&root).expect("remove temporary manual tree");
+
+    let mut text = String::new();
+    visible_text(&report.document.root, &mut text);
+    assert!(
+        text.contains("before native include"),
+        "visible text: {text}"
+    );
+    assert!(
+        text.contains("included native marker"),
+        "visible text: {text}"
+    );
+    assert!(
+        text.contains("after native include"),
+        "visible text: {text}"
+    );
 }
 
 #[cfg(unix)]

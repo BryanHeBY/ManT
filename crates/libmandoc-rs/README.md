@@ -269,6 +269,10 @@ the ordered patches in `patches/series`:
   `.so` targets through the shim's per-call source hook. That hook serves a
   virtual bundle or the strict Windows root resolver, and finalizes only after
   the outermost memory source with the same recursion bound as files.
+- `0019-share-input-recursion-depth.patch` keeps memory buffers and native
+  files in one parser-owned include-depth counter, so a native `.so` target
+  cannot finalize the document while its caller-owned outer buffer still has
+  content to parse.
 - `0014-isolate-renderer-output.patch` routes ASCII and HTML bytes into the
   shim's bounded per-call sink, makes formatter ID/tab state thread-local,
   releases per-call tab storage, and widens small integer-format buffers to
