@@ -4,7 +4,10 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use super::{App, Overlay, PointerDrag, UpdateOutcome, menu::MenuId};
+use super::{
+    App, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag, SELECTION_AUTO_SCROLL_INTERVAL,
+    SelectionAutoScroll, UpdateOutcome, menu::MenuId,
+};
 use crate::layout::{MIN_SIDEBAR_WIDTH, maximum_sidebar_width};
 
 impl App {
@@ -60,6 +63,7 @@ impl App {
             return UpdateOutcome::Redraw;
         }
         if key.code == KeyCode::Esc && self.selection.take().is_some() {
+            self.selection_auto_scroll = None;
             return UpdateOutcome::Redraw;
         }
         match key.code {
@@ -168,6 +172,9 @@ impl App {
         mouse: MouseEvent,
         now: Instant,
     ) -> Option<UpdateOutcome> {
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+            self.selection_auto_scroll = None;
+        }
         let outcome = match mouse.kind {
             MouseEventKind::Down(MouseButton::Left)
                 if self
@@ -223,7 +230,7 @@ impl App {
                     UpdateOutcome::Redraw
                 }
                 PointerDrag::ContentSelection { moved } => {
-                    self.update_content_selection(mouse, moved)
+                    self.update_content_selection(mouse, moved, now)
                 }
                 PointerDrag::FinderScrollbar(_) | PointerDrag::None => return None,
             },
@@ -237,6 +244,7 @@ impl App {
                         self.scroll_content_to_pointer(mouse.row, drag);
                     }
                     PointerDrag::ContentSelection { moved } => {
+                        self.selection_auto_scroll = None;
                         self.finish_content_selection(mouse, moved);
                     }
                     PointerDrag::FinderScrollbar(_) | PointerDrag::None => {}
@@ -253,21 +261,120 @@ impl App {
         let position = self
             .content_text_position(mouse.column, mouse.row, false)
             .expect("content containment guarantees a text position");
-        self.selection = Some(crate::RenderedSelection::new(position));
-        self.pointer_drag = PointerDrag::ContentSelection { moved: false };
+        let extend = mouse.modifiers.contains(KeyModifiers::SHIFT) && self.selection.is_some();
+        if extend {
+            let retained_anchor = self
+                .selection
+                .expect("extension requires a retained selection")
+                .anchor;
+            self.selection = Some(crate::RenderedSelection {
+                anchor: retained_anchor,
+                focus: position,
+            });
+        } else {
+            self.selection = Some(crate::RenderedSelection::new(position));
+        }
+        self.pointer_drag = PointerDrag::ContentSelection { moved: extend };
         UpdateOutcome::Redraw
     }
 
-    fn update_content_selection(&mut self, mouse: MouseEvent, moved: bool) -> UpdateOutcome {
-        if let Some(position) = self.content_text_position(mouse.column, mouse.row, true)
-            && let Some(selection) = &mut self.selection
-        {
+    fn update_content_selection(
+        &mut self,
+        mouse: MouseEvent,
+        moved: bool,
+        now: Instant,
+    ) -> UpdateOutcome {
+        let direction = self.selection_scroll_direction(mouse.row);
+        let scrolling = direction
+            .is_some_and(|direction| self.advance_selection_scroll(direction, mouse.column, now));
+        self.selection_auto_scroll = if scrolling {
+            direction.map(|direction| SelectionAutoScroll {
+                direction,
+                column: mouse.column,
+                deadline: now + SELECTION_AUTO_SCROLL_INTERVAL,
+            })
+        } else {
+            None
+        };
+        self.update_selection_focus(mouse.column, mouse.row);
+        if let Some(selection) = self.selection {
             self.pointer_drag = PointerDrag::ContentSelection {
-                moved: moved || position != selection.anchor,
+                moved: moved || selection.focus != selection.anchor,
             };
-            selection.focus = position;
         }
         UpdateOutcome::Redraw
+    }
+
+    fn selection_scroll_direction(&self, row: u16) -> Option<isize> {
+        let area = self.geometry.content;
+        if area.height == 0 {
+            None
+        } else if row <= area.y {
+            Some(-1)
+        } else if row >= area.bottom().saturating_sub(1) {
+            Some(1)
+        } else {
+            None
+        }
+    }
+
+    fn advance_selection_scroll(&mut self, direction: isize, column: u16, now: Instant) -> bool {
+        let Some(maximum) = self
+            .geometry
+            .content_scrollbar
+            .map(crate::scrollbar::VerticalScrollbar::maximum)
+        else {
+            return false;
+        };
+        let next = self
+            .content_scroll
+            .saturating_add_signed(direction)
+            .min(maximum);
+        if next == self.content_scroll {
+            return false;
+        }
+        self.content_scroll = next;
+        self.navigation_sync_deadline = Some(now + NAVIGATION_SYNC_IDLE);
+        let row = if direction < 0 {
+            self.geometry.content.y
+        } else {
+            self.geometry.content.bottom().saturating_sub(1)
+        };
+        self.update_selection_focus(column, row);
+        true
+    }
+
+    fn update_selection_focus(&mut self, column: u16, row: u16) {
+        if let Some(position) = self.content_text_position(column, row, true)
+            && let Some(selection) = &mut self.selection
+        {
+            selection.focus = position;
+        }
+    }
+
+    pub(super) fn tick_selection_auto_scroll(&mut self, now: Instant) -> bool {
+        let Some(scroll) = self
+            .selection_auto_scroll
+            .filter(|scroll| scroll.deadline <= now)
+        else {
+            return false;
+        };
+        if !matches!(self.pointer_drag, PointerDrag::ContentSelection { .. })
+            || !self.advance_selection_scroll(scroll.direction, scroll.column, now)
+        {
+            self.selection_auto_scroll = None;
+            return false;
+        }
+        self.selection_auto_scroll = Some(SelectionAutoScroll {
+            deadline: now + SELECTION_AUTO_SCROLL_INTERVAL,
+            ..scroll
+        });
+        if let Some(selection) = self.selection {
+            self.pointer_drag = PointerDrag::ContentSelection {
+                moved: selection.focus != selection.anchor,
+            };
+        }
+        true
     }
 
     fn finish_content_selection(&mut self, mouse: MouseEvent, moved: bool) {

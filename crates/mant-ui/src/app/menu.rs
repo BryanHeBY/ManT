@@ -571,7 +571,7 @@ impl App {
                 Line::raw("Alt+←/→      back / forward"),
                 Line::raw("Ctrl+F or /  find in current page"),
                 Line::raw("n / N        next / previous search match"),
-                Line::raw("mouse drag   select rendered document text"),
+                Line::raw("drag / Shift+click  select+copy / extend"),
                 Line::raw("y / Ctrl+Shift+C  copy selected plain text"),
                 Line::raw("d/u          scroll content by ten rows"),
                 Line::raw("b            toggle sidebar"),

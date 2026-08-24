@@ -19,7 +19,7 @@ use ratatui::{Terminal, backend::TestBackend, layout::Rect};
 
 use super::{
     App, COPY_TOAST_DURATION, NAVIGATION_SYNC_IDLE, Overlay, PointerDrag,
-    SIDEBAR_RESIZE_FRAME_INTERVAL, UpdateOutcome,
+    SELECTION_AUTO_SCROLL_INTERVAL, SIDEBAR_RESIZE_FRAME_INTERVAL, UpdateOutcome,
     finder::FinderTreeRow,
     menu::{MenuAction, MenuId},
     render::sidebar_metadata,
@@ -1254,6 +1254,121 @@ fn dragging_document_text_emits_a_plain_text_copy_request() {
         CopyRequest::Selection { text } => assert_eq!(text, "Show help"),
         CopyRequest::Node { .. } => panic!("visual selection emitted a semantic node"),
     }
+}
+
+#[test]
+fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
+    let backend = TestBackend::new(60, 10);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&navigation_bundle());
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let area = app.geometry.content;
+    assert!(
+        app.geometry
+            .content_scrollbar
+            .is_some_and(|scrollbar| scrollbar.maximum() > 2)
+    );
+    let started = Instant::now();
+    let pointer = |kind, row| MouseEvent {
+        kind,
+        column: area.x + 4,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+
+    app.handle_pointer_control_at(
+        pointer(MouseEventKind::Down(MouseButton::Left), area.y + 1),
+        started,
+    );
+    app.handle_pointer_control_at(
+        pointer(MouseEventKind::Drag(MouseButton::Left), area.bottom() - 1),
+        started,
+    );
+    assert_eq!(app.content_scroll, 1);
+    let deadline = app
+        .selection_auto_scroll
+        .expect("scheduled downward selection scroll")
+        .deadline;
+    assert_eq!(deadline, started + SELECTION_AUTO_SCROLL_INTERVAL);
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("draw scrolled selection");
+
+    assert_eq!(app.tick(deadline), UpdateOutcome::Redraw);
+    assert_eq!(app.content_scroll, 2);
+    app.handle_pointer_control_at(
+        pointer(MouseEventKind::Up(MouseButton::Left), area.bottom() - 1),
+        deadline,
+    );
+    assert!(app.selection_auto_scroll.is_none());
+    assert!(app.take_copy_request().is_some());
+
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("draw before upward selection");
+    let restarted = deadline + Duration::from_millis(1);
+    app.handle_pointer_control_at(
+        pointer(MouseEventKind::Down(MouseButton::Left), area.y + 1),
+        restarted,
+    );
+    app.handle_pointer_control_at(
+        pointer(MouseEventKind::Drag(MouseButton::Left), area.y),
+        restarted,
+    );
+    assert_eq!(app.content_scroll, 1);
+    assert_eq!(
+        app.selection_auto_scroll.map(|scroll| scroll.direction),
+        Some(-1)
+    );
+    app.handle_pointer_control_at(
+        pointer(MouseEventKind::Drag(MouseButton::Left), area.y + 2),
+        restarted + Duration::from_millis(1),
+    );
+    assert!(app.selection_auto_scroll.is_none());
+}
+
+#[test]
+fn shift_click_moves_the_active_endpoint_and_retains_the_true_anchor() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&navigation_bundle());
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("Show help")
+        .into_iter()
+        .next()
+        .expect("visible description");
+    app.selection = Some(RenderedSelection {
+        anchor: TextPosition {
+            row: region.row,
+            column: region.start_column + 2,
+        },
+        focus: TextPosition {
+            row: region.row,
+            column: region.start_column,
+        },
+    });
+    let column =
+        app.geometry.content.x + u16::try_from(region.end_column - 1).expect("selection column");
+    let row = app.geometry.content.y + u16::try_from(region.row).expect("selection row");
+    let mouse = |kind| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::SHIFT,
+    };
+
+    app.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left)));
+    app.handle_mouse(mouse(MouseEventKind::Up(MouseButton::Left)));
+
+    let CopyRequest::Selection { text } = app.take_copy_request().expect("extended copy") else {
+        panic!("visual selection emitted a semantic node");
+    };
+    assert_eq!(text, "ow help");
+    let selection = app.selection.expect("retained extended selection");
+    assert_eq!(selection.anchor.column, region.start_column + 2);
+    assert_eq!(selection.focus.column, region.end_column - 1);
 }
 
 #[test]

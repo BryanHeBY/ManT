@@ -253,6 +253,7 @@ impl App {
             self.selection = None;
             if matches!(self.pointer_drag, PointerDrag::ContentSelection { .. }) {
                 self.pointer_drag = PointerDrag::None;
+                self.selection_auto_scroll = None;
             }
         }
         let viewport_anchor = (self.content_render_width != 0

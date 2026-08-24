@@ -28,6 +28,7 @@ use crate::{
 
 const NAVIGATION_SYNC_IDLE: Duration = Duration::from_millis(140);
 const COPY_TOAST_DURATION: Duration = Duration::from_millis(1_500);
+const SELECTION_AUTO_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
 const HISTORY_LIMIT: usize = 64;
 /// Caps expensive width-dependent document reflow while the splitter moves.
 ///
@@ -109,6 +110,13 @@ enum PointerDrag {
 
 #[derive(Debug, Clone, Copy)]
 struct PendingSidebarResize {
+    column: u16,
+    deadline: Instant,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SelectionAutoScroll {
+    direction: isize,
     column: u16,
     deadline: Instant,
 }
@@ -214,6 +222,7 @@ pub struct App {
     overlay: Overlay,
     pointer_drag: PointerDrag,
     selection: Option<RenderedSelection>,
+    selection_auto_scroll: Option<SelectionAutoScroll>,
     geometry: FrameGeometry,
     navigation_sync_deadline: Option<Instant>,
     sidebar_resize: SidebarResizeSchedule,
@@ -286,6 +295,7 @@ impl App {
             overlay: Overlay::None,
             pointer_drag: PointerDrag::None,
             selection: None,
+            selection_auto_scroll: None,
             geometry: FrameGeometry::default(),
             navigation_sync_deadline: None,
             sidebar_resize: SidebarResizeSchedule::default(),
@@ -347,6 +357,7 @@ impl App {
         self.overlay = Overlay::None;
         self.pointer_drag = PointerDrag::None;
         self.selection = None;
+        self.selection_auto_scroll = None;
         self.navigation_sync_deadline = None;
         self.rendered_cache.clear();
         self.content_render_width = 0;
@@ -540,6 +551,9 @@ impl App {
             self.copy_toast = None;
             outcome = UpdateOutcome::Redraw;
         }
+        if self.tick_selection_auto_scroll(now) {
+            outcome = UpdateOutcome::Redraw;
+        }
         outcome
     }
 
@@ -548,6 +562,7 @@ impl App {
             self.navigation_sync_deadline,
             self.sidebar_resize.deadline(),
             self.copy_toast.as_ref().map(|toast| toast.deadline),
+            self.selection_auto_scroll.map(|scroll| scroll.deadline),
         ]
         .into_iter()
         .flatten()
