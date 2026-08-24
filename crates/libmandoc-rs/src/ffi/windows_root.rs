@@ -154,7 +154,9 @@ impl RootResolver {
             return Err(denied("include target is not a regular file"));
         }
         let final_path = final_path(&file)?;
-        if final_path == canonical_root || !final_path.starts_with(&canonical_root) {
+        if path_eq_case_insensitive(&final_path, &canonical_root)
+            || !path_starts_with_case_insensitive(&final_path, &canonical_root)
+        {
             return Err(denied("include target resolves outside the approved root"));
         }
         Ok(file)
@@ -298,6 +300,38 @@ fn strip_prefix_case_insensitive(path: &Path, base: &Path) -> Option<PathBuf> {
     Some(path_components.collect())
 }
 
+fn path_eq_case_insensitive(left: &Path, right: &Path) -> bool {
+    path_components_eq_case_insensitive(left.components(), right.components())
+}
+
+fn path_starts_with_case_insensitive(path: &Path, base: &Path) -> bool {
+    let mut path_components = path.components();
+    base.components().all(|base_component| {
+        path_components.next().is_some_and(|path_component| {
+            component_eq_case_insensitive(path_component, base_component)
+        })
+    })
+}
+
+fn path_components_eq_case_insensitive<'a>(
+    mut left: impl Iterator<Item = Component<'a>>,
+    mut right: impl Iterator<Item = Component<'a>>,
+) -> bool {
+    loop {
+        match (left.next(), right.next()) {
+            (None, None) => return true,
+            (Some(left), Some(right)) if component_eq_case_insensitive(left, right) => {}
+            _ => return false,
+        }
+    }
+}
+
+fn component_eq_case_insensitive(left: Component<'_>, right: Component<'_>) -> bool {
+    left.as_os_str()
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&right.as_os_str().to_string_lossy())
+}
+
 fn is_reserved_device_name(component: &OsStr) -> bool {
     let normalized = component
         .to_string_lossy()
@@ -368,7 +402,10 @@ fn denied(message: &'static str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{FILE_ATTRIBUTE_REPARSE_POINT, is_reparse_point, safe_relative_path};
+    use super::{
+        FILE_ATTRIBUTE_REPARSE_POINT, is_reparse_point, path_eq_case_insensitive,
+        path_starts_with_case_insensitive, safe_relative_path,
+    };
 
     #[test]
     fn relative_paths_normalize_current_directory_components() {
@@ -390,5 +427,17 @@ mod tests {
         assert!(is_reparse_point(FILE_ATTRIBUTE_REPARSE_POINT));
         assert!(is_reparse_point(FILE_ATTRIBUTE_REPARSE_POINT | 0x20));
         assert!(!is_reparse_point(0x20));
+    }
+
+    #[test]
+    fn confinement_comparisons_follow_windows_case_semantics() {
+        let root = std::path::Path::new(r"C:\Users\Runner\Manuals");
+        let differently_cased_root = std::path::Path::new(r"c:\users\runner\manuals");
+        let child = std::path::Path::new(r"C:\USERS\RUNNER\MANUALS\man1\target.1");
+        let sibling = std::path::Path::new(r"C:\Users\Runner\Manuals-sibling\target.1");
+
+        assert!(path_eq_case_insensitive(root, differently_cased_root));
+        assert!(path_starts_with_case_insensitive(child, root));
+        assert!(!path_starts_with_case_insensitive(sibling, root));
     }
 }
