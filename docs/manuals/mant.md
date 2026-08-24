@@ -557,6 +557,14 @@ syntax is never cut at an arbitrary visual boundary. Synthetic Outline groups
 cannot be copied; select a complete section, entry, document overview, or tldr
 node instead.
 
+Clipboard delivery follows the terminal topology. Local sessions use the
+native system clipboard first and fall back to the write-only OSC 52 terminal
+protocol when native access is unavailable. WSL, SSH, and VS Code remote
+sessions prefer OSC 52 so the outer terminal or a compatible multiplexer such
+as herdr can place the text on the user's clipboard. Terminals can disable OSC
+52 writes; in that case ManT can confirm that it emitted the request but cannot
+observe whether the outer terminal accepted it.
+
 ### Page Search
 
 - `Ctrl+F`, `/`: Open the bottom search field.

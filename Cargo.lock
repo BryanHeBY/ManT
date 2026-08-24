@@ -928,6 +928,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "arboard",
+ "base64",
  "clap",
  "crossterm_winapi",
  "mant-engine",

@@ -61,6 +61,14 @@ optional tldr quick references before the full document. `Ctrl+O` opens the
 shared Markdown and native-manual catalog. Redirected output stays
 deterministic instead of emitting terminal control sequences.
 
+Visual selections copy automatically, while the Edit menu can copy a complete
+semantic node as deterministic text or structurally complete `CommonMark`. Local
+sessions prefer the native clipboard and fall back to write-only OSC 52. WSL,
+SSH, and VS Code remote sessions prefer OSC 52 so compatible outer terminals
+and multiplexers such as herdr can forward the copy to the user's clipboard.
+This terminal protocol has no acknowledgement, so a terminal that disables
+OSC 52 can silently ignore an emitted copy request.
+
 Help, diagnostics, and tldr output share a terminal-aware colour policy.
 Use `--color auto|always|never`; automatic mode respects terminal capability,
 `NO_COLOR`, and `TERM=dumb`, while structured formats stay undecorated.
