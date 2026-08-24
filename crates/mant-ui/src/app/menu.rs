@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     Frame,
-    layout::{Alignment, Margin, Rect},
+    layout::{Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
@@ -337,6 +337,10 @@ impl App {
             };
         }
 
+        if let Some(outcome) = self.handle_document_tab_mouse(mouse) {
+            return Some(outcome);
+        }
+
         if let Overlay::Menu { id, cursor } = self.overlay {
             let entries = menu_entries(id);
             let row = usize::from(mouse.row.saturating_sub(1));
@@ -434,16 +438,14 @@ impl App {
         }
     }
 
-    pub(super) fn draw_menu(&self, frame: &mut Frame<'_>, area: Rect) {
+    pub(super) fn draw_menu(&mut self, frame: &mut Frame<'_>, area: Rect) {
         let style = Style::default().bg(theme::MENU);
-        let menu_width = 44;
-        let rule = "─".repeat(usize::from(area.width).saturating_sub(menu_width));
         frame.render_widget(Block::default().style(style), area);
         let open_menu = match self.overlay {
             Overlay::Menu { id, .. } => Some(id),
             Overlay::None | Overlay::DocumentFinder | Overlay::Help => None,
         };
-        let mut spans = MenuId::ALL
+        let spans = MenuId::ALL
             .into_iter()
             .map(|id| {
                 let active = open_menu == Some(id);
@@ -457,14 +459,8 @@ impl App {
                 )
             })
             .collect::<Vec<_>>();
-        spans.push(Span::styled(rule, style.fg(theme::BORDER)));
         frame.render_widget(Paragraph::new(Line::from(spans)).style(style), area);
-        frame.render_widget(
-            Paragraph::new(format!("{} ", self.document.terminal_label()))
-                .alignment(Alignment::Right)
-                .style(style.fg(theme::SUBTEXT)),
-            area,
-        );
+        self.draw_document_tabs(frame, area, style);
     }
 
     pub(super) fn draw_overlay(&mut self, frame: &mut Frame<'_>) {
@@ -536,7 +532,7 @@ impl App {
 
     fn draw_help(frame: &mut Frame<'_>) {
         let width = 58.min(frame.area().width.saturating_sub(2));
-        let height = 20.min(frame.area().height);
+        let height = 21.min(frame.area().height);
         if width < 4 || height < 3 {
             return;
         }
@@ -568,6 +564,7 @@ impl App {
                 Line::raw("←/→ or h/l  move through the outline tree"),
                 Line::raw("Enter        fold or unfold selected node"),
                 Line::raw("Ctrl+O       find and open a document"),
+                Line::raw("top tabs     switch opened documents"),
                 Line::raw("Alt+←/→      back / forward"),
                 Line::raw("Ctrl+F or /  find in current page"),
                 Line::raw("n / N        next / previous search match"),

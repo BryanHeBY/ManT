@@ -201,7 +201,7 @@ fn continuation_prefix(node: &NavNode, expanded: bool) -> String {
     prefix
 }
 
-fn truncate_middle(value: &str, width: usize) -> String {
+pub(crate) fn truncate_middle(value: &str, width: usize) -> String {
     if value.width() <= width {
         return value.to_owned();
     }

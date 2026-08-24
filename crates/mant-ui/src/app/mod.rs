@@ -6,6 +6,7 @@ mod menu;
 mod navigation;
 mod render;
 mod search;
+mod tabs;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -61,6 +62,20 @@ struct HistoryLocation {
     address: Option<DocumentAddress>,
     fallback: Option<Arc<ResolvedContent>>,
     target: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct DocumentTab {
+    address: Option<DocumentAddress>,
+    fallback: Option<Arc<ResolvedContent>>,
+    label: String,
+    target: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DocumentTabHit {
+    area: Rect,
+    index: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -187,6 +202,9 @@ struct FrameGeometry {
     navigation: Rect,
     navigation_scrollbar: Option<VerticalScrollbar>,
     sidebar_splitter: Rect,
+    document_tabs: Vec<DocumentTabHit>,
+    previous_document_tabs: Rect,
+    next_document_tabs: Rect,
     status: Rect,
     navigation_rows: Vec<usize>,
     finder_query: Rect,
@@ -194,7 +212,7 @@ struct FrameGeometry {
     finder_scrollbar: Option<VerticalScrollbar>,
 }
 
-/// All mutable interaction state for one `ManT` document.
+/// All mutable interaction state for one `ManT` reader session.
 pub struct App {
     current_bundle: Arc<ResolvedContent>,
     document: DocumentView,
@@ -217,6 +235,11 @@ pub struct App {
     fallback_bundle: Option<Arc<ResolvedContent>>,
     back_history: Vec<HistoryLocation>,
     forward_history: Vec<HistoryLocation>,
+    document_tabs: Vec<DocumentTab>,
+    active_document_tab: usize,
+    document_tab_scroll: usize,
+    document_tab_visibility_target: Option<usize>,
+    document_tab_view_width: u16,
     notice: Option<String>,
     copy_toast: Option<CopyToast>,
     overlay: Overlay,
@@ -268,7 +291,7 @@ impl App {
         {
             scope_documents.insert(0, Arc::new(bundle.clone()));
         }
-        Self {
+        let mut app = Self {
             current_bundle: Arc::clone(&current_bundle),
             document,
             selected: 0,
@@ -290,6 +313,11 @@ impl App {
             fallback_bundle: bundle.address.is_none().then_some(current_bundle),
             back_history: Vec::new(),
             forward_history: Vec::new(),
+            document_tabs: Vec::new(),
+            active_document_tab: 0,
+            document_tab_scroll: 0,
+            document_tab_visibility_target: Some(0),
+            document_tab_view_width: 0,
             notice: None,
             copy_toast: None,
             overlay: Overlay::None,
@@ -301,7 +329,9 @@ impl App {
             sidebar_resize: SidebarResizeSchedule::default(),
             content_render_width: 0,
             rendered_cache: HashMap::new(),
-        }
+        };
+        app.sync_current_document_tab();
+        app
     }
 
     pub(crate) fn take_open_request(&mut self) -> Option<NavigationRequest> {
@@ -338,6 +368,7 @@ impl App {
     }
 
     fn replace_document(&mut self, bundle: &ResolvedContent) {
+        self.remember_current_document_tab();
         self.current_bundle = Arc::new(bundle.clone());
         self.document = DocumentView::new(bundle);
         self.current_address.clone_from(&bundle.address);
@@ -363,6 +394,7 @@ impl App {
         self.content_render_width = 0;
         self.notice = None;
         self.copy_toast = None;
+        self.sync_current_document_tab();
     }
 
     pub(super) fn copy_selection(&mut self) {

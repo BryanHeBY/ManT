@@ -204,6 +204,18 @@ fn manual_bundle(name: &str, section: &str) -> ResolvedContent {
     bundle
 }
 
+fn open_manual(app: &mut App, name: &str, section: &str) {
+    app.request_open(
+        DocumentAddress::Manual {
+            name: name.to_owned(),
+            manual_section: section.to_owned(),
+        },
+        None,
+    );
+    let request = app.take_open_request().expect("manual open request");
+    app.complete_open(&manual_bundle(name, section), request);
+}
+
 #[test]
 fn document_finder_filters_live_and_emits_an_exact_address() {
     let mut app = App::with_catalog(&navigation_bundle(), document_catalog());
@@ -568,6 +580,198 @@ fn same_document_fragment_jumps_participate_in_history() {
     assert_eq!(app.document.navigation()[app.selected].target_id, "options");
     app.navigate_history(false);
     assert_eq!(app.document.navigation()[app.selected].target_id, "details");
+}
+
+#[test]
+fn document_tabs_keep_first_open_order_and_reuse_existing_documents() {
+    let mut app = App::new(&manual_bundle("git", "1"));
+    open_manual(&mut app, "man", "1");
+    app.geometry.content.width = 60;
+    assert!(app.jump_to_anchor("details"));
+    open_manual(&mut app, "printf", "3");
+
+    assert_eq!(
+        app.document_tabs
+            .iter()
+            .map(|tab| tab.label.as_str())
+            .collect::<Vec<_>>(),
+        ["git(1)", "man(1)", "printf(3)"]
+    );
+    assert_eq!(app.active_document_tab, 2);
+
+    assert_eq!(app.activate_document_tab(1), UpdateOutcome::Redraw);
+    let request = app.take_open_request().expect("existing tab request");
+    assert_eq!(
+        request.address(),
+        &DocumentAddress::Manual {
+            name: "man".to_owned(),
+            manual_section: "1".to_owned(),
+        }
+    );
+    assert_eq!(request.target.as_deref(), Some("details"));
+    assert_eq!(
+        app.active_document_tab, 2,
+        "requesting a tab does not activate it before the host succeeds"
+    );
+    app.complete_open(&manual_bundle("man", "1"), request);
+
+    assert_eq!(app.active_document_tab, 1);
+    assert_eq!(app.document_tabs.len(), 3);
+    assert_eq!(
+        app.document_tabs
+            .iter()
+            .map(|tab| tab.label.as_str())
+            .collect::<Vec<_>>(),
+        ["git(1)", "man(1)", "printf(3)"]
+    );
+
+    app.navigate_history(true);
+    assert_eq!(
+        app.take_open_request()
+            .map(|request| request.address().clone()),
+        Some(DocumentAddress::Manual {
+            name: "printf".to_owned(),
+            manual_section: "3".to_owned(),
+        }),
+        "a tab jump participates in ordinary backward history"
+    );
+}
+
+#[test]
+fn document_tab_stack_evicts_the_oldest_identity_at_its_bound() {
+    let mut app = App::new(&manual_bundle("initial", "1"));
+    for index in 1..=64 {
+        open_manual(&mut app, &format!("tool-{index}"), "1");
+    }
+
+    assert_eq!(app.document_tabs.len(), 64);
+    assert_eq!(app.document_tabs[0].label, "tool-1(1)");
+    assert_eq!(app.document_tabs[63].label, "tool-64(1)");
+    assert_eq!(app.active_document_tab, 63);
+}
+
+#[test]
+fn overflowing_document_tabs_keep_the_active_tab_visible_and_clickable() {
+    let backend = TestBackend::new(86, 14);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&manual_bundle("initial-tool", "1"));
+    for index in 1..6 {
+        open_manual(&mut app, &format!("document-tool-{index}"), "1");
+    }
+
+    terminal.draw(|frame| app.draw(frame)).expect("draw tabs");
+    assert!(
+        app.geometry
+            .document_tabs
+            .iter()
+            .any(|tab| tab.index == app.active_document_tab),
+        "the newly activated tab remains inside the visible window"
+    );
+    assert_ne!(app.geometry.previous_document_tabs, Rect::default());
+    assert_eq!(app.geometry.next_document_tabs, Rect::default());
+    for pair in app.geometry.document_tabs.windows(2) {
+        assert!(pair[0].area.right() <= pair[1].area.x);
+    }
+    for tab in &app.geometry.document_tabs {
+        assert!(tab.area.right() <= 86);
+        assert_eq!(
+            terminal
+                .backend()
+                .buffer()
+                .cell((tab.area.x, tab.area.y))
+                .expect("tab separator")
+                .symbol(),
+            "│"
+        );
+    }
+    let active = app
+        .geometry
+        .document_tabs
+        .iter()
+        .find(|tab| tab.index == app.active_document_tab)
+        .copied()
+        .expect("active tab geometry");
+    assert_eq!(
+        terminal
+            .backend()
+            .buffer()
+            .cell((active.area.x + 1, active.area.y))
+            .expect("active tab cell")
+            .bg,
+        theme::SELECTED
+    );
+
+    let previous = app.geometry.previous_document_tabs;
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: previous.x,
+        row: previous.y,
+        modifiers: KeyModifiers::NONE,
+    });
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("draw earlier tabs");
+    let target = app
+        .geometry
+        .document_tabs
+        .first()
+        .copied()
+        .expect("visible earlier tab");
+    assert!(target.index < app.active_document_tab);
+    app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: target.area.x + 1,
+        row: target.area.y,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(
+        app.take_open_request()
+            .map(|request| request.address().clone()),
+        app.document_tabs[target.index].address
+    );
+}
+
+#[test]
+fn document_tab_width_matrix_is_terminal_safe_and_keeps_the_active_identity() {
+    let mut app = App::new(&manual_bundle("编译器选项与输出格式", "1"));
+    open_manual(&mut app, "a-deliberately-long-shared-prefix-alpha", "1");
+    open_manual(&mut app, "a-deliberately-long-shared-prefix-omega", "1");
+    open_manual(&mut app, "unsafe\u{1b}[2J-title", "1");
+
+    for width in [44, 45, 46, 48, 60, 86, 120] {
+        let backend = TestBackend::new(width, 12);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        terminal.draw(|frame| app.draw(frame)).expect("draw tabs");
+        if width == 44 {
+            assert!(app.geometry.document_tabs.is_empty());
+            continue;
+        }
+        assert!(
+            app.geometry
+                .document_tabs
+                .iter()
+                .any(|tab| tab.index == app.active_document_tab),
+            "active tab is visible at width {width}"
+        );
+        assert!(
+            app.geometry
+                .document_tabs
+                .iter()
+                .all(|tab| tab.area.x >= 44 && tab.area.right() <= width),
+            "tab geometry stays inside width {width}"
+        );
+        assert!(
+            app.geometry
+                .document_tabs
+                .windows(2)
+                .all(|pair| pair[0].area.right() <= pair[1].area.x),
+            "tab hit regions do not overlap at width {width}"
+        );
+        assert!(
+            !terminal.backend().to_string().contains('\u{1b}'),
+            "tab labels cannot emit terminal controls"
+        );
+    }
 }
 
 #[test]
