@@ -131,6 +131,10 @@ not `0.10.0`. If a lower-level crate makes a breaking pre-1.0 change, bump its
 minor version, update and bump every dependent that adopts it, then publish
 bottom-up. If a dependent starts using an API introduced in `0.9.2`, change its
 minimum to `^0.9.2` and bump that dependent even when no Rust source changed.
+Because `libmandoc-rs` declares `links = "libmandoc_rs"`, Cargo permits only
+one version of that native-link crate in a dependency graph; its breaking
+minor upgrades therefore require coordinated dependent releases even when
+other pure-Rust crates could otherwise coexist at multiple versions.
 Do not publish changed crate source under an existing version: the native
 product artifacts are built from workspace paths, while Cargo installations
 resolve the published crates, so failing to bump a changed package could make

@@ -45,6 +45,8 @@
 #define HAVE_OHASH 0
 #define NEED_XPG4_2 0
 
+#include "mant_symbol_prefix.h"
+
 #define BINM_APROPOS "apropos"
 #define BINM_CATMAN "catman"
 #define BINM_MAKEWHATIS "makewhatis"

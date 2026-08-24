@@ -47,6 +47,8 @@ run "check roff audit coverage contract" python3 scripts/check-roff-audit-covera
 run "test Rust workspace" cargo test --locked --workspace
 run "test optional libmandoc features" \
   cargo test --locked --package libmandoc-rs --all-features
+run "check libmandoc native symbol namespace" \
+  bash scripts/check-libmandoc-symbols.sh
 run "test published crate source sets" bash scripts/check-packaged-crates.sh
 run "build roff CommonMark projection profiler" \
   cargo build --locked --package mant-engine --example roff_projection_profile

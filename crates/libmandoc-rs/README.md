@@ -50,6 +50,15 @@ locations, and tags. It is not
 semantic entries, typed links, or renderers should use `mant-engine` and
 `mant-ir` instead.
 
+All bundled parser and compatibility definitions are compiled under the
+`mant_vendored_*` namespace; only the private `mant_mandoc_*` Rust/shim bridge
+remains separately named. Linking this crate therefore does not inject generic
+symbols such as `strlcpy`, `ohash_init`, or `mparse_alloc` into a consumer's
+native symbol namespace. Cargo's `links = "libmandoc_rs"` key still permits
+only one `libmandoc-rs` version in a dependency graph. A breaking pre-1.0
+upgrade must consequently be coordinated across every dependent crate rather
+than relying on parallel `0.x` versions.
+
 The shim retains the completed native parser only during the synchronous FFI
 transfer. Each native node and table cell is exposed as a shallow borrowed
 snapshot and copied directly into the public Rust tree; no borrowed pointer

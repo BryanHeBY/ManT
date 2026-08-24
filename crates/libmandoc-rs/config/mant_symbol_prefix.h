@@ -1,0 +1,261 @@
+/* Namespace every private vendored or compatibility symbol that can enter a
+ * downstream static link.  The Rust FFI surface intentionally keeps its
+ * mant_mandoc_* names and is not listed here. */
+#ifndef MANT_MANDOC_SYMBOL_PREFIX_H
+#define MANT_MANDOC_SYMBOL_PREFIX_H
+
+#define __mdoc_argnames mant_vendored___mdoc_argnames
+#define __roff_name mant_vendored___roff_name
+#define a2roffsu mant_vendored_a2roffsu
+#define arch_valid mant_vendored_arch_valid
+#define ascii_alloc mant_vendored_ascii_alloc
+#define ascii_free mant_vendored_ascii_free
+#define ascii_uc2str mant_vendored_ascii_uc2str
+#define deroff mant_vendored_deroff
+#define eqn_alloc mant_vendored_eqn_alloc
+#define eqn_box_free mant_vendored_eqn_box_free
+#define eqn_box_new mant_vendored_eqn_box_new
+#define eqn_free mant_vendored_eqn_free
+#define eqn_parse mant_vendored_eqn_parse
+#define eqn_read mant_vendored_eqn_read
+#define eqn_reset mant_vendored_eqn_reset
+#define html_alloc mant_vendored_html_alloc
+#define html_close_paragraph mant_vendored_html_close_paragraph
+#define html_fillmode mant_vendored_html_fillmode
+#define html_free mant_vendored_html_free
+#define html_make_id mant_vendored_html_make_id
+#define html_man mant_vendored_html_man
+#define html_mdoc mant_vendored_html_mdoc
+#define html_reset mant_vendored_html_reset
+#define html_setfont mant_vendored_html_setfont
+#define locale_alloc mant_vendored_locale_alloc
+#define man_breakscope mant_vendored_man_breakscope
+#define man_descope mant_vendored_man_descope
+#define man_endparse mant_vendored_man_endparse
+#define man_macro mant_vendored_man_macro
+#define man_parseln mant_vendored_man_parseln
+#define man_unscope mant_vendored_man_unscope
+#define man_validate mant_vendored_man_validate
+#define mandoc_a2msec mant_vendored_mandoc_a2msec
+#define mandoc_asprintf mant_vendored_mandoc_asprintf
+#define mandoc_calloc mant_vendored_mandoc_calloc
+#define mandoc_eos mant_vendored_mandoc_eos
+#define mandoc_escape mant_vendored_mandoc_escape
+#define mandoc_font mant_vendored_mandoc_font
+#define mandoc_malloc mant_vendored_mandoc_malloc
+#define mandoc_msg mant_vendored_mandoc_msg
+#define mandoc_msg_getinfilename mant_vendored_mandoc_msg_getinfilename
+#define mandoc_msg_getmin mant_vendored_mandoc_msg_getmin
+#define mandoc_msg_getrc mant_vendored_mandoc_msg_getrc
+#define mandoc_msg_setinfilename mant_vendored_mandoc_msg_setinfilename
+#define mandoc_msg_setmin mant_vendored_mandoc_msg_setmin
+#define mandoc_msg_setoutfile mant_vendored_mandoc_msg_setoutfile
+#define mandoc_msg_setrc mant_vendored_mandoc_msg_setrc
+#define mandoc_msg_summary mant_vendored_mandoc_msg_summary
+#define mandoc_normdate mant_vendored_mandoc_normdate
+#define mandoc_ohash_init mant_vendored_mandoc_ohash_init
+#define mandoc_realloc mant_vendored_mandoc_realloc
+#define mandoc_reallocarray mant_vendored_mandoc_reallocarray
+#define mandoc_recallocarray mant_vendored_mandoc_recallocarray
+#define mandoc_strdup mant_vendored_mandoc_strdup
+#define mandoc_strndup mant_vendored_mandoc_strndup
+#define mandoc_strntoi mant_vendored_mandoc_strntoi
+#define mandoc_xr_add mant_vendored_mandoc_xr_add
+#define mandoc_xr_free mant_vendored_mandoc_xr_free
+#define mandoc_xr_get mant_vendored_mandoc_xr_get
+#define mandoc_xr_reset mant_vendored_mandoc_xr_reset
+#define mchars_alloc mant_vendored_mchars_alloc
+#define mchars_free mant_vendored_mchars_free
+#define mchars_num2char mant_vendored_mchars_num2char
+#define mchars_num2uc mant_vendored_mchars_num2uc
+#define mchars_spec2cp mant_vendored_mchars_spec2cp
+#define mchars_spec2str mant_vendored_mchars_spec2str
+#define mchars_uc2str mant_vendored_mchars_uc2str
+#define mdoc_a2att mant_vendored_mdoc_a2att
+#define mdoc_a2lib mant_vendored_mdoc_a2lib
+#define mdoc_a2sec mant_vendored_mdoc_a2sec
+#define mdoc_a2st mant_vendored_mdoc_a2st
+#define mdoc_argnames mant_vendored_mdoc_argnames
+#define mdoc_args mant_vendored_mdoc_args
+#define mdoc_argv mant_vendored_mdoc_argv
+#define mdoc_argv_free mant_vendored_mdoc_argv_free
+#define mdoc_block_alloc mant_vendored_mdoc_block_alloc
+#define mdoc_elem_alloc mant_vendored_mdoc_elem_alloc
+#define mdoc_endbody_alloc mant_vendored_mdoc_endbody_alloc
+#define mdoc_endparse mant_vendored_mdoc_endparse
+#define mdoc_isdelim mant_vendored_mdoc_isdelim
+#define mdoc_macro mant_vendored_mdoc_macro
+#define mdoc_macro_call mant_vendored_mdoc_macro_call
+#define mdoc_parseln mant_vendored_mdoc_parseln
+#define mdoc_state mant_vendored_mdoc_state
+#define mdoc_tail_alloc mant_vendored_mdoc_tail_alloc
+#define mdoc_validate mant_vendored_mdoc_validate
+#define mparse_alloc mant_vendored_mparse_alloc
+#define mparse_copy mant_vendored_mparse_copy
+#define mparse_free mant_vendored_mparse_free
+#define mparse_open mant_vendored_mparse_open
+#define mparse_readfd mant_vendored_mparse_readfd
+#define mparse_readmem mant_vendored_mparse_readmem
+#define mparse_reset mant_vendored_mparse_reset
+#define mparse_result mant_vendored_mparse_result
+#define preconv_cue mant_vendored_preconv_cue
+#define preconv_encode mant_vendored_preconv_encode
+#define print_endline mant_vendored_print_endline
+#define print_eqn mant_vendored_print_eqn
+#define print_gen_comment mant_vendored_print_gen_comment
+#define print_gen_decls mant_vendored_print_gen_decls
+#define print_gen_head mant_vendored_print_gen_head
+#define print_otag mant_vendored_print_otag
+#define print_otag_id mant_vendored_print_otag_id
+#define print_stagq mant_vendored_print_stagq
+#define print_tagged_text mant_vendored_print_tagged_text
+#define print_tagq mant_vendored_print_tagq
+#define print_tbl mant_vendored_print_tbl
+#define print_tblclose mant_vendored_print_tblclose
+#define print_text mant_vendored_print_text
+#define roff_alloc mant_vendored_roff_alloc
+#define roff_block_alloc mant_vendored_roff_block_alloc
+#define roff_body_alloc mant_vendored_roff_body_alloc
+#define roff_elem_alloc mant_vendored_roff_elem_alloc
+#define roff_endparse mant_vendored_roff_endparse
+#define roff_free mant_vendored_roff_free
+#define roff_getarg mant_vendored_roff_getarg
+#define roff_getcontrol mant_vendored_roff_getcontrol
+#define roff_getformat mant_vendored_roff_getformat
+#define roff_getreg mant_vendored_roff_getreg
+#define roff_head_alloc mant_vendored_roff_head_alloc
+#define roff_html_pre mant_vendored_roff_html_pre
+#define roff_man_alloc mant_vendored_roff_man_alloc
+#define roff_man_free mant_vendored_roff_man_free
+#define roff_man_reset mant_vendored_roff_man_reset
+#define roff_name mant_vendored_roff_name
+#define roff_node_alloc mant_vendored_roff_node_alloc
+#define roff_node_append mant_vendored_roff_node_append
+#define roff_node_child mant_vendored_roff_node_child
+#define roff_node_delete mant_vendored_roff_node_delete
+#define roff_node_free mant_vendored_roff_node_free
+#define roff_node_next mant_vendored_roff_node_next
+#define roff_node_prev mant_vendored_roff_node_prev
+#define roff_node_relink mant_vendored_roff_node_relink
+#define roff_node_transparent mant_vendored_roff_node_transparent
+#define roff_node_unlink mant_vendored_roff_node_unlink
+#define roff_parseln mant_vendored_roff_parseln
+#define roff_reset mant_vendored_roff_reset
+#define roff_setreg mant_vendored_roff_setreg
+#define roff_state_reset mant_vendored_roff_state_reset
+#define roff_strdup mant_vendored_roff_strdup
+#define roff_term_pre mant_vendored_roff_term_pre
+#define roff_tok_transparent mant_vendored_roff_tok_transparent
+#define roff_userret mant_vendored_roff_userret
+#define roff_validate mant_vendored_roff_validate
+#define roff_word_alloc mant_vendored_roff_word_alloc
+#define roff_word_append mant_vendored_roff_word_append
+#define roffhash_alloc mant_vendored_roffhash_alloc
+#define roffhash_find mant_vendored_roffhash_find
+#define roffhash_free mant_vendored_roffhash_free
+#define tag_alloc mant_vendored_tag_alloc
+#define tag_exists mant_vendored_tag_exists
+#define tag_free mant_vendored_tag_free
+#define tag_postprocess mant_vendored_tag_postprocess
+#define tag_put mant_vendored_tag_put
+#define tbl_alloc mant_vendored_tbl_alloc
+#define tbl_cdata mant_vendored_tbl_cdata
+#define tbl_data mant_vendored_tbl_data
+#define tbl_end mant_vendored_tbl_end
+#define tbl_free mant_vendored_tbl_free
+#define tbl_layout mant_vendored_tbl_layout
+#define tbl_option mant_vendored_tbl_option
+#define tbl_read mant_vendored_tbl_read
+#define tbl_restart mant_vendored_tbl_restart
+#define tbl_span mant_vendored_tbl_span
+#define tblcalc mant_vendored_tblcalc
+#define term_begin mant_vendored_term_begin
+#define term_end mant_vendored_term_end
+#define term_eqn mant_vendored_term_eqn
+#define term_flushln mant_vendored_term_flushln
+#define term_fontlast mant_vendored_term_fontlast
+#define term_fontpop mant_vendored_term_fontpop
+#define term_fontpopq mant_vendored_term_fontpopq
+#define term_fontpush mant_vendored_term_fontpush
+#define term_fontrepl mant_vendored_term_fontrepl
+#define term_free mant_vendored_term_free
+#define term_hen mant_vendored_term_hen
+#define term_hspan mant_vendored_term_hspan
+#define term_len mant_vendored_term_len
+#define term_newln mant_vendored_term_newln
+#define term_setcol mant_vendored_term_setcol
+#define term_setwidth mant_vendored_term_setwidth
+#define term_strlen mant_vendored_term_strlen
+#define term_tab_free mant_vendored_term_tab_free
+#define term_tab_iset mant_vendored_term_tab_iset
+#define term_tab_next mant_vendored_term_tab_next
+#define term_tab_set mant_vendored_term_tab_set
+#define term_tag_write mant_vendored_term_tag_write
+#define term_tbl mant_vendored_term_tbl
+#define term_vspace mant_vendored_term_vspace
+#define term_vspan mant_vendored_term_vspan
+#define term_word mant_vendored_term_word
+#define terminal_man mant_vendored_terminal_man
+#define terminal_mdoc mant_vendored_terminal_mdoc
+#define terminal_sepline mant_vendored_terminal_sepline
+#define utf8_alloc mant_vendored_utf8_alloc
+
+#if !HAVE_ERR
+#define err mant_vendored_err
+#define errx mant_vendored_errx
+#define warn mant_vendored_warn
+#define warnx mant_vendored_warnx
+#endif
+
+#if !HAVE_PROGNAME
+#define getprogname mant_vendored_getprogname
+#define setprogname mant_vendored_setprogname
+#endif
+
+#if !HAVE_REALLOCARRAY
+#define reallocarray mant_vendored_reallocarray
+#endif
+
+#if !HAVE_RECALLOCARRAY
+#define recallocarray mant_vendored_recallocarray
+#endif
+
+#if !HAVE_STRLCAT
+#define strlcat mant_vendored_strlcat
+#endif
+
+#if !HAVE_STRLCPY
+#define strlcpy mant_vendored_strlcpy
+#endif
+
+#if !HAVE_STRNDUP
+#define strndup mant_vendored_strndup
+#endif
+
+#if !HAVE_STRTONUM
+#define strtonum mant_vendored_strtonum
+#endif
+
+#if !HAVE_VASPRINTF
+#define vasprintf mant_vendored_vasprintf
+#endif
+
+#if !HAVE_OHASH
+#define ohash_create_entry mant_vendored_ohash_create_entry
+#define ohash_delete mant_vendored_ohash_delete
+#define ohash_entries mant_vendored_ohash_entries
+#define ohash_find mant_vendored_ohash_find
+#define ohash_first mant_vendored_ohash_first
+#define ohash_init mant_vendored_ohash_init
+#define ohash_insert mant_vendored_ohash_insert
+#define ohash_interval mant_vendored_ohash_interval
+#define ohash_lookup_interval mant_vendored_ohash_lookup_interval
+#define ohash_lookup_memory mant_vendored_ohash_lookup_memory
+#define ohash_next mant_vendored_ohash_next
+#define ohash_qlookup mant_vendored_ohash_qlookup
+#define ohash_qlookupi mant_vendored_ohash_qlookupi
+#define ohash_remove mant_vendored_ohash_remove
+#endif
+
+#endif
+

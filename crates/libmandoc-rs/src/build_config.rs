@@ -104,6 +104,32 @@ mod tests {
     }
 
     #[test]
+    fn every_target_namespaces_private_native_symbols() {
+        let configs = [
+            include_str!("../config/linux-gnu.h"),
+            include_str!("../config/macos.h"),
+            include_str!("../config/windows-msvc.h"),
+        ];
+        for config in configs {
+            assert!(config.contains("#include \"mant_symbol_prefix.h\""));
+        }
+
+        let prefix = include_str!("../config/mant_symbol_prefix.h");
+        for symbol in [
+            "mparse_alloc",
+            "mandoc_malloc",
+            "roff_alloc",
+            "strlcpy",
+            "ohash_init",
+        ] {
+            assert!(
+                prefix.contains(&format!("#define {symbol} mant_vendored_{symbol}")),
+                "missing namespace mapping for {symbol}"
+            );
+        }
+    }
+
+    #[test]
     fn diagnostic_capture_never_falls_back_to_process_stderr() {
         let shim = include_str!("../shim/mant_mandoc_shim.c");
 
