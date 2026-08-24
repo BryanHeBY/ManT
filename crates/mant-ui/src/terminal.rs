@@ -11,7 +11,7 @@ use mant_ir::ResolvedContent;
 use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::{App, UpdateOutcome};
+use crate::{App, CopyRequest, UpdateOutcome};
 
 /// Run the interactive frontend until the user requests exit.
 ///
@@ -74,14 +74,51 @@ pub fn run_with_catalog_and_scope<D, F, E>(
     bundle: &ResolvedContent,
     catalog: DocumentCatalog,
     scope: &[ResolvedContent],
-    mut discover_documents: D,
-    mut open_document: F,
-    mut open_external: E,
+    discover_documents: D,
+    open_document: F,
+    open_external: E,
 ) -> io::Result<()>
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
     E: FnMut(&str) -> Result<(), String>,
+{
+    run_with_catalog_and_scope_and_copy(
+        bundle,
+        catalog,
+        scope,
+        discover_documents,
+        open_document,
+        open_external,
+        |_| Err("clipboard access is unavailable in this host".to_owned()),
+    )
+}
+
+/// Run the frontend with host-owned clipboard integration in addition to
+/// discovery, document loading, external links, and scoped search.
+///
+/// Selection requests already contain terminal-safe plain text. Semantic node
+/// requests retain the complete resolved document plus its stable selector so
+/// the host can render the requested format without reconstructing UI state.
+///
+/// # Errors
+///
+/// Returns terminal setup, input, drawing, or restoration failures. Clipboard
+/// failures are shown inside the UI and leave the current selection intact.
+pub fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
+    bundle: &ResolvedContent,
+    catalog: DocumentCatalog,
+    scope: &[ResolvedContent],
+    mut discover_documents: D,
+    mut open_document: F,
+    mut open_external: E,
+    mut copy_to_clipboard: C,
+) -> io::Result<()>
+where
+    D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
+    F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
+    E: FnMut(&str) -> Result<(), String>,
+    C: FnMut(CopyRequest) -> Result<(), String>,
 {
     let mut stdout = io::stdout();
     enable_raw_mode()?;
@@ -108,6 +145,7 @@ where
                 redraw |= service_discovery_request(&mut app, &mut discover_documents);
                 redraw |= service_open_request(&mut app, &mut open_document);
                 redraw |= service_external_request(&mut app, &mut open_external);
+                redraw |= service_copy_request(&mut app, &mut copy_to_clipboard);
                 continue;
             };
             if !event::poll(timeout)? {
@@ -117,6 +155,7 @@ where
             redraw |= service_discovery_request(&mut app, &mut discover_documents);
             redraw |= service_open_request(&mut app, &mut open_document);
             redraw |= service_external_request(&mut app, &mut open_external);
+            redraw |= service_copy_request(&mut app, &mut copy_to_clipboard);
         }
         Ok(())
     }));
@@ -129,6 +168,21 @@ where
             panic::resume_unwind(payload);
         }
     }
+}
+
+fn service_copy_request<C>(app: &mut App, copy_to_clipboard: &mut C) -> bool
+where
+    C: FnMut(CopyRequest) -> Result<(), String>,
+{
+    let Some(request) = app.take_copy_request() else {
+        return false;
+    };
+    let label = request.label();
+    match copy_to_clipboard(request) {
+        Ok(()) => app.report_notice(format!("Copied {label}")),
+        Err(message) => app.report_notice(message),
+    }
+    true
 }
 
 fn service_external_request<E>(app: &mut App, open_external: &mut E) -> bool

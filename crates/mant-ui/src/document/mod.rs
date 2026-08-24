@@ -7,6 +7,7 @@
 mod inline;
 mod model;
 mod search;
+mod selection;
 mod wrap;
 
 use std::{collections::HashMap, sync::Arc};
@@ -45,6 +46,7 @@ pub use self::search::RenderedSearchMatch;
 #[cfg(test)]
 use self::search::{RenderedSearchFragment, RenderedSearchSourceCell};
 use self::search::{RenderedSearchRecord, search_records_for_lines};
+pub(crate) use self::selection::{RenderedSelection, TextPosition};
 #[cfg(test)]
 use self::wrap::wrap_line;
 use self::wrap::{WrappedLine, wrap_line_with_links};

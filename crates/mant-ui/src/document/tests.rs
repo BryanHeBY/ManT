@@ -973,7 +973,7 @@ fn rendered_search_finds_literal_options_and_decorates_every_match() {
             .any(|span| span.style.bg == Some(theme::SEARCH_ACTIVE))
     );
 
-    let viewport = rendered.viewport_text(1, 1, &matches, Some(1));
+    let viewport = rendered.viewport_text(1, 1, &matches, Some(1), None);
     assert_eq!(viewport.lines.len(), 1);
     assert!(
         viewport.lines[0]

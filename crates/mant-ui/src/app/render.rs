@@ -216,6 +216,12 @@ impl App {
         };
         self.geometry.content = document_area;
         let render_width = document_area.width.max(1);
+        if self.content_render_width != 0 && self.content_render_width != render_width {
+            self.selection = None;
+            if matches!(self.pointer_drag, PointerDrag::ContentSelection { .. }) {
+                self.pointer_drag = PointerDrag::None;
+            }
+        }
         let viewport_anchor = (self.content_render_width != 0
             && self.content_render_width != render_width)
             .then(|| {
@@ -253,6 +259,7 @@ impl App {
             viewport_height,
             matches,
             self.active_rendered_search_match(),
+            self.selection,
         );
         frame.render_widget(
             Paragraph::new(text).style(Style::default().bg(theme::CONTENT)),

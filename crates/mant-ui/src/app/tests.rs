@@ -25,10 +25,27 @@ use super::{
     search::SearchMode,
 };
 use crate::{
-    NavKind,
+    CopyFormat, CopyRequest, NavKind,
     layout::{CONTENT_SCROLLBAR_GAP, DEFAULT_SIDEBAR_WIDTH, SIDEBAR_SPLITTER_WIDTH},
     theme,
 };
+
+fn click_document_cell(app: &mut App, column: usize, row: usize) {
+    let column = app.geometry.content.x + u16::try_from(column).expect("document column");
+    let row = app.geometry.content.y
+        + u16::try_from(row.saturating_sub(app.content_scroll)).expect("document row");
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        app.handle_mouse(MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        });
+    }
+}
 
 fn empty_bundle() -> ResolvedContent {
     ResolvedContent {
@@ -1150,7 +1167,7 @@ fn settled_sidebar_resize_keeps_the_visible_code_logically_anchored() {
     );
     assert!(
         resized
-            .viewport_text(app.content_scroll, 1, &[], None)
+            .viewport_text(app.content_scroll, 1, &[], None, None)
             .lines[0]
             .to_string()
             .contains("sentinel_code_block")
@@ -1200,6 +1217,73 @@ fn clicking_and_dragging_the_content_scrollbar_moves_the_document() {
         modifiers: KeyModifiers::NONE,
     });
     assert_eq!(app.pointer_drag, PointerDrag::None);
+}
+
+#[test]
+fn dragging_document_text_emits_a_plain_text_copy_request() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&navigation_bundle());
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("Show help")
+        .into_iter()
+        .next()
+        .expect("visible description");
+    let start_column =
+        app.geometry.content.x + u16::try_from(region.start_column).expect("selection column");
+    let end_column = app.geometry.content.x
+        + u16::try_from(region.end_column.saturating_sub(1)).expect("selection column");
+    let row = app.geometry.content.y + u16::try_from(region.row).expect("selection row");
+
+    for (kind, column) in [
+        (MouseEventKind::Down(MouseButton::Left), start_column),
+        (MouseEventKind::Drag(MouseButton::Left), end_column),
+        (MouseEventKind::Up(MouseButton::Left), end_column),
+    ] {
+        app.handle_mouse(MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        });
+    }
+    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+
+    match app.take_copy_request().expect("copy request") {
+        CopyRequest::Selection { text } => assert_eq!(text, "Show help"),
+        CopyRequest::Node { .. } => panic!("visual selection emitted a semantic node"),
+    }
+}
+
+#[test]
+fn edit_actions_copy_complete_semantic_nodes_only() {
+    let mut app = App::new(&navigation_bundle());
+
+    app.activate_menu_action(MenuAction::CopyNodeMarkdown);
+    match app.take_copy_request().expect("semantic copy request") {
+        CopyRequest::Node {
+            selector, format, ..
+        } => {
+            assert_eq!(selector, "options");
+            assert_eq!(format, CopyFormat::Markdown);
+        }
+        CopyRequest::Selection { .. } => panic!("semantic action emitted visual text"),
+    }
+
+    app.selected = app
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.kind == NavKind::EntryGroup)
+        .expect("entry group");
+    app.activate_menu_action(MenuAction::CopyNodeText);
+    assert!(app.take_copy_request().is_none());
+    assert_eq!(
+        app.notice.as_deref(),
+        Some("Select a complete document node before copying")
+    );
 }
 
 #[test]
@@ -1298,7 +1382,7 @@ fn view_menu_is_clickable_and_toggles_the_sidebar() {
 
     app.handle_mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: 8,
+        column: MenuId::View.left(),
         row: 1,
         modifiers: KeyModifiers::NONE,
     });
@@ -1449,12 +1533,7 @@ fn clicking_a_wrapped_section_reference_opens_its_target() {
         .next()
         .expect("visible reference text");
 
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
-        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
-        modifiers: KeyModifiers::NONE,
-    });
+    click_document_cell(&mut app, region.start_column, region.row);
 
     assert_eq!(app.document.navigation()[app.selected].id, "details");
     assert!(app.expanded.contains("options"));
@@ -1484,12 +1563,7 @@ fn clicking_a_parsed_markdown_fragment_jumps_and_participates_in_history() {
         .next()
         .expect("visible parsed fragment link");
 
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
-        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
-        modifiers: KeyModifiers::NONE,
-    });
+    click_document_cell(&mut app, region.start_column, region.row);
 
     assert_eq!(app.document.navigation()[app.selected].id, "details");
     assert_eq!(app.back_history.len(), 1);
@@ -1548,12 +1622,7 @@ fn clicking_a_manual_reference_requests_the_exact_page() {
         .next()
         .expect("visible manual reference");
 
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
-        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
-        modifiers: KeyModifiers::NONE,
-    });
+    click_document_cell(&mut app, region.start_column, region.row);
 
     assert_eq!(
         app.take_open_request().expect("manual request").address(),
@@ -1593,13 +1662,7 @@ fn clicking_a_real_git_manual_reference_requests_git_add_section_one() {
     let mut opened = None;
     for region in matches {
         app.content_scroll = region.row;
-        app.handle_mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: app.geometry.content.x
-                + u16::try_from(region.start_column).expect("link column"),
-            row: app.geometry.content.y,
-            modifiers: KeyModifiers::NONE,
-        });
+        click_document_cell(&mut app, region.start_column, region.row);
         if let Some(request) = app.take_open_request() {
             opened = Some(request.address().clone());
             break;
@@ -1639,12 +1702,7 @@ fn clicking_a_relative_markdown_link_preserves_its_source_and_fragment() {
         .next()
         .expect("visible Markdown link");
 
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
-        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
-        modifiers: KeyModifiers::NONE,
-    });
+    click_document_cell(&mut app, region.start_column, region.row);
 
     let request = app.take_open_request().expect("Markdown request");
     assert_eq!(
@@ -1691,12 +1749,23 @@ fn clicking_an_external_link_returns_the_uri_to_the_host() {
         .next()
         .expect("visible external link");
 
-    app.handle_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: app.geometry.content.x + u16::try_from(region.start_column).expect("link column"),
-        row: app.geometry.content.y + u16::try_from(region.row).expect("link row"),
-        modifiers: KeyModifiers::NONE,
-    });
+    let column = app.geometry.content.x + u16::try_from(region.start_column).expect("link column");
+    let row = app.geometry.content.y + u16::try_from(region.row).expect("link row");
+    for (kind, pointer_column) in [
+        (MouseEventKind::Down(MouseButton::Left), column),
+        (MouseEventKind::Drag(MouseButton::Left), column + 1),
+        (MouseEventKind::Up(MouseButton::Left), column),
+    ] {
+        app.handle_mouse(MouseEvent {
+            kind,
+            column: pointer_column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        });
+    }
+    assert!(app.take_external_request().is_none());
+
+    click_document_cell(&mut app, region.start_column, region.row);
 
     assert_eq!(
         app.take_external_request().as_deref(),
@@ -1877,7 +1946,7 @@ fn search_menu_actions_keep_confirmed_results_available() {
     assert!(app.search.matches.len() >= 2);
 
     app.handle_key(KeyEvent::new(KeyCode::F(10), KeyModifiers::NONE));
-    for _ in 0..3 {
+    for _ in 0..4 {
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     }
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));

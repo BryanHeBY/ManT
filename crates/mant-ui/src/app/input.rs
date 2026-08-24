@@ -10,6 +10,13 @@ use crate::layout::{MIN_SIDEBAR_WIDTH, maximum_sidebar_width};
 impl App {
     /// Apply one keyboard event and report whether the terminal needs repainting.
     pub fn handle_key(&mut self, key: KeyEvent) -> UpdateOutcome {
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.modifiers.contains(KeyModifiers::SHIFT)
+            && matches!(key.code, KeyCode::Char('c' | 'C'))
+        {
+            self.copy_selection();
+            return UpdateOutcome::Redraw;
+        }
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.quit = true;
             return UpdateOutcome::Unchanged;
@@ -52,6 +59,9 @@ impl App {
             self.overlay = Overlay::Help;
             return UpdateOutcome::Redraw;
         }
+        if key.code == KeyCode::Esc && self.selection.take().is_some() {
+            return UpdateOutcome::Redraw;
+        }
         match key.code {
             KeyCode::Char('q' | 'Q') => self.quit = true,
             KeyCode::Char('j') | KeyCode::Down => self.select_relative(1),
@@ -64,6 +74,7 @@ impl App {
             KeyCode::Home => self.jump_content(false),
             KeyCode::End => self.jump_content(true),
             KeyCode::Char('b') => self.show_sidebar = !self.show_sidebar,
+            KeyCode::Char('y') => self.copy_selection(),
             KeyCode::Char('<') => {
                 self.sidebar_width = self.sidebar_width.saturating_sub(2).max(MIN_SIDEBAR_WIDTH);
             }
@@ -144,15 +155,6 @@ impl App {
                 }
                 UpdateOutcome::Redraw
             }
-            MouseEventKind::Down(MouseButton::Left)
-                if self
-                    .geometry
-                    .content
-                    .contains((mouse.column, mouse.row).into()) =>
-            {
-                self.activate_content_link(mouse.column, mouse.row);
-                UpdateOutcome::Redraw
-            }
             _ => UpdateOutcome::Unchanged,
         }
     }
@@ -202,6 +204,14 @@ impl App {
                 self.pointer_drag = PointerDrag::ContentScrollbar(drag);
                 UpdateOutcome::Redraw
             }
+            MouseEventKind::Down(MouseButton::Left)
+                if self
+                    .geometry
+                    .content
+                    .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.begin_content_selection(mouse)
+            }
             MouseEventKind::Drag(MouseButton::Left) => match self.pointer_drag {
                 PointerDrag::Sidebar => self.request_sidebar_resize(mouse.column, now),
                 PointerDrag::NavigationScrollbar(drag) => {
@@ -211,6 +221,9 @@ impl App {
                 PointerDrag::ContentScrollbar(drag) => {
                     self.scroll_content_to_pointer(mouse.row, drag);
                     UpdateOutcome::Redraw
+                }
+                PointerDrag::ContentSelection { moved } => {
+                    self.update_content_selection(mouse, moved)
                 }
                 PointerDrag::FinderScrollbar(_) | PointerDrag::None => return None,
             },
@@ -223,6 +236,9 @@ impl App {
                     PointerDrag::ContentScrollbar(drag) => {
                         self.scroll_content_to_pointer(mouse.row, drag);
                     }
+                    PointerDrag::ContentSelection { moved } => {
+                        self.finish_content_selection(mouse, moved);
+                    }
                     PointerDrag::FinderScrollbar(_) | PointerDrag::None => {}
                 }
                 self.pointer_drag = PointerDrag::None;
@@ -231,6 +247,68 @@ impl App {
             _ => return None,
         };
         Some(outcome)
+    }
+
+    fn begin_content_selection(&mut self, mouse: MouseEvent) -> UpdateOutcome {
+        let position = self
+            .content_text_position(mouse.column, mouse.row, false)
+            .expect("content containment guarantees a text position");
+        self.selection = Some(crate::RenderedSelection::new(position));
+        self.pointer_drag = PointerDrag::ContentSelection { moved: false };
+        UpdateOutcome::Redraw
+    }
+
+    fn update_content_selection(&mut self, mouse: MouseEvent, moved: bool) -> UpdateOutcome {
+        if let Some(position) = self.content_text_position(mouse.column, mouse.row, true)
+            && let Some(selection) = &mut self.selection
+        {
+            self.pointer_drag = PointerDrag::ContentSelection {
+                moved: moved || position != selection.anchor,
+            };
+            selection.focus = position;
+        }
+        UpdateOutcome::Redraw
+    }
+
+    fn finish_content_selection(&mut self, mouse: MouseEvent, moved: bool) {
+        if let Some(position) = self.content_text_position(mouse.column, mouse.row, true)
+            && let Some(selection) = &mut self.selection
+        {
+            selection.focus = position;
+        }
+        let activate_link = !moved
+            && self
+                .selection
+                .is_some_and(crate::RenderedSelection::is_empty)
+            && self
+                .geometry
+                .content
+                .contains((mouse.column, mouse.row).into());
+        if activate_link {
+            self.selection = None;
+            self.activate_content_link(mouse.column, mouse.row);
+        }
+    }
+
+    fn content_text_position(
+        &self,
+        column: u16,
+        row: u16,
+        clamp: bool,
+    ) -> Option<crate::TextPosition> {
+        let area = self.geometry.content;
+        if area.width == 0 || area.height == 0 {
+            return None;
+        }
+        if !clamp && !area.contains((column, row).into()) {
+            return None;
+        }
+        let column = column.clamp(area.x, area.x.saturating_add(area.width - 1));
+        let row = row.clamp(area.y, area.y.saturating_add(area.height - 1));
+        Some(crate::TextPosition {
+            row: self.content_scroll + usize::from(row - area.y),
+            column: usize::from(column - area.x),
+        })
     }
 
     pub(super) fn is_sidebar_boundary(&self, column: u16, row: u16) -> bool {

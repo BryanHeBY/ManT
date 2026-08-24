@@ -11,11 +11,12 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use super::{App, Overlay, UpdateOutcome, fit_to_width};
-use crate::{layout::DEFAULT_SIDEBAR_WIDTH, theme};
+use crate::{CopyFormat, layout::DEFAULT_SIDEBAR_WIDTH, theme};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum MenuId {
     Manual,
+    Edit,
     View,
     Navigate,
     Search,
@@ -23,8 +24,9 @@ pub(super) enum MenuId {
 }
 
 impl MenuId {
-    pub(super) const ALL: [Self; 5] = [
+    pub(super) const ALL: [Self; 6] = [
         Self::Manual,
+        Self::Edit,
         Self::View,
         Self::Navigate,
         Self::Search,
@@ -34,6 +36,7 @@ impl MenuId {
     pub(super) const fn label(self) -> &'static str {
         match self {
             Self::Manual => "Manual",
+            Self::Edit => "Edit",
             Self::View => "View",
             Self::Navigate => "Navigate",
             Self::Search => "Search",
@@ -44,10 +47,11 @@ impl MenuId {
     pub(super) const fn left(self) -> u16 {
         match self {
             Self::Manual => 0,
-            Self::View => 8,
-            Self::Navigate => 14,
-            Self::Search => 24,
-            Self::Help => 32,
+            Self::Edit => 8,
+            Self::View => 14,
+            Self::Navigate => 20,
+            Self::Search => 30,
+            Self::Help => 38,
         }
     }
 }
@@ -63,6 +67,9 @@ pub(super) struct MenuEntry {
 pub(super) enum MenuAction {
     Quit,
     OpenDocument,
+    CopySelection,
+    CopyNodeText,
+    CopyNodeMarkdown,
     Back,
     Forward,
     ToggleSidebar,
@@ -91,6 +98,24 @@ const MANUAL_MENU: &[MenuEntry] = &[
         label: "Quit",
         shortcut: "q",
         action: MenuAction::Quit,
+    },
+];
+
+const EDIT_MENU: &[MenuEntry] = &[
+    MenuEntry {
+        label: "Copy Selection",
+        shortcut: "y",
+        action: MenuAction::CopySelection,
+    },
+    MenuEntry {
+        label: "Copy Current Node as Text",
+        shortcut: "",
+        action: MenuAction::CopyNodeText,
+    },
+    MenuEntry {
+        label: "Copy Current Node as Markdown",
+        shortcut: "",
+        action: MenuAction::CopyNodeMarkdown,
     },
 ];
 
@@ -187,6 +212,7 @@ const HELP_MENU: &[MenuEntry] = &[MenuEntry {
 pub(super) const fn menu_entries(id: MenuId) -> &'static [MenuEntry] {
     match id {
         MenuId::Manual => MANUAL_MENU,
+        MenuId::Edit => EDIT_MENU,
         MenuId::View => VIEW_MENU,
         MenuId::Navigate => NAVIGATE_MENU,
         MenuId::Search => SEARCH_MENU,
@@ -343,6 +369,9 @@ impl App {
         match action {
             MenuAction::Quit => self.quit = true,
             MenuAction::OpenDocument => self.open_document_finder(),
+            MenuAction::CopySelection => self.copy_selection(),
+            MenuAction::CopyNodeText => self.copy_selected_node(CopyFormat::Text),
+            MenuAction::CopyNodeMarkdown => self.copy_selected_node(CopyFormat::Markdown),
             MenuAction::Back => self.navigate_history(true),
             MenuAction::Forward => self.navigate_history(false),
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
@@ -391,7 +420,7 @@ impl App {
 
     pub(super) fn draw_menu(&self, frame: &mut Frame<'_>, area: Rect) {
         let style = Style::default().bg(theme::MENU);
-        let menu_width = 38;
+        let menu_width = 44;
         let rule = "─".repeat(usize::from(area.width).saturating_sub(menu_width));
         frame.render_widget(Block::default().style(style), area);
         let open_menu = match self.overlay {
@@ -491,7 +520,7 @@ impl App {
 
     fn draw_help(frame: &mut Frame<'_>) {
         let width = 58.min(frame.area().width.saturating_sub(2));
-        let height = 18.min(frame.area().height);
+        let height = 20.min(frame.area().height);
         if width < 4 || height < 3 {
             return;
         }
@@ -526,6 +555,8 @@ impl App {
                 Line::raw("Alt+←/→      back / forward"),
                 Line::raw("Ctrl+F or /  find in current page"),
                 Line::raw("n / N        next / previous search match"),
+                Line::raw("mouse drag   select rendered document text"),
+                Line::raw("y / Ctrl+Shift+C  copy selected plain text"),
                 Line::raw("d/u          scroll content by ten rows"),
                 Line::raw("b            toggle sidebar"),
                 Line::raw("F10          open menu bar"),

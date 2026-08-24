@@ -20,6 +20,8 @@ catalog, search, and cross-document interactions without serializing the IR.
 - Confirmed full-document search with active and inactive match highlighting.
 - tldr quick-reference and source-document rendering through one layout model.
 - Keyboard, mouse, scrollbar, and resizable-pane interaction.
+- Width-aware visual text selection plus typed requests for plain-text and
+  complete-node Text/Markdown clipboard content.
 - A Crossterm lifecycle boundary that restores raw mode and the alternate
   screen after normal exit, setup failure, or panic.
 - A static, less-like text pager for terminal-owned catalog output; short and
@@ -37,7 +39,8 @@ mant host
 ├─ supplies ResolvedContent ───────────────> App / DocumentView
 ├─ answers CatalogQuery ──────────────────> live finder
 ├─ resolves an exact DocumentAddress <──── cross-document activation
-└─ decides whether to open HTTP(S)/mailto < external-link request
+├─ decides whether to open HTTP(S)/mailto < external-link request
+└─ renders/stores a typed CopyRequest <──── selection or semantic node
 ```
 
 The UI never scans the filesystem, interprets a source path, downloads data,
@@ -66,10 +69,14 @@ invoke `App::draw` from their frame callback instead.
 Use `run_with_catalog` when cross-document discovery and navigation are
 required. Use `run_with_catalog_and_scope` when interactive search must begin
 with an already-resolved document set; its first bundle remains the initial
-page while catalog discovery stays global. Their callbacks receive versioned
-catalog queries, exact logical document addresses, and already-classified
-external URIs; callback failures return to the UI as notices rather than
-giving the frontend hidden authority.
+page while catalog discovery stays global. Embedders that provide a system
+clipboard use `run_with_catalog_and_scope_and_copy`. Its copy callback receives
+a `CopyRequest`: visual selections already contain plain text, while semantic
+node requests carry the complete resolved content, stable node selector, and
+requested format. The callbacks otherwise receive versioned catalog queries,
+exact logical document addresses, and already-classified external URIs;
+callback failures return to the UI as notices rather than giving the frontend
+hidden authority.
 
 ## Platform behavior
 

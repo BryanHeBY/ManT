@@ -14,14 +14,14 @@ use std::{
 };
 
 use mant_ir::ResolvedContent;
-use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog};
+use mant_protocol::{CatalogQuery, DocumentAddress, DocumentCatalog, NodeSelector};
 use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthChar;
 
 use self::{finder::FinderState, menu::MenuId, search::SearchState};
 
 use crate::{
-    DocumentView, NavKind, RenderedDocument,
+    CopyFormat, CopyRequest, DocumentView, NavKind, RenderedDocument, RenderedSelection,
     layout::DEFAULT_SIDEBAR_WIDTH,
     scrollbar::{ScrollbarDrag, VerticalScrollbar},
 };
@@ -96,6 +96,7 @@ enum PointerDrag {
     Sidebar,
     NavigationScrollbar(ScrollbarDrag),
     ContentScrollbar(ScrollbarDrag),
+    ContentSelection { moved: bool },
     FinderScrollbar(ScrollbarDrag),
 }
 
@@ -180,6 +181,7 @@ struct FrameGeometry {
 
 /// All mutable interaction state for one `ManT` document.
 pub struct App {
+    current_bundle: Arc<ResolvedContent>,
     document: DocumentView,
     selected: usize,
     expanded: HashSet<String>,
@@ -195,6 +197,7 @@ pub struct App {
     pending_discovery: Option<CatalogQuery>,
     pending_open: Option<NavigationRequest>,
     pending_external: Option<String>,
+    pending_copy: Option<CopyRequest>,
     current_address: Option<DocumentAddress>,
     fallback_bundle: Option<Arc<ResolvedContent>>,
     back_history: Vec<HistoryLocation>,
@@ -202,6 +205,7 @@ pub struct App {
     notice: Option<String>,
     overlay: Overlay,
     pointer_drag: PointerDrag,
+    selection: Option<RenderedSelection>,
     geometry: FrameGeometry,
     navigation_sync_deadline: Option<Instant>,
     sidebar_resize: SidebarResizeSchedule,
@@ -231,6 +235,7 @@ impl App {
         scope: &[ResolvedContent],
     ) -> Self {
         let document = DocumentView::new(bundle);
+        let current_bundle = Arc::new(bundle.clone());
         let mut finder = FinderState::default();
         finder.replace_catalog(catalog);
         let expanded = document
@@ -247,6 +252,7 @@ impl App {
             scope_documents.insert(0, Arc::new(bundle.clone()));
         }
         Self {
+            current_bundle: Arc::clone(&current_bundle),
             document,
             selected: 0,
             expanded,
@@ -262,13 +268,15 @@ impl App {
             pending_discovery: None,
             pending_open: None,
             pending_external: None,
+            pending_copy: None,
             current_address: bundle.address.clone(),
-            fallback_bundle: bundle.address.is_none().then(|| Arc::new(bundle.clone())),
+            fallback_bundle: bundle.address.is_none().then_some(current_bundle),
             back_history: Vec::new(),
             forward_history: Vec::new(),
             notice: None,
             overlay: Overlay::None,
             pointer_drag: PointerDrag::None,
+            selection: None,
             geometry: FrameGeometry::default(),
             navigation_sync_deadline: None,
             sidebar_resize: SidebarResizeSchedule::default(),
@@ -283,6 +291,10 @@ impl App {
 
     pub(crate) fn take_external_request(&mut self) -> Option<String> {
         self.pending_external.take()
+    }
+
+    pub(crate) fn take_copy_request(&mut self) -> Option<CopyRequest> {
+        self.pending_copy.take()
     }
 
     pub(crate) fn take_discovery_request(&mut self) -> Option<CatalogQuery> {
@@ -307,6 +319,7 @@ impl App {
     }
 
     fn replace_document(&mut self, bundle: &ResolvedContent) {
+        self.current_bundle = Arc::new(bundle.clone());
         self.document = DocumentView::new(bundle);
         self.current_address.clone_from(&bundle.address);
         self.fallback_bundle = bundle.address.is_none().then(|| Arc::new(bundle.clone()));
@@ -324,10 +337,48 @@ impl App {
         self.search = SearchState::default();
         self.overlay = Overlay::None;
         self.pointer_drag = PointerDrag::None;
+        self.selection = None;
         self.navigation_sync_deadline = None;
         self.rendered_cache.clear();
         self.content_render_width = 0;
         self.notice = None;
+    }
+
+    pub(super) fn copy_selection(&mut self) {
+        const MAX_COPY_BYTES: usize = 4 * 1024 * 1024;
+
+        let Some(selection) = self.selection else {
+            self.notice = Some("Drag across document text before copying".to_owned());
+            return;
+        };
+        let Some(rendered) = self.rendered_cache.get(&self.content_render_width) else {
+            self.notice = Some("The document is not ready to copy".to_owned());
+            return;
+        };
+        let text = rendered.selected_text(selection);
+        if text.is_empty() {
+            self.notice = Some("The selected cells contain no text".to_owned());
+        } else if text.len() > MAX_COPY_BYTES {
+            self.notice = Some("The selection exceeds the 4 MiB clipboard limit".to_owned());
+        } else {
+            self.pending_copy = Some(CopyRequest::Selection { text });
+        }
+    }
+
+    pub(super) fn copy_selected_node(&mut self, format: CopyFormat) {
+        let Some(node) = self.document.navigation().get(self.selected) else {
+            self.notice = Some("No document node is selected".to_owned());
+            return;
+        };
+        if node.kind == NavKind::EntryGroup {
+            self.notice = Some("Select a complete document node before copying".to_owned());
+            return;
+        }
+        self.pending_copy = Some(CopyRequest::Node {
+            content: Arc::clone(&self.current_bundle),
+            selector: NodeSelector::new(node.id.clone()),
+            format,
+        });
     }
 
     pub(crate) fn report_open_error(&mut self, message: String) {

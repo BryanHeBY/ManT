@@ -8,7 +8,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthChar;
 
-use super::{RenderedDocument, WrappedLine};
+use super::{RenderedDocument, RenderedSelection, WrappedLine};
 use crate::theme;
 
 /// One exact visual-row range found in a width-dependent document rendering.
@@ -89,9 +89,14 @@ impl RenderedDocument {
         height: usize,
         matches: &[RenderedSearchMatch],
         active: Option<usize>,
+        selection: Option<RenderedSelection>,
     ) -> Text<'static> {
         let end = start.saturating_add(height).min(self.text.lines.len());
-        self.text_range(start, end, matches, active)
+        let mut text = self.text_range(start, end, matches, active);
+        if let Some(selection) = selection {
+            self.highlight_selection(&mut text, start, selection);
+        }
+        text
     }
 
     fn text_range(
