@@ -78,6 +78,11 @@ exact logical document addresses, and already-classified external URIs;
 callback failures return to the UI as notices rather than giving the frontend
 hidden authority.
 
+Completing an effective document-text drag emits its plain-text copy request
+immediately. A successful callback produces a short-lived, non-modal
+confirmation; selection extraction excludes presentation-only tldr panel
+borders. Keyboard and Edit-menu actions can copy the retained selection again.
+
 ## Platform behavior
 
 The frontend is portable across Linux, macOS, and Windows and does not inspect

@@ -21,6 +21,10 @@ that crate was not published for that change.
 - Add the `run_with_catalog_and_scope_and_copy` embedding boundary. Existing
   run functions retain their signatures and report an in-reader notice if an
   embedding host without clipboard integration invokes a copy action.
+- Copy a completed mouse selection immediately, show successful copies in a
+  short-lived non-modal popup, and omit presentation-only tldr panel borders
+  from visual text. Size Edit menus from their complete item labels so copy
+  actions remain visible and clickable.
 
 ### mant-engine
 
