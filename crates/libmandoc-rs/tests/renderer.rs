@@ -195,6 +195,75 @@ fn concurrent_render_formats_isolate_output_state() {
 }
 
 #[test]
+fn page_offset_state_does_not_cross_renderer_instances() {
+    let baseline_source = b".TH OFFSET 1\n.po\n.SH BODY\nbaseline marker\n";
+    let shifted_source = b".TH OFFSET 1\n.po 20\n.SH BODY\nshifted marker\n";
+    let render_baseline = || {
+        Renderer::new(RenderFormat::Ascii)
+            .render_bytes("baseline.1", baseline_source)
+            .expect("render a page using the initial page offset")
+            .output
+    };
+
+    let expected = render_baseline();
+    let shifted = Renderer::new(RenderFormat::Ascii)
+        .render_bytes("shifted.1", shifted_source)
+        .expect("render a page with an explicit offset")
+        .output;
+    let actual = render_baseline();
+
+    assert_ne!(shifted, expected);
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn concurrent_table_renderers_isolate_borders_and_centering() {
+    const WORKERS: usize = 8;
+    let mut source =
+        String::from(".TH TABLE 1\n.SH BODY\n.TS\ncenter,allbox;\nl l.\nleft\tright\n");
+    for row in 0..64 {
+        source.push_str(&format!("row{row}\tvalue{row}\n"));
+    }
+    source.push_str(".TE\n");
+    let source = Arc::new(source);
+    let start = Arc::new(Barrier::new(WORKERS));
+    let workers: Vec<_> = (0..WORKERS)
+        .map(|worker| {
+            let source = Arc::clone(&source);
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                let format = if worker % 2 == 0 {
+                    RenderFormat::Ascii
+                } else {
+                    RenderFormat::Utf8
+                };
+                start.wait();
+                for _ in 0..32 {
+                    let output = Renderer::new(format)
+                        .render_bytes(format!("table-{worker}.1"), source.as_bytes())
+                        .expect("render an isolated centered table")
+                        .output;
+                    match format {
+                        RenderFormat::Ascii => {
+                            assert!(output.contains('+'), "ASCII table lost its borders");
+                            assert!(!output.contains('┌'), "ASCII table used UTF-8 borders");
+                        }
+                        RenderFormat::Utf8 => {
+                            assert!(output.contains('┌'), "UTF-8 table lost its borders");
+                            assert!(!output.contains('+'), "UTF-8 table used ASCII borders");
+                        }
+                        RenderFormat::Html => unreachable!(),
+                    }
+                }
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.join().expect("table renderer worker must not panic");
+    }
+}
+
+#[test]
 fn stdio_child_render() {
     if std::env::var_os("LIBMANDOC_RS_STDIO_CHILD").is_none() {
         return;

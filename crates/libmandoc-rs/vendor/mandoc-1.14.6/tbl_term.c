@@ -132,10 +132,6 @@ static  const int borders_ascii[81] = {
 	'+', '+', '+',  /* 222 */
 };
 
-/* Either of the above according to the selected output encoding. */
-static	const int *borders_locale;
-
-
 static size_t
 term_tbl_sulen(const struct roffsu *su, void *arg)
 {
@@ -163,7 +159,6 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 {
 	const struct tbl_cell	*cp, *cpn, *cpp, *cps;
 	const struct tbl_dat	*dp;
-	static size_t		 offset;
 	size_t			 save_offset;
 	size_t			 coloff, tsz;
 	int			 hspans, ic, more;
@@ -180,7 +175,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 	 */
 
 	if (tp->tbl.cols == NULL) {
-		borders_locale = tp->enc == TERMENC_UTF8 ?
+		tp->tbl_borders = tp->enc == TERMENC_UTF8 ?
 		    borders_utf8 : borders_ascii;
 
 		tp->tbl.len = term_tbl_len;
@@ -192,7 +187,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 
 		/* Center the table as a whole. */
 
-		offset = tp->tcol->offset;
+		tp->tbl_offset = tp->tcol->offset;
 		if (sp->opts->opts & TBL_OPT_CENTRE) {
 			tsz = sp->opts->opts & (TBL_OPT_BOX | TBL_OPT_DBOX)
 			    ? 2 : !!sp->opts->lvert + !!sp->opts->rvert;
@@ -201,11 +196,11 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 				    tp->tbl.cols[ic].spacing;
 			if (sp->opts->cols)
 				tsz += tp->tbl.cols[sp->opts->cols - 1].width;
-			if (offset + tsz > tp->tcol->rmargin)
+			if (tp->tbl_offset + tsz > tp->tcol->rmargin)
 				tsz -= 1;
-			offset = offset + tp->tcol->rmargin > tsz ?
-			    (offset + tp->tcol->rmargin - tsz) / 2 : 0;
-			tp->tcol->offset = offset;
+			tp->tbl_offset = tp->tbl_offset + tp->tcol->rmargin > tsz ?
+			    (tp->tbl_offset + tp->tcol->rmargin - tsz) / 2 : 0;
+			tp->tcol->offset = tp->tbl_offset;
 		}
 
 		/* Horizontal frame at the start of boxed tables. */
@@ -220,7 +215,7 @@ term_tbl(struct termp *tp, const struct tbl_span *sp)
 	/* Set up the columns. */
 
 	tp->flags |= TERMP_MULTICOL;
-	tp->tcol->offset = offset;
+	tp->tcol->offset = tp->tbl_offset;
 	horiz = 0;
 	switch (sp->pos) {
 	case TBL_SPAN_HORIZ:
@@ -788,7 +783,7 @@ tbl_fill_border(struct termp *tp, int c, size_t len)
 {
 	char	 buf[16];
 
-	if ((c = borders_locale[c]) > 127) {
+	if ((c = tp->tbl_borders[c]) > 127) {
 		(void)snprintf(buf, sizeof(buf), "\\[u%04x]", c);
 		tbl_fill_string(tp, buf, len);
 	} else
@@ -800,7 +795,7 @@ tbl_direct_border(struct termp *tp, int c, size_t len)
 {
 	size_t	 i, sz;
 
-	c = borders_locale[c];
+	c = tp->tbl_borders[c];
 	sz = (*tp->width)(tp, c);
 	for (i = 0; i < len; i += sz) {
 		(*tp->letter)(tp, c);

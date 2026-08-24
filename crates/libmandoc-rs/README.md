@@ -290,6 +290,9 @@ the ordered patches in `patches/series`:
   head before a following tagged paragraph when the tag ends in `\\c`, so
   legacy GNU pages retain consecutive long and short option aliases instead
   of deleting the first tag as a broken next-line scope.
+- `0021-isolate-terminal-renderer-state.patch` moves table borders, centered
+  table offsets, and roff page-offset history from C statics into each terminal
+  renderer, preventing both cross-thread races and same-thread document leaks.
 
 Each is a narrow parser, renderer-boundary, or portability correction. They do
 not create a separately maintained formatter. `scripts/sync-vendor --verify`

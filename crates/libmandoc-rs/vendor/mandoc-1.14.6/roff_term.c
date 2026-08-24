@@ -159,11 +159,10 @@ static void
 roff_term_pre_po(ROFF_TERM_ARGS)
 {
 	struct roffsu	 su;
-	static int	 po, pouse, polast;
 	int		 ponew;
 
 	/* Revert the currently active page offset. */
-	p->tcol->offset -= pouse;
+	p->tcol->offset -= p->roff_pouse;
 
 	/* Determine the requested page offset. */
 	if (n->child != NULL &&
@@ -171,18 +170,19 @@ roff_term_pre_po(ROFF_TERM_ARGS)
 		ponew = term_hen(p, &su);
 		if (*n->child->string == '+' ||
 		    *n->child->string == '-')
-			ponew += po;
+			ponew += p->roff_po;
 	} else
-		ponew = polast;
+		ponew = p->roff_polast;
 
 	/* Remeber both the previous and the newly requested offset. */
-	polast = po;
-	po = ponew;
+	p->roff_polast = p->roff_po;
+	p->roff_po = ponew;
 
 	/* Truncate to the range [-offset, 60], remember, and apply it. */
-	pouse = po >= 60 ? 60 :
-	    po < -(int)p->tcol->offset ? -(int)p->tcol->offset : po;
-	p->tcol->offset += pouse;
+	p->roff_pouse = p->roff_po >= 60 ? 60 :
+	    p->roff_po < -(int)p->tcol->offset ?
+	    -(int)p->tcol->offset : p->roff_po;
+	p->tcol->offset += p->roff_pouse;
 }
 
 static void

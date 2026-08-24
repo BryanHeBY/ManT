@@ -60,6 +60,8 @@ struct	termp_col {
 
 struct	termp {
 	struct rofftbl	  tbl;		/* Table configuration. */
+	const int	 *tbl_borders;	/* Table borders for this encoding. */
+	size_t		  tbl_offset;	/* Left offset of the current table. */
 	struct termp_col *tcols;	/* Array of table columns. */
 	struct termp_col *tcol;		/* Current table column. */
 	size_t		  maxtcol;	/* Allocated table columns. */
@@ -77,6 +79,9 @@ struct	termp {
 	int		  mdocstyle;	/* Imitate mdoc(7) output. */
 	int		  ti;		/* Temporary indent for one line. */
 	int		  skipvsp;	/* Vertical space to skip. */
+	int		  roff_po;	/* Requested page offset. */
+	int		  roff_pouse;	/* Applied page offset. */
+	int		  roff_polast;	/* Previous page offset. */
 	int		  flags;
 #define	TERMP_SENTENCE	 (1 << 0)	/* Space before a sentence. */
 #define	TERMP_NOSPACE	 (1 << 1)	/* No space before words. */
