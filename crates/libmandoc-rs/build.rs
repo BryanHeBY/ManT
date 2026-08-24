@@ -99,6 +99,7 @@ fn main() {
     build
         .include(&out_dir)
         .include(&vendor_dir)
+        .include(crate_dir.join("config"))
         .include(crate_dir.join("shim"))
         .warnings(true)
         .flag_if_supported("-W")

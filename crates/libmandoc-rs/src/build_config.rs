@@ -80,6 +80,29 @@ mod tests {
     }
 
     #[test]
+    fn every_target_locks_roff_character_classes_to_ascii() {
+        let configs = [
+            include_str!("../config/linux-gnu.h"),
+            include_str!("../config/macos.h"),
+            include_str!("../config/windows-msvc.h"),
+        ];
+        for config in configs {
+            assert!(config.contains("#include \"mant_ascii_ctype.h\""));
+        }
+
+        let ascii = include_str!("../config/mant_ascii_ctype.h");
+        for class in [
+            "isalnum", "isalpha", "isdigit", "isgraph", "islower", "isspace", "isupper", "tolower",
+            "toupper",
+        ] {
+            assert!(
+                ascii.contains(&format!("#define {class}(c) mant_ascii_{class}(c)")),
+                "missing deterministic override for {class}"
+            );
+        }
+    }
+
+    #[test]
     #[should_panic(expected = "Linux/musl")]
     fn unconfigured_linux_libc_is_rejected() {
         target_configuration("linux", "musl");

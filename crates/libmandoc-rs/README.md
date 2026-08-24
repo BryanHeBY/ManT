@@ -120,6 +120,9 @@ The vendored parser subset and its include shim make all mutable parse state
 thread-local, so independent `Parser` calls may run concurrently. A `Parser`
 value is inexpensive immutable configuration; this guarantees parallel calls,
 not recursive re-entry through a caller callback on the same OS thread. The
+target configurations also lock roff syntax character classes to ASCII, and
+validated manual dates use fixed English month names, so a host process calling
+`setlocale` cannot change the owned AST, diagnostics, or renderer bytes. The
 Rust ownership transfer and native equation expansion stop descending after
 256 levels. Pathological input beyond that defensive cap still returns a
 successful, finite report but omits deeper descendants; ordinary manuals
@@ -304,6 +307,8 @@ the ordered patches in `patches/series`:
   parent-traversing embedded `.so` as a diagnostic-only rejected request,
   retaining surrounding content without inserting the invalid path into
   visible document prose.
+- `0024-deterministic-manual-dates.patch` formats validated manual dates with
+  fixed English month names instead of consulting the process `LC_TIME`.
 
 Each is a narrow parser, renderer-boundary, or portability correction. They do
 not create a separately maintained formatter. `scripts/sync-vendor --verify`

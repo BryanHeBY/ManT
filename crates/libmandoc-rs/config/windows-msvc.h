@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <sys/types.h>
 #include <time.h>
+#include "mant_ascii_ctype.h"
 
 #define MAN_CONF_FILE ""
 #define MANPATH_BASE ""

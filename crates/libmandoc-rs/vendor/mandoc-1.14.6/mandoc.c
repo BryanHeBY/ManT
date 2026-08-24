@@ -515,9 +515,13 @@ a2time(time_t *t, const char *fmt, const char *p)
 static char *
 time2a(time_t t, int utc)
 {
+	static const char *const months[] = {
+		"January", "February", "March", "April", "May", "June",
+		"July", "August", "September", "October", "November",
+		"December"
+	};
 	struct tm	 tm_storage, *tm;
 	char		*buf, *p;
-	size_t		 ssz;
 	int		 isz;
 
 	buf = NULL;
@@ -534,9 +538,12 @@ time2a(time_t t, int utc)
 
 	p = buf = mandoc_malloc(10 + 4 + 4 + 1);
 
-	if ((ssz = strftime(p, 10 + 1, "%B ", tm)) == 0)
+	if (tm->tm_mon < 0 || tm->tm_mon >= 12)
 		goto fail;
-	p += (int)ssz;
+	isz = snprintf(p, 10 + 1, "%s ", months[tm->tm_mon]);
+	if (isz < 0 || isz > 10)
+		goto fail;
+	p += isz;
 
 	/*
 	 * The output format is just "%d" here, not "%2d" or "%02d".
@@ -552,7 +559,8 @@ time2a(time_t t, int utc)
 		goto fail;
 	p += isz;
 
-	if (strftime(p, 4 + 1, "%Y", tm) == 0)
+	isz = snprintf(p, 4 + 1, "%04d", tm->tm_year + 1900);
+	if (isz != 4)
 		goto fail;
 	return buf;
 

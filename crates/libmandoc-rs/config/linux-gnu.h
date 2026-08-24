@@ -5,6 +5,7 @@
 
 #define _GNU_SOURCE
 #include <sys/types.h>
+#include "mant_ascii_ctype.h"
 
 #define MAN_CONF_FILE "/etc/man.conf"
 #define MANPATH_BASE "/usr/share/man:/usr/X11R6/man"
