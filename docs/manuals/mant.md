@@ -530,6 +530,14 @@ document and history unchanged.
 - `Alt+Left`: Return to the previous document or in-page jump.
 - `Alt+Right`: Move forward after returning.
 
+The upper-right tab strip keeps up to 64 successfully opened documents in
+stable first-open order. Reopening a document activates its existing tab rather
+than adding a duplicate. Clicking a tab restores its last selected Outline node
+through the same transactional host-open boundary as other document links, so
+a failed load leaves the current document, active tab, and history unchanged.
+Long terminal-aware labels are middle-truncated; when the strip overflows, the
+`‹` and `›` controls reveal adjacent tabs without changing the current document.
+
 Mouse input selects and folds outline nodes, follows in-page,
 cross-document, and safe external links, scrolls either pane, drags
 scrollbars, resizes the Outline boundary, and selects rendered document text.

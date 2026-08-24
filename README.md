@@ -100,6 +100,8 @@ settles, the outline follows the first visible document node.
 - `h` / `l` collapse and expand branches.
 - `d` / `u` or page keys scroll the document.
 - `Ctrl+O` opens a live finder for registered Markdown and native manuals.
+- The upper-right tab strip keeps successfully opened documents in first-open
+  order; click a tab to return to its last selected node.
 - `Alt+Left` / `Alt+Right` move backward and forward through document jumps.
 - `Ctrl+F` or `/` opens confirmed full-page search.
 - `n` and `Shift+N` select the next and previous matches.

@@ -29,6 +29,10 @@ that crate was not published for that change.
   vertical viewport edge, and let Shift-modified clicks or drags extend the
   retained selection by preserving its true mouse-down anchor and moving its
   active endpoint before copying it.
+- Replace the upper-right document title with a clickable, bounded tab stack.
+  Tabs retain first-open order and the last selected semantic node, deduplicate
+  logical documents, remain transactional across host load failures, and use
+  terminal-aware middle truncation plus overflow controls.
 
 ### mant-engine
 

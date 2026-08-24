@@ -78,6 +78,14 @@ exact logical document addresses, and already-classified external URIs;
 callback failures return to the UI as notices rather than giving the frontend
 hidden authority.
 
+The upper-right document tab stack records successful loads in stable first-open
+order and deduplicates logical addresses. Selecting an addressed tab emits the
+ordinary `open_document` request and commits the active tab only after the host
+returns content; the initial direct bundle remains locally restorable. Tabs
+retain the last selected semantic node, use terminal-column-aware truncation,
+and expose bounded overflow controls. The stack and navigation history are each
+capped at 64 entries.
+
 Completing an effective document-text drag emits its plain-text copy request
 immediately. A successful callback produces a short-lived, non-modal
 confirmation; selection extraction excludes presentation-only tldr panel
