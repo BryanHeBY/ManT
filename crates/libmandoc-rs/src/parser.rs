@@ -15,7 +15,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::io::Read;
 
 use crate::{
-    Diagnostic, DiagnosticLevel, Document, RawDocument, SourceBundle, compression, diagnostics, ffi,
+    Diagnostic, DiagnosticCode, DiagnosticLevel, Document, RawDocument, SourceBundle, compression,
+    diagnostics, ffi,
 };
 
 /// Selects the macro language before parsing begins.
@@ -381,6 +382,7 @@ impl Parser {
         if raw.node_truncated {
             findings.push(Diagnostic {
                 level: DiagnosticLevel::Warning,
+                code: Some(DiagnosticCode::SyntaxTreeDepthLimit),
                 message: "owned syntax tree exceeded the 256-level copy limit; deeper descendants were omitted"
                     .into(),
                 location: None,
@@ -389,6 +391,7 @@ impl Parser {
         if raw.equation_truncated {
             findings.push(Diagnostic {
                 level: DiagnosticLevel::Warning,
+                code: Some(DiagnosticCode::EquationTreeDepthLimit),
                 message: "equation tree exceeded the 256-level copy limit; deeper equation content was omitted"
                     .into(),
                 location: None,

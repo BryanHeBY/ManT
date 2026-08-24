@@ -201,6 +201,9 @@ timezone mutation and uses reentrant platform APIs where local time is
 required. Recursive re-entry on one thread is not supported, and the Rust
 node transfer and native equation expansion stop after 256 levels so hostile
 nesting cannot carry an unbounded C tree into recursive Rust consumers. A
+finite truncated tree remains successful and carries a typed parser finding;
+the engine projects those findings as `manual.syntax-depth-truncated` and
+`manual.equation-depth-truncated`. A
 mixed Rust/C ThreadSanitizer runner guards this boundary locally because
 instrumenting only Rust would miss races inside the vendored parser and
 optional formatters.

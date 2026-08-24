@@ -182,6 +182,10 @@ unsafe extern "C" {
     fn mant_mandoc_document_alias_target(document: *const CDocument) -> *const c_char;
     fn mant_mandoc_document_has_body(document: *const CDocument) -> i32;
     fn mant_mandoc_document_equation_truncated(document: *const CDocument) -> i32;
+    #[cfg(test)]
+    fn mant_mandoc_node_view_size() -> usize;
+    #[cfg(test)]
+    fn mant_mandoc_table_cell_view_size() -> usize;
     fn mant_mandoc_document_root(document: *const CDocument) -> *const CNode;
     fn mant_mandoc_node_snapshot(
         document: *mut CDocument,
@@ -673,7 +677,7 @@ unsafe fn copy_node(
         kind: node_kind(view.kind)?,
         macro_name: unsafe { optional_string(view.macro_name) },
         text,
-        tag: unsafe { optional_string(view.tag) },
+        tag: unsafe { visible_string(view.tag) },
         line: view.line.try_into().unwrap_or_default(),
         column: view.column.try_into().unwrap_or_default(),
         flags: NodeFlags {
@@ -776,7 +780,22 @@ mod tests {
 
     use flate2::read::MultiGzDecoder;
 
-    use super::{InputFormat, Node, parse_buffer};
+    use super::{
+        CNodeView, CTableCellView, InputFormat, Node, mant_mandoc_node_view_size,
+        mant_mandoc_table_cell_view_size, parse_buffer,
+    };
+
+    #[test]
+    fn borrowed_snapshot_views_match_the_native_abi() {
+        assert_eq!(
+            unsafe { mant_mandoc_node_view_size() },
+            std::mem::size_of::<CNodeView>()
+        );
+        assert_eq!(
+            unsafe { mant_mandoc_table_cell_view_size() },
+            std::mem::size_of::<CTableCellView>()
+        );
+    }
 
     #[test]
     fn owned_transfer_preserves_semantic_edges_after_parser_release() {

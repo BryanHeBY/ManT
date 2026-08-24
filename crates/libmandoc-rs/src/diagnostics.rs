@@ -14,6 +14,19 @@ pub enum DiagnosticLevel {
     Style,
 }
 
+/// Stable machine-readable classification for wrapper-generated findings.
+///
+/// Native libmandoc findings do not expose a stable code and therefore leave
+/// [`Diagnostic::code`] unset.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiagnosticCode {
+    /// Descendants beyond the owned syntax-tree depth limit were omitted.
+    SyntaxTreeDepthLimit,
+    /// Content beyond the native equation-tree depth limit was omitted.
+    EquationTreeDepthLimit,
+}
+
 /// Optional source location extracted from a libmandoc diagnostic prefix.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,6 +43,12 @@ pub struct SourceLocation {
 pub struct Diagnostic {
     /// Severity classified from libmandoc's diagnostic marker.
     pub level: DiagnosticLevel,
+    /// Stable wrapper-generated classification, when one is available.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub code: Option<DiagnosticCode>,
     /// Human-readable finding with the location prefix removed.
     pub message: String,
     /// Source position when libmandoc supplied a parseable prefix.
@@ -59,6 +78,7 @@ fn parse_diagnostic(line: &str) -> Option<Diagnostic> {
     let (prefix, message) = line.split_once(marker).unwrap_or(("", line));
     Some(Diagnostic {
         level,
+        code: None,
         message: message.to_owned(),
         location: source_location(prefix),
     })
@@ -84,6 +104,7 @@ mod tests {
 
         assert_eq!(diagnostics.len(), 2);
         assert_eq!(diagnostics[0].level, DiagnosticLevel::Unsupported);
+        assert_eq!(diagnostics[0].code, None);
         assert_eq!(diagnostics[0].message, "unsupported roff request: ab");
         assert_eq!(
             diagnostics[0].location,

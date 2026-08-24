@@ -20,7 +20,7 @@ pub use ast::{
     NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
 };
 pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
-pub use diagnostics::{Diagnostic, DiagnosticLevel, SourceLocation};
+pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticLevel, SourceLocation};
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,
     Parser,
@@ -68,9 +68,9 @@ mod tests {
     use windows_sys::Win32::Foundation::ERROR_PRIVILEGE_NOT_HELD;
 
     use super::{
-        AuthorMode, Compression, DiagnosticLevel, DisplayKind, Document, IncludePolicy,
-        InputFormat, MacroSet, Node, NodeKind, NormalizedFont, NormalizedListKind, ParseError,
-        ParseOptions, Parser, SourceBundle, TableAlignment,
+        AuthorMode, Compression, DiagnosticCode, DiagnosticLevel, DisplayKind, Document,
+        IncludePolicy, InputFormat, MacroSet, Node, NodeKind, NormalizedFont, NormalizedListKind,
+        ParseError, ParseOptions, Parser, SourceBundle, TableAlignment,
     };
 
     fn source_path(label: &str) -> std::path::PathBuf {
@@ -1621,7 +1621,7 @@ mod tests {
             report
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.message.contains("syntax tree exceeded")),
+                .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::SyntaxTreeDepthLimit)),
             "node truncation must remain observable: {:?}",
             report.diagnostics
         );
@@ -1663,7 +1663,7 @@ mod tests {
             report
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.message.contains("equation tree exceeded")),
+                .any(|diagnostic| diagnostic.code == Some(DiagnosticCode::EquationTreeDepthLimit)),
             "equation truncation must remain observable: {:?}",
             report.diagnostics
         );
@@ -1835,5 +1835,34 @@ mod tests {
         });
         let explicit_target = explicit_target.expect("Tg must annotate its resolved destination");
         assert!(explicit_target.flags.permalink);
+    }
+
+    #[test]
+    fn parser_normalizes_internal_sentinels_in_validated_tags() {
+        let report = Parser::default()
+            .parse_bytes(
+                "tag-sentinel.1",
+                b".TH TAG-SENTINEL 1\n.SH OPTIONS\n.TP\n\\fB\\-\\-new-window\\fR\nOpen a window.\n",
+            )
+            .expect("parse tagged paragraph");
+        let tagged = find_node(&report.document.root, &|node| {
+            node.tag
+                .as_deref()
+                .is_some_and(|tag| tag.contains("new-window"))
+        });
+
+        assert!(
+            tagged.is_some(),
+            "normalized TP tag must remain addressable"
+        );
+        assert!(
+            find_node(&report.document.root, &|node| {
+                node.tag.as_deref().is_some_and(|tag| {
+                    tag.chars()
+                        .any(|character| ['\u{1d}', '\u{1e}', '\u{1f}'].contains(&character))
+                })
+            })
+            .is_none()
+        );
     }
 }

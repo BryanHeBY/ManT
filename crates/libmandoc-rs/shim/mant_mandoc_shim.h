@@ -164,6 +164,8 @@ const char *mant_mandoc_document_alias_target(const struct mant_mandoc_document 
 int mant_mandoc_document_has_body(const struct mant_mandoc_document *);
 int mant_mandoc_document_equation_truncated(
     const struct mant_mandoc_document *);
+size_t mant_mandoc_node_view_size(void);
+size_t mant_mandoc_table_cell_view_size(void);
 const struct mant_mandoc_node *mant_mandoc_document_root(
     const struct mant_mandoc_document *);
 int mant_mandoc_node_snapshot(struct mant_mandoc_document *,

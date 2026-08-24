@@ -2,7 +2,10 @@
 
 use mant_ir::{Diagnostic, DiagnosticLevel};
 
-use libmandoc_rs::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
+use libmandoc_rs::{
+    Diagnostic as MandocDiagnostic, DiagnosticCode as MandocDiagnosticCode,
+    DiagnosticLevel as MandocDiagnosticLevel,
+};
 
 pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
     input
@@ -14,7 +17,15 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
                 MandocDiagnosticLevel::Warning => DiagnosticLevel::Warning,
                 MandocDiagnosticLevel::Style => DiagnosticLevel::Style,
             },
-            code: None,
+            code: diagnostic.code.map(|code| {
+                match code {
+                    MandocDiagnosticCode::SyntaxTreeDepthLimit => "manual.syntax-depth-truncated",
+                    MandocDiagnosticCode::EquationTreeDepthLimit => {
+                        "manual.equation-depth-truncated"
+                    }
+                }
+                .to_owned()
+            }),
             message: diagnostic.message.clone(),
             source: diagnostic.location.map(|location| mant_ir::SourceSpan {
                 byte_range: None,
@@ -29,7 +40,10 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
 
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
+    use libmandoc_rs::{
+        Diagnostic as MandocDiagnostic, DiagnosticCode as MandocDiagnosticCode,
+        DiagnosticLevel as MandocDiagnosticLevel,
+    };
     use mant_ir::DiagnosticLevel;
 
     use super::lower_diagnostics;
@@ -39,19 +53,31 @@ mod tests {
         let diagnostics = lower_diagnostics(&[
             MandocDiagnostic {
                 level: MandocDiagnosticLevel::Unsupported,
+                code: None,
                 message: "unsupported roff request: ab".into(),
                 location: None,
             },
             MandocDiagnostic {
                 level: MandocDiagnosticLevel::Warning,
+                code: None,
                 message: "skipping paragraph macro".into(),
+                location: None,
+            },
+            MandocDiagnostic {
+                level: MandocDiagnosticLevel::Warning,
+                code: Some(MandocDiagnosticCode::SyntaxTreeDepthLimit),
+                message: "deeper descendants were omitted".into(),
                 location: None,
             },
         ]);
 
-        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(diagnostics.len(), 3);
         assert_eq!(diagnostics[0].level, DiagnosticLevel::Unsupported);
         assert_eq!(diagnostics[0].message, "unsupported roff request: ab");
         assert_eq!(diagnostics[1].level, DiagnosticLevel::Warning);
+        assert_eq!(
+            diagnostics[2].code.as_deref(),
+            Some("manual.syntax-depth-truncated")
+        );
     }
 }

@@ -254,6 +254,9 @@ Display `eqn(7)` input becomes an `equation` block containing libmandoc's normal
 ManT preserves these expressions for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
 
 Deeply nested equations and document trees are bounded before recursive Rust lowering. The owned native tree stops descending after 256 levels and returns the finite prefix, so pathological input cannot overflow later recursive consumers; descendants beyond that defensive cap are omitted rather than reported as a whole-document parse failure.
+The retained document carries `manual.syntax-depth-truncated` or
+`manual.equation-depth-truncated`, respectively, so structured consumers can
+detect either omission without matching diagnostic prose.
 
 ## Diagnostics and Fallback
 

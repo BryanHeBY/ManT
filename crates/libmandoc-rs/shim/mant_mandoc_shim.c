@@ -1346,6 +1346,18 @@ mant_mandoc_document_equation_truncated(
 	return document == NULL ? 0 : document->equation_truncated;
 }
 
+size_t
+mant_mandoc_node_view_size(void)
+{
+	return sizeof(struct mant_mandoc_node_view);
+}
+
+size_t
+mant_mandoc_table_cell_view_size(void)
+{
+	return sizeof(struct mant_mandoc_table_cell_view);
+}
+
 const struct mant_mandoc_node *
 mant_mandoc_document_root(const struct mant_mandoc_document *document)
 {

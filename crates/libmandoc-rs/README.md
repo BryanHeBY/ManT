@@ -59,6 +59,12 @@ only one `libmandoc-rs` version in a dependency graph. A breaking pre-1.0
 upgrade must consequently be coordinated across every dependent crate rather
 than relying on parallel `0.x` versions.
 
+Repository CI verifies the final native archive with GNU `nm` on Linux.
+macOS and Windows still compile the same prefix map and exercise linking,
+parsing, and rendering, but do not claim an equivalent exported-symbol scan;
+their native builds instead treat warnings as errors for the supported
+toolchains.
+
 The shim retains the completed native parser only during the synchronous FFI
 transfer. Each native node and table cell is exposed as a shallow borrowed
 snapshot and copied directly into the public Rust tree; no borrowed pointer
@@ -157,7 +163,10 @@ equation expansion stop descending after 256 syntax-tree or equation-box
 levels. Pathological input beyond either
 defensive cap still returns a successful, finite report and omits deeper
 descendants, while appending an explicit warning to `ParseReport::diagnostics`;
-ordinary manuals remain far below both limits.
+ordinary manuals remain far below both limits. These wrapper-generated
+warnings carry `DiagnosticCode::SyntaxTreeDepthLimit` or
+`DiagnosticCode::EquationTreeDepthLimit`; native libmandoc findings retain
+their severity and message but do not invent a machine code.
 
 Enable the optional `serde` feature to derive `Serialize` and `Deserialize`
 for the public AST, parser configuration, reports, diagnostics, and errors.
