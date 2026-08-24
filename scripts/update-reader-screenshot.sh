@@ -177,9 +177,9 @@ for _ in {1..100}; do
 done
 [[ -n $ready ]] || fail "timed out waiting for the first ManT reader frame"
 
-# F10 opens Manual; Right selects View; Down twice selects Expand All.
+# F10 opens Manual; Right twice selects View; Down twice selects Expand All.
 xdotool windowfocus --sync "$window"
-xdotool key --clearmodifiers --delay 100 F10 Right Down Down Return
+xdotool key --clearmodifiers --delay 100 F10 Right Right Down Down Return
 sleep 0.5
 
 printf '==> capture expanded reader\n'
