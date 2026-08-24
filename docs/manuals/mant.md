@@ -532,7 +532,17 @@ document and history unchanged.
 
 Mouse input selects and folds outline nodes, follows in-page,
 cross-document, and safe external links, scrolls either pane, drags
-scrollbars, and resizes the Outline boundary.
+scrollbars, resizes the Outline boundary, and selects rendered document text.
+A drag selection is copied as plain text with `y`, `Ctrl+Shift+C`, or **Edit →
+Copy Selection**; `Escape` clears it. Selection follows terminal cells and
+never attempts to reconstruct partial Markdown.
+
+The Edit menu can also copy the complete current Outline node as deterministic
+text or structurally complete CommonMark. These node actions operate on the
+semantic document subtree rather than the visible wrapped rows, so Markdown
+syntax is never cut at an arbitrary visual boundary. Synthetic Outline groups
+cannot be copied; select a complete section, entry, document overview, or tldr
+node instead.
 
 ### Page Search
 
@@ -561,8 +571,9 @@ Navigate contains backward/forward history and current-document movement.
 - `q`: Quit.
 
 The View menu can hide the Outline sidebar. The Navigate and Search menus expose the
-same operations as their shortcuts. Terminal setup is restored on normal
-exit, errors, and Rust panics.
+same operations as their shortcuts. The Edit menu exposes visual plain-text
+copy and complete-node Text/Markdown copy. Terminal setup is restored on
+normal exit, errors, and Rust panics.
 
 ## Document Selection
 

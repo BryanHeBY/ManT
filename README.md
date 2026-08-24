@@ -103,12 +103,17 @@ settles, the outline follows the first visible document node.
 - `Alt+Left` / `Alt+Right` move backward and forward through document jumps.
 - `Ctrl+F` or `/` opens confirmed full-page search.
 - `n` and `Shift+N` select the next and previous matches.
+- Mouse drag selects rendered text; `y` or `Ctrl+Shift+C` copies it as plain
+  text, and `Escape` clears the selection.
 - `F10` opens the menu, `?` opens help, and `q` quits.
 
 The mouse can select and fold outline nodes, follow underlined in-page,
 cross-document, and web/email links, scroll both panes, drag scrollbars, and
 resize the Outline sidebar. Markdown links stay inside their registered source; man
 and mdoc references select an exact manual section.
+The Edit menu can copy a complete selected Outline node as deterministic text
+or structurally complete Markdown; arbitrary visual selections deliberately
+remain plain text so wrapping cannot produce a truncated Markdown fragment.
 
 Human-facing help, diagnostics, and tldr output use terminal-aware
 colour. `--color auto|always|never` controls the shared policy; automatic mode

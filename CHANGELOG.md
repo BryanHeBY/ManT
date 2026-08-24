@@ -12,6 +12,16 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-ui
+
+- Add terminal-cell-aware mouse text selection and typed host clipboard
+  requests. Visual selections remain plain text, while complete addressable
+  nodes can request deterministic Text or structurally complete Markdown;
+  synthetic Outline groups are rejected.
+- Add the `run_with_catalog_and_scope_and_copy` embedding boundary. Existing
+  run functions retain their signatures and report an in-reader notice if an
+  embedding host without clipboard integration invokes a copy action.
+
 ### mant-engine
 
 - Prevent embedded `.so` requests from reading process-working-directory
@@ -75,6 +85,10 @@ that crate was not published for that change.
   and filesystem-derived identities cannot forge `hint:`, `warning:`, or other
   diagnostic lines. Intentional multi-line tldr advice remains independently
   sanitized and styled.
+- Provide native Linux, macOS, and Windows system-clipboard integration for the
+  interactive reader. The clipboard is initialized lazily and retained for
+  the TUI session; copy payloads are rejected above 4 MiB rather than
+  truncated.
 
 ### Workspace publication transition
 
