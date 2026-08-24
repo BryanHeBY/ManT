@@ -55,5 +55,7 @@
 #define BINM_WHATIS "whatis"
 #define BINM_PAGER "less"
 
+extern const char *getprogname(void);
+extern void setprogname(const char *);
 extern void *reallocarray(void *, size_t, size_t);
 extern void *recallocarray(void *, size_t, size_t, size_t);

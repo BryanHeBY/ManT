@@ -153,6 +153,37 @@ mod tests {
     }
 
     #[test]
+    fn every_progname_compatibility_target_declares_its_namespaced_api() {
+        let targets = [
+            (include_str!("../config/linux-gnu.h"), LINUX_COMPAT_SOURCES),
+            (include_str!("../config/macos.h"), MACOS_COMPAT_SOURCES),
+            (
+                include_str!("../config/windows-msvc.h"),
+                WINDOWS_MSVC_COMPAT_SOURCES,
+            ),
+        ];
+
+        for (config, sources) in targets {
+            assert!(sources.contains(&"compat_progname.c"));
+            let prefix = config
+                .find("#include \"mant_symbol_prefix.h\"")
+                .expect("target configuration must namespace native symbols");
+            for declaration in [
+                "extern const char *getprogname(void);",
+                "extern void setprogname(const char *);",
+            ] {
+                let declaration = config
+                    .find(declaration)
+                    .unwrap_or_else(|| panic!("missing compatibility declaration: {declaration}"));
+                assert!(
+                    declaration > prefix,
+                    "compatibility declarations must use the prefixed symbol names"
+                );
+            }
+        }
+    }
+
+    #[test]
     #[should_panic(expected = "Linux/musl")]
     fn unconfigured_linux_libc_is_rejected() {
         target_configuration("linux", "musl");
