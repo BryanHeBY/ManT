@@ -1,12 +1,14 @@
 #![cfg(feature = "render")]
 
 use std::{
+    fmt::Write as _,
     process::Command,
     sync::{Arc, Barrier},
 };
 
 use libmandoc_rs::{
-    Compression, IncludePolicy, ParseOptions, RenderErrorKind, RenderFormat, Renderer, SourceBundle,
+    Compression, IncludePolicy, MAX_DECOMPRESSED_SOURCE_BYTES, ParseOptions, RenderErrorKind,
+    RenderFormat, Renderer, SourceBundle,
 };
 
 const MAN_SOURCE: &[u8] = b".TH HELLO 1 \"August 23, 2026\" \"ManT\" \"User Commands\"\n\
@@ -123,6 +125,24 @@ fn output_limit_rejects_partial_results() {
 }
 
 #[test]
+fn renderer_rejects_oversized_decoded_sources_before_native_rendering() {
+    let source = vec![b'x'; MAX_DECOMPRESSED_SOURCE_BYTES + 1];
+    let compressed = zstd::stream::encode_all(source.as_slice(), 0)
+        .expect("compress oversized renderer fixture");
+    let error = Renderer::new(RenderFormat::Ascii)
+        .render_bytes("oversized.1.zst", &compressed)
+        .expect_err("reject a decoded renderer source above the fixed limit");
+
+    assert_eq!(error.kind, RenderErrorKind::Decompression);
+    assert!(
+        error
+            .message
+            .contains(&format!("{MAX_DECOMPRESSED_SOURCE_BYTES}-byte limit")),
+        "unexpected decompression error: {error}"
+    );
+}
+
+#[test]
 fn renderer_resolves_virtual_includes() {
     let mut bundle = SourceBundle::new();
     bundle
@@ -222,7 +242,7 @@ fn concurrent_table_renderers_isolate_borders_and_centering() {
     let mut source =
         String::from(".TH TABLE 1\n.SH BODY\n.TS\ncenter,allbox;\nl l.\nleft\tright\n");
     for row in 0..64 {
-        source.push_str(&format!("row{row}\tvalue{row}\n"));
+        writeln!(source, "row{row}\tvalue{row}").expect("append table fixture row");
     }
     source.push_str(".TE\n");
     let source = Arc::new(source);

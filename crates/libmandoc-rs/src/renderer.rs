@@ -11,12 +11,9 @@ use std::{
 #[cfg(windows)]
 use std::io::Read;
 
-#[cfg(windows)]
-use flate2::read::MultiGzDecoder;
-
 use crate::{
     Compression, Diagnostic, ParseError, ParseErrorKind, Parser, RawRender, SourceBundle,
-    diagnostics, ffi, parser::IncludeSettings,
+    compression, diagnostics, ffi, parser::IncludeSettings,
 };
 
 /// Default maximum bytes retained for one render call.
@@ -285,14 +282,11 @@ impl Renderer {
     fn render_auto_file(&self, path: &Path) -> Result<RenderReport, RenderError> {
         let source = File::open(path).map_err(|error| read_error(path, &error))?;
         if path.extension().is_some_and(|extension| extension == "gz") {
-            let mut decoded = Vec::new();
-            MultiGzDecoder::new(source)
-                .read_to_end(&mut decoded)
-                .map_err(|error| RenderError {
-                    path: path.to_path_buf(),
-                    kind: RenderErrorKind::Decompression,
-                    message: format!("could not decompress gzip manual source: {error}"),
-                })?;
+            let decoded = compression::decode_gzip(source).map_err(|error| RenderError {
+                path: path.to_path_buf(),
+                kind: RenderErrorKind::Decompression,
+                message: format!("could not decompress gzip manual source: {error}"),
+            })?;
             self.render_plain_bytes(path, &decoded)
         } else {
             let mut source = source;
@@ -306,14 +300,14 @@ impl Renderer {
 
     fn render_zstd_file(&self, path: &Path) -> Result<RenderReport, RenderError> {
         let source = File::open(path)
-            .and_then(zstd::stream::decode_all)
+            .and_then(compression::decode_zstd)
             .map_err(|error| decompression_error(path, &error))?;
         self.render_plain_bytes(path, &source)
     }
 
     fn render_zstd_bytes(&self, path: &Path, source: &[u8]) -> Result<RenderReport, RenderError> {
         let source =
-            zstd::stream::decode_all(source).map_err(|error| decompression_error(path, &error))?;
+            compression::decode_zstd(source).map_err(|error| decompression_error(path, &error))?;
         self.render_plain_bytes(path, &source)
     }
 

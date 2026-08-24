@@ -164,7 +164,11 @@ input, not gzip; callers must decompress gzip byte streams themselves.
 `Compression::Plain` bypasses top-level compression detection. Other
 compression formats are not part of this crate's supported contract. Under
 `IncludePolicy::Root`, an unresolved `.so name` also tries `name.gz`; Windows
-decompresses that included source in Rust before parsing it from memory.
+decompresses that included source in Rust before parsing it from memory. Every
+Rust-managed zstd or gzip decode is capped at 16 MiB of complete uncompressed
+source and returns a typed decompression failure instead of partial bytes on
+overflow. Unix native file/gzip transport retains libmandoc's own limits;
+`ManT` applies its separate 16 MiB source budget before that product boundary.
 
 ## Vendor layering
 

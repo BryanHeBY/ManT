@@ -5,6 +5,7 @@
 mod build_config;
 
 mod ast;
+mod compression;
 mod diagnostics;
 #[allow(unsafe_code)]
 mod ffi;
@@ -18,6 +19,7 @@ pub use ast::{
     AuthorMode, DisplayKind, Document, MacroSet, Metadata, Node, NodeFlags, NodeKind,
     NormalizedEnclosure, NormalizedFont, NormalizedListKind, TableAlignment, TableCell,
 };
+pub use compression::MAX_DECOMPRESSED_SOURCE_BYTES;
 pub use diagnostics::{Diagnostic, DiagnosticLevel, SourceLocation};
 pub use parser::{
     Compression, IncludePolicy, InputFormat, ParseError, ParseErrorKind, ParseOptions, ParseReport,
@@ -413,6 +415,25 @@ mod tests {
         );
         assert_eq!(error.kind, super::ParseErrorKind::Decompression);
         assert!(!error.message.contains("unsupported control character"));
+    }
+
+    #[test]
+    fn oversized_zstd_sources_fail_without_returning_partial_input() {
+        let source = vec![b'x'; super::MAX_DECOMPRESSED_SOURCE_BYTES + 1];
+        let compressed = zstd::stream::encode_all(source.as_slice(), 0)
+            .expect("compress oversized source fixture");
+        let error = Parser::default()
+            .parse_bytes("oversized.1.zst", &compressed)
+            .expect_err("reject a decoded source above the fixed limit");
+
+        assert_eq!(error.kind, super::ParseErrorKind::Decompression);
+        assert!(
+            error.message.contains(&format!(
+                "{}-byte limit",
+                super::MAX_DECOMPRESSED_SOURCE_BYTES
+            )),
+            "unexpected decompression error: {error}"
+        );
     }
 
     #[cfg(unix)]

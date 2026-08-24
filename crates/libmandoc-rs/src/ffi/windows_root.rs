@@ -13,7 +13,7 @@ use std::{
     ptr,
 };
 
-use flate2::read::MultiGzDecoder;
+use crate::compression;
 use windows_sys::Win32::{
     Foundation::HANDLE,
     Storage::FileSystem::{
@@ -104,9 +104,7 @@ impl RootResolver {
                 compressed.push(".gz");
                 let compressed = PathBuf::from(compressed);
                 let file = self.open_confined(&compressed)?;
-                let mut data = Vec::new();
-                MultiGzDecoder::new(file).read_to_end(&mut data)?;
-                Ok(data)
+                compression::decode_gzip(file)
             }
             Err(error) => Err(error),
         }

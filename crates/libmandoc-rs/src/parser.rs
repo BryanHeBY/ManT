@@ -14,10 +14,7 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(windows)]
 use std::io::Read;
 
-#[cfg(windows)]
-use flate2::read::MultiGzDecoder;
-
-use crate::{Diagnostic, Document, RawDocument, SourceBundle, diagnostics, ffi};
+use crate::{Diagnostic, Document, RawDocument, SourceBundle, compression, diagnostics, ffi};
 
 /// Selects the macro language before parsing begins.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -254,7 +251,7 @@ impl Parser {
 
     fn parse_zstd_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
         let source = File::open(path)
-            .and_then(zstd::stream::decode_all)
+            .and_then(compression::decode_zstd)
             .map_err(|error| decompression_error(path, &error))?;
         self.parse_plain_bytes(path, &source)
     }
@@ -268,9 +265,7 @@ impl Parser {
     fn parse_auto_file(&self, path: &Path) -> Result<ParseReport, ParseError> {
         let source = File::open(path).map_err(|error| read_error(path, &error))?;
         if path.extension().is_some_and(|extension| extension == "gz") {
-            let mut decoded = Vec::new();
-            MultiGzDecoder::new(source)
-                .read_to_end(&mut decoded)
+            let decoded = compression::decode_gzip(source)
                 .map_err(|error| gzip_decompression_error(path, &error))?;
             self.parse_plain_bytes(path, &decoded)
         } else {
@@ -285,7 +280,7 @@ impl Parser {
 
     fn parse_zstd_bytes(&self, path: &Path, source: &[u8]) -> Result<ParseReport, ParseError> {
         let source =
-            zstd::stream::decode_all(source).map_err(|error| decompression_error(path, &error))?;
+            compression::decode_zstd(source).map_err(|error| decompression_error(path, &error))?;
         self.parse_plain_bytes(path, &source)
     }
 
