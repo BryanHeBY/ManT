@@ -99,7 +99,7 @@ Invoke-Native -Label "test portable Rust packages" -Program "cargo" `
 Invoke-Native -Label "test optional libmandoc features" -Program "cargo" `
     -Arguments @("test", "--locked", "--package", "libmandoc-rs", "--all-features")
 Invoke-Native -Label "lint portable Rust packages" -Program "cargo" `
-    -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--", "-D", "warnings"))
+    -Arguments (@("clippy", "--locked") + $Packages + @("--all-targets", "--all-features", "--", "-D", "warnings"))
 & (Join-Path $PSScriptRoot "build-and-smoke.ps1") -BuildProfile $BuildProfile
 
 Write-Host "`nWindows verification succeeded"

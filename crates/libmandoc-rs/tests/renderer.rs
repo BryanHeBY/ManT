@@ -52,7 +52,7 @@ fn html_mdoc_output_matches_the_pinned_renderer_golden() {
         .with_html_fragment(true)
         .render_bytes("hello.1", MDOC_SOURCE)
         .expect("render mdoc fixture");
-    let expected = include_str!("fixtures/render-mdoc-fragment.html").replace("\r\n", "\n");
+    let expected = include_str!("fixtures/render-mdoc-fragment.html");
     assert_eq!(report.output, expected);
 }
 
