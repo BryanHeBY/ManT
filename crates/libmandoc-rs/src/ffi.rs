@@ -107,6 +107,7 @@ unsafe extern "C" {
         include_root: *const c_char,
         allow_include: i32,
         input_format: i32,
+        operating_system: *const c_char,
     ) -> *mut CDocument;
     fn mant_mandoc_parse_buffer(
         path: *const c_char,
@@ -115,6 +116,7 @@ unsafe extern "C" {
         include_root: *const c_char,
         allow_include: i32,
         input_format: i32,
+        operating_system: *const c_char,
         resolver: Option<CSourceResolver>,
         resolver_context: *mut c_void,
     ) -> *mut CDocument;
@@ -123,6 +125,7 @@ unsafe extern "C" {
         sources: *const CSource,
         source_count: usize,
         input_format: i32,
+        operating_system: *const c_char,
     ) -> *mut CDocument;
     #[cfg(all(feature = "render", unix))]
     fn mant_mandoc_render_file(
@@ -130,6 +133,7 @@ unsafe extern "C" {
         include_root: *const c_char,
         allow_include: i32,
         input_format: i32,
+        operating_system: *const c_char,
         render_format: i32,
         render_width: usize,
         html_fragment: i32,
@@ -143,6 +147,7 @@ unsafe extern "C" {
         include_root: *const c_char,
         allow_include: i32,
         input_format: i32,
+        operating_system: *const c_char,
         render_format: i32,
         render_width: usize,
         html_fragment: i32,
@@ -156,6 +161,7 @@ unsafe extern "C" {
         sources: *const CSource,
         source_count: usize,
         input_format: i32,
+        operating_system: *const c_char,
         render_format: i32,
         render_width: usize,
         html_fragment: i32,
@@ -214,6 +220,7 @@ pub(super) fn render_file(
     include_root: Option<&CStr>,
     allow_includes: bool,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
     render_format: i32,
     width: usize,
     html_fragment: bool,
@@ -225,6 +232,7 @@ pub(super) fn render_file(
             include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
             render_format,
             width,
             i32::from(html_fragment),
@@ -242,6 +250,7 @@ pub(super) fn render_buffer(
     include_root: Option<&CStr>,
     allow_includes: bool,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
     render_format: i32,
     width: usize,
     html_fragment: bool,
@@ -255,6 +264,7 @@ pub(super) fn render_buffer(
             include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
             render_format,
             width,
             i32::from(html_fragment),
@@ -274,6 +284,7 @@ pub(super) fn render_buffer(
     include_root: Option<&Path>,
     allow_includes: bool,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
     render_format: i32,
     width: usize,
     html_fragment: bool,
@@ -289,6 +300,7 @@ pub(super) fn render_buffer(
             std::ptr::null(),
             i32::from(allow_includes),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
             render_format,
             width,
             i32::from(html_fragment),
@@ -305,6 +317,7 @@ pub(super) fn render_bundle(
     root: &CStr,
     bundle: &SourceBundle,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
     render_format: i32,
     width: usize,
     html_fragment: bool,
@@ -317,6 +330,7 @@ pub(super) fn render_bundle(
             sources.as_ptr(),
             sources.len(),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
             render_format,
             width,
             i32::from(html_fragment),
@@ -352,6 +366,7 @@ pub(super) fn parse_file(
     include_root: Option<&CStr>,
     allow_includes: bool,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
     let pointer = unsafe {
         mant_mandoc_parse_file(
@@ -359,6 +374,7 @@ pub(super) fn parse_file(
             include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
         )
     };
     copy_document(pointer)
@@ -371,6 +387,7 @@ pub(super) fn parse_buffer(
     include_root: Option<&CStr>,
     allow_includes: bool,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
     let pointer = unsafe {
         mant_mandoc_parse_buffer(
@@ -380,6 +397,7 @@ pub(super) fn parse_buffer(
             include_root.map_or(std::ptr::null(), CStr::as_ptr),
             i32::from(allow_includes),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
             None,
             std::ptr::null_mut(),
         )
@@ -394,6 +412,7 @@ pub(super) fn parse_buffer(
     include_root: Option<&Path>,
     allow_includes: bool,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
     let mut resolver = include_root.map(|root| windows_root::RootResolver::new(root, path));
     let (callback, context) = windows_root::callback_parts(resolver.as_mut());
@@ -405,6 +424,7 @@ pub(super) fn parse_buffer(
             std::ptr::null(),
             i32::from(allow_includes),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
             callback,
             context,
         )
@@ -416,6 +436,7 @@ pub(super) fn parse_bundle(
     root: &CStr,
     bundle: &SourceBundle,
     input_format: InputFormat,
+    operating_system: Option<&CStr>,
 ) -> Result<RawDocument, String> {
     let (_paths, sources) = bundle_sources(bundle);
     let pointer = unsafe {
@@ -424,6 +445,7 @@ pub(super) fn parse_bundle(
             sources.as_ptr(),
             sources.len(),
             input_format_code(input_format),
+            operating_system.map_or(std::ptr::null(), CStr::as_ptr),
         )
     };
     copy_document(pointer)
@@ -804,7 +826,7 @@ emphasis
         // `parse_buffer` destroys its private native parser handle before it
         // returns. Traversing every owned string and cell afterwards catches
         // any borrowed pointer that accidentally escaped the FFI boundary.
-        let parsed = parse_buffer(&path, source, None, false, InputFormat::Auto)
+        let parsed = parse_buffer(&path, source, None, false, InputFormat::Auto, None)
             .unwrap_or_else(|error| panic!("owned transfer failed for {label}: {error}"));
         let (nodes, bytes) = touch_owned_node(&parsed.document.root);
         assert!(

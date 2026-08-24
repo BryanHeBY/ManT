@@ -115,10 +115,10 @@ set_mant_progname(void)
 
 static char *copy_string(const char *);
 static struct mant_mandoc_document *parse_input(const char *,
-    const unsigned char *, size_t, const char *, int, int, int, size_t,
-    int, size_t, mant_mandoc_source_resolver, void *, int);
+    const unsigned char *, size_t, const char *, int, int, const char *,
+    int, size_t, int, size_t, mant_mandoc_source_resolver, void *, int);
 static struct mant_mandoc_document *parse_bundle_mode(const char *,
-    const struct mant_mandoc_source *, size_t, int, int);
+    const struct mant_mandoc_source *, size_t, int, const char *, int);
 static char *read_diagnostics(FILE *);
 static const struct mant_mandoc_source *find_bundle_source(const char *);
 static int is_safe_bundle_path(const char *);
@@ -142,34 +142,36 @@ static int render_document(struct mant_mandoc_document *,
 
 struct mant_mandoc_document *
 mant_mandoc_parse_file(const char *path, const char *include_root,
-    int allow_include, int input_format)
+    int allow_include, int input_format, const char *operating_system)
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, 0, 0, 0, 0, NULL, NULL, 1);
+	    input_format, operating_system, 0, 0, 0, 0, NULL, NULL, 1);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_parse_buffer(const char *path, const unsigned char *buffer,
     size_t length, const char *include_root, int allow_include,
-    int input_format, mant_mandoc_source_resolver resolver,
-    void *resolver_context)
+    int input_format, const char *operating_system,
+    mant_mandoc_source_resolver resolver, void *resolver_context)
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format, 0, 0, 0, 0, resolver, resolver_context, 1);
+	    input_format, operating_system, 0, 0, 0, 0, resolver,
+	    resolver_context, 1);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_parse_bundle(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
-    int input_format)
+    int input_format, const char *operating_system)
 {
-	return parse_bundle_mode(root, sources, source_count, input_format, 1);
+	return parse_bundle_mode(root, sources, source_count, input_format,
+	    operating_system, 1);
 }
 
 static struct mant_mandoc_document *
 parse_bundle_mode(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
-    int input_format, int retain_parser)
+    int input_format, const char *operating_system, int retain_parser)
 {
 	const struct mant_mandoc_source	*source;
 	struct mant_mandoc_document	*document;
@@ -197,7 +199,7 @@ parse_bundle_mode(const char *root,
 			    "source bundle does not contain the requested root");
 	} else
 		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format, 0, 0, 0, 0, NULL, NULL,
+		    NULL, 1, input_format, operating_system, 0, 0, 0, 0, NULL, NULL,
 		    retain_parser);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
@@ -207,9 +209,10 @@ parse_bundle_mode(const char *root,
 static struct mant_mandoc_document *
 parse_input(const char *path, const unsigned char *buffer, size_t length,
     const char *include_root, int allow_include, int input_format,
-    int render_format, size_t render_width, int html_fragment,
-    size_t output_limit, mant_mandoc_source_resolver resolver,
-    void *resolver_context, int retain_parser)
+    const char *operating_system, int render_format, size_t render_width,
+    int html_fragment, size_t output_limit,
+    mant_mandoc_source_resolver resolver, void *resolver_context,
+    int retain_parser)
 {
 	struct mant_mandoc_document	*document;
 	struct mparse			*parser;
@@ -289,7 +292,7 @@ parse_input(const char *path, const unsigned char *buffer, size_t length,
 	}
 #endif
 	mchars_alloc();
-	parser = mparse_alloc(options, MANDOC_OS_OTHER, NULL);
+	parser = mparse_alloc(options, MANDOC_OS_OTHER, operating_system);
 #ifdef MANDOC_MEMORY_ONLY
 	mparse_readmem(parser, buffer, length, path);
 #else
@@ -363,38 +366,39 @@ cleanup:
 #ifdef MANT_MANDOC_RENDER
 struct mant_mandoc_document *
 mant_mandoc_render_file(const char *path, const char *include_root,
-    int allow_include, int input_format, int render_format,
-    size_t render_width, int html_fragment, size_t output_limit)
+    int allow_include, int input_format, const char *operating_system,
+    int render_format, size_t render_width, int html_fragment,
+    size_t output_limit)
 {
 	return parse_input(path, NULL, 0, include_root, allow_include,
-	    input_format, render_format, render_width, html_fragment,
-	    output_limit, NULL, NULL, 0);
+	    input_format, operating_system, render_format, render_width,
+	    html_fragment, output_limit, NULL, NULL, 0);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_render_buffer(const char *path, const unsigned char *buffer,
     size_t length, const char *include_root, int allow_include,
-    int input_format, int render_format, size_t render_width,
-    int html_fragment, size_t output_limit,
+    int input_format, const char *operating_system, int render_format,
+    size_t render_width, int html_fragment, size_t output_limit,
     mant_mandoc_source_resolver resolver, void *resolver_context)
 {
 	return parse_input(path, buffer, length, include_root, allow_include,
-	    input_format, render_format, render_width, html_fragment,
-	    output_limit, resolver, resolver_context, 0);
+	    input_format, operating_system, render_format, render_width,
+	    html_fragment, output_limit, resolver, resolver_context, 0);
 }
 
 struct mant_mandoc_document *
 mant_mandoc_render_bundle(const char *root,
     const struct mant_mandoc_source *sources, size_t source_count,
-    int input_format, int render_format, size_t render_width,
-    int html_fragment, size_t output_limit)
+    int input_format, const char *operating_system, int render_format,
+    size_t render_width, int html_fragment, size_t output_limit)
 {
 	const struct mant_mandoc_source	*source;
 	struct mant_mandoc_document	*document;
 
 	if (sources == NULL || source_count == 0)
 		return mant_mandoc_parse_bundle(root, sources, source_count,
-		    input_format);
+		    input_format, operating_system);
 	if (bundle_sources != NULL) {
 		document = calloc(1, sizeof(*document));
 		if (document != NULL)
@@ -412,8 +416,8 @@ mant_mandoc_render_bundle(const char *root,
 			    "source bundle does not contain the requested root");
 	} else
 		document = parse_input(root, source->data, source->length,
-		    NULL, 1, input_format, render_format, render_width,
-		    html_fragment, output_limit, NULL, NULL, 0);
+		    NULL, 1, input_format, operating_system, render_format,
+		    render_width, html_fragment, output_limit, NULL, NULL, 0);
 	bundle_sources = NULL;
 	bundle_source_count = 0;
 	return document;

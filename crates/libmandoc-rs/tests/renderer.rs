@@ -7,8 +7,8 @@ use std::{
 };
 
 use libmandoc_rs::{
-    Compression, IncludePolicy, MAX_DECOMPRESSED_SOURCE_BYTES, ParseOptions, RenderErrorKind,
-    RenderFormat, Renderer, SourceBundle,
+    Compression, IncludePolicy, MAX_DECOMPRESSED_SOURCE_BYTES, ParseOptions, Parser,
+    RenderErrorKind, RenderFormat, Renderer, SourceBundle,
 };
 
 const MAN_SOURCE: &[u8] = b".TH HELLO 1 \"August 23, 2026\" \"ManT\" \"User Commands\"\n\
@@ -66,6 +66,22 @@ fn utf8_output_preserves_unicode_scalars() {
         .expect("render deterministic UTF-8");
     assert!(report.output.contains("café — 日本 😀"));
     assert!(report.output.is_char_boundary(report.output.len()));
+}
+
+#[test]
+fn renderer_uses_the_parsers_mdoc_operating_system_override() {
+    let parser = Parser::default()
+        .with_mdoc_operating_system("PinnedOS 1.0")
+        .expect("valid operating-system override");
+    let report = Renderer::new(RenderFormat::Utf8)
+        .with_parser(parser)
+        .render_bytes(
+            "pinned-os.1",
+            b".Dd August 24, 2026\n.Dt PINNED-OS 1\n.Os\n.Sh NAME\n.Nm pinned-os\n",
+        )
+        .expect("render a caller-pinned bare Os macro");
+
+    assert!(report.output.contains("PinnedOS 1.0"));
 }
 
 #[test]

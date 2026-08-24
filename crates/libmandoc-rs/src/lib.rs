@@ -206,6 +206,33 @@ mod tests {
     }
 
     #[test]
+    fn parser_can_pin_bare_mdoc_operating_system_metadata() {
+        let parser = Parser::default()
+            .with_mdoc_operating_system("PinnedOS 1.0")
+            .expect("valid operating-system override");
+        assert_eq!(
+            parser.mdoc_operating_system().map(std::ffi::CStr::to_bytes),
+            Some(b"PinnedOS 1.0".as_slice())
+        );
+
+        let bare = parser
+            .parse_bytes(
+                "bare-os.1",
+                b".Dd August 24, 2026\n.Dt BARE-OS 1\n.Os\n.Sh NAME\n.Nm bare-os\n",
+            )
+            .expect("parse a caller-pinned bare Os macro");
+        assert_eq!(bare.document.metadata.os.as_deref(), Some("PinnedOS 1.0"));
+
+        let authored = parser
+            .parse_bytes(
+                "authored-os.1",
+                b".Dd August 24, 2026\n.Dt AUTHORED-OS 1\n.Os AuthoredOS\n.Sh NAME\n.Nm authored-os\n",
+            )
+            .expect("parse an authored Os value");
+        assert_eq!(authored.document.metadata.os.as_deref(), Some("AuthoredOS"));
+    }
+
+    #[test]
     fn parser_expands_the_libbsd_library_name() {
         let report = Parser::default()
             .parse_bytes(

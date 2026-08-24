@@ -115,6 +115,13 @@ assert_eq!(report.document.metadata.title.as_deref(), Some("HELLO"));
 `InputFormat::Mdoc` when the caller already knows the source language. The
 default remains compatible automatic detection, and the input selection is
 kept outside `ParseOptions` so existing struct literals continue to compile.
+`Parser::with_mdoc_operating_system` similarly pins the fallback value for an
+argument-less mdoc `.Os`; explicit `.Os name` source text still wins. Without
+that override, Unix retains upstream `uname(3)` behavior and Windows retains
+its configured `Windows` value, so consumers requiring byte-reproducible bare
+`.Os` metadata or rendering should set the override explicitly. Libmandoc
+continues to infer its OpenBSD/NetBSD validation dialect from the selected
+name, matching the upstream `-I os=...` boundary.
 
 The vendored parser subset and its include shim make all mutable parse state
 thread-local, so independent `Parser` calls may run concurrently. A `Parser`

@@ -1,7 +1,7 @@
 //! Public parser configuration, input handling, and typed failure boundary.
 
 use std::{
-    ffi::CString,
+    ffi::{CStr, CString},
     fmt,
     fs::File,
     io,
@@ -134,6 +134,7 @@ impl std::error::Error for ParseError {}
 pub struct Parser {
     options: ParseOptions,
     input_format: InputFormat,
+    mdoc_operating_system: Option<CString>,
 }
 
 impl Parser {
@@ -143,6 +144,7 @@ impl Parser {
         Self {
             options,
             input_format: InputFormat::Auto,
+            mdoc_operating_system: None,
         }
     }
 
@@ -163,6 +165,31 @@ impl Parser {
     #[must_use]
     pub const fn input_format(&self) -> InputFormat {
         self.input_format
+    }
+
+    /// Override the operating-system name used by an argument-less mdoc
+    /// `.Os` macro.
+    ///
+    /// Without an override, libmandoc retains its native behavior: Unix uses
+    /// `uname(3)` and Windows uses its target configuration. An explicit `.Os
+    /// name` in the document still takes precedence over this value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::ffi::NulError`] when the supplied name contains a NUL
+    /// byte and therefore cannot cross the native boundary.
+    pub fn with_mdoc_operating_system(
+        mut self,
+        operating_system: impl AsRef<str>,
+    ) -> Result<Self, std::ffi::NulError> {
+        self.mdoc_operating_system = Some(CString::new(operating_system.as_ref())?);
+        Ok(self)
+    }
+
+    /// Return the caller-selected operating-system override for bare `.Os`.
+    #[must_use]
+    pub fn mdoc_operating_system(&self) -> Option<&CStr> {
+        self.mdoc_operating_system.as_deref()
     }
 
     /// Parse one source path into an owned document.
@@ -245,7 +272,12 @@ impl Parser {
             });
         }
         self.finish(root, |c_path, _| {
-            ffi::parse_bundle(c_path, bundle, self.input_format)
+            ffi::parse_bundle(
+                c_path,
+                bundle,
+                self.input_format,
+                self.mdoc_operating_system(),
+            )
         })
     }
 
@@ -292,6 +324,7 @@ impl Parser {
                 includes.root.as_deref(),
                 includes.allow_includes,
                 self.input_format,
+                self.mdoc_operating_system(),
             )
         })
     }
@@ -305,6 +338,7 @@ impl Parser {
                 includes.root.as_deref(),
                 includes.allow_includes,
                 self.input_format,
+                self.mdoc_operating_system(),
             )
         })
     }
@@ -318,6 +352,7 @@ impl Parser {
                 includes.root.as_deref(),
                 includes.allow_includes,
                 self.input_format,
+                self.mdoc_operating_system(),
             )
         })
     }

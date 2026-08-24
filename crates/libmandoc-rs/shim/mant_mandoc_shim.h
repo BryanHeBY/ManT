@@ -122,21 +122,24 @@ enum mant_mandoc_author_mode {
 #define MANT_MANDOC_NODE_SYNOPSIS_PRETTY (1U << 9)
 
 struct mant_mandoc_document *mant_mandoc_parse_file(
-    const char *, const char *, int, int);
+    const char *, const char *, int, int, const char *);
 struct mant_mandoc_document *mant_mandoc_parse_buffer(
     const char *, const unsigned char *, size_t, const char *, int, int,
-    mant_mandoc_source_resolver, void *);
+    const char *, mant_mandoc_source_resolver, void *);
 struct mant_mandoc_document *mant_mandoc_parse_bundle(
-    const char *, const struct mant_mandoc_source *, size_t, int);
+    const char *, const struct mant_mandoc_source *, size_t, int,
+    const char *);
 #ifdef MANT_MANDOC_RENDER
 struct mant_mandoc_document *mant_mandoc_render_file(
-    const char *, const char *, int, int, int, size_t, int, size_t);
+    const char *, const char *, int, int, const char *, int, size_t, int,
+    size_t);
 struct mant_mandoc_document *mant_mandoc_render_buffer(
     const char *, const unsigned char *, size_t, const char *, int, int,
-    int, size_t, int, size_t, mant_mandoc_source_resolver, void *);
+    const char *, int, size_t, int, size_t, mant_mandoc_source_resolver,
+    void *);
 struct mant_mandoc_document *mant_mandoc_render_bundle(
-    const char *, const struct mant_mandoc_source *, size_t, int, int,
-    size_t, int, size_t);
+    const char *, const struct mant_mandoc_source *, size_t, int,
+    const char *, int, size_t, int, size_t);
 #endif
 void mant_mandoc_document_free(struct mant_mandoc_document *);
 
