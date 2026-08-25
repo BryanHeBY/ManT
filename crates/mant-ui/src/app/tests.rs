@@ -1461,6 +1461,63 @@ fn dragging_document_text_emits_a_plain_text_copy_request() {
 }
 
 #[test]
+fn right_click_in_document_content_copies_the_retained_selection() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&navigation_bundle());
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("Show help")
+        .into_iter()
+        .next()
+        .expect("visible description");
+    app.selection = Some(RenderedSelection {
+        anchor: TextPosition {
+            row: region.row,
+            column: region.start_column,
+        },
+        focus: TextPosition {
+            row: region.row,
+            column: region.end_column.saturating_sub(1),
+        },
+    });
+
+    let outcome = app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: app.geometry.content.x,
+        row: app.geometry.content.y,
+        modifiers: KeyModifiers::NONE,
+    });
+
+    assert_eq!(outcome, UpdateOutcome::Redraw);
+    let CopyRequest::Selection { text } = app.take_copy_request().expect("right-click copy") else {
+        panic!("visual selection emitted a semantic node");
+    };
+    assert_eq!(text, "Show help");
+    assert!(app.selection.is_some(), "copying must retain the selection");
+}
+
+#[test]
+fn right_click_without_a_selection_is_inert() {
+    let backend = TestBackend::new(80, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&navigation_bundle());
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+
+    let outcome = app.handle_mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: app.geometry.content.x,
+        row: app.geometry.content.y,
+        modifiers: KeyModifiers::NONE,
+    });
+
+    assert_eq!(outcome, UpdateOutcome::Unchanged);
+    assert!(app.take_copy_request().is_none());
+    assert!(app.notice.is_none());
+}
+
+#[test]
 fn selection_drag_auto_scrolls_repeatedly_at_both_viewport_edges() {
     let backend = TestBackend::new(60, 10);
     let mut terminal = Terminal::new(backend).expect("test terminal");

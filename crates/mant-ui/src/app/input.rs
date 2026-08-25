@@ -102,6 +102,19 @@ impl App {
             return outcome;
         }
         match mouse.kind {
+            MouseEventKind::Down(MouseButton::Right)
+                if self.pointer_drag == PointerDrag::None
+                    && self
+                        .selection
+                        .is_some_and(|selection| !selection.is_empty())
+                    && self
+                        .geometry
+                        .content
+                        .contains((mouse.column, mouse.row).into()) =>
+            {
+                self.copy_selection();
+                UpdateOutcome::Redraw
+            }
             MouseEventKind::Down(MouseButton::Left)
                 if self.search.is_open()
                     && self
