@@ -224,6 +224,42 @@ fn section_spacing_is_not_coalesced_with_existing_blank_rows() {
 }
 
 #[test]
+fn indented_continuation_without_spacing_follows_its_lead_row() {
+    let mut bundle = bundle();
+    bundle.document.as_mut().expect("document").sections[0].blocks = vec![
+        paragraph("alternate object database"),
+        Block::Paragraph {
+            children: vec![Inline::Text {
+                value: "Via the alternates mechanism, a repository can inherit objects.".to_owned(),
+            }],
+            layout: LayoutHint {
+                indent_columns: 4,
+                spacing_before_lines: 0,
+            },
+            source: None,
+        },
+    ];
+
+    let rendered = DocumentView::new(&bundle).render(100);
+    let rows = rendered
+        .text
+        .lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    let term = rows
+        .iter()
+        .position(|row| row.trim() == "alternate object database")
+        .expect("visible glossary term");
+
+    assert!(
+        rows.get(term + 1)
+            .is_some_and(|row| row.trim_start().starts_with("Via the alternates mechanism")),
+        "an indented continuation with zero spacing must occupy the next row: {rows:?}",
+    );
+}
+
+#[test]
 fn a_tldr_only_result_explains_why_no_manual_body_follows() {
     let mut bundle = bundle();
     bundle.document = None;

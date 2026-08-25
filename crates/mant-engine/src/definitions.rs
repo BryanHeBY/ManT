@@ -210,12 +210,6 @@ fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
         for child in &mut description {
             shift_block_indent(child, description_origin);
         }
-        // A relative-indent wrapper continues the hanging term on the next
-        // line; it does not introduce a paragraph-distance gap of its own.
-        // The outer term retains the `.PP`/`.PD` distance between entries,
-        // while an explicit leading vertical-space block would have stopped
-        // this normalization before reaching this point.
-        clear_block_spacing(description.first_mut());
         let terms = vec![children];
         normalized.push(Block::DefinitionList {
             items: vec![DefinitionItem {
@@ -258,12 +252,6 @@ fn block_indent(block: &Block) -> u16 {
 fn shift_block_indent(block: &mut Block, origin: u16) {
     if let Some(layout) = block_layout_mut(block) {
         layout.indent_columns = layout.indent_columns.saturating_sub(origin);
-    }
-}
-
-fn clear_block_spacing(block: Option<&mut Block>) {
-    if let Some(layout) = block.and_then(block_layout_mut) {
-        layout.spacing_before_lines = 0;
     }
 }
 
@@ -497,13 +485,13 @@ mod tests {
 
     #[test]
     fn normalizes_hanging_option_layout_before_assigning_identity() {
-        let paragraph = |value: &str, indent_columns| Block::Paragraph {
+        let paragraph = |value: &str, indent_columns, spacing_before_lines| Block::Paragraph {
             children: vec![Inline::Text {
                 value: value.to_owned(),
             }],
             layout: LayoutHint {
                 indent_columns,
-                spacing_before_lines: 1,
+                spacing_before_lines,
             },
             source: None,
         };
@@ -512,10 +500,10 @@ mod tests {
             title: "OPTIONS".to_owned(),
             spacing_before_lines: 0,
             blocks: vec![
-                paragraph("-v, --version", 0),
-                paragraph("Print version information.", 4),
-                paragraph("-C <path>", 0),
-                paragraph("Run from path.", 4),
+                paragraph("-v, --version", 0, 1),
+                paragraph("Print version information.", 4, 0),
+                paragraph("-C <path>", 0, 1),
+                paragraph("Run from path.", 4, 0),
             ],
             children: Vec::new(),
             source: None,

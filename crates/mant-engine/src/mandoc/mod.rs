@@ -1479,6 +1479,101 @@ The next line.\n",
     }
 
     #[test]
+    fn relative_indent_does_not_invent_paragraph_distance() {
+        let path = temporary_source(
+            "relative-indent-spacing",
+            ".TH SPACING 7\n\
+             .SH DESCRIPTION\n\
+             .PP\n\
+             first term\n\
+             .RS 4\n\
+             First description.\n\
+             .RE\n\
+             .PP\n\
+             second term\n\
+             .RS 4\n\
+             Second description.\n\
+             .RE\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower relative-indent spacing");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [
+            Block::Paragraph {
+                layout: first_term, ..
+            },
+            Block::Paragraph {
+                layout: first_description,
+                ..
+            },
+            Block::Paragraph {
+                layout: second_term,
+                ..
+            },
+            Block::Paragraph {
+                layout: second_description,
+                ..
+            },
+        ] = document.sections[0].blocks.as_slice()
+        else {
+            panic!("expected two terms followed by their indented descriptions");
+        };
+        assert_eq!(
+            (first_term.indent_columns, first_term.spacing_before_lines),
+            (0, 0)
+        );
+        assert_eq!(
+            (
+                first_description.indent_columns,
+                first_description.spacing_before_lines,
+            ),
+            (4, 0),
+            "RS changes indentation without adding paragraph distance",
+        );
+        assert_eq!(
+            (second_term.indent_columns, second_term.spacing_before_lines),
+            (0, 1),
+            "the following PP still owns the distance between entries",
+        );
+        assert_eq!(
+            (
+                second_description.indent_columns,
+                second_description.spacing_before_lines,
+            ),
+            (4, 0),
+        );
+    }
+
+    #[test]
+    fn relative_indent_preserves_child_owned_paragraph_distance() {
+        let path = temporary_source(
+            "relative-indent-child-spacing",
+            ".TH SPACING 7\n\
+             .SH DESCRIPTION\n\
+             Before.\n\
+             .RS 4\n\
+             .PP\n\
+             Explicit nested paragraph.\n\
+             .RE\n",
+        );
+
+        let document = parse_manual_source(&path).expect("lower nested paragraph spacing");
+        fs::remove_file(path).expect("remove temporary roff fixture");
+
+        let [Block::Paragraph { .. }, Block::Paragraph { layout, .. }] =
+            document.sections[0].blocks.as_slice()
+        else {
+            panic!("expected outer prose and one explicitly separated nested paragraph");
+        };
+        assert_eq!(layout.indent_columns, 4);
+        assert_eq!(
+            layout.spacing_before_lines, 1,
+            "PP inside RS must retain its own paragraph distance",
+        );
+    }
+
+    #[test]
     fn preserves_mdoc_paragraph_and_heading_distance() {
         let path = temporary_source(
             "mdoc-vertical-layout",

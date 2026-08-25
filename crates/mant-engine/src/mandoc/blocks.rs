@@ -164,9 +164,39 @@ fn lower_blocks_with_spacing(
     paragraph_distance: &mut u16,
     spacing_enabled: bool,
 ) -> Vec<Block> {
+    lower_blocks_onto(
+        nodes,
+        context,
+        indent_columns,
+        paragraph_distance,
+        spacing_enabled,
+        Vec::new(),
+    )
+}
+
+/// Lower a transparent structural subtree onto already emitted blocks.
+///
+/// Relative-indent scopes change geometry without starting a paragraph. By
+/// retaining the preceding blocks while lowering their children, only an
+/// actual child paragraph/list macro can contribute its `.PD` distance. This
+/// also lets adjacent definition lists merge across generated `.RS` wrappers
+/// without reconstructing their boundary spacing after the fact.
+fn lower_blocks_onto(
+    nodes: &[Node],
+    context: &LoweringContext<'_>,
+    indent_columns: u16,
+    paragraph_distance: &mut u16,
+    spacing_enabled: bool,
+    output: Vec<Block>,
+) -> Vec<Block> {
     let (table_embeddings, embedded_nodes) = table_embeddings(nodes, context);
-    let mut lowerer =
-        BlockLowerer::new(context, indent_columns, paragraph_distance, spacing_enabled);
+    let mut lowerer = BlockLowerer::new(
+        context,
+        indent_columns,
+        paragraph_distance,
+        spacing_enabled,
+        output,
+    );
     for (index, node) in nodes.iter().enumerate() {
         if !embedded_nodes[index] && !is_inline_equation_quote_artifact(nodes, index) {
             if follows_inline_equation_punctuation(nodes, index) {
@@ -197,12 +227,13 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
         indent_columns: u16,
         paragraph_distance: &'a mut u16,
         spacing_enabled: bool,
+        output: Vec<Block>,
     ) -> Self {
         Self {
             context,
             indent_columns,
             paragraph_distance,
-            state: BlockState::new(indent_columns, spacing_enabled),
+            state: BlockState::with_output(indent_columns, spacing_enabled, output),
             definition_hanging_width: 7,
             split_authors: false,
             synopsis_return_type_open: false,
@@ -669,14 +700,15 @@ impl StructuralLowerer<'_, '_, '_> {
                 extend_blocks_with_spacing(self.output, nested, spacing_before);
             }
             Some("RS") => {
-                let nested = lower_blocks_with_spacing(
+                let output = std::mem::take(self.output);
+                *self.output = lower_blocks_onto(
                     first_part_children(node, NodeKind::Body),
                     self.context,
                     self.indent_columns + 4,
                     self.paragraph_distance,
                     self.spacing_enabled,
+                    output,
                 );
-                extend_transparent_blocks(self.output, nested, *self.paragraph_distance);
             }
             _ => return false,
         }
@@ -976,9 +1008,9 @@ struct BlockState {
 }
 
 impl BlockState {
-    const fn new(indent_columns: u16, spacing_enabled: bool) -> Self {
+    const fn with_output(indent_columns: u16, spacing_enabled: bool, output: Vec<Block>) -> Self {
         Self {
-            output: Vec::new(),
+            output,
             paragraph: InlineBuilder::with_spacing(spacing_enabled),
             paragraph_source: None,
             paragraph_last_line: None,
@@ -1163,25 +1195,15 @@ fn ends_with_line_continuation(node: &Node) -> bool {
         .is_some_and(ends_with_line_continuation)
 }
 
-/// Appends blocks lowered through a transparent roff wrapper.
-///
-/// Sphinx emits each option as its own `.INDENT`/`.UNINDENT` pair. mandoc
-/// expands those macros to separate `RS` nodes, so lowering every node in
-/// isolation would turn one option list into many one-item lists and lose the
-/// default `.PD` distance between them. Adjacent lists with identical layout
-/// are one semantic list; joining them retains that distance on the boundary.
+/// Appends blocks lowered through a transparent styling wrapper.
 fn extend_transparent_blocks(
     output: &mut Vec<Block>,
     mut nested: Vec<Block>,
     paragraph_distance: u16,
 ) {
-    // A transparent wrapper cannot decide whether its first child begins a
-    // new paragraph in isolation. At section start there is no leading
-    // distance; after visible outer content the current `.PD` value applies.
-    // An explicit vertical-space node already owns the distance before the
-    // wrapper's first visible child. Applying `.PD` as well would represent
-    // the same roff gap twice; this is common in Sphinx's `.sp` + `.INDENT`
-    // output and produces visibly doubled rows in both the TUI and text views.
+    // Styling blocks are lowered in isolation so the normalized font can be
+    // applied only to their children. Restore their boundary distance without
+    // duplicating an explicit vertical-space node.
     let boundary_spacing = if output.is_empty()
         || output
             .last()
@@ -1316,7 +1338,7 @@ mod tests {
 
     #[test]
     fn block_state_preserves_filled_line_boundaries_and_continuations() {
-        let mut state = BlockState::new(3, true);
+        let mut state = BlockState::with_output(3, true, Vec::new());
         state.push_inline(text("alpha"), Some(source(1)), false, false);
         state.push_inline(text("beta"), Some(source(2)), false, false);
         state.push_inline(text("gamma"), Some(source(3)), true, false);
@@ -1349,7 +1371,7 @@ mod tests {
     #[test]
     fn block_state_flushes_paragraph_before_tight_preformatted_lines() {
         let context = LoweringContext::new(None, None);
-        let mut state = BlockState::new(2, true);
+        let mut state = BlockState::with_output(2, true, Vec::new());
         state.push_inline(text("prose"), Some(source(1)), false, false);
         state.push_preformatted(text("first"), Some(source(3)), false, &context);
         state.push_preformatted(text("second"), Some(source(4)), true, &context);
