@@ -107,9 +107,9 @@ settles, the outline follows the first visible document node.
 - `n` and `Shift+N` select the next and previous matches.
 - Mouse drag selects and immediately copies rendered text as plain text; a
   short confirmation appears after success. `y` or `Ctrl+Shift+C` copies the
-  current selection again, `Shift+click` or `Shift+drag` extends it, and
-  `Escape` clears it. Holding a drag at the top or bottom edge scrolls the
-  document continuously.
+  current selection again, as does right-clicking inside the document.
+  `Shift+click` or `Shift+drag` extends it, and `Escape` clears it. Holding a
+  drag at the top or bottom edge scrolls the document continuously.
 - `F10` opens the menu, `?` opens help, and `q` quits.
 
 The mouse can select and fold outline nodes, follow underlined in-page,

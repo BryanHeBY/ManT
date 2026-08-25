@@ -67,8 +67,9 @@ Visual selections copy automatically, while the Edit menu can copy a complete
 semantic node as deterministic text or structurally complete `CommonMark`. Local
 sessions prefer the native clipboard and fall back to write-only OSC 52. WSL,
 SSH, and VS Code remote sessions prefer OSC 52 so compatible outer terminals
-and multiplexers such as [Herdr](https://herdr.dev/) can forward the copy to
-the user's clipboard. OSC 52 payloads are limited to 400 KiB before Base64
+and multiplexers can forward the copy to the user's clipboard. Right-clicking
+inside the document copies the retained visual selection again when the mouse
+event reaches `ManT`. OSC 52 payloads are limited to 400 KiB before Base64
 encoding; native clipboard delivery retains the reader-wide 4 MiB limit. This
 terminal protocol has no acknowledgement, so a terminal that disables OSC 52
 can silently ignore an emitted copy request.

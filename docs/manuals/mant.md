@@ -543,10 +543,12 @@ cross-document, and safe external links, scrolls either pane, drags
 scrollbars, resizes the Outline boundary, and selects rendered document text.
 A completed drag selection is copied immediately as plain text and shows a
 short success popup. `y`, `Ctrl+Shift+C`, or **Edit → Copy Selection** copies
-the current selection again; `Shift+click` or `Shift+drag` retains the original
-mouse-down anchor and moves the active endpoint, matching a text editor's
-directional selection model. `Escape` clears it. Holding a drag on the first or
-last content row continuously scrolls and extends the selection. Selection follows terminal cells, omits
+the current selection again. Right-clicking inside the document does the same
+when the terminal delivers that mouse event to ManT; `Shift+click` or
+`Shift+drag` retains the original mouse-down anchor and moves the active
+endpoint, matching a text editor's directional selection model. `Escape`
+clears it. Holding a drag on the first or last content row continuously scrolls
+and extends the selection. Selection follows terminal cells, omits
 presentation-only tldr panel borders, and never attempts to reconstruct partial
 Markdown.
 
@@ -560,12 +562,12 @@ node instead.
 Clipboard delivery follows the terminal topology. Local sessions use the
 native system clipboard first and fall back to the write-only OSC 52 terminal
 protocol when native access is unavailable. WSL, SSH, and VS Code remote
-sessions prefer OSC 52 so the outer terminal or a compatible multiplexer such
-as [Herdr](https://herdr.dev/) can place the text on the user's clipboard. OSC
-52 payloads are limited to 400 KiB before Base64 encoding so common terminal
-parsers do not silently discard an oversized control string. Terminals can
-disable OSC 52 writes; in that case ManT can confirm that it emitted the
-request but cannot observe whether the outer terminal accepted it.
+sessions prefer OSC 52 so a compatible outer terminal or multiplexer can place
+the text on the user's clipboard. OSC 52 payloads are limited to 400 KiB before
+Base64 encoding so common terminal parsers do not silently discard an oversized
+control string. Terminals can disable OSC 52 writes; in that case ManT can
+confirm that it emitted the request but cannot observe whether the outer
+terminal accepted it.
 
 ### Page Search
 
