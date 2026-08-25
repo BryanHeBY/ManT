@@ -193,7 +193,7 @@ where
         return false;
     };
     match open_external(&uri) {
-        Ok(()) => app.report_notice(format!("Opened {uri}")),
+        Ok(()) => app.report_notice(format!("Sent {uri} to the system opener")),
         Err(message) => app.report_open_error(message),
     }
     true

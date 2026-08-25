@@ -541,6 +541,10 @@ Long terminal-aware labels are middle-truncated; when the strip overflows, the
 Mouse input selects and folds outline nodes, follows in-page,
 cross-document, and safe external links, scrolls either pane, drags
 scrollbars, resizes the Outline boundary, and selects rendered document text.
+Safe external links are handed asynchronously to the platform URL handler;
+WSL uses the Windows handler when it is available, and the child process cannot
+read from or write into the TUI terminal streams. A success notice confirms
+that handoff started, not that a browser accepted it.
 A completed drag selection is copied immediately as plain text and shows a
 short success popup. `y`, `Ctrl+Shift+C`, or **Edit → Copy Selection** copies
 the current selection again. Right-clicking inside the document does the same

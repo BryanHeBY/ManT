@@ -5,6 +5,7 @@ mod arguments;
 mod clipboard;
 mod doctor;
 mod error;
+mod external;
 mod mcp;
 mod presentation;
 mod terminal;
@@ -19,6 +20,7 @@ use error::{
     Failure, query_execution_failure, query_failure, report_argument_error, report_failure,
     report_process_argument_error,
 };
+use external::open_uri as open_external_uri;
 use mant_engine::QueryPolicy;
 use mant_ir::ResolvedContent;
 use mant_protocol::{
@@ -840,32 +842,6 @@ fn run_interactive(
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
-}
-
-fn open_external_uri(uri: &str) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    let mut command = {
-        let mut command = std::process::Command::new("rundll32.exe");
-        command.args(["url.dll,FileProtocolHandler", uri]);
-        command
-    };
-    #[cfg(target_os = "macos")]
-    let mut command = {
-        let mut command = std::process::Command::new("open");
-        command.arg(uri);
-        command
-    };
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let mut command = {
-        let mut command = std::process::Command::new("xdg-open");
-        command.arg(uri);
-        command
-    };
-
-    command
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("could not open external link: {error}"))
 }
 
 fn request_for_address(address: &DocumentAddress) -> (QueryRequest, QueryPolicy) {
