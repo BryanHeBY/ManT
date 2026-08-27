@@ -196,6 +196,36 @@ fn m3_string_and_macro_defined_conditionals_accept_the_two_token_form() {
 }
 
 #[test]
+fn device_and_character_conditions_match_the_terminal_mandoc_profile() {
+    let name = SourceName::new("device-character-condition.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".if o old-device\n.if e hidden-even-device\n.if v hidden-v-device\n.if c A literal-character\n.if c \\[em] special-character\n.if c \\[u2717] unicode-character\n.if !c \\[not-a-character] unavailable-character\n.if 1 .ec @\n.if c @[em] custom-escape-character\n.if !c @[not-a-character] custom-escape-unavailable\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        text,
+        [
+            "old-device",
+            "literal-character",
+            "special-character",
+            "unicode-character",
+            "unavailable-character",
+            "custom-escape-character",
+            "custom-escape-unavailable",
+        ]
+    );
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
 fn m3_delimited_string_conditions_handle_match_mismatch_and_malformed_input() {
     let name = SourceName::new("string-compare.roff").unwrap();
     let report = Parser::default()

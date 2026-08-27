@@ -247,7 +247,9 @@ impl ReplayMachine<'_, '_> {
                         ) else {
                             return ScopeFlow::Halt;
                         };
-                        let Some(condition) = evaluate_condition(environment, &predicate) else {
+                        let Some(condition) =
+                            evaluate_condition(environment, &predicate, scanner.escape_character())
+                        else {
                             push_diagnostic(
                                 diagnostics,
                                 limits,
@@ -434,8 +436,11 @@ impl ReplayMachine<'_, '_> {
                         ) else {
                             return ScopeFlow::Halt;
                         };
-                        let Some(condition) = evaluate_condition(environment, &expanded_predicate)
-                        else {
+                        let Some(condition) = evaluate_condition(
+                            environment,
+                            &expanded_predicate,
+                            scanner.escape_character(),
+                        ) else {
                             push_diagnostic(
                                 diagnostics,
                                 limits,
@@ -684,8 +689,11 @@ impl ReplayMachine<'_, '_> {
                     ) else {
                         return ScopeFlow::Halt;
                     };
-                    let Some(condition) = evaluate_condition(environment, &expanded_predicate)
-                    else {
+                    let Some(condition) = evaluate_condition(
+                        environment,
+                        &expanded_predicate,
+                        scanner.escape_character(),
+                    ) else {
                         push_diagnostic(
                             diagnostics,
                             limits,
@@ -953,7 +961,9 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                     ) else {
                         return ScopeFlow::Halt;
                     };
-                    let Some(condition) = evaluate_condition(environment, &predicate) else {
+                    let Some(condition) =
+                        evaluate_condition(environment, &predicate, scanner.escape_character())
+                    else {
                         push_diagnostic(
                             diagnostics,
                             limits,
@@ -1104,7 +1114,9 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                     ) else {
                         return ScopeFlow::Halt;
                     };
-                    let Some(condition) = evaluate_condition(environment, &predicate) else {
+                    let Some(condition) =
+                        evaluate_condition(environment, &predicate, scanner.escape_character())
+                    else {
                         push_diagnostic(
                             diagnostics,
                             limits,
@@ -1248,7 +1260,11 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                             ) else {
                                 return ScopeFlow::Halt;
                             };
-                            let condition = evaluate_condition(environment, &predicate);
+                            let condition = evaluate_condition(
+                                environment,
+                                &predicate,
+                                scanner.escape_character(),
+                            );
                             if request == b"ie"
                                 && let Some(condition) = condition
                             {
@@ -2244,7 +2260,9 @@ pub(in crate::parser) fn execute_scope_line(
                 ) else {
                     return ScopeFlow::Halt;
                 };
-                let Some(condition) = evaluate_condition(environment, &predicate) else {
+                let Some(condition) =
+                    evaluate_condition(environment, &predicate, scanner.escape_character())
+                else {
                     push_diagnostic(
                         diagnostics,
                         limits,

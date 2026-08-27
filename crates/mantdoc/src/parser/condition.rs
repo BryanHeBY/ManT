@@ -35,7 +35,10 @@ impl From<bool> for BranchOutcome {
 
 pub(super) fn condition_parts(arguments: &[Argument]) -> Option<(Vec<u8>, usize)> {
     let first = arguments.first()?;
-    if matches!(first.bytes.as_slice(), b"d" | b"r" | b"!d" | b"!r") {
+    if matches!(
+        first.bytes.as_slice(),
+        b"c" | b"d" | b"r" | b"!c" | b"!d" | b"!r"
+    ) {
         let name = arguments.get(1)?;
         let mut predicate = first.bytes.clone();
         predicate.extend_from_slice(&name.bytes);
@@ -399,7 +402,11 @@ pub(super) fn lex_condition_arguments(
     Ok(arguments)
 }
 
-pub(super) fn evaluate_condition(environment: &mut Environment, bytes: &[u8]) -> Option<bool> {
+pub(super) fn evaluate_condition(
+    environment: &mut Environment,
+    bytes: &[u8],
+    escape: u8,
+) -> Option<bool> {
     let (negated, bytes) = bytes
         .strip_prefix(b"!")
         .map_or((false, bytes), |remaining| (true, remaining));
@@ -410,7 +417,12 @@ pub(super) fn evaluate_condition(environment: &mut Environment, bytes: &[u8]) ->
     if bytes == b"(" {
         return Some(false);
     }
-    let value = if let Some(name) = bytes.strip_prefix(b"r").filter(|name| !name.is_empty()) {
+    let value = if let Some(character) = bytes.strip_prefix(b"c") {
+        Some(character_is_available(
+            trim_horizontal_space(character),
+            escape,
+        ))
+    } else if let Some(name) = bytes.strip_prefix(b"r").filter(|name| !name.is_empty()) {
         Some(environment.is_register_defined(name))
     } else if let Some(name) = bytes.strip_prefix(b"d").filter(|name| !name.is_empty()) {
         let defined = environment.is_name_defined(name)
@@ -426,12 +438,50 @@ pub(super) fn evaluate_condition(environment: &mut Environment, bytes: &[u8]) ->
         Some(defined)
     } else {
         match bytes {
-            b"n" => Some(true),
-            b"t" => Some(false),
+            b"n" | b"o" => Some(true),
+            b"e" | b"t" | b"v" => Some(false),
             _ => evaluate_numeric_condition(bytes).or_else(|| evaluate_string_condition(bytes)),
         }
     }?;
     Some(if negated { !value } else { value })
+}
+
+fn character_is_available(bytes: &[u8], escape: u8) -> bool {
+    let Some((&first, _)) = bytes.split_first() else {
+        return false;
+    };
+    if first != escape {
+        // Match mandoc's groff-compatible exception: a horizontal tab is
+        // neither available nor unavailable.  Ordinary literal bytes are
+        // available on the terminal output device.
+        return first != b'\t';
+    }
+    if bytes.get(1) == Some(&b'[') && bytes.last() == Some(&b']') {
+        let name = &bytes[2..bytes.len() - 1];
+        if let Some(hex) = name.strip_prefix(b"u") {
+            return hex.split(|byte| *byte == b'_').all(|part| {
+                !part.is_empty()
+                    && part.iter().all(u8::is_ascii_hexdigit)
+                    && std::str::from_utf8(part)
+                        .ok()
+                        .and_then(|part| u32::from_str_radix(part, 16).ok())
+                        .and_then(char::from_u32)
+                        .is_some()
+            });
+        }
+        return std::str::from_utf8(name)
+            .ok()
+            .and_then(crate::special_character)
+            .is_some();
+    }
+    if bytes.get(1) == Some(&b'(') && bytes.len() == 4 {
+        let name = &bytes[2..];
+        return std::str::from_utf8(name)
+            .ok()
+            .and_then(crate::special_character)
+            .is_some();
+    }
+    false
 }
 
 pub(super) fn is_builtin_request(name: &[u8]) -> bool {

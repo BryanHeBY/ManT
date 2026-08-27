@@ -146,7 +146,9 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     ) else {
                         break 'lines;
                     };
-                    let Some(condition) = evaluate_condition(environment, &predicate) else {
+                    let Some(condition) =
+                        evaluate_condition(environment, &predicate, scanner.escape_character())
+                    else {
                         push_diagnostic(
                             &mut diagnostics,
                             limits,
@@ -1120,8 +1122,11 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             ) else {
                                 break 'lines;
                             };
-                            let Some(condition) = evaluate_condition(environment, &predicate)
-                            else {
+                            let Some(condition) = evaluate_condition(
+                                environment,
+                                &predicate,
+                                scanner.escape_character(),
+                            ) else {
                                 push_diagnostic(
                                     &mut diagnostics,
                                     limits,
@@ -1717,7 +1722,11 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     ) else {
                                         break 'lines;
                                     };
-                                    let condition = evaluate_condition(environment, &predicate);
+                                    let condition = evaluate_condition(
+                                        environment,
+                                        &predicate,
+                                        scanner.escape_character(),
+                                    );
                                     if name == b"ie" {
                                         previous_conditional = condition.map(BranchOutcome::from);
                                     }
@@ -3279,8 +3288,11 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                                 ) else {
                                                     break 'lines;
                                                 };
-                                                let condition =
-                                                    evaluate_condition(environment, &predicate);
+                                                let condition = evaluate_condition(
+                                                    environment,
+                                                    &predicate,
+                                                    scanner.escape_character(),
+                                                );
                                                 if request == b"ie"
                                                     && let Some(condition) = condition
                                                 {
@@ -3727,9 +3739,11 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     ) else {
                                         break 'lines;
                                     };
-                                    let Some(condition) =
-                                        evaluate_condition(environment, &predicate)
-                                    else {
+                                    let Some(condition) = evaluate_condition(
+                                        environment,
+                                        &predicate,
+                                        scanner.escape_character(),
+                                    ) else {
                                         push_diagnostic(
                                             &mut diagnostics,
                                             limits,
