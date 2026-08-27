@@ -1,7 +1,29 @@
 use super::{
     Diagnostic, DiagnosticCode, DocumentBuilder, LEGACY_SYNTAX_TREE_DEPTH_MESSAGE, Limits,
-    ParseState, Severity, push_diagnostic,
+    DiagnosticProfile, ParseState, Severity, push_diagnostic,
 };
+
+/// Project findings after all parser stages have established their source
+/// order. This is deliberately presentation-only: the parser's AST and
+/// execution outcome remain identical for every [`DiagnosticProfile`].
+pub(super) fn apply_diagnostic_profile(
+    diagnostics: &mut Vec<Diagnostic>,
+    profile: DiagnosticProfile,
+) {
+    if profile != DiagnosticProfile::LibmandocRsV0_9 {
+        return;
+    }
+    diagnostics.retain(|diagnostic| {
+        diagnostic.code.as_str() != DiagnosticCode::MDOC_MDOCDATE_MISSING
+    });
+    for diagnostic in diagnostics {
+        diagnostic.message = diagnostic
+            .message
+            .trim_end_matches([' ', '\t'])
+            .to_owned()
+            .into();
+    }
+}
 
 pub(super) fn apply_tree_depth_limit(
     outcome: &mut ParseState,

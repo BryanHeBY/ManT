@@ -23,20 +23,9 @@ pub(super) fn project(report: &native::ParseReport) -> legacy::ParseReport {
         diagnostics: report
             .diagnostics
             .iter()
-            // `libmandoc-rs` 0.9.1 did not expose this upstream style
-            // finding.  Keep the native parser's complete upstream report,
-            // while preserving the engine's established public document
-            // contract during the migration.
-            .filter(|diagnostic| {
-                diagnostic.code.as_str() != native::DiagnosticCode::MDOC_MDOCDATE_MISSING
-            })
             .map(|diagnostic| legacy::Diagnostic {
                 level: severity(diagnostic.severity),
-                // The C wrapper copied its display strings through a
-                // whitespace-normalizing boundary.  Native mantdoc retains
-                // byte-exact upstream wording; project only the historical
-                // terminal horizontal whitespace away for legacy consumers.
-                message: legacy_message(&diagnostic.message),
+                message: diagnostic.message.to_string(),
                 location: diagnostic
                     .primary
                     .as_ref()
@@ -48,10 +37,6 @@ pub(super) fn project(report: &native::ParseReport) -> legacy::ParseReport {
             })
             .collect(),
     }
-}
-
-fn legacy_message(message: &str) -> String {
-    message.trim_end_matches([' ', '\t']).to_owned()
 }
 
 fn node(document: &native::Document, value: NodeRef<'_>) -> legacy::Node {
@@ -203,9 +188,9 @@ fn table_alignment(value: native::TableAlignment) -> legacy::TableAlignment {
 
 #[cfg(test)]
 mod tests {
-    use mantdoc::{Parser, Source, SourceName};
+    use mantdoc::{DiagnosticProfile, Parser, ParserConfig, Source, SourceName};
 
-    use super::{legacy_message, project};
+    use super::project;
 
     #[test]
     fn retains_metadata_locations_and_recursive_children() {
@@ -256,15 +241,25 @@ mod tests {
     #[test]
     fn preserves_legacy_diagnostic_projection_without_muting_native_findings() {
         let name = SourceName::new("openbsd.1").unwrap();
-        let report = Parser::default()
+        let upstream = Parser::default()
             .parse(Source::new(
                 &name,
                 b".\\\" $OpenBSD: openbsd.1,v 1.1 2026/08/28 00:00:00 user Exp $\n.Dd bad date\n.Dt OPENBSD 1\n.Os\n.Sh NAME\n.Nm openbsd\n",
             ))
             .unwrap();
-        assert!(report.diagnostics.iter().any(|diagnostic| {
+        assert!(upstream.diagnostics.iter().any(|diagnostic| {
             diagnostic.code.as_str() == mantdoc::DiagnosticCode::MDOC_MDOCDATE_MISSING
         }));
+
+        let report = Parser::new(ParserConfig {
+            diagnostic_profile: DiagnosticProfile::LibmandocRsV0_9,
+            ..ParserConfig::default()
+        })
+        .parse(Source::new(
+            &name,
+            b".\\\" $OpenBSD: openbsd.1,v 1.1 2026/08/28 00:00:00 user Exp $\n.Dd bad date\n.Dt OPENBSD 1\n.Os\n.Sh NAME\n.Nm openbsd\n",
+        ))
+        .unwrap();
 
         let projected = project(&report);
         assert_eq!(
@@ -278,6 +273,5 @@ mod tests {
                 "NAME section without description",
             ]
         );
-        assert!(legacy_message("message \t ").eq("message"));
     }
 }

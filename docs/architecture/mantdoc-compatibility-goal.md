@@ -189,6 +189,16 @@ libmandoc's eqn input-stack recovery can retain C-global failure state across
 documents, making a long-lived worker corpus-order dependent. Independent
 process pairs may run concurrently after their release binaries have been
 built once.
+
+`mantdoc::DiagnosticProfile::Upstream` is the default and is the only profile
+used by the upstream lint and renderer gates. The explicit
+`LibmandocRsV0_9` profile changes no parser execution, AST, span, severity, or
+diagnostic order: it only reproduces the wrapper's one unreported OpenBSD
+Mdocdate style finding and its terminal-horizontal-whitespace message
+normalization. The legacy parser and engine oracle use that profile; it keeps
+the two independently testable contracts honest rather than silently making
+an upstream golden look like wrapper parity.
+
 Exit requires all 572 upstream inputs to have zero unreviewed AST, diagnostic,
 and IR difference.
 
@@ -200,6 +210,12 @@ the separately recorded `native-deterministic` policy only to legacy's
 host-derived empty `.Os` metadata: 366 reports use that explicit policy; no
 other field, diagnostic, or node is normalized. This is an input-contract
 checkpoint, not closure of the renderer, engine-IR, or real-corpus gates.
+
+The process-isolated engine oracle has likewise completed all 572 inputs with
+572/572 equal IR reports after removing only parser provenance and applying
+the same explicit empty-`.Os` host policy to 366 reports. The compatibility
+projection includes historical wrapper diagnostics without weakening the raw
+upstream diagnostic profile.
 
 The UPSTREAM-GOLDEN checkpoint has also completed from a clean native build:
 all 572 inputs parse through the immutable canonical snapshot; all 659

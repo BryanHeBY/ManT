@@ -51,6 +51,25 @@ pub enum RecoveryMode {
     Strict,
 }
 
+/// Select the externally visible diagnostic contract for a parse report.
+///
+/// The parser always performs the same bounded execution and structural
+/// recovery. This setting only projects the resulting diagnostics for callers
+/// that must interoperate with a historical public API.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum DiagnosticProfile {
+    /// Preserve the complete diagnostic wording and style findings expected by
+    /// the pinned upstream mandoc regression corpus.
+    #[default]
+    Upstream,
+    /// Reproduce the diagnostic presentation exposed by `libmandoc-rs` 0.9.
+    ///
+    /// This omits one style finding that its C wrapper never surfaced and
+    /// applies its terminal-horizontal-whitespace normalization. It does not
+    /// alter parsing, the AST, source spans, severities, or diagnostic order.
+    LibmandocRsV0_9,
+}
+
 /// Complete configuration for one independent parse session.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ParserConfig {
@@ -62,6 +81,8 @@ pub struct ParserConfig {
     pub limits: Limits,
     /// Recovery behavior for non-fatal source defects.
     pub recovery: RecoveryMode,
+    /// Externally visible diagnostic projection.
+    pub diagnostic_profile: DiagnosticProfile,
 }
 
 impl Default for ParserConfig {
@@ -71,6 +92,7 @@ impl Default for ParserConfig {
             operating_system: None,
             limits: Limits::default(),
             recovery: RecoveryMode::BestEffort,
+            diagnostic_profile: DiagnosticProfile::Upstream,
         }
     }
 }
@@ -194,6 +216,7 @@ impl Parser {
         apply_mdoc_structure_outcome(&mut outcome, structure, &self.config.limits);
         apply_tree_depth_limit(&mut outcome, &mut builder, &self.config.limits);
         reorder_deferred_post_validation_diagnostics(&mut outcome);
+        apply_diagnostic_profile(&mut outcome.diagnostics, self.config.diagnostic_profile);
         if builder.metadata_mut().os.is_none()
             && let Some(arguments) = source_mdoc_operating_system_request(source.bytes)
             && !trim_horizontal_space(arguments).is_empty()
@@ -241,8 +264,8 @@ use condition::{
     macro_conditional_body_origin, macro_scope_body_origin, split_escaped_condition_body,
 };
 use diagnostics::{
-    apply_man_structure_outcome, apply_mdoc_structure_outcome, apply_preprocess_outcome,
-    apply_tree_depth_limit, reorder_deferred_post_validation_diagnostics,
+    apply_diagnostic_profile, apply_man_structure_outcome, apply_mdoc_structure_outcome,
+    apply_preprocess_outcome, apply_tree_depth_limit, reorder_deferred_post_validation_diagnostics,
 };
 use emit::{
     EmitContext, append_node, append_text_node, append_textual_node, contains_valid_utf8_non_ascii,

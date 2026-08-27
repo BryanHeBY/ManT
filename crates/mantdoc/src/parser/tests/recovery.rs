@@ -1,6 +1,27 @@
 use super::*;
 
 #[test]
+fn diagnostic_profiles_change_only_the_public_diagnostic_projection() {
+    let name = SourceName::new("openbsd.1").unwrap();
+    let source = b".\\\" $OpenBSD: openbsd.1,v 1.1 2026/08/28 00:00:00 user Exp $\n.Dd bad date\n.Dt OPENBSD 1\n.Os\n.Sh NAME\n.Nm openbsd\n";
+    let upstream = Parser::default().parse(Source::new(&name, source)).unwrap();
+    let legacy = Parser::new(ParserConfig {
+        diagnostic_profile: crate::DiagnosticProfile::LibmandocRsV0_9,
+        ..ParserConfig::default()
+    })
+    .parse(Source::new(&name, source))
+    .unwrap();
+
+    assert_eq!(upstream.document, legacy.document);
+    assert!(upstream.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_str() == DiagnosticCode::MDOC_MDOCDATE_MISSING
+    }));
+    assert!(!legacy.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code.as_str() == DiagnosticCode::MDOC_MDOCDATE_MISSING
+    }));
+}
+
+#[test]
 fn ignore_blocks_report_excess_markers_unmatched_ends_and_eof() {
     let name = SourceName::new("ignore-blocks.roff").unwrap();
     let report = Parser::default()

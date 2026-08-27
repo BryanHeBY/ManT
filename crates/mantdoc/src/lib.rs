@@ -40,8 +40,8 @@ pub use logical::{
     LogicalParseReport, LogicalRelatedSpan, LogicalSourceSpan,
 };
 pub use parser::{
-    FatalError, FatalErrorKind, ParseReport, ParseStatistics, Parser, ParserConfig, RecoveryMode,
-    Syntax,
+    DiagnosticProfile, FatalError, FatalErrorKind, ParseReport, ParseStatistics, Parser,
+    ParserConfig, RecoveryMode, Syntax,
 };
 #[cfg(feature = "render")]
 pub use renderer::{

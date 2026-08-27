@@ -17,7 +17,9 @@ use mant_ir::{
     Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, SourceFormat,
     SourceSpan, validate_document,
 };
-use mantdoc::{Parser as NativeParser, Source as NativeSource, SourceName};
+use mantdoc::{
+    DiagnosticProfile, Parser as NativeParser, ParserConfig, Source as NativeSource, SourceName,
+};
 use std::{cell::RefCell, collections::BTreeMap, path::Path};
 
 use self::{
@@ -96,7 +98,7 @@ fn parse_plain_manual(
     let source_text = String::from_utf8_lossy(source.as_ref());
     let source_name = SourceName::new(path.to_string_lossy().as_ref())
         .map_err(|error| ManualError::native_parse(path, error.to_string()))?;
-    let native_report = NativeParser::default()
+    let native_report = legacy_compatible_parser()
         .parse(NativeSource::new(&source_name, source.as_ref()))
         .map_err(|error| ManualError::native_parse(path, error.to_string()))?;
     let report = native_adapter::project(&native_report);
@@ -120,6 +122,13 @@ fn parse_plain_manual(
         document.meta.alias_target = Some(alias_target.to_owned());
     }
     Ok(document)
+}
+
+fn legacy_compatible_parser() -> NativeParser {
+    NativeParser::new(ParserConfig {
+        diagnostic_profile: DiagnosticProfile::LibmandocRsV0_9,
+        ..ParserConfig::default()
+    })
 }
 
 fn lower_mandoc_document_with_source(
