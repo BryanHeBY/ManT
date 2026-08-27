@@ -13,6 +13,7 @@ use crate::{
     ast::{DocumentBuilder, MdocListMarker},
 };
 
+mod context;
 mod driver;
 mod spec;
 use spec::{

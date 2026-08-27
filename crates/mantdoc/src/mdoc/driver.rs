@@ -1,3 +1,4 @@
+use super::context::MdocContext;
 use super::{
     ArgumentPlacement, BTreeMap, BTreeSet, DocumentBuilder, MacroSet, NodeId, NodeKind,
     NormalizedEnclosure, NormalizedListKind, Recovery, ScopeFrame, SourceSpan, StructureOutcome,
@@ -128,15 +129,17 @@ pub(crate) fn structure(
     max_nodes: usize,
     mut saw_operating_system_request: bool,
 ) -> StructureOutcome {
-    let mut outcome = StructureOutcome::default();
+    let mut package = MdocContext::default();
     if builder.macro_set() != MacroSet::Mdoc {
-        return outcome;
+        return package.outcome;
     }
     let root = DocumentBuilder::root();
     let Some(flat) = builder.children(root).map(<[NodeId]>::to_vec) else {
-        return outcome;
+        return package.outcome;
     };
     let mut machine = MdocStructureMachine::prepare(builder, flat);
+    let outcome = &mut package.outcome;
+    let deferred = &mut package.deferred;
 
     let mut root_children = Vec::new();
     let mut section_parent = root;
@@ -190,24 +193,19 @@ pub(crate) fn structure(
     // mandoc validates Pp after it has completed the containing body, while
     // roff layout requests such as br and sp are validated immediately.
     // Keep the two queues separate to preserve observable finding order.
-    let mut deferred_paragraph_argument_recoveries = Vec::new();
     // Delimiter spacing is validated after the syntax pass. Keep those
     // findings distinct so a later source-level recovery is reported first.
-    let mut deferred_post_validation_recoveries = Vec::new();
     // A list closer that crosses a partial scope opened from an item header
     // leaves the list and partial block unclosed.  mandoc reports the
     // resulting item validation only after those EOF closers, so retain these
     // narrow recovery events separately from ordinary source-order findings.
-    let mut deferred_broken_item_recoveries = Vec::new();
     // List-content relocation is a post-validation action: all item-break
     // errors are observable before the warnings for material moved out of its
     // enclosing list.
-    let mut deferred_list_content_recoveries = Vec::new();
     // A callable explicit closer encountered while an implicit partial block
     // is parsed is a syntax-stage finding in libmandoc.  Emit it before the
     // later section/list post-validation findings, despite the implicit
     // block's public AST node being assembled only after those tokens.
-    let mut syntax_stage_recoveries = Vec::new();
     // A validated `.Tg` registers an explicit manual tag for the immediately
     // following mdoc node.  The general tag priority table comes later; this
     // state only covers the source-order relationship needed to preserve the
@@ -312,7 +310,7 @@ pub(crate) fn structure(
                     active_body,
                     node,
                     max_nodes,
-                    &mut outcome,
+                    outcome,
                 ))
         {
             continue;
@@ -334,13 +332,7 @@ pub(crate) fn structure(
         let inline_events = if builder.node_macro_name(node) == Some("Vt") {
             vec![node]
         } else {
-            split_inline_macro_events(
-                builder,
-                node,
-                inline_spacing_enabled,
-                max_nodes,
-                &mut outcome,
-            )
+            split_inline_macro_events(builder, node, inline_spacing_enabled, max_nodes, outcome)
         };
         // A SYNOPSIS Nm is a full block, but inline events split from the
         // same physical request line remain part of its Head.  When no
@@ -525,11 +517,13 @@ pub(crate) fn structure(
                     } else {
                         format!("... {text}")
                     };
-                    deferred_post_validation_recoveries.push(Recovery::TrailingDelimiterSpacing {
-                        macro_name: "Ad",
-                        display: display.into(),
-                        location: Some(location),
-                    });
+                    deferred
+                        .post_validation
+                        .push(Recovery::TrailingDelimiterSpacing {
+                            macro_name: "Ad",
+                            display: display.into(),
+                            location: Some(location),
+                        });
                 }
             }
             if macro_name.as_deref() == Some("An")
@@ -612,7 +606,7 @@ pub(crate) fn structure(
                     node,
                     spacing_enabled,
                     max_nodes,
-                    &mut outcome,
+                    outcome,
                     &mut scopes,
                 )
             {
@@ -633,7 +627,7 @@ pub(crate) fn structure(
                     &tokens,
                     spacing_enabled,
                     max_nodes,
-                    &mut outcome,
+                    outcome,
                     &mut scopes,
                 ) {
                     if let Some(mut flags) = builder.node_flags(body) {
@@ -677,7 +671,7 @@ pub(crate) fn structure(
                                 .and_then(|argument| builder.node_location(argument)),
                         ));
                     }
-                    record_date(builder, node, &mut outcome);
+                    record_date(builder, node, outcome);
                     coalesce_text_children(builder, node);
                     mark_no_print(builder, node);
                     // A late date request is still no-printing metadata, but
@@ -700,7 +694,7 @@ pub(crate) fn structure(
                                 });
                         }
                         saw_title_prologue = true;
-                        record_title(builder, node, &mut outcome);
+                        record_title(builder, node, outcome);
                     } else {
                         outcome.recoveries.push(Recovery::LateTitle {
                             location: builder.node_location(node),
@@ -797,7 +791,7 @@ pub(crate) fn structure(
                         "Sh",
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         root_children.push(node);
                         continue;
@@ -817,7 +811,7 @@ pub(crate) fn structure(
                         head,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     let _ = builder.replace_children(head, &heading_events);
                     let heading_scopes = structure_unclosed_explicit_partial_blocks(
@@ -825,7 +819,7 @@ pub(crate) fn structure(
                         head,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     if !heading_scopes.is_empty()
                         && let Some(mut flags) = builder.node_flags(body)
@@ -895,7 +889,7 @@ pub(crate) fn structure(
                                 .children(frame.body)
                                 .is_some_and(<[NodeId]>::is_empty)
                         {
-                            deferred_post_validation_recoveries.push(Recovery::EmptyBlock {
+                            deferred.post_validation.push(Recovery::EmptyBlock {
                                 macro_name: "Bk",
                                 location: builder.node_location(frame.open),
                             });
@@ -958,7 +952,7 @@ pub(crate) fn structure(
                         "Ss",
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -1000,7 +994,7 @@ pub(crate) fn structure(
                         "Nm",
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -1049,7 +1043,7 @@ pub(crate) fn structure(
                         "Vt",
                         ArgumentPlacement::BodyTokens,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -1059,7 +1053,7 @@ pub(crate) fn structure(
                         body,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     let _ = builder.replace_children(body, &children);
                     mark_synopsis_pretty(builder, node);
@@ -1073,7 +1067,7 @@ pub(crate) fn structure(
                         node,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     for (event_index, event) in events.into_iter().enumerate() {
                         // A Vt request can split into nested callable macro
@@ -1103,7 +1097,7 @@ pub(crate) fn structure(
                             builder,
                             event,
                             "Vt",
-                            &mut deferred_post_validation_recoveries,
+                            &mut deferred.post_validation,
                         );
                         append_to_parent(builder, root, &mut root_children, active_body, event);
                     }
@@ -1119,7 +1113,7 @@ pub(crate) fn structure(
                         "Eo",
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -1154,7 +1148,7 @@ pub(crate) fn structure(
                         name,
                         ArgumentPlacement::BodyTokens,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -1173,7 +1167,7 @@ pub(crate) fn structure(
                         body,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     let nested_scopes = if closes_on_line {
                         Vec::new()
@@ -1183,7 +1177,7 @@ pub(crate) fn structure(
                             body,
                             spacing_enabled,
                             max_nodes,
-                            &mut outcome,
+                            outcome,
                         )
                     };
                     let children = split_mdoc_inline_children(
@@ -1191,7 +1185,7 @@ pub(crate) fn structure(
                         body,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     let _ = builder.replace_children(body, &children);
                     clear_leading_explicit_partial_punctuation(builder, body);
@@ -1200,7 +1194,7 @@ pub(crate) fn structure(
                         builder,
                         body,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                         spacing_enabled,
                     );
                     if matches!(name, "Bo" | "Do" | "Po") {
@@ -1243,7 +1237,7 @@ pub(crate) fn structure(
                         false,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                 }
                 Some(name) if is_implicit_partial_block_macro(name) => {
@@ -1253,7 +1247,7 @@ pub(crate) fn structure(
                         name,
                         ArgumentPlacement::BodyTokens,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -1302,7 +1296,7 @@ pub(crate) fn structure(
                             &pending_tokens,
                             spacing_enabled,
                             max_nodes,
-                            &mut outcome,
+                            outcome,
                         ));
                         pending_tokens.clear();
                         let location = builder.node_location(token);
@@ -1328,11 +1322,11 @@ pub(crate) fn structure(
                         &pending_tokens,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ));
                     let mut children =
-                        expand_fl_elements(builder, body, children, max_nodes, &mut outcome);
-                    insert_generated_system_names(builder, &children, max_nodes, &mut outcome);
+                        expand_fl_elements(builder, body, children, max_nodes, outcome);
+                    insert_generated_system_names(builder, &children, max_nodes, outcome);
                     let tail = take_implicit_partial_tail(builder, &mut children);
                     let _ = builder.replace_children(body, &children);
                     move_leading_open_delimiters(builder, node, head, body);
@@ -1346,7 +1340,7 @@ pub(crate) fn structure(
                         builder,
                         body,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                         spacing_enabled,
                     );
                     // A direct explicit opener is an element of this
@@ -1361,13 +1355,13 @@ pub(crate) fn structure(
                         body,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     nested_implicit_scopes.extend(structure_nested_implicit_explicit_scopes(
                         builder,
                         body,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                         spacing_enabled,
                     ));
                     if spacing_enabled && name == "Op" {
@@ -1394,7 +1388,7 @@ pub(crate) fn structure(
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                     for (close, location, _) in enclosed_explicit_closes {
                         if scopes.iter().any(|frame| frame.close == close) {
-                            syntax_stage_recoveries.push(Recovery::BadlyNestedBlock {
+                            deferred.syntax_stage.push(Recovery::BadlyNestedBlock {
                                 breaker: open_name(&close),
                                 interrupted: implicit_partial_block_name(name),
                                 location,
@@ -1626,10 +1620,12 @@ pub(crate) fn structure(
                         let _ = builder.macro_name(node, "Pp");
                     }
                     if let Some(argument) = node_arguments(builder, node).first() {
-                        deferred_paragraph_argument_recoveries.push(Recovery::InvalidArguments {
-                            message: format!("skipping all arguments: Pp {argument}").into(),
-                            location: builder.node_location(node),
-                        });
+                        deferred
+                            .paragraph_arguments
+                            .push(Recovery::InvalidArguments {
+                                message: format!("skipping all arguments: Pp {argument}").into(),
+                                location: builder.node_location(node),
+                            });
                     }
                     if let Some((tag_node, tag)) = pending_manual_tag.take() {
                         mark_manual_target(builder, node, &tag);
@@ -1697,7 +1693,7 @@ pub(crate) fn structure(
                         "Nd",
                         ArgumentPlacement::Body,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -1732,7 +1728,7 @@ pub(crate) fn structure(
                         builder,
                         node,
                         "Nm",
-                        &mut deferred_post_validation_recoveries,
+                        &mut deferred.post_validation,
                     );
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                     if !matches!(macro_name.as_deref(), Some("Fl" | "No"))
@@ -1748,14 +1744,9 @@ pub(crate) fn structure(
                 }
                 Some("Fl") => {
                     let elements =
-                        expand_fl_elements(builder, root, vec![node], max_nodes, &mut outcome);
+                        expand_fl_elements(builder, root, vec![node], max_nodes, outcome);
                     for element in &elements {
-                        validate_tag(
-                            builder,
-                            *element,
-                            "Fl",
-                            &mut deferred_post_validation_recoveries,
-                        );
+                        validate_tag(builder, *element, "Fl", &mut deferred.post_validation);
                     }
                     if let Some((tag_node, tag)) = pending_manual_tag.take()
                         && let Some(element) = elements.first()
@@ -1792,12 +1783,7 @@ pub(crate) fn structure(
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Fn") => {
-                    validate_tag(
-                        builder,
-                        node,
-                        "Fn",
-                        &mut deferred_post_validation_recoveries,
-                    );
+                    validate_tag(builder, node, "Fn", &mut deferred.post_validation);
                     validate_function_name(builder, node, &mut outcome.recoveries);
                     validate_function_argument_commas(builder, node, &mut outcome.recoveries);
                     let function_name = node_arguments(builder, node).first().cloned();
@@ -1841,26 +1827,16 @@ pub(crate) fn structure(
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Ft") => {
-                    validate_tag(
-                        builder,
-                        node,
-                        "Ft",
-                        &mut deferred_post_validation_recoveries,
-                    );
+                    validate_tag(builder, node, "Ft", &mut deferred.post_validation);
                     // A function-type declaration starts a new declaration
-                    // context.  This differs from ordinary paragraph prose:
+                    // package.  This differs from ordinary paragraph prose:
                     // each following standalone `.Fn` is eligible for its
                     // own automatic destination.
                     function_target_taken = false;
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Fa") => {
-                    validate_tag(
-                        builder,
-                        node,
-                        "Fa",
-                        &mut deferred_post_validation_recoveries,
-                    );
+                    validate_tag(builder, node, "Fa", &mut deferred.post_validation);
                     validate_function_argument_commas(builder, node, &mut outcome.recoveries);
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
@@ -1877,12 +1853,7 @@ pub(crate) fn structure(
                         continue;
                     }
                     mark_link_terminal_delimiter(builder, node);
-                    validate_tag(
-                        builder,
-                        node,
-                        "Lk",
-                        &mut deferred_post_validation_recoveries,
-                    );
+                    validate_tag(builder, node, "Lk", &mut deferred.post_validation);
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Mt") => {
@@ -1892,12 +1863,7 @@ pub(crate) fn structure(
                     {
                         outcome.node_limit_location = builder.node_location(node);
                     }
-                    validate_tag(
-                        builder,
-                        node,
-                        "Mt",
-                        &mut deferred_post_validation_recoveries,
-                    );
+                    validate_tag(builder, node, "Mt", &mut deferred.post_validation);
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Ot") => {
@@ -1922,12 +1888,11 @@ pub(crate) fn structure(
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("An") => {
-                    validate_an(builder, node, &mut outcome);
+                    validate_an(builder, node, outcome);
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("At") => {
-                    let siblings =
-                        validate_at(builder, node, spacing_enabled, max_nodes, &mut outcome);
+                    let siblings = validate_at(builder, node, spacing_enabled, max_nodes, outcome);
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                     for sibling in siblings {
                         append_to_parent(builder, root, &mut root_children, active_body, sibling);
@@ -1954,7 +1919,7 @@ pub(crate) fn structure(
                         // empty later St has been diagnosed. Keep the error
                         // in that post-validation queue rather than exposing
                         // scanner source order as a compatibility difference.
-                        deferred_post_validation_recoveries.push(Recovery::UnknownStandard {
+                        deferred.post_validation.push(Recovery::UnknownStandard {
                             standard: selector_text.into(),
                             location: builder.node_location(selector),
                         });
@@ -2048,12 +2013,7 @@ pub(crate) fn structure(
                         });
                         continue;
                     }
-                    validate_tag(
-                        builder,
-                        node,
-                        "In",
-                        &mut deferred_post_validation_recoveries,
-                    );
+                    validate_tag(builder, node, "In", &mut deferred.post_validation);
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Xr") => {
@@ -2086,18 +2046,18 @@ pub(crate) fn structure(
                         // later source-line empty requests have been seen.
                         // Keep this alongside delimiter styles to preserve
                         // the legacy document-order post-validation sequence.
-                        deferred_post_validation_recoveries.push(
-                            Recovery::MissingReferenceSection {
+                        deferred
+                            .post_validation
+                            .push(Recovery::MissingReferenceSection {
                                 name: arguments[0].clone().into_boxed_str(),
                                 location: builder.node_location(node),
-                            },
-                        );
+                            });
                     }
                     validate_no_break_trailing_delimiter(
                         builder,
                         node,
                         "Xr",
-                        &mut deferred_post_validation_recoveries,
+                        &mut deferred.post_validation,
                     );
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
@@ -2107,8 +2067,8 @@ pub(crate) fn structure(
                         builder,
                         node,
                         max_nodes,
-                        &mut outcome,
-                        &mut deferred_post_validation_recoveries,
+                        outcome,
+                        &mut deferred.post_validation,
                         &mut outer_delimiters,
                     ) {
                         continue;
@@ -2124,7 +2084,7 @@ pub(crate) fn structure(
                     // generated Nm elements around the selected utilities.
                     // Keep non-standard invocations intact until the broader
                     // argument-validation family is implemented.
-                    if !expand_standard_exit_status(builder, node, max_nodes, &mut outcome)
+                    if !expand_standard_exit_status(builder, node, max_nodes, outcome)
                         && outcome.node_limit_location.is_none()
                     {
                         outcome.node_limit_location = builder.node_location(node);
@@ -2134,7 +2094,7 @@ pub(crate) fn structure(
                 Some("Rv") => {
                     // `Rv -std` shares Ex's validated name-list grammar but
                     // expands into the standard return-value sentence.
-                    if !expand_standard_return_value(builder, node, max_nodes, &mut outcome)
+                    if !expand_standard_return_value(builder, node, max_nodes, outcome)
                         && outcome.node_limit_location.is_none()
                     {
                         outcome.node_limit_location = builder.node_location(node);
@@ -2182,7 +2142,7 @@ pub(crate) fn structure(
                         builder,
                         node,
                         system_macro_name(name),
-                        &mut deferred_post_validation_recoveries,
+                        &mut deferred.post_validation,
                     );
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
@@ -2196,7 +2156,7 @@ pub(crate) fn structure(
                             builder,
                             node,
                             &inline_events[event_index + 1..],
-                            &mut deferred_post_validation_recoveries,
+                            &mut deferred.post_validation,
                         );
                     }
                     append_to_parent(builder, root, &mut root_children, active_body, node);
@@ -2216,7 +2176,7 @@ pub(crate) fn structure(
                         builder,
                         node,
                         "Pa",
-                        &mut deferred_post_validation_recoveries,
+                        &mut deferred.post_validation,
                     );
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
@@ -2228,7 +2188,7 @@ pub(crate) fn structure(
                         });
                         continue;
                     }
-                    deferred_post_validation_recoveries.push(Recovery::UselessMacro {
+                    deferred.post_validation.push(Recovery::UselessMacro {
                         macro_name: "Tn",
                         location: builder.node_location(node),
                     });
@@ -2403,12 +2363,7 @@ pub(crate) fn structure(
                         // libmandoc emits delimiter style findings during its
                         // post-validation sweep, after later empty-macro
                         // recoveries in the same document have been seen.
-                        validate_tag(
-                            builder,
-                            node,
-                            macro_name,
-                            &mut deferred_post_validation_recoveries,
-                        );
+                        validate_tag(builder, node, macro_name, &mut deferred.post_validation);
                     }
                     if let Some(tag) = pending_transparent_permalink.take() {
                         mark_permalink(builder, node, Some(&tag));
@@ -2441,7 +2396,7 @@ pub(crate) fn structure(
                             &tail,
                             spacing_enabled,
                             max_nodes,
-                            &mut outcome,
+                            outcome,
                             &mut scopes,
                         )
                     {
@@ -2480,7 +2435,7 @@ pub(crate) fn structure(
                         &children[kept..],
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     let _ = builder.replace_children(node, &children[..kept]);
                     append_to_parent(builder, root, &mut root_children, active_body, node);
@@ -2499,7 +2454,7 @@ pub(crate) fn structure(
                         "En",
                         ArgumentPlacement::BodyTokens,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         let _ = builder.set_node_enclosure(node, enclosure.clone());
                         append_to_parent(builder, root, &mut root_children, active_body, node);
@@ -2510,7 +2465,7 @@ pub(crate) fn structure(
                         body,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     let _ = builder.replace_children(body, &children);
                     move_leading_open_delimiter(builder, node, head, body);
@@ -2521,8 +2476,7 @@ pub(crate) fn structure(
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Bl") => {
-                    let attributes =
-                        list_attributes(builder, node, &mut deferred_post_validation_recoveries);
+                    let attributes = list_attributes(builder, node, &mut deferred.post_validation);
                     if !attributes.compact
                         && let Some(previous) = discard_previous_paragraph_control(
                             builder,
@@ -2538,7 +2492,7 @@ pub(crate) fn structure(
                                 "the paragraph-control predicate checked the macro name"
                             ),
                         };
-                        deferred_post_validation_recoveries.push(Recovery::ParagraphBoundary {
+                        deferred.post_validation.push(Recovery::ParagraphBoundary {
                             macro_name,
                             placement: "before",
                             blocker: "Bl",
@@ -2551,7 +2505,7 @@ pub(crate) fn structure(
                         "Bl",
                         ArgumentPlacement::Drop,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -2598,7 +2552,7 @@ pub(crate) fn structure(
                         // list-on-block bad nesting.
                         let list = scopes[list_index];
                         let list_body = list.body;
-                        deferred_list_content_recoveries.extend(move_initial_list_content_out(
+                        deferred.list_content.extend(move_initial_list_content_out(
                             builder,
                             root,
                             &mut root_children,
@@ -2653,13 +2607,13 @@ pub(crate) fn structure(
                             builder,
                             list_body,
                             &mut pending_empty_column_items,
-                            &mut outcome,
+                            outcome,
                         );
                         finalize_short_column_items(
                             builder,
                             list_body,
                             &mut pending_short_column_items,
-                            &mut outcome,
+                            outcome,
                         );
                     }
                     if list_is_innermost
@@ -2671,7 +2625,7 @@ pub(crate) fn structure(
                             list_body,
                             list_type,
                             &deferred_fixed_head_argument_items,
-                            &mut outcome,
+                            outcome,
                         );
                     }
                     if builder.node_list_kind(list_body) != Some(NormalizedListKind::Column) {
@@ -2697,7 +2651,7 @@ pub(crate) fn structure(
                             outcome.recoveries.push(Recovery::ColumnOutsideColumnList {
                                 location: ta_location,
                             });
-                            deferred_post_validation_recoveries.push(Recovery::InvalidArguments {
+                            deferred.post_validation.push(Recovery::InvalidArguments {
                                 message: format!("skipping all arguments: It {retained_text}")
                                     .into(),
                                 location: builder.node_location(node),
@@ -2728,7 +2682,7 @@ pub(crate) fn structure(
                         "It",
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -2758,7 +2712,7 @@ pub(crate) fn structure(
                             body,
                             spacing_enabled,
                             max_nodes,
-                            &mut outcome,
+                            outcome,
                             &mut scopes,
                         )
                     {
@@ -2816,7 +2770,7 @@ pub(crate) fn structure(
                             head,
                             spacing_enabled,
                             max_nodes,
-                            &mut outcome,
+                            outcome,
                         );
                         collapse_long_option_prefixes(builder, &parsed)
                     };
@@ -2831,7 +2785,7 @@ pub(crate) fn structure(
                         builder,
                         head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                         spacing_enabled,
                     );
                     if opens_xo {
@@ -2844,14 +2798,9 @@ pub(crate) fn structure(
                         let location = parsed_head
                             .first()
                             .and_then(|opening| builder.node_location(*opening));
-                        let Some((xo, _, xo_body)) = make_synthetic_block(
-                            builder,
-                            head,
-                            "Xo",
-                            location,
-                            max_nodes,
-                            &mut outcome,
-                        ) else {
+                        let Some((xo, _, xo_body)) =
+                            make_synthetic_block(builder, head, "Xo", location, max_nodes, outcome)
+                        else {
                             let _ = builder.append_existing_child(list_body, node);
                             flow_parent = body;
                             active_body = body;
@@ -2901,11 +2850,7 @@ pub(crate) fn structure(
                         }
                         let _ = builder.append_existing_child(list_body, node);
                         if let Some(nested_scope) = structure_item_head_explicit_partial(
-                            builder,
-                            head,
-                            body,
-                            max_nodes,
-                            &mut outcome,
+                            builder, head, body, max_nodes, outcome,
                         ) {
                             flow_parent = nested_scope.body;
                             active_body = nested_scope.body;
@@ -2929,11 +2874,11 @@ pub(crate) fn structure(
                         // mandoc deletes a completely argument-less display
                         // and relinks its Body into the surrounding flow.  Its
                         // matching closer remains syntactically consumed.
-                        deferred_post_validation_recoveries.push(
-                            Recovery::DisplayWithoutArguments {
+                        deferred
+                            .post_validation
+                            .push(Recovery::DisplayWithoutArguments {
                                 location: builder.node_location(node),
-                            },
-                        );
+                            });
                         implicitly_closed.push("Ed");
                         continue;
                     }
@@ -2942,7 +2887,7 @@ pub(crate) fn structure(
                         builder,
                         node,
                         &mut immediate_display_recoveries,
-                        &mut deferred_post_validation_recoveries,
+                        &mut deferred.post_validation,
                     );
                     outcome.recoveries.extend(immediate_display_recoveries);
                     if !attributes.compact
@@ -2973,7 +2918,7 @@ pub(crate) fn structure(
                         "Bd",
                         ArgumentPlacement::Drop,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -3017,7 +2962,7 @@ pub(crate) fn structure(
                         name,
                         ArgumentPlacement::BodyTokens,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -3027,7 +2972,7 @@ pub(crate) fn structure(
                         body,
                         spacing_enabled,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     );
                     let _ = builder.replace_children(body, &children);
                     coalesce_mdoc_display_phrases(builder, body);
@@ -3049,8 +2994,7 @@ pub(crate) fn structure(
                         .children(node)
                         .map(<[NodeId]>::to_vec)
                         .unwrap_or_default();
-                    let attributes =
-                        font_attributes(builder, node, &mut deferred_post_validation_recoveries);
+                    let attributes = font_attributes(builder, node, &mut deferred.post_validation);
                     let uses_option_form = font_arguments
                         .first()
                         .and_then(|argument| builder.node_text(*argument))
@@ -3070,7 +3014,7 @@ pub(crate) fn structure(
                         "Bf",
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -3132,7 +3076,7 @@ pub(crate) fn structure(
                         "Bk",
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -3162,7 +3106,7 @@ pub(crate) fn structure(
                         name,
                         ArgumentPlacement::Head,
                         max_nodes,
-                        &mut outcome,
+                        outcome,
                     ) else {
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
@@ -3198,7 +3142,7 @@ pub(crate) fn structure(
                         } else if let Some(first) = arguments.first().copied()
                             && let Some(excess) = arguments.get(1).copied()
                         {
-                            deferred_post_validation_recoveries.push(Recovery::InvalidArguments {
+                            deferred.post_validation.push(Recovery::InvalidArguments {
                                 message: format!(
                                     "skipping excess arguments: Fo ... {}",
                                     builder.node_text(excess).unwrap_or_default()
@@ -3361,7 +3305,7 @@ pub(crate) fn structure(
                                 frame,
                                 node,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             let mut surviving_scopes = scopes.split_off(index + 1);
                             scopes.truncate(index);
@@ -3392,7 +3336,7 @@ pub(crate) fn structure(
                                 frame,
                                 node,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             outcome.recoveries.push(Recovery::BadlyNestedBlock {
                                 breaker: open_name(close),
@@ -3451,7 +3395,7 @@ pub(crate) fn structure(
                                         active_body,
                                         implicit,
                                         max_nodes,
-                                        &mut outcome,
+                                        outcome,
                                     );
                                     outcome.recoveries.push(Recovery::BadlyNestedBlock {
                                         breaker,
@@ -3467,7 +3411,7 @@ pub(crate) fn structure(
                                 frame,
                                 node,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             outcome.recoveries.push(Recovery::BadlyNestedBlock {
                                 breaker: open_name(close),
@@ -3495,7 +3439,7 @@ pub(crate) fn structure(
                                 !crossed_partial,
                                 spacing_enabled,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             continue;
                         }
@@ -3528,7 +3472,7 @@ pub(crate) fn structure(
                                         active_body,
                                         implicit,
                                         max_nodes,
-                                        &mut outcome,
+                                        outcome,
                                     );
                                     outcome.recoveries.push(Recovery::BadlyNestedBlock {
                                         breaker,
@@ -3584,7 +3528,7 @@ pub(crate) fn structure(
                                 true,
                                 spacing_enabled,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             if scopes.len() > scope_count {
                                 // The tail was attached to an already
@@ -3615,7 +3559,7 @@ pub(crate) fn structure(
                                 true,
                                 spacing_enabled,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                         }
                         if reports_not_open && builder.node_macro_name(active_body) == Some("Bo") {
@@ -3668,7 +3612,7 @@ pub(crate) fn structure(
                                 frame,
                                 node,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             )
                             .map(|body| {
                                 complete_explicit_tail(
@@ -3677,7 +3621,7 @@ pub(crate) fn structure(
                                     node,
                                     spacing_enabled,
                                     max_nodes,
-                                    &mut outcome,
+                                    outcome,
                                 )
                             })
                             .unwrap_or_default();
@@ -3717,13 +3661,13 @@ pub(crate) fn structure(
                                 builder,
                                 frame.body,
                                 &mut pending_empty_column_items,
-                                &mut outcome,
+                                outcome,
                             );
                             finalize_short_column_items(
                                 builder,
                                 frame.body,
                                 &mut pending_short_column_items,
-                                &mut outcome,
+                                outcome,
                             );
                         }
                         if close == "El"
@@ -3736,7 +3680,7 @@ pub(crate) fn structure(
                                 frame.body,
                                 list_type,
                                 &deferred_fixed_head_argument_items,
-                                &mut outcome,
+                                outcome,
                             );
                         }
                         if close == "El"
@@ -3755,7 +3699,7 @@ pub(crate) fn structure(
                                 frame,
                                 node,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             outcome.recoveries.push(Recovery::BadlyNestedBlock {
                                 breaker: open_name(close),
@@ -3763,7 +3707,8 @@ pub(crate) fn structure(
                                 location: builder.node_location(node),
                             });
                             discard_item_body(builder, item);
-                            deferred_broken_item_recoveries
+                            deferred
+                                .broken_items
                                 .extend(broken_item_recoveries(builder, frame, item));
                             continue;
                         }
@@ -3779,7 +3724,7 @@ pub(crate) fn structure(
                                 frame,
                                 node,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             outcome.recoveries.push(Recovery::BadlyNestedBlock {
                                 breaker: open_name(close),
@@ -3814,7 +3759,7 @@ pub(crate) fn structure(
                                 &children,
                                 spacing_enabled,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             if let Some(first) = remainder.first()
                                 // A callable macro quoted after Fc continues
@@ -3844,7 +3789,7 @@ pub(crate) fn structure(
                                 &children,
                                 spacing_enabled,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                             mark_explicit_partial_close_tail_line_start(builder, &remainder);
                             remainder
@@ -3915,7 +3860,7 @@ pub(crate) fn structure(
                                     node,
                                     spacing_enabled,
                                     max_nodes,
-                                    &mut outcome,
+                                    outcome,
                                 );
                             }
                         }
@@ -3962,7 +3907,7 @@ pub(crate) fn structure(
                                 node,
                                 spacing_enabled,
                                 max_nodes,
-                                &mut outcome,
+                                outcome,
                             );
                         }
                         outcome.recoveries.push(Recovery::UnmatchedClose {
@@ -4000,7 +3945,7 @@ pub(crate) fn structure(
                             node,
                             spacing_enabled,
                             max_nodes,
-                            &mut outcome,
+                            outcome,
                             &mut scopes,
                         )
                     {
@@ -4022,7 +3967,7 @@ pub(crate) fn structure(
                             active_body,
                             &tag,
                             max_nodes,
-                            &mut outcome,
+                            outcome,
                         );
                     }
                     if let Some(close) = scopes.last().map(|frame| frame.close)
@@ -4057,7 +4002,7 @@ pub(crate) fn structure(
                     false,
                     spacing_enabled,
                     max_nodes,
-                    &mut outcome,
+                    outcome,
                 );
             }
         }
@@ -4106,13 +4051,13 @@ pub(crate) fn structure(
                 builder,
                 frame.body,
                 &mut pending_empty_column_items,
-                &mut outcome,
+                outcome,
             );
             finalize_short_column_items(
                 builder,
                 frame.body,
                 &mut pending_short_column_items,
-                &mut outcome,
+                outcome,
             );
         }
     }
@@ -4137,14 +4082,7 @@ pub(crate) fn structure(
         &mut outcome.recoveries,
     );
     flush_pending_authors_section(builder, &mut pending_authors_body, &mut outcome.recoveries);
-    outcome.recoveries.extend(deferred_broken_item_recoveries);
-    outcome.recoveries.extend(deferred_list_content_recoveries);
-    outcome
-        .recoveries
-        .extend(deferred_paragraph_argument_recoveries);
-    outcome
-        .recoveries
-        .extend(deferred_post_validation_recoveries);
+    let syntax_stage_recoveries = deferred.flush_into(outcome);
     // A crossed closer found while recursively structuring an implicit block
     // is syntactic rather than a late post-validation finding.  It used to be
     // appended only after every validator finding, which was observable for a
@@ -4270,5 +4208,5 @@ pub(crate) fn structure(
             .recoveries
             .push(Recovery::RcsIdMissing { flavour: "NetBSD" });
     }
-    outcome
+    package.outcome
 }
