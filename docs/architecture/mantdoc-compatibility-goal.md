@@ -182,10 +182,24 @@ wrapper-generated findings.  IR comparison covers document metadata,
 sections, blocks, lists, displays, tables, inline style, links, cross-manual
 references, anchors, diagnostics, and explicitly allowed provenance changes.
 
-The harness uses deterministic hash shards, long-lived JSONL workers, crash
-and timeout isolation, bounded resources, and a resumable SQLite database.
+The harness uses deterministic hash shards, process-isolated legacy/native
+runner pairs, crash and timeout isolation, bounded resources, and a resumable
+SQLite database. Process isolation is mandatory for legacy comparisons:
+libmandoc's eqn input-stack recovery can retain C-global failure state across
+documents, making a long-lived worker corpus-order dependent. Independent
+process pairs may run concurrently after their release binaries have been
+built once.
 Exit requires all 572 upstream inputs to have zero unreviewed AST, diagnostic,
 and IR difference.
+
+### Current compatibility checkpoint
+
+The process-isolated parser oracle has completed the pinned 1.14.6 upstream
+input set with 572/572 equal canonical AST and diagnostic reports. It applies
+the separately recorded `native-deterministic` policy only to legacy's
+host-derived empty `.Os` metadata: 366 reports use that explicit policy; no
+other field, diagnostic, or node is normalized. This is an input-contract
+checkpoint, not closure of the renderer, engine-IR, or real-corpus gates.
 
 ### CORPUS-RESTORE and MASS-AUDIT: exhaust the existing real corpus
 
