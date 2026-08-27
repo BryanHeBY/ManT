@@ -1,6 +1,5 @@
 //! Preserves no-fill and literal display content as preformatted blocks.
 
-use libmandoc_rs::{Node, NodeKind, NormalizedFont};
 use mant_ir::{Block, Inline};
 
 use super::super::{
@@ -8,6 +7,7 @@ use super::super::{
     inline::{InlineBuilder, append_inline_node, lower_inline_nodes, plain_text},
     layout::layout,
     source_span,
+    syntax::{Node, NodeKind, NormalizedFont},
 };
 use super::{
     participates_in_inline_flow,
@@ -237,8 +237,9 @@ fn append_styled_preformatted_line(
 
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::NormalizedFont;
     use mant_ir::Inline;
+
+    use super::super::super::syntax::NormalizedFont;
 
     #[test]
     fn font_styling_preserves_line_boundaries() {

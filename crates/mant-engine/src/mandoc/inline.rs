@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 
-use libmandoc_rs::{Node, NodeKind};
 use mant_ir::Inline;
 
 use crate::inline::{first_visible_character, has_printable_character, last_visible_character};
@@ -18,6 +17,7 @@ use super::{
     first_part_children,
     reference::trailing_sphinx_manual_reference,
     roff_escape::{RoffFont as Font, RoffInlineEvent, decode, visible_text},
+    syntax::{Node, NodeKind},
 };
 
 pub(super) struct InlineBuilder {

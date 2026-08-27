@@ -27,8 +27,8 @@ pub use catalog::{
 };
 pub use executable::find_host_executable;
 pub use mandoc::{
-    MAX_MANUAL_BYTES, ManualError, ManualErrorKind, lower_mandoc_document, parse_manual_bytes,
-    parse_manual_page, parse_manual_source,
+    MAX_MANUAL_BYTES, ManualError, ManualErrorKind, parse_manual_bytes, parse_manual_page,
+    parse_manual_source,
 };
 pub use mant_ir::ResolvedContent;
 pub use manual::{is_command_manual_section, is_manual_section, parenthesized_manual_reference};

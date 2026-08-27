@@ -4,8 +4,8 @@
 //!
 //! `{ "id": "...", "path": "/.../git.1.gz", "root": "/usr/share/man" }`
 //!
-//! It parses the source twice on purpose. The first pass retains the owned
-//! libmandoc AST as the structural expectation; the second uses the same
+//! It parses the source twice on purpose. The first pass retains the native
+//! mantdoc AST as the structural expectation; the second uses the same
 //! bounded, source-aware `ManualPage` path as indexed product queries. The
 //! resulting JSON identifies likely topology loss without comparing terminal
 //! wrapping or trusting a host reference renderer.
@@ -19,12 +19,12 @@ use std::{
 };
 
 use flate2::read::GzDecoder;
-use libmandoc_rs::{
-    Compression, DisplayKind, IncludePolicy, Node, NodeKind, NormalizedListKind, ParseOptions,
-    Parser, SpecialCharacter, special_character,
-};
 use mant_engine::{ManualPage, parse_manual_page};
 use mant_ir::{Block, Document, Inline, LinkTarget, Section};
+use mantdoc::{
+    ContainedRootResolver, DisplayKind, Limits, NodeKind, NodeRef, NormalizedListKind, Parser,
+    Source, SourceName, SpecialCharacter, special_character,
+};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -244,14 +244,25 @@ fn profile_request(line: &str) -> Result<Value, String> {
     let path = path_field(&request, "path")?;
     let root = path_field(&request, "root")?;
 
-    let report = Parser::new(ParseOptions {
-        includes: IncludePolicy::Root(root.clone()),
-        compression: Compression::Auto,
-    })
-    .parse_file(&path)
-    .map_err(|error| error.to_string())?;
-    let (mut expected, mut expected_topology) = ast_profile(&report.document.root);
-    if let Some(source) = read_source(&path)? {
+    let source = read_source(&path)?.ok_or_else(|| {
+        format!(
+            "unsupported compressed source for native structural profiling: {}",
+            path.display()
+        )
+    })?;
+    let name = source_name_within_root(&path, &root)?;
+    let limits = Limits::default();
+    let mut resolver =
+        ContainedRootResolver::new(&root, &limits).map_err(|error| error.to_string())?;
+    let report = Parser::default()
+        .parse_with_resolver(Source::new(&name, &source), &mut resolver)
+        .map_err(|error| error.to_string())?;
+    let root_node = report
+        .document
+        .node(report.document.root())
+        .expect("finished native documents always contain their synthetic root");
+    let (mut expected, mut expected_topology) = ast_profile(root_node);
+    {
         for (line, expression) in source_table_equations(&String::from_utf8_lossy(&source)) {
             let value = normalize_equation_fragment(&expression)?;
             if value.is_empty()
@@ -284,7 +295,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
         manual_root: root,
     })
     .map_err(|error| error.to_string())?;
-    // The raw libmandoc pass follows `.so` through IncludePolicy but does not
+    // The raw native pass follows `.so` through the confined resolver but does not
     // own ManT's logical alias metadata.  Classify the source identity from
     // the normal indexed-page path, which is also the path whose IR we audit.
     let is_alias = document.meta.alias_target.is_some();
@@ -309,12 +320,12 @@ fn profile_request(line: &str) -> Result<Value, String> {
             "ir": document.diagnostics.len(),
         },
         "sourceLinkOrigins": {
-            "manual": semantic_link_origins(&report.document.root, "Xr", NodeKind::Element),
-            "externalMdoc": semantic_link_origins(&report.document.root, "Lk", NodeKind::Element),
-            "externalMan": semantic_link_origins(&report.document.root, "UR", NodeKind::Block),
-            "emailMdoc": semantic_link_origins(&report.document.root, "Mt", NodeKind::Element),
-            "emailMan": semantic_link_origins(&report.document.root, "MT", NodeKind::Block),
-            "section": semantic_link_origins(&report.document.root, "Sx", NodeKind::Element),
+            "manual": semantic_link_origins(root_node, "Xr", NodeKind::Element),
+            "externalMdoc": semantic_link_origins(root_node, "Lk", NodeKind::Element),
+            "externalMan": semantic_link_origins(root_node, "UR", NodeKind::Block),
+            "emailMdoc": semantic_link_origins(root_node, "Mt", NodeKind::Element),
+            "emailMan": semantic_link_origins(root_node, "MT", NodeKind::Block),
+            "section": semantic_link_origins(root_node, "Sx", NodeKind::Element),
         },
         "alias": is_alias,
         "violations": violations,
@@ -330,7 +341,47 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("request.{field} must be a non-empty string"))
 }
 
-fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
+fn source_name_within_root(path: &Path, root: &Path) -> Result<SourceName, String> {
+    let root = fs::canonicalize(root).map_err(|error| {
+        format!(
+            "cannot canonicalize manual root {}: {error}",
+            root.display()
+        )
+    })?;
+    let path = fs::canonicalize(path).map_err(|error| {
+        format!(
+            "cannot canonicalize manual path {}: {error}",
+            path.display()
+        )
+    })?;
+    let relative = path.strip_prefix(&root).map_err(|_| {
+        format!(
+            "manual path {} is outside the configured root {}",
+            path.display(),
+            root.display()
+        )
+    })?;
+    let mut components = Vec::new();
+    for component in relative.components() {
+        let value = component
+            .as_os_str()
+            .to_str()
+            .ok_or_else(|| format!("manual path {} is not UTF-8", path.display()))?;
+        components.push(value);
+    }
+    SourceName::new(components.join("/"))
+        .map_err(|error| format!("manual path has no logical source name: {error}"))
+}
+
+fn ast_source_line(node: NodeRef<'_>) -> u32 {
+    node.source_position().map_or(0, |position| position.line)
+}
+
+fn ast_source_column(node: NodeRef<'_>) -> u32 {
+    node.source_position().map_or(0, |position| position.column)
+}
+
+fn ast_profile(root: NodeRef<'_>) -> (AstStructure, AstTopology) {
     let mut profile = AstStructure::default();
     let mut no_fill_lines = BTreeMap::new();
     collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
@@ -354,36 +405,36 @@ fn ast_profile(root: &Node) -> (AstStructure, AstTopology) {
 }
 
 fn collect_ast_structure(
-    node: &Node,
+    node: NodeRef<'_>,
     inherited_nonprinting: bool,
     inside_table: bool,
     relative_indent_depth: usize,
     profile: &mut AstStructure,
     no_fill_lines: &mut BTreeMap<u32, NoFillSourceLine>,
 ) {
-    let nonprinting = inherited_nonprinting || node.flags.no_print || is_stateful_request(node);
-    if node.flags.no_fill
+    let flags = node.flags();
+    let nonprinting = inherited_nonprinting || flags.no_print || is_stateful_request(node);
+    if flags.no_fill
         && !nonprinting
-        && node.kind == NodeKind::Text
-        && node.flags.line_start
-        && node.text.as_deref().is_some_and(is_no_fill_row_text)
-        && node.line > 0
+        && node.kind() == NodeKind::Text
+        && flags.line_start
+        && node.text().is_some_and(is_no_fill_row_text)
+        && ast_source_line(node) > 0
     {
-        let text = node.text.as_deref().unwrap_or_default();
-        let line = no_fill_lines.entry(node.line).or_default();
+        let text = node.text().unwrap_or_default();
+        let line = no_fill_lines.entry(ast_source_line(node)).or_default();
         line.zero_width_blank |= is_zero_width_guard_line(text);
         line.printable |= is_printable_no_fill_text(text);
-        line.continues_line |= node.flags.line_continuation;
+        line.continues_line |= flags.line_continuation;
     }
-    if node.kind == NodeKind::Block {
-        match node.macro_name.as_deref() {
+    if node.kind() == NodeKind::Block {
+        match node.macro_name() {
             Some("Bd" | "D1" | "Dl")
-                if node.macro_name.as_deref() != Some("Bd")
-                    || node.display_kind == Some(DisplayKind::Literal)
+                if node.macro_name() != Some("Bd")
+                    || node.display_kind() == Some(DisplayKind::Literal)
                         && node
-                            .children
-                            .iter()
-                            .filter(|part| part.kind == NodeKind::Body)
+                            .children()
+                            .filter(|part| part.kind() == NodeKind::Body)
                             .any(has_visible_text) =>
             {
                 profile.literal_displays += 1;
@@ -411,36 +462,38 @@ fn collect_ast_structure(
             _ => {}
         }
     }
-    if node.macro_name.as_deref() == Some("br") && node.kind == NodeKind::Element {
+    if node.macro_name() == Some("br") && node.kind() == NodeKind::Element {
         profile.hard_breaks += 1;
     }
-    if node.kind == NodeKind::Table && !node.table_cells.is_empty() {
+    if node.kind() == NodeKind::Table && !node.table_cells().is_empty() {
         profile.table_rows += 1;
         profile.table_spanning_cells += node
-            .table_cells
+            .table_cells()
             .iter()
             .filter(|cell| cell.column_span > 1 || cell.row_span > 1)
             .count();
     }
-    if node.kind == NodeKind::Equation {
-        match node.equation.as_deref().map(str::trim) {
+    if node.kind() == NodeKind::Equation {
+        match node.equation().map(str::trim) {
             None | Some("") => profile.equation_configurations += 1,
             Some(_) if inside_table => profile.table_equations += 1,
-            Some(_) if node.flags.line_start => profile.display_equations += 1,
+            Some(_) if flags.line_start => profile.display_equations += 1,
             Some(_) => profile.inline_equations += 1,
         }
     }
-    let child_inside_table = inside_table || node.kind == NodeKind::Table;
+    let child_inside_table = inside_table || node.kind() == NodeKind::Table;
     let child_indent_depth = relative_indent_depth
         + usize::from(
-            node.kind == NodeKind::Block
-                && node.macro_name.as_deref() == Some("RS")
-                && node_part_children(node, NodeKind::Body)
-                    .iter()
+            node.kind() == NodeKind::Block
+                && node.macro_name() == Some("RS")
+                && node
+                    .children()
+                    .filter(|part| part.kind() == NodeKind::Body)
+                    .flat_map(NodeRef::children)
                     .any(has_visible_text),
         );
     profile.max_relative_indent_depth = profile.max_relative_indent_depth.max(child_indent_depth);
-    for child in &node.children {
+    for child in node.children() {
         collect_ast_structure(
             child,
             nonprinting,
@@ -454,47 +507,45 @@ fn collect_ast_structure(
 
 /// Return unique, printable source occurrences for one semantic link macro.
 ///
-/// libmandoc can expose more than one structural view of one macro occurrence,
+/// A malformed source can expose more than one structural view of one macro occurrence,
 /// and malformed empty closers such as a bare `.MT` have no target at all.
 /// Source coordinates keep the audit focused on links the lowering path can
 /// actually be expected to preserve.
-fn semantic_link_origins(node: &Node, macro_name: &str, kind: NodeKind) -> BTreeSet<(u32, u32)> {
+fn semantic_link_origins(
+    node: NodeRef<'_>,
+    macro_name: &str,
+    kind: NodeKind,
+) -> BTreeSet<(u32, u32)> {
     let mut origins = BTreeSet::new();
     collect_semantic_link_origins(node, macro_name, kind, &mut origins);
     origins
 }
 
 fn collect_semantic_link_origins(
-    node: &Node,
+    node: NodeRef<'_>,
     macro_name: &str,
     kind: NodeKind,
     origins: &mut BTreeSet<(u32, u32)>,
 ) {
     let has_target = if kind == NodeKind::Block {
-        node_part_children(node, NodeKind::Head)
-            .iter()
+        node.children()
+            .filter(|part| part.kind() == NodeKind::Head)
+            .flat_map(NodeRef::children)
             .any(has_visible_text)
     } else {
         has_visible_text(node)
     };
-    if node.kind == kind
-        && node.macro_name.as_deref() == Some(macro_name)
-        && node.line > 0
-        && !node.flags.generated
+    if node.kind() == kind
+        && node.macro_name() == Some(macro_name)
+        && ast_source_line(node) > 0
+        && !node.flags().generated
         && has_target
     {
-        origins.insert((node.line, node.column));
+        origins.insert((ast_source_line(node), ast_source_column(node)));
     }
-    for child in &node.children {
+    for child in node.children() {
         collect_semantic_link_origins(child, macro_name, kind, origins);
     }
-}
-
-fn node_part_children(node: &Node, kind: NodeKind) -> &[Node] {
-    node.children
-        .iter()
-        .find(|part| part.kind == kind)
-        .map_or(&[], |part| part.children.as_slice())
 }
 
 /// libmandoc keeps a source-line node for a standalone `\f` font switch in a
@@ -584,9 +635,9 @@ fn is_roff_font_switch(text: &str) -> bool {
     found && remainder.is_empty()
 }
 
-fn is_stateful_request(node: &Node) -> bool {
+fn is_stateful_request(node: NodeRef<'_>) -> bool {
     matches!(
-        node.macro_name.as_deref(),
+        node.macro_name(),
         Some(
             "Es" | "Sm"
                 | "PD"
@@ -606,12 +657,11 @@ fn is_stateful_request(node: &Node) -> bool {
     )
 }
 
-fn direct_list_item_count(node: &Node) -> usize {
-    node.children
-        .iter()
-        .filter(|part| part.kind == NodeKind::Body)
-        .flat_map(|body| &body.children)
-        .filter(|child| child.macro_name.as_deref() == Some("It"))
+fn direct_list_item_count(node: NodeRef<'_>) -> usize {
+    node.children()
+        .filter(|part| part.kind() == NodeKind::Body)
+        .flat_map(NodeRef::children)
+        .filter(|child| child.macro_name() == Some("It"))
         .count()
 }
 
@@ -622,21 +672,20 @@ enum MdocContainerKind {
     Table,
 }
 
-fn mdoc_list_topology_kind(node: &Node) -> Option<MdocContainerKind> {
-    if node.macro_name.as_deref() != Some("Bl") {
+fn mdoc_list_topology_kind(node: NodeRef<'_>) -> Option<MdocContainerKind> {
+    if node.macro_name() != Some("Bl") {
         return None;
     }
-    Some(match node.list_kind {
+    Some(match node.list_kind() {
         Some(NormalizedListKind::Column) => MdocContainerKind::Table,
         Some(NormalizedListKind::Definition) => MdocContainerKind::Definition,
-        None if node.children.iter().any(|child| {
-            child.kind == NodeKind::Body
-                && child.children.iter().any(|item| {
-                    item.macro_name.as_deref() == Some("It")
-                        && item
-                            .children
-                            .iter()
-                            .any(|part| part.kind == NodeKind::Head && !part.children.is_empty())
+        None if node.children().any(|child| {
+            child.kind() == NodeKind::Body
+                && child.children().any(|item| {
+                    item.macro_name() == Some("It")
+                        && item.children().any(|part| {
+                            part.kind() == NodeKind::Head && part.children().next().is_some()
+                        })
                 })
         }) =>
         {
@@ -649,40 +698,35 @@ fn mdoc_list_topology_kind(node: &Node) -> Option<MdocContainerKind> {
     })
 }
 
-fn ast_ip_is_bullet(node: &Node) -> bool {
-    let Some(head) = node
-        .children
-        .iter()
-        .find(|child| child.kind == NodeKind::Head)
-    else {
+fn ast_ip_is_bullet(node: NodeRef<'_>) -> bool {
+    let Some(head) = node.children().find(|child| child.kind() == NodeKind::Head) else {
         return false;
     };
-    let Some(term) = head.children.first() else {
+    let Some(term) = head.children().next() else {
         return false;
     };
     is_bullet_glyph(ast_visible_text(term).trim())
 }
 
-fn has_visible_definition_description(node: &Node) -> bool {
-    node.children
-        .iter()
-        .filter(|part| part.kind == NodeKind::Body)
+fn has_visible_definition_description(node: NodeRef<'_>) -> bool {
+    node.children()
+        .filter(|part| part.kind() == NodeKind::Body)
         .any(has_visible_text)
 }
 
-fn has_visible_text(node: &Node) -> bool {
-    !node.flags.no_print
-        && node.kind != NodeKind::Comment
-        && (node.text.as_deref().is_some_and(|text| !text.is_empty())
-            || node.children.iter().any(has_visible_text))
+fn has_visible_text(node: NodeRef<'_>) -> bool {
+    !node.flags().no_print
+        && node.kind() != NodeKind::Comment
+        && (node.text().is_some_and(|text| !text.is_empty())
+            || node.children().any(has_visible_text))
 }
 
-fn ast_visible_text(node: &Node) -> String {
-    if node.flags.no_print || node.kind == NodeKind::Comment {
+fn ast_visible_text(node: NodeRef<'_>) -> String {
+    if node.flags().no_print || node.kind() == NodeKind::Comment {
         return String::new();
     }
-    let mut text = node.text.clone().unwrap_or_default();
-    for child in &node.children {
+    let mut text = node.text().unwrap_or_default().to_owned();
+    for child in node.children() {
         text.push_str(&ast_visible_text(child));
     }
     text
@@ -693,27 +737,24 @@ fn is_bullet_glyph(value: &str) -> bool {
         || matches!(value.chars().collect::<Vec<_>>().as_slice(), [glyph] if !glyph.is_alphanumeric())
 }
 
-fn has_visible_flow_text(node: &Node) -> bool {
-    node.children.iter().any(|child| {
-        !child.flags.no_print
-            && child.kind != NodeKind::Comment
-            && child.kind != NodeKind::Block
-            && (child.text.as_deref().is_some_and(|text| !text.is_empty())
-                || has_visible_flow_text(child))
+fn has_visible_flow_text(node: NodeRef<'_>) -> bool {
+    node.children().any(|child| {
+        !child.flags().no_print
+            && child.kind() != NodeKind::Comment
+            && child.kind() != NodeKind::Block
+            && (child.text().is_some_and(|text| !text.is_empty()) || has_visible_flow_text(child))
     })
 }
 
-fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
-    node.children
-        .iter()
-        .filter(|part| part.kind == NodeKind::Body)
-        .flat_map(|body| &body.children)
-        .filter(|item| item.macro_name.as_deref() == Some("It"))
+fn mdoc_column_rows(node: NodeRef<'_>) -> Vec<AstTableRowTopology> {
+    node.children()
+        .filter(|part| part.kind() == NodeKind::Body)
+        .flat_map(NodeRef::children)
+        .filter(|item| item.macro_name() == Some("It"))
         .filter_map(|item| {
             let cells = item
-                .children
-                .iter()
-                .filter(|part| part.kind == NodeKind::Body)
+                .children()
+                .filter(|part| part.kind() == NodeKind::Body)
                 .map(|_| AstTableCellTopology {
                     column_span: 1,
                     row_span: 1,
@@ -725,16 +766,16 @@ fn mdoc_column_rows(node: &Node) -> Vec<AstTableRowTopology> {
         .collect()
 }
 
-fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopology) {
-    if node.kind == NodeKind::Equation
-        && let Some(value) = node.equation.as_deref().map(str::trim)
+fn collect_ast_topology(node: NodeRef<'_>, inside_table: bool, topology: &mut AstTopology) {
+    if node.kind() == NodeKind::Equation
+        && let Some(value) = node.equation().map(str::trim)
         && !value.is_empty()
     {
         topology.equations.push(AstEquationTopology {
-            source_line: node.line,
+            source_line: ast_source_line(node),
             context: if inside_table {
                 EquationContext::TableCell
-            } else if node.flags.line_start {
+            } else if node.flags().line_start {
                 EquationContext::Display
             } else {
                 EquationContext::Inline
@@ -742,17 +783,17 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
             value: equation_visible_text(value),
         });
     }
-    if node.kind == NodeKind::Block
+    if node.kind() == NodeKind::Block
         && mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table)
-        && node.line > 0
+        && ast_source_line(node) > 0
     {
         topology.table_rows.extend(mdoc_column_rows(node));
-    } else if node.kind == NodeKind::Block
+    } else if node.kind() == NodeKind::Block
         && let Some(kind) = mdoc_list_topology_kind(node)
-        && node.line > 0
+        && ast_source_line(node) > 0
     {
         topology.lists.push(AstListTopology {
-            source_line: node.line,
+            source_line: ast_source_line(node),
             kind: match kind {
                 MdocContainerKind::Generic => ListTopologyKind::Generic,
                 MdocContainerKind::Definition => ListTopologyKind::Definition,
@@ -762,11 +803,11 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
         });
     }
 
-    for child in &node.children {
-        if child.kind == NodeKind::Table && !child.table_cells.is_empty() {
+    for child in node.children() {
+        if child.kind() == NodeKind::Table && !child.table_cells().is_empty() {
             topology.table_rows.push(AstTableRowTopology {
                 cells: child
-                    .table_cells
+                    .table_cells()
                     .iter()
                     .map(|cell| AstTableCellTopology {
                         column_span: cell.column_span,
@@ -779,7 +820,7 @@ fn collect_ast_topology(node: &Node, inside_table: bool, topology: &mut AstTopol
         }
         collect_ast_topology(
             child,
-            inside_table || node.kind == NodeKind::Table,
+            inside_table || node.kind() == NodeKind::Table,
             topology,
         );
     }
@@ -1354,25 +1395,65 @@ fn delimited_expressions(source: &str, opening: char, closing: char) -> Vec<Stri
 
 fn normalize_equation_fragment(source: &str) -> Result<String, String> {
     let synthetic = format!(".TH AUDIT 7\n.EQ\n{source}\n.EN\n");
-    let report = Parser::new(ParseOptions {
-        includes: IncludePolicy::Deny,
-        compression: Compression::Plain,
-    })
-    .parse_bytes("audit-equation.7", synthetic.as_bytes())
-    .map_err(|error| error.to_string())?;
-    find_equation(&report.document.root)
+    let name = SourceName::new("audit-equation.7").expect("static source name is valid");
+    let report = Parser::default()
+        .parse(Source::new(&name, synthetic.as_bytes()))
+        .map_err(|error| error.to_string())?;
+    let root = report
+        .document
+        .node(report.document.root())
+        .expect("finished native documents always contain their synthetic root");
+    find_equation(root)
         .map(equation_visible_text)
+        .map(|normalized| retain_table_equation_delimiter_spacing(source, normalized))
         .ok_or_else(|| format!("could not normalize table equation {source:?}"))
 }
 
-fn find_equation(node: &Node) -> Option<&str> {
-    if node.kind == NodeKind::Equation
-        && let Some(value) = node.equation.as_deref()
+/// tbl passes a delimited equation's bracketed spelling to the product
+/// lowering path.  That path restores authored edge padding inside `()`,
+/// `[]`, and `{}` after the shared eqn parser normalizes the expression.  The
+/// structure oracle must observe that same semantic spelling rather than
+/// treating compatible delimiter padding as an AST-to-IR mismatch.
+fn retain_table_equation_delimiter_spacing(source: &str, mut normalized: String) -> String {
+    let source = source.trim();
+    let Some(opening) = source.chars().next() else {
+        return normalized;
+    };
+    let closing = match opening {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        _ => return normalized,
+    };
+    if !source.ends_with(closing)
+        || !normalized.starts_with(opening)
+        || !normalized.ends_with(closing)
+    {
+        return normalized;
+    }
+
+    let source_inner = &source[opening.len_utf8()..source.len() - closing.len_utf8()];
+    if source_inner.starts_with(char::is_whitespace)
+        && !normalized[opening.len_utf8()..].starts_with(char::is_whitespace)
+    {
+        normalized.insert(opening.len_utf8(), ' ');
+    }
+    if source_inner.ends_with(char::is_whitespace)
+        && !normalized[..normalized.len() - closing.len_utf8()].ends_with(char::is_whitespace)
+    {
+        normalized.insert(normalized.len() - closing.len_utf8(), ' ');
+    }
+    normalized
+}
+
+fn find_equation(node: NodeRef<'_>) -> Option<&str> {
+    if node.kind() == NodeKind::Equation
+        && let Some(value) = node.equation()
         && !value.trim().is_empty()
     {
         return Some(value.trim());
     }
-    node.children.iter().find_map(find_equation)
+    node.children().find_map(find_equation)
 }
 
 fn exact(violations: &mut Vec<String>, label: &str, expected: usize, observed: usize) {
@@ -1475,7 +1556,7 @@ mod tests {
 
     use super::{
         NoFillSourceLine, equation_visible_text, is_no_fill_row_text, is_zero_width_guard_line,
-        retained_no_fill_rows,
+        normalize_equation_fragment, retained_no_fill_rows,
     };
 
     #[test]
@@ -1537,6 +1618,14 @@ mod tests {
         assert_eq!(
             equation_visible_text(r"1 + \(lf x \(rf \[->] infinity"),
             "1 + ⌊ x ⌋ → infinity"
+        );
+    }
+
+    #[test]
+    fn table_equation_normalization_uses_delimited_table_padding() {
+        assert_eq!(
+            normalize_equation_fragment("[ 0 , ~ pi over 2 ]").unwrap(),
+            "[ 0 , π / 2 ]"
         );
     }
 }

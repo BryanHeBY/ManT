@@ -6,9 +6,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::reference::{is_manual_reference_name, is_manual_section};
-use super::roff_escape::visible_text;
-use libmandoc_rs::{Node, NodeKind};
+use super::{
+    reference::{is_manual_reference_name, is_manual_section},
+    roff_escape::visible_text,
+    syntax::{Node, NodeKind},
+};
 use mant_ir::{Block, Diagnostic, DiagnosticLevel, Inline, LinkTarget, Section};
 
 type SectionTargets = HashMap<String, Option<String>>;

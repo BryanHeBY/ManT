@@ -1,11 +1,8 @@
-//! Adapts libmandoc-rs diagnostics into `ManT`'s document contract.
+//! Adapts the engine's parser-neutral diagnostics into `ManT`'s document contract.
 
 use mant_ir::{Diagnostic, DiagnosticLevel};
 
-use libmandoc_rs::{
-    Diagnostic as MandocDiagnostic, DiagnosticCode as MandocDiagnosticCode,
-    DiagnosticLevel as MandocDiagnosticLevel,
-};
+use super::syntax::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
 
 pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
     input
@@ -17,15 +14,7 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
                 MandocDiagnosticLevel::Warning => DiagnosticLevel::Warning,
                 MandocDiagnosticLevel::Style => DiagnosticLevel::Style,
             },
-            code: diagnostic.code().map(|code| {
-                match code {
-                    MandocDiagnosticCode::SyntaxTreeDepthLimit => "manual.syntax-depth-truncated",
-                    MandocDiagnosticCode::EquationTreeDepthLimit => {
-                        "manual.equation-depth-truncated"
-                    }
-                }
-                .to_owned()
-            }),
+            code: truncation_code(&diagnostic.message).map(str::to_owned),
             message: diagnostic.message.clone(),
             source: diagnostic.location.map(|location| mant_ir::SourceSpan {
                 byte_range: None,
@@ -38,12 +27,26 @@ pub(super) fn lower_diagnostics(input: &[MandocDiagnostic]) -> Vec<Diagnostic> {
         .collect()
 }
 
+fn truncation_code(message: &str) -> Option<&'static str> {
+    match message {
+        "owned syntax tree exceeded the 256-level copy limit; deeper descendants were omitted" => {
+            Some("manual.syntax-depth-truncated")
+        }
+        "equation tree exceeded the 256-level copy limit; deeper equation content was omitted" => {
+            Some("manual.equation-depth-truncated")
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel};
     use mant_ir::DiagnosticLevel;
 
-    use super::lower_diagnostics;
+    use super::{
+        super::syntax::{Diagnostic as MandocDiagnostic, DiagnosticLevel as MandocDiagnosticLevel},
+        lower_diagnostics,
+    };
 
     #[test]
     fn preserves_each_finding_and_classifies_known_levels() {

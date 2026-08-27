@@ -1,6 +1,5 @@
 //! Reconstructs native tbl rows and source-backed semantic cell content.
 
-use libmandoc_rs::{Node, NodeKind, TableAlignment as MandocTableAlignment};
 use mant_ir::{
     Block, Inline, LayoutHint, TableAlignment as AstTableAlignment, TableCell as AstTableCell,
     TableRow,
@@ -15,6 +14,9 @@ use super::super::{
     layout::layout,
     roff_escape::visible_text,
     source_span,
+    syntax::{
+        Node, NodeKind, TableAlignment as MandocTableAlignment, TableCell as MandocTableCell,
+    },
 };
 
 pub(super) struct TableEmbedding<'a> {
@@ -174,9 +176,9 @@ fn lower_missing_table_cell(
 }
 
 fn lower_table_cell(
-    cell: &libmandoc_rs::TableCell,
+    cell: &MandocTableCell,
     cell_index: usize,
-    row_cells: &[libmandoc_rs::TableCell],
+    row_cells: &[MandocTableCell],
     node: &Node,
     context: &LoweringContext<'_>,
     text_block: Option<&TableTextBlock>,
@@ -213,7 +215,15 @@ fn lower_table_cell(
                         table_text_agrees(&reconstructed_text, &visible_text(text))
                     })
             });
-            if agrees_with_current || !belongs_to_other_cell {
+            // Request-level reconstruction owns styles and links that tbl's
+            // flattened cell text cannot represent.  Prefer it even when a
+            // loose text-containment check happens to match another cell
+            // across a word boundary (for example `using` + `perl` matching
+            // the first column's `gperl`).
+            let reconstructed_has_semantics = reconstructed
+                .iter()
+                .any(|inline| !matches!(inline, Inline::Text { .. }));
+            if agrees_with_current || !belongs_to_other_cell || reconstructed_has_semantics {
                 return reconstructed;
             }
         }
@@ -356,6 +366,15 @@ fn source_table_inline(source_line: &str, default_name: Option<&str>) -> Option<
     let argument = rest.trim();
     if matches!(name, "BI" | "BR" | "IB" | "IR" | "RB" | "RI") {
         return lower_source_alternating_fonts(name, argument);
+    }
+    if name == "SM" {
+        return Some(parse_roff_text(argument));
+    }
+    // The widely used groff fallback `.MR name section [punctuation]` is a
+    // source-defined convenience macro. tbl preserves the call but not its
+    // definition body, so recover its stable manual-reference semantics here.
+    if name == "MR" {
+        return lower_source_mdoc_request("Xr", argument, default_name);
     }
     lower_source_mdoc_request(name, argument, default_name)
 }

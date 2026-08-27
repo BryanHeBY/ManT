@@ -5,8 +5,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use libmandoc_rs::ParseError;
-
 /// Stable category for a native manual failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ManualErrorKind {
@@ -20,7 +18,7 @@ pub enum ManualErrorKind {
     UnsafePath,
     /// A native alias redirect was invalid or could not be resolved.
     Redirect,
-    /// libmandoc rejected or could not represent the source.
+    /// The selected parser rejected or could not represent the source.
     Parse,
 }
 
@@ -62,8 +60,13 @@ pub enum ManualError {
         /// Stable human-readable detail.
         message: String,
     },
-    /// Failure reported by the low-level libmandoc binding.
-    Parse(ParseError),
+    /// Failure reported by the native Rust parser.
+    NativeParse {
+        /// Original source path.
+        path: PathBuf,
+        /// Stable human-readable detail.
+        message: String,
+    },
 }
 
 impl ManualError {
@@ -102,6 +105,13 @@ impl ManualError {
         }
     }
 
+    pub(super) fn native_parse(path: &Path, message: impl Into<String>) -> Self {
+        Self::NativeParse {
+            path: path.to_path_buf(),
+            message: message.into(),
+        }
+    }
+
     #[must_use]
     /// Return the stable failure category.
     pub const fn kind(&self) -> ManualErrorKind {
@@ -111,7 +121,7 @@ impl ManualError {
             Self::Limit { .. } => ManualErrorKind::Limit,
             Self::UnsafePath { .. } => ManualErrorKind::UnsafePath,
             Self::Redirect { .. } => ManualErrorKind::Redirect,
-            Self::Parse(_) => ManualErrorKind::Parse,
+            Self::NativeParse { .. } => ManualErrorKind::Parse,
         }
     }
 
@@ -123,8 +133,8 @@ impl ManualError {
             | Self::Decompression { path, .. }
             | Self::Limit { path, .. }
             | Self::UnsafePath { path, .. }
-            | Self::Redirect { path, .. } => path,
-            Self::Parse(error) => &error.path,
+            | Self::Redirect { path, .. }
+            | Self::NativeParse { path, .. } => path,
         }
     }
 
@@ -136,15 +146,9 @@ impl ManualError {
             | Self::Decompression { message, .. }
             | Self::Limit { message, .. }
             | Self::UnsafePath { message, .. }
-            | Self::Redirect { message, .. } => message,
-            Self::Parse(error) => &error.message,
+            | Self::Redirect { message, .. }
+            | Self::NativeParse { message, .. } => message,
         }
-    }
-}
-
-impl From<ParseError> for ManualError {
-    fn from(error: ParseError) -> Self {
-        Self::Parse(error)
     }
 }
 
@@ -157,8 +161,8 @@ impl fmt::Display for ManualError {
 impl std::error::Error for ManualError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Parse(error) => Some(error),
-            Self::Read { .. }
+            Self::NativeParse { .. }
+            | Self::Read { .. }
             | Self::Decompression { .. }
             | Self::Limit { .. }
             | Self::UnsafePath { .. }

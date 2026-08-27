@@ -4,9 +4,9 @@
 //! shared rules that turn mandoc's display offsets and paragraph distances into
 //! the `LayoutHint` values consumed by every output format.
 
-use libmandoc_rs::Node;
 use mant_ir::{Block, LayoutHint};
 
+use super::syntax::Node;
 use crate::block::{block_layout, block_layout_mut};
 
 /// Update the current man(7) paragraph distance after a `.PD` request.
@@ -136,7 +136,7 @@ fn distance_lines(argument: &str) -> Option<u16> {
 }
 
 fn first_text(node: &Node) -> Option<&str> {
-    if node.kind == libmandoc_rs::NodeKind::Text {
+    if node.kind == super::syntax::NodeKind::Text {
         return node.text.as_deref();
     }
     node.children.iter().find_map(first_text)
@@ -223,8 +223,7 @@ pub(super) fn display_indent(node: &Node) -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use libmandoc_rs::{Node, NodeFlags, NodeKind};
-
+    use super::super::syntax::{Node, NodeFlags, NodeKind};
     use super::{
         display_indent, horizontal_distance_columns, layout, layout_with_spacing,
         normalize_explicit_vertical_spacing, paragraph_distance_lines, vertical_distance_lines,

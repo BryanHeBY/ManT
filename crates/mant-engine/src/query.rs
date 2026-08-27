@@ -331,7 +331,7 @@ impl fmt::Display for ManualLoadError {
             } => {
                 write!(
                     formatter,
-                    "could not load manual '{name}': libmandoc parsed {} but produced no readable sections",
+                    "could not load manual '{name}': mantdoc parsed {} but produced no readable sections",
                     path.display()
                 )?;
                 if !diagnostics.is_empty() {

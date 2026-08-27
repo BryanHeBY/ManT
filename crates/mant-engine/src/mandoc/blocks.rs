@@ -1,6 +1,5 @@
 //! Reconstructs sections and semantic blocks from the copied mandoc tree.
 
-use libmandoc_rs::{AuthorMode, DisplayKind, Node, NodeKind, NormalizedFont};
 use mant_ir::{Block, Inline, Section};
 
 use super::{
@@ -18,6 +17,7 @@ use super::{
     part_child_groups,
     roff_escape::visible_text,
     source_span,
+    syntax::{AuthorMode, DisplayKind, Node, NodeKind, NormalizedFont},
 };
 
 mod lists;

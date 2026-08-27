@@ -6,7 +6,7 @@
 //! visible document text.
 
 use crate::text_safety::push_terminal_safe;
-use libmandoc_rs::SpecialCharacter;
+use mantdoc::{SpecialCharacter, special_character};
 
 const ASCII_BREAK: char = '\u{1d}';
 const ASCII_HYPH: char = '\u{1e}';
@@ -269,7 +269,7 @@ impl Decoder {
             }
             return;
         }
-        match libmandoc_rs::special_character(name) {
+        match special_character(name) {
             Some(SpecialCharacter::Visible(character)) => {
                 push_terminal_safe(&mut self.text, character);
             }
@@ -483,7 +483,7 @@ enum NamedCharacterSyntax {
 }
 
 /// Compatibility folds intentionally chosen by `ManT`. Every other known name
-/// comes from the complete catalog pinned by `libmandoc-rs`.
+/// comes from mantdoc's complete pinned catalog.
 fn dedicated_special_character(name: &str) -> Option<&'static str> {
     match name {
         "en" => Some("–"),

@@ -1,31 +1,30 @@
-//! Lowers the owned libmandoc syntax tree into `ManT`'s stable document model.
+//! Lowers the engine-owned syntax projection into `ManT`'s stable document model.
 
 mod blocks;
 mod diagnostics;
 mod error;
 pub(crate) mod inline;
 mod layout;
+mod native_adapter;
 mod navigation;
 mod reference;
 mod roff_escape;
 mod source;
 mod source_lines;
+mod syntax;
 
-use std::{cell::RefCell, collections::BTreeMap, path::Path};
-
-use libmandoc_rs::{
-    Compression, Document as MandocDocument, IncludePolicy, MacroSet, Node, ParseOptions,
-    ParseReport, Parser,
-};
 use mant_ir::{
     Diagnostic, DiagnosticLevel, Document, DocumentMeta, DocumentSource, ParserInfo, SourceFormat,
     SourceSpan, validate_document,
 };
+use mantdoc::{Parser as NativeParser, Source as NativeSource, SourceName};
+use std::{cell::RefCell, collections::BTreeMap, path::Path};
 
 use self::{
     roff_escape::visible_text,
     source::{load_manual_source, redirect_target, resolve_manual_redirects},
     source_lines::SourceLineIndex,
+    syntax::{Document as MandocDocument, MacroSet, Node, NodeKind, ParseReport},
 };
 use crate::ManualPage;
 use crate::text_safety::mask_terminal_control_bytes;
@@ -57,7 +56,7 @@ pub fn parse_manual_source(path: &Path) -> Result<Document, ManualError> {
 ///
 /// # Errors
 ///
-/// Returns [`ManualError`] when libmandoc rejects the input.
+/// Returns [`ManualError`] when the parser rejects the input.
 pub fn parse_manual_bytes(path: &Path, source: &[u8]) -> Result<Document, ManualError> {
     reject_standalone_redirect(path, source)?;
     parse_plain_manual(path, source, None)
@@ -94,14 +93,18 @@ fn parse_plain_manual(
     alias_target: Option<&str>,
 ) -> Result<Document, ManualError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
-    let report = Parser::new(ParseOptions {
-        includes: IncludePolicy::Deny,
-        compression: Compression::Plain,
-    })
-    .parse_bytes(path, source.as_ref())
-    .map_err(ManualError::from)?;
     let source_text = String::from_utf8_lossy(source.as_ref());
+    let source_name = SourceName::new(path.to_string_lossy().as_ref())
+        .map_err(|error| ManualError::native_parse(path, error.to_string()))?;
+    let native_report = NativeParser::default()
+        .parse(NativeSource::new(&source_name, source.as_ref()))
+        .map_err(|error| ManualError::native_parse(path, error.to_string()))?;
+    let report = native_adapter::project(&native_report);
     let mut document = lower_mandoc_document_with_source(path, &report, Some(&source_text));
+    document.parser = Some(ParserInfo {
+        name: "mantdoc".to_owned(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+    });
     if masked_controls > 0 {
         document.diagnostics.insert(
             0,
@@ -117,12 +120,6 @@ fn parse_plain_manual(
         document.meta.alias_target = Some(alias_target.to_owned());
     }
     Ok(document)
-}
-
-/// Convert a completed low-level parse into the stable document contract.
-#[must_use]
-pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
-    lower_mandoc_document_with_source(path, report, None)
 }
 
 fn lower_mandoc_document_with_source(
@@ -146,10 +143,7 @@ fn lower_mandoc_document_with_source(
     ));
     navigation::resolve_navigation(&mut sections, &retained_targets, &mut diagnostics);
     let mut document = Document {
-        parser: Some(ParserInfo {
-            name: "libmandoc".to_owned(),
-            version: libmandoc_rs::LIBMANDOC_VERSION.to_owned(),
-        }),
+        parser: None,
         source: DocumentSource {
             format: match parsed.macro_set {
                 MacroSet::Mdoc => SourceFormat::Mdoc,
@@ -265,12 +259,20 @@ impl<'a> LoweringContext<'a> {
             }
         }
         let synthetic = format!(".TH MANT-EQN 7\n.EQ\n{source}\n.EN\n");
-        let normalized = Parser::default()
-            .parse_bytes(Path::new("mant-inline-eqn.7"), synthetic.as_bytes())
+        let source_name = SourceName::new("mant-inline-eqn.7")
+            .expect("fixed inline equation source name is valid");
+        let normalized = NativeParser::default()
+            .parse(NativeSource::new(&source_name, synthetic.as_bytes()))
             .ok()
-            .and_then(|report| first_equation(&report.document.root).map(visible_text))
+            .and_then(|report| {
+                let report = native_adapter::project(&report);
+                first_equation(&report.document.root).map(visible_text)
+            })
             .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| visible_text(source));
+            .map_or_else(
+                || visible_text(source),
+                |value| retain_equation_delimiter_spacing(source, value),
+            );
         self.normalized_equations
             .borrow_mut()
             .insert(source.to_owned(), normalized.clone());
@@ -483,6 +485,43 @@ fn first_equation(node: &Node) -> Option<&str> {
         .or_else(|| node.children.iter().find_map(first_equation))
 }
 
+/// Preserve observable blank space immediately inside literal equation
+/// delimiters.  `mantdoc` normalizes equation tokens, whereas libmandoc's
+/// owned-AST projection retains this particular layout detail.  The lowerer
+/// still has the bounded source fragment for a tbl cell, so restoring it here
+/// keeps the public document contract stable without a second parser.
+fn retain_equation_delimiter_spacing(source: &str, mut normalized: String) -> String {
+    let source = source.trim();
+    let Some(opening) = source.chars().next() else {
+        return normalized;
+    };
+    let closing = match opening {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        _ => return normalized,
+    };
+    if !source.ends_with(closing)
+        || !normalized.starts_with(opening)
+        || !normalized.ends_with(closing)
+    {
+        return normalized;
+    }
+
+    let source_inner = &source[opening.len_utf8()..source.len() - closing.len_utf8()];
+    if source_inner.starts_with(char::is_whitespace)
+        && !normalized[opening.len_utf8()..].starts_with(char::is_whitespace)
+    {
+        normalized.insert(opening.len_utf8(), ' ');
+    }
+    if source_inner.ends_with(char::is_whitespace)
+        && !normalized[..normalized.len() - closing.len_utf8()].ends_with(char::is_whitespace)
+    {
+        normalized.insert(normalized.len() - closing.len_utf8(), ' ');
+    }
+    normalized
+}
+
 /// Track active inline eqn delimiters at each source line.
 ///
 /// eqn configures delimiters inside an `.EQ`/`.EN` block; they take effect on
@@ -592,7 +631,7 @@ fn source_span(node: &Node) -> Option<SourceSpan> {
 /// Most semantic macros own at most one head, body, and tail. Callers whose
 /// grammar permits repeated parts must use [`part_child_groups`] instead so
 /// the multiplicity remains explicit at the lowering boundary.
-fn first_part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
+fn first_part_children(node: &Node, kind: NodeKind) -> &[Node] {
     node.children
         .iter()
         .find(|child| child.kind == kind)
@@ -600,7 +639,7 @@ fn first_part_children(node: &Node, kind: libmandoc_rs::NodeKind) -> &[Node] {
 }
 
 /// Iterate every libmandoc structural part of one kind in source order.
-fn part_child_groups(node: &Node, kind: libmandoc_rs::NodeKind) -> impl Iterator<Item = &[Node]> {
+fn part_child_groups(node: &Node, kind: NodeKind) -> impl Iterator<Item = &[Node]> {
     node.children
         .iter()
         .filter(move |child| child.kind == kind)
@@ -613,37 +652,12 @@ mod tests {
 
     use mant_ir::{Block, DiagnosticLevel, Inline, SourceFormat};
 
-    use super::{
-        MAX_INLINE_EQUATION_NORMALIZATIONS, Parser, lower_mandoc_document, parse_manual_bytes,
-        parse_manual_source,
-    };
+    use super::{MAX_INLINE_EQUATION_NORMALIZATIONS, parse_manual_bytes, parse_manual_source};
 
     fn temporary_source(label: &str, source: &str) -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!("mant-lower-{label}-{}.1", process::id()));
         fs::write(&path, source).expect("write temporary roff fixture");
         path
-    }
-
-    fn find_macro_mut<'a>(
-        node: &'a mut libmandoc_rs::Node,
-        name: &str,
-    ) -> Option<&'a mut libmandoc_rs::Node> {
-        if node.macro_name.as_deref() == Some(name) {
-            return Some(node);
-        }
-        node.children
-            .iter_mut()
-            .find_map(|child| find_macro_mut(child, name))
-    }
-
-    fn replace_first_text(node: &mut libmandoc_rs::Node, value: &str) -> bool {
-        if let Some(text) = node.text.as_mut() {
-            *text = value.to_owned();
-            return true;
-        }
-        node.children
-            .iter_mut()
-            .any(|child| replace_first_text(child, value))
     }
 
     #[test]
@@ -2093,43 +2107,6 @@ Escaped: Ma\\[u0161]l\\[u00E1] and \\[u2014] dash.\n";
     }
 
     #[test]
-    fn diagnoses_future_structural_macros_before_discarding_visible_parts() {
-        let mut report = Parser::default()
-            .parse_bytes(
-                "future-structure.1",
-                b".Dd August 17, 2026\n.Dt FUTURE 1\n.Os\n.Sh SYNOPSIS\n\
-.Fo future_call\n.Fa argument\n.Fc\n",
-            )
-            .expect("parse structural fixture");
-        let block = find_macro_mut(&mut report.document.root, "Fo").expect("Fo block");
-        block.macro_name = Some("FutureBlock".to_owned());
-        let mut second_body = block
-            .children
-            .iter()
-            .find(|child| child.kind == libmandoc_rs::NodeKind::Body)
-            .cloned()
-            .expect("function body");
-        assert!(replace_first_text(&mut second_body, "second_argument"));
-        block.children.push(second_body);
-
-        let document = lower_mandoc_document(std::path::Path::new("future-structure.1"), &report);
-
-        assert!(document.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code.as_deref() == Some("manual.unhandled-structural-parts")
-                && diagnostic.message.contains("FutureBlock")
-        }));
-        let rendered = document.sections[0]
-            .blocks
-            .iter()
-            .map(|block| match block {
-                Block::Paragraph { children, .. } => inline_text(children),
-                block => panic!("expected fallback paragraph, got {block:?}"),
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(rendered, ["argument", "second_argument"]);
-    }
-
-    #[test]
     fn recognizes_explicitly_styled_traditional_man_references_in_any_section() {
         let path = temporary_source(
             "man-see-also",
@@ -2584,18 +2561,18 @@ Sean\n\
     }
 
     #[test]
-    fn lowers_the_pinned_large_mdoc_fixture_without_empty_sections() {
+    fn lowers_the_checked_in_mdoc_fixture_without_empty_sections() {
         let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
+            .join("../../tests/fixtures/roff/minimal-mdoc.1");
         if !source.exists() {
-            // The repository supplies this separately licensed cross-crate
-            // fixture; the published mant-engine package is self-contained.
+            // The workspace fixture is intentionally not packaged with the
+            // independent mant-engine crate.
             return;
         }
 
-        let document = parse_manual_source(&source).expect("lower vendored mandoc manual");
+        let document = parse_manual_source(&source).expect("lower checked-in mdoc fixture");
 
-        assert!(document.sections.len() > 5);
+        assert!(document.sections.len() > 1);
         assert!(
             document
                 .sections

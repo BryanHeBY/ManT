@@ -1,7 +1,7 @@
 //! Integration tests for the Arch Linux fixture corpus.
 //!
 //! Each page module covers roff bytes extracted from an immutable Arch Linux
-//! Archive package and exercises the full libmandoc lowering pipeline.
+//! Archive package and exercises the full native mantdoc lowering pipeline.
 
 #[path = "../common/mod.rs"]
 #[allow(dead_code)]

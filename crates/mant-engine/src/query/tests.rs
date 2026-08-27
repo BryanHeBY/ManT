@@ -556,7 +556,7 @@ fn manual_only_failure_is_not_hidden_by_tldr() {
 
 #[test]
 fn requested_manual_section_failure_is_not_hidden_by_tldr() {
-    let mut host = host(Err("libmandoc failed".to_owned()));
+    let mut host = host(Err("mantdoc failed".to_owned()));
     host.locate = Err("section not found".to_owned());
     host.tldr = Ok(Some(tldr()));
     let request = QueryRequest {
@@ -601,7 +601,7 @@ fn readable_best_effort_document_survives_parser_findings() {
 
 #[test]
 fn ordinary_query_reports_a_tldr_hint_after_total_document_failure() {
-    let mut host = host(Err("libmandoc failed".to_owned()));
+    let mut host = host(Err("mantdoc failed".to_owned()));
     host.locate = Err("source not found".to_owned());
     host.tldr = Ok(Some(tldr()));
     let error = query_with(&request(), QueryPolicy::default(), &host)
@@ -616,7 +616,7 @@ fn ordinary_query_reports_a_tldr_hint_after_total_document_failure() {
 
 #[test]
 fn explicit_tldr_policy_survives_total_manual_failure() {
-    let mut host = host(Err("libmandoc failed".to_owned()));
+    let mut host = host(Err("mantdoc failed".to_owned()));
     host.locate = Err("source not found".to_owned());
     host.tldr = Ok(Some(tldr()));
     let result =
@@ -721,7 +721,7 @@ fn explicit_source_limits_tldr_lookup_to_that_source() {
 
 #[test]
 fn reports_both_manual_paths_when_no_content_exists() {
-    let mut host = host(Err("libmandoc failed".to_owned()));
+    let mut host = host(Err("mantdoc failed".to_owned()));
     host.locate = Err("source not found".to_owned());
     let error =
         query_with(&request(), QueryPolicy::default(), &host).expect_err("empty query must fail");

@@ -804,24 +804,24 @@ fn addressable_rendering_returns_exact_semantic_node_ranges() {
 
 #[cfg(unix)]
 #[test]
-fn serializes_a_large_source_lowered_document() {
+fn serializes_a_checked_in_mdoc_source_lowered_document() {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../libmandoc-rs/vendor/mandoc-1.14.6/mandoc.1");
+        .join("../../tests/fixtures/roff/minimal-mdoc.1");
     if !source.exists() {
-        // Published package tests must not require a sibling crate's vendor
-        // tree; repository verification still exercises the real fixture.
+        // The workspace fixture is intentionally not packaged with the
+        // independent mant-engine crate.
         return;
     }
     let document = crate::parse_manual_source(&source).expect("large native document");
     let query = ResolvedContent {
         address: None,
-        label: "mandoc".to_owned(),
+        label: "mant-mdoc-fixture".to_owned(),
         document: Some(document),
         tldr: None,
     };
 
     let markdown = render_markdown(&query);
-    assert!(markdown.starts_with("# mandoc\n"));
+    assert!(markdown.starts_with("# mant-mdoc-fixture\n"));
     assert!(markdown.contains("## NAME"));
     assert!(markdown.contains("## DESCRIPTION"));
     assert!(!markdown.contains("<pre"));

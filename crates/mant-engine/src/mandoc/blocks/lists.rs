@@ -1,6 +1,5 @@
 //! Lowers man and mdoc list and definition structures.
 
-use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
 use mant_ir::{
     Block, DefinitionItem, Inline, ListItem, ListKind, TableAlignment as AstTableAlignment,
     TableCell as AstTableCell, TableRow,
@@ -18,6 +17,7 @@ use super::super::{
     part_child_groups,
     roff_escape::visible_text,
     source_span,
+    syntax::{Node, NodeKind, NormalizedListKind},
 };
 use super::{is_inline_equation, is_inline_equation_quote_artifact, lower_blocks_with_spacing};
 
