@@ -14,6 +14,7 @@ use super::{
     take_terminal_table_vertical_skip, take_terminal_vertical_skip,
     terminal_apply_tab_stop_request, terminal_tab_next, terminal_tab_stop_request,
 };
+use std::borrow::Cow;
 
 pub(in crate::renderer) fn append_blank_line(
     output: &mut String,
@@ -135,6 +136,47 @@ struct TerminalLayoutLine<'a> {
     temporary_indent: Option<usize>,
     hanging_indent: Option<usize>,
     text: &'a str,
+}
+
+struct TerminalLayoutWord<'a> {
+    encoded: &'a str,
+    visible: Cow<'a, str>,
+    no_hyphen_break: bool,
+}
+
+impl<'a> TerminalLayoutWord<'a> {
+    fn decode(encoded: &'a str) -> Self {
+        let has_controls = encoded.contains([
+            TERMINAL_OPTIONAL_BREAK_MARKER,
+            TERMINAL_NO_HYPHEN_BREAK_MARKER,
+            TERMINAL_SENTENCE_PENDING_MARKER,
+        ]);
+        let visible = if has_controls {
+            Cow::Owned(encoded.replace(
+                [
+                    TERMINAL_OPTIONAL_BREAK_MARKER,
+                    TERMINAL_NO_HYPHEN_BREAK_MARKER,
+                    TERMINAL_SENTENCE_PENDING_MARKER,
+                ],
+                "",
+            ))
+        } else {
+            Cow::Borrowed(encoded)
+        };
+        Self {
+            encoded,
+            visible,
+            no_hyphen_break: encoded.contains(TERMINAL_NO_HYPHEN_BREAK_MARKER),
+        }
+    }
+
+    fn optional_break(&self, available: usize) -> Option<(String, String)> {
+        let (prefix, suffix) = terminal_optional_break(self.encoded, available)?;
+        Some((
+            prefix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, ""),
+            suffix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, ""),
+        ))
+    }
 }
 
 impl<'a> TerminalLayoutLine<'a> {
@@ -309,16 +351,8 @@ pub(in crate::renderer) fn wrap_terminal_output(
                 sentence_spacing = true;
                 continue;
             }
-            let no_hyphen_break = raw_word.contains(TERMINAL_NO_HYPHEN_BREAK_MARKER);
-            let word = raw_word.replace(
-                [
-                    TERMINAL_OPTIONAL_BREAK_MARKER,
-                    TERMINAL_NO_HYPHEN_BREAK_MARKER,
-                    TERMINAL_SENTENCE_PENDING_MARKER,
-                ],
-                "",
-            );
-            let word_width = display_width(&word);
+            let word = TerminalLayoutWord::decode(raw_word);
+            let word_width = display_width(&word.visible);
             let separator = if first_word {
                 0
             } else if sentence_spacing {
@@ -329,13 +363,9 @@ pub(in crate::renderer) fn wrap_terminal_output(
             if first_word
                 && raw_word.contains(TERMINAL_OPTIONAL_BREAK_MARKER)
                 && initial_indent_width.saturating_add(word_width) > layout.width
-                && let Some((prefix, suffix)) = terminal_optional_break(
-                    raw_word,
-                    layout.width.saturating_sub(initial_indent_width),
-                )
+                && let Some((prefix, suffix)) =
+                    word.optional_break(layout.width.saturating_sub(initial_indent_width))
             {
-                let prefix = prefix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, "");
-                let suffix = suffix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, "");
                 append(&mut output, &initial_indent, maximum)?;
                 append(&mut output, &prefix, maximum)?;
                 append(&mut output, "\n", maximum)?;
@@ -357,9 +387,7 @@ pub(in crate::renderer) fn wrap_terminal_output(
                 let available = layout
                     .width
                     .saturating_sub(current_width.saturating_add(separator));
-                if let Some((prefix, suffix)) = terminal_optional_break(raw_word, available) {
-                    let prefix = prefix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, "");
-                    let suffix = suffix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, "");
+                if let Some((prefix, suffix)) = word.optional_break(available) {
                     append(&mut output, &" ".repeat(separator), maximum)?;
                     append(&mut output, &prefix, maximum)?;
                     append(&mut output, "\n", maximum)?;
@@ -372,8 +400,8 @@ pub(in crate::renderer) fn wrap_terminal_output(
                     sentence_spacing = false;
                     continue;
                 }
-                if !no_hyphen_break
-                    && let Some((prefix, suffix)) = terminal_hyphen_break(&word, available)
+                if !word.no_hyphen_break
+                    && let Some((prefix, suffix)) = terminal_hyphen_break(&word.visible, available)
                 {
                     append(&mut output, &" ".repeat(separator), maximum)?;
                     append(&mut output, prefix, maximum)?;
@@ -401,7 +429,7 @@ pub(in crate::renderer) fn wrap_terminal_output(
                 append(&mut output, &" ".repeat(separator), maximum)?;
                 current_width = current_width.saturating_add(separator);
             }
-            append(&mut output, &word, maximum)?;
+            append(&mut output, &word.visible, maximum)?;
             current_width = current_width.saturating_add(word_width);
             first_word = false;
             sentence_spacing = false;
