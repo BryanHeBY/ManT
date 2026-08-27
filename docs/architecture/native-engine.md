@@ -94,15 +94,17 @@ mutable caches in the tree. Syn-style `Visit` and `VisitMut` traits keep
 cross-cutting passes exhaustive as the IR evolves.
 
 At a structured integration boundary, `mant-protocol::DocumentResponse` adds
-the exact `mant.document/v0.9` discriminator and producer metadata. `mant.query/v0.9`
+the exact `mant.document/v0.10` discriminator and producer metadata. `mant.query/v0.10`
 combines an optional document response with an optional tldr quick reference
 while preserving their different origins and licences.
 
 The model carries intent that a renderer cannot safely recover from text:
 
 - section and anchor IDs identify page-local destinations;
-- definition identities group aliases and classify options, commands,
-  variables, and environment variables;
+- definition identities remain attached to content, while the rebuildable
+  `SemanticIndex` classifies commands, parameter families, configuration keys,
+  variables, values, and terms; it preserves selector aliases separately from
+  authored forms and reconstructs nested ownership;
 - `Inline::Link` has an explicit target kind for a hierarchical Markdown
   document, installed manual, page-local section, external URI, or email;
 - `OutlinePath` validates internal one-based outline addresses; its protocol
@@ -265,8 +267,10 @@ point even in the full executable.
 
 `mant-ui` receives a complete typed bundle plus host callbacks for catalog
 discovery, document loading, copy delivery, and safe external URI handling.
-The state machine owns a hierarchical Outline tree, a bounded document tab
-stack, terminal-cell selections, a complete-catalog finder, page search, typed
+The state machine owns a hierarchical Outline tree whose collapsed entry
+groups use the same direct/descendant/form summaries as the default protocol
+outline and whose expanded nodes follow the same `SemanticIndex`, a bounded
+document tab stack, terminal-cell selections, a complete-catalog finder, page search, typed
 link hit regions, and bounded back/forward history. It emits plain-text visual
 selections or complete semantic-node Text/CommonMark requests without opening
 a system clipboard itself. Successful local jumps stay in memory;

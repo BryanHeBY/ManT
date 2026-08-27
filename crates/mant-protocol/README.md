@@ -32,13 +32,13 @@ local inspection ─────────────────────
 
 | Family | Current discriminator | Purpose |
 | --- | --- | --- |
-| Process framing | `mant.cli/v0.9` | Advertised by the `mant` executable |
-| Request | `mant.request/v0.9` | Closed input accepted by `--request-json` |
-| Scope request/result | `mant.scope-request/v0.9`, `mant.scope-query/v0.9` | Bounded multi-document search and explanation |
-| Full query | `mant.query/v0.9` | Document plus optional tldr content |
-| Document | `mant.document/v0.9` | Versioned projection of the normalized document |
-| Catalog | `mant.catalog/v0.9` | Registered Markdown and native-manual discovery |
-| Outline, excerpt, search | `mant.outline/v0.9`, `mant.excerpt/v0.9`, `mant.search/v0.9` | Focused query projections |
+| Process framing | `mant.cli/v0.10` | Advertised by the `mant` executable |
+| Request | `mant.request/v0.10` | Closed input accepted by `--request-json` |
+| Scope request/result | `mant.scope-request/v0.10`, `mant.scope-query/v0.10` | Bounded multi-document search and explanation |
+| Full query | `mant.query/v0.10` | Document plus optional tldr content |
+| Document | `mant.document/v0.10` | Versioned projection of the normalized document |
+| Catalog | `mant.catalog/v0.10` | Registered Markdown and native-manual discovery |
+| Outline, excerpt, search | `mant.outline/v0.10`, `mant.excerpt/v0.10`, `mant.search/v0.10` | Focused query projections |
 | Doctor | `mant.doctor/v1` | Read-only local installation diagnostics |
 
 The schemas generated from the Rust types are authoritative. Request schemas
@@ -56,31 +56,32 @@ Schema rather than copying a shape by hand:
 
 ```rust
 use mant_protocol::{
-    NATIVE_API_VERSION, OutlineDetail, QueryInput, QueryRequest, QueryView,
+    EntryProjection, NATIVE_API_VERSION, QueryInput, QueryRequest, QueryView,
     RequestSchema, query_request_json_schema,
 };
 
 let request = QueryRequest {
-    schema: RequestSchema::V0Dot9,
+    schema: RequestSchema::V0Dot10,
     input: QueryInput::Document {
         selector: "git".to_owned(),
         source: None,
         manual_section: None,
     },
     view: QueryView::Outline {
-        detail: OutlineDetail::Entries,
+        entries: EntryProjection::Summary,
+        root: None,
     },
 };
 
-assert_eq!(NATIVE_API_VERSION, "0.9");
-assert_eq!(request.schema, RequestSchema::V0Dot9);
+assert_eq!(NATIVE_API_VERSION, "0.10");
+assert_eq!(request.schema, RequestSchema::V0Dot10);
 let _schema = query_request_json_schema();
 ```
 
 The native query family follows `ManT`'s pre-stable minor release line: `ManT`
-0.9.x uses `v0.9`, and patch releases retain the same wire shape. The former
+0.10.x uses `v0.10`, and patch releases retain the same wire shape. The former
 bare `v1` through `v7` schemas were experimental and are intentionally not
-accepted by 0.9. Historical tags preserve those contracts; the first stable
+accepted by 0.10. Historical tags preserve those contracts; the first stable
 native protocol will use a `v1.0` release line. Independent contracts such as
 `mant.doctor/v1` and `mant.markdown/v1` keep their own identifiers. Clients
 must therefore compare complete discriminators. The `mant-protocol` crate has
@@ -95,7 +96,7 @@ changes outside a patch-compatible addition.
 `DefinitionIdentity`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a
 Serde change to any of them is also a protocol change. CI compares every
-generated structural schema with the checked-in v0.9 snapshot, so an accidental
+generated structural schema with the checked-in v0.10 snapshot, so an accidental
 IR representation change fails until compatibility is restored or the
 affected protocol discriminator is advanced explicitly. Rustdoc descriptions
 and schema titles are excluded from that structural comparison.
@@ -104,6 +105,13 @@ Focused excerpt and search results share `OutlineTrail`: ordered compact
 ancestors plus one typed terminal node. This keeps full tree-chain rendering
 and machine navigation consistent without treating exact explanation as a
 text search.
+
+Outline requests use `EntryProjection`: `Summary` is the compact default,
+`None` emits section topology only, `All` emits the complete nested semantic
+index, and `Kinds` retains selected roles plus their required ancestors. An
+optional root selector can focus any projection on one section or entry.
+Outline entries keep exact selector aliases separate from authored forms and
+can expose evidence-backed value domains.
 
 Normalized document content is defined separately by
 [`mant-ir`](https://crates.io/crates/mant-ir). Parsing, lookup, projection, and

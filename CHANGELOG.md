@@ -12,7 +12,54 @@ that crate was not published for that change.
 
 ## Unreleased
 
-No compatibility changes are pending.
+### mant-ir 0.10.0
+
+- Add a rebuildable `SemanticIndex` that keeps content definitions independent
+  from semantic discovery, preserves exact aliases separately from authored
+  forms, reconstructs nested command/parameter/value ownership, and exposes
+  compact `EntrySummary` coverage.
+- Expand entry semantics to distinguish commands; option, marker, and operand
+  parameters; configuration keys; environment variables; variables; values;
+  and generic terms. Add evidence-backed value domains without heuristically
+  inferring cross-document sets from prose.
+- Extend `OutlinePath` with nested entry coordinates such as `2/e3/e1`.
+
+### mant-protocol 0.10.0
+
+- Advance the complete native protocol family from v0.9 to v0.10. This is a
+  breaking wire change; v0.9 clients must regenerate schemas and send the new
+  discriminators.
+- Replace outline `detail` with the tagged `entries` projection (`none`,
+  `summary`, `all`, or selected kinds) and optional `root`. The default summary
+  reports semantic coverage without materializing every entry.
+- Expand outline entry nodes with typed kinds, exact aliases, authored forms,
+  content targets, optional value domains, summaries, and nested children.
+  Exact paths and IDs win before aliases, and ambiguous aliases return stable
+  candidates.
+
+### mant-engine 0.10.0
+
+- Build every outline from the source-neutral semantic index. Native man/mdoc
+  definitions now retain grouped forms, including alternative mdoc terms, and
+  nested option/value hierarchies without duplicating content definitions.
+- Add `build_outline_projection` for summary, full, role-filtered, and rooted
+  discovery while retaining `build_outline_with_detail` as an in-process
+  compatibility convenience.
+
+### mant-ui 0.10.0
+
+- Align the interactive Outline with protocol discovery: collapsed entry
+  groups display direct, nested, and authored-form counts, while expansion
+  reveals the complete role-aware hierarchy and multi-form labels.
+
+### mant 0.10.0
+
+- Make `--outline` return section topology plus semantic summaries by default.
+  Use `--outline-entries none|summary|all|KINDS` to control expansion and
+  `--outline-root SELECTOR` to focus one section or entry. The former
+  `--outline=entries|sections|options` syntax is removed.
+- Give `mant_outline` the same `entries` and `root` inputs as native request
+  JSON, keeping MCP, CLI, and the TUI on one projection model.
 
 ## 0.9.1 - 2026-08-24
 

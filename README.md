@@ -70,8 +70,9 @@ independent of terminal detection.
 - **Navigate a documentation library, not just one page.** A single catalog
   covers personal Markdown, installed sources, and native manual sections;
   typed links and bounded back/forward history connect them.
-- **Address structure directly.** Sections, options, commands, variables, and
-  environment variables are semantic nodes, so `--exclude` can be retrieved
+- **Address structure directly.** Sections and a nested semantic index of
+  commands, parameters, configuration keys, variables, and values are nodes,
+  so `--exclude` can be retrieved
   without searching or copying the complete page.
 - **Get the same interpretation everywhere.** The TUI, CLI renderers, search,
   generated schemas, and MCP tools consume one normalized Rust document model.
@@ -91,10 +92,11 @@ mant --input README.md
 mant tar --ui
 ```
 
-The Outline sidebar mirrors nested document sections and reveals normalized
-options, commands, variables, and environment variables on demand. Selecting
-a node places its target at the top of the content pane; after scrolling
-settles, the outline follows the first visible document node.
+The Outline sidebar mirrors nested document sections and reveals semantic
+entry groups and their nested commands, parameters, keys, variables, and
+values on demand. Collapsed groups report direct, nested, and authored-form
+counts. Selecting a node places its target at the top of the content pane;
+after scrolling settles, the outline follows the first visible document node.
 
 - `j` / `k` or arrow keys move through visible nodes.
 - `h` / `l` collapse and expand branches.
@@ -159,6 +161,7 @@ Start with an outline and retrieve only the section or option that matters:
 
 ```sh
 mant gcc --outline
+mant ssh --outline --outline-entries all --outline-root=-L
 mant git --tldr
 mant gcc --node 4.2 --format markdown
 mant tar --node acls --format json
@@ -171,6 +174,9 @@ and cached tldr candidates, and permits a quick reference even when no full
 document exists. On a color terminal, tldr and text projections such as
 outline, node, explanation, and search use semantic styles; pipes, `NO_COLOR`,
 and `TERM=dumb` receive plain text.
+The default outline emits section topology plus compact semantic coverage.
+Use `--outline-entries none|summary|all|KINDS` to control entry expansion and
+`--outline-root` to focus one section or semantic entry.
 `--color always|never` overrides detection, while an explicit `--format`
 continues to select Markdown, text, or JSON.
 

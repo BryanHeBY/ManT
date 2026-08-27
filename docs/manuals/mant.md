@@ -21,7 +21,7 @@
 
 - Validate a local Markdown manual's semantic outline and diagnostics:
 
-`mant --input {{./tool.md}} --outline=entries --format json --compact`
+`mant --input {{./tool.md}} --outline --outline-entries all --format json --compact`
 
 - Serve local documentation to an MCP client over standard input and output:
 
@@ -83,7 +83,7 @@ pagination. Inside one relevance tier, candidates preserving the query's exact
 case rank before candidates found only through case folding. Plain `--find`
 output is tab-separated as
 the canonical catalog path and `kind`, while `--format json` returns
-`mant.catalog/v0.9`. `--list` groups the same hierarchy beneath `documents`,
+`mant.catalog/v0.10`. `--list` groups the same hierarchy beneath `documents`,
 `sources/SOURCE`, or `manual/SECTION`.
 
 An empty name match stays silent in ordinary text output. If an explicit source
@@ -502,8 +502,11 @@ With a complete logical selector or `--input` file and a terminal on stdin and s
 projection option or `--format` selects deterministic output instead.
 
 The resizable Outline sidebar forms one tree of addressable nodes: document
-sections, options, commands, variables, environment variables, and optional
-tldr content. Selecting a node puts its target at the top of the content pane.
+sections, semantic entry groups, nested parameters and values, and optional
+tldr content. A collapsed entry group shows its direct-entry, nested-entry,
+and authored-form counts; expanding it reveals the same hierarchy returned by
+an `all` outline projection. Selecting a node puts its target at the top of the
+content pane.
 After content scrolling settles, the outline follows the first visible
 document node.
 Underlined references can be followed directly. Markdown fragments and mdoc
@@ -619,9 +622,14 @@ mant --document git --document git-config --explain core.worktree --follow-links
 
 Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--ui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
 
-- `--outline [DETAIL]`: Print the addressable tree; `entries` is the default and
-  `sections` is the compact form. The CLI accepts historical `options` as an
-  alias for `entries`.
+- `--outline`: Print section topology plus a compact semantic-entry summary for
+  each non-empty scope.
+- `--outline-entries MODE|KINDS`: Select `none`, `summary`, `all`, or a
+  comma-separated list of `command`, `option`, `marker`, `operand`,
+  `configuration-key`, `environment-variable`, `variable`, `value`, and
+  `term`.
+- `--outline-root SELECTOR`: Start the projection at one exact section or entry
+  path, stable ID, or unambiguous semantic alias.
 - `--node SELECTOR`: Return an outline node selected by path, stable ID, or
   semantic-entry alias; repeat the option to select several nodes.
 - `--explain ENTRY`: Return exactly one semantic option, command, variable, or
@@ -631,6 +639,9 @@ Outline path `0` and node ID `tldr` designate the reserved tldr outline node,
 which contains either an external tldr page or a Markdown document's explicitly
 marked tldr preface. It is not a native manual section. Remaining headings use
 one-based paths such as `2.3`, and semantic entries use paths such as `2.3/e4`.
+Nested entries append another component, for example `2.3/e4/e2`. One semantic
+entry may retain several author-written forms without creating duplicate
+nodes; aliases remain exact selectable spellings rather than display forms.
 `--tldr` selects that reserved node alone and, unlike a general node
 projection, explicitly permits a quick reference without a full document. It
 uses the normal document priority chain, but considers only Markdown documents
@@ -727,7 +738,7 @@ a native CLI interface and is not exposed through the read-only MCP server.
 
 ## Integration
 
-- `--request-json`: Read one closed `mant.request/v0.9` or `mant.scope-request/v0.9` object from standard input.
+- `--request-json`: Read one closed `mant.request/v0.10` or `mant.scope-request/v0.10` object from standard input.
 - `--schema CONTRACT`: Print a generated JSON Schema for `doctor`, `request`, `query`, `outline`, `excerpt`, `search`, `scope-request`, `scope-query`, `catalog`, or `all`.
 - `--protocol-version`: Print the exact native protocol versions.
 - `--mcp`: Serve read-only ManT tools over silent MCP stdio. Successful calls
@@ -740,22 +751,22 @@ The current protocol descriptor is:
 
 ```json
 {
-  "protocol": "mant.cli/v0.9",
-  "nativeApiVersion": "0.9",
-  "requestSchema": "mant.request/v0.9",
-  "querySchema": "mant.query/v0.9",
-  "documentSchema": "mant.document/v0.9",
-  "outlineSchema": "mant.outline/v0.9",
-  "excerptSchema": "mant.excerpt/v0.9",
-  "searchSchema": "mant.search/v0.9",
-  "scopeRequestSchema": "mant.scope-request/v0.9",
-  "scopeQuerySchema": "mant.scope-query/v0.9",
-  "catalogSchema": "mant.catalog/v0.9"
+  "protocol": "mant.cli/v0.10",
+  "nativeApiVersion": "0.10",
+  "requestSchema": "mant.request/v0.10",
+  "querySchema": "mant.query/v0.10",
+  "documentSchema": "mant.document/v0.10",
+  "outlineSchema": "mant.outline/v0.10",
+  "excerptSchema": "mant.excerpt/v0.10",
+  "searchSchema": "mant.search/v0.10",
+  "scopeRequestSchema": "mant.scope-request/v0.10",
+  "scopeQuerySchema": "mant.scope-query/v0.10",
+  "catalogSchema": "mant.catalog/v0.10"
 }
 ```
 
 The native request and response family follows ManT's pre-stable minor release
-line: ManT 0.9.x uses v0.9, and patch releases keep the same wire shape. The
+line: ManT 0.10.x uses v0.10, and patch releases keep the same wire shape. The
 former experimental bare v1 through v7 query schemas are no longer accepted.
 Excerpt and search results now share a complete outline trail, so both human
 output and structured consumers receive the same ancestor chain and terminal

@@ -98,6 +98,7 @@ Discover the document before selecting only the content that matters:
 
 ```sh
 mant gcc --outline
+mant ssh --outline --outline-entries all --outline-root=-L
 mant git --tldr
 mant gcc --node 4.2 --format markdown
 mant tar --explain=--exclude
@@ -111,6 +112,11 @@ Repeated `--document` values form an ordered query set. `--follow-links` adds ty
 Partial document queries default to text and can explicitly select Markdown or
 JSON. A complete native roff manual also supports `--format man` for manual-only
 plain text without tldr content.
+The default outline returns section topology plus compact entry coverage.
+`--outline-entries none|summary|all|KINDS` controls expansion, while
+`--outline-root` focuses the result on one exact section or semantic entry.
+Expanded entries preserve nested command/parameter/value relationships and
+keep exact aliases separate from complete authored forms.
 Text projections use semantic ANSI styles on capable terminals and remain plain
 under redirection; Markdown, JSON, man, request JSON, and MCP never contain ANSI.
 Terminal-bound Markdown masks control characters in dynamic document identities,

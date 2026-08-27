@@ -144,7 +144,7 @@ Use one H1 document title followed by H2 manual sections and deeper headings onl
 Use these focused checks while authoring:
 
 ```sh
-mant --input ./tool.md --outline=entries --format json --compact
+mant --input ./tool.md --outline --outline-entries all --format json --compact
 mant --input ./tool.md --search warning --word --context 1 --format markdown
 ```
 

@@ -97,11 +97,20 @@ A definition-list item may carry `DefinitionIdentity` when ManT can identify a s
 | Field | Meaning |
 | --- | --- |
 | `id` | Document-local entry and anchor ID |
-| `role` | `option`, `command`, `environment-variable`, or `variable` |
+| `role` | Option, marker, operand, command, configuration key, environment variable, variable, value, or generic term |
 | `case` | Sensitive or insensitive alias matching |
 | `names` | Exact normalized aliases exposed to selectors |
 
 The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
+
+`SemanticIndex` is a rebuildable sidecar over these content definitions. It
+classifies entries with `EntryKind`, preserves exact selector `aliases`
+separately from complete author-written `forms`, and retains nested ownership
+such as command → option → value. `EntrySummary` reports direct entries,
+descendants, forms, and kind totals without materializing the indexed nodes in
+an outline. `ValueDomain::Choices` describes observed nested choices;
+`EntrySet` and `Union` are reserved for producers with explicit evidence and
+are never guessed from prose.
 
 ## Addresses and Resolution
 
@@ -131,7 +140,12 @@ Diagnostics have `style`, `warning`, `error`, or `unsupported` severity, an opti
 
 `validate_document` checks invariants after parsing or deserialization, including document-local identity validity, uniqueness, link targets, and structural consistency. Custom producers should validate before handing a document to indexes or frontends.
 
-`DocumentIndex` is an immutable navigation index over a validated document. `NodePath` and outline paths are ephemeral coordinates derived from the current tree; they are not long-term storage identifiers.
+`DocumentIndex` is an immutable content-navigation index over a validated
+document. `SemanticIndex` independently projects semantic definitions for
+outline discovery and can always be rebuilt from the document. `NodePath` and
+outline paths are ephemeral coordinates derived from the current tree; nested
+semantic entries use paths such as `2/e3/e1`. These coordinates are not
+long-term storage identifiers.
 
 ## Quick References
 
@@ -145,7 +159,7 @@ Add the crate when implementing an in-process parser, index, renderer, or truste
 
 ```toml
 [dependencies]
-mant-ir = "^0.9.1"
+mant-ir = "^0.10.0"
 ```
 
 Prefer constructors and visitors from the crate over recursively rewriting public fields by hand. Use `visit::Visit` or `visit::VisitMut` for whole-document passes and run validation after transformations that can affect identities or links.

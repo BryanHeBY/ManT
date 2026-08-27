@@ -28,7 +28,8 @@ The important public families are:
 | API | Purpose |
 | --- | --- |
 | `Document`, `Section`, `Block`, `Inline` | Source-neutral content tree |
-| `DefinitionIdentity` | Addressable option, command, variable, or environment-variable entry |
+| `DefinitionIdentity` | Addressable content definition and exact aliases |
+| `SemanticIndex`, `SemanticEntry`, `EntrySummary` | Rebuildable role-aware hierarchy, authored forms, and compact coverage |
 | `DocumentAddress`, `MarkdownOrigin` | Exact identity in `ManT`'s catalog rather than a physical path |
 | `NodeId`, `OutlinePath`, `TextRange` | Typed local identities and coordinates |
 | `DocumentIndex` | Immutable lookup sidecar derived from one document |

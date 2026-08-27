@@ -13,7 +13,8 @@ deterministic output without owning a terminal or command-line process.
 - Bounded native manual loading, explicit leaf-file symlink support,
   root-constrained `.so` alias resolution, and `man(7)`/`mdoc(7)` lowering on
   every supported platform.
-- Semantic outlines containing addressable sections and role-aware entries.
+- Semantic outlines with compact scope summaries, role filters, nested entry
+  paths, authored forms, value domains, and optional section/entry roots.
 - Excerpt selection and literal or regular-expression search with generated
   Markdown coordinates.
 - Markdown, text, man-style text, and JSON renderers over one normalized IR.
@@ -52,7 +53,7 @@ DocumentResolver ──> Markdown parser or libmandoc lowering
 | Resolve and project a scope request | `DocumentResolver::execute_scope_query` |
 | Parse in-memory Markdown without discovery | `parse_markdown` or `query_markdown_text` |
 | Parse in-memory roff without discovery | `parse_manual_bytes` or `query_roff_bytes` |
-| Build a focused result from existing content | `build_outline_with_detail`, `select_excerpt`, `search_query` |
+| Build a focused result from existing content | `build_outline_projection`, `select_excerpt`, `search_query` |
 | Produce human or JSON output | The `render_*` functions |
 
 ## Basic use
@@ -61,16 +62,16 @@ The in-memory Markdown path is deterministic and works on every supported
 platform:
 
 ```rust
-use mant_protocol::OutlineDetail;
+use mant_protocol::EntryProjection;
 use mant_engine::{
-    build_outline_with_detail, query_markdown_text, render_outline_text,
+    build_outline_projection, query_markdown_text, render_outline_text,
 };
 
 let query = query_markdown_text(
     "# Demo\n\n## Options\n\n- `--verbose`: Show more detail.\n",
     Some("demo.md".to_owned()),
 )?;
-let outline = build_outline_with_detail(&query, OutlineDetail::Entries)?;
+let outline = build_outline_projection(&query, EntryProjection::All, None)?;
 
 println!("{}", render_outline_text(&outline));
 # Ok::<(), Box<dyn std::error::Error>>(())

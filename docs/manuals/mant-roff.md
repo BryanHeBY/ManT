@@ -275,7 +275,7 @@ For manuals intended to work across mandoc, groff, and ManT:
 3. Use `Bl`/`It`, `TP`/`IP`, `Bd`, `EX`/`EE`, `tbl`, and `eqn` only where their retained structure matters.
 4. Avoid relying on device geometry, page traps, custom diversions, color, point size, or arbitrary file inclusion.
 5. Inspect a concrete normalized outline and its diagnostics with
-   `mant --input ./widget.1 --input-format roff --outline=entries --format json --compact`.
+   `mant --input ./widget.1 --input-format roff --outline --outline-entries all --format json --compact`.
 
 ## Upstream References
 
