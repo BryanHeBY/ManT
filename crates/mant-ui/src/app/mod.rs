@@ -244,7 +244,7 @@ pub struct App {
     finder: FinderState,
     pending_discovery: Option<CatalogQuery>,
     pending_open: Option<NavigationRequest>,
-    pending_external: Option<String>,
+    pending_external: Option<crate::ExternalUri>,
     pending_copy: Option<CopyRequest>,
     current_address: Option<DocumentAddress>,
     fallback_bundle: Option<Arc<ResolvedContent>>,
@@ -354,7 +354,7 @@ impl App {
         self.pending_open.take()
     }
 
-    pub(crate) fn take_external_request(&mut self) -> Option<String> {
+    pub(crate) fn take_external_request(&mut self) -> Option<crate::ExternalUri> {
         self.pending_external.take()
     }
 

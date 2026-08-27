@@ -6,9 +6,9 @@ use std::{
     thread,
 };
 
-/// Hand a previously validated external URI to the platform URL handler.
-pub(super) fn open_uri(uri: &str) -> Result<(), String> {
-    let command = platform_command(uri);
+/// Hand a type-validated external URI to the platform URL handler.
+pub(super) fn open_uri(uri: &mant_ui::ExternalUri) -> Result<(), String> {
+    let command = platform_command(uri.as_str());
     let child = spawn_silenced(command)
         .map_err(|error| format!("could not start the system link opener: {error}"))?;
 
@@ -37,7 +37,7 @@ fn spawn_silenced(mut command: Command) -> io::Result<Child> {
 fn platform_command(uri: &str) -> Command {
     #[cfg(target_os = "windows")]
     {
-        let mut command = Command::new("rundll32.exe");
+        let mut command = Command::new(windows_url_handler());
         command.args(["url.dll,FileProtocolHandler", uri]);
         command
     }
@@ -54,6 +54,20 @@ fn platform_command(uri: &str) -> Command {
         let wsl_handler = running_under_wsl().then(wsl_windows_url_handler).flatten();
         linux_command(uri, wsl_handler.as_deref())
     }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_url_handler() -> std::path::PathBuf {
+    windows_url_handler_from(std::env::var_os("SystemRoot"))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_url_handler_from(system_root: Option<std::ffi::OsString>) -> std::path::PathBuf {
+    let root = system_root
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"));
+    root.join("System32").join("rundll32.exe")
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -179,6 +193,19 @@ mod tests {
         assert_eq!(
             command.get_args().collect::<Vec<_>>(),
             ["https://example.test/docs"]
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_handler_is_absolute_and_never_uses_path_lookup() {
+        assert_eq!(
+            windows_url_handler_from(Some(std::ffi::OsString::from(r"D:\HostWindows"))),
+            std::path::PathBuf::from(r"D:\HostWindows\System32\rundll32.exe")
+        );
+        assert_eq!(
+            windows_url_handler_from(Some(std::ffi::OsString::from("relative"))),
+            std::path::PathBuf::from(r"C:\Windows\System32\rundll32.exe")
         );
     }
 }

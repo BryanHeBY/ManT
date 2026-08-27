@@ -349,7 +349,10 @@ impl App {
             area,
         );
         let suffix = if let Some(notice) = &self.notice {
-            format!("{} ", notice.lines().next().unwrap_or_default())
+            format!(
+                "{} ",
+                sanitize_terminal_text(notice.lines().next().unwrap_or_default())
+            )
         } else if !self.search.query.is_empty() && !self.search.scope_matches.is_empty() {
             format!(
                 "Find “{}” · {} matches ",

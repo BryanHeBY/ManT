@@ -51,7 +51,7 @@ pub fn run_with_catalog<D, F, E>(
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
-    E: FnMut(&str) -> Result<(), String>,
+    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
 {
     run_with_catalog_and_scope(
         bundle,
@@ -81,7 +81,7 @@ pub fn run_with_catalog_and_scope<D, F, E>(
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
-    E: FnMut(&str) -> Result<(), String>,
+    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
 {
     run_with_catalog_and_scope_and_copy(
         bundle,
@@ -117,7 +117,7 @@ pub fn run_with_catalog_and_scope_and_copy<D, F, E, C>(
 where
     D: FnMut(&CatalogQuery) -> Result<DocumentCatalog, String>,
     F: FnMut(&DocumentAddress) -> Result<ResolvedContent, String>,
-    E: FnMut(&str) -> Result<(), String>,
+    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
     C: FnMut(CopyRequest) -> Result<(), String>,
 {
     let mut stdout = io::stdout();
@@ -187,13 +187,13 @@ where
 
 fn service_external_request<E>(app: &mut App, open_external: &mut E) -> bool
 where
-    E: FnMut(&str) -> Result<(), String>,
+    E: FnMut(&crate::ExternalUri) -> Result<(), String>,
 {
     let Some(uri) = app.take_external_request() else {
         return false;
     };
     match open_external(&uri) {
-        Ok(()) => app.report_notice(format!("Sent {uri} to the system opener")),
+        Ok(()) => app.report_notice(format!("Sent {} to the system opener", uri.as_str())),
         Err(message) => app.report_open_error(message),
     }
     true

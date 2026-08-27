@@ -1,8 +1,8 @@
 //! Lowers semantic inline nodes into styled text, anchors, and link targets.
 
 use super::{
-    DocumentAddress, Inline, LinkTarget, LogicalLinkRange, Modifier, Section, Span, Style,
-    StyledInlineLine, UnicodeWidthStr, theme,
+    DocumentAddress, ExternalUri, Inline, LinkTarget, LogicalLinkRange, Modifier, Section, Span,
+    Style, StyledInlineLine, UnicodeWidthStr, theme,
 };
 
 pub(super) fn tldr_style(role: crate::tldr::TldrRole) -> Style {
@@ -174,7 +174,7 @@ fn append_external_link(
     current_address: Option<&DocumentAddress>,
     lines: &mut Vec<StyledInlineLine>,
 ) {
-    let target = safe_external_uri(uri).map(LinkTarget::External);
+    let target = ExternalUri::parse(uri).map(LinkTarget::External);
     append_addressable_inline(
         children,
         Style::default()
@@ -206,20 +206,6 @@ fn markdown_reference_address(
     name: &str,
 ) -> Option<DocumentAddress> {
     current?.resolve_document_reference(name)
-}
-
-pub(super) fn safe_external_uri(uri: &str) -> Option<String> {
-    if uri.is_empty() || uri.len() > 4096 || uri.chars().any(char::is_control) {
-        return None;
-    }
-    let (scheme, target) = uri.split_once(':')?;
-    if !["https", "http", "mailto"]
-        .iter()
-        .any(|allowed| scheme.eq_ignore_ascii_case(allowed))
-    {
-        return None;
-    }
-    (!target.trim_start_matches('/').is_empty()).then(|| uri.to_owned())
 }
 
 fn record_link(

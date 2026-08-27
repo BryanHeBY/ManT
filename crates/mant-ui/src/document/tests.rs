@@ -409,7 +409,9 @@ fn inline_styles_preserve_the_renderer_neutral_ir_semantics() {
     assert!(spans[6].style.add_modifier.contains(Modifier::UNDERLINED));
     assert_eq!(
         lines[0].links[0].target,
-        LinkTarget::External("https://example.test".to_owned())
+        LinkTarget::External(
+            ExternalUri::parse("https://example.test").expect("valid external URI")
+        )
     );
 }
 
@@ -436,13 +438,36 @@ fn unsafe_external_schemes_remain_visible_but_inert() {
 #[test]
 fn external_uri_schemes_are_matched_case_insensitively() {
     assert_eq!(
-        safe_external_uri("HTTPS://example.test"),
-        Some("HTTPS://example.test".to_owned())
+        ExternalUri::parse("HTTPS://example.test")
+            .as_ref()
+            .map(ExternalUri::as_str),
+        Some("HTTPS://example.test")
     );
     assert_eq!(
-        safe_external_uri("MAILTO:docs@example.test"),
-        Some("MAILTO:docs@example.test".to_owned())
+        ExternalUri::parse("MAILTO:docs@example.test")
+            .as_ref()
+            .map(ExternalUri::as_str),
+        Some("MAILTO:docs@example.test")
     );
+}
+
+#[test]
+fn unsafe_tldr_more_information_remains_visible_but_inert() {
+    let mut bundle = geometry_bundle();
+    bundle.tldr.as_mut().expect("tldr").more_information = Some("file:///etc/passwd".to_owned());
+
+    let view = DocumentView::new(&bundle);
+    let link_line = view
+        .lines
+        .iter()
+        .find(|line| {
+            line.spans
+                .iter()
+                .any(|span| span.content.contains("file:///etc/passwd"))
+        })
+        .expect("visible more-information line");
+
+    assert!(link_line.links.is_empty());
 }
 
 #[test]

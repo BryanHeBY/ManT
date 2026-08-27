@@ -29,11 +29,10 @@ use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 use crate::theme;
-#[cfg(test)]
-use inline::safe_external_uri;
 use inline::{
     count_sections, inline_anchor_ids, shifted_links, spans_width, styled_inline_lines, tldr_style,
 };
+pub use model::ExternalUri;
 pub(crate) use model::LinkTarget;
 use model::{
     LineSurface, LogicalLine, LogicalLinkRange, LogicalTableCell, LogicalTableLayout,
@@ -399,9 +398,14 @@ impl DocumentBuilder {
                 .spans
                 .iter()
                 .filter(|span| span.role == crate::tldr::TldrRole::Link)
-                .filter_map(|span| tldr.more_information.as_ref().map(|uri| (span, uri)))
+                .filter_map(|span| {
+                    tldr.more_information
+                        .as_deref()
+                        .and_then(ExternalUri::parse)
+                        .map(|uri| (span, uri))
+                })
                 .map(|(span, uri)| LogicalLinkRange {
-                    target: LinkTarget::External(uri.clone()),
+                    target: LinkTarget::External(uri),
                     start_column: 0,
                     end_column: UnicodeWidthStr::width(span.text.as_str()),
                 })

@@ -6,6 +6,38 @@ use mant_ir::{DocumentAddress, TableAlignment};
 use ratatui::{style::Style, text::Span};
 use unicode_width::UnicodeWidthStr;
 
+/// External URI that passed `ManT`'s host-activation policy.
+///
+/// Construction accepts only non-empty HTTP, HTTPS, and mailto targets of at
+/// most 4096 bytes without control characters. Keeping validation in this
+/// type prevents a new document producer from bypassing the activation gate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalUri(String);
+
+impl ExternalUri {
+    /// Validate one untrusted external URI for host activation.
+    #[must_use]
+    pub fn parse(uri: &str) -> Option<Self> {
+        if uri.is_empty() || uri.len() > 4096 || uri.chars().any(char::is_control) {
+            return None;
+        }
+        let (scheme, target) = uri.split_once(':')?;
+        if !["https", "http", "mailto"]
+            .iter()
+            .any(|allowed| scheme.eq_ignore_ascii_case(allowed))
+        {
+            return None;
+        }
+        (!target.trim_start_matches('/').is_empty()).then(|| Self(uri.to_owned()))
+    }
+
+    /// Return the validated URI spelling supplied by the document.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LinkTarget {
     Section(String),
@@ -13,7 +45,7 @@ pub(crate) enum LinkTarget {
         address: DocumentAddress,
         fragment: Option<String>,
     },
-    External(String),
+    External(ExternalUri),
 }
 
 #[derive(Debug, Clone)]

@@ -2336,9 +2336,31 @@ fn clicking_an_external_link_returns_the_uri_to_the_host() {
     click_document_cell(&mut app, region.start_column, region.row);
 
     assert_eq!(
-        app.take_external_request().as_deref(),
+        app.take_external_request()
+            .as_ref()
+            .map(crate::ExternalUri::as_str),
         Some("https://example.test/docs")
     );
+}
+
+#[test]
+fn clicking_unsafe_tldr_more_information_does_not_reach_the_host() {
+    let mut bundle = tldr_bundle();
+    bundle.tldr.as_mut().expect("tldr").more_information = Some("file:///etc/passwd".to_owned());
+    let backend = TestBackend::new(72, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("file:///etc/passwd")
+        .into_iter()
+        .next()
+        .expect("visible tldr URL");
+
+    click_document_cell(&mut app, region.start_column, region.row);
+
+    assert!(app.take_external_request().is_none());
 }
 
 #[test]
