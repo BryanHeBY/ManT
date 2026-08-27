@@ -65,6 +65,24 @@ fn selected_scope_text_keeps_the_post_closer_trailing_whitespace_finding() {
 }
 
 #[test]
+fn filled_scope_text_marks_sentence_end_after_trimming_before_its_closer() {
+    let name = SourceName::new("conditional-sentence-end.3").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt CONDITIONAL 3\n.Os\n.Sh DESCRIPTION\n.Bd -filled\n.if n \\{\\\nselected body. \\}\n.Ed\n",
+        ))
+        .unwrap();
+
+    let selected = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("selected body."))
+        .unwrap();
+    assert!(selected.flags().sentence_end);
+}
+
+#[test]
 fn nested_inline_conditional_in_a_scope_keeps_its_body_location() {
     let name = SourceName::new("nested-scope-location.1").unwrap();
     let report = Parser::default()

@@ -23,16 +23,17 @@ pub(super) struct StructureEvents {
 impl StructureEvents {
     pub(super) fn prepare(builder: &mut DocumentBuilder, flat: Vec<NodeId>) -> Self {
         let synopsis_events = builder.take_mdoc_synopsis_events().into_iter().peekable();
-        // Ordinary source text is tokenized before this package pass. Only
-        // direct flat text events receive the generic sentence fallback;
-        // macro arguments keep their macro-specific punctuation semantics.
+        apply_presentation_flags(builder, &flat);
+        trim_mdoc_filled_text_trailing_whitespace(builder, &flat);
+        // Ordinary source text is tokenized before this package pass.  Trim
+        // filled-flow terminal whitespace before detecting sentence ends:
+        // mandoc exposes `text. ` as `text.` with sentence punctuation.
+        // Macro arguments retain their macro-specific punctuation semantics.
         for node in &flat {
             if builder.node_kind(*node) == Some(NodeKind::Text) {
                 mark_sentence_end(builder, *node);
             }
         }
-        apply_presentation_flags(builder, &flat);
-        trim_mdoc_filled_text_trailing_whitespace(builder, &flat);
         for node in &flat {
             let macro_name = builder.node_macro_name(*node);
             if matches!(macro_name, Some("Fd" | "Fl" | "Sy" | "Ar" | "Em" | "Sq")) {
