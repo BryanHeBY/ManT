@@ -73,6 +73,11 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         help="absolute JSONL output outside the repository; written only when complete",
     )
     parser.add_argument(
+        "--unavailable-output",
+        type=Path,
+        help="absolute JSONL report outside the repository for missing or mismatched identities",
+    )
+    parser.add_argument(
         "--jobs",
         type=positive_integer,
         default=min(os.cpu_count() or 1, 12),
@@ -85,8 +90,12 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument("--self-check", action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args(argv)
-    if arguments.output is not None and not arguments.output.is_absolute():
-        parser.error("--output must be an absolute path outside the repository")
+    for option in ("output", "unavailable_output"):
+        value = getattr(arguments, option)
+        if value is not None and not value.is_absolute():
+            parser.error(f"--{option.replace('_', '-')} must be an absolute path outside the repository")
+    if arguments.output is not None and arguments.output == arguments.unavailable_output:
+        parser.error("--output and --unavailable-output must differ")
     return arguments
 
 
@@ -164,25 +173,64 @@ def inspect_all(
         return dict(results)
 
 
-def write_manifest(output: Path, identities: Sequence[Identity], roots: dict[str, Path]) -> None:
+def external_output_path(output: Path) -> Path:
     resolved_output = output.resolve()
     if resolved_output.is_relative_to(ROOT):
         raise ValueError("--output must stay outside the repository")
     if not resolved_output.parent.is_dir():
         raise ValueError(f"output parent does not exist: {resolved_output.parent}")
+    return resolved_output
+
+
+def write_jsonl(output: Path, records: Iterable[dict[str, str]]) -> Path:
+    resolved_output = external_output_path(output)
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", newline="", dir=resolved_output.parent, delete=False
     ) as temporary:
-        for identity in identities:
-            record = {
+        for record in records:
+            temporary.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+        temporary_path = Path(temporary.name)
+    temporary_path.replace(resolved_output)
+    return resolved_output
+
+
+def write_manifest(output: Path, identities: Sequence[Identity], roots: dict[str, Path]) -> Path:
+    return write_jsonl(
+        output,
+        (
+            {
                 "id": f"{identity.corpus}:{identity.path}",
                 "source_name": identity.path,
                 "source_path": str((roots[identity.corpus] / identity.path).resolve()),
                 "source_sha256": identity.sha256,
             }
-            temporary.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
-        temporary_path = Path(temporary.name)
-    temporary_path.replace(resolved_output)
+            for identity in identities
+        ),
+    )
+
+
+def write_unavailable_report(
+    output: Path, identities: Sequence[Identity], results: dict[Identity, str], roots: dict[str, Path]
+) -> Path:
+    def records() -> Iterable[dict[str, str]]:
+        for identity in identities:
+            status = results[identity]
+            if status == "verified":
+                continue
+            record = {
+                "schema": "mantdoc.real-corpus-unavailable/v1",
+                "id": f"{identity.corpus}:{identity.path}",
+                "corpus": identity.corpus,
+                "path": identity.path,
+                "source_sha256": identity.sha256,
+                "status": status,
+            }
+            if (root := roots.get(identity.corpus)) is not None:
+                record["source_root"] = str(root.resolve())
+                record["source_path"] = str((root / identity.path).resolve())
+            yield record
+
+    return write_jsonl(output, records())
 
 
 def summarize(identities: Sequence[Identity], results: dict[Identity, str]) -> bool:
@@ -227,11 +275,16 @@ def main(argv: Sequence[str]) -> int:
             raise ValueError(f"source roots name no ledger corpus: {sorted(unknown_roots)!r}")
         results = inspect_all(identities, roots, arguments.jobs)
         complete = summarize(identities, results)
+        if arguments.unavailable_output is not None:
+            report = write_unavailable_report(
+                arguments.unavailable_output, identities, results, roots
+            )
+            print(f"unavailable_report={report}")
         if arguments.output is not None:
             if not complete:
                 raise ValueError("refusing to write an incomplete oracle manifest")
-            write_manifest(arguments.output, identities, roots)
-            print(f"manifest={arguments.output.resolve()}")
+            manifest = write_manifest(arguments.output, identities, roots)
+            print(f"manifest={manifest}")
         return 0 if complete or not arguments.require_complete else 1
     except ValueError as error:
         print(f"build-real-corpus-manifest: {error}", file=sys.stderr)

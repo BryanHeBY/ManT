@@ -271,7 +271,8 @@ only explicit `corpus=absolute-root` mappings, verifies decompressed SHA-256
 identities in parallel, and emits an external oracle JSONL manifest only after
 all 45,036 unique identities verify. A missing root, member, decoder failure,
 or digest mismatch is reported by corpus and blocks manifest creation; it is
-never converted into an audit skip.
+never converted into an audit skip. Its optional external unavailable report
+retains each exact identity and state for restoration triage.
 
 Run the release oracle without sampling over every applicable identity.  For
 each source compare AST, diagnostics, engine IR, supported renderers, and
