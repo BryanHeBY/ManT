@@ -1,5 +1,5 @@
 use crate::{
-    AuthorMode, DiagnosticCode, DisplayKind, MacroSet, NodeKind, NormalizedFont,
+    AuthorMode, DiagnosticCode, DisplayKind, MacroSet, NodeKind, NodeRef, NormalizedFont,
     NormalizedListKind, Severity, Source, SourceName,
 };
 

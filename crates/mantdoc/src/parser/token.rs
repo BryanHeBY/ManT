@@ -222,6 +222,7 @@ impl PackageToken {
                     | MdocToken::Tn
                     | MdocToken::Ux
                     | MdocToken::Va
+                    | MdocToken::Vt
                     | MdocToken::Xr
                     | MdocToken::Aq
                     | MdocToken::Bq
@@ -289,6 +290,7 @@ mod tests {
         assert!(PackageToken::classify(MacroSet::Mdoc, b"At").is_builtin(MacroSet::Mdoc));
         assert!(!PackageToken::classify(MacroSet::Mdoc, b"Sh").is_builtin(MacroSet::Mdoc));
         assert!(PackageToken::classify(MacroSet::Mdoc, b"Xr").is_mdoc_callable());
+        assert!(PackageToken::classify(MacroSet::Mdoc, b"Vt").is_mdoc_callable());
         assert!(!PackageToken::classify(MacroSet::Mdoc, b"Sh").is_mdoc_callable());
     }
 }

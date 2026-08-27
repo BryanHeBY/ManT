@@ -926,6 +926,14 @@ pub(crate) fn structure(
                         append_to_parent(builder, root, &mut root_children, active_body, node);
                         continue;
                     };
+                    let heading_events = split_mdoc_inline_children(
+                        builder,
+                        head,
+                        spacing_enabled,
+                        max_nodes,
+                        outcome,
+                    );
+                    let _ = builder.replace_children(head, &heading_events);
                     coalesce_adjacent_text_children(builder, head);
                     target_heads.push(head);
                     if let Some((tag_node, tag)) = pending_manual_tag.take() {

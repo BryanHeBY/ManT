@@ -503,18 +503,21 @@ pub(super) fn emphasis_fallback_elements(builder: &DocumentBuilder) -> Vec<NodeI
 }
 
 pub(super) fn visible_head_text(builder: &DocumentBuilder, head: NodeId) -> Option<String> {
-    let values = builder
+    let mut values = Vec::new();
+    let mut pending = builder
         .children(head)?
         .iter()
-        .filter_map(|child| {
-            builder.node_text(*child).or_else(|| {
-                builder
-                    .children(*child)
-                    .and_then(|children| children.first())
-                    .and_then(|child| builder.node_text(*child))
-            })
-        })
+        .rev()
+        .copied()
         .collect::<Vec<_>>();
+    while let Some(node) = pending.pop() {
+        if let Some(text) = builder.node_text(node) {
+            values.push(text);
+        }
+        if let Some(children) = builder.children(node) {
+            pending.extend(children.iter().rev().copied());
+        }
+    }
     (!values.is_empty()).then(|| values.join(" "))
 }
 

@@ -97,6 +97,7 @@ const fn macro_form(token: MdocToken) -> MacroForm {
         | MdocToken::Tn
         | MdocToken::Ux
         | MdocToken::Va
+        | MdocToken::Vt
         | MdocToken::Xr => MacroForm::Inline,
         MdocToken::Aq
         | MdocToken::Bq

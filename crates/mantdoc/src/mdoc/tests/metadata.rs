@@ -112,6 +112,33 @@ fn section_targets_preserve_discretionary_hyphen_and_deroff_heading_spellings() 
 }
 
 #[test]
+fn section_headings_parse_callable_vt_as_an_inline_element() {
+    let name = SourceName::new("mdoc-section-vt.3").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt SECTION-VT 3\n.Os\n.Sh NAME\n.Nm section-vt\n.Nd test\n.Sh DESCRIPTION\n.Ss Copying to and from Vt struct stat\n",
+        ))
+        .unwrap();
+    let heading = report
+        .document
+        .preorder()
+        .find(|node| node.kind() == NodeKind::Head && node.macro_name() == Some("Ss"))
+        .unwrap();
+    let children = heading.children().collect::<Vec<_>>();
+    assert_eq!(children[0].text(), Some("Copying to and from"));
+    assert_eq!(children[1].macro_name(), Some("Vt"));
+    assert_eq!(
+        children[1]
+            .children()
+            .filter_map(NodeRef::text)
+            .collect::<Vec<_>>(),
+        ["struct", "stat"]
+    );
+    assert_eq!(heading.tag(), Some("Copying_to_and_from_struct_stat"));
+}
+
+#[test]
 fn assigns_unique_emphasis_fallback_targets_like_libmandoc() {
     let name = SourceName::new("mdoc-emphasis-tags.1").unwrap();
     let report = Parser::default()
