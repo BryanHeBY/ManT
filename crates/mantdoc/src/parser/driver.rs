@@ -1,8 +1,8 @@
 use super::{
-    ArgumentIssue, ControlEvent, DiagnosticCode, DocumentBuilder, EscapeIssueKind, IncludeRequest,
-    InputTrap, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, RequestKind,
-    ScanOutcome, ScannedLine, Scanner, ScopeFlow, ScopeLine, Severity, Source, SourceEvent,
-    SourceMachine, SourcePosition, SourceResolver, SourceSpan, Syntax, append_node,
+    ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EscapeIssueKind,
+    IncludeRequest, InputTrap, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession,
+    RequestKind, ScanOutcome, ScannedLine, Scanner, ScopeFlow, ScopeLine, Severity, Source,
+    SourceEvent, SourceMachine, SourcePosition, SourceResolver, SourceSpan, Syntax, append_node,
     append_text_node, append_textual_node, apply_environment_request, apply_string_request,
     arm_input_trap, collect_pending_macro_scope, collect_scope,
     condition_body_source_start_from_offset, condition_body_template,
@@ -89,7 +89,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
     // Keeping this at the scanner boundary lets an active body take the
     // ordinary package parser path, while an inactive one is consumed before
     // it can create diagnostics, mutate state, or publish AST nodes.
-    let mut next_line_condition = None::<bool>;
+    let mut next_line_condition = None::<BranchOutcome>;
     // mandoc reports an open `.while` when its caller resumes after an inner
     // macro closed that loop.  Scope collection has already consumed the
     // closer, so publish the recovery finding on the next physical line.
@@ -119,7 +119,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
         // the physical line immediately before its `.el`; preserve the pair
         // so the false arm remains visible.
         let paired_else = event.is_else_request();
-        if pending_next_line_condition == Some(false) && !paired_else {
+        if pending_next_line_condition.is_some_and(BranchOutcome::is_skipped) && !paired_else {
             continue;
         }
         match event {
@@ -1322,7 +1322,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     );
                     let mut escaped_name_body_offset = None;
                     let (condition, body_start) = match name {
-                        b"el" => (previous_conditional.take().map(|previous| !previous), 0),
+                        b"el" => (
+                            previous_conditional
+                                .take()
+                                .map(BranchOutcome::inverse)
+                                .map(BranchOutcome::is_taken),
+                            0,
+                        ),
                         b"if" | b"ie" => {
                             if name == b"ie"
                                 && (condition_arguments.is_empty()
@@ -1333,7 +1339,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 // mandoc accepts an empty (also a lone
                                 // negated-empty) `.ie` as false, leaving the
                                 // following `.el` as the active arm.
-                                previous_conditional = Some(false);
+                                previous_conditional = Some(BranchOutcome::Skipped);
                                 (Some(false), condition_arguments.len())
                             } else {
                                 let Some((predicate, body_start)) =
@@ -1382,7 +1388,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 };
                                 let condition = evaluate_condition(environment, &predicate);
                                 if name == b"ie" {
-                                    previous_conditional = condition;
+                                    previous_conditional = condition.map(BranchOutcome::from);
                                 }
                                 (condition, body_start)
                             }
@@ -1608,7 +1614,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 &mut truncated,
                             );
                         }
-                        next_line_condition = Some(condition);
+                        next_line_condition = Some(condition.into());
                         continue;
                     }
                     if name != b"el" && body_template.is_empty() {

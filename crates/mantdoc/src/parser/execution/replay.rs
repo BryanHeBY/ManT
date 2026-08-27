@@ -1,9 +1,9 @@
 use super::super::{
-    ArgumentIssue, Diagnostic, DiagnosticCode, DocumentBuilder, Environment, Limits, NodeFlags,
-    NodeId, NodeKind, Scanner, ScopeExecutionFrame, ScopeFlow, ScopeLine, Severity, SourcePosition,
-    SourceSpan, append_node, append_text_node, apply_environment_request, apply_string_request,
-    condition_body_source_start_from_offset, condition_body_template, condition_parts,
-    consume_ignore_block, copy_mode_reparse, diagnostic, emit_escape_issues,
+    ArgumentIssue, BranchOutcome, Diagnostic, DiagnosticCode, DocumentBuilder, Environment, Limits,
+    NodeFlags, NodeId, NodeKind, Scanner, ScopeExecutionFrame, ScopeFlow, ScopeLine, Severity,
+    SourcePosition, SourceSpan, append_node, append_text_node, apply_environment_request,
+    apply_string_request, condition_body_source_start_from_offset, condition_body_template,
+    condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic, emit_escape_issues,
     environment_error_diagnostic, evaluate_condition, expand_environment, ignore_marker,
     is_builtin_package_macro, is_definition_terminator, is_environment_request,
     is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator, is_scope_opener,
@@ -85,7 +85,7 @@ pub(in crate::parser) fn execute_scope_lines(
                             next: next + 1,
                             previous_conditional: None,
                         });
-                        if previous_conditional != Some(false) {
+                        if !previous_conditional.is_some_and(BranchOutcome::is_skipped) {
                             continue;
                         }
                         let body = trim_horizontal_space(arguments);
@@ -205,7 +205,7 @@ pub(in crate::parser) fn execute_scope_lines(
                     frames.push(ScopeExecutionFrame::Lines {
                         lines,
                         next: next + 1,
-                        previous_conditional: Some(condition),
+                        previous_conditional: Some(condition.into()),
                     });
                     if !condition || body.is_empty() {
                         continue;
@@ -364,7 +364,7 @@ pub(in crate::parser) fn execute_scope_lines(
                     frames.push(ScopeExecutionFrame::Lines {
                         lines,
                         next: next + 1,
-                        previous_conditional: else_eligible.then_some(condition),
+                        previous_conditional: else_eligible.then(|| condition.into()),
                     });
                     if condition {
                         frames.push(ScopeExecutionFrame::Lines {
@@ -384,7 +384,7 @@ pub(in crate::parser) fn execute_scope_lines(
                         next: next + 1,
                         previous_conditional: None,
                     });
-                    if previous_conditional == Some(false) {
+                    if previous_conditional.is_some_and(BranchOutcome::is_skipped) {
                         frames.push(ScopeExecutionFrame::Lines {
                             lines: else_lines,
                             next: 0,

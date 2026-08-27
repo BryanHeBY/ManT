@@ -1,4 +1,6 @@
-use super::{Diagnostic, DocumentBuilder, Environment, ParserConfig, Source, SourceResolver};
+use super::{
+    BranchOutcome, Diagnostic, DocumentBuilder, Environment, ParserConfig, Source, SourceResolver,
+};
 use crate::{SourceId, SourceName};
 
 pub(super) struct ParseSession<'a, R: SourceResolver + ?Sized> {
@@ -36,7 +38,7 @@ pub(super) struct ScanOutcome {
     pub(super) expansion_steps: usize,
     pub(super) truncated: bool,
     pub(super) maximum_depth: usize,
-    pub(super) previous_conditional: Option<bool>,
+    pub(super) previous_conditional: Option<BranchOutcome>,
     pub(super) total_loop_iterations: usize,
     pub(super) saw_mdoc_operating_system: bool,
 }

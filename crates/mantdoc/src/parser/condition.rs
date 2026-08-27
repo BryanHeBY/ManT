@@ -4,6 +4,35 @@ use super::{
     push_diagnostic, trim_horizontal_space, visible_bytes,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum BranchOutcome {
+    Taken,
+    Skipped,
+}
+
+impl BranchOutcome {
+    pub(super) const fn is_taken(self) -> bool {
+        matches!(self, Self::Taken)
+    }
+
+    pub(super) const fn is_skipped(self) -> bool {
+        matches!(self, Self::Skipped)
+    }
+
+    pub(super) const fn inverse(self) -> Self {
+        match self {
+            Self::Taken => Self::Skipped,
+            Self::Skipped => Self::Taken,
+        }
+    }
+}
+
+impl From<bool> for BranchOutcome {
+    fn from(value: bool) -> Self {
+        if value { Self::Taken } else { Self::Skipped }
+    }
+}
+
 pub(super) fn condition_parts(arguments: &[Argument]) -> Option<(Vec<u8>, usize)> {
     let first = arguments.first()?;
     if matches!(first.bytes.as_slice(), b"d" | b"r" | b"!d" | b"!r") {

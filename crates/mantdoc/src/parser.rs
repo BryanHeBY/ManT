@@ -233,7 +233,7 @@ mod request;
 mod runtime;
 mod session;
 use condition::{
-    condition_body_source_start_from_offset, condition_body_template,
+    BranchOutcome, condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, emit_escaped_condition_name,
     emit_escaped_request_name, evaluate_condition, lex_condition_arguments,
     macro_conditional_body_origin, macro_scope_body_origin, split_escaped_condition_body,
@@ -543,7 +543,7 @@ enum ScopeExecutionFrame<'a> {
     Lines {
         lines: &'a [ScopeLine],
         next: usize,
-        previous_conditional: Option<bool>,
+        previous_conditional: Option<BranchOutcome>,
     },
     Loop {
         start: u32,
