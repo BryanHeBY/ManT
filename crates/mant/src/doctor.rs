@@ -88,25 +88,29 @@ pub(crate) fn inspect_system() -> DoctorReport {
 }
 
 fn inspect_mantdoc(builder: &mut DoctorBuilder) {
+    // `mant.doctor/v1` predates the native parser cutover. Keep its published
+    // machine code stable while the human-readable result names the active
+    // implementation; a future rename requires a new doctor contract.
+    const CHECK_CODE: &str = "runtime.libmandoc";
     let probe = b".TH MANT-DOCTOR 1\n.SH NAME\nmant-doctor \\- installation probe\n";
     match mant_engine::parse_manual_bytes(Path::new("mant-doctor.1"), probe) {
         Ok(document) if !document.sections.is_empty() => {
             builder.push(
-                "runtime.libmandoc",
+                CHECK_CODE,
                 DoctorCheckStatus::Ok,
                 "mantdoc parsed the built-in roff probe",
             );
         }
         Ok(_) => {
             builder.push(
-                "runtime.libmandoc",
+                CHECK_CODE,
                 DoctorCheckStatus::Error,
                 "mantdoc returned an empty document for the built-in roff probe",
             );
         }
         Err(error) => {
             let check = builder.push(
-                "runtime.libmandoc",
+                CHECK_CODE,
                 DoctorCheckStatus::Error,
                 "mantdoc could not parse the built-in roff probe",
             );

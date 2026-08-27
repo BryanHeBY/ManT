@@ -785,6 +785,11 @@ actionable local state and exit successfully. An error means a promised runtime
 capability is broken and exits with status `1`; invalid usage exits with status
 `2`.
 
+The v1 machine code for the parser probe remains `runtime.libmandoc` so existing
+doctor-report consumers do not break during the native parser cutover. Its
+message names the active `mantdoc` implementation. Renaming that code requires
+a future doctor contract rather than silently changing v1.
+
 Doctor JSON intentionally includes local filesystem paths for diagnosis. It is
 a native CLI interface and is not exposed through the read-only MCP server.
 

@@ -3,8 +3,8 @@
 `mantdoc` is `ManT`'s native Rust parser for roff, man, mdoc, tbl, and eqn
 sources. It replaces `libmandoc-rs` without a C build script, FFI, native
 library link, or unsafe code. See the repository
-[migration guide](../../docs/mantdoc-migration.md) for its deliberate public
-API differences from `libmandoc-rs`.
+[migration guide](https://github.com/BryanHeBY/ManT/blob/main/docs/mantdoc-migration.md)
+for its deliberate public API differences from `libmandoc-rs`.
 
 ## Stability
 
