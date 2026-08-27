@@ -21,6 +21,28 @@ fn same_line_conditionals_reparse_nested_requests() {
 }
 
 #[test]
+fn undefined_two_character_register_condition_does_not_leak_its_request_body() {
+    let name = SourceName::new("conditional-register-body.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH GCC 1\n.if rF .nr rF 1\n.SH NAME\ngcc - compiler\n.if \\n[rF] unexpected\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["NAME", "gcc - compiler"]);
+    assert!(
+        !text
+            .iter()
+            .any(|value| value.contains(".if rF .nr rF 1") || value.contains("unexpected"))
+    );
+}
+
+#[test]
 fn nested_inline_conditional_in_a_scope_keeps_its_body_location() {
     let name = SourceName::new("nested-scope-location.1").unwrap();
     let report = Parser::default()
