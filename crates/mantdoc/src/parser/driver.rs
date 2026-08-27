@@ -807,6 +807,14 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     }
                     retain_leading_comments = false;
                     let name = name.as_ref();
+                    // A bare control character (`.` or `'` with no request
+                    // name) is an empty roff request.  It is not the `..`
+                    // definition terminator and libmandoc consumes it without
+                    // a node or diagnostic.  In particular, generated man
+                    // pages often use standalone dots as visual separators.
+                    if name.is_empty() && table_preprocessor_depth == 0 {
+                        continue;
+                    }
                     let arguments = arguments.as_ref();
                     let raw_arguments = raw_arguments.as_ref();
                     // The physical scanner stops a control name at an adjacent

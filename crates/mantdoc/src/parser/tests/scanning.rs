@@ -14,6 +14,27 @@ fn physical_os_request_detection_distinguishes_absent_and_bare_forms() {
 }
 
 #[test]
+fn bare_control_lines_are_empty_requests_not_ast_elements() {
+    let name = SourceName::new("empty-request.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH EMPTY 1 28-Aug-2026\n.\n.   \n.SH DESCRIPTION\nbody\n",
+        ))
+        .unwrap();
+
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+    assert!(
+        report
+            .document
+            .preorder()
+            .all(|node| node.macro_name() != Some(""))
+    );
+    let root = report.document.node(report.document.root()).unwrap();
+    assert_eq!(root.children().count(), 1);
+}
+
+#[test]
 fn tbl_projection_keeps_utf8_and_malformed_byte_origins_distinct() {
     assert_eq!(
         crate::parser::legacy_table_input_text(b"\\[u0080]\xc2\x80"),
