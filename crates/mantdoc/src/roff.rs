@@ -1156,6 +1156,15 @@ fn escape_end(bytes: &[u8], start: usize, escape: u8) -> Option<usize> {
             .iter()
             .position(|byte| *byte == b']')
             .map(|offset| start + 3 + offset),
+        b'f' => match bytes.get(start + 2) {
+            Some(b'[') => bytes[start + 3..]
+                .iter()
+                .position(|byte| *byte == b']')
+                .map(|offset| start + 4 + offset),
+            Some(b'(') => Some((start + 5).min(bytes.len())),
+            Some(_) => Some((start + 3).min(bytes.len())),
+            None => Some(bytes.len()),
+        },
         b'*' | b'n' => match bytes.get(start + 2) {
             Some(b'[') => bytes[start + 3..]
                 .iter()
@@ -1244,6 +1253,21 @@ mod tests {
             .unwrap();
         assert_eq!(expansion.bytes, b"1 0 96 \\h'0M'");
         assert_eq!(expansion.steps, 4);
+    }
+
+    #[test]
+    fn width_escape_ignores_all_font_escape_forms() {
+        let mut environment = Environment::default();
+        let expansion = environment
+            .expand(
+                b"\\w'\\fBescape-unicode' \\w'\\f(BIescape-unicode' \\w'\\f[BI]escape-unicode'",
+                b'\\',
+                &[],
+                8,
+                Limits::default().max_expanded_line_bytes,
+            )
+            .unwrap();
+        assert_eq!(expansion.bytes, b"336 336 336");
     }
 
     #[test]
