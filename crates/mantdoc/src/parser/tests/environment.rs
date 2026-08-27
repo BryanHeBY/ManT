@@ -91,6 +91,24 @@ fn man_trailing_whitespace_points_at_its_terminal_byte() {
 }
 
 #[test]
+fn formatter_only_requests_do_not_leak_from_conditional_execution() {
+    let name = SourceName::new("formatter-state.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH FORMATTER-STATE 1 28-Aug-2026\n.if n .ad l\n.nh\nvisible\n",
+        ))
+        .unwrap();
+
+    assert!(
+        report
+            .document
+            .preorder()
+            .all(|node| !matches!(node.macro_name(), Some("ad" | "nh")))
+    );
+}
+
+#[test]
 fn mdoc_control_arguments_expand_unescaped_string_references() {
     let name = SourceName::new("mdoc-string-argument.1").unwrap();
     let report = Parser::new(ParserConfig {

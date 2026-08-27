@@ -5,13 +5,25 @@ use super::{
 };
 
 pub(super) fn is_environment_request(name: &[u8]) -> bool {
-    // `.ftr`, `.na`, `.pl`, and `.ps` are formatter-side state in libmandoc.
+    // `.ad`, `.ftr`, `.na`, `.nh`, `.pl`, and `.ps` are formatter-side state in libmandoc.
     // Classifying them here consumes the requests without exposing AST nodes;
     // the shared no-op fallback in `apply_environment_request` is their
     // intentional semantic implementation.
     matches!(
         name,
-        b"ds" | b"as" | b"nr" | b"rr" | b"rm" | b"rn" | b"als" | b"ftr" | b"na" | b"pl" | b"ps"
+        b"ds"
+            | b"as"
+            | b"nr"
+            | b"rr"
+            | b"rm"
+            | b"rn"
+            | b"als"
+            | b"ad"
+            | b"ftr"
+            | b"na"
+            | b"nh"
+            | b"pl"
+            | b"ps"
     )
 }
 
