@@ -9,7 +9,7 @@ The `examples/` commands provide explicit maintainer entry points:
 
 ```sh
 cargo run --locked --package mantdoc --example mantdoc-corpus-inventory \
-  --features conformance -- /tmp/mandoc-1.14.6.tar.gz --m3-execution
+  -- /path/to/mandoc-1.14.6.tar.gz --m3-execution
 ```
 
 `scripts/run-mantdoc-differential-shards.py` builds these private examples once

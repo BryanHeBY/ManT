@@ -32,10 +32,6 @@ serde = ["dep:serde"]
 gzip = ["dep:flate2"]
 zstd = ["dep:zstd"]
 render = ["dep:unicode-width"]
-# Enables repository-only upstream regression tools under `examples/`.
-# The feature has no public runtime effect and its sources are excluded from
-# the published crate.
-conformance = []
 
 [dependencies]
 flate2 = { workspace = true, optional = true }
@@ -87,14 +83,12 @@ required-features = ["render"]
 [[example]]
 name = "mantdoc-corpus-inventory"
 path = "examples/mantdoc-corpus-inventory.rs"
-required-features = ["conformance"]
 
 [[example]]
 name = "mantdoc-canonical-snapshot"
 path = "examples/mantdoc-canonical-snapshot.rs"
-required-features = ["conformance"]
 
 [[example]]
 name = "mantdoc-render-diff"
 path = "examples/mantdoc-render-diff.rs"
-required-features = ["conformance", "render"]
+required-features = ["render"]

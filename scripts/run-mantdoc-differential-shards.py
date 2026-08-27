@@ -142,11 +142,9 @@ def main() -> int:
         "--package",
         "mantdoc",
         "--examples",
-        "--features",
-        "conformance",
     ]
     if features:
-        build_command[-1] = f"conformance,{','.join(features)}"
+        build_command.extend(["--features", ",".join(features)])
     build = subprocess.run(
         build_command,
         cwd=ROOT,
