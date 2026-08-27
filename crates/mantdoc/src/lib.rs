@@ -56,3 +56,6 @@ pub use source::{
 
 /// The M0 oracle that `mantdoc` initially compares against.
 pub const LEGACY_ORACLE_ID: &str = "libmandoc-rs-0.9.1-863d2b3";
+
+/// Version of the native parser implementation.
+pub const MANTDOC_VERSION: &str = env!("CARGO_PKG_VERSION");

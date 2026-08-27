@@ -7,8 +7,8 @@
       "name": "mant-native",
       "version": "0.2.0",
       "engine": {
-        "name": "libmandoc",
-        "version": "1.14.6"
+        "name": "mantdoc",
+        "version": "0.1.0-alpha.1"
       }
     },
     "source": {

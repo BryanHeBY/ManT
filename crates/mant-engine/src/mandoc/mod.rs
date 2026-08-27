@@ -103,7 +103,7 @@ fn parse_plain_manual(
     let mut document = lower_mandoc_document_with_source(path, &report, Some(&source_text));
     document.parser = Some(ParserInfo {
         name: "mantdoc".to_owned(),
-        version: env!("CARGO_PKG_VERSION").to_owned(),
+        version: mantdoc::MANTDOC_VERSION.to_owned(),
     });
     if masked_controls > 0 {
         document.diagnostics.insert(
@@ -665,6 +665,18 @@ mod tests {
         let error = parse_manual_bytes(std::path::Path::new("stdin"), b".so man1/target.1\n")
             .expect_err("standalone input must not follow another file");
         assert!(error.to_string().contains("require MANPATH discovery"));
+    }
+
+    #[test]
+    fn reports_the_native_parser_name_and_version() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("version.1"),
+            b".TH VERSION 1\n.SH NAME\nversion\n",
+        )
+        .expect("parse native manual");
+        let parser = document.parser.expect("native parser provenance");
+        assert_eq!(parser.name, "mantdoc");
+        assert_eq!(parser.version, mantdoc::MANTDOC_VERSION);
     }
 
     #[test]
