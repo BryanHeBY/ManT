@@ -571,17 +571,26 @@ pub struct Document {
     nodes: Vec<NodeRecord>,
     child_edges: Vec<NodeId>,
     strings: Vec<Box<str>>,
+    #[cfg(feature = "render")]
     terminal_request_presence: u8,
 }
 
+#[cfg(feature = "render")]
 const TERMINAL_REQUEST_PD: u8 = 1 << 0;
+#[cfg(feature = "render")]
 const TERMINAL_REQUEST_FT: u8 = 1 << 1;
+#[cfg(feature = "render")]
 const TERMINAL_REQUEST_PO: u8 = 1 << 2;
+#[cfg(feature = "render")]
 const TERMINAL_REQUEST_IN: u8 = 1 << 3;
+#[cfg(feature = "render")]
 const TERMINAL_REQUEST_LL: u8 = 1 << 4;
+#[cfg(feature = "render")]
 const TERMINAL_REQUEST_BF: u8 = 1 << 5;
+#[cfg(feature = "render")]
 const TERMINAL_REQUEST_SM: u8 = 1 << 6;
 
+#[cfg(feature = "render")]
 const fn terminal_request_bit(name: &str) -> u8 {
     match name.as_bytes() {
         b"PD" => TERMINAL_REQUEST_PD,
@@ -604,6 +613,7 @@ impl Document {
             nodes: vec![NodeRecord::root()],
             child_edges: Vec::new(),
             strings: Vec::new(),
+            #[cfg(feature = "render")]
             terminal_request_presence: 0,
         }
     }
@@ -685,6 +695,7 @@ impl Document {
         self.strings[id.0 as usize].as_ref()
     }
 
+    #[cfg(feature = "render")]
     fn has_terminal_request(&self, name: &str) -> bool {
         self.terminal_request_presence & terminal_request_bit(name) != 0
     }
@@ -723,6 +734,7 @@ impl<'doc> NodeRef<'doc> {
         self.record.macro_name.map(|id| self.document.string(id))
     }
 
+    #[cfg(feature = "render")]
     pub(crate) fn document_has_terminal_request(self, name: &str) -> bool {
         self.document.has_terminal_request(name)
     }
