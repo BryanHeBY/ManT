@@ -80,35 +80,35 @@ pub(crate) fn inspect_system() -> DoctorReport {
             std::env::consts::OS
         ),
     );
-    inspect_libmandoc(&mut builder);
+    inspect_mantdoc(&mut builder);
     inspect_sources(&mut builder);
     inspect_manuals(&mut builder);
     inspect_tldr(&mut builder);
     builder.finish()
 }
 
-fn inspect_libmandoc(builder: &mut DoctorBuilder) {
+fn inspect_mantdoc(builder: &mut DoctorBuilder) {
     let probe = b".TH MANT-DOCTOR 1\n.SH NAME\nmant-doctor \\- installation probe\n";
     match mant_engine::parse_manual_bytes(Path::new("mant-doctor.1"), probe) {
         Ok(document) if !document.sections.is_empty() => {
             builder.push(
                 "runtime.libmandoc",
                 DoctorCheckStatus::Ok,
-                "libmandoc parsed the built-in roff probe",
+                "mantdoc parsed the built-in roff probe",
             );
         }
         Ok(_) => {
             builder.push(
                 "runtime.libmandoc",
                 DoctorCheckStatus::Error,
-                "libmandoc returned an empty document for the built-in roff probe",
+                "mantdoc returned an empty document for the built-in roff probe",
             );
         }
         Err(error) => {
             let check = builder.push(
                 "runtime.libmandoc",
                 DoctorCheckStatus::Error,
-                "libmandoc could not parse the built-in roff probe",
+                "mantdoc could not parse the built-in roff probe",
             );
             check.details.push(error.to_string());
         }
