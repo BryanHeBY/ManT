@@ -1,6 +1,30 @@
 use crate::{DiagnosticCode, NodeKind, NodeRef, Parser, Source, SourceName};
 
 #[test]
+fn leading_comments_do_not_receive_filled_sentence_punctuation() {
+    let name = SourceName::new("man-comment-sentence.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".\\\" Copyright sentence.\n.TH COMMENT 1\n.SH NAME\ncomment - prose.\n",
+        ))
+        .unwrap();
+    let comment = report
+        .document
+        .preorder()
+        .find(|node| node.kind() == NodeKind::Comment)
+        .unwrap();
+    assert_eq!(comment.text(), Some(" Copyright sentence."));
+    assert!(!comment.flags().sentence_end);
+    let prose = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("comment - prose."))
+        .unwrap();
+    assert!(prose.flags().sentence_end);
+}
+
+#[test]
 fn structures_sections_terms_and_indents_from_executed_scanner_nodes() {
     let name = SourceName::new("man-structure.1").unwrap();
     let report = Parser::default()

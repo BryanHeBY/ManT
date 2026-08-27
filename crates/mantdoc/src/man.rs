@@ -798,6 +798,12 @@ fn clear_sentence_end_from_section_heads(builder: &mut DocumentBuilder) {
 }
 
 fn mark_sentence_end(builder: &mut DocumentBuilder, node: NodeId) {
+    // Roff comments participate in parser validation, but they are neither
+    // filled source text nor renderer input.  In particular, a preamble
+    // copyright sentence must not acquire libmandoc's NODE_EOS flag.
+    if builder.node_kind(node) == Some(NodeKind::Comment) {
+        return;
+    }
     let candidate = builder
         .node_text(node)
         .is_some()
