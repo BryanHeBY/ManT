@@ -82,6 +82,8 @@ run_preflight "check roff renderer-layout audit" \
   python3 scripts/audit-roff-layout.py --self-check
 run_preflight "check roff audit coverage contract" \
   python3 scripts/check-roff-audit-coverage.py
+run_preflight "check real corpus manifest" \
+  python3 scripts/build-real-corpus-manifest.py --self-check
 wait_preflight
 
 run "test Rust workspace with all features" \

@@ -266,6 +266,13 @@ Restore and hash-check every source identity in the union of the six ledgers.
 Every identity must be available, safely reusable in an equivalent execution
 context, explicitly non-roff, or reported as a blocking missing source.
 
+`scripts/build-real-corpus-manifest.py` is the restoration boundary: it accepts
+only explicit `corpus=absolute-root` mappings, verifies decompressed SHA-256
+identities in parallel, and emits an external oracle JSONL manifest only after
+all 45,036 unique identities verify. A missing root, member, decoder failure,
+or digest mismatch is reported by corpus and blocks manifest creation; it is
+never converted into an audit skip.
+
 Run the release oracle without sampling over every applicable identity.  For
 each source compare AST, diagnostics, engine IR, supported renderers, and
 visible text; detect missing and additional text, leaked requests, panic,
