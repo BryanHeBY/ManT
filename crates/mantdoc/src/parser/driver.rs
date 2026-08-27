@@ -486,6 +486,23 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         &mut diagnostics,
                         &mut truncated,
                     );
+                    // man(7) reports unescaped end-of-line whitespace, then
+                    // removes its terminal spaces before constructing the
+                    // public word node. A terminal tab remains significant;
+                    // an escaped final space is likewise retained.
+                    let bytes = if builder.macro_set() == MacroSet::Man && environment.is_filled() {
+                        let end = bytes
+                            .iter()
+                            .rposition(|byte| *byte != b' ')
+                            .map_or(0, |index| index.saturating_add(1));
+                        if end < bytes.len() && bytes[..end].last() != Some(&b'\\') {
+                            &bytes[..end]
+                        } else {
+                            bytes
+                        }
+                    } else {
+                        bytes
+                    };
                     let Some(bytes) = expand_environment(
                         environment,
                         bytes,

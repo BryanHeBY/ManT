@@ -88,6 +88,12 @@ fn man_trailing_whitespace_points_at_its_terminal_byte() {
             .source_position(finding.primary.as_ref().unwrap()),
         Some(crate::SourcePosition { line: 3, column: 6 })
     );
+    assert!(
+        report
+            .document
+            .preorder()
+            .any(|node| node.text() == Some("text"))
+    );
 }
 
 #[test]
