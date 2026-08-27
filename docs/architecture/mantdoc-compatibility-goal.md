@@ -234,12 +234,15 @@ source spans. The first attempted generic width rebase fixed a GCC real-manual
 case but regressed both upstream cases, so it was rejected rather than
 accepted into the canonical snapshot.
 
-Consequently, any earlier aggregate statement that the 572 upstream inputs had
-already achieved full legacy parser or engine-oracle equality is superseded.
-The whole set must be rerun from the isolated release runners, with every
-difference retained in the replayable inventory. The only permitted
-normalization remains the separately recorded `native-deterministic` policy
-for legacy's host-derived empty `.Os` metadata; it must not hide spans,
+The first fresh 12-lane release-runner audit found 570 fully equal reports,
+two parser differences, zero engine-IR differences, and zero runner errors.
+Its two parser findings were exactly the man cursor cases above. After the
+copy-origin provenance repair, the same complete audit returned 572/572 equal
+parser and engine-IR reports with zero runner errors. The 366 empty-`.Os`
+reports use the declared `native-deterministic` policy. This replaces the old
+unsubstantiated aggregate claim with a reproducible release-runner result.
+Every rerun must retain all differences in the replayable inventory. The
+empty-`.Os` policy is the only permitted normalization: it must not hide spans,
 diagnostics, AST nodes, or IR differences.
 
 The UPSTREAM-GOLDEN presentation checkpoint is still independently current:
