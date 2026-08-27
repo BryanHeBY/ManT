@@ -70,6 +70,10 @@ run_preflight "check product build script syntax" bash -n scripts/build-and-smok
 run_preflight "check CI verification script syntax" bash -n scripts/find-successful-ci.sh
 run_preflight "check mantdoc migration verification script syntax" \
   bash -n scripts/check-mantdoc.sh
+run_preflight "check mantdoc Clippy exception script syntax" \
+  bash -n scripts/check-mantdoc-clippy-exceptions.sh
+run_preflight "check mantdoc Clippy exception budget" \
+  bash scripts/check-mantdoc-clippy-exceptions.sh
 run_preflight "check mantdoc conformance manifests" \
   python3 scripts/check-mantdoc-conformance-manifests.py
 run_preflight "check roff fidelity audit" python3 scripts/audit-roff-fidelity.py --self-check

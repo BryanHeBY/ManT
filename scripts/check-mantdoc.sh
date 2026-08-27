@@ -113,13 +113,20 @@ declare -a preflight_labels=()
 run_preflight "check Rust formatting" cargo fmt --all --check
 run_preflight "check mantdoc conformance manifests" \
   python3 scripts/check-mantdoc-conformance-manifests.py
+run_preflight "check mantdoc Clippy exception budget" \
+  bash scripts/check-mantdoc-clippy-exceptions.sh
 
 printf '\n==> test mantdoc with all features\n'
 cargo test --quiet --locked --package mantdoc --all-features
 wait_preflights
 
 printf '\n==> lint mantdoc with all targets and features\n'
-cargo clippy --quiet --locked --package mantdoc --all-targets --all-features -- -D warnings
+cargo clippy --quiet --locked --package mantdoc --all-targets --all-features -- \
+  -D warnings \
+  -D clippy::branches_sharing_code \
+  -D clippy::or_fun_call \
+  -D clippy::redundant_clone \
+  -D clippy::unnecessary_struct_initialization
 
 lanes=m3,m4,m5,m6
 if [[ $renderer == true ]]; then
