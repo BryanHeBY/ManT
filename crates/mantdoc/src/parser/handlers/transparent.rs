@@ -1,7 +1,7 @@
 use super::super::{
-    Diagnostic, DiagnosticCode, Environment, InputTrap, Limits, Severity, TransparentRequest,
-    arm_input_trap, diagnostic, emit_translation_request_diagnostics, push_diagnostic,
-    trim_horizontal_space, validate_character_request, visible_bytes,
+    Diagnostic, DiagnosticCode, EmitContext, Environment, InputTrap, Limits, Severity,
+    TransparentRequest, arm_input_trap, diagnostic, emit_translation_request_diagnostics,
+    push_diagnostic, trim_horizontal_space, validate_character_request, visible_bytes,
 };
 use super::RequestTransition;
 
@@ -15,6 +15,7 @@ pub(in crate::parser) struct TransparentRequestContext<'a> {
     pub(in crate::parser) argument_start: u32,
     pub(in crate::parser) environment: &'a mut Environment,
     pub(in crate::parser) input_trap: &'a mut InputTrap,
+    pub(in crate::parser) text_bytes: &'a mut usize,
     pub(in crate::parser) limits: &'a Limits,
     pub(in crate::parser) diagnostics: &'a mut Vec<Diagnostic>,
     pub(in crate::parser) truncated: &'a mut bool,
@@ -37,10 +38,13 @@ fn execute_translation(context: &mut TransparentRequestContext<'_>) {
         context.escape,
         context.control_start,
         context.argument_start,
-        context.source_id,
-        context.limits,
-        context.diagnostics,
-        context.truncated,
+        &mut EmitContext::new(
+            context.source_id,
+            context.limits,
+            context.text_bytes,
+            context.diagnostics,
+            context.truncated,
+        ),
     );
     context
         .environment

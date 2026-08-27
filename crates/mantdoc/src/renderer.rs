@@ -483,7 +483,6 @@ impl Renderer {
     }
 }
 
-#[allow(clippy::too_many_lines)] // HTML and terminal node dispatch stay adjacent for output-contract review.
 fn render_document(
     document: &Document,
     format: RenderFormat,

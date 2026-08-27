@@ -145,10 +145,13 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             scanner.escape_character(),
                             scanner.control_character(),
                             start,
-                            source_id,
-                            limits,
-                            &mut diagnostics,
-                            &mut truncated,
+                            &mut EmitContext::new(
+                                source_id,
+                                limits,
+                                &mut text_bytes,
+                                &mut diagnostics,
+                                &mut truncated,
+                            ),
                         );
                         // `roff_getcontrol()` recognizes the escaped control
                         // character before text dispatch. A following quote is a
@@ -2587,6 +2590,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             argument_start,
                             environment,
                             input_trap: &mut input_trap,
+                            text_bytes: &mut text_bytes,
                             limits,
                             diagnostics: &mut diagnostics,
                             truncated: &mut truncated,

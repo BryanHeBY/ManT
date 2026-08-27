@@ -54,31 +54,27 @@ impl<'a> EmitContext<'a> {
 /// flags the following quote as the historical "bad comment style" while
 /// retaining that text in the public tree.  Diagnose from raw scanner bytes so
 /// escape normalization cannot erase the distinction.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn emit_bad_comment_style(
     bytes: &[u8],
     escape: u8,
     control: u8,
     start: u32,
-    source_id: crate::SourceId,
-    limits: &Limits,
-    diagnostics: &mut Vec<Diagnostic>,
-    truncated: &mut bool,
+    context: &mut EmitContext<'_>,
 ) {
     debug_assert!(is_bad_comment_style(bytes, escape, control));
     let quote_start = start.saturating_add(2);
     push_diagnostic(
-        diagnostics,
-        limits,
+        context.diagnostics,
+        context.limits,
         diagnostic(
             DiagnosticCode::INPUT_BAD_COMMENT_STYLE,
             Severity::Style,
-            source_id,
+            context.source_id,
             quote_start,
             quote_start.saturating_add(1),
             "bad comment style",
         ),
-        truncated,
+        context.truncated,
     );
 }
 
@@ -88,47 +84,43 @@ pub(super) fn is_bad_comment_style(bytes: &[u8], escape: u8, control: u8) -> boo
 
 /// Preserve mandoc's diagnostics for exceptional `.tr` request shapes while
 /// leaving the executor's pair-to-space recovery unchanged.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn emit_translation_request_diagnostics(
     glyphs: &[u8],
     escape: u8,
     control_start: u32,
     argument_start: u32,
-    source_id: crate::SourceId,
-    limits: &Limits,
-    diagnostics: &mut Vec<Diagnostic>,
-    truncated: &mut bool,
+    context: &mut EmitContext<'_>,
 ) {
     match translation_request_issue(glyphs, escape) {
         Some(TranslationRequestIssue::Empty) => push_diagnostic(
-            diagnostics,
-            limits,
+            context.diagnostics,
+            context.limits,
             diagnostic(
                 DiagnosticCode::ROFF_EMPTY_REQUEST,
                 Severity::Warning,
-                source_id,
+                context.source_id,
                 control_start,
                 control_start.saturating_add(2),
                 "skipping empty request: tr",
             ),
-            truncated,
+            context.truncated,
         ),
         Some(TranslationRequestIssue::Odd { start, end }) => {
             let glyph = visible_bytes(&glyphs[start..end]);
             let start = argument_start.saturating_add(u32::try_from(start).unwrap_or(u32::MAX));
             let end = argument_start.saturating_add(u32::try_from(end).unwrap_or(u32::MAX));
             push_diagnostic(
-                diagnostics,
-                limits,
+                context.diagnostics,
+                context.limits,
                 diagnostic(
                     DiagnosticCode::ROFF_ODD_TRANSLATION,
                     Severity::Warning,
-                    source_id,
+                    context.source_id,
                     start,
                     end,
                     format!("odd number of characters in request: tr {glyph}"),
                 ),
-                truncated,
+                context.truncated,
             );
         }
         None => {}

@@ -24,8 +24,8 @@ while IFS=: read -r lint maximum; do
   fi
 done <<'EOF'
 struct_excessive_bools:4
-too_many_arguments:47
-too_many_lines:37
+too_many_arguments:40
+too_many_lines:36
 EOF
 
 printf 'mantdoc Clippy exception budget valid\n'
