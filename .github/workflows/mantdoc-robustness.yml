@@ -1,0 +1,73 @@
+# Keep randomized and interpreter-heavy evidence out of the per-push critical
+# path. The regular CI still replays every checked-in regression seed; this
+# scheduled/manual workflow supplies the longer M10 fuzz and Miri evidence.
+name: Mantdoc robustness
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      fuzz_seconds:
+        description: Seconds to fuzz each target (workers run independently)
+        required: false
+        default: "300"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mantdoc-robustness-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FUZZ_SECONDS: ${{ inputs.fuzz_seconds || '300' }}
+
+jobs:
+  fuzz:
+    name: Native fuzz soak
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install nightly fuzz toolchain
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly install cargo-fuzz --locked
+
+      # `scripts/fuzz.sh` gives each target a distinct target directory and
+      # starts up to four independent libFuzzer workers. This is deliberately
+      # not a push gate: seeds found here must be minimized and committed, then
+      # the ordinary deterministic replay makes them fast per-push coverage.
+      - name: Run bounded native fuzz soak
+        run: FUZZ_JOBS=4 scripts/fuzz.sh "$FUZZ_SECONDS"
+
+  miri:
+    name: Focused native Miri
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install nightly Miri toolchain
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup component add miri --toolchain nightly
+          cargo +nightly miri setup
+
+      # This focused session-isolation test covers parser-owned state without
+      # Miri's filesystem isolation conflicting with external fuzz corpora.
+      - name: Check parser session isolation under Miri
+        run: >-
+          cargo +nightly miri test --locked --package mantdoc --lib
+          m3_parallel_sessions_do_not_share_delayed_environment_definitions

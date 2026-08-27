@@ -177,17 +177,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libmandoc-rs"
-version = "0.9.1"
-dependencies = [
- "cc",
- "flate2",
- "unicode-width",
- "windows-sys",
- "zstd",
-]
-
-[[package]]
 name = "log"
 version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -200,10 +189,10 @@ dependencies = [
  "flate2",
  "grep-matcher",
  "grep-regex",
- "libmandoc-rs",
  "mant-ir",
  "mant-protocol",
  "mant-sources",
+ "mantdoc",
  "pulldown-cmark",
  "regex-syntax",
  "serde",
@@ -216,9 +205,9 @@ name = "mant-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "libmandoc-rs",
  "mant-engine",
  "mant-protocol",
+ "mantdoc",
 ]
 
 [[package]]
@@ -244,6 +233,13 @@ version = "0.9.1"
 dependencies = [
  "serde",
  "toml",
+]
+
+[[package]]
+name = "mantdoc"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "unicode-width",
 ]
 
 [[package]]
@@ -507,21 +503,6 @@ name = "unicode-width"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
-
-[[package]]
-name = "windows-link"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
-
-[[package]]
-name = "windows-sys"
-version = "0.61.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
-dependencies = [
- "windows-link",
-]
 
 [[package]]
 name = "winnow"
