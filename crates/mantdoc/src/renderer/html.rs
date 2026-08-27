@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::{
-    Document, HtmlFont, Limits, MdocListMarker, NodeKind, NodeRef, NormalizedFont,
+    BoundedOutput, Document, HtmlFont, Limits, MdocListMarker, NodeKind, NodeRef, NormalizedFont,
     NormalizedListKind, RenderError, TableAlignment, TableTerminalBorder, TableTerminalFont,
     append, escape_html, html_request_font_before, render_html_equation,
     render_html_visible_text_with_font, table_terminal_cell_starts, terminal_mdoc_section_named,
@@ -18,7 +18,7 @@ pub(super) fn render_html_document(
     maximum: usize,
     limits: &Limits,
 ) -> Result<String, RenderError> {
-    let mut output = String::new();
+    let mut output = BoundedOutput::new(maximum);
     let mut state = HtmlState::default();
     if !fragment {
         append(
@@ -35,7 +35,7 @@ pub(super) fn render_html_document(
     if !fragment {
         append(&mut output, "</main></body></html>", maximum)?;
     }
-    Ok(output.trim_end().to_owned())
+    output.finish_trimmed()
 }
 
 /// Document-scoped HTML state which the arena deliberately does not expose as

@@ -1,10 +1,9 @@
 use super::{
     HtmlFont, HtmlFontChange, HtmlRequestFontState, Limits, NodeKind, NodeRef,
-    RENDER_LITERAL_BACKSLASH_MARKER, RenderError, RenderErrorKind, RenderFormat,
-    TERMINAL_NONBREAKING_SPACE_MARKER, TERMINAL_PENDING_LINE_BREAK_MARKER,
-    TERMINAL_ZERO_WIDTH_BACKSPACE_MARKER, TerminalFont, TerminalFontChange,
-    ascii_terminal_named_scalar_is_known, display_width, render_terminal_font, render_visible_text,
-    terminal_signed_roff_en_prefix,
+    RENDER_LITERAL_BACKSLASH_MARKER, RenderError, RenderFormat, TERMINAL_NONBREAKING_SPACE_MARKER,
+    TERMINAL_PENDING_LINE_BREAK_MARKER, TERMINAL_ZERO_WIDTH_BACKSPACE_MARKER, TerminalFont,
+    TerminalFontChange, ascii_terminal_named_scalar_is_known, display_width, render_terminal_font,
+    render_visible_text, terminal_signed_roff_en_prefix,
 };
 
 /// Apply the 1.14.6 device's whitespace-escape recovery before generic
@@ -1041,14 +1040,7 @@ pub(super) fn ascii_terminal_control_name(character: char) -> &'static str {
 }
 
 pub(super) fn append(output: &mut String, value: &str, maximum: usize) -> Result<(), RenderError> {
-    if output.len().saturating_add(value.len()) > maximum {
-        return Err(RenderError {
-            kind: RenderErrorKind::OutputLimit,
-            message: format!("rendered output exceeds {maximum} bytes").into(),
-        });
-    }
-    output.push_str(value);
-    Ok(())
+    super::append_checked(output, value, maximum)
 }
 
 pub(super) fn escape_html(value: &str) -> String {

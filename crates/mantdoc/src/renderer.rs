@@ -500,6 +500,7 @@ fn render_document(
 
 mod equation;
 mod html;
+mod output;
 mod terminal;
 mod text;
 use equation::{
@@ -509,6 +510,7 @@ use equation::{
 use html::render_html_document;
 #[cfg(test)]
 use html::wrap_html_plain_paragraph;
+use output::{BoundedOutput, append_checked, ensure_length};
 #[cfg(test)]
 use terminal::layout::{
     expand_filled_terminal_tabs, expand_literal_terminal_tabs, terminal_character_width,

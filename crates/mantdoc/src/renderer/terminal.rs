@@ -1,7 +1,7 @@
 use super::{
-    AuthorMode, DEFAULT_RENDER_WIDTH, DisplayKind, Document, Limits, MacroSet, MdocListMarker,
-    NodeKind, NodeRef, NormalizedFont, NormalizedListKind, RENDER_LITERAL_BACKSLASH_MARKER,
-    RenderError, RenderErrorKind, RenderFormat, TERMINAL_ATTACH_NEXT_MARKER,
+    AuthorMode, BoundedOutput, DEFAULT_RENDER_WIDTH, DisplayKind, Document, Limits, MacroSet,
+    MdocListMarker, NodeKind, NodeRef, NormalizedFont, NormalizedListKind,
+    RENDER_LITERAL_BACKSLASH_MARKER, RenderError, RenderFormat, TERMINAL_ATTACH_NEXT_MARKER,
     TERMINAL_CENTER_MARKER, TERMINAL_CONTINUE_SOURCE_LINE_MARKER, TERMINAL_EMPTY_WORD_MARKER,
     TERMINAL_FORCE_SEPARATOR_MARKER, TERMINAL_HANGING_INDENT_MARKER, TERMINAL_KEEP_SPACING_MARKER,
     TERMINAL_LINE_LENGTH_MARKER, TERMINAL_LITERAL_PUNCTUATION_MARKER, TERMINAL_LITERAL_TAB_MARKER,
@@ -14,8 +14,8 @@ use super::{
     TableTerminalRow, TerminalFont, TerminalJoin, TerminalLineLength, TerminalMdocSmRelink,
     TerminalPageOffsetState, TerminalRequestFontState, TerminalRequestIndentState,
     TerminalTabLayout, TerminalTabStops, TerminalTextLayout, UnicodeWidthChar, append,
-    ascii_terminal_character, render_numeric_character_escapes, render_terminal_equation,
-    render_terminal_equation_text, render_terminal_visible_text,
+    ascii_terminal_character, ensure_length, render_numeric_character_escapes,
+    render_terminal_equation, render_terminal_equation_text, render_terminal_visible_text,
     render_terminal_visible_text_with_font, render_terminal_whitespace_escapes,
     render_unicode_character_escapes,
 };
@@ -31,11 +31,11 @@ pub(super) fn render_terminal_document(
     maximum: usize,
     limits: &Limits,
 ) -> Result<String, RenderError> {
-    let mut output = String::new();
+    let mut output = BoundedOutput::new(maximum);
     let protected_header_lines =
         append_terminal_header(document, format, width, limits, &mut output, maximum)?;
     let Some(root) = document.node(document.root()) else {
-        return Ok(output);
+        return output.finish();
     };
     for node in root.children() {
         // A malformed, argumentless `.SH`/`.SS` is deliberately absent from
@@ -64,6 +64,7 @@ pub(super) fn render_terminal_document(
     if !rendered.is_empty() {
         append(&mut rendered, "\n", maximum)?;
     }
+    ensure_length(rendered.len(), maximum)?;
     Ok(rendered)
 }
 
@@ -4115,12 +4116,7 @@ pub(super) fn mark_terminal_line_length(
         if matches!(state, TerminalLineLength::Default) {
             return Ok(());
         }
-        if output.len().saturating_add(encoded.len()) > maximum {
-            return Err(RenderError {
-                kind: RenderErrorKind::OutputLimit,
-                message: format!("rendered output exceeds {maximum} bytes").into(),
-            });
-        }
+        ensure_length(output.len().saturating_add(encoded.len()), maximum)?;
         output.insert_str(line_start, &encoded);
         return Ok(());
     };
@@ -4138,12 +4134,7 @@ pub(super) fn mark_terminal_line_length(
         .len()
         .saturating_sub(replaced)
         .saturating_add(encoded.len());
-    if next_len > maximum {
-        return Err(RenderError {
-            kind: RenderErrorKind::OutputLimit,
-            message: format!("rendered output exceeds {maximum} bytes").into(),
-        });
-    }
+    ensure_length(next_len, maximum)?;
     output.replace_range(marker_start..marker_end, &encoded);
     Ok(())
 }
@@ -4183,16 +4174,12 @@ pub(super) fn terminal_apply_mdoc_spacing(
             output.drain(..TERMINAL_NO_SPACE_MARKER.len_utf8());
         }
     } else if !terminal_spacing_disabled(output) {
-        if output
-            .len()
-            .saturating_add(TERMINAL_NO_SPACE_MARKER.len_utf8())
-            > maximum
-        {
-            return Err(RenderError {
-                kind: RenderErrorKind::OutputLimit,
-                message: format!("rendered output exceeds {maximum} bytes").into(),
-            });
-        }
+        ensure_length(
+            output
+                .len()
+                .saturating_add(TERMINAL_NO_SPACE_MARKER.len_utf8()),
+            maximum,
+        )?;
         output.insert(0, TERMINAL_NO_SPACE_MARKER);
     }
     // Recovery leaves an invalid `.Sm bad` argument as the request's
