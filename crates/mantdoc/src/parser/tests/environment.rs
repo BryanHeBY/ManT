@@ -96,7 +96,7 @@ fn formatter_only_requests_do_not_leak_from_conditional_execution() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FORMATTER-STATE 1 28-Aug-2026\n.if n .ad l\n.nh\nvisible\n",
+            b".TH FORMATTER-STATE 1 28-Aug-2026\n.if n .ad l\n.nh\n.ne 10\nvisible\n",
         ))
         .unwrap();
 
@@ -104,7 +104,7 @@ fn formatter_only_requests_do_not_leak_from_conditional_execution() {
         report
             .document
             .preorder()
-            .all(|node| !matches!(node.macro_name(), Some("ad" | "nh")))
+            .all(|node| !matches!(node.macro_name(), Some("ad" | "ne" | "nh")))
     );
 }
 

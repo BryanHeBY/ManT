@@ -5,7 +5,7 @@ use super::{
 };
 
 pub(super) fn is_environment_request(name: &[u8]) -> bool {
-    // `.ad`, `.ftr`, `.na`, `.nh`, `.pl`, and `.ps` are formatter-side state in libmandoc.
+    // `.ad`, `.ftr`, `.na`, `.ne`, `.nh`, `.pl`, and `.ps` are formatter-side state in libmandoc.
     // Classifying them here consumes the requests without exposing AST nodes;
     // the shared no-op fallback in `apply_environment_request` is their
     // intentional semantic implementation.
@@ -21,6 +21,7 @@ pub(super) fn is_environment_request(name: &[u8]) -> bool {
             | b"ad"
             | b"ftr"
             | b"na"
+            | b"ne"
             | b"nh"
             | b"pl"
             | b"ps"
