@@ -1,10 +1,10 @@
 use super::{
     Diagnostic, DiagnosticCode, DocumentBuilder, LEGACY_SYNTAX_TREE_DEPTH_MESSAGE, Limits,
-    ScanOutcome, Severity, push_diagnostic,
+    ParseState, Severity, push_diagnostic,
 };
 
 pub(super) fn apply_tree_depth_limit(
-    outcome: &mut ScanOutcome,
+    outcome: &mut ParseState,
     builder: &mut DocumentBuilder,
     limits: &Limits,
 ) {
@@ -37,7 +37,7 @@ pub(super) fn apply_tree_depth_limit(
 }
 
 pub(super) fn apply_man_structure_outcome(
-    outcome: &mut ScanOutcome,
+    outcome: &mut ParseState,
     structure: crate::man::StructureOutcome,
     limits: &Limits,
 ) {
@@ -291,7 +291,7 @@ fn diagnostic_from_man_recovery(recovery: crate::man::Recovery) -> Diagnostic {
 /// Some scanner-detected conditions are validated by mandoc after the normal
 /// request stream. Keep their scanner budget reservation, then reproduce that
 /// observable diagnostic phase just before publishing the report.
-pub(super) fn reorder_deferred_post_validation_diagnostics(outcome: &mut ScanOutcome) {
+pub(super) fn reorder_deferred_post_validation_diagnostics(outcome: &mut ParseState) {
     for diagnostic in outcome.deferred_post_validation_diagnostics.drain(..) {
         if let Some(index) = outcome
             .diagnostics
@@ -305,7 +305,7 @@ pub(super) fn reorder_deferred_post_validation_diagnostics(outcome: &mut ScanOut
 }
 
 pub(super) fn apply_preprocess_outcome(
-    outcome: &mut ScanOutcome,
+    outcome: &mut ParseState,
     structure: crate::preprocess::PreprocessOutcome,
     limits: &Limits,
 ) {
@@ -375,7 +375,7 @@ pub(super) fn apply_preprocess_outcome(
 
 #[allow(clippy::too_many_lines)] // One recovery-to-diagnostic mapping preserves upstream ordering.
 pub(super) fn apply_mdoc_structure_outcome(
-    outcome: &mut ScanOutcome,
+    outcome: &mut ParseState,
     structure: crate::mdoc::StructureOutcome,
     limits: &Limits,
 ) {

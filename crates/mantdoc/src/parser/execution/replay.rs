@@ -1,11 +1,11 @@
 use super::super::{
     ArgumentIssue, BranchOutcome, Diagnostic, DiagnosticCode, DocumentBuilder, EmitContext,
-    Environment, Limits, NodeFlags, NodeId, NodeKind, Scanner, ScopeExecutionFrame, ScopeFlow,
-    ScopeLine, Severity, SourcePosition, SourceSpan, append_node, append_text_node,
-    apply_environment_request, apply_string_request, condition_body_source_start_from_offset,
-    condition_body_template, condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic,
-    emit_escape_issues, environment_error_diagnostic, evaluate_condition, expand_environment,
-    ignore_marker, is_builtin_package_macro, is_definition_terminator, is_environment_request,
+    Environment, Limits, NodeFlags, NodeId, NodeKind, Scanner, ScopeFlow, ScopeLine, Severity,
+    SourcePosition, SourceSpan, append_node, append_text_node, apply_environment_request,
+    apply_string_request, condition_body_source_start_from_offset, condition_body_template,
+    condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic, emit_escape_issues,
+    environment_error_diagnostic, evaluate_condition, expand_environment, ignore_marker,
+    is_builtin_package_macro, is_definition_terminator, is_environment_request,
     is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator, is_scope_opener,
     join_arguments, lex_arguments, lex_condition_arguments, normalize_document_escapes,
     push_diagnostic, record_expansion_steps, scope_line_end, scope_line_start,
@@ -14,7 +14,32 @@ use super::super::{
 };
 use super::collect::collect_pending_macro_scope;
 
-pub(in crate::parser) struct ScopeMachine<'state, 'source> {
+enum ReplayFrame<'a> {
+    Lines {
+        lines: &'a [ScopeLine],
+        next: usize,
+        previous_conditional: Option<BranchOutcome>,
+    },
+    Loop {
+        start: u32,
+        end: u32,
+        predicate: &'a [u8],
+        lines: &'a [ScopeLine],
+        iterations: usize,
+        /// A nested `.while` is executed in mandoc's active input frame,
+        /// then causes its enclosing loop to stop rather than resuming the
+        /// outer scope after the inner predicate becomes false.
+        break_after: bool,
+    },
+    /// Apply the copied-input provenance of a nested loop only after its
+    /// replayed body has emitted nodes at the direct scope root.
+    SetNewRootChildrenLogicalStart {
+        first_child: usize,
+        position: SourcePosition,
+    },
+}
+
+pub(in crate::parser) struct ReplayMachine<'state, 'source> {
     pub(in crate::parser) builder: &'state mut DocumentBuilder,
     pub(in crate::parser) root: NodeId,
     pub(in crate::parser) source_id: crate::SourceId,
@@ -29,106 +54,205 @@ pub(in crate::parser) struct ScopeMachine<'state, 'source> {
     pub(in crate::parser) truncated: &'state mut bool,
 }
 
-impl ScopeMachine<'_, '_> {
+impl ReplayMachine<'_, '_> {
+    #[allow(clippy::too_many_lines)] // An explicit frame stack avoids recursive execution of untrusted nested scopes.
     pub(in crate::parser) fn run(self, lines: &[ScopeLine]) -> ScopeFlow {
-        execute_scope_lines(
+        let Self {
+            builder,
+            root,
+            source_id,
+            scanner,
+            environment,
+            limits,
+            text_bytes,
+            expansion_steps,
+            maximum_depth,
+            total_loop_iterations,
+            diagnostics,
+            truncated,
+        } = self;
+        let mut closed_loop_from_inner_scope = None;
+        let mut frames = vec![ReplayFrame::Lines {
             lines,
-            self.builder,
-            self.root,
-            self.source_id,
-            self.scanner,
-            self.environment,
-            self.limits,
-            self.text_bytes,
-            self.expansion_steps,
-            self.maximum_depth,
-            self.total_loop_iterations,
-            self.diagnostics,
-            self.truncated,
-        )
-    }
-}
-
-#[allow(clippy::too_many_arguments)] // Private transition core; callers use `ScopeMachine`.
-#[allow(clippy::too_many_lines)] // An explicit frame stack avoids recursive execution of untrusted nested scopes.
-fn execute_scope_lines(
-    lines: &[ScopeLine],
-    builder: &mut DocumentBuilder,
-    root: NodeId,
-    source_id: crate::SourceId,
-    scanner: &mut Scanner<'_>,
-    environment: &mut Environment,
-    limits: &Limits,
-    text_bytes: &mut usize,
-    expansion_steps: &mut usize,
-    maximum_depth: &mut usize,
-    total_loop_iterations: &mut usize,
-    diagnostics: &mut Vec<Diagnostic>,
-    truncated: &mut bool,
-) -> ScopeFlow {
-    let mut closed_loop_from_inner_scope = None;
-    let mut frames = vec![ScopeExecutionFrame::Lines {
-        lines,
-        next: 0,
-        previous_conditional: None,
-    }];
-    while let Some(frame) = frames.pop() {
-        match frame {
-            ScopeExecutionFrame::SetNewRootChildrenLogicalStart {
-                first_child,
-                position,
-            } => {
-                set_new_root_children_logical_start(builder, root, first_child, position);
-            }
-            ScopeExecutionFrame::Lines {
-                lines,
-                next,
-                previous_conditional,
-            } => {
-                let Some(line) = lines.get(next) else {
-                    continue;
-                };
-                if let Some(consumed) = execute_collected_scope_definition(
-                    line,
-                    &lines[next + 1..],
-                    scanner,
-                    environment,
-                    limits,
-                    source_id,
-                    diagnostics,
-                    truncated,
-                ) {
-                    frames.push(ScopeExecutionFrame::Lines {
-                        lines,
-                        next: next + consumed + 1,
-                        previous_conditional: None,
-                    });
-                    continue;
+            next: 0,
+            previous_conditional: None,
+        }];
+        while let Some(frame) = frames.pop() {
+            match frame {
+                ReplayFrame::SetNewRootChildrenLogicalStart {
+                    first_child,
+                    position,
+                } => {
+                    set_new_root_children_logical_start(builder, root, first_child, position);
                 }
-                if let ScopeLine::Control {
-                    start,
-                    end,
-                    name,
-                    arguments,
-                    ..
-                } = line
-                    && matches!(name.as_slice(), b"ie" | b"el")
-                {
-                    if name == b"el" {
-                        frames.push(ScopeExecutionFrame::Lines {
+                ReplayFrame::Lines {
+                    lines,
+                    next,
+                    previous_conditional,
+                } => {
+                    let Some(line) = lines.get(next) else {
+                        continue;
+                    };
+                    if let Some(consumed) = execute_collected_scope_definition(
+                        line,
+                        &lines[next + 1..],
+                        scanner,
+                        environment,
+                        limits,
+                        source_id,
+                        diagnostics,
+                        truncated,
+                    ) {
+                        frames.push(ReplayFrame::Lines {
                             lines,
-                            next: next + 1,
+                            next: next + consumed + 1,
                             previous_conditional: None,
                         });
-                        if !previous_conditional.is_some_and(BranchOutcome::is_skipped) {
+                        continue;
+                    }
+                    if let ScopeLine::Control {
+                        start,
+                        end,
+                        name,
+                        arguments,
+                        ..
+                    } = line
+                        && matches!(name.as_slice(), b"ie" | b"el")
+                    {
+                        if name == b"el" {
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional: None,
+                            });
+                            if !previous_conditional.is_some_and(BranchOutcome::is_skipped) {
+                                continue;
+                            }
+                            let body = trim_horizontal_space(arguments);
+                            if body.is_empty() {
+                                continue;
+                            }
+                            let body = inline_scope_body_line(
+                                body.to_vec(),
+                                *start,
+                                *end,
+                                scanner.control_character(),
+                                scanner.escape_character(),
+                            );
+                            match execute_scope_line(
+                                &body,
+                                builder,
+                                root,
+                                source_id,
+                                scanner,
+                                environment,
+                                limits,
+                                text_bytes,
+                                expansion_steps,
+                                maximum_depth,
+                                total_loop_iterations,
+                                diagnostics,
+                                truncated,
+                            ) {
+                                ScopeFlow::Continue => {}
+                                flow => return flow,
+                            }
                             continue;
                         }
-                        let body = trim_horizontal_space(arguments);
-                        if body.is_empty() {
+                        let Ok(condition_arguments) =
+                            lex_condition_arguments(arguments, scanner.escape_character(), limits)
+                        else {
+                            *truncated = true;
+                            push_diagnostic(
+                                diagnostics,
+                                limits,
+                                diagnostic(
+                                    DiagnosticCode::ARGUMENT_LIMIT,
+                                    Severity::Warning,
+                                    source_id,
+                                    *start,
+                                    *end,
+                                    "inline roff ie arguments in a scope exceed configured parser limits",
+                                ),
+                                truncated,
+                            );
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional: None,
+                            });
+                            continue;
+                        };
+                        let Some((predicate, body_start)) = condition_parts(&condition_arguments)
+                        else {
+                            push_diagnostic(
+                                diagnostics,
+                                limits,
+                                diagnostic(
+                                    DiagnosticCode::ROFF_CONDITION,
+                                    Severity::Warning,
+                                    source_id,
+                                    *start,
+                                    *end,
+                                    "inline roff ie in a scope is missing its predicate",
+                                ),
+                                truncated,
+                            );
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional: None,
+                            });
+                            continue;
+                        };
+                        let Some(predicate) = expand_environment(
+                            environment,
+                            &predicate,
+                            scanner.escape_character(),
+                            &[],
+                            limits,
+                            source_id,
+                            *start,
+                            *end,
+                            expansion_steps,
+                            diagnostics,
+                            truncated,
+                        ) else {
+                            return ScopeFlow::Halt;
+                        };
+                        let Some(condition) = evaluate_condition(environment, &predicate) else {
+                            push_diagnostic(
+                                diagnostics,
+                                limits,
+                                diagnostic(
+                                    DiagnosticCode::ROFF_CONDITION,
+                                    Severity::Warning,
+                                    source_id,
+                                    *start,
+                                    *end,
+                                    "inline roff ie predicate in a scope is outside the M3 numeric/nroff subset",
+                                ),
+                                truncated,
+                            );
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional: None,
+                            });
+                            continue;
+                        };
+                        let body =
+                            condition_body_template(arguments, &condition_arguments, body_start);
+                        frames.push(ReplayFrame::Lines {
+                            lines,
+                            next: next + 1,
+                            previous_conditional: Some(condition.into()),
+                        });
+                        if !condition || body.is_empty() {
                             continue;
                         }
                         let body = inline_scope_body_line(
-                            body.to_vec(),
+                            body,
                             *start,
                             *end,
                             scanner.control_character(),
@@ -154,106 +278,252 @@ fn execute_scope_lines(
                         }
                         continue;
                     }
-                    let Ok(condition_arguments) =
-                        lex_condition_arguments(arguments, scanner.escape_character(), limits)
-                    else {
-                        *truncated = true;
-                        push_diagnostic(
-                            diagnostics,
+                    if let ScopeLine::Control {
+                        start,
+                        end,
+                        name,
+                        arguments,
+                        ..
+                    } = line
+                        && name == b"ig"
+                    {
+                        let marker = match ignore_marker(
+                            arguments,
+                            scanner.escape_character(),
                             limits,
-                            diagnostic(
-                                DiagnosticCode::ARGUMENT_LIMIT,
-                                Severity::Warning,
-                                source_id,
-                                *start,
-                                *end,
-                                "inline roff ie arguments in a scope exceed configured parser limits",
-                            ),
-                            truncated,
-                        );
-                        frames.push(ScopeExecutionFrame::Lines {
+                        ) {
+                            Ok(marker) => marker,
+                            Err(ArgumentIssue::UnterminatedQuote) => {
+                                push_diagnostic(
+                                    diagnostics,
+                                    limits,
+                                    diagnostic(
+                                        DiagnosticCode::ARGUMENT_UNTERMINATED_QUOTE,
+                                        Severity::Warning,
+                                        source_id,
+                                        *start,
+                                        *end,
+                                        "roff ignore-block marker in a collected scope contains an unterminated quote",
+                                    ),
+                                    truncated,
+                                );
+                                vec![b'.']
+                            }
+                            Err(ArgumentIssue::Limit) => {
+                                *truncated = true;
+                                push_diagnostic(
+                                    diagnostics,
+                                    limits,
+                                    diagnostic(
+                                        DiagnosticCode::ARGUMENT_LIMIT,
+                                        Severity::Warning,
+                                        source_id,
+                                        *start,
+                                        *end,
+                                        "roff ignore-block marker in a collected scope exceeds configured parser limits",
+                                    ),
+                                    truncated,
+                                );
+                                vec![b'.']
+                            }
+                        };
+                        let next = lines[next + 1..]
+                            .iter()
+                            .position(|candidate| is_scope_ignore_terminator(candidate, &marker))
+                            .map_or(lines.len(), |offset| next + offset + 2);
+                        frames.push(ReplayFrame::Lines {
                             lines,
-                            next: next + 1,
+                            next,
                             previous_conditional: None,
                         });
-                        continue;
-                    };
-                    let Some((predicate, body_start)) = condition_parts(&condition_arguments)
-                    else {
-                        push_diagnostic(
-                            diagnostics,
-                            limits,
-                            diagnostic(
-                                DiagnosticCode::ROFF_CONDITION,
-                                Severity::Warning,
-                                source_id,
-                                *start,
-                                *end,
-                                "inline roff ie in a scope is missing its predicate",
-                            ),
-                            truncated,
-                        );
-                        frames.push(ScopeExecutionFrame::Lines {
-                            lines,
-                            next: next + 1,
-                            previous_conditional: None,
-                        });
-                        continue;
-                    };
-                    let Some(predicate) = expand_environment(
-                        environment,
-                        &predicate,
-                        scanner.escape_character(),
-                        &[],
-                        limits,
-                        source_id,
-                        *start,
-                        *end,
-                        expansion_steps,
-                        diagnostics,
-                        truncated,
-                    ) else {
-                        return ScopeFlow::Halt;
-                    };
-                    let Some(condition) = evaluate_condition(environment, &predicate) else {
-                        push_diagnostic(
-                            diagnostics,
-                            limits,
-                            diagnostic(
-                                DiagnosticCode::ROFF_CONDITION,
-                                Severity::Warning,
-                                source_id,
-                                *start,
-                                *end,
-                                "inline roff ie predicate in a scope is outside the M3 numeric/nroff subset",
-                            ),
-                            truncated,
-                        );
-                        frames.push(ScopeExecutionFrame::Lines {
-                            lines,
-                            next: next + 1,
-                            previous_conditional: None,
-                        });
-                        continue;
-                    };
-                    let body = condition_body_template(arguments, &condition_arguments, body_start);
-                    frames.push(ScopeExecutionFrame::Lines {
-                        lines,
-                        next: next + 1,
-                        previous_conditional: Some(condition.into()),
-                    });
-                    if !condition || body.is_empty() {
                         continue;
                     }
-                    let body = inline_scope_body_line(
-                        body,
-                        *start,
-                        *end,
-                        scanner.control_character(),
-                        scanner.escape_character(),
-                    );
+                    if let ScopeLine::Conditional {
+                        start,
+                        end,
+                        predicate,
+                        else_eligible,
+                        lines: conditional_lines,
+                    } = line
+                    {
+                        if frames.len() >= limits.max_tree_depth {
+                            *truncated = true;
+                            push_diagnostic(
+                                diagnostics,
+                                limits,
+                                diagnostic(
+                                    DiagnosticCode::LIMIT_SCOPE_DEPTH,
+                                    Severity::Warning,
+                                    source_id,
+                                    *start,
+                                    *end,
+                                    "nested roff scope execution exceeds max_tree_depth",
+                                ),
+                                truncated,
+                            );
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional: None,
+                            });
+                            continue;
+                        }
+                        let Some(expanded_predicate) = expand_environment(
+                            environment,
+                            predicate,
+                            scanner.escape_character(),
+                            &[],
+                            limits,
+                            source_id,
+                            *start,
+                            *end,
+                            expansion_steps,
+                            diagnostics,
+                            truncated,
+                        ) else {
+                            return ScopeFlow::Halt;
+                        };
+                        let Some(condition) = evaluate_condition(environment, &expanded_predicate)
+                        else {
+                            push_diagnostic(
+                                diagnostics,
+                                limits,
+                                diagnostic(
+                                    DiagnosticCode::ROFF_CONDITION,
+                                    Severity::Warning,
+                                    source_id,
+                                    *start,
+                                    *end,
+                                    "nested roff conditional predicate is outside the M3 numeric/nroff subset",
+                                ),
+                                truncated,
+                            );
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional: None,
+                            });
+                            continue;
+                        };
+                        frames.push(ReplayFrame::Lines {
+                            lines,
+                            next: next + 1,
+                            previous_conditional: else_eligible.then(|| condition.into()),
+                        });
+                        if condition {
+                            frames.push(ReplayFrame::Lines {
+                                lines: conditional_lines,
+                                next: 0,
+                                previous_conditional: None,
+                            });
+                        }
+                        continue;
+                    }
+                    if let ScopeLine::Else {
+                        lines: else_lines, ..
+                    } = line
+                    {
+                        frames.push(ReplayFrame::Lines {
+                            lines,
+                            next: next + 1,
+                            previous_conditional: None,
+                        });
+                        if previous_conditional.is_some_and(BranchOutcome::is_skipped) {
+                            frames.push(ReplayFrame::Lines {
+                                lines: else_lines,
+                                next: 0,
+                                previous_conditional: None,
+                            });
+                        }
+                        continue;
+                    }
+                    frames.push(ReplayFrame::Lines {
+                        lines,
+                        next: next + 1,
+                        previous_conditional: None,
+                    });
+                    if let ScopeLine::Loop {
+                        start,
+                        end,
+                        predicate,
+                        lines: loop_lines,
+                    } = line
+                    {
+                        if environment.mark_nested_while_recovery(*start) {
+                            // mandoc's roff input buffer retains the nested
+                            // request and its first replayed body line together.
+                            // Preserve that observable logical column while the
+                            // physical span remains sliceable at the request.
+                            let logical_start =
+                                loop_lines.first().map(scope_line_end).and_then(|body_end| {
+                                    let body_end =
+                                        SourceSpan::new(source_id, body_end, body_end).ok()?;
+                                    let position = builder.source_position(&body_end)?;
+                                    Some(SourcePosition {
+                                        line: position.line,
+                                        column: position.column.saturating_add(
+                                            end.saturating_sub(*start).saturating_sub(1),
+                                        ),
+                                    })
+                                });
+                            let nested_span = SourceSpan::new(source_id, *start, *end)
+                                .expect("collected scope spans are ordered")
+                                .with_logical_start(logical_start.unwrap_or_else(|| {
+                                    builder
+                                        .source_position(
+                                            &SourceSpan::new(source_id, *start, *start)
+                                                .expect("collected scope starts are ordered"),
+                                        )
+                                        .unwrap_or(SourcePosition { line: 1, column: 1 })
+                                }));
+                            push_diagnostic(
+                                diagnostics,
+                                limits,
+                                Diagnostic::new(
+                                    DiagnosticCode::new(DiagnosticCode::ROFF_WHILE_NESTED)
+                                        .expect("static diagnostic code is valid"),
+                                    Severity::Unsupported,
+                                    "nested .while loops",
+                                )
+                                .with_primary(nested_span),
+                                truncated,
+                            );
+                            if let Some(outer_closer) = lines.get(next + 1).map(scope_line_end) {
+                                let closer_start = outer_closer.saturating_add(4);
+                                push_diagnostic(
+                                    diagnostics,
+                                    limits,
+                                    diagnostic(
+                                        DiagnosticCode::ROFF_WHILE_CANNOT_CONTINUE,
+                                        Severity::Unsupported,
+                                        source_id,
+                                        closer_start,
+                                        closer_start,
+                                        "cannot continue this .while loop",
+                                    ),
+                                    truncated,
+                                );
+                            }
+                        }
+                        // Mandoc's recovery puts the inner loop into the active
+                        // input frame.  Once that loop is exhausted, it abandons
+                        // the enclosing `.while` rather than replaying its
+                        // remaining sibling lines (notably the outer register
+                        // decrement).  Model that explicitly rather than
+                        // flattening one body line into the parent frame.
+                        frames.clear();
+                        frames.push(ReplayFrame::Loop {
+                            start: *start,
+                            end: *end,
+                            predicate,
+                            lines: loop_lines,
+                            iterations: 0,
+                            break_after: true,
+                        });
+                        continue;
+                    }
                     match execute_scope_line(
-                        &body,
+                        line,
                         builder,
                         root,
                         source_id,
@@ -268,97 +538,86 @@ fn execute_scope_lines(
                         truncated,
                     ) {
                         ScopeFlow::Continue => {}
-                        flow => return flow,
+                        ScopeFlow::Halt => return ScopeFlow::Halt,
+                        ScopeFlow::Break => {
+                            let mut consumed = false;
+                            while let Some(frame) = frames.pop() {
+                                if matches!(frame, ReplayFrame::Loop { .. }) {
+                                    consumed = true;
+                                    break;
+                                }
+                            }
+                            if !consumed {
+                                return ScopeFlow::Break;
+                            }
+                        }
+                        ScopeFlow::CloseLoopInInnerScope { invocation_start } => {
+                            // A macro reparses in a nested input frame in mandoc.
+                            // Its `\\}` closes the active outer loop but the caller's
+                            // remaining physical scope lines still run.  Drop only
+                            // the loop frame, retain those continuations, and
+                            // propagate the later out-of-scope recovery to the
+                            // scanner boundary.
+                            let diagnostic_start = invocation_start.saturating_add(4);
+                            push_diagnostic(
+                                diagnostics,
+                                limits,
+                                diagnostic(
+                                    DiagnosticCode::ROFF_WHILE_INNER_SCOPE,
+                                    Severity::Unsupported,
+                                    source_id,
+                                    diagnostic_start,
+                                    diagnostic_start,
+                                    "end of .while loop in inner scope",
+                                ),
+                                truncated,
+                            );
+                            let mut continuations = Vec::new();
+                            let mut consumed = false;
+                            while let Some(frame) = frames.pop() {
+                                if matches!(frame, ReplayFrame::Loop { .. }) {
+                                    consumed = true;
+                                    break;
+                                }
+                                continuations.push(frame);
+                            }
+                            for frame in continuations.into_iter().rev() {
+                                frames.push(frame);
+                            }
+                            // The outermost `.while` is driven by the caller of
+                            // this function rather than a `Loop` frame.  In that
+                            // case there is nothing local to remove, but the
+                            // continuation lines must still execute before the
+                            // recovery is returned to that caller.
+                            if !consumed {
+                                closed_loop_from_inner_scope = Some(invocation_start);
+                                continue;
+                            }
+                            closed_loop_from_inner_scope = Some(invocation_start);
+                        }
+                        ScopeFlow::LoopContinue => {
+                            let mut loop_frame = None;
+                            while let Some(frame) = frames.pop() {
+                                if matches!(frame, ReplayFrame::Loop { .. }) {
+                                    loop_frame = Some(frame);
+                                    break;
+                                }
+                            }
+                            let Some(loop_frame) = loop_frame else {
+                                return ScopeFlow::LoopContinue;
+                            };
+                            frames.push(loop_frame);
+                        }
                     }
-                    continue;
                 }
-                if let ScopeLine::Control {
-                    start,
-                    end,
-                    name,
-                    arguments,
-                    ..
-                } = line
-                    && name == b"ig"
-                {
-                    let marker = match ignore_marker(arguments, scanner.escape_character(), limits)
-                    {
-                        Ok(marker) => marker,
-                        Err(ArgumentIssue::UnterminatedQuote) => {
-                            push_diagnostic(
-                                diagnostics,
-                                limits,
-                                diagnostic(
-                                    DiagnosticCode::ARGUMENT_UNTERMINATED_QUOTE,
-                                    Severity::Warning,
-                                    source_id,
-                                    *start,
-                                    *end,
-                                    "roff ignore-block marker in a collected scope contains an unterminated quote",
-                                ),
-                                truncated,
-                            );
-                            vec![b'.']
-                        }
-                        Err(ArgumentIssue::Limit) => {
-                            *truncated = true;
-                            push_diagnostic(
-                                diagnostics,
-                                limits,
-                                diagnostic(
-                                    DiagnosticCode::ARGUMENT_LIMIT,
-                                    Severity::Warning,
-                                    source_id,
-                                    *start,
-                                    *end,
-                                    "roff ignore-block marker in a collected scope exceeds configured parser limits",
-                                ),
-                                truncated,
-                            );
-                            vec![b'.']
-                        }
-                    };
-                    let next = lines[next + 1..]
-                        .iter()
-                        .position(|candidate| is_scope_ignore_terminator(candidate, &marker))
-                        .map_or(lines.len(), |offset| next + offset + 2);
-                    frames.push(ScopeExecutionFrame::Lines {
-                        lines,
-                        next,
-                        previous_conditional: None,
-                    });
-                    continue;
-                }
-                if let ScopeLine::Conditional {
+                ReplayFrame::Loop {
                     start,
                     end,
                     predicate,
-                    else_eligible,
-                    lines: conditional_lines,
-                } = line
-                {
-                    if frames.len() >= limits.max_tree_depth {
-                        *truncated = true;
-                        push_diagnostic(
-                            diagnostics,
-                            limits,
-                            diagnostic(
-                                DiagnosticCode::LIMIT_SCOPE_DEPTH,
-                                Severity::Warning,
-                                source_id,
-                                *start,
-                                *end,
-                                "nested roff scope execution exceeds max_tree_depth",
-                            ),
-                            truncated,
-                        );
-                        frames.push(ScopeExecutionFrame::Lines {
-                            lines,
-                            next: next + 1,
-                            previous_conditional: None,
-                        });
-                        continue;
-                    }
+                    lines,
+                    iterations,
+                    break_after,
+                } => {
                     let Some(expanded_predicate) = expand_environment(
                         environment,
                         predicate,
@@ -366,8 +625,8 @@ fn execute_scope_lines(
                         &[],
                         limits,
                         source_id,
-                        *start,
-                        *end,
+                        start,
+                        end,
                         expansion_steps,
                         diagnostics,
                         truncated,
@@ -383,377 +642,129 @@ fn execute_scope_lines(
                                 DiagnosticCode::ROFF_CONDITION,
                                 Severity::Warning,
                                 source_id,
-                                *start,
-                                *end,
-                                "nested roff conditional predicate is outside the M3 numeric/nroff subset",
+                                start,
+                                end,
+                                "nested roff while predicate is outside the M3 numeric/nroff subset",
                             ),
                             truncated,
                         );
-                        frames.push(ScopeExecutionFrame::Lines {
-                            lines,
-                            next: next + 1,
-                            previous_conditional: None,
-                        });
                         continue;
                     };
-                    frames.push(ScopeExecutionFrame::Lines {
-                        lines,
-                        next: next + 1,
-                        previous_conditional: else_eligible.then(|| condition.into()),
-                    });
-                    if condition {
-                        frames.push(ScopeExecutionFrame::Lines {
-                            lines: conditional_lines,
-                            next: 0,
-                            previous_conditional: None,
-                        });
-                    }
-                    continue;
-                }
-                if let ScopeLine::Else {
-                    lines: else_lines, ..
-                } = line
-                {
-                    frames.push(ScopeExecutionFrame::Lines {
-                        lines,
-                        next: next + 1,
-                        previous_conditional: None,
-                    });
-                    if previous_conditional.is_some_and(BranchOutcome::is_skipped) {
-                        frames.push(ScopeExecutionFrame::Lines {
-                            lines: else_lines,
-                            next: 0,
-                            previous_conditional: None,
-                        });
-                    }
-                    continue;
-                }
-                frames.push(ScopeExecutionFrame::Lines {
-                    lines,
-                    next: next + 1,
-                    previous_conditional: None,
-                });
-                if let ScopeLine::Loop {
-                    start,
-                    end,
-                    predicate,
-                    lines: loop_lines,
-                } = line
-                {
-                    if environment.mark_nested_while_recovery(*start) {
-                        // mandoc's roff input buffer retains the nested
-                        // request and its first replayed body line together.
-                        // Preserve that observable logical column while the
-                        // physical span remains sliceable at the request.
-                        let logical_start =
-                            loop_lines.first().map(scope_line_end).and_then(|body_end| {
-                                let body_end =
-                                    SourceSpan::new(source_id, body_end, body_end).ok()?;
-                                let position = builder.source_position(&body_end)?;
-                                Some(SourcePosition {
-                                    line: position.line,
-                                    column: position.column.saturating_add(
-                                        end.saturating_sub(*start).saturating_sub(1),
-                                    ),
-                                })
-                            });
-                        let nested_span = SourceSpan::new(source_id, *start, *end)
-                            .expect("collected scope spans are ordered")
-                            .with_logical_start(logical_start.unwrap_or_else(|| {
-                                builder
-                                    .source_position(
-                                        &SourceSpan::new(source_id, *start, *start)
-                                            .expect("collected scope starts are ordered"),
-                                    )
-                                    .unwrap_or(SourcePosition { line: 1, column: 1 })
-                            }));
-                        push_diagnostic(
-                            diagnostics,
-                            limits,
-                            Diagnostic::new(
-                                DiagnosticCode::new(DiagnosticCode::ROFF_WHILE_NESTED)
-                                    .expect("static diagnostic code is valid"),
-                                Severity::Unsupported,
-                                "nested .while loops",
-                            )
-                            .with_primary(nested_span),
-                            truncated,
-                        );
-                        if let Some(outer_closer) = lines.get(next + 1).map(scope_line_end) {
-                            let closer_start = outer_closer.saturating_add(4);
-                            push_diagnostic(
-                                diagnostics,
-                                limits,
-                                diagnostic(
-                                    DiagnosticCode::ROFF_WHILE_CANNOT_CONTINUE,
-                                    Severity::Unsupported,
-                                    source_id,
-                                    closer_start,
-                                    closer_start,
-                                    "cannot continue this .while loop",
-                                ),
-                                truncated,
-                            );
-                        }
-                    }
-                    // Mandoc's recovery puts the inner loop into the active
-                    // input frame.  Once that loop is exhausted, it abandons
-                    // the enclosing `.while` rather than replaying its
-                    // remaining sibling lines (notably the outer register
-                    // decrement).  Model that explicitly rather than
-                    // flattening one body line into the parent frame.
-                    frames.clear();
-                    frames.push(ScopeExecutionFrame::Loop {
-                        start: *start,
-                        end: *end,
-                        predicate,
-                        lines: loop_lines,
-                        iterations: 0,
-                        break_after: true,
-                    });
-                    continue;
-                }
-                match execute_scope_line(
-                    line,
-                    builder,
-                    root,
-                    source_id,
-                    scanner,
-                    environment,
-                    limits,
-                    text_bytes,
-                    expansion_steps,
-                    maximum_depth,
-                    total_loop_iterations,
-                    diagnostics,
-                    truncated,
-                ) {
-                    ScopeFlow::Continue => {}
-                    ScopeFlow::Halt => return ScopeFlow::Halt,
-                    ScopeFlow::Break => {
-                        let mut consumed = false;
-                        while let Some(frame) = frames.pop() {
-                            if matches!(frame, ScopeExecutionFrame::Loop { .. }) {
-                                consumed = true;
-                                break;
-                            }
-                        }
-                        if !consumed {
+                    if !condition {
+                        if break_after {
                             return ScopeFlow::Break;
                         }
+                        continue;
                     }
-                    ScopeFlow::CloseLoopInInnerScope { invocation_start } => {
-                        // A macro reparses in a nested input frame in mandoc.
-                        // Its `\\}` closes the active outer loop but the caller's
-                        // remaining physical scope lines still run.  Drop only
-                        // the loop frame, retain those continuations, and
-                        // propagate the later out-of-scope recovery to the
-                        // scanner boundary.
-                        let diagnostic_start = invocation_start.saturating_add(4);
+                    if iterations >= limits.max_loop_iterations {
+                        *truncated = true;
                         push_diagnostic(
                             diagnostics,
                             limits,
                             diagnostic(
-                                DiagnosticCode::ROFF_WHILE_INNER_SCOPE,
-                                Severity::Unsupported,
+                                DiagnosticCode::LIMIT_LOOP_ITERATIONS,
+                                Severity::Warning,
                                 source_id,
-                                diagnostic_start,
-                                diagnostic_start,
-                                "end of .while loop in inner scope",
+                                start,
+                                end,
+                                "nested roff while request exceeds max_loop_iterations",
                             ),
                             truncated,
                         );
-                        let mut continuations = Vec::new();
-                        let mut consumed = false;
-                        while let Some(frame) = frames.pop() {
-                            if matches!(frame, ScopeExecutionFrame::Loop { .. }) {
-                                consumed = true;
-                                break;
-                            }
-                            continuations.push(frame);
-                        }
-                        for frame in continuations.into_iter().rev() {
-                            frames.push(frame);
-                        }
-                        // The outermost `.while` is driven by the caller of
-                        // this function rather than a `Loop` frame.  In that
-                        // case there is nothing local to remove, but the
-                        // continuation lines must still execute before the
-                        // recovery is returned to that caller.
-                        if !consumed {
-                            closed_loop_from_inner_scope = Some(invocation_start);
-                            continue;
-                        }
-                        closed_loop_from_inner_scope = Some(invocation_start);
+                        continue;
                     }
-                    ScopeFlow::LoopContinue => {
-                        let mut loop_frame = None;
-                        while let Some(frame) = frames.pop() {
-                            if matches!(frame, ScopeExecutionFrame::Loop { .. }) {
-                                loop_frame = Some(frame);
-                                break;
-                            }
-                        }
-                        let Some(loop_frame) = loop_frame else {
-                            return ScopeFlow::LoopContinue;
-                        };
-                        frames.push(loop_frame);
-                    }
-                }
-            }
-            ScopeExecutionFrame::Loop {
-                start,
-                end,
-                predicate,
-                lines,
-                iterations,
-                break_after,
-            } => {
-                let Some(expanded_predicate) = expand_environment(
-                    environment,
-                    predicate,
-                    scanner.escape_character(),
-                    &[],
-                    limits,
-                    source_id,
-                    start,
-                    end,
-                    expansion_steps,
-                    diagnostics,
-                    truncated,
-                ) else {
-                    return ScopeFlow::Halt;
-                };
-                let Some(condition) = evaluate_condition(environment, &expanded_predicate) else {
-                    push_diagnostic(
-                        diagnostics,
-                        limits,
-                        diagnostic(
-                            DiagnosticCode::ROFF_CONDITION,
-                            Severity::Warning,
-                            source_id,
-                            start,
-                            end,
-                            "nested roff while predicate is outside the M3 numeric/nroff subset",
-                        ),
-                        truncated,
-                    );
-                    continue;
-                };
-                if !condition {
-                    if break_after {
-                        return ScopeFlow::Break;
-                    }
-                    continue;
-                }
-                if iterations >= limits.max_loop_iterations {
-                    *truncated = true;
-                    push_diagnostic(
-                        diagnostics,
-                        limits,
-                        diagnostic(
-                            DiagnosticCode::LIMIT_LOOP_ITERATIONS,
-                            Severity::Warning,
-                            source_id,
-                            start,
-                            end,
-                            "nested roff while request exceeds max_loop_iterations",
-                        ),
-                        truncated,
-                    );
-                    continue;
-                }
-                if *total_loop_iterations >= limits.max_total_loop_iterations {
-                    *truncated = true;
-                    push_diagnostic(
-                        diagnostics,
-                        limits,
-                        diagnostic(
-                            DiagnosticCode::LIMIT_TOTAL_LOOP_ITERATIONS,
-                            Severity::Warning,
-                            source_id,
-                            start,
-                            end,
-                            "nested roff while requests exceed max_total_loop_iterations",
-                        ),
-                        truncated,
-                    );
-                    continue;
-                }
-                if !record_expansion_steps(
-                    expansion_steps,
-                    1,
-                    limits,
-                    source_id,
-                    start,
-                    end,
-                    diagnostics,
-                    truncated,
-                ) {
-                    return ScopeFlow::Halt;
-                }
-                *total_loop_iterations += 1;
-                frames.push(ScopeExecutionFrame::Loop {
-                    start,
-                    end,
-                    predicate,
-                    lines,
-                    iterations: iterations + 1,
-                    break_after,
-                });
-                if break_after {
-                    let control_column = lines
-                        .first()
-                        .and_then(|line| match line {
-                            ScopeLine::Control {
+                    if *total_loop_iterations >= limits.max_total_loop_iterations {
+                        *truncated = true;
+                        push_diagnostic(
+                            diagnostics,
+                            limits,
+                            diagnostic(
+                                DiagnosticCode::LIMIT_TOTAL_LOOP_ITERATIONS,
+                                Severity::Warning,
+                                source_id,
                                 start,
-                                argument_start,
-                                name,
-                                ..
-                            } => argument_start.saturating_sub(*start).checked_sub(
-                                u32::try_from(name.len())
-                                    .expect("scope request names fit public source columns"),
+                                end,
+                                "nested roff while requests exceed max_total_loop_iterations",
                             ),
-                            _ => None,
-                        })
-                        .unwrap_or(1);
-                    let replay_offset = if iterations == 0 {
-                        lines.first().map(scope_line_start)
-                    } else {
-                        lines
-                            .last()
-                            .map(scope_line_end)
-                            .map(|end| end.saturating_add(1))
-                    };
-                    if let Some(replay_offset) = replay_offset
-                        && let Some(replay_position) = builder.source_position(
-                            &SourceSpan::new(source_id, replay_offset, replay_offset)
-                                .expect("collected scope positions are ordered"),
-                        )
-                    {
-                        frames.push(ScopeExecutionFrame::SetNewRootChildrenLogicalStart {
-                            first_child: builder.children(root).map_or(0, <[NodeId]>::len),
-                            position: SourcePosition {
-                                line: replay_position.line,
-                                column: end
-                                    .saturating_sub(start)
-                                    .saturating_add(control_column)
-                                    .saturating_sub(1),
-                            },
-                        });
+                            truncated,
+                        );
+                        continue;
                     }
+                    if !record_expansion_steps(
+                        expansion_steps,
+                        1,
+                        limits,
+                        source_id,
+                        start,
+                        end,
+                        diagnostics,
+                        truncated,
+                    ) {
+                        return ScopeFlow::Halt;
+                    }
+                    *total_loop_iterations += 1;
+                    frames.push(ReplayFrame::Loop {
+                        start,
+                        end,
+                        predicate,
+                        lines,
+                        iterations: iterations + 1,
+                        break_after,
+                    });
+                    if break_after {
+                        let control_column = lines
+                            .first()
+                            .and_then(|line| match line {
+                                ScopeLine::Control {
+                                    start,
+                                    argument_start,
+                                    name,
+                                    ..
+                                } => argument_start.saturating_sub(*start).checked_sub(
+                                    u32::try_from(name.len())
+                                        .expect("scope request names fit public source columns"),
+                                ),
+                                _ => None,
+                            })
+                            .unwrap_or(1);
+                        let replay_offset = if iterations == 0 {
+                            lines.first().map(scope_line_start)
+                        } else {
+                            lines
+                                .last()
+                                .map(scope_line_end)
+                                .map(|end| end.saturating_add(1))
+                        };
+                        if let Some(replay_offset) = replay_offset
+                            && let Some(replay_position) = builder.source_position(
+                                &SourceSpan::new(source_id, replay_offset, replay_offset)
+                                    .expect("collected scope positions are ordered"),
+                            )
+                        {
+                            frames.push(ReplayFrame::SetNewRootChildrenLogicalStart {
+                                first_child: builder.children(root).map_or(0, <[NodeId]>::len),
+                                position: SourcePosition {
+                                    line: replay_position.line,
+                                    column: end
+                                        .saturating_sub(start)
+                                        .saturating_add(control_column)
+                                        .saturating_sub(1),
+                                },
+                            });
+                        }
+                    }
+                    frames.push(ReplayFrame::Lines {
+                        lines,
+                        next: 0,
+                        previous_conditional: None,
+                    });
                 }
-                frames.push(ScopeExecutionFrame::Lines {
-                    lines,
-                    next: 0,
-                    previous_conditional: None,
-                });
             }
         }
+        closed_loop_from_inner_scope.map_or(ScopeFlow::Continue, |invocation_start| {
+            ScopeFlow::CloseLoopInInnerScope { invocation_start }
+        })
     }
-    closed_loop_from_inner_scope.map_or(ScopeFlow::Continue, |invocation_start| {
-        ScopeFlow::CloseLoopInInnerScope { invocation_start }
-    })
 }
 
 #[allow(clippy::too_many_arguments)]

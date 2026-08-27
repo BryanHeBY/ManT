@@ -165,19 +165,19 @@ impl Parser {
         environment.configure_limits(&self.config.limits);
         let mut active_sources = vec![source.name.clone()];
         let root_source_has_mdoc_os = source_has_mdoc_operating_system_request(source.bytes);
-        let mut session = ParseSession::new(
+        let mut core = ParserCore::new(
             &self.config,
             &mut builder,
             &mut environment,
             &mut active_sources,
             resolver,
         );
-        let mut outcome = SourceMachine::new(
+        let mut outcome = SourceFrame::new(
             source,
             DocumentBuilder::root_source(),
             0,
-            &mut session,
-            ScanOutcome::root(source.bytes.len(), root_source_has_mdoc_os),
+            &mut core,
+            ParseState::root(source.bytes.len(), root_source_has_mdoc_os),
         )
         .run();
         outcome.saw_mdoc_operating_system |= root_source_has_mdoc_os;
@@ -263,7 +263,7 @@ use execution::{
         ScopeCollector, collect_pending_macro_scope, definition_scope_remainder_line,
         record_suppressed_scope_definitions,
     },
-    replay::{ScopeMachine, execute_scope_line, execute_scope_macro_lines},
+    replay::{ReplayMachine, execute_scope_line, execute_scope_macro_lines},
 };
 use handlers::{
     RequestHandling,
@@ -290,7 +290,7 @@ use runtime::{
     update_man_example_fill_presentation, update_man_indent_register, update_preprocessor_depth,
     update_table_preprocessor_depth, validate_character_request, visible_bytes,
 };
-use session::{ParseSession, ScanOutcome, SourceMachine};
+use session::{ParseState, ParserCore, SourceFrame};
 use token::PackageToken;
 
 struct DenyResolver;
@@ -545,31 +545,6 @@ enum ScopeFlow {
         invocation_start: u32,
     },
     Halt,
-}
-
-enum ScopeExecutionFrame<'a> {
-    Lines {
-        lines: &'a [ScopeLine],
-        next: usize,
-        previous_conditional: Option<BranchOutcome>,
-    },
-    Loop {
-        start: u32,
-        end: u32,
-        predicate: &'a [u8],
-        lines: &'a [ScopeLine],
-        iterations: usize,
-        /// A nested `.while` is executed in mandoc's active input frame,
-        /// then causes its enclosing loop to stop rather than resuming the
-        /// outer scope after the inner predicate becomes false.
-        break_after: bool,
-    },
-    /// Apply the copied-input provenance of a nested loop only after its
-    /// replayed body has emitted nodes at the direct scope root.
-    SetNewRootChildrenLogicalStart {
-        first_child: usize,
-        position: SourcePosition,
-    },
 }
 
 fn is_scope_opener(bytes: &[u8], escape: u8) -> bool {

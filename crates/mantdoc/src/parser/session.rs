@@ -3,7 +3,7 @@ use super::{
 };
 use crate::{SourceId, SourceName};
 
-pub(super) struct ParseSession<'a, R: SourceResolver + ?Sized> {
+pub(super) struct ParserCore<'a, R: SourceResolver + ?Sized> {
     pub(super) config: &'a ParserConfig,
     pub(super) builder: &'a mut DocumentBuilder,
     pub(super) environment: &'a mut Environment,
@@ -11,7 +11,7 @@ pub(super) struct ParseSession<'a, R: SourceResolver + ?Sized> {
     pub(super) resolver: &'a mut R,
 }
 
-impl<'a, R: SourceResolver + ?Sized> ParseSession<'a, R> {
+impl<'a, R: SourceResolver + ?Sized> ParserCore<'a, R> {
     pub(super) fn new(
         config: &'a ParserConfig,
         builder: &'a mut DocumentBuilder,
@@ -29,7 +29,7 @@ impl<'a, R: SourceResolver + ?Sized> ParseSession<'a, R> {
     }
 }
 
-pub(super) struct ScanOutcome {
+pub(super) struct ParseState {
     pub(super) diagnostics: Vec<Diagnostic>,
     pub(super) deferred_post_validation_diagnostics: Vec<Diagnostic>,
     pub(super) source_bytes: usize,
@@ -43,7 +43,7 @@ pub(super) struct ScanOutcome {
     pub(super) saw_mdoc_operating_system: bool,
 }
 
-impl ScanOutcome {
+impl ParseState {
     pub(super) fn root(source_bytes: usize, saw_mdoc_operating_system: bool) -> Self {
         Self {
             diagnostics: Vec::new(),
@@ -61,29 +61,29 @@ impl ScanOutcome {
     }
 }
 
-pub(super) struct SourceMachine<'source, 'session, 'context, R: SourceResolver + ?Sized> {
+pub(super) struct SourceFrame<'source, 'core, 'context, R: SourceResolver + ?Sized> {
     pub(super) source: Source<'source>,
     pub(super) source_id: SourceId,
     pub(super) include_depth: usize,
-    pub(super) session: &'session mut ParseSession<'context, R>,
-    pub(super) outcome: ScanOutcome,
+    pub(super) core: &'core mut ParserCore<'context, R>,
+    pub(super) outcome: ParseState,
 }
 
-impl<'source, 'session, 'context, R: SourceResolver + ?Sized>
-    SourceMachine<'source, 'session, 'context, R>
+impl<'source, 'core, 'context, R: SourceResolver + ?Sized>
+    SourceFrame<'source, 'core, 'context, R>
 {
     pub(super) const fn new(
         source: Source<'source>,
         source_id: SourceId,
         include_depth: usize,
-        session: &'session mut ParseSession<'context, R>,
-        outcome: ScanOutcome,
+        core: &'core mut ParserCore<'context, R>,
+        outcome: ParseState,
     ) -> Self {
         Self {
             source,
             source_id,
             include_depth,
-            session,
+            core,
             outcome,
         }
     }
