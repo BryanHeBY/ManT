@@ -8,7 +8,8 @@ use std::{
 
 use mant_ir::{
     Block, DefinitionCase, DefinitionIdentity, DefinitionItem, DefinitionRole, Diagnostic,
-    DiagnosticLevel, EntrySummary, OutlinePath, Section, SemanticEntry, SemanticIndex, SourceSpan,
+    DiagnosticLevel, EntryKindCount, EntrySummary, OutlinePath, Section, SemanticEntry,
+    SemanticIndex, SourceSpan,
 };
 use mant_protocol::{
     EntryProjection, ExcerptSchema, ExcerptSelection, NodeSelector, OutlineDetail, OutlineNode,
@@ -202,7 +203,7 @@ pub fn build_outline_projection(
         entries.clone()
     };
     let mut nodes = Vec::new();
-    if query.tldr.is_some() {
+    if query.tldr.is_some() && !matches!(&materialized_entries, EntryProjection::Kinds { .. }) {
         nodes.push(OutlineNode::Tldr {
             path: OutlinePath::Tldr.to_string().into(),
             id: TLDR_ID.into(),
@@ -213,13 +214,19 @@ pub fn build_outline_projection(
         let index = SemanticIndex::build(manual);
         if !manual.blocks.is_empty() {
             let root_entries = index.root();
-            nodes.push(OutlineNode::DocumentRoot {
+            let children = project_entries(root_entries, None, &[], &materialized_entries);
+            let root = OutlineNode::DocumentRoot {
                 path: OutlinePath::DocumentRoot.to_string().into(),
                 id: DOCUMENT_ROOT_ID.into(),
                 title: DOCUMENT_ROOT_TITLE.to_owned(),
                 entry_summary: projected_summary(root_entries, &materialized_entries),
-                children: project_entries(root_entries, None, &[], &materialized_entries),
-            });
+                children,
+            };
+            if !matches!(&materialized_entries, EntryProjection::Kinds { .. })
+                || !root.children().is_empty()
+            {
+                nodes.push(root);
+            }
         }
         nodes.extend(outline_nodes(
             &manual.sections,
@@ -529,7 +536,7 @@ fn outline_nodes(
     sections
         .iter()
         .enumerate()
-        .map(|(section_index, section)| {
+        .filter_map(|(section_index, section)| {
             let mut coordinates = parent.to_vec();
             coordinates.push(section_index + 1);
             let path =
@@ -542,13 +549,15 @@ fn outline_nodes(
                 index,
                 entries,
             ));
-            OutlineNode::DocumentSection {
+            let node = OutlineNode::DocumentSection {
                 path: path.to_string().into(),
                 id: section.id.clone(),
                 title: section.title.clone(),
                 entry_summary: projected_summary(semantic_entries, entries),
                 children,
-            }
+            };
+            (!matches!(entries, EntryProjection::Kinds { .. }) || !node.children().is_empty())
+                .then_some(node)
         })
         .collect()
 }
@@ -557,11 +566,56 @@ fn projected_summary(
     entries: &[SemanticEntry],
     projection: &EntryProjection,
 ) -> Option<EntrySummary> {
-    if matches!(projection, EntryProjection::None) {
-        return None;
-    }
-    let summary = EntrySummary::for_entries(entries);
+    let summary = match projection {
+        EntryProjection::None => return None,
+        EntryProjection::Summary | EntryProjection::All => EntrySummary::for_entries(entries),
+        EntryProjection::Kinds { kinds } => filtered_entry_summary(entries, kinds),
+    };
     (!summary.is_empty()).then_some(summary)
+}
+
+fn filtered_entry_summary(entries: &[SemanticEntry], kinds: &[mant_ir::EntryKind]) -> EntrySummary {
+    let mut summary = EntrySummary::default();
+    for entry in entries {
+        summarize_filtered_entry(entry, kinds, &mut summary, true);
+    }
+    summary
+}
+
+fn summarize_filtered_entry(
+    entry: &SemanticEntry,
+    kinds: &[mant_ir::EntryKind],
+    summary: &mut EntrySummary,
+    direct: bool,
+) {
+    if kinds.contains(&entry.kind) {
+        record_projected_summary(summary, entry.kind, entry.forms.len(), direct);
+    }
+    for child in &entry.children {
+        summarize_filtered_entry(child, kinds, summary, false);
+    }
+}
+
+fn record_projected_summary(
+    summary: &mut EntrySummary,
+    kind: mant_ir::EntryKind,
+    forms: usize,
+    direct: bool,
+) {
+    if direct {
+        summary.direct = summary.direct.saturating_add(1);
+    } else {
+        summary.descendants = summary.descendants.saturating_add(1);
+    }
+    summary.forms = summary
+        .forms
+        .saturating_add(u32::try_from(forms).unwrap_or(u32::MAX));
+    if let Some(count) = summary.by_kind.iter_mut().find(|count| count.kind == kind) {
+        count.count = count.count.saturating_add(1);
+    } else {
+        summary.by_kind.push(EntryKindCount { kind, count: 1 });
+        summary.by_kind.sort_by_key(|count| count.kind);
+    }
 }
 
 fn project_entries(
@@ -698,6 +752,9 @@ fn reproject_selected_node(
                 *entry_summary = None;
             }
             children.retain_mut(|child| reproject_selected_node(child, projection, false));
+            if let EntryProjection::Kinds { kinds } = projection {
+                *entry_summary = projected_outline_summary(children, kinds);
+            }
             true
         }
         OutlineNode::DocumentEntry {
@@ -714,6 +771,9 @@ fn reproject_selected_node(
             } else {
                 children.retain_mut(|child| reproject_selected_node(child, projection, false));
             }
+            if let EntryProjection::Kinds { kinds } = projection {
+                *entry_summary = projected_outline_summary(children, kinds);
+            }
             keep_self
                 || match projection {
                     EntryProjection::All => true,
@@ -724,6 +784,40 @@ fn reproject_selected_node(
                 }
         }
     }
+}
+
+fn projected_outline_summary(
+    nodes: &[OutlineNode],
+    kinds: &[mant_ir::EntryKind],
+) -> Option<EntrySummary> {
+    fn visit(
+        node: &OutlineNode,
+        kinds: &[mant_ir::EntryKind],
+        summary: &mut EntrySummary,
+        direct: bool,
+    ) {
+        let OutlineNode::DocumentEntry {
+            entry_kind,
+            forms,
+            children,
+            ..
+        } = node
+        else {
+            return;
+        };
+        if kinds.contains(entry_kind) {
+            record_projected_summary(summary, *entry_kind, forms.len(), direct);
+        }
+        for child in children {
+            visit(child, kinds, summary, false);
+        }
+    }
+
+    let mut summary = EntrySummary::default();
+    for node in nodes {
+        visit(node, kinds, &mut summary, true);
+    }
+    (!summary.is_empty()).then_some(summary)
 }
 
 enum LocatedNode<'a> {
@@ -1326,7 +1420,23 @@ mod tests {
             None,
         )
         .expect("value outline");
-        let option = &filtered.nodes[1].children()[0];
+        assert_eq!(filtered.nodes.len(), 1);
+        let option_section = filtered
+            .nodes
+            .iter()
+            .find(|node| node.id() == "options-2")
+            .expect("filtered ancestor section");
+        let OutlineNode::DocumentSection {
+            entry_summary: Some(summary),
+            ..
+        } = option_section
+        else {
+            panic!("filtered value summary");
+        };
+        assert_eq!((summary.direct, summary.descendants), (0, 1));
+        assert_eq!(summary.by_kind.len(), 1);
+        assert_eq!(summary.by_kind[0].kind, EntryKind::Value);
+        let option = &option_section.children()[0];
         assert!(matches!(
             option,
             OutlineNode::DocumentEntry {
@@ -1343,6 +1453,20 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    #[test]
+    fn kind_filter_with_no_matches_returns_an_explicitly_empty_projection() {
+        let outline = build_outline_projection(
+            &query_with_semantic_entries(),
+            EntryProjection::Kinds {
+                kinds: vec![EntryKind::EnvironmentVariable],
+            },
+            None,
+        )
+        .expect("empty environment projection");
+
+        assert!(outline.nodes.is_empty());
     }
 
     #[test]

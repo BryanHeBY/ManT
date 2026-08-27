@@ -54,7 +54,11 @@ pub fn render_outline_text(outline: &QueryOutline) -> String {
             .as_ref()
             .and_then(|meta| meta.manual_section.as_deref()),
     )];
-    render_outline_nodes(&outline.nodes, "", &mut lines);
+    if let Some(message) = super::outline_empty_message(outline) {
+        lines.push(message);
+    } else {
+        render_outline_nodes(&outline.nodes, "", &mut lines);
+    }
     lines.join("\n").trim_end().to_owned()
 }
 
@@ -129,7 +133,7 @@ pub fn render_outline_entry_summary(summary: &EntrySummary) -> String {
     )
 }
 
-const fn entry_kind_label(kind: EntryKind, singular: bool) -> &'static str {
+pub(super) const fn entry_kind_label(kind: EntryKind, singular: bool) -> &'static str {
     match (kind, singular) {
         (EntryKind::Command, true) => "command",
         (EntryKind::Command, false) => "commands",
@@ -495,12 +499,13 @@ fn join_parts(parts: Vec<String>) -> String {
 mod tests {
     use crate::ResolvedContent;
     use mant_ir::{
-        Block, DefinitionItem, Document, DocumentMeta, DocumentSource, Inline, LayoutHint, Section,
-        SourceFormat, TldrDocument, TldrOrigin,
+        Block, DefinitionItem, Document, DocumentMeta, DocumentSource, EntryKind, Inline,
+        LayoutHint, Section, SourceFormat, TldrDocument, TldrOrigin,
     };
+    use mant_protocol::EntryProjection;
 
     use super::{render_excerpt_text, render_outline_text, render_query_man, render_query_text};
-    use crate::{build_outline, select_excerpt};
+    use crate::{build_outline, build_outline_projection, render_outline_markdown, select_excerpt};
 
     fn query() -> ResolvedContent {
         ResolvedContent {
@@ -577,6 +582,27 @@ mod tests {
         assert!(output.contains("Outline 1.1: OPTIONS > Common options"));
         assert!(output.contains("child details"));
         assert!(!output.contains("parent details"));
+    }
+
+    #[test]
+    fn renders_an_explicit_zero_for_an_empty_kind_projection() {
+        let outline = build_outline_projection(
+            &query(),
+            EntryProjection::Kinds {
+                kinds: vec![EntryKind::EnvironmentVariable],
+            },
+            None,
+        )
+        .expect("empty kind projection");
+
+        assert_eq!(
+            render_outline_text(&outline),
+            "demo(1)\n0 matching semantic entries for: environment variables"
+        );
+        assert!(
+            render_outline_markdown(&outline)
+                .contains("0 matching semantic entries for: environment variables")
+        );
     }
 
     #[test]

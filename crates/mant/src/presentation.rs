@@ -90,6 +90,9 @@ impl TerminalText {
 }
 
 fn render_terminal_outline(outline: &QueryOutline, color: bool) -> String {
+    if outline.nodes.is_empty() {
+        return mant_engine::render_outline_text(outline);
+    }
     let mut output = TerminalText::new(color);
     output.styled(
         TerminalRole::Document,
@@ -742,6 +745,31 @@ The selected color is visible in terminal output.
             assert!(colored.contains("\x1b["));
             assert_eq!(strip_ansi(&colored), plain);
         }
+    }
+
+    #[test]
+    fn terminal_outline_reports_an_empty_kind_projection() {
+        let query = query_markdown_text(PAGE, None).expect("Markdown query");
+        let result = project_query_view(
+            query,
+            &QueryView::Outline {
+                entries: EntryProjection::Kinds {
+                    kinds: vec![mant_ir::EntryKind::EnvironmentVariable],
+                },
+                root: None,
+            },
+        )
+        .expect("empty environment outline");
+
+        let rendered = render_query_result(
+            &result,
+            options(QueryFormat::Text, true, OutputTarget::Terminal),
+        )
+        .expect("terminal outline");
+        assert_eq!(
+            rendered,
+            "stdin\n0 matching semantic entries for: environment variables"
+        );
     }
 
     #[test]

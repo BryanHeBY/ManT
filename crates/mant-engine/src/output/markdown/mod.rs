@@ -304,7 +304,9 @@ pub fn render_outline_markdown(outline: &QueryOutline) -> String {
             .and_then(|meta| meta.manual_section.as_deref()),
     );
     let mut blocks = vec![heading(1, &format!("{label} outline"))];
-    if !outline.nodes.is_empty() {
+    if let Some(message) = super::outline_empty_message(outline) {
+        blocks.push(message);
+    } else if !outline.nodes.is_empty() {
         blocks.push(outline_list(&outline.nodes, 0));
     }
     blocks.join("\n\n").trim_end().to_owned()

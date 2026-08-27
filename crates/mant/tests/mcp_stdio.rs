@@ -69,7 +69,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
-    let replies = (0..(12 + usize::from(cfg!(windows))))
+    let replies = (0..(13 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -171,6 +171,18 @@ fn request_document_tools(input: &mut impl Write) {
         &json!({
             "documents": ["documents/mcp-registered"],
             "entry": "VISUAL"
+        }),
+    );
+    call_tool(
+        input,
+        16,
+        "mant_outline",
+        &json!({
+            "document": "documents/mcp-suffix.exe",
+            "entries": {
+                "kind": "kinds",
+                "kinds": [{"kind": "environment-variable"}]
+            }
         }),
     );
     call_tool(
@@ -344,6 +356,13 @@ fn assert_tool_replies(replies: &[Value]) {
         probe.contains("[explain: matched=0, missed=0, failed=1]"),
         "{probe}"
     );
+
+    let empty_outline = successful_text(reply(replies, 16));
+    assert!(
+        empty_outline.contains("0 matching semantic entries for: environment variables"),
+        "{empty_outline}"
+    );
+    assert!(!empty_outline.contains("Suffix details"), "{empty_outline}");
 
     let bounded = successful_text(reply(replies, 10));
     assert!(

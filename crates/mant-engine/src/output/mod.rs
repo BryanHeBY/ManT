@@ -5,6 +5,8 @@ mod markdown;
 mod search;
 mod text;
 
+use mant_protocol::{EntryProjection, QueryOutline};
+
 pub use json::{
     render_excerpt_json, render_outline_json, render_query_json, render_search_json,
     render_update_json,
@@ -23,3 +25,18 @@ pub use text::{
     render_excerpt_text, render_outline_entry_summary, render_outline_text, render_query_man,
     render_query_text,
 };
+
+fn outline_empty_message(outline: &QueryOutline) -> Option<String> {
+    if !outline.nodes.is_empty() {
+        return None;
+    }
+    let EntryProjection::Kinds { kinds } = &outline.entries else {
+        return None;
+    };
+    let labels = kinds
+        .iter()
+        .map(|kind| text::entry_kind_label(*kind, false))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!("0 matching semantic entries for: {labels}"))
+}
