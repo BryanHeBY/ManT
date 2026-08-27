@@ -15,6 +15,47 @@ use super::{
     validate_maximum_arguments, validate_no_arguments, validate_option_arguments,
     validate_section_paragraph_controls,
 };
+use std::collections::BTreeSet;
+
+struct ManStructureMachine {
+    nodes: std::vec::IntoIter<NodeId>,
+    suppressed_nodes: BTreeSet<NodeId>,
+}
+
+impl ManStructureMachine {
+    fn prepare(builder: &mut DocumentBuilder, flat: Vec<NodeId>) -> Self {
+        // Scanner output is normalized once before structural transitions.
+        // Keeping this phase separate makes `step` a cheap source-order
+        // cursor with no repeated package classification or allocation.
+        for node in &flat {
+            normalize_visible_macro_tabulation_escapes(builder, *node);
+            if builder
+                .node_macro_name(*node)
+                .is_some_and(is_line_scoped_element)
+            {
+                coalesce_text_children(builder, *node);
+            }
+        }
+        apply_presentation_flags(builder, &flat);
+        let mut suppressed_nodes =
+            BTreeSet::from_iter(suppress_filled_c_blank_lines(builder, &flat));
+        suppressed_nodes.extend(attach_centered_input_lines(builder, &flat));
+        Self {
+            nodes: flat.into_iter(),
+            suppressed_nodes,
+        }
+    }
+
+    fn step(&mut self) -> Option<NodeId> {
+        self.nodes
+            .by_ref()
+            .find(|node| !self.suppressed_nodes.contains(node))
+    }
+
+    fn finish(self) {
+        debug_assert!(self.nodes.len() == 0, "man event machine finished early");
+    }
+}
 
 /// Convert the implemented man block families from scanner elements into
 /// `Block`/`Head`/`Body` syntax nodes.
@@ -31,21 +72,10 @@ pub(crate) fn structure(builder: &mut DocumentBuilder, max_nodes: usize) -> Stru
     };
 
     // The scanner intentionally has no man(7)-specific state: it produces a
-    // source-ordered list of already-expanded roff events.  Keep all man
-    // scope handling here, after roff execution, so macro expansion cannot
-    // bypass document structure merely because it came from a `.de` body.
-    for node in &flat {
-        normalize_visible_macro_tabulation_escapes(builder, *node);
-        if builder
-            .node_macro_name(*node)
-            .is_some_and(is_line_scoped_element)
-        {
-            coalesce_text_children(builder, *node);
-        }
-    }
-    apply_presentation_flags(builder, &flat);
-    let c_blank_followers = suppress_filled_c_blank_lines(builder, &flat);
-    let centered_input_lines = attach_centered_input_lines(builder, &flat);
+    // source-ordered list of already-expanded roff events. Keep package
+    // normalization and event traversal in an explicit prepare/step/finish
+    // machine so generated `.de` input follows the same transition path.
+    let mut machine = ManStructureMachine::prepare(builder, flat);
 
     // `subsection_parent` is the current SH body receiving sibling `.SS`
     // blocks; `flow_parent` is the current container receiving structural
@@ -82,13 +112,7 @@ pub(crate) fn structure(builder: &mut DocumentBuilder, max_nodes: usize) -> Stru
     let mut saw_title_control = false;
     let mut saw_complete_title_control = false;
 
-    for node in flat {
-        if c_blank_followers.contains(&node) {
-            continue;
-        }
-        if centered_input_lines.contains(&node) {
-            continue;
-        }
+    while let Some(node) = machine.step() {
         if builder.node_kind(node) == Some(NodeKind::Comment) {
             // man(7) retains the source preamble comment but discards comments
             // interspersed with parsed document content from its public tree.
@@ -814,6 +838,7 @@ pub(crate) fn structure(builder: &mut DocumentBuilder, max_nodes: usize) -> Stru
             }
         }
     }
+    machine.finish();
     for frame in &indents {
         outcome.recoveries.push(Recovery::UnclosedBlock {
             macro_name: "RS",
