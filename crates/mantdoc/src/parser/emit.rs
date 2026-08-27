@@ -503,6 +503,7 @@ pub(super) fn append_legacy_table_utf8(projected: &mut String, text: &str) {
 
 pub(super) fn emit_trailing_whitespace(
     bytes: &[u8],
+    macro_set: MacroSet,
     line_start: u32,
     source_id: crate::SourceId,
     limits: &Limits,
@@ -512,7 +513,10 @@ pub(super) fn emit_trailing_whitespace(
     let Some(trailing_start) = trailing_whitespace_start(bytes) else {
         return;
     };
-    let offset = if bytes[..trailing_start].ends_with(b"\\\"") {
+    // man(7) reports its terminal byte (`strlen(buf) - 1`), whereas mdoc(7)
+    // reports the beginning of its retained whitespace run.  This is public
+    // source-location behavior, so retain the package distinction here.
+    let offset = if macro_set == MacroSet::Man || bytes[..trailing_start].ends_with(b"\\\"") {
         bytes.len().saturating_sub(1)
     } else {
         trailing_start

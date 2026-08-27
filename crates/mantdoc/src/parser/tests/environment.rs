@@ -68,6 +68,29 @@ fn user_macro_fill_requests_apply_before_the_next_physical_text_line() {
 }
 
 #[test]
+fn man_trailing_whitespace_points_at_its_terminal_byte() {
+    let name = SourceName::new("trailing-space.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH TRAILING-SPACE 1 28-Aug-2026\n.SH DESCRIPTION\ntext  \n",
+        ))
+        .unwrap();
+
+    let finding = report
+        .diagnostics
+        .iter()
+        .find(|finding| finding.code.as_str() == DiagnosticCode::INPUT_TRAILING_WHITESPACE)
+        .unwrap();
+    assert_eq!(
+        report
+            .document
+            .source_position(finding.primary.as_ref().unwrap()),
+        Some(crate::SourcePosition { line: 3, column: 6 })
+    );
+}
+
+#[test]
 fn mdoc_control_arguments_expand_unescaped_string_references() {
     let name = SourceName::new("mdoc-string-argument.1").unwrap();
     let report = Parser::new(ParserConfig {

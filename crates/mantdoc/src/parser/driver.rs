@@ -421,6 +421,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         if builder.macro_set() == MacroSet::Mdoc || environment.is_filled() {
                             emit_trailing_whitespace(
                                 bytes,
+                                builder.macro_set(),
                                 start,
                                 source_id,
                                 limits,
@@ -506,6 +507,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     {
                         emit_trailing_whitespace(
                             &bytes,
+                            builder.macro_set(),
                             start,
                             source_id,
                             limits,
