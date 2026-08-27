@@ -403,6 +403,21 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     // macro is reparsed at this line's source location.
                     let sprung_input_trap = input_trap.consume_text_line();
                     if builder.macro_set() != MacroSet::None && package_preprocessor_depth == 0 {
+                        // `roff_parseln()` reports its raw physical-line
+                        // finding before man/mdoc perform their own style
+                        // validation (including trailing whitespace).
+                        if environment.is_filled() {
+                            emit_long_input_line(
+                                bytes,
+                                start,
+                                end,
+                                source_id,
+                                scanner.control_character(),
+                                limits,
+                                &mut diagnostics,
+                                &mut truncated,
+                            );
+                        }
                         if builder.macro_set() == MacroSet::Mdoc || environment.is_filled() {
                             emit_trailing_whitespace(
                                 bytes,
@@ -413,15 +428,6 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 &mut truncated,
                             );
                         }
-                        emit_long_input_line(
-                            bytes,
-                            start,
-                            end,
-                            source_id,
-                            limits,
-                            &mut diagnostics,
-                            &mut truncated,
-                        );
                         if environment.is_filled() && !suppress_filled_text_tabs {
                             emit_filled_text_tabs(
                                 bytes,
@@ -3954,6 +3960,21 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         );
                                     }
                                     continue;
+                                }
+                                // A user macro body is executable roff input,
+                                // not merely an AST template.  Package fill
+                                // toggles in generated bodies (notably
+                                // Pod::Man's `Vb`/`Ve` wrappers around `.nf`
+                                // and `.fi`) must therefore mutate the same
+                                // session environment as physical controls
+                                // before the next caller line is scanned.
+                                if is_builtin_package_macro(builder.macro_set(), request) {
+                                    update_fill_mode(
+                                        environment,
+                                        builder.macro_set(),
+                                        request,
+                                        raw_arguments,
+                                    );
                                 }
                                 if !is_builtin_package_macro(builder.macro_set(), request)
                                     && let Some(nested) =

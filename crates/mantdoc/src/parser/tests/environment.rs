@@ -55,6 +55,19 @@ fn empty_user_strings_are_silent_in_control_position() {
 }
 
 #[test]
+fn user_macro_fill_requests_apply_before_the_next_physical_text_line() {
+    let name = SourceName::new("pod-verbatim.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH POD-VERBATIM 1 28-Aug-2026\n.SH DESCRIPTION\n.de Vb\n.nf\n..\n.de Ve\n.fi\n..\n.Vb\n\\&        \n.Ve\n",
+        ))
+        .unwrap();
+
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
 fn mdoc_control_arguments_expand_unescaped_string_references() {
     let name = SourceName::new("mdoc-string-argument.1").unwrap();
     let report = Parser::new(ParserConfig {

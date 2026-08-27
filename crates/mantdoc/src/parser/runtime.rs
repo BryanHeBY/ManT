@@ -310,19 +310,21 @@ pub(super) fn emit_long_input_line(
     line_start: u32,
     line_end: u32,
     source_id: crate::SourceId,
+    control_character: u8,
     limits: &Limits,
     diagnostics: &mut Vec<Diagnostic>,
     truncated: &mut bool,
 ) {
-    const STYLE_LINE_BYTES: usize = 80;
-    const PREVIEW_CHARACTERS: usize = 20;
-    if bytes.len() <= STYLE_LINE_BYTES {
+    const PREVIEW_BYTES: usize = 20;
+    // Keep the original roff.c predicate rather than treating every long
+    // physical input line as style prose.  In particular, mandoc excludes
+    // no-fill lines, request/escape-led lines, indented lines, and long words
+    // that offer no break point before column 80.  Running this before text
+    // normalization also preserves the raw 20-byte diagnostic excerpt.
+    if !is_long_input_line_style(bytes, control_character) {
         return;
     }
-    let preview = decode_visible_bytes(bytes)
-        .chars()
-        .take(PREVIEW_CHARACTERS)
-        .collect::<String>();
+    let preview = String::from_utf8_lossy(&bytes[..bytes.len().min(PREVIEW_BYTES)]);
     let location = line_start.saturating_add(
         u32::try_from(bytes.len().saturating_sub(1))
             .expect("scanner source lines fit the public offset boundary"),
@@ -340,6 +342,22 @@ pub(super) fn emit_long_input_line(
         ),
         truncated,
     );
+}
+
+/// Exact `roff.c` eligibility predicate for `MANDOCERR_TEXT_LONG`.
+///
+/// This stays separate from emission so the boundary conditions remain easy to
+/// audit against upstream and cannot drift behind presentation changes.
+fn is_long_input_line_style(bytes: &[u8], control_character: u8) -> bool {
+    const STYLE_LINE_BYTES: usize = 80;
+
+    bytes.len() > STYLE_LINE_BYTES
+        && !matches!(bytes.first(), Some(b' ' | b'.' | b'\\'))
+        && bytes.first().is_none_or(|byte| *byte != control_character)
+        && bytes
+            .iter()
+            .position(|byte| *byte == b' ')
+            .is_some_and(|space| space < STYLE_LINE_BYTES)
 }
 
 pub(super) fn invalid_input_byte_offsets(bytes: &[u8]) -> Vec<(usize, u8)> {
@@ -1393,7 +1411,7 @@ pub(super) fn visible_bytes(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::source_offset_or_line_start;
+    use super::{is_long_input_line_style, source_offset_or_line_start};
 
     #[test]
     fn expansion_offsets_outside_the_invocation_fall_back_to_line_start() {
@@ -1403,5 +1421,23 @@ mod tests {
             source_offset_or_line_start(u32::MAX - 2, u32::MAX, 4),
             u32::MAX - 2
         );
+    }
+
+    #[test]
+    fn long_line_style_predicate_matches_roff_boundaries() {
+        let eligible = [b"word ".as_slice(), &[b'x'; 76]].concat();
+        assert_eq!(eligible.len(), 81);
+        assert!(is_long_input_line_style(&eligible, b'.'));
+
+        for ineligible in [
+            vec![b'x'; 80],
+            [b" ".as_slice(), &eligible].concat(),
+            [b".".as_slice(), &eligible].concat(),
+            [b"\\".as_slice(), &eligible].concat(),
+            [b"'".as_slice(), &eligible].concat(),
+            vec![b'x'; 81],
+        ] {
+            assert!(!is_long_input_line_style(&ineligible, b'\''));
+        }
     }
 }
