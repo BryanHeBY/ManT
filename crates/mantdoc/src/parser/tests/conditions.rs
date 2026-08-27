@@ -920,3 +920,23 @@ fn m3_scope_macro_while_frames_share_the_session_loop_budget() {
         .collect::<Vec<_>>();
     assert_eq!(visible, ["inside", "inside"]);
 }
+
+#[test]
+fn inline_condition_in_a_user_macro_keeps_the_body_control_cursor() {
+    let name = SourceName::new("macro-inline-control.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH MACRO-INLINE-CONTROL 1 28-Aug-2026\n.de Sp\n.if n .sp\n..\n.Sp\n",
+        ))
+        .unwrap();
+    let sp = report
+        .document
+        .preorder()
+        .find(|node| node.macro_name() == Some("sp"))
+        .unwrap();
+    assert_eq!(
+        sp.source_position(),
+        Some(crate::SourcePosition { line: 5, column: 7 })
+    );
+}

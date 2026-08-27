@@ -202,9 +202,6 @@ pub(super) fn macro_conditional_body_origin(
     let predicate = arguments.first()?;
     let body = arguments.get(body_start)?;
     let predicate_width = predicate_width?;
-    if predicate_width == predicate.bytes.len() {
-        return None;
-    }
     let control_width = body_line.len().checked_sub(raw_arguments.len())?;
     let separator_width = body
         .offset

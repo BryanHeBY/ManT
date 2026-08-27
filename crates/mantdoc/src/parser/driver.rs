@@ -3479,18 +3479,22 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         continue;
                                     }
                                     if condition && !body_template.is_empty() {
+                                        let conditional_body_origin = macro_conditional_body_origin(
+                                            &body_line,
+                                            raw_arguments,
+                                            &condition_arguments,
+                                            body_start,
+                                            predicate_width,
+                                        );
                                         pending.push((
                                             body_template,
                                             macro_arguments,
                                             macro_depth,
-                                            macro_origin,
-                                            macro_conditional_body_origin(
-                                                &body_line,
-                                                raw_arguments,
-                                                &condition_arguments,
-                                                body_start,
-                                                predicate_width,
-                                            ),
+                                            conditional_body_origin
+                                                .map_or(macro_origin, |origin| {
+                                                    origin.saturating_sub(1)
+                                                }),
+                                            conditional_body_origin,
                                             false,
                                         ));
                                     }
