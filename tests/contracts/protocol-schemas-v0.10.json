@@ -6769,100 +6769,6 @@
           "selections"
         ]
       },
-      "QuerySearch": {
-        "$id": "urn:mant:search:v0.10",
-        "description": "Complete, paginatable search result returned to agents and scripts.",
-        "type": "object",
-        "properties": {
-          "label": {
-            "description": "Human-readable selected-document label.",
-            "type": "string"
-          },
-          "matches": {
-            "description": "Matching line groups in render order.",
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/SearchHit"
-            }
-          },
-          "meta": {
-            "description": "Document metadata, when one was loaded.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/DocumentMeta"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "nextOffset": {
-            "description": "Offset for the next page, when one exists.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint32",
-            "minimum": 0
-          },
-          "offset": {
-            "description": "Applied zero-based matching-line offset.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "query": {
-            "description": "Normalized query applied by the engine.",
-            "$ref": "#/$defs/SearchQuery"
-          },
-          "render": {
-            "description": "Coordinate-space description shared by all matching line groups.",
-            "$ref": "#/$defs/SearchRender"
-          },
-          "returned": {
-            "description": "Number of matching line groups present in [`Self::matches`].",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "schema": {
-            "description": "Exact response schema discriminator.",
-            "$ref": "#/$defs/SearchSchema"
-          },
-          "source": {
-            "description": "Authoritative document source, when one was loaded.",
-            "anyOf": [
-              {
-                "$ref": "#/$defs/DocumentSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "total": {
-            "description": "Total matching line groups before pagination.",
-            "type": "integer",
-            "format": "uint32",
-            "minimum": 0
-          },
-          "truncated": {
-            "description": "Whether additional matching line groups remain.",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "schema",
-          "label",
-          "query",
-          "render",
-          "total",
-          "returned",
-          "offset",
-          "truncated",
-          "matches"
-        ]
-      },
       "ResolvedDocumentScope": {
         "description": "Logical graph produced before applying a projection.",
         "type": "object",
@@ -7132,15 +7038,23 @@
             "maximum": 65535,
             "minimum": 0
           },
-          "search": {
-            "description": "Matching line groups retained for this global page together with their\ndocument-local coordinate contract.",
-            "$ref": "#/$defs/QuerySearch"
+          "matches": {
+            "description": "Matching line groups retained from the globally paginated result set.\nTheir ordinals are global across all documents in the scope.",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SearchHit"
+            }
+          },
+          "render": {
+            "description": "Canonical Markdown coordinate space for this document's hits.",
+            "$ref": "#/$defs/SearchRender"
           }
         },
         "required": [
           "address",
           "depth",
-          "search"
+          "render",
+          "matches"
         ]
       },
       "SearchCase": {
@@ -7487,16 +7401,6 @@
             "description": "Complete query document, including optional tldr content.",
             "type": "string",
             "const": "full"
-          }
-        ]
-      },
-      "SearchSchema": {
-        "description": "Exact schema marker for structure-aware search results.",
-        "oneOf": [
-          {
-            "description": "Version 0.10 of the pre-stable search protocol.",
-            "type": "string",
-            "const": "mant.search/v0.10"
           }
         ]
       },

@@ -3,7 +3,7 @@
 use std::fmt::Write as _;
 
 use mant_protocol::{
-    DocumentCatalog, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse, ScopeQueryResult,
+    DocumentCatalog, QueryExcerpt, QueryOutline, ScopeQueryResponse, ScopeQueryResult,
     TraversalLimit, sanitize_terminal_text,
 };
 
@@ -242,10 +242,6 @@ pub(super) fn prepare_outline(outline: &mut QueryOutline) {
     discard_document_source_path(&mut outline.source);
 }
 
-pub(super) fn prepare_search(search: &mut QuerySearch) {
-    discard_document_source_path(&mut search.source);
-}
-
 pub(super) fn prepare_scope(response: &mut ScopeQueryResponse) {
     for unresolved in &mut response.scope.unresolved {
         "document could not be resolved".clone_into(&mut unresolved.reason);
@@ -262,11 +258,7 @@ pub(super) fn prepare_scope(response: &mut ScopeQueryResponse) {
                 reason.clone_into(&mut failure.reason);
             }
         }
-        ScopeQueryResult::Search { search } => {
-            for found in &mut search.documents {
-                prepare_search(&mut found.search);
-            }
-        }
+        ScopeQueryResult::Search { .. } => {}
     }
 }
 

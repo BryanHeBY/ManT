@@ -4,8 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DocumentAddress, QueryExcerpt, QuerySearch, SearchCase, SearchQuery, SearchScope, SearchSyntax,
-    default_search_limit,
+    DocumentAddress, QueryExcerpt, SearchCase, SearchHit, SearchQuery, SearchRender, SearchScope,
+    SearchSyntax, default_search_limit,
 };
 
 /// Maximum number of initial documents accepted by the native scope contract.
@@ -335,9 +335,11 @@ pub struct ScopedSearchDocument {
     pub address: DocumentAddress,
     /// Distance retained from the resolved scope.
     pub depth: u16,
-    /// Matching line groups retained for this global page together with their
-    /// document-local coordinate contract.
-    pub search: QuerySearch,
+    /// Canonical Markdown coordinate space for this document's hits.
+    pub render: SearchRender,
+    /// Matching line groups retained from the globally paginated result set.
+    /// Their ordinals are global across all documents in the scope.
+    pub matches: Vec<SearchHit>,
 }
 
 /// Globally paginated search over a resolved document scope.

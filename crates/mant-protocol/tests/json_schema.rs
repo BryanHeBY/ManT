@@ -3,7 +3,7 @@
 use mant_protocol::{
     document_catalog_json_schema, query_bundle_json_schema, query_excerpt_json_schema,
     query_json_schema_catalog, query_outline_json_schema, query_request_json_schema,
-    query_search_json_schema,
+    query_search_json_schema, scope_query_response_json_schema,
 };
 use serde_json::Value;
 
@@ -125,6 +125,28 @@ fn response_schemas_follow_the_serialized_wire_shapes() {
         assert_eq!(
             search["$defs"]["SearchMarkdownRange"]["properties"][coordinate]["minimum"],
             1
+        );
+    }
+
+    let scope = value(scope_query_response_json_schema());
+    let scoped_document = &scope["$defs"]["ScopedSearchDocument"];
+    assert_eq!(
+        required(scoped_document),
+        ["address", "depth", "render", "matches"]
+    );
+    for local_pagination_field in [
+        "query",
+        "total",
+        "returned",
+        "offset",
+        "truncated",
+        "nextOffset",
+    ] {
+        assert!(
+            scoped_document["properties"]
+                .get(local_pagination_field)
+                .is_none(),
+            "unexpected document-local field {local_pagination_field}"
         );
     }
 }

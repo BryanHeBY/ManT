@@ -9,7 +9,7 @@ use mant_ir::{
 };
 use mant_protocol::{
     ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse,
-    ScopeQueryResult, sanitize_terminal_text,
+    ScopeQueryResult, ScopedSearchDocument, SearchQuery, SearchSchema, sanitize_terminal_text,
 };
 use serde::Serialize;
 
@@ -565,12 +565,7 @@ pub(super) fn render_scope_query_result(
                     output_terminal,
                 );
                 output.push('\n');
-                // A document-local continuation is not a valid cursor for a
-                // globally paginated scope. Retain the local counts and
-                // coordinates, but let the outer scope presentation report
-                // its one authoritative next offset.
-                let mut local_search = found.search.clone();
-                local_search.next_offset = None;
+                let local_search = scoped_search_projection(found, &search.query);
                 let rendered = match format {
                     QueryFormat::Markdown => {
                         let search = output_terminal.then(|| terminal_search(&local_search));
@@ -586,6 +581,37 @@ pub(super) fn render_scope_query_result(
         }
     }
     Ok(output)
+}
+
+fn scoped_search_projection(found: &ScopedSearchDocument, query: &SearchQuery) -> QuerySearch {
+    let (label, meta) = match &found.address {
+        mant_protocol::DocumentAddress::Manual {
+            name,
+            manual_section,
+        } => (
+            name.clone(),
+            Some(DocumentMeta {
+                manual_section: Some(manual_section.clone()),
+                ..DocumentMeta::default()
+            }),
+        ),
+        mant_protocol::DocumentAddress::Markdown { path, .. } => (path.clone(), None),
+    };
+    let returned = u32::try_from(found.matches.len()).unwrap_or(u32::MAX);
+    QuerySearch {
+        schema: SearchSchema::V0Dot10,
+        label,
+        source: None,
+        meta,
+        query: query.clone(),
+        render: found.render.clone(),
+        total: returned,
+        returned,
+        offset: 0,
+        truncated: false,
+        next_offset: None,
+        matches: found.matches.clone(),
+    }
 }
 
 fn write_scope_heading(

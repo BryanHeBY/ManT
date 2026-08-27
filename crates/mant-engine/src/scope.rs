@@ -635,6 +635,7 @@ fn execute_scope_search(
     let mut remaining_take = query.limit;
     let mut groups = Vec::new();
     for (scoped, bundle) in loaded.scope.documents.iter().zip(&loaded.documents) {
+        let document_ordinal_base = total;
         let local = search_query(
             bundle,
             &SearchQuery {
@@ -654,14 +655,16 @@ fn execute_scope_search(
         if u32::try_from(hits.len()).unwrap_or(u32::MAX) > remaining_take {
             hits.truncate(usize::try_from(remaining_take).unwrap_or(usize::MAX));
         }
+        for hit in &mut hits {
+            hit.ordinal = document_ordinal_base.saturating_add(hit.ordinal);
+        }
         remaining_take =
             remaining_take.saturating_sub(u32::try_from(hits.len()).unwrap_or(u32::MAX));
-        local.returned = u32::try_from(hits.len()).unwrap_or(u32::MAX);
-        local.matches = hits;
         groups.push(ScopedSearchDocument {
             address: scoped.address.clone(),
             depth: scoped.depth,
-            search: local,
+            render: local.render,
+            matches: hits,
         });
     }
     let returned = query.limit.saturating_sub(remaining_take);
@@ -931,6 +934,73 @@ mod tests {
         assert_eq!(failures[0].address, address);
         assert!(failures[0].reason.contains("outline node 1 (Startup)"));
         assert!(failures[0].reason.contains("at line"));
+    }
+
+    #[test]
+    fn scope_search_uses_one_global_cursor_and_global_ordinals() {
+        let address = |path: &str| DocumentAddress::Markdown {
+            path: path.to_owned(),
+            origin: MarkdownOrigin::Documents,
+        };
+        let markdown = |title: &str, count: usize| {
+            let body = (1..=count)
+                .map(|index| format!("needle {index}"))
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            crate::query_markdown_text(&format!("# {title}\n\n{body}\n"), None)
+                .expect("search fixture")
+        };
+        let documents = ["alpha", "beta"]
+            .into_iter()
+            .map(|path| ScopedDocument {
+                address: address(path),
+                depth: 0,
+                root_indices: Vec::new(),
+                reached_from: Vec::new(),
+            })
+            .collect::<Vec<_>>();
+        let loaded = LoadedDocumentScope {
+            scope: ResolvedDocumentScope {
+                query: DocumentScope {
+                    documents: Vec::new(),
+                    traversal: mant_protocol::DocumentTraversal::default(),
+                },
+                documents,
+                edges: Vec::new(),
+                frontier: Vec::new(),
+                unresolved: Vec::new(),
+            },
+            documents: vec![markdown("Alpha", 3), markdown("Beta", 10)],
+        };
+        let query = SearchQuery {
+            pattern: "needle".to_owned(),
+            syntax: mant_protocol::SearchSyntax::Literal,
+            case: mant_protocol::SearchCase::Insensitive,
+            scope: mant_protocol::SearchScope::Visible,
+            word: false,
+            context_lines: 0,
+            limit: 5,
+            offset: 0,
+        };
+
+        let ScopeQueryResult::Search { search } =
+            execute_scope_search(&loaded, &query).expect("scope search")
+        else {
+            panic!("search result");
+        };
+
+        assert_eq!(search.total, 13);
+        assert_eq!(search.returned, 5);
+        assert_eq!(search.next_offset, Some(5));
+        assert_eq!(search.documents.len(), 2);
+        assert_eq!(
+            search
+                .documents
+                .iter()
+                .flat_map(|document| document.matches.iter().map(|hit| hit.ordinal))
+                .collect::<Vec<_>>(),
+            [1, 2, 3, 4, 5]
+        );
     }
 
     #[test]

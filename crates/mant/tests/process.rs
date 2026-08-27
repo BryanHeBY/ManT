@@ -1307,12 +1307,19 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert_eq!(scope_document_paths(&search), ["alpha", "beta", "gamma"]);
     assert!(search["scope"].get("frontier").is_none());
     assert_eq!(search["result"]["search"]["total"], 3);
+    let groups = search["result"]["search"]["documents"]
+        .as_array()
+        .expect("search groups");
+    assert_eq!(groups.len(), 3);
+    assert!(groups.iter().all(|group| group.get("search").is_none()));
+    assert!(groups.iter().all(|group| group.get("offset").is_none()));
     assert_eq!(
-        search["result"]["search"]["documents"]
-            .as_array()
-            .expect("search groups")
-            .len(),
-        3
+        groups
+            .iter()
+            .flat_map(|group| group["matches"].as_array().expect("search hits"))
+            .map(|hit| hit["ordinal"].as_u64().expect("global ordinal"))
+            .collect::<Vec<_>>(),
+        [1, 2, 3]
     );
 
     let explain = run_with_registered_documents(
