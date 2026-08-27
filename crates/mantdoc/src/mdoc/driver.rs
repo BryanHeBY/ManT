@@ -1348,6 +1348,28 @@ pub(crate) fn structure(
                         }
                     }
                     if !tail.is_empty() {
+                        let nested_inline = builder
+                            .node_source_position(node)
+                            .is_some_and(|position| position.column > 2);
+                        if nested_inline {
+                            // `blk_part_imp()` publishes terminal delimiters
+                            // in its surrounding inline flow when the block
+                            // itself was called from another macro's line
+                            // (for example `.An Name Aq Mt mail .`).  A
+                            // standalone request instead owns the delimiter
+                            // as the Block tail.
+                            append_to_parent(builder, root, &mut root_children, active_body, node);
+                            for delimiter in tail {
+                                append_to_parent(
+                                    builder,
+                                    root,
+                                    &mut root_children,
+                                    active_body,
+                                    delimiter,
+                                );
+                            }
+                            continue;
+                        }
                         let mut block_children = vec![head, body];
                         block_children.extend(tail);
                         let _ = builder.replace_children(node, &block_children);

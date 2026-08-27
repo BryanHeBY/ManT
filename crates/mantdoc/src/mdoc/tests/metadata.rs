@@ -37,6 +37,60 @@ fn normalizes_deterministic_mdocdate_without_consulting_host_time() {
 }
 
 #[test]
+fn derives_mdoc_section_four_volume_from_the_upstream_section_table() {
+    let name = SourceName::new("section-four.4").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt SECTION-FOUR 4\n.Os\n.Sh NAME\n.Nm section-four\n.Nd test\n",
+        ))
+        .unwrap();
+
+    assert_eq!(
+        report.document.metadata().volume.as_deref(),
+        Some("Device Drivers Manual")
+    );
+}
+
+#[test]
+fn author_names_are_one_phrase_before_a_callable_inline_macro() {
+    let name = SourceName::new("author-phrase.4").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt AUTHOR-PHRASE 4\n.Os\n.Sh AUTHORS\n.An Bill Paul Aq Mt author@example.com .\n",
+        ))
+        .unwrap();
+
+    let author = report
+        .document
+        .preorder()
+        .find(|node| node.kind() == NodeKind::Element && node.macro_name() == Some("An"))
+        .unwrap();
+    assert_eq!(
+        author
+            .children()
+            .filter_map(NodeRef::text)
+            .collect::<Vec<_>>(),
+        ["Bill Paul"]
+    );
+    let address = report
+        .document
+        .preorder()
+        .find(|node| node.kind() == NodeKind::Block && node.macro_name() == Some("Aq"))
+        .unwrap();
+    assert_eq!(address.children().count(), 2);
+    assert_eq!(
+        report
+            .document
+            .preorder()
+            .filter(|node| node.text() == Some("."))
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn openbsd_rcs_id_requires_mdocdate_in_the_first_date_prologue() {
     let name = SourceName::new("openbsd-mdocdate.1").unwrap();
     let report = Parser::default()

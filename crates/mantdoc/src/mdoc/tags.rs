@@ -676,7 +676,7 @@ pub(super) fn default_volume(section: &str) -> Option<String> {
             "1" => "General Commands Manual",
             "2" => "System Calls Manual",
             "3" => "Library Functions Manual",
-            "4" => "Kernel Interfaces Manual",
+            "4" => "Device Drivers Manual",
             "5" => "File Formats Manual",
             "6" => "Games Manual",
             "7" => "Miscellaneous Information Manual",

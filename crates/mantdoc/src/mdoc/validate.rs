@@ -1,7 +1,8 @@
 use super::{
     AuthorMode, BTreeMap, DocumentBuilder, NodeId, NodeKind, Recovery, SourceSpan,
-    StructureOutcome, generated_system_name, is_mdoc_closing_delimiter, mark_no_print,
-    mark_sentence_end, push_generated_text, push_generated_text_at, split_mdoc_inline_tokens,
+    StructureOutcome, coalesce_adjacent_text_children, generated_system_name,
+    is_mdoc_closing_delimiter, mark_no_print, mark_sentence_end, push_generated_text,
+    push_generated_text_at, split_mdoc_inline_tokens,
 };
 
 pub(super) fn node_arguments(builder: &DocumentBuilder, node: NodeId) -> Vec<String> {
@@ -52,6 +53,13 @@ pub(super) fn validate_an(
         let _ = builder.replace_children(node, retained);
     }
     let _ = builder.set_node_author_mode(node, author_mode);
+
+    // `An` owns one author phrase, not scanner-sized words.  Keep callable
+    // inline macros as boundaries, but merge each direct text run so both
+    // ordinary authors and authors immediately followed by `Aq`/`Mt` expose
+    // the same owned AST as libmandoc.
+    coalesce_adjacent_text_children(builder, node);
+    let retained = builder.children(node).unwrap_or_default();
 
     if author_mode.is_some() {
         if let Some(excess) = retained.first().copied() {
