@@ -312,7 +312,7 @@ fn key_binding_command_form(value: &str) -> Option<(&str, Option<&str>)> {
 
 fn looks_like_key_binding(value: &str) -> bool {
     value
-        .split(|character: char| matches!(character, ',' | ' '))
+        .split([',', ' '])
         .filter(|part| !part.is_empty() && *part != "usually" && *part != "...")
         .any(|part| {
             part.starts_with("C-")
