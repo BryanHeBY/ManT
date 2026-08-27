@@ -75,9 +75,20 @@ pub(super) fn render_scope_explain(
     )
     .map_err(crate::error::Failure::into_message)?;
     if matches.is_empty() && failures.is_empty() {
+        let document = response.scope.documents.first().map_or_else(
+            || "DOCUMENT".to_owned(),
+            |document| document.address.catalog_path(),
+        );
+        let document = serde_json::to_string(&document)
+            .expect("serializing a String for an MCP hint cannot fail");
+        let entry =
+            serde_json::to_string(entry).expect("serializing a String for an MCP hint cannot fail");
         text = format!(
-            "0 matches for semantic entry `{entry}` across {} documents",
-            response.scope.documents.len()
+            "0 matches for semantic entry {entry} across {} documents\n\
+             Next: call mant_outline(document={document}, entries={{\"kind\":\"all\"}}) for \
+             available selectors, repeating it for other resolved documents; call mant_search \
+             with the same documents and pattern={entry} when the term may occur only in prose.",
+            response.scope.documents.len(),
         );
     }
     append_status_line(

@@ -69,7 +69,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
-    let replies = (0..(13 + usize::from(cfg!(windows))))
+    let replies = (0..(14 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -207,6 +207,15 @@ fn request_document_tools(input: &mut impl Write) {
 }
 
 fn request_compatibility_and_page_tools(input: &mut impl Write) {
+    call_tool(
+        input,
+        17,
+        "mant_explain",
+        &json!({
+            "documents": ["documents/mcp-suffix.exe"],
+            "entry": "missing-entry"
+        }),
+    );
     call_tool(
         input,
         11,
@@ -357,12 +366,8 @@ fn assert_tool_replies(replies: &[Value]) {
         "{probe}"
     );
 
-    let empty_outline = successful_text(reply(replies, 16));
-    assert!(
-        empty_outline.contains("0 matching semantic entries for: environment variables"),
-        "{empty_outline}"
-    );
-    assert!(!empty_outline.contains("Suffix details"), "{empty_outline}");
+    assert_empty_outline(replies);
+    assert_missing_explain_guidance(replies);
 
     let bounded = successful_text(reply(replies, 10));
     assert!(
@@ -417,6 +422,30 @@ fn assert_tool_replies(replies: &[Value]) {
         assert!(!encoded.contains("sourcePath"));
         assert!(!encoded.contains('\u{1b}'));
     }
+}
+
+fn assert_empty_outline(replies: &[Value]) {
+    let empty_outline = successful_text(reply(replies, 16));
+    assert!(
+        empty_outline.contains("0 matching semantic entries for: environment variables"),
+        "{empty_outline}"
+    );
+    assert!(!empty_outline.contains("Suffix details"), "{empty_outline}");
+}
+
+fn assert_missing_explain_guidance(replies: &[Value]) {
+    let missing = successful_text(reply(replies, 17));
+    assert!(
+        missing.contains("call mant_outline(document=\"documents/mcp-suffix.exe\"")
+            && missing.contains("entries={\"kind\":\"all\"}")
+            && missing.contains("call mant_search"),
+        "{missing}"
+    );
+    assert!(!missing.contains("--format json"), "{missing}");
+    assert!(
+        missing.contains("[explain: matched=0, missed=1, failed=0]"),
+        "{missing}"
+    );
 }
 
 fn assert_page_header(text: &str) {

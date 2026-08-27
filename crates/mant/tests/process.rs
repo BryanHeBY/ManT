@@ -1346,6 +1346,29 @@ fn document_scopes_follow_typed_links_breadth_first_and_query_multiple_roots() {
     assert_eq!(matches[1]["address"]["path"], "alpha");
     assert_eq!(explain["result"]["missed"], 0);
 
+    let missing = run_with_registered_documents(
+        &fixture_root,
+        &[
+            "--document",
+            "alpha",
+            "--document",
+            "beta",
+            "--explain=missing-entry",
+        ],
+    );
+    assert!(missing.status.success(), "{missing:?}");
+    assert!(missing.stderr.is_empty());
+    let missing = String::from_utf8(missing.stdout).expect("scope miss text");
+    assert!(
+        missing.contains("No semantic entry 'missing-entry' across 2 resolved documents."),
+        "{missing}"
+    );
+    assert!(
+        missing.contains("mant documents/alpha --outline --outline-entries all --format json"),
+        "{missing}"
+    );
+    assert!(missing.contains("use `--search`"), "{missing}");
+
     fs::remove_dir_all(fixture_root).expect("remove scope fixture");
 }
 

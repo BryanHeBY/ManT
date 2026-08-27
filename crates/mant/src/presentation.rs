@@ -9,7 +9,8 @@ use mant_ir::{
 };
 use mant_protocol::{
     ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline, QuerySearch, ScopeQueryResponse,
-    ScopeQueryResult, ScopedSearchDocument, SearchQuery, SearchSchema, sanitize_terminal_text,
+    ScopeQueryResult, ScopedQueryFailure, ScopedSearchDocument, SearchQuery, SearchSchema,
+    sanitize_terminal_text,
 };
 use serde::Serialize;
 
@@ -506,8 +507,21 @@ pub(super) fn render_scope_query_result(
     let mut output = String::new();
     match &response.result {
         ScopeQueryResult::Explain {
-            matches, failures, ..
+            entry,
+            matches,
+            missed,
+            failures,
         } => {
+            if matches.is_empty() && failures.is_empty() && *missed > 0 {
+                write_scope_explain_miss(
+                    &mut output,
+                    response,
+                    entry,
+                    *missed,
+                    format,
+                    output_terminal,
+                );
+            }
             for (index, found) in matches.iter().enumerate() {
                 if index > 0 {
                     output.push_str("\n\n");
@@ -533,24 +547,7 @@ pub(super) fn render_scope_query_result(
                 };
                 output.push_str(rendered.trim());
             }
-            for failure in failures {
-                if !output.is_empty() {
-                    output.push_str("\n\n");
-                }
-                write_scope_heading(
-                    &mut output,
-                    &failure.address.catalog_path(),
-                    format,
-                    color,
-                    output_terminal,
-                );
-                output.push('\n');
-                if format == QueryFormat::Text || output_terminal {
-                    output.push_str(&sanitize_terminal_text(&failure.reason));
-                } else {
-                    output.push_str(&failure.reason);
-                }
-            }
+            write_scope_failures(&mut output, failures, format, color, output_terminal);
         }
         ScopeQueryResult::Search { search } => {
             for (index, found) in search.documents.iter().enumerate() {
@@ -581,6 +578,58 @@ pub(super) fn render_scope_query_result(
         }
     }
     Ok(output)
+}
+
+fn write_scope_failures(
+    output: &mut String,
+    failures: &[ScopedQueryFailure],
+    format: QueryFormat,
+    color: bool,
+    output_terminal: bool,
+) {
+    for failure in failures {
+        if !output.is_empty() {
+            output.push_str("\n\n");
+        }
+        write_scope_heading(
+            output,
+            &failure.address.catalog_path(),
+            format,
+            color,
+            output_terminal,
+        );
+        output.push('\n');
+        if format == QueryFormat::Text || output_terminal {
+            output.push_str(&sanitize_terminal_text(&failure.reason));
+        } else {
+            output.push_str(&failure.reason);
+        }
+    }
+}
+
+fn write_scope_explain_miss(
+    output: &mut String,
+    response: &ScopeQueryResponse,
+    entry: &str,
+    missed: u32,
+    format: QueryFormat,
+    output_terminal: bool,
+) {
+    let document = response.scope.documents.first().map_or_else(
+        || "DOCUMENT".to_owned(),
+        |document| document.address.catalog_path(),
+    );
+    let message = format!(
+        "No semantic entry '{entry}' across {missed} resolved documents.\n\
+         hint: run `mant {document} --outline --outline-entries all --format json` \
+         for available selectors, then repeat for the other resolved documents; \
+         use `--search` when the term may occur only in prose"
+    );
+    if format == QueryFormat::Text || output_terminal {
+        output.push_str(&sanitize_terminal_text(&message));
+    } else {
+        output.push_str(&message);
+    }
 }
 
 fn scoped_search_projection(found: &ScopedSearchDocument, query: &SearchQuery) -> QuerySearch {
