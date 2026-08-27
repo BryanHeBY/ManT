@@ -1146,18 +1146,12 @@ fn m5_expected_diagnostic_codes(case_id: &str) -> &'static [&'static str] {
             "mdoc.empty-macro",
             "mdoc.title-not-uppercase",
         ],
-        "regress/mdoc/Dd/badarg" | "regress/mdoc/Dd/long" => {
-            &["mdoc.date-unparseable", "mdoc.mdocdate-missing"]
-        }
-        "regress/mdoc/Dd/manarg" => &["mdoc.date-legacy", "mdoc.mdocdate-missing"],
+        "regress/mdoc/Dd/badarg" | "regress/mdoc/Dd/long" => &["mdoc.date-unparseable"],
+        "regress/mdoc/Dd/manarg" => &["mdoc.date-legacy"],
         "regress/mdoc/Dd/noarg" => &["mdoc.date-missing"],
-        "regress/mdoc/Dd/order" => &["mdoc.prologue-order", "mdoc.mdocdate-missing"],
+        "regress/mdoc/Dd/order" => &["mdoc.prologue-order"],
         "regress/mdoc/Dd/late" => &["mdoc.late-prologue"],
-        "regress/mdoc/Dd/dupe" => &[
-            "mdoc.mdocdate-missing",
-            "mdoc.duplicate-prologue",
-            "mdoc.duplicate-prologue",
-        ],
+        "regress/mdoc/Dd/dupe" => &["mdoc.duplicate-prologue", "mdoc.duplicate-prologue"],
         "regress/mdoc/Dt/dupe" => &["mdoc.duplicate-prologue", "mdoc.late-title"],
         "regress/mdoc/Dt/case" => &["mdoc.title-not-uppercase"],
         "regress/mdoc/Dt/badsec" => &["mdoc.title-section-unknown"],
@@ -2362,11 +2356,11 @@ mod tests {
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/badarg"),
-            ["mdoc.date-unparseable", "mdoc.mdocdate-missing"]
+            ["mdoc.date-unparseable"]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/manarg"),
-            ["mdoc.date-legacy", "mdoc.mdocdate-missing"]
+            ["mdoc.date-legacy"]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/noarg"),
@@ -2374,7 +2368,7 @@ mod tests {
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/order"),
-            ["mdoc.prologue-order", "mdoc.mdocdate-missing"]
+            ["mdoc.prologue-order"]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/late"),
@@ -2390,11 +2384,7 @@ mod tests {
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/dupe"),
-            [
-                "mdoc.mdocdate-missing",
-                "mdoc.duplicate-prologue",
-                "mdoc.duplicate-prologue",
-            ]
+            ["mdoc.duplicate-prologue", "mdoc.duplicate-prologue"]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dt/dupe"),
@@ -3075,7 +3065,7 @@ mod tests {
     #[test]
     fn named_backend_runs_one_exact_byte_case() {
         let backend = MantdocBackend::default();
-        let bytes = b".TH PLAIN 1\n".to_vec();
+        let bytes = b".TH PLAIN 1 \"August 28, 2026\"\n".to_vec();
         let case = CaseInput {
             identity: CaseIdentity {
                 corpus_id: "m1".into(),
@@ -3093,9 +3083,16 @@ mod tests {
         let report = run
             .outcome
             .expect("M2 scanner accepts a plain control line");
-        assert!(report.diagnostics.is_empty());
-        // root + `.TH` element + its two argument text nodes
-        assert_eq!(report.document.node_count(), 4);
+        assert_eq!(
+            report
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.code.as_str())
+                .collect::<Vec<_>>(),
+            [mantdoc::DiagnosticCode::MAN_NO_DOCUMENT_BODY]
+        );
+        // root + `.TH` element + its title, section, and date arguments
+        assert_eq!(report.document.node_count(), 5);
     }
 
     #[test]

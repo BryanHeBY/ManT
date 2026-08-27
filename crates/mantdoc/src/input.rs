@@ -314,7 +314,7 @@ mod tests {
     fn plain_and_auto_bytes_share_the_raw_parser_contract() {
         let parser = Parser::default();
         let name = name();
-        let bytes = b".TH INPUT 1\n";
+        let bytes = b".TH INPUT 1 28-Aug-2026\n";
         let plain = parser
             .parse_bytes(&name, bytes, Compression::Plain)
             .unwrap();
@@ -342,7 +342,7 @@ mod tests {
             .insert("man1/root.1", b".so child.1\n")
             .expect("root source");
         bundle
-            .insert("man1/child.1", b".TH BUNDLE 1\n")
+            .insert("man1/child.1", b".TH BUNDLE 1 28-Aug-2026\n")
             .expect("included source");
         let report = Parser::default()
             .parse_bundle(&mut bundle, "man1/root.1")
@@ -366,7 +366,7 @@ mod tests {
         fs::create_dir_all(&manual).unwrap();
         let root = manual.join("root.1");
         fs::write(&root, b".so child.1\n").unwrap();
-        fs::write(manual.join("child.1"), b".TH CONTAINED 1\n").unwrap();
+        fs::write(manual.join("child.1"), b".TH CONTAINED 1 28-Aug-2026\n").unwrap();
 
         let report = Parser::default()
             .parse_file_in_root(directory.path(), &root, Compression::Plain)
@@ -391,7 +391,7 @@ mod tests {
         let manual = directory.path().join("man1");
         fs::create_dir_all(&manual).unwrap();
         let outside = directory.path().join("outside.1");
-        fs::write(&outside, b".TH OUTSIDE 1\n").unwrap();
+        fs::write(&outside, b".TH OUTSIDE 1 28-Aug-2026\n").unwrap();
         let root = manual.join("root.1");
         fs::write(&root, b".so escape.1\n").unwrap();
         symlink(&outside, manual.join("escape.1")).unwrap();
@@ -429,7 +429,7 @@ mod tests {
         use std::io::Write;
 
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-        encoder.write_all(b".TH GZIP 1\n").unwrap();
+        encoder.write_all(b".TH GZIP 1 28-Aug-2026\n").unwrap();
         let compressed = encoder.finish().unwrap();
         let parser = Parser::default();
         let name = name();
@@ -445,7 +445,7 @@ mod tests {
     #[cfg(feature = "zstd")]
     #[test]
     fn zstd_and_auto_decode_to_the_same_bounded_report() {
-        let compressed = zstd::stream::encode_all(&b".TH ZSTD 1\n"[..], 0).unwrap();
+        let compressed = zstd::stream::encode_all(&b".TH ZSTD 1 28-Aug-2026\n"[..], 0).unwrap();
         let parser = Parser::default();
         let name = name();
         let explicit = parser
@@ -463,7 +463,7 @@ mod tests {
         use std::io::Write;
 
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-        encoder.write_all(b".TH TOO-LONG 1\n").unwrap();
+        encoder.write_all(b".TH TOO-LONG 1 28-Aug-2026\n").unwrap();
         let compressed = encoder.finish().unwrap();
         let parser = Parser::new(ParserConfig {
             limits: Limits {

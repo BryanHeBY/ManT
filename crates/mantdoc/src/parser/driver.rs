@@ -258,7 +258,21 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     };
                     inline.iterations += 1;
                     total_loop_iterations += 1;
-                    let body_start = inline.body_start;
+                    // A selected user macro inherits its caller's physical
+                    // request column.  Its body is copy-mode input, so using
+                    // the inline body cursor would incorrectly expose the
+                    // `.while` body's offset (rather than column one) on
+                    // every emitted node.
+                    let body_start = split_macro_control(
+                        &body,
+                        scanner.control_character(),
+                        scanner.escape_character(),
+                    )
+                    .filter(|(request, _)| {
+                        !is_builtin_package_macro(builder.macro_set(), request)
+                            && environment.macro_definition(request).is_some()
+                    })
+                    .map_or(inline.body_start, |_| inline.start);
                     let end = inline.end;
                     pending_events.push(DriverWork::InlineWhile(inline));
                     pending_events.push(DriverWork::Event(SourceEvent::from_generated(
@@ -267,6 +281,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         end,
                         builder.macro_set(),
                         &mut scanner,
+                        false,
                     )));
                     continue 'lines;
                 }
@@ -318,6 +333,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     mut end,
                     bytes,
                     terminal_inline_conditional,
+                    suppress_filled_text_tabs,
                 } => {
                     let bytes = bytes.as_ref();
                     // A trailing odd escape joins the next physical *text*
@@ -406,7 +422,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             &mut diagnostics,
                             &mut truncated,
                         );
-                        if environment.is_filled() {
+                        if environment.is_filled() && !suppress_filled_text_tabs {
                             emit_filled_text_tabs(
                                 bytes,
                                 start,
@@ -762,7 +778,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 start.saturating_add(1),
                                 format!(
                                     "escaped character not allowed in a name: {}",
-                                    visible_bytes(preview)
+                                    visible_bytes(preview).trim_end()
                                 ),
                             ),
                             &mut truncated,
@@ -2000,12 +2016,29 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             ) else {
                                 break 'lines;
                             };
+                            // `roff_cond()` re-enters an inline user macro at
+                            // the conditional request's physical cursor.  A
+                            // literal body and a package macro retain their
+                            // authored body offset, but a copy-mode macro
+                            // body must not expose that offset as its public
+                            // AST location.
+                            let generated_start = split_macro_control(
+                                &body,
+                                scanner.control_character(),
+                                scanner.escape_character(),
+                            )
+                            .filter(|(request, _)| {
+                                !is_builtin_package_macro(builder.macro_set(), request)
+                                    && environment.macro_definition(request).is_some()
+                            })
+                            .map_or(body_source_start, |_| start);
                             pending_events.push(DriverWork::Event(SourceEvent::from_generated(
                                 body,
-                                body_source_start,
+                                generated_start,
                                 end,
                                 builder.macro_set(),
                                 &mut scanner,
+                                raw_condition_arguments.contains(&b'\t'),
                             )));
                             continue;
                         }
@@ -2018,6 +2051,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             end,
                             builder.macro_set(),
                             &mut scanner,
+                            false,
                         )));
                         continue;
                     }
@@ -2403,7 +2437,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         control_start.saturating_add(1),
                                         format!(
                                             "escaped character not allowed in a name: {}",
-                                            visible_bytes(&preview)
+                                            visible_bytes(&preview).trim_end()
                                         ),
                                     ),
                                     &mut truncated,

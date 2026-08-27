@@ -56,7 +56,7 @@ fn man_layout_requests_are_not_visible_tagged_field_bodies() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH FIELD 1\n.SH DESCRIPTION\n.IP tag 6n\n.sp 2v\nfollowing IP text\n.TP 6n\ntag\n.sp 2v\nfollowing TP text\n",
+                b".TH FIELD 1 28-Aug-2026\n.SH DESCRIPTION\n.IP tag 6n\n.sp 2v\nfollowing IP text\n.TP 6n\ntag\n.sp 2v\nfollowing TP text\n",
             ))
             .unwrap();
     assert!(!report.output.contains("tag  \n"), "{}", report.output);

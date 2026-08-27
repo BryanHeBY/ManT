@@ -21,6 +21,50 @@ fn same_line_conditionals_reparse_nested_requests() {
 }
 
 #[test]
+fn nested_inline_conditional_in_a_scope_keeps_its_body_location() {
+    let name = SourceName::new("nested-scope-location.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH NESTED 1 28-Aug-2026\n.SH DESCRIPTION\n.if n \\{outer\n.if n inner\n.\\}\n",
+        ))
+        .unwrap();
+    let node = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("inner"))
+        .unwrap();
+    let position = report
+        .document
+        .source_position(node.location().unwrap())
+        .unwrap();
+    assert_eq!((position.line, position.column), (4, 7));
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn inline_conditional_user_macro_keeps_the_physical_request_column() {
+    let name = SourceName::new("conditional-user-macro-location.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\n.de visible\nmacro body\n..\n.if n .visible\n",
+        ))
+        .unwrap();
+    let node = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("macro body"))
+        .unwrap();
+    let position = report
+        .document
+        .source_position(node.location().unwrap())
+        .unwrap();
+    assert_eq!((position.line, position.column), (6, 1));
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
 fn selected_conditionals_reenter_definition_and_else_dispatch() {
     let name = SourceName::new("conditional-rerun.roff").unwrap();
     let report = Parser::default()
@@ -442,7 +486,7 @@ fn conditional_scope_closer_suffix_keeps_terminal_inline_provenance() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CONDITIONAL 1\n.SH DESCRIPTION\npreceding words\n.if n \\{text line block end\n\\} with additional words\nfollowing words\n",
+                b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\npreceding words\n.if n \\{text line block end\n\\} with additional words\nfollowing words\n",
             ))
             .unwrap();
     let suffix = report
@@ -462,7 +506,7 @@ fn m3_control_scope_closer_discards_following_text() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CONDITIONAL 1\n.SH DESCRIPTION\n.if n \\{\\\nfirst line\n.\\}suffix must not print\n",
+                b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\n.if n \\{\\\nfirst line\n.\\}suffix must not print\n",
             ))
             .unwrap();
     let visible = report
@@ -481,7 +525,7 @@ fn m3_nested_text_closers_remain_in_the_active_inner_scope() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CONDITIONAL 1\n.SH DESCRIPTION\n.if n \\{outer\n.if n \\{inner\non\\} the\\} same\nafter\n",
+                b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\n.if n \\{outer\n.if n \\{inner\non\\} the\\} same\nafter\n",
             ))
             .unwrap();
     let visible = report
@@ -508,7 +552,7 @@ fn m3_attached_font_scope_closers_keep_font_arguments_and_diagnostic() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CONDITIONAL 1\n.SH DESCRIPTION\n.if n \\{outer\n.if n \\{inner\n.BR\\}on\\}the same\nafter\n",
+                b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\n.if n \\{outer\n.if n \\{inner\n.BR\\}on\\}the same\nafter\n",
             ))
             .unwrap();
     assert_eq!(
@@ -541,7 +585,7 @@ fn m3_unterminated_conditional_scope_reports_its_opener_and_executes_prefix() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH CONDITIONAL 1\n.SH DESCRIPTION\n.if n \\{\nstill open\n",
+            b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\n.if n \\{\nstill open\n",
         ))
         .unwrap();
     let diagnostic = report
@@ -644,7 +688,7 @@ fn m3_conditional_macro_definitions_discard_terminator_tails_and_inactive_defini
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CONDITIONAL-DEFINITION 1\n.SH DESCRIPTION\n.if n \\{.de first\nfirst content\n.. \\}\n.if n \\{.de second\nsecond content\n.. \\}ignored\n.if t \\{.de suppressed\nnot visible\n.. \\}ignored\ninitial text\n.first\n.second\n.suppressed\nfinal text\n",
+                b".TH CONDITIONAL-DEFINITION 1 28-Aug-2026\n.SH DESCRIPTION\n.if n \\{.de first\nfirst content\n.. \\}\n.if n \\{.de second\nsecond content\n.. \\}ignored\n.if t \\{.de suppressed\nnot visible\n.. \\}ignored\ninitial text\n.first\n.second\n.suppressed\nfinal text\n",
             ))
             .unwrap();
     let visible = report

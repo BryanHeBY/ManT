@@ -258,7 +258,10 @@ mod tests {
     fn logical_parse_report_round_trips_without_internal_source_ids() {
         let name = SourceName::new("logical-report.1").expect("fixed source name");
         let report = Parser::default()
-            .parse(Source::new(&name, b".TH lower 1\n.SH BODY\nvisible text\n"))
+            .parse(Source::new(
+                &name,
+                b".TH lower 1 28-Aug-2026\n.SH BODY\nvisible text\n",
+            ))
             .expect("source parses with a style diagnostic");
         let logical = LogicalParseReport::from(&report);
 

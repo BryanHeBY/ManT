@@ -90,10 +90,10 @@ pub(super) fn title_section_missing(builder: &DocumentBuilder, title: NodeId) ->
 }
 
 pub(super) fn title_missing_date(builder: &DocumentBuilder, title: NodeId) -> bool {
-    let explicit_empty_date = title_date_argument(builder, title)
+    let absent_or_empty_date = title_date_argument(builder, title)
         .and_then(|argument| builder.node_text(argument))
-        .is_some_and(str::is_empty);
-    explicit_empty_date || title_section_missing(builder, title)
+        .is_none_or(str::is_empty);
+    absent_or_empty_date || title_section_missing(builder, title)
 }
 
 /// Accept the stable man(7) date spellings that mandoc normalizes without a

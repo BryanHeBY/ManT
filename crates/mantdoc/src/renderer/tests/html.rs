@@ -51,7 +51,7 @@ fn html_ft_requests_keep_font_state_in_one_paragraph() {
             .with_html_fragment(true)
             .render(Source::new(
                 &name,
-                b".TH FT 1\n.SH DESCRIPTION\ndefault\n.ft I\nitalic\n.ft CR\nliteral\n.ft B\nbold\n.ft I bogus\nitalic again\n.ft P\nstill italic\n.ft\nstill italic\n",
+                b".TH FT 1 28-Aug-2026\n.SH DESCRIPTION\ndefault\n.ft I\nitalic\n.ft CR\nliteral\n.ft B\nbold\n.ft I bogus\nitalic again\n.ft P\nstill italic\n.ft\nstill italic\n",
             ))
             .unwrap();
     assert!(
@@ -71,7 +71,7 @@ fn html_tbl_layout_metadata_merges_rows_and_keeps_fonts() {
             .with_html_fragment(true)
             .render(Source::new(
                 &name,
-                b".TH TBL 1\n.SH DESCRIPTION\n.TS\nbox tab(:);\nlb r\nl ri.\nbold:roman\n_\nroman:italic\n.TE\n",
+                b".TH TBL 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nbox tab(:);\nlb r\nl ri.\nbold:roman\n_\nroman:italic\n.TE\n",
             ))
             .unwrap();
     assert!(
@@ -89,7 +89,10 @@ fn html_escapes_visible_text_and_preserves_parse_diagnostics() {
     let name = SourceName::new("render.1").unwrap();
     let report = Renderer::new(RenderFormat::Html)
         .with_html_fragment(true)
-        .render(Source::new(&name, b".TH RENDER 1\n.SH NAME\n<&>\n"))
+        .render(Source::new(
+            &name,
+            b".TH RENDER 1 28-Aug-2026\n.SH NAME\n<&>\n",
+        ))
         .unwrap();
     assert!(report.output.contains("&lt;&amp;&gt;"));
     assert!(report.diagnostics.is_empty());
@@ -166,7 +169,7 @@ fn html_man_blocks_keep_field_indent_synopsis_and_literal_boundaries() {
             .with_html_fragment(true)
             .render(Source::new(
                 &name,
-                b".TH BLOCKS 1\n.SH DESCRIPTION\n.PD 2v\n.TP 10n\ntag\nbody\n.HP 10n\nhanging body\n.RS\nindented body\n.PP\nnested body\n.RE\n.SY command\n.I arguments\n.YS\n.PP\nregular paragraph\n.nf\nliteral\ntext\n.fi\nregular tail\n.br\n",
+                b".TH BLOCKS 1 28-Aug-2026\n.SH DESCRIPTION\n.PD 2v\n.TP 10n\ntag\nbody\n.HP 10n\nhanging body\n.RS\nindented body\n.PP\nnested body\n.RE\n.SY command\n.I arguments\n.YS\n.PP\nregular paragraph\n.nf\nliteral\ntext\n.fi\nregular tail\n.br\n",
             ))
             .unwrap();
     assert!(report.output.contains(
@@ -217,7 +220,7 @@ fn html_roff_font_escapes_emit_semantic_and_literal_spans() {
             .with_html_fragment(true)
             .render(Source::new(
                 &name,
-                b".TH FONT 1\n.SH DESCRIPTION\n.nf\n\\f4bolditalic\\f3bold\\f2italic\\f1roman\n\\f(CWliteral\\f(CBbold\\f(CIitalic\\fRroman\n",
+                b".TH FONT 1 28-Aug-2026\n.SH DESCRIPTION\n.nf\n\\f4bolditalic\\f3bold\\f2italic\\f1roman\n\\f(CWliteral\\f(CBbold\\f(CIitalic\\fRroman\n",
             ))
             .unwrap();
     assert!(
@@ -284,7 +287,7 @@ fn html_no_fill_spacing_request_stays_inside_one_preformatted_region() {
         .with_html_fragment(true)
         .render(Source::new(
             &name,
-            b".TH SPACE 1\n.SH DESCRIPTION\n.nf\nfirst\n.sp\nsecond\n.fi\n",
+            b".TH SPACE 1 28-Aug-2026\n.SH DESCRIPTION\n.nf\nfirst\n.sp\nsecond\n.fi\n",
         ))
         .unwrap();
     assert!(

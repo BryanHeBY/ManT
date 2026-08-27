@@ -36,7 +36,7 @@ fn empty_user_strings_are_silent_in_control_position() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH EMPTY-STRING 1\n.SH DESCRIPTION\n.ds empty \"\n.empty\nvisible\n",
+            b".TH EMPTY-STRING 1 28-Aug-2026\n.SH DESCRIPTION\n.ds empty \"\n.empty\nvisible\n",
         ))
         .unwrap();
     assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
@@ -108,7 +108,7 @@ fn recursive_string_expansion_drops_only_its_own_input_line() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH RECURSIVE-STRING 1\n.SH DESCRIPTION\n.ds recur \\\\*[recur]\nbefore recursion\n(and do not \\*[recur] print this)\nafter recursion\n",
+                b".TH RECURSIVE-STRING 1 28-Aug-2026\n.SH DESCRIPTION\n.ds recur \\\\*[recur]\nbefore recursion\n(and do not \\*[recur] print this)\nafter recursion\n",
             ))
             .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -231,7 +231,7 @@ fn m3_generated_controls_relex_expanded_macro_arguments() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH MACRO 1\n.SH DESCRIPTION\n.de show\n.BI \\$@\n..\n.show one two three\n",
+            b".TH MACRO 1 28-Aug-2026\n.SH DESCRIPTION\n.de show\n.BI \\$@\n..\n.show one two three\n",
         ))
         .unwrap();
     let bold_italic = report
@@ -277,7 +277,7 @@ fn man_attached_name_escape_rebases_the_first_visible_argument() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH ATTACHED 1\n.SH DESCRIPTION\n.IB\\(lqone two\n",
+            b".TH ATTACHED 1 28-Aug-2026\n.SH DESCRIPTION\n.IB\\(lqone two\n",
         ))
         .unwrap();
     let macro_node = report
@@ -331,7 +331,7 @@ fn roff_input_traps_reparse_the_armed_macro_after_the_matching_text_line() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH INPUT-TRAP 1\n.SH DESCRIPTION\n.de first\nfirst trap\n..\n.de second\nsecond trap\n..\n.it 1first\none\n.it 2 second\ntwo\nthree\nfour\n",
+                b".TH INPUT-TRAP 1 28-Aug-2026\n.SH DESCRIPTION\n.de first\nfirst trap\n..\n.de second\nsecond trap\n..\n.it 1first\none\n.it 2 second\ntwo\nthree\nfour\n",
             ))
             .unwrap();
     let text = report
@@ -367,7 +367,7 @@ fn man_builtin_macro_names_take_precedence_over_roff_definitions() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH DEFINED-MAN 1\n.de BI\n.IB \\$1 \\$2 \\$3\n..\n.SH DESCRIPTION\n.BI bold italic bold\n",
+                b".TH DEFINED-MAN 1 28-Aug-2026\n.de BI\n.IB \\$1 \\$2 \\$3\n..\n.SH DESCRIPTION\n.BI bold italic bold\n",
             ))
             .unwrap();
     let macro_node = report
@@ -774,7 +774,7 @@ fn m3_macro_generated_man_controls_use_the_invocation_control_column() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH GENERATED 1\n.de list\n.TP 6n\ntag\n..\n.list\ntext\n",
+            b".TH GENERATED 1 28-Aug-2026\n.de list\n.TP 6n\ntag\n..\n.list\ntext\n",
         ))
         .unwrap();
     let term = report

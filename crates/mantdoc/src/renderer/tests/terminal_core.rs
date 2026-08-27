@@ -184,7 +184,7 @@ fn terminal_literal_opening_punctuation_does_not_suppress_next_word_spacing() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH PUNCT 1\n.SH DESCRIPTION\n.tr x\n>>x<<\ntwo words\n",
+            b".TH PUNCT 1 28-Aug-2026\n.SH DESCRIPTION\n.tr x\n>>x<<\ntwo words\n",
         ))
         .unwrap();
     assert!(
@@ -298,12 +298,12 @@ fn terminal_renderer_keeps_section_headings_out_of_body_flow() {
     let report = Renderer::new(RenderFormat::Utf8)
         .render(Source::new(
             &name,
-            b".TH SECTIONS 1\n.SH NAME\nsections \\- body\n.SH DESCRIPTION\nvisible text\n",
+            b".TH SECTIONS 1 28-Aug-2026\n.SH NAME\nsections \\- body\n.SH DESCRIPTION\nvisible text\n",
         ))
         .unwrap();
     assert_eq!(
         report.output,
-        "SECTIONS(1)                 General Commands Manual                SECTIONS(1)\n\nN\u{8}NA\u{8}AM\u{8}ME\u{8}E\n       sections - body\n\nD\u{8}DE\u{8}ES\u{8}SC\u{8}CR\u{8}RI\u{8}IP\u{8}PT\u{8}TI\u{8}IO\u{8}ON\u{8}N\n       visible text\n\nOpenBSD                                                            SECTIONS(1)\n"
+        "SECTIONS(1)                 General Commands Manual                SECTIONS(1)\n\nN\u{8}NA\u{8}AM\u{8}ME\u{8}E\n       sections - body\n\nD\u{8}DE\u{8}ES\u{8}SC\u{8}CR\u{8}RI\u{8}IP\u{8}PT\u{8}TI\u{8}IO\u{8}ON\u{8}N\n       visible text\n\nOpenBSD                           28-Aug-2026                      SECTIONS(1)\n"
     );
 }
 
@@ -332,12 +332,12 @@ fn terminal_renderer_wraps_by_display_width() {
             .with_width(20)
             .render(Source::new(
                 &name,
-                b".TH WRAP 1\n.SH DESCRIPTION\nwide \\[u4E2D]\\[u6587] text stays together on terminal lines\n",
+                b".TH WRAP 1 28-Aug-2026\n.SH DESCRIPTION\nwide \\[u4E2D]\\[u6587] text stays together on terminal lines\n",
             ))
             .unwrap();
     assert_eq!(
         report.output,
-        "WRAP(1)\nGeneral Commands Manual\n\nD\u{8}DE\u{8}ES\u{8}SC\u{8}CR\u{8}RI\u{8}IP\u{8}PT\u{8}TI\u{8}IO\u{8}ON\u{8}N\n       wide 中文\n       text stays\n       together on\n       terminal\n       lines\n\nOpenBSD      WRAP(1)\n"
+        "WRAP(1)\nGeneral Commands Manual\n\nD\u{8}DE\u{8}ES\u{8}SC\u{8}CR\u{8}RI\u{8}IP\u{8}PT\u{8}TI\u{8}IO\u{8}ON\u{8}N\n       wide 中文\n       text stays\n       together on\n       terminal\n       lines\n\nOpenBSD28-Aug-2026\n             WRAP(1)\n"
     );
 }
 
@@ -347,7 +347,7 @@ fn ascii_terminal_headings_use_deterministic_overstrike_emphasis() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH ASCII-HEADING 1\n.SH NAME\nascii-heading \\- test\n",
+            b".TH ASCII-HEADING 1 28-Aug-2026\n.SH NAME\nascii-heading \\- test\n",
         ))
         .unwrap();
     assert!(report.output.contains("N\u{8}NA\u{8}AM\u{8}ME\u{8}E"));
@@ -485,7 +485,7 @@ fn tbl_rows_share_calculated_terminal_columns() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TBL-COLUMNS 1\n.SH DESCRIPTION\nnormal text\n.TS\ntab(:);\nr c l.\n*:*:*\n**:**:**\n.TE\n",
+                b".TH TBL-COLUMNS 1 28-Aug-2026\n.SH DESCRIPTION\nnormal text\n.TS\ntab(:);\nr c l.\n*:*:*\n**:**:**\n.TE\n",
             ))
             .unwrap();
     // The first field is right-aligned, the middle one centered, and
@@ -534,7 +534,7 @@ fn tbl_center_uses_one_calculated_offset_for_rules_and_data() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TBL-CENTRE 1\n.SH DESCRIPTION\n.TS\ncenter tab(:); |l||l|.\n_\ntxt:text\n.TE\n",
+            b".TH TBL-CENTRE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ncenter tab(:); |l||l|.\n_\ntxt:text\n.TE\n",
         ))
         .unwrap();
     // The visual rule has one more intersection glyph than tblcalc's
@@ -560,7 +560,7 @@ fn tbl_interior_empty_data_rows_are_terminal_blank_lines() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TBL-EMPTY-ROW 1\n.SH DESCRIPTION\n.TS\nlb\nli\nlb.\nfirst\n\nlast\n.TE\n",
+            b".TH TBL-EMPTY-ROW 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nlb\nli\nlb.\nfirst\n\nlast\n.TE\n",
         ))
         .unwrap();
     assert!(
@@ -590,7 +590,7 @@ fn terminal_c_continuation_attaches_filled_and_literal_source_lines() {
     let man_report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &man_name,
-            b".TH ROFF-C 1\n.SH DESCRIPTION\n.B\none\\c\nword\n",
+            b".TH ROFF-C 1 28-Aug-2026\n.SH DESCRIPTION\n.B\none\\c\nword\n",
         ))
         .unwrap();
     assert!(
@@ -608,7 +608,7 @@ fn tbl_closing_line_consumes_the_first_following_positive_sp_slot() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TBL-SP 1\n.SH DESCRIPTION\n.TS\nbox;\nl.\nvalue\n.TE\n.sp\nfollowing text\n",
+            b".TH TBL-SP 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nbox;\nl.\nvalue\n.TE\n.sp\nfollowing text\n",
         ))
         .unwrap();
     assert!(
@@ -624,7 +624,7 @@ fn tbl_layout_horizontal_cells_override_input_and_preserve_following_sp() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TBL-HORIZONTAL 1\n.SH DESCRIPTION\n.TS\ntab(:);\n_ _\nl l\n- -\nl r\n_ ^\nr.\ncolum one:column two\nleft:right\nnot:printed\nright:left\n.TE\n.sp\nfollowing text\n",
+                b".TH TBL-HORIZONTAL 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ntab(:);\n_ _\nl l\n- -\nl r\n_ ^\nr.\ncolum one:column two\nleft:right\nnot:printed\nright:left\n.TE\n.sp\nfollowing text\n",
             ))
             .unwrap();
     assert!(
@@ -642,7 +642,7 @@ fn tbl_next_row_vertical_rules_extend_into_the_current_device_row() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TBL-SPACING 1\n.SH DESCRIPTION\n.TS\nbox tab(:);\nl0 l1 |  l2 |  l3 |  l4 |  l5 |  l6 |  l7 |  l8\nl0 l1    l2    l3    l4    l5    l6    l7    l8\nl0 l1 |  l2 || l3 || l4    l5 || l6 |  l7 || l8.\na:b:c:d:e:f:g:h:i\na:b:c:d:e:f:g:h:i\na:b:c:d:e:f:g:h:i\n.TE\n",
+                b".TH TBL-SPACING 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nbox tab(:);\nl0 l1 |  l2 |  l3 |  l4 |  l5 |  l6 |  l7 |  l8\nl0 l1    l2    l3    l4    l5    l6    l7    l8\nl0 l1 |  l2 || l3 || l4    l5 || l6 |  l7 || l8.\na:b:c:d:e:f:g:h:i\na:b:c:d:e:f:g:h:i\na:b:c:d:e:f:g:h:i\n.TE\n",
             ))
             .unwrap();
     assert!(
@@ -750,7 +750,7 @@ fn tbl_device_layout_keeps_box_rules_and_decimal_columns_private_to_rendering() 
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TBL-DEVICE 1\n.SH DESCRIPTION\n.TS\nbox tab(:);\nr || n | n .\n1:1.00:+42.0\n_\n10:-10.0:3.14\n.TE\n",
+                b".TH TBL-DEVICE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nbox tab(:);\nr || n | n .\n1:1.00:+42.0\n_\n10:-10.0:3.14\n.TE\n",
             ))
             .unwrap();
     assert!(
@@ -768,7 +768,7 @@ fn tbl_layout_vertical_edges_frame_contents_and_horizontal_rules() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TBL-EDGES 1\n.SH DESCRIPTION\n.TS\n|l|l|.\n_\nA\ttest\n_\n.TE\n",
+            b".TH TBL-EDGES 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\n|l|l|.\n_\nA\ttest\n_\n.TE\n",
         ))
         .unwrap();
     assert!(
@@ -786,7 +786,7 @@ fn tbl_leading_layout_metadata_applies_only_to_the_outer_field() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH TBL 1\n.SH DESCRIPTION\n.TS\ntab(:);\n  l l\n  l l\n| l l\n  l l.\n11:12\n21:22\n31:32\n41:42\n.TE\n",
+                b".TH TBL 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ntab(:);\n  l l\n  l l\n| l l\n  l l.\n11:12\n21:22\n31:32\n41:42\n.TE\n",
             ))
             .unwrap();
     let mut stack = vec![report.document.node(report.document.root()).unwrap()];
@@ -816,7 +816,7 @@ fn tbl_badspan_terminal_columns_follow_the_occupied_span() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH TBL 1\n.SH DESCRIPTION\n.TS\nallbox tab(:);\nS L S S\nL L L L L L.\nspan:end\n1:2:3:4:5:6\n.TE\n",
+                b".TH TBL 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nallbox tab(:);\nS L S S\nL L L L L L.\nspan:end\n1:2:3:4:5:6\n.TE\n",
             ))
             .unwrap();
     let mut stack = vec![report.document.node(report.document.root()).unwrap()];
@@ -838,7 +838,7 @@ fn tbl_full_rules_keep_the_preceding_layout_grid() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TBL 1\n.SH DESCRIPTION\n.TS\ntab(:);\n||l||l||\n|l|l|\nll.\n_\na:b\n_\nc:d\n_\ne:f\n_\n.TE\n",
+                b".TH TBL 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ntab(:);\n||l||l||\n|l|l|\nll.\n_\na:b\n_\nc:d\n_\ne:f\n_\n.TE\n",
             ))
             .unwrap();
     assert!(
@@ -856,7 +856,7 @@ fn tbl_standalone_leading_vertical_layout_line_joins_the_next_row() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TBL-STANDALONE 1\n.SH DESCRIPTION\n.TS\nl\n|\nr.\ntable text\n_\nbar\nright\n.TE\n.PP\nfollowing text\n",
+                b".TH TBL-STANDALONE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nl\n|\nr.\ntable text\n_\nbar\nright\n.TE\n.PP\nfollowing text\n",
             ))
             .unwrap();
     assert!(
@@ -874,7 +874,7 @@ fn tbl_allbox_rules_resume_after_a_spanned_row() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TBL-SPAN 1\n.SH DESCRIPTION\n.TS\nallbox tab(:);\nL L L\nC S C.\na:b:c\nwide:c\n.TE\n",
+                b".TH TBL-SPAN 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\nallbox tab(:);\nL L L\nC S C.\na:b:c\nwide:c\n.TE\n",
             ))
             .unwrap();
     assert!(
@@ -892,7 +892,7 @@ fn tbl_empty_layout_retains_an_authored_leading_vertical_rule() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TBL-EMPTY 1\n.SH DESCRIPTION\n.TS\n|.\ntable text\n.TE\n",
+            b".TH TBL-EMPTY 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\n|.\ntable text\n.TE\n",
         ))
         .unwrap();
     // The compatible AST recovers the empty format as one normal left

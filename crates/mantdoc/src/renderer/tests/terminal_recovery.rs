@@ -251,7 +251,7 @@ fn empty_man_section_recovery_keeps_orphaned_blocks_in_the_body_column() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH SH-NOARG 1\n.SH DESCRIPTION\nfirst\n.SH\n.nf\nsecond\n.SH\n.fi\nthird\n.SH\n.TP 6n\ntag\ntagged text\n",
+                b".TH SH-NOARG 1 28-Aug-2026\n.SH DESCRIPTION\nfirst\n.SH\n.nf\nsecond\n.SH\n.fi\nthird\n.SH\n.TP 6n\ntag\ntagged text\n",
             ))
             .unwrap();
     assert!(
@@ -269,7 +269,7 @@ fn leading_man_section_spacing_does_not_create_a_body_blank_line() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH LEADING-SP 1\n.SH DESCRIPTION\n.sp\n.PP\ntext\n",
+            b".TH LEADING-SP 1 28-Aug-2026\n.SH DESCRIPTION\n.sp\n.PP\ntext\n",
         ))
         .unwrap();
     let text_start = report.output.find("\n       text\n").unwrap();
@@ -523,7 +523,7 @@ fn man_pd_controls_following_section_heading_density() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH PD 1\n.SH DESCRIPTION\nfirst\n.PD 2\n.SH DOUBLE\nsecond\n.PD 0\n.SS NONE\nthird\n",
+                b".TH PD 1 28-Aug-2026\n.SH DESCRIPTION\nfirst\n.PD 2\n.SH DOUBLE\nsecond\n.PD 0\n.SS NONE\nthird\n",
             ))
             .unwrap();
     assert!(
@@ -590,7 +590,7 @@ fn man_synopsis_blocks_keep_filled_and_literal_argument_fields() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH SY 1\n.SH DESCRIPTION\nbefore\n.SY command\n.I argument\n.YS\n.nf\n.SY literal\n.I argument\n.YS\n.fi\n",
+                b".TH SY 1 28-Aug-2026\n.SH DESCRIPTION\nbefore\n.SY command\n.I argument\n.YS\n.nf\n.SY literal\n.I argument\n.YS\n.fi\n",
             ))
             .unwrap();
     assert!(
@@ -626,7 +626,7 @@ fn widthless_man_rs_restores_the_current_field_margin() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH RS 1\n.SH DESCRIPTION\n.TP 2n\n\\(bu\nbullet list\n.RS\nindented text\n.RE\nregular text\n.RS\ntop-level indented list\n.RE\n",
+                b".TH RS 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 2n\n\\(bu\nbullet list\n.RS\nindented text\n.RE\nregular text\n.RS\ntop-level indented list\n.RE\n",
             ))
             .unwrap();
     assert!(
@@ -644,7 +644,7 @@ fn man_rs_truncates_unsuffixed_fractional_widths_to_terminal_cells() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH RS 1\n.SH DESCRIPTION\n.RS 0.0\nzero\n.RS 3.5\nthree\n.RE\nzero again\n.RE\nplain\n",
+                b".TH RS 1 28-Aug-2026\n.SH DESCRIPTION\n.RS 0.0\nzero\n.RS 3.5\nthree\n.RE\nzero again\n.RE\nplain\n",
             ))
             .unwrap();
     assert!(
@@ -662,7 +662,7 @@ fn man_stray_re_after_ip_consumes_the_field_paragraph_slot() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH LONELY-RE 1\n.SH DESCRIPTION\n.IP tag 6n\nbody\n.RE\nout of body\n",
+            b".TH LONELY-RE 1 28-Aug-2026\n.SH DESCRIPTION\n.IP tag 6n\nbody\n.RE\nout of body\n",
         ))
         .unwrap();
     assert!(
@@ -700,7 +700,7 @@ fn man_subsections_and_paragraph_blocks_have_terminal_geometry() {
     let report = Renderer::new(RenderFormat::Utf8)
             .render(Source::new(
                 &name,
-                b".TH SUBSECTION 1\n.SH DESCRIPTION\n.SS nested heading\nfirst paragraph\n.PP\nsecond paragraph\n",
+                b".TH SUBSECTION 1 28-Aug-2026\n.SH DESCRIPTION\n.SS nested heading\nfirst paragraph\n.PP\nsecond paragraph\n",
             ))
             .unwrap();
     assert!(report
@@ -884,7 +884,7 @@ fn terminal_sentence_flags_survive_attached_closing_delimiters() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH SENTENCE 1\n.SH DESCRIPTION\nShe said: \"A sentence.\"\nAnd continued.\nA parenthesized dot (.) is not terminal punctuation.\n",
+                b".TH SENTENCE 1 28-Aug-2026\n.SH DESCRIPTION\nShe said: \"A sentence.\"\nAnd continued.\nA parenthesized dot (.) is not terminal punctuation.\n",
             ))
             .unwrap();
     assert!(
@@ -952,7 +952,7 @@ fn man_ip_separates_a_tabbed_tag_from_its_indented_body() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n.IP single\ttab 3n\ntext\n.PP\n.B single\\ttab\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.IP single\ttab 3n\ntext\n.PP\n.B single\\ttab\n",
         ))
         .unwrap();
     assert!(
@@ -975,7 +975,7 @@ fn man_field_after_a_recovered_section_blank_is_detected() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n\n.IP tag\nbody\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n\n.IP tag\nbody\n",
         ))
         .unwrap();
     let field = report
@@ -994,7 +994,7 @@ fn man_ip_uses_the_default_tag_field_and_ignores_trailing_tag_blanks() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n.IP tag\nbody\n.IP \"tag    \"\nbody\n.IP seseven\nbody\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.IP tag\nbody\n.IP \"tag    \"\nbody\n.IP seseven\nbody\n",
         ))
         .unwrap();
     assert!(
@@ -1012,7 +1012,7 @@ fn empty_man_ip_body_does_not_leave_unused_tag_field_padding() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n.IP tag1 10n\n.IP tag2\nbody\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.IP tag1 10n\n.IP tag2\nbody\n",
         ))
         .unwrap();
     assert!(
@@ -1029,7 +1029,7 @@ fn man_ip_inside_rs_closes_without_an_extra_vertical_gap() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n.IP\n.RS\n.IP tag\ninside\n.RE\nafter\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.IP\n.RS\n.IP tag\ninside\n.RE\nafter\n",
         ))
         .unwrap();
     assert!(
@@ -1060,7 +1060,7 @@ fn man_ip_uses_only_its_tag_and_optional_scaled_width() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n.nf\n.IP tag 4n ignored\nliteral\n.fi\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.nf\n.IP tag 4n ignored\nliteral\n.fi\n",
         ))
         .unwrap();
     assert!(report.output.contains("       tag literal"));
@@ -1073,7 +1073,7 @@ fn man_pd_density_applies_to_ip_field_boundaries() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n.PD 2v\n.IP tag\nfirst\n.IP tag\nsecond\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.PD 2v\n.IP tag\nfirst\n.IP tag\nsecond\n",
         ))
         .unwrap();
     assert!(report.output.contains("N\x08N\n       tag    first"));
@@ -1088,7 +1088,7 @@ fn man_pd_density_applies_to_ip_field_boundaries() {
     let zero_density = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH IP 1\n.SH DESCRIPTION\n.PD 0\n.IP tag\nfirst\n.TP\nnext\ntext\n",
+            b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.PD 0\n.IP tag\nfirst\n.TP\nnext\ntext\n",
         ))
         .unwrap();
     assert!(
@@ -1106,7 +1106,7 @@ fn long_man_ip_tags_wrap_without_losing_the_body_field() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH IP 1\n.SH DESCRIPTION\n.IP \"This indented paragraph has ridiculously long text in its head, such that it doesn't even fit on the line\" 6n\nbody\n",
+                b".TH IP 1 28-Aug-2026\n.SH DESCRIPTION\n.IP \"This indented paragraph has ridiculously long text in its head, such that it doesn't even fit on the line\" 6n\nbody\n",
             ))
             .unwrap();
     assert!(
@@ -1124,7 +1124,7 @@ fn roff_center_and_right_adjust_requests_own_no_fill_input_lines() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH ADJUST 1\n.SH DESCRIPTION\nbefore\n.ce 2\ncenter\nsecond\n.rj 1\nright\nafter\n",
+            b".TH ADJUST 1 28-Aug-2026\n.SH DESCRIPTION\nbefore\n.ce 2\ncenter\nsecond\n.rj 1\nright\nafter\n",
         ))
         .unwrap();
     assert!(
@@ -1158,7 +1158,7 @@ fn roff_indent_requests_start_new_fields_and_reset_at_a_paragraph() {
     let report = Renderer::new(RenderFormat::Utf8)
         .render(Source::new(
             &name,
-            b".TH INDENT 1\n.SH DESCRIPTION\nbefore\n.in 4n\nafter\n.PP\nreset\n",
+            b".TH INDENT 1 28-Aug-2026\n.SH DESCRIPTION\nbefore\n.in 4n\nafter\n.PP\nreset\n",
         ))
         .unwrap();
     assert!(

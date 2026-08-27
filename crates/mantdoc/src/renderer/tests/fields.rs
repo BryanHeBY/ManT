@@ -249,7 +249,7 @@ fn doublebox_uses_two_terminal_rules_and_consumes_two_following_sp_slots() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TABLE 1\n.SH DESCRIPTION\n.TS\ndoublebox;\nL .\none\n.TE\n.sp 2v\nfollowing\n",
+            b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ndoublebox;\nL .\none\n.TE\n.sp 2v\nfollowing\n",
         ))
         .unwrap();
     let layout = report.output.replace('\u{8}', "");
@@ -267,7 +267,7 @@ fn allbox_adds_its_rule_before_an_authored_manual_table_rule() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TABLE 1\n.SH DESCRIPTION\n.TS\ntab(:) allbox;\n||l||l||.\na:b\n_\nc:d\n_\n.TE\n",
+            b".TH TABLE 1 28-Aug-2026\n.SH DESCRIPTION\n.TS\ntab(:) allbox;\n||l||l||.\na:b\n_\nc:d\n_\n.TE\n",
         ))
         .unwrap();
     assert!(
@@ -649,7 +649,7 @@ fn man_tp_skips_extra_header_arguments_and_honours_head_indentation() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TP 1\n.SH DESCRIPTION\n.TP 10n ignored\ntag\nbody\n.TP 8n\n.in 3n\nshifted\nbody\n",
+                b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 10n ignored\ntag\nbody\n.TP 8n\n.in 3n\nshifted\nbody\n",
             ))
             .unwrap();
     assert!(
@@ -669,7 +669,7 @@ fn man_tp_skips_extra_header_arguments_and_honours_head_indentation() {
     let invalid_width = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TP 1\n.SH DESCRIPTION\n.TP not-a-width\ntag\nbody\n",
+            b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.TP not-a-width\ntag\nbody\n",
         ))
         .unwrap();
     assert!(
@@ -690,7 +690,7 @@ fn man_tp_head_font_requests_override_an_open_parent_font() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH TP 1\n.SH DESCRIPTION\n.TP\n.B\n.I\nitalic term\nbody\n",
+            b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.TP\n.B\n.I\nitalic term\nbody\n",
         ))
         .unwrap();
     assert!(
@@ -708,7 +708,7 @@ fn man_tp_field_width_is_shared_until_a_paragraph_reset() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TP 1\n.SH DESCRIPTION\n.TP 6n\nshort\nbody\n.TP\n20n\nbody\n.PP\nreset\n.TP\n20n\nbody\n",
+                b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 6n\nshort\nbody\n.TP\n20n\nbody\n.PP\nreset\n.TP\n20n\nbody\n",
             ))
             .unwrap();
     assert!(
@@ -726,7 +726,7 @@ fn man_empty_tp_before_rs_does_not_leave_field_padding_at_line_end() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TP 1\n.SH DESCRIPTION\n.TP 4n\n*\nitem\n.RS 8n\nindented text\n.RE\nmiddle text\n.TP 4n\n*\n.RS 8n\nindented text\n.RE\ntrailing text\n",
+                b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 4n\n*\nitem\n.RS 8n\nindented text\n.RE\nmiddle text\n.TP 4n\n*\n.RS 8n\nindented text\n.RE\ntrailing text\n",
             ))
             .unwrap();
     assert!(
@@ -745,7 +745,7 @@ fn man_empty_hp_before_sibling_rs_keeps_both_vertical_boundaries() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH HP 1\n.SH DESCRIPTION\n.RS\nouter text\n.HP 2n\n.RS 4n\ninner text\n.RE\n.RE\n",
+            b".TH HP 1 28-Aug-2026\n.SH DESCRIPTION\n.RS\nouter text\n.HP 2n\n.RS 4n\ninner text\n.RE\n.RE\n",
         ))
         .unwrap();
     assert!(
@@ -764,7 +764,7 @@ fn man_tp_uses_pd_density_and_wraps_long_terms() {
             .with_width(40)
             .render(Source::new(
                 &name,
-                b".TH TP 1\n.SH DESCRIPTION\n.PD 2v\n.TP\nfirst-tag\ntext\n.TP\nsecond-tag\ntext\n.TP 6n\nThis tagged paragraph has ridiculously long text in its head\nbody\n",
+                b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.PD 2v\n.TP\nfirst-tag\ntext\n.TP\nsecond-tag\ntext\n.TP 6n\nThis tagged paragraph has ridiculously long text in its head\nbody\n",
             ))
             .unwrap();
     assert!(
@@ -789,7 +789,7 @@ fn man_tp_trailing_nonbreaking_blanks_reserve_but_do_not_print_field_cells() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TP 1\n.SH DESCRIPTION\n.TP\ntag\\ \\&\nfirst body\n.TP\ntag\\ \\ \\ \\ \\ \\&\nsecond body\n",
+                b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.TP\ntag\\ \\&\nfirst body\n.TP\ntag\\ \\ \\ \\ \\ \\&\nsecond body\n",
             ))
             .unwrap();
     assert!(
@@ -808,7 +808,7 @@ fn man_tp_body_wraps_at_its_field_and_keeps_wide_fields_unfilled() {
             .with_width(40)
             .render(Source::new(
                 &name,
-                b".TH TP 1\n.SH DESCRIPTION\n.TP 12n\ntag\nfirst second third fourth fifth sixth\n.TP 100n\nwide\nbody\n",
+                b".TH TP 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 12n\ntag\nfirst second third fourth fifth sixth\n.TP 100n\nwide\nbody\n",
             ))
             .unwrap();
     assert!(
@@ -832,7 +832,7 @@ fn man_font_macro_arguments_do_not_add_sentence_spacing() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH FONT 1\n.SH DESCRIPTION\nEarlier sentence.\nIt works with\n.B several words\nand with\n.B\nnext line\nscope.\n",
+                b".TH FONT 1 28-Aug-2026\n.SH DESCRIPTION\nEarlier sentence.\nIt works with\n.B several words\nand with\n.B\nnext line\nscope.\n",
             ))
             .unwrap();
     assert!(
@@ -857,7 +857,7 @@ fn man_font_macro_arguments_do_not_add_sentence_spacing() {
     let alternating = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH FONT 1\n.SH DESCRIPTION\n.BI bold italic bold again\n.IR italic roman\n",
+            b".TH FONT 1 28-Aug-2026\n.SH DESCRIPTION\n.BI bold italic bold again\n.IR italic roman\n",
         ))
         .unwrap();
     assert!(
@@ -877,7 +877,7 @@ fn man_font_macro_arguments_do_not_add_sentence_spacing() {
     let option = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH FONT 1\n.SH DESCRIPTION\nempty\n.OP\nvalue\n.OP -f arg excess\n",
+            b".TH FONT 1 28-Aug-2026\n.SH DESCRIPTION\nempty\n.OP\nvalue\n.OP -f arg excess\n",
         ))
         .unwrap();
     assert!(option.output.contains("empty []"), "{}", option.output);

@@ -79,7 +79,7 @@ fn terminal_paragraph_and_spacing_elements_create_one_blank_line() {
     let report = Renderer::new(RenderFormat::Utf8)
         .render(Source::new(
             &name,
-            b".TH TERMINAL-SPACING 1\n.SH DESCRIPTION\nfirst paragraph\n.sp\nsecond paragraph\n",
+            b".TH TERMINAL-SPACING 1 28-Aug-2026\n.SH DESCRIPTION\nfirst paragraph\n.sp\nsecond paragraph\n",
         ))
         .unwrap();
     assert!(
@@ -95,7 +95,7 @@ fn terminal_vertical_requests_accumulate_across_transparent_anchors() {
     let man = Renderer::new(RenderFormat::Utf8)
         .render(Source::new(
             &man_name,
-            b".TH TERMINAL-ADJACENT-SP 1\n.SH DESCRIPTION\nbefore\n.sp\n.sp\nafter\n",
+            b".TH TERMINAL-ADJACENT-SP 1 28-Aug-2026\n.SH DESCRIPTION\nbefore\n.sp\n.sp\nafter\n",
         ))
         .unwrap();
     assert!(
@@ -124,7 +124,7 @@ fn terminal_negative_spacing_suppresses_the_next_paragraph_gap() {
     let report = Renderer::new(RenderFormat::Utf8)
             .render(Source::new(
                 &name,
-                b".TH TERMINAL-NEGATIVE-SPACING 1\n.SH DESCRIPTION\nfirst line\n.sp -1v\n.PP\nsecond line\n",
+                b".TH TERMINAL-NEGATIVE-SPACING 1 28-Aug-2026\n.SH DESCRIPTION\nfirst line\n.sp -1v\n.PP\nsecond line\n",
             ))
             .unwrap();
     assert!(
@@ -140,7 +140,7 @@ fn terminal_roff_font_requests_persist_across_sibling_text() {
     let report = Renderer::new(RenderFormat::Ascii)
             .render(Source::new(
                 &name,
-                b".TH TERMINAL-FONT-REQUESTS 1\n.SH DESCRIPTION\nplain\n.ft I\nitalic\n.ft B\nbold\n.ft P\nitalic-again\n.ft\nbold-again\n.ft R\nroman\n",
+                b".TH TERMINAL-FONT-REQUESTS 1 28-Aug-2026\n.SH DESCRIPTION\nplain\n.ft I\nitalic\n.ft B\nbold\n.ft P\nitalic-again\n.ft\nbold-again\n.ft R\nroman\n",
             ))
             .unwrap();
     let expected = format!(
@@ -556,7 +556,7 @@ fn no_fill_lines_bypass_terminal_width_wrapping() {
         .with_width(20)
         .render(Source::new(
             &name,
-            b".TH TERMINAL-NO-FILL 1\n.SH DESCRIPTION\n.nf\none two three four five six   \n.fi\n",
+            b".TH TERMINAL-NO-FILL 1 28-Aug-2026\n.SH DESCRIPTION\n.nf\none two three four five six   \n.fi\n",
         ))
         .unwrap();
     assert!(report.output.contains("       one two three four five six"));
@@ -565,7 +565,7 @@ fn no_fill_lines_bypass_terminal_width_wrapping() {
     let example = Renderer::new(RenderFormat::Utf8)
             .render(Source::new(
                 &name,
-                b".TH TERMINAL-NO-FILL 1\n.SH DESCRIPTION\nregular\n.EX ignored\nliteral\n.EE ignored\nagain\n",
+                b".TH TERMINAL-NO-FILL 1 28-Aug-2026\n.SH DESCRIPTION\nregular\n.EX ignored\nliteral\n.EE ignored\nagain\n",
             ))
             .unwrap();
     assert!(
@@ -584,7 +584,7 @@ fn filled_terminal_tabs_use_the_native_five_column_stops() {
     let report = Renderer::new(RenderFormat::Utf8)
         .render(Source::new(
             &name,
-            b".TH TERMINAL-TABS 1\n.SH DESCRIPTION\nsingle\ttab\n.br\ndouble\t\ttab\n",
+            b".TH TERMINAL-TABS 1 28-Aug-2026\n.SH DESCRIPTION\nsingle\ttab\n.br\ndouble\t\ttab\n",
         ))
         .unwrap();
     assert!(
@@ -629,7 +629,7 @@ fn terminal_same_line_conditional_body_keeps_its_tab_in_the_current_field() {
     let report = Renderer::new(RenderFormat::Ascii)
         .render(Source::new(
             &name,
-            b".TH CONDITION 1\n.SH DESCRIPTION\n.nr name 0\nlabel:\n.ie rname\tvalue\n",
+            b".TH CONDITION 1 28-Aug-2026\n.SH DESCRIPTION\n.nr name 0\nlabel:\n.ie rname\tvalue\n",
         ))
         .unwrap();
     assert!(
@@ -817,7 +817,7 @@ fn filled_man_source_lines_use_terminal_sentence_spacing() {
     let report = Renderer::new(RenderFormat::Utf8)
         .render(Source::new(
             &name,
-            b".TH SENTENCE-SPACING 1\n.SH DESCRIPTION\nFirst sentence.\nSecond sentence.\n",
+            b".TH SENTENCE-SPACING 1 28-Aug-2026\n.SH DESCRIPTION\nFirst sentence.\nSecond sentence.\n",
         ))
         .unwrap();
     assert!(
@@ -834,7 +834,7 @@ fn terminal_wraps_at_a_fitting_hyphen_before_moving_a_whole_word() {
             .with_width(32)
             .render(Source::new(
                 &name,
-                b".TH HYPHEN 1\n.SH DESCRIPTION\nA line whose final break-here word crosses the margin.\n",
+                b".TH HYPHEN 1 28-Aug-2026\n.SH DESCRIPTION\nA line whose final break-here word crosses the margin.\n",
             ))
             .unwrap();
     assert!(report.output.contains("final break-\n       here"));

@@ -191,7 +191,7 @@ fn user_macro_tabs_preserve_argument_prefixes_and_defer_validation() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH MACRO-TABS 1\n.SH DESCRIPTION\n.de show end ignored\nvalue \\\\$1;\\\\$2\n.end\n.show\t\ttwo\n.show\t\t\t three\n",
+                b".TH MACRO-TABS 1 28-Aug-2026\n.SH DESCRIPTION\n.de show end ignored\nvalue \\\\$1;\\\\$2\n.end\n.show\t\ttwo\n.show\t\t\t three\n",
             ))
             .unwrap();
     assert_eq!(
@@ -315,7 +315,7 @@ fn unterminated_bracketed_register_reference_keeps_legacy_diagnostics() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH REGISTER 1\n.SH DESCRIPTION\nincomplete: \\n[second\n",
+            b".TH REGISTER 1 28-Aug-2026\n.SH DESCRIPTION\nincomplete: \\n[second\n",
         ))
         .unwrap();
     assert_eq!(
@@ -360,7 +360,7 @@ fn unterminated_delimited_escape_keeps_the_authored_diagnostic_spelling() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH WIDTH 1\n.SH DESCRIPTION\nunterminated: \\w'foo\n",
+            b".TH WIDTH 1 28-Aug-2026\n.SH DESCRIPTION\nunterminated: \\w'foo\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -382,7 +382,7 @@ fn ignored_escape_forms_keep_only_the_legacy_invalid_diagnostics() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            br".TH ESC-IGNORE 1
+            br".TH ESC-IGNORE 1 28-Aug-2026
 .SH NAME
 esc-ignore \- ignored roff escape sequences
 .SH DESCRIPTION
@@ -428,7 +428,7 @@ fn invalid_bracket_escapes_are_reported_before_their_raw_form() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            br".TH ESC-INVALID 1
+            br".TH ESC-INVALID 1 28-Aug-2026
 .SH NAME
 esc-invalid \- invalid roff escape sequences
 .SH DESCRIPTION
@@ -512,7 +512,7 @@ fn roff_register_conditionals_keep_the_legacy_name_and_tab_diagnostics() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH REGISTER 1\n.SH DESCRIPTION\n.ie rknown\tvisible\n.el hidden\n.nr known 0\n.ie rknown\\(enignored\n.el hidden\n",
+                b".TH REGISTER 1 28-Aug-2026\n.SH DESCRIPTION\n.ie rknown\tvisible\n.el hidden\n.nr known 0\n.ie rknown\\(enignored\n.el hidden\n",
             ))
             .unwrap();
     assert_eq!(report.diagnostics.len(), 2, "{:#?}", report.diagnostics);
@@ -556,7 +556,7 @@ fn roff_renamed_man_macro_remains_defined_for_a_d_condition() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH RENAMED 1\n.SH DESCRIPTION\n.rn SM renamed\n.ie drenamed visible\n.el hidden\n",
+            b".TH RENAMED 1 28-Aug-2026\n.SH DESCRIPTION\n.rn SM renamed\n.ie drenamed visible\n.el hidden\n",
         ))
         .unwrap();
     let text = report
@@ -615,7 +615,7 @@ fn man_unknown_roff_font_is_removed_at_the_request_and_reports_its_macro() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FONT 1\n.SH DESCRIPTION\n.ft foo\nvisible\n",
+            b".TH FONT 1 28-Aug-2026\n.SH DESCRIPTION\n.ft foo\nvisible\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
@@ -646,7 +646,7 @@ fn man_roff_font_request_keeps_only_its_first_selector() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FONT 1\n.SH DESCRIPTION\n.ft I surplus\n.ft\nvisible\n",
+            b".TH FONT 1 28-Aug-2026\n.SH DESCRIPTION\n.ft I surplus\n.ft\nvisible\n",
         ))
         .unwrap();
     let font = report

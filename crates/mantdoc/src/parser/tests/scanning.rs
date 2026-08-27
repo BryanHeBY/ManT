@@ -30,7 +30,7 @@ fn tbl_projection_keeps_utf8_and_malformed_byte_origins_distinct() {
 fn m2_scanner_accepts_arbitrary_bytes_without_utf8_replacement() {
     let name = SourceName::new("arbitrary.1").unwrap();
     let report = Parser::default()
-        .parse(Source::new(&name, b".TH TEST 1\n\xff"))
+        .parse(Source::new(&name, b".TH TEST 1 28-Aug-2026\n\xff"))
         .unwrap();
     assert_eq!(report.document.macro_set(), MacroSet::Man);
     assert_eq!(
@@ -40,7 +40,7 @@ fn m2_scanner_accepts_arbitrary_bytes_without_utf8_replacement() {
             .map(crate::SourceName::as_str),
         Some("arbitrary.1")
     );
-    assert_eq!(report.statistics.source_bytes, 12);
+    assert_eq!(report.statistics.source_bytes, 24);
     assert_eq!(report.diagnostics.len(), 1);
     assert_eq!(
         report.diagnostics[0].code.as_str(),
@@ -64,7 +64,10 @@ fn m2_scanner_accepts_arbitrary_bytes_without_utf8_replacement() {
 fn lowercase_man_title_keeps_the_legacy_visible_diagnostic() {
     let name = SourceName::new("lowercase-title.1").unwrap();
     let report = Parser::default()
-        .parse(Source::new(&name, b".TH bar-man 1\n"))
+        .parse(Source::new(
+            &name,
+            b".TH bar-man 1 28-Aug-2026\n.SH DESCRIPTION\nbody\n",
+        ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
     assert_eq!(
@@ -162,7 +165,7 @@ fn filled_text_tab_keeps_the_legacy_visible_diagnostic() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH TABS 1\n.SH DESCRIPTION\nleft\tright\n",
+            b".TH TABS 1 28-Aug-2026\n.SH DESCRIPTION\nleft\tright\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -179,7 +182,7 @@ fn copy_mode_string_tabs_survive_expansion_and_warn_in_filled_text() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH TABS 1\n.SH DESCRIPTION\n.ds value\ttext\n>>\\*[value]<<\n",
+            b".TH TABS 1 28-Aug-2026\n.SH DESCRIPTION\n.ds value\ttext\n>>\\*[value]<<\n",
         ))
         .unwrap();
     let visible = report
@@ -208,7 +211,7 @@ fn undefined_string_warning_starts_at_its_interpolation() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH STRING 1\n.SH DESCRIPTION\n>>>\\*[missing]<<<\n",
+            b".TH STRING 1 28-Aug-2026\n.SH DESCRIPTION\n>>>\\*[missing]<<<\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -230,7 +233,7 @@ fn missing_strings_on_one_line_report_in_reverse_source_order() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH STRING 1\n.SH DESCRIPTION\n\\*[first] and \\*[second]\n",
+            b".TH STRING 1 28-Aug-2026\n.SH DESCRIPTION\n\\*[first] and \\*[second]\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 3);
@@ -274,7 +277,7 @@ fn nested_man_examples_keep_non_stack_fill_style_diagnostics() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH EXAMPLE 1\n.SH DESCRIPTION\n.EX\nouter\n.EX\ninner\n.EE\nouter\n.EE\n",
+            b".TH EXAMPLE 1 28-Aug-2026\n.SH DESCRIPTION\n.EX\nouter\n.EX\ninner\n.EE\nouter\n.EE\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 2);
@@ -315,7 +318,10 @@ fn nested_man_examples_keep_non_stack_fill_style_diagnostics() {
 fn redundant_man_fill_request_keeps_the_legacy_style_diagnostic() {
     let name = SourceName::new("redundant-fill.1").unwrap();
     let report = Parser::default()
-        .parse(Source::new(&name, b".TH FILL 1\n.SH DESCRIPTION\n.fi\n"))
+        .parse(Source::new(
+            &name,
+            b".TH FILL 1 28-Aug-2026\n.SH DESCRIPTION\n.fi\n",
+        ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
     assert_eq!(
@@ -387,7 +393,7 @@ fn selected_syntax_is_deterministic_before_scanning_is_implemented() {
         ..ParserConfig::default()
     });
     let report = parser
-        .parse(Source::new(&name, b".TH ignored 1\n"))
+        .parse(Source::new(&name, b".TH ignored 1 28-Aug-2026\n"))
         .unwrap();
     assert_eq!(report.document.macro_set(), MacroSet::Mdoc);
 }
@@ -400,7 +406,10 @@ fn explicit_roff_syntax_does_not_select_or_structure_macro_packages() {
         ..ParserConfig::default()
     });
     let report = parser
-        .parse(Source::new(&name, b".TH RAW 1\n.SH BODY\ntext\n"))
+        .parse(Source::new(
+            &name,
+            b".TH RAW 1 28-Aug-2026\n.SH BODY\ntext\n",
+        ))
         .unwrap();
     assert_eq!(report.document.macro_set(), MacroSet::None);
     let nodes = report
@@ -459,7 +468,7 @@ fn conditional_font_family_setup_consumes_both_scope_closers() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b"'\\\" t\r\n.\\\" comment\r\n.ie \"\\f[CB]x\\f[]\"x\" \\{\\\r\n. ftr V B\r\n.\\}\r\n.el \\{\\\r\n. ftr V CR\r\n.\\}\r\n.TH CONDITIONAL 1\r\n",
+                b"'\\\" t\r\n.\\\" comment\r\n.ie \"\\f[CB]x\\f[]\"x\" \\{\\\r\n. ftr V B\r\n.\\}\r\n.el \\{\\\r\n. ftr V CR\r\n.\\}\r\n.TH CONDITIONAL 1 \"August 28, 2026\"\r\nvisible\r\n",
             ))
             .unwrap();
     assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
@@ -499,7 +508,7 @@ fn man_rs_updates_the_an_margin_register_before_text_expansion() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH AN-MARGIN 1\n.SH DESCRIPTION\n.RS 0.0\n\\n[an-margin]\n.RS 3.5\n\\n[an-margin]\n.RE\n\\n[an-margin]\n.RE\n\\n[an-margin]\n",
+                b".TH AN-MARGIN 1 28-Aug-2026\n.SH DESCRIPTION\n.RS 0.0\n\\n[an-margin]\n.RS 3.5\n\\n[an-margin]\n.RE\n\\n[an-margin]\n.RE\n\\n[an-margin]\n",
             ))
             .unwrap();
     assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
@@ -544,7 +553,7 @@ fn m3_mdoc_os_uses_the_session_fallback_only_when_the_source_is_bare() {
     let man = parser
         .parse(Source::new(
             &name,
-            b".TH FALLBACK-OS 1\n.SH NAME\nfallback-os\n",
+            b".TH FALLBACK-OS 1 28-Aug-2026\n.SH NAME\nfallback-os\n",
         ))
         .unwrap();
     assert_eq!(man.document.metadata().os.as_deref(), Some("PinnedOS 1.0"));

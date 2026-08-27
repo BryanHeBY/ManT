@@ -12,6 +12,7 @@ pub(super) enum SourceEvent<'source> {
         end: u32,
         bytes: Cow<'source, [u8]>,
         terminal_inline_conditional: bool,
+        suppress_filled_text_tabs: bool,
     },
     Comment {
         start: u32,
@@ -48,6 +49,7 @@ impl<'source> SourceEvent<'source> {
                 end,
                 bytes: Cow::Borrowed(bytes),
                 terminal_inline_conditional: false,
+                suppress_filled_text_tabs: false,
             },
             ScannedLine::Comment { start, end, bytes } => Self::Comment {
                 start,
@@ -93,6 +95,7 @@ impl<'source> SourceEvent<'source> {
         end: u32,
         macro_set: MacroSet,
         scanner: &mut Scanner<'source>,
+        suppress_filled_text_tabs: bool,
     ) -> Self {
         let Some(introducer) = bytes.first().copied() else {
             return Self::Text {
@@ -100,6 +103,7 @@ impl<'source> SourceEvent<'source> {
                 end,
                 bytes: Cow::Owned(bytes),
                 terminal_inline_conditional: true,
+                suppress_filled_text_tabs,
             };
         };
         let no_break = introducer == scanner.no_break_control_character();
@@ -109,6 +113,7 @@ impl<'source> SourceEvent<'source> {
                 end,
                 bytes: Cow::Owned(bytes),
                 terminal_inline_conditional: true,
+                suppress_filled_text_tabs,
             };
         }
         let control_remainder = &bytes[1..];

@@ -52,7 +52,7 @@ fn structures_man_indents_emitted_by_a_user_macro() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".de1 INDENT\n. RS \\\\$1\n..\n.de UNINDENT\n. RE\n..\n.TH INDENT 1\n.SH DESCRIPTION\nintro\n.INDENT 0.0\n.TP\nterm\ndescription\n.UNINDENT\n",
+                b".de1 INDENT\n. RS \\\\$1\n..\n.de UNINDENT\n. RE\n..\n.TH INDENT 1 28-Aug-2026\n.SH DESCRIPTION\nintro\n.INDENT 0.0\n.TP\nterm\ndescription\n.UNINDENT\n",
             ))
             .unwrap();
     let indent = report
@@ -91,7 +91,7 @@ fn mr_is_a_recognized_inline_man_macro() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH MR 1\n.SH DESCRIPTION\n.MR printf 3\nafter\n",
+            b".TH MR 1 28-Aug-2026\n.SH DESCRIPTION\n.MR printf 3\nafter\n",
         ))
         .unwrap();
     let reference = report
@@ -121,7 +121,7 @@ fn inline_conditional_dispatches_man_request_body() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH OPTION 1\n.SH DESCRIPTION\n.ie n .IP \"*<\"\"\\-fallthrough\"\">\" 4\nbody\n.el .IP *<\\f(CW\\-other\\fR> 4\n",
+                b".TH OPTION 1 28-Aug-2026\n.SH DESCRIPTION\n.ie n .IP \"*<\"\"\\-fallthrough\"\">\" 4\nbody\n.el .IP *<\\f(CW\\-other\\fR> 4\n",
             ))
             .unwrap();
     let heads = report
@@ -143,7 +143,7 @@ fn filled_c_before_a_blank_line_discards_only_the_recovery_pair() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH C-BLANK 1\n.SH DESCRIPTION\nfilled\\c\n\nnext\n.nf\nliteral\\c\n\nlater\n.fi\n",
+            b".TH C-BLANK 1 28-Aug-2026\n.SH DESCRIPTION\nfilled\\c\n\nnext\n.nf\nliteral\\c\n\nlater\n.fi\n",
         ))
         .unwrap();
     let texts = report
@@ -164,7 +164,7 @@ fn a_continued_line_keeps_next_line_scopes_open() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH C-SCOPE 1\n.SH DESCRIPTION\n.B\none\\c\nword\n.TP\nterm\\c\nword\ndefinition\n",
+            b".TH C-SCOPE 1 28-Aug-2026\n.SH DESCRIPTION\n.B\none\\c\nword\n.TP\nterm\\c\nword\ndefinition\n",
         ))
         .unwrap();
     let bold = report
@@ -201,7 +201,7 @@ fn a_physical_text_continuation_stays_in_its_tp_head() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH CONTINUATION 1\n.SH DESCRIPTION\n.TP\nfirst\\\nsecond\ndefinition\n",
+            b".TH CONTINUATION 1 28-Aug-2026\n.SH DESCRIPTION\n.TP\nfirst\\\nsecond\ndefinition\n",
         ))
         .unwrap();
     let term = report
@@ -233,7 +233,7 @@ fn unmatched_re_breaks_out_of_the_current_implicit_term() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH UNMATCHED-RE 1\n.SH DESCRIPTION\n.TP 6n\ntag\nbody\n.RE\noutside\n",
+            b".TH UNMATCHED-RE 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 6n\ntag\nbody\n.RE\noutside\n",
         ))
         .unwrap();
     let body = report
@@ -266,7 +266,7 @@ fn paragraph_distance_keeps_next_line_man_scopes_open() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH PD-NEXTLINE 1\n.SH\n.PD 0v\nSECTION\n.TP\n.PD 0v\ntag\nbody\n.B\n.PD 0v\nbold\n",
+            b".TH PD-NEXTLINE 1 28-Aug-2026\n.SH\n.PD 0v\nSECTION\n.TP\n.PD 0v\ntag\nbody\n.B\n.PD 0v\nbold\n",
         ))
         .unwrap();
     let section = report
@@ -307,7 +307,7 @@ fn rs_closes_an_implicit_indent_before_restoring_outer_flow() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH RS-IMPLICIT-PARENT 1\n.SH DESCRIPTION\n.IP tag 6n\nterm body\n.RS\nindented\n.RE\nafter indent\n",
+                b".TH RS-IMPLICIT-PARENT 1 28-Aug-2026\n.SH DESCRIPTION\n.IP tag 6n\nterm body\n.RS\nindented\n.RE\nafter indent\n",
             ))
             .unwrap();
     assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
@@ -334,7 +334,7 @@ fn centering_and_right_adjustment_own_their_following_input_lines() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CENTER 1\n.SH DESCRIPTION\n.ce 2\nfirst centered\nsecond centered\n.rj 1\nright adjusted\nafter\n",
+                b".TH CENTER 1 28-Aug-2026\n.SH DESCRIPTION\n.ce 2\nfirst centered\nsecond centered\n.rj 1\nright adjusted\nafter\n",
             ))
             .unwrap();
     assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
@@ -488,12 +488,35 @@ fn empty_th_date_remains_metadata_and_reports_the_empty_argument() {
 }
 
 #[test]
+fn omitted_th_date_reports_the_title_control() {
+    let name = SourceName::new("omitted-th-date.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH OMITTED-DATE 1\n.SH NAME\nomitted-date\n",
+        ))
+        .unwrap();
+    assert_eq!(report.document.metadata().date.as_deref(), Some(""));
+    let diagnostic = report.diagnostics.first().unwrap();
+    assert_eq!(
+        diagnostic.code.as_str(),
+        DiagnosticCode::MAN_TITLE_DATE_MISSING
+    );
+    assert_eq!(diagnostic.message.as_ref(), "missing date, using \"\": TH");
+    let location = report
+        .document
+        .source_position(diagnostic.primary.as_ref().unwrap())
+        .unwrap();
+    assert_eq!((location.line, location.column), (1, 2));
+}
+
+#[test]
 fn empty_ip_is_removed_before_the_next_paragraph_boundary() {
     let name = SourceName::new("empty-ip.1").unwrap();
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH EMPTY-IP 1\n.SH DESCRIPTION\n.IP\n.IP tag\nbody\n",
+            b".TH EMPTY-IP 1 28-Aug-2026\n.SH DESCRIPTION\n.IP\n.IP tag\nbody\n",
         ))
         .unwrap();
     let ips = report
@@ -536,7 +559,7 @@ fn mt_validates_uri_arguments_and_returns_me_tail_to_outer_flow() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH MT-ARGS 1\n.SH DESCRIPTION\n.MT first second\ntext\n.ME tail args\n",
+            b".TH MT-ARGS 1 28-Aug-2026\n.SH DESCRIPTION\n.MT first second\ntext\n.ME tail args\n",
         ))
         .unwrap();
     let block = report
@@ -578,7 +601,7 @@ fn op_reports_missing_and_superfluous_option_arguments_without_rewriting_flow() 
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH OP-ARGS 1\n.SH DESCRIPTION\n.OP\n.OP -f arg bogus\n",
+            b".TH OP-ARGS 1 28-Aug-2026\n.SH DESCRIPTION\n.OP\n.OP -f arg bogus\n",
         ))
         .unwrap();
     assert_eq!(
@@ -617,7 +640,7 @@ fn pd_reports_and_removes_its_first_excess_argument() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH PD-ARGS 1\n.SH DESCRIPTION\n.PD 0 zzz\n",
+            b".TH PD-ARGS 1 28-Aug-2026\n.SH DESCRIPTION\n.PD 0 zzz\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -649,7 +672,7 @@ fn sp_reports_and_removes_its_first_excess_argument() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH SP-ARGS 1\n.SH DESCRIPTION\nbody\n.sp 3v 2i\n",
+            b".TH SP-ARGS 1 28-Aug-2026\n.SH DESCRIPTION\nbody\n.sp 3v 2i\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -681,7 +704,7 @@ fn paragraph_controls_report_but_retain_ignored_arguments() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH PARAGRAPH-ARGS 1\n.SH DESCRIPTION\n.PP arg\n.LP arg1 arg2\n.P arg\n",
+            b".TH PARAGRAPH-ARGS 1 28-Aug-2026\n.SH DESCRIPTION\n.PP arg\n.LP arg1 arg2\n.P arg\n",
         ))
         .unwrap();
     assert_eq!(
@@ -722,7 +745,7 @@ fn empty_paragraph_controls_report_empty_and_after_section_recovery() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH PARAGRAPH-EMPTY 1\n.SH DESCRIPTION\n.PP\nheading paragraph\n.PP\n.PP\nbody\n",
+            b".TH PARAGRAPH-EMPTY 1 28-Aug-2026\n.SH DESCRIPTION\n.PP\nheading paragraph\n.PP\n.PP\nbody\n",
         ))
         .unwrap();
     assert_eq!(
@@ -756,7 +779,7 @@ fn terminal_section_break_is_removed_and_reported() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH TERMINAL-BREAK 1\n.SH DESCRIPTION\nvisible text\n.br\n",
+            b".TH TERMINAL-BREAK 1 28-Aug-2026\n.SH DESCRIPTION\nvisible text\n.br\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -783,7 +806,7 @@ fn structures_paragraphs_tq_and_next_line_term_heads() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH LISTS 1\n.SH DESCRIPTION\n.PP\nfirst paragraph\n.TP\nfirst term\nfirst definition\n.TQ\nsecond term\nsecond definition\n.IP marker 4\nindented definition\n.HP 4\nhanging definition\n",
+                b".TH LISTS 1 28-Aug-2026\n.SH DESCRIPTION\n.PP\nfirst paragraph\n.TP\nfirst term\nfirst definition\n.TQ\nsecond term\nsecond definition\n.IP marker 4\nindented definition\n.HP 4\nhanging definition\n",
             ))
             .unwrap();
     let section_body = report
@@ -841,7 +864,7 @@ fn nested_empty_font_macros_finish_a_pending_tp_term_at_its_text() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH NESTED 1\n.SH DESCRIPTION\n.TP\n.B\n.I\nterm\ndefinition\n",
+            b".TH NESTED 1 28-Aug-2026\n.SH DESCRIPTION\n.TP\n.B\n.I\nterm\ndefinition\n",
         ))
         .unwrap();
     let block = report
@@ -868,7 +891,7 @@ fn pending_tp_head_retains_indent_request_before_its_term() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH INDENT 1\n.SH DESCRIPTION\n.TP 8n\n.in 3n\ntag\nbody\n",
+            b".TH INDENT 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 8n\n.in 3n\ntag\nbody\n",
         ))
         .unwrap();
     let head = report
@@ -890,7 +913,7 @@ fn structures_explicit_link_mail_and_synopsis_blocks() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH EXPLICIT 1\n.SH LINKS\n.UR https://example.test\nlink body\n.UE\n.MT mail@example.test\nmail body\n.ME\n.SY command\nargument\n.YS\n.B\nbold next line\n",
+                b".TH EXPLICIT 1 28-Aug-2026\n.SH LINKS\n.UR https://example.test\nlink body\n.UE\n.MT mail@example.test\nmail body\n.ME\n.SY command\nargument\n.YS\n.B\nbold next line\n",
             ))
             .unwrap();
     let section_body = report
@@ -944,7 +967,7 @@ fn eof_drops_an_unfilled_next_line_font_scope_with_a_typed_warning() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FONT-EOF 1\n.SH DESCRIPTION\ntext before scope\n.B\n",
+            b".TH FONT-EOF 1 28-Aug-2026\n.SH DESCRIPTION\ntext before scope\n.B\n",
         ))
         .unwrap();
     assert!(
@@ -976,7 +999,7 @@ fn blank_lines_are_skipped_without_closing_a_next_line_font_scope() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FONT-BLANK 1\n.SH DESCRIPTION\n.B\n\nbold\nafter\n",
+            b".TH FONT-BLANK 1 28-Aug-2026\n.SH DESCRIPTION\n.B\n\nbold\nafter\n",
         ))
         .unwrap();
     let bold = report
@@ -1008,7 +1031,7 @@ fn propagates_no_fill_and_sentence_state_in_source_order() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH PRESENTATION 1\n.SH EXAMPLES\n.nf\nfirst literal.\n.B bold literal\n.fi\nfilled sentence.\n.EX\nexample line\n.EE\nfinal sentence.\n",
+                b".TH PRESENTATION 1 28-Aug-2026\n.SH EXAMPLES\n.nf\nfirst literal.\n.B bold literal\n.fi\nfilled sentence.\n.EX\nexample line\n.EE\nfinal sentence.\n",
             ))
             .unwrap();
     let section_body = report
@@ -1069,7 +1092,7 @@ fn assigns_and_suppresses_man_destination_tags_like_libmandoc() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH TAGS 1\n.SH NAME\ntags\n.SH \"SEE ALSO\"\nfirst\n.SS \"SEE ALSO\"\nsecond\n.TP\n-term\ndefinition\n",
+                b".TH TAGS 1 28-Aug-2026\n.SH NAME\ntags\n.SH \"SEE ALSO\"\nfirst\n.SS \"SEE ALSO\"\nsecond\n.TP\n-term\ndefinition\n",
             ))
             .unwrap();
     let document = &report.document;
@@ -1099,7 +1122,7 @@ fn assigns_and_suppresses_man_destination_tags_like_libmandoc() {
     let width_report = Parser::default()
         .parse(Source::new(
             &width_name,
-            b".TH WIDTH 1\n.SH NAME\nwidth\n.SH DESCRIPTION\n.TP 6n\n.BI bold italic\nbody\n",
+            b".TH WIDTH 1 28-Aug-2026\n.SH NAME\nwidth\n.SH DESCRIPTION\n.TP 6n\n.BI bold italic\nbody\n",
         ))
         .unwrap();
     let width_term_head = width_report
@@ -1114,7 +1137,7 @@ fn assigns_and_suppresses_man_destination_tags_like_libmandoc() {
     let priority_report = Parser::default()
             .parse(Source::new(
                 &priority_name,
-                b".TH TAGS 1\n.SH DESCRIPTION\n.TP\n.I \" plain\"\nfirst\n.TP\nplain\nsecond\n.TP\n.I \"plain \"\nthird\n.HP\n.B not-a-term\nhanging\n.IP \" weak\"\nfirst indent\n.IP -weak\nsecond indent\n",
+                b".TH TAGS 1 28-Aug-2026\n.SH DESCRIPTION\n.TP\n.I \" plain\"\nfirst\n.TP\nplain\nsecond\n.TP\n.I \"plain \"\nthird\n.HP\n.B not-a-term\nhanging\n.IP \" weak\"\nfirst indent\n.IP -weak\nsecond indent\n",
             ))
             .unwrap();
     let heads = priority_report
@@ -1147,7 +1170,7 @@ fn reports_unmatched_closers_and_end_of_input_open_blocks() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH RECOVERY 1\n.RE\n.UR https://example.test\nunclosed link\n",
+            b".TH RECOVERY 1 28-Aug-2026\n.RE\n.UR https://example.test\nunclosed link\n",
         ))
         .unwrap();
     assert_eq!(
@@ -1186,7 +1209,7 @@ fn reports_eof_for_a_pending_section_title_and_removes_the_empty_section() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH SECTION-EOF 1\n.SH DESCRIPTION\ntext\n.SH\n",
+            b".TH SECTION-EOF 1 28-Aug-2026\n.SH DESCRIPTION\ntext\n.SH\n",
         ))
         .unwrap();
     let sections = report
@@ -1214,7 +1237,7 @@ fn propagates_eof_through_an_empty_font_scope_in_a_pending_section_title() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH SECTION-FONT-EOF 1\n.SH DESCRIPTION\ntext\n.SH\n.B\n",
+            b".TH SECTION-FONT-EOF 1 28-Aug-2026\n.SH DESCRIPTION\ntext\n.SH\n.B\n",
         ))
         .unwrap();
     assert_eq!(
@@ -1236,7 +1259,7 @@ fn empty_section_heads_use_fill_toggles_to_start_the_body() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH SECTION-BREAK 1\n.SH DESCRIPTION\n.SH\n.nf\nliteral\n.SH\n.fi\nfilled\n",
+            b".TH SECTION-BREAK 1 28-Aug-2026\n.SH DESCRIPTION\n.SH\n.nf\nliteral\n.SH\n.fi\nfilled\n",
         ))
         .unwrap();
     let literal = report
@@ -1273,7 +1296,7 @@ fn fill_toggles_preserve_macro_and_argument_state_boundaries() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH FILL 1\n.SH DESCRIPTION\n.EX opening argument\nliteral\n.EE closing argument\nregular\n",
+                b".TH FILL 1 28-Aug-2026\n.SH DESCRIPTION\n.EX opening argument\nliteral\n.EE closing argument\nregular\n",
             ))
             .unwrap();
     let ex = report
@@ -1299,7 +1322,7 @@ fn fill_mode_requests_discard_and_report_their_complete_argument_tail() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FILL-ARGS 1\n.SH DESCRIPTION\n.nf arg1 arg2 arg3\nliteral\n.fi arg1 arg2 arg3\n",
+            b".TH FILL-ARGS 1 28-Aug-2026\n.SH DESCRIPTION\n.nf arg1 arg2 arg3\nliteral\n.fi arg1 arg2 arg3\n",
         ))
         .unwrap();
     assert_eq!(
@@ -1340,7 +1363,7 @@ fn line_break_requests_discard_and_report_their_complete_argument_tail() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH BR-ARGS 1\n.SH DESCRIPTION\nsome\ntext\n.br arg1 arg2 arg3\nmore\ntext\n",
+            b".TH BR-ARGS 1 28-Aug-2026\n.SH DESCRIPTION\nsome\ntext\n.br arg1 arg2 arg3\nmore\ntext\n",
         ))
         .unwrap();
     assert_eq!(
@@ -1370,7 +1393,7 @@ fn no_fill_keeps_man_term_structure_filled_but_marks_body_flow() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FILLTERM 1\n.SH DESCRIPTION\n.nf\n.TP 4n\nterm\nliteral body\n",
+            b".TH FILLTERM 1 28-Aug-2026\n.SH DESCRIPTION\n.nf\n.TP 4n\nterm\nliteral body\n",
         ))
         .unwrap();
     let term = report
@@ -1394,7 +1417,7 @@ fn fill_toggle_after_tp_stays_in_the_pending_term_head() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH FILLTERM 1\n.SH DESCRIPTION\n.TP\n.nf\nterm\nliteral body\n",
+            b".TH FILLTERM 1 28-Aug-2026\n.SH DESCRIPTION\n.TP\n.nf\nterm\nliteral body\n",
         ))
         .unwrap();
     let term = report
@@ -1423,7 +1446,7 @@ fn ip_tab_separated_tag_stays_one_head_argument_before_the_width() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH IPTAB 1\n.SH DESCRIPTION\n.IP single\ttab 3n\nbody\n",
+            b".TH IPTAB 1 28-Aug-2026\n.SH DESCRIPTION\n.IP single\ttab 3n\nbody\n",
         ))
         .unwrap();
     let head = report
@@ -1452,7 +1475,7 @@ fn section_title_punctuation_is_not_a_flow_sentence_boundary() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH HEADING 1\n.SH \"A heading.\"\ntext\n",
+            b".TH HEADING 1 28-Aug-2026\n.SH \"A heading.\"\ntext\n",
         ))
         .unwrap();
     let heading = report
@@ -1472,7 +1495,7 @@ fn deferred_subsection_title_retains_its_text_sentence_boundary() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH HEADING 1\n.SH DESCRIPTION\n.SS\nA deferred subsection title.\nbody\n",
+            b".TH HEADING 1 28-Aug-2026\n.SH DESCRIPTION\n.SS\nA deferred subsection title.\nbody\n",
         ))
         .unwrap();
     let heading = report
@@ -1493,7 +1516,7 @@ fn tbl_openers_break_pending_man_line_scopes_without_leaking_controls() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH TBL-BREAK 1\n.SH DESCRIPTION\n.TP 6n\n.TS\nl.\nfirst\n.TE\n.SH\n.TS\nl.\nsecond\n.TE\n.SS\n.TS\nl.\nthird\n.TE\n.B\n.TS\nl.\nfourth\n.TE\nfinal\n",
+                b".TH TBL-BREAK 1 28-Aug-2026\n.SH DESCRIPTION\n.TP 6n\n.TS\nl.\nfirst\n.TE\n.SH\n.TS\nl.\nsecond\n.TE\n.SS\n.TS\nl.\nthird\n.TE\n.B\n.TS\nl.\nfourth\n.TE\nfinal\n",
             ))
             .unwrap();
     assert_eq!(

@@ -378,13 +378,6 @@ pub(crate) enum Recovery {
         /// First `.Dd` argument.
         location: Option<SourceSpan>,
     },
-    /// An OpenBSD-style RCS id requires an `$Mdocdate` date prologue.
-    MdocDateMissing {
-        /// Authored date phrase.
-        date: Box<str>,
-        /// First `.Dd` argument.
-        location: Option<SourceSpan>,
-    },
     /// A recognized operating-system flavour had no matching RCS id comment.
     RcsIdMissing {
         /// Legacy validation flavour selected by `.Os`.

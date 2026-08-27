@@ -57,7 +57,7 @@ fn character_control_requests_are_private_and_discard_excess_bytes_in_man_input(
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH CHARACTER-CONTROL 1\n.SH DESCRIPTION\n.cc :\n:cc ;bogus\ntext\n",
+            b".TH CHARACTER-CONTROL 1 28-Aug-2026\n.SH DESCRIPTION\n.cc :\n:cc ;bogus\ntext\n",
         ))
         .unwrap();
     assert_eq!(
@@ -143,7 +143,7 @@ fn char_requests_are_private_but_expand_declared_character_values() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CHARACTER-DEFINITIONS 1\n.SH DESCRIPTION\n.char \\[myc] myval\n.char x y\n.char \\[boldX] \\fBX\n\\[boldX] \\[myc]\nfinal text\n",
+                b".TH CHARACTER-DEFINITIONS 1 28-Aug-2026\n.SH DESCRIPTION\n.char \\[myc] myval\n.char x y\n.char \\[boldX] \\fBX\n\\[boldX] \\[myc]\nfinal text\n",
             ))
             .unwrap();
     assert_eq!(
@@ -180,7 +180,7 @@ fn char_requests_report_invalid_left_operands_at_their_precise_source_spans() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH CHARACTER-INVALID 1\n.SH DESCRIPTION\n.char\n.char \\fR myval\n.char \\[myc]x myval\n.char xy myval\nmyc: <\\[myc]> x\n",
+                b".TH CHARACTER-INVALID 1 28-Aug-2026\n.SH DESCRIPTION\n.char\n.char \\fR myval\n.char \\[myc]x myval\n.char xy myval\nmyc: <\\[myc]> x\n",
             ))
             .unwrap();
     assert_eq!(
@@ -192,7 +192,7 @@ fn char_requests_report_invalid_left_operands_at_their_precise_source_spans() {
         [
             (
                 DiagnosticCode::ROFF_INVALID_CHARACTER_ARGUMENT,
-                "argument is not a character: char ",
+                "argument is not a character: char",
             ),
             (
                 DiagnosticCode::ROFF_INVALID_CHARACTER_ARGUMENT,
@@ -247,7 +247,7 @@ fn scanner_limits_return_a_bounded_prefix_and_typed_findings() {
 #[test]
 fn default_tree_limit_matches_the_legacy_finite_prefix_boundary() {
     let name = SourceName::new("deep-man.1").unwrap();
-    let mut source = String::from(".TH DEEP 1\n.SH BODY\n");
+    let mut source = String::from(".TH DEEP 1 28-Aug-2026\n.SH BODY\n");
     for _ in 0..300 {
         source.push_str(".RS\n");
     }
@@ -279,7 +279,7 @@ fn caller_selected_tree_limit_uses_the_native_limit_code() {
     let name = SourceName::new("narrow-tree.1").unwrap();
     let mut config = ParserConfig::default();
     config.limits.max_tree_depth = 4;
-    let mut source = String::from(".TH NARROW 1\n.SH BODY\n");
+    let mut source = String::from(".TH NARROW 1 28-Aug-2026\n.SH BODY\n");
     for _ in 0..10 {
         source.push_str(".RS\n");
     }
@@ -483,7 +483,7 @@ fn package_ast_retains_a_final_no_space_escape() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH PACKAGE-C 1\n.SH DESCRIPTION\none\\c\nword\n",
+            b".TH PACKAGE-C 1 28-Aug-2026\n.SH DESCRIPTION\none\\c\nword\n",
         ))
         .unwrap();
     let text = report

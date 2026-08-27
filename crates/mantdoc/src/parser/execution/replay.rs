@@ -113,6 +113,7 @@ impl ReplayMachine<'_, '_> {
                     if let ScopeLine::Control {
                         start,
                         end,
+                        argument_start,
                         name,
                         arguments,
                         ..
@@ -137,9 +138,14 @@ impl ReplayMachine<'_, '_> {
                                 });
                                 continue;
                             }
+                            let body_start = arguments.len().saturating_sub(body.len());
+                            let body_source_start = argument_start.saturating_add(
+                                u32::try_from(body_start)
+                                    .expect("scope conditional body offsets fit source spans"),
+                            );
                             let body = inline_scope_body_line(
                                 body.to_vec(),
-                                *start,
+                                body_source_start,
                                 *end,
                                 scanner.control_character(),
                                 scanner.escape_character(),
@@ -282,9 +288,17 @@ impl ReplayMachine<'_, '_> {
                             });
                             continue;
                         }
+                        let body_source_start = condition_body_source_start_from_offset(
+                            arguments,
+                            &condition_arguments,
+                            body_start,
+                            *argument_start,
+                            *start,
+                            None,
+                        );
                         let body = inline_scope_body_line(
                             body,
-                            *start,
+                            body_source_start,
                             *end,
                             scanner.control_character(),
                             scanner.escape_character(),

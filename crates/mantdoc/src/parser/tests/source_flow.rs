@@ -249,7 +249,7 @@ fn physical_line_continuation_keeps_quoted_control_arguments_together() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH CONTINUED 1\n.SH DESCRIPTION\n.IP \"a long \\\ncontinued \\\nterm\" 4n\nbody\n",
+            b".TH CONTINUED 1 28-Aug-2026\n.SH DESCRIPTION\n.IP \"a long \\\ncontinued \\\nterm\" 4n\nbody\n",
         ))
         .unwrap();
     assert!(report.diagnostics.is_empty());
@@ -270,7 +270,7 @@ fn terminal_package_macro_continuation_retains_completed_arguments() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH TERMINAL 1\n.SH DESCRIPTION\n.IB one two\\",
+            b".TH TERMINAL 1 28-Aug-2026\n.SH DESCRIPTION\n.IB one two\\",
         ))
         .unwrap();
     assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
@@ -328,7 +328,7 @@ fn man_next_line_conditions_materialize_a_vertical_boundary() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH CONDITIONAL 1\n.SH DESCRIPTION\n.if n First sentence.\n.if n\nSecond sentence.\n",
+            b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\n.if n First sentence.\n.if n\nSecond sentence.\n",
         ))
         .unwrap();
     let nodes = report.document.preorder().collect::<Vec<_>>();
@@ -346,7 +346,7 @@ fn escaped_deferred_references_do_not_become_public_warnings() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH DEFERRED 1\n.SH DESCRIPTION\n.ds value used\n.IB prefix ##\\\\*[value]## suffix\n",
+                b".TH DEFERRED 1 28-Aug-2026\n.SH DESCRIPTION\n.ds value used\n.IB prefix ##\\\\*[value]## suffix\n",
             ))
             .unwrap();
     assert!(report.diagnostics.is_empty());
@@ -358,7 +358,7 @@ fn legacy_unicode_escape_uses_the_legacy_public_diagnostic_message() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH LEGACY-UNICODE 1\n.SH DESCRIPTION\naccent: e\\U'0301'\n",
+            b".TH LEGACY-UNICODE 1 28-Aug-2026\n.SH DESCRIPTION\naccent: e\\U'0301'\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -378,7 +378,7 @@ fn bracketed_accent_spelling_preserves_legacy_invalid_escape_findings() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH INVALID-BRACKET-ACCENT 1\n.SH DESCRIPTION\nacute e\\[']e\ngrave e\\[`]e\n",
+            b".TH INVALID-BRACKET-ACCENT 1 28-Aug-2026\n.SH DESCRIPTION\nacute e\\[']e\ngrave e\\[`]e\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 2);
@@ -401,7 +401,7 @@ fn bracketed_whitespace_controls_keep_legacy_invalid_escape_findings() {
     let report = Parser::default()
             .parse(Source::new(
                 &name,
-                b".TH INVALID-BRACKET-WHITESPACE 1\n.SH DESCRIPTION\nblank a\\[ hy]b\npercent a\\[%]b\nampersand a\\[&]b\ncolon a\\[:]b\ncaret a\\[^]b\nunderline a\\[_]b\npipe a\\[|]b\ntilde a\\[~]b\ndigit a\\[0]b\n",
+                b".TH INVALID-BRACKET-WHITESPACE 1 28-Aug-2026\n.SH DESCRIPTION\nblank a\\[ hy]b\npercent a\\[%]b\nampersand a\\[&]b\ncolon a\\[:]b\ncaret a\\[^]b\nunderline a\\[_]b\npipe a\\[|]b\ntilde a\\[~]b\ndigit a\\[0]b\n",
             ))
             .unwrap();
     assert_eq!(report.diagnostics.len(), 9);
@@ -418,7 +418,7 @@ fn bracketed_whitespace_controls_keep_legacy_invalid_escape_findings() {
             .map(|diagnostic| diagnostic.message.as_ref())
             .collect::<Vec<_>>(),
         [
-            "invalid escape sequence: \\[ ",
+            "invalid escape sequence: \\[",
             "invalid escape sequence: \\[%]",
             "invalid escape sequence: \\[&]",
             "invalid escape sequence: \\[:]",
@@ -437,7 +437,7 @@ fn invalid_bracketed_unicode_scalar_keeps_the_authored_spelling() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH INVALID-UNICODE-SCALAR 1\n.SH DESCRIPTION\ntext \\[uD800]\n",
+            b".TH INVALID-UNICODE-SCALAR 1 28-Aug-2026\n.SH DESCRIPTION\ntext \\[uD800]\n",
         ))
         .unwrap();
     assert_eq!(report.diagnostics.len(), 1);
@@ -457,7 +457,7 @@ fn malformed_unicode_escape_diagnostics_use_legacy_order_and_position() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH INVALID-UNICODE-SHAPE 1\n.SH DESCRIPTION\ntext \\[u2B].\\[u02B]\n",
+            b".TH INVALID-UNICODE-SHAPE 1 28-Aug-2026\n.SH DESCRIPTION\ntext \\[u2B].\\[u02B]\n",
         ))
         .unwrap();
     assert_eq!(
@@ -489,7 +489,7 @@ fn zero_width_escape_retains_its_following_no_space_escape_in_package_ast() {
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH ZERO 1\n.SH DESCRIPTION\nzero width: \\z\\c\nfollowing line\n",
+            b".TH ZERO 1 28-Aug-2026\n.SH DESCRIPTION\nzero width: \\z\\c\nfollowing line\n",
         ))
         .unwrap();
     assert!(report.diagnostics.is_empty());
