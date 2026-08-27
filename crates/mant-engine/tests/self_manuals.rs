@@ -2,7 +2,7 @@
 
 use mant_engine::{
     build_outline_with_detail, query_markdown_text, render_markdown, render_query_text,
-    select_excerpt,
+    select_excerpt, select_explanation,
 };
 use mant_ir::{TldrCommandPart, TldrOrigin};
 use mant_protocol::{ExcerptSelection, OutlineDetail, OutlineNode};
@@ -100,12 +100,20 @@ fn shipped_manual_options_are_addressable_for_agents_and_the_tui() {
     let outline =
         build_outline_with_detail(&query, OutlineDetail::Entries).expect("manual outline");
 
-    for expected in ["--manual", "--search", "--ui", "--help"] {
+    for expected in [
+        "--manual",
+        "--search",
+        "--ui",
+        "--help",
+        "MANT_MANPATH",
+        "APPDATA",
+    ] {
         assert!(
             contains_entry(&outline.nodes, expected),
             "mant.md should expose {expected} as a semantic entry"
         );
     }
+    assert!(select_explanation(&query, "MANT_MANPATH").is_ok());
 }
 
 #[test]

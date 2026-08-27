@@ -2,8 +2,12 @@
 
 use crate::common::{self, GIT_SECTIONS};
 use crate::fixtures::{archlinux_manual, archlinux_manual_query};
-use mant_engine::{build_outline, build_outline_with_detail, select_excerpt};
-use mant_ir::{Block, Inline};
+use mant_engine::{
+    build_outline, build_outline_projection, build_outline_with_detail, select_excerpt,
+    select_explanation,
+};
+use mant_ir::{Block, EntryKind, Inline};
+use mant_protocol::EntryProjection;
 use mant_protocol::{ExcerptSelection, OutlineDetail};
 
 /// Section topology (24 sections), nested children in ENVIRONMENT VARIABLES,
@@ -153,6 +157,32 @@ fn supports_outline_discovery_and_targeted_excerpts() {
     assert_eq!(outline.path(), "16.4");
     assert_eq!(outline.ancestors[0].title, "ENVIRONMENT VARIABLES");
     assert!(common::block_slice_text(&section.blocks).contains("GIT_EXTERNAL_DIFF"));
+}
+
+#[test]
+fn identifies_git_environment_variables_from_hanging_definitions() {
+    let query = archlinux_manual_query("git");
+    let explanation = select_explanation(&query, "GIT_DIR").expect("GIT_DIR environment entry");
+    assert!(matches!(
+        explanation.selections.as_slice(),
+        [ExcerptSelection::DocumentEntry { outline, entry }]
+            if outline.ancestors.iter().any(|ancestor| ancestor.title == "ENVIRONMENT VARIABLES")
+                && entry.identity.as_ref().is_some_and(|identity| {
+                    identity.role == mant_ir::DefinitionRole::EnvironmentVariable
+                        && identity.names == ["GIT_DIR"]
+                })
+    ));
+
+    let outline = build_outline_projection(
+        &query,
+        EntryProjection::Kinds {
+            kinds: vec![EntryKind::EnvironmentVariable],
+        },
+        None,
+    )
+    .expect("Git environment outline");
+    assert!(common::find_outline_entry(&outline.nodes, "GIT_DIR").is_some());
+    assert!(common::find_outline_entry(&outline.nodes, "HOME").is_some());
 }
 
 /// No roff escapes or control characters leak into text values.

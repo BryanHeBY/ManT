@@ -13,7 +13,7 @@ use mant_ir::{
 };
 
 use crate::block::block_source;
-use crate::definitions::{option_names_from_terms, option_prefix};
+use crate::definitions::{environment_variable_alias, option_names_from_terms, option_prefix};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct EntryDeclaration {
@@ -652,8 +652,9 @@ fn entry_names(
         DefinitionRole::Command => {
             plain_entry_names(value, is_command_name).ok_or(EntryRejectionReason::InvalidEntryName)
         }
-        DefinitionRole::EnvironmentVariable => plain_entry_names(value, is_environment_name)
-            .ok_or(EntryRejectionReason::InvalidEntryName),
+        DefinitionRole::EnvironmentVariable => {
+            environment_entry_names(value).ok_or(EntryRejectionReason::InvalidEntryName)
+        }
         DefinitionRole::Variable => {
             plain_entry_names(value, is_variable_name).ok_or(EntryRejectionReason::InvalidEntryName)
         }
@@ -682,20 +683,12 @@ fn is_command_name(value: &str) -> bool {
     !value.is_empty() && !value.contains(['\r', '\n']) && !value.starts_with(['-', '/'])
 }
 
-fn is_environment_name(value: &str) -> bool {
-    let value = value
-        .strip_prefix("$env:")
-        .or_else(|| value.strip_prefix("$ENV:"))
-        .or_else(|| value.strip_prefix('$'))
-        .unwrap_or(value);
-    !value.is_empty()
-        && value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
-        && value
-            .chars()
-            .next()
-            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+fn environment_entry_names(value: &str) -> Option<Vec<String>> {
+    let names = value
+        .split([',', '|'])
+        .map(environment_variable_alias)
+        .collect::<Option<Vec<_>>>()?;
+    (!names.is_empty()).then_some(names)
 }
 
 fn is_variable_name(value: &str) -> bool {

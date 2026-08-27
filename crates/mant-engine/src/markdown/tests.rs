@@ -608,11 +608,15 @@ fn turns_explicit_option_lists_into_addressable_definitions() {
 #[test]
 fn declared_entries_cover_windows_options_commands_and_environment_variables() {
     let parsed = parse_markdown(
-        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/query`: Query tasks.\n- `/?`: Display help.\n- `/S COMPUTER`: Select a remote computer.\n- `/server:NAME`: Select a server.\n- `/reg:32`, `/reg:64`: Select registry views.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Read values.\n- `winget install`: Install a package.\n\n### query\n\nBehavioral details.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n- `$LASTEXITCODE`: Hold the last native exit code.\n",
+        "# tool\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/query`: Query tasks.\n- `/?`: Display help.\n- `/S COMPUTER`: Select a remote computer.\n- `/server:NAME`: Select a server.\n- `/reg:32`, `/reg:64`: Select registry views.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Read values.\n- `winget install`: Install a package.\n\n### query\n\nBehavioral details.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n- `$LASTEXITCODE`: Hold the last native exit code.\n- `%ProgramFiles(x86)%`: Locate 32-bit programs.\n- `${Env:ProgramData}`: Locate shared application data.\n- `RUST_LOG=debug`: Select a log filter.\n",
         Some("tool.md".to_owned()),
     )
     .expect("declared semantic entries");
-    assert!(parsed.document.diagnostics.is_empty());
+    assert!(
+        parsed.document.diagnostics.is_empty(),
+        "unexpected diagnostics: {:?}",
+        parsed.document.diagnostics
+    );
 
     let Block::DefinitionList {
         items: option_items,
@@ -667,6 +671,18 @@ fn declared_entries_cover_windows_options_commands_and_environment_variables() {
         [ExcerptSelection::DocumentEntry { entry, .. }]
             if entry.identity.as_ref().is_some_and(|identity| identity.role == DefinitionRole::EnvironmentVariable)
     ));
+    for selector in [
+        "ProgramFiles(x86)",
+        "%ProgramFiles(x86)%",
+        "ProgramData",
+        "${Env:ProgramData}",
+        "RUST_LOG",
+    ] {
+        assert!(
+            select_explanation(&query, selector).is_ok(),
+            "environment selector {selector}"
+        );
+    }
 }
 
 #[test]

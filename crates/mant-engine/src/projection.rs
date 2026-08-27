@@ -16,7 +16,11 @@ use mant_protocol::{
     QueryOutline,
 };
 
-use crate::{ResolvedContent, definitions::definition_entries, inline::plain_text};
+use crate::{
+    ResolvedContent,
+    definitions::{definition_entries, environment_variable_body},
+    inline::plain_text,
+};
 
 pub(crate) const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
@@ -883,9 +887,9 @@ fn semantic_name_shorthand(role: DefinitionRole, name: &str) -> Option<&str> {
             let shorthand = name.trim_start_matches('-');
             (shorthand != name && !shorthand.is_empty()).then_some(shorthand)
         }
-        DefinitionRole::EnvironmentVariable => name
-            .strip_prefix("$env:")
-            .or_else(|| name.strip_prefix("$ENV:")),
+        DefinitionRole::EnvironmentVariable => {
+            environment_variable_body(name).filter(|body| *body != name)
+        }
         DefinitionRole::Command
         | DefinitionRole::ConfigurationKey
         | DefinitionRole::Marker

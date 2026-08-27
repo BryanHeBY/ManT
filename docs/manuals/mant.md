@@ -865,6 +865,7 @@ for the schema and update lifecycle.
 
 ## Environment
 
+<!-- mant:entries role=environment-variable case=sensitive -->
 - `MANT_MANPATH`: Completely replace ManT's manual roots. Lists use colons on
   Unix and semicolons on Windows. A root may contain flat roff files or section
   directories such as `man1/`, but is never an individual roff file.

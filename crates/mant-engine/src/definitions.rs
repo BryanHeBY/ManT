@@ -200,7 +200,7 @@ fn identify_blocks(
     retained: &mut HashSet<String>,
 ) {
     normalize_definition_nesting(blocks);
-    normalize_hanging_definitions(blocks);
+    normalize_hanging_definitions(blocks, context);
     for block in blocks {
         match block {
             Block::List { items, .. } => {
@@ -427,23 +427,23 @@ impl DefinitionContext {
 /// Turn renderer-neutral hanging-indent runs into semantic definitions.
 ///
 /// Some man(7) generators use `.PP` followed by `.RS` instead of `.TP` for
-/// option entries. Native parsers correctly retain that layout, but
-/// neither representation is a definition list on its own. Recognising the
-/// shared visible shape here keeps option identity independent of the source
-/// macro set or source parser used by the query pipeline.
-fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
+/// options and environment variables. Native parsers correctly retain that
+/// layout, but neither representation is a definition list on its own.
+/// Recognising the shared visible shape here keeps identity independent of
+/// the source macro set or source parser used by the query pipeline.
+fn normalize_hanging_definitions(blocks: &mut Vec<Block>, context: DefinitionContext) {
     let mut pending: VecDeque<Block> = mem::take(blocks).into();
     let mut normalized = Vec::with_capacity(pending.len());
 
     while let Some(block) = pending.pop_front() {
-        let Some(term_indent) = option_term_indent(&block) else {
+        let Some(term_indent) = hanging_term_indent(&block, context) else {
             normalized.push(block);
             continue;
         };
 
         let mut description = Vec::new();
         while let Some(next) = pending.front() {
-            if option_term_indent(next) == Some(term_indent) {
+            if hanging_term_indent(next, context) == Some(term_indent) {
                 break;
             }
             if matches!(next, Block::VerticalSpace { .. }) {
@@ -497,18 +497,28 @@ fn normalize_hanging_definitions(blocks: &mut Vec<Block>) {
     *blocks = normalized;
 }
 
-fn option_term_indent(block: &Block) -> Option<u16> {
+fn hanging_term_indent(block: &Block, context: DefinitionContext) -> Option<u16> {
     let Block::Paragraph {
         children, layout, ..
     } = block
     else {
         return None;
     };
-    let text = plain_text(children);
-    let trimmed = text.trim_start();
-    (trimmed.starts_with('-')
-        && !option_names_from_terms(std::slice::from_ref(children)).is_empty())
-    .then_some(layout.indent_columns)
+    let recognized = match context {
+        DefinitionContext::EnvironmentVariables => {
+            !environment_names_from_terms(std::slice::from_ref(children)).is_empty()
+        }
+        DefinitionContext::Generic | DefinitionContext::Parameters => {
+            let text = plain_text(children);
+            text.trim_start().starts_with('-')
+                && !option_names_from_terms(std::slice::from_ref(children)).is_empty()
+        }
+        DefinitionContext::Commands
+        | DefinitionContext::Variables
+        | DefinitionContext::ConfigurationKeys
+        | DefinitionContext::Values => false,
+    };
+    recognized.then_some(layout.indent_columns)
 }
 
 fn block_indent(block: &Block) -> u16 {
@@ -528,7 +538,8 @@ fn identify_item(
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
 ) -> DefinitionRole {
-    // Markdown declarations already carry an authored semantic identity.
+    // A non-empty identity supplied by a producer is already authoritative;
+    // Markdown normalization uses an empty placeholder until this pass.
     // Native parser anchors, by contrast, are navigation destinations whose
     // formatter-generated tags may contain only the first word of a term.
     // Keep those anchors addressable, but never reuse them as inferred entry
@@ -536,6 +547,7 @@ fn identify_item(
     let declared_id = item
         .identity
         .as_ref()
+        .filter(|identity| !identity.id.as_str().is_empty())
         .map(|identity| identity.id.to_string());
     let (role, case, names) = item.identity.as_ref().map_or_else(
         || infer_identity(item, context),
@@ -613,22 +625,22 @@ fn infer_identity(
                 (DefinitionRole::Command, DefinitionCase::Sensitive, names)
             }
         }
-        DefinitionContext::EnvironmentVariables => (
+        DefinitionContext::EnvironmentVariables => named_identity(
             DefinitionRole::EnvironmentVariable,
             DefinitionCase::Sensitive,
-            named_term(item, is_variable_term),
+            environment_names(item),
         ),
-        DefinitionContext::Variables => (
+        DefinitionContext::Variables => named_identity(
             DefinitionRole::Variable,
             DefinitionCase::Sensitive,
             named_term(item, is_variable_term),
         ),
-        DefinitionContext::ConfigurationKeys => (
+        DefinitionContext::ConfigurationKeys => named_identity(
             DefinitionRole::ConfigurationKey,
             DefinitionCase::Insensitive,
             named_term(item, is_configuration_key),
         ),
-        DefinitionContext::Values => (
+        DefinitionContext::Values => named_identity(
             DefinitionRole::Value,
             DefinitionCase::Sensitive,
             named_term(item, is_value_name),
@@ -636,6 +648,18 @@ fn infer_identity(
         DefinitionContext::Parameters => parameter_identity(item, trimmed),
         DefinitionContext::Generic if trimmed.starts_with('-') => parameter_identity(item, trimmed),
         DefinitionContext::Generic => (DefinitionRole::Term, DefinitionCase::Sensitive, Vec::new()),
+    }
+}
+
+fn named_identity(
+    role: DefinitionRole,
+    case: DefinitionCase,
+    names: Vec<String>,
+) -> (DefinitionRole, DefinitionCase, Vec<String>) {
+    if names.is_empty() {
+        (DefinitionRole::Term, DefinitionCase::Sensitive, names)
+    } else {
+        (role, case, names)
     }
 }
 
@@ -736,6 +760,80 @@ fn named_term(item: &DefinitionItem, validate: fn(&str) -> bool) -> Vec<String> 
         })
 }
 
+fn environment_names(item: &DefinitionItem) -> Vec<String> {
+    environment_names_from_terms(&item.terms)
+}
+
+fn environment_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
+    terms
+        .iter()
+        .flat_map(|term| {
+            let text = plain_text(term);
+            text.split([',', '|'])
+                .filter_map(environment_variable_alias)
+                .collect::<Vec<_>>()
+        })
+        .fold(Vec::new(), |mut names, name| {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            names
+        })
+}
+
+/// Return one exact environment-variable spelling without an authored value.
+///
+/// The semantic name grammar is shared by inferred native definitions and
+/// explicitly declared Markdown entries. It accepts conventional POSIX,
+/// shell, PowerShell provider, braced provider, and Windows `%NAME%` forms.
+/// Context remains responsible for deciding that a definition actually
+/// describes environment variables; this parser is never run over prose.
+pub(crate) fn environment_variable_alias(value: &str) -> Option<String> {
+    let token = value.trim().split_whitespace().next()?;
+    let spelling = token.split_once('=').map_or(token, |(name, _)| name);
+    let body = environment_variable_body(spelling)?;
+    is_environment_variable_body(body).then(|| spelling.to_owned())
+}
+
+/// Remove a recognized shell/provider wrapper from an environment selector.
+pub(crate) fn environment_variable_body(value: &str) -> Option<&str> {
+    if let Some(body) = value
+        .strip_prefix('%')
+        .and_then(|body| body.strip_suffix('%'))
+    {
+        return Some(body);
+    }
+    if let Some(body) = value
+        .strip_prefix("${")
+        .and_then(|body| body.strip_suffix('}'))
+    {
+        return strip_environment_provider(body);
+    }
+    if let Some(body) = strip_environment_provider(value) {
+        return Some(body);
+    }
+    Some(value.strip_prefix('$').unwrap_or(value))
+}
+
+fn strip_environment_provider(value: &str) -> Option<&str> {
+    let (provider, body) = value.split_once(':')?;
+    provider
+        .trim_start_matches('$')
+        .eq_ignore_ascii_case("env")
+        .then_some(body)
+}
+
+fn is_environment_variable_body(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '(' | ')')
+        })
+}
+
 fn is_variable_term(value: &str) -> bool {
     let value = value.strip_prefix('$').unwrap_or(value);
     let (head, index) = value
@@ -783,6 +881,11 @@ fn role_name_slug(role: DefinitionRole, name: &str) -> String {
             "$_" => return "underscore".to_owned(),
             _ => {}
         }
+    }
+    if role == DefinitionRole::EnvironmentVariable
+        && let Some(body) = environment_variable_body(name)
+    {
+        return slug(body);
     }
     let slug = slug(name);
     if slug.is_empty() {
@@ -1001,6 +1104,59 @@ mod tests {
             items[0].identity.as_ref().expect("option identity").names,
             ["-C"]
         );
+    }
+
+    #[test]
+    fn normalizes_cross_platform_hanging_environment_definitions() {
+        let paragraph = |value: &str, indent_columns| Block::Paragraph {
+            children: vec![Inline::Text {
+                value: value.to_owned(),
+            }],
+            layout: LayoutHint {
+                indent_columns,
+                spacing_before_lines: 0,
+            },
+            source: None,
+        };
+        let mut sections = vec![Section {
+            id: "environment".into(),
+            title: "ENVIRONMENT VARIABLES".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![
+                paragraph("HOME", 0),
+                paragraph("User home.", 4),
+                paragraph("$Env:Path = C:\\Tools", 0),
+                paragraph("PowerShell provider form.", 4),
+                paragraph("%ProgramFiles(x86)%=C:\\Program Files (x86)", 0),
+                paragraph("Windows expansion form.", 4),
+            ],
+            children: Vec::new(),
+            source: None,
+        }];
+
+        identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+
+        let identities = sections[0]
+            .blocks
+            .iter()
+            .map(|block| {
+                let Block::DefinitionList { items, .. } = block else {
+                    panic!("hanging environment entry should become a definition list");
+                };
+                items[0].identity.as_ref().expect("environment identity")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(identities.len(), 3);
+        assert!(
+            identities
+                .iter()
+                .all(|identity| identity.role == DefinitionRole::EnvironmentVariable)
+        );
+        assert_eq!(identities[0].names, ["HOME"]);
+        assert_eq!(identities[1].names, ["$Env:Path"]);
+        assert_eq!(identities[2].names, ["%ProgramFiles(x86)%"]);
+        assert_eq!(identities[1].id.as_str(), "environment-path");
+        assert_eq!(identities[2].id.as_str(), "environment-programfiles-x86");
     }
 
     #[test]
