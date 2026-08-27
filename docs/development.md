@@ -94,7 +94,7 @@ It runs formatting and manifest checks alongside the initial native test build,
 then shares that Cargo target cache for Clippy and a single build of the
 conformance tools. Locally it uses at most 12 deterministic shards and 20
 workers (bounded further by available CPUs); CI intentionally uses four of
-each. M3/M4/M6 run alongside deterministic M5 and strict M9 shards;
+each. Strict lint plus M3/M4/M6 run alongside deterministic M5 and strict M9 shards;
 `--renderer` is retained only for command-line compatibility. `scripts/check.sh` remains
 the mandatory full workspace, packaging, documentation, fuzz-compilation, and
 product-smoke boundary before handoff.

@@ -103,8 +103,11 @@ regression and no known control-line leak.
 3. Compare all 659 applicable ASCII, UTF-8, and HTML outputs byte-for-byte.
    M9 differences and errors both fail the strict gate.
 4. Project and compare all 249 lint outputs, including severity, logical
-   source, line, column, order, and message.  Only declared environment path
-   prefixes may be normalized.
+   source, line, column, order, and message.  The sole current exclusion is
+   the reported `Xr` manual lookup: it is emitted by the `mandoc` command-line
+   driver after parsing against its host manual database, a capability neither
+   libmandoc-rs nor mantdoc's parser owns.  The lint lane counts that exact
+   external finding separately; no parser finding is normalized or ignored.
 5. Classify every Markdown and tag golden.  If a renderer is outside the
    `libmandoc-rs` replacement contract, retain parser coverage and extract any
    tag, anchor, link, or IR assertion the golden can support.

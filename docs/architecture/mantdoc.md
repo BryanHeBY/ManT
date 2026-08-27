@@ -24,7 +24,7 @@ eqn parsing. It has no C/FFI runtime path and does not depend on the historical
 The private `crates/mantdoc/tests/conformance/` support owns long-running
 upstream checks. It validates a checksum-pinned `mandoc-1.14.6` archive without
 copying its payload, then checks native parser behavior, a 572-case canonical
-snapshot, and upstream renderer outputs. `scripts/run-mantdoc-differential-shards.py`
+snapshot, upstream lint output, and upstream renderer outputs. `scripts/run-mantdoc-differential-shards.py`
 builds the private examples once and runs independent lanes in parallel.
 
 The checked-in expectations are native test assets, not a compatibility

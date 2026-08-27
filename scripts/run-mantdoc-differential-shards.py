@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run independent native mantdoc conformance lanes concurrently.
 
-The M3, M4, and M6 smoke gates are independent whole-corpus tasks. M5 and the
-strict M9 renderer-golden gate additionally partition their
+The M3, M4, and M6 smoke gates are independent whole-corpus tasks. The strict
+lint, M5, and M9 renderer-golden gates additionally partition their
 checksum-ordered corpus by ``case_index % shard_count``. This helper builds the
 feature-gated tools once, runs every independent task concurrently, then sums
 machine-readable counters. A shard always validates the whole upstream
@@ -22,9 +22,9 @@ from dataclasses import dataclass
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEFAULT_LANES = ("m3", "m4", "m5", "m6", "m9")
-SHARDED_LANES = frozenset(("m5", "m9"))
-KNOWN_LANES = frozenset((*DEFAULT_LANES, "m9"))
+DEFAULT_LANES = ("lint", "m3", "m4", "m5", "m6", "m9")
+SHARDED_LANES = frozenset(("lint", "m5", "m9"))
+KNOWN_LANES = frozenset((*DEFAULT_LANES, "lint", "m9"))
 AGGREGATE_COUNTERS = {
     "case_count",
     "diagnostic_case_count",
@@ -32,6 +32,11 @@ AGGREGATE_COUNTERS = {
     "renderer_equal_output_count",
     "renderer_difference_output_count",
     "renderer_error_output_count",
+    "lint_output_count",
+    "lint_equal_output_count",
+    "lint_difference_output_count",
+    "lint_error_output_count",
+    "lint_external_output_count",
 }
 
 
@@ -50,6 +55,7 @@ def command_for(
     list_renderer_differences: bool,
 ) -> list[str]:
     inventory = ROOT / "target" / "debug" / "examples" / "mantdoc-corpus-inventory"
+    lint_diff = ROOT / "target" / "debug" / "examples" / "mantdoc-lint-diff"
     renderer_diff = ROOT / "target" / "debug" / "examples" / "mantdoc-render-diff"
     if lane == "m3":
         return [str(inventory), str(archive), "--m3-execution"]
@@ -59,6 +65,8 @@ def command_for(
         return [str(inventory), str(archive), "--m5-mdoc-smoke-shard", shard]
     if lane == "m6":
         return [str(inventory), str(archive), "--m6-preprocess-smoke"]
+    if lane == "lint":
+        return [str(lint_diff), str(archive), "--all-shard", shard]
     renderer_mode = (
         "--all-list-differences-shard" if list_renderer_differences else "--all-shard"
     )
@@ -111,7 +119,7 @@ def main() -> int:
     parser.add_argument(
         "--lanes",
         default=",".join(DEFAULT_LANES),
-        help="comma-separated subset of m3,m4,m5,m6,m9 (default: M3-M6 and strict M9)",
+        help="comma-separated subset of lint,m3,m4,m5,m6,m9 (default: strict lint and M3-M6/M9)",
     )
     parser.add_argument(
         "--list-renderer-differences",
@@ -126,7 +134,7 @@ def main() -> int:
         parser.error("--jobs must be positive")
     lanes = tuple(lane for lane in args.lanes.split(",") if lane)
     if not lanes or any(lane not in KNOWN_LANES for lane in lanes):
-        parser.error("--lanes must be a nonempty subset of m3,m4,m5,m6,m9")
+        parser.error("--lanes must be a nonempty subset of lint,m3,m4,m5,m6,m9")
     if args.list_renderer_differences and "m9" not in lanes:
         parser.error("--list-renderer-differences requires the m9 lane")
     if not args.archive.is_file():
