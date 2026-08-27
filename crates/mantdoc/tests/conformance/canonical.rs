@@ -1,8 +1,8 @@
 //! Versioned storage-independent AST and diagnostic projections for L2.
 //!
 //! The projection deliberately represents only the contract enumerated in
-//! `tests/conformance/manifests/v1/differential.toml`.  It never serializes
-//! arena IDs, C pointers, allocation order, or diagnostic prose.
+//! The projection never serializes arena IDs, allocation order, or diagnostic
+//! prose.
 
 use std::collections::BTreeSet;
 
@@ -176,21 +176,19 @@ pub struct CanonicalDiagnostic {
     pub severity: String,
     /// Comparable primary location, when available.
     pub location: Option<CanonicalLocation>,
-    /// Compatibility code retained in the frozen pre-native report shape.
-    pub legacy_code: Option<String>,
-    /// Native typed code, never inferred from legacy diagnostic prose.
-    pub native_code: Option<String>,
+    /// Native typed diagnostic code.
+    pub code: String,
 }
 
-/// First canonical mismatch, suitable for an accepted-difference ledger key.
+/// First canonical mismatch, retained for focused regression diagnostics.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct CanonicalDifference {
     /// RFC 6901 JSON Pointer into the canonical record.
     pub pointer: String,
-    /// Oracle value at this pointer.
-    pub legacy: serde_json::Value,
-    /// Native value at this pointer.
-    pub native: serde_json::Value,
+    /// Left-hand value at this pointer.
+    pub expected: serde_json::Value,
+    /// Right-hand value at this pointer.
+    pub actual: serde_json::Value,
 }
 
 /// Canonicalize one native parser report.
@@ -204,19 +202,14 @@ pub fn canonicalize_mantdoc(report: &ParseReport) -> CanonicalParse {
             .diagnostics
             .iter()
             .enumerate()
-            .map(|(ordinal, diagnostic)| {
-                let (legacy_code, native_code) =
-                    native_compatibility_codes(diagnostic.code.as_str());
-                CanonicalDiagnostic {
-                    ordinal,
-                    severity: enum_name(diagnostic.severity),
-                    location: diagnostic
-                        .primary
-                        .as_ref()
-                        .and_then(|span| native_location(&report.document, span)),
-                    legacy_code,
-                    native_code,
-                }
+            .map(|(ordinal, diagnostic)| CanonicalDiagnostic {
+                ordinal,
+                severity: enum_name(diagnostic.severity),
+                location: diagnostic
+                    .primary
+                    .as_ref()
+                    .and_then(|span| native_location(&report.document, span)),
+                code: diagnostic.code.to_string(),
             })
             .collect(),
     }
@@ -549,8 +542,8 @@ fn first_json_difference(
                     (legacy, native) => {
                         return Some(CanonicalDifference {
                             pointer: path,
-                            legacy: legacy.cloned().unwrap_or(serde_json::Value::Null),
-                            native: native.cloned().unwrap_or(serde_json::Value::Null),
+                            expected: legacy.cloned().unwrap_or(serde_json::Value::Null),
+                            actual: native.cloned().unwrap_or(serde_json::Value::Null),
                         });
                     }
                 }
@@ -569,8 +562,8 @@ fn first_json_difference(
                     (legacy, native) => {
                         return Some(CanonicalDifference {
                             pointer: path,
-                            legacy: legacy.cloned().unwrap_or(serde_json::Value::Null),
-                            native: native.cloned().unwrap_or(serde_json::Value::Null),
+                            expected: legacy.cloned().unwrap_or(serde_json::Value::Null),
+                            actual: native.cloned().unwrap_or(serde_json::Value::Null),
                         });
                     }
                 }
@@ -580,8 +573,8 @@ fn first_json_difference(
         _ if legacy == native => None,
         _ => Some(CanonicalDifference {
             pointer,
-            legacy: legacy.clone(),
-            native: native.clone(),
+            expected: legacy.clone(),
+            actual: native.clone(),
         }),
     }
 }

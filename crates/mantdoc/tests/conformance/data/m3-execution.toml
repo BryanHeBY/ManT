@@ -3,11 +3,9 @@
 # This is intentionally a narrow execution-stage contract.  It locks the
 # source identity, raw-roff bounded report shape, work count, truncation state,
 # and stable diagnostics for the roff requests implemented in M3.  It is not an
-# AST, renderer, or legacy-oracle parity assertion; those comparisons begin in
-# M7 after the common adapter has been frozen.
+# AST or renderer assertion; native canonical and renderer checks are separate.
 schema = "mantdoc.m3-execution/v1"
 corpus_id = "mandoc-stable-1.14.6"
-oracle_id = "libmandoc-rs-0.9.1-863d2b3"
 
 [[case]]
 id = "regress/roff/while/basic"

@@ -6,9 +6,10 @@ that ManT needs, while deliberately replacing the recursive public tree and
 ambient I/O with a bounded arena and explicit authority.
 
 This guide describes the public contract currently available in the unpublished
-`0.1.0-alpha` workspace crate. The native M7 parser, M8 engine integration,
-and M9 renderer parity gates are complete; the remaining release work is
-tracked in the [migration plan](architecture/mantdoc-migration.md).
+`0.1.0-alpha` workspace crate. `mantdoc` is now ManT's sole parser backend;
+the historical C oracle lives independently and is not a build, test, or
+runtime dependency. For the current design, see the
+[native parser architecture](architecture/mantdoc.md).
 
 ## Core parse
 

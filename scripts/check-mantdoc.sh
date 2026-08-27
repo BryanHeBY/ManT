@@ -111,8 +111,6 @@ wait_preflights() {
 declare -a preflight_pids=()
 declare -a preflight_labels=()
 run_preflight "check Rust formatting" cargo fmt --all --check
-run_preflight "check mantdoc conformance manifests" \
-  python3 scripts/check-mantdoc-conformance-manifests.py
 run_preflight "check mantdoc Clippy exception budget" \
   bash scripts/check-mantdoc-clippy-exceptions.sh
 

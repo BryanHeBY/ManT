@@ -1,5 +1,4 @@
-//! Create or verify the native canonical regression snapshot used after the
-//! temporary C oracle is retired.
+//! Create or verify the native canonical parser regression snapshot.
 
 use std::{
     env,
@@ -142,8 +141,7 @@ fn verify_snapshot(path: &Path, records: &[String]) -> Result<(), String> {
 
 fn snapshot_contents(records: &[String]) -> String {
     let mut contents = format!(
-        "schema={SNAPSHOT_SCHEMA}\ncorpus_id=mandoc-stable-1.14.6\noracle_id={}\ncanonical_mdoc_os={CANONICAL_MDOC_OPERATING_SYSTEM}\ncase_count={}\nrecords_sha256={}\n\n",
-        mantdoc::LEGACY_ORACLE_ID,
+        "schema={SNAPSHOT_SCHEMA}\ncorpus_id=mandoc-stable-1.14.6\nparser=mantdoc-native\ncanonical_mdoc_os={CANONICAL_MDOC_OPERATING_SYSTEM}\ncase_count={}\nrecords_sha256={}\n\n",
         records.len(),
         records_sha256(records)
     );

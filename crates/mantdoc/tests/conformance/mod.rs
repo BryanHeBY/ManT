@@ -1,13 +1,9 @@
 #![doc = include_str!("README.md")]
 #![warn(missing_docs)]
 
-//! Versioned identities used by the native-parser differential harness.
+//! Checksum-pinned identities and native parser regression support.
 
-use std::{
-    collections::BTreeSet,
-    fmt,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, fmt, path::Path};
 
 use mantdoc::{FatalError, ParseReport, Parser, Source, SourceName};
 use serde::Deserialize;
@@ -19,9 +15,8 @@ mod corpus;
 #[allow(unused_imports)]
 pub use canonical::{
     CANONICAL_AST_SCHEMA, CANONICAL_DIAGNOSTIC_SCHEMA, CANONICAL_MDOC_OPERATING_SYSTEM,
-    CanonicalDiagnostic, CanonicalDifference, CanonicalDocument, CanonicalEnclosure,
-    CanonicalFlags, CanonicalLocation, CanonicalMetadata, CanonicalNode, CanonicalParse,
-    CanonicalTableCell, canonicalize_mantdoc, first_difference,
+    CanonicalDiagnostic, CanonicalDocument, CanonicalEnclosure, CanonicalFlags, CanonicalLocation,
+    CanonicalMetadata, CanonicalNode, CanonicalParse, CanonicalTableCell, canonicalize_mantdoc,
 };
 #[allow(unused_imports)]
 pub use corpus::{
@@ -30,11 +25,11 @@ pub use corpus::{
     stable_1_14_6_inventory, stable_1_14_6_reference_output, stable_1_14_6_renderer_case,
 };
 
-const M3_EXECUTION_MANIFEST: &str =
-    include_str!("../../../../tests/conformance/manifests/v1/m3-execution.toml");
+const M3_EXECUTION_MANIFEST: &str = include_str!("data/m3-execution.toml");
 
-/// Repository-relative path of the versioned native M3 execution gate.
-pub const M3_EXECUTION_MANIFEST_PATH: &str = "tests/conformance/manifests/v1/m3-execution.toml";
+/// Repository-relative path of the native M3 execution gate.
+pub const M3_EXECUTION_MANIFEST_PATH: &str =
+    "crates/mantdoc/tests/conformance/data/m3-execution.toml";
 
 /// Number of checksum-pinned traditional man(7) inputs in mandoc 1.14.6.
 pub const M4_STABLE_MAN_CASE_COUNT: usize = 99;
@@ -378,7 +373,6 @@ impl std::error::Error for M6PreprocessSmokeGateError {}
 struct M3ExecutionManifest {
     schema: String,
     corpus_id: String,
-    oracle_id: String,
     #[serde(rename = "case")]
     cases: Vec<M3ExecutionExpectation>,
 }
@@ -401,19 +395,6 @@ struct M3ExecutionDiagnosticExpectation {
     end: u32,
 }
 
-/// Versioned canonical layer compared for one input case.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DifferentialLayer {
-    /// Parser-owned logical syntax tree.
-    Ast,
-    /// Parser diagnostics and source locations.
-    Diagnostics,
-    /// Source-neutral semantic `ManT` IR.
-    Ir,
-    /// Optional bounded reference-renderer output.
-    Renderer,
-}
-
 /// Stable identity of one exact decompressed parser input/configuration pair.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CaseIdentity {
@@ -427,26 +408,11 @@ pub struct CaseIdentity {
     pub decompressed_source_sha256: Box<str>,
     /// Hash of syntax, limits, recovery, and resolver configuration.
     pub parser_config_fingerprint: Box<str>,
-    /// Patched oracle identity used for comparison.
-    pub oracle_id: Box<str>,
     /// Include graph hash when resolver behavior contributed to this case.
     pub source_graph_hash: Option<Box<str>>,
 }
 
-/// One narrow reviewed exception to canonical differential equality.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AcceptedDifferenceKey {
-    /// Reviewed unique ledger identifier.
-    pub id: Box<str>,
-    /// Layer containing the one accepted mismatch.
-    pub layer: DifferentialLayer,
-    /// Exact source/configuration identity.
-    pub case: CaseIdentity,
-    /// JSON Pointer to one canonical value rather than an entire macro or file.
-    pub canonical_json_pointer: Box<str>,
-}
-
-/// Exact bytes and identity sent to every named backend in one differential run.
+/// Exact bytes and identity sent to a checked native parser configuration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CaseInput {
     /// Hash-keyed conformance identity.
@@ -480,7 +446,7 @@ pub fn stable_1_14_6_case_input(
 }
 
 /// A case's declared identity does not match the exact data or configuration
-/// presented to a differential backend.
+/// presented to the configured parser.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CaseValidationError {
     /// The source bytes differ from the decompressed-source hash in the case identity.
@@ -534,12 +500,12 @@ pub trait ParseBackend {
     ///
     /// # Errors
     ///
-    /// Returns the parser's fatal, bounded-session error without converting it
-    /// into a differential result or losing its stable category.
+    /// Returns the parser's fatal, bounded-session error without losing its
+    /// stable category.
     fn parse(&self, source: Source<'_>) -> Result<ParseReport, FatalError>;
 }
 
-/// M1 native backend adapter; the legacy adapter is added when AST emission starts.
+/// Adapter around the native parser configuration used by archive-backed tests.
 #[derive(Clone, Debug)]
 pub struct MantdocBackend {
     parser: Parser,
@@ -620,8 +586,7 @@ pub fn run_case(
 /// decompressed source hashes, and native parser configuration.  It then
 /// requires every node count, work count, truncation state, and diagnostic
 /// code/span sequence to equal the M3 expectation.  This deliberately checks
-/// execution behavior only; canonical legacy AST and renderer comparisons are
-/// later M7 work.
+/// execution behavior only; canonical parser and renderer checks are separate.
 ///
 /// # Errors
 ///
@@ -700,7 +665,7 @@ fn run_m3_execution(
 /// This is intentionally a parser and recovery gate, not an AST parity claim:
 /// it requires a finite report for all 99 stable inputs and fixes every
 /// diagnostic sequence emitted by the current native baseline. Canonical
-/// legacy AST/IR and renderer comparison remain M7/M8/M9 responsibilities.
+/// parser and renderer checks remain separate release gates.
 ///
 /// # Errors
 ///
@@ -1812,13 +1777,6 @@ fn parse_m3_execution_manifest() -> Result<M3ExecutionManifest, M3ExecutionGateE
             manifest.corpus_id
         )));
     }
-    if manifest.oracle_id != mantdoc::LEGACY_ORACLE_ID {
-        return Err(manifest_error(format!(
-            "oracle_id must be {}, got {:?}",
-            mantdoc::LEGACY_ORACLE_ID,
-            manifest.oracle_id
-        )));
-    }
     if manifest.cases.is_empty() {
         return Err(manifest_error("at least one case is required"));
     }
@@ -1988,7 +1946,6 @@ fn case_input_from_payload(
             logical_root: source_name.as_str().into(),
             decompressed_source_sha256: payload.case.source_sha256,
             parser_config_fingerprint: parser_config_fingerprint(config),
-            oracle_id: mantdoc::LEGACY_ORACLE_ID.into(),
             source_graph_hash: None,
         },
         source_name,
@@ -2099,52 +2056,36 @@ fn sha256_hex(bytes: &[u8]) -> String {
     text
 }
 
-/// Return the repository-owned conformance root without depending on CWD.
-#[must_use]
-pub fn conformance_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("tests/conformance")
-}
-
-/// Return the M0 manifest directory for a schema version.
-#[must_use]
-pub fn manifests_root(version: &str) -> PathBuf {
-    conformance_root().join("manifests").join(version)
-}
-
 #[cfg(test)]
 mod tests {
-    use mantdoc::LEGACY_ORACLE_ID;
-
     use super::{
         CaseIdentity, CaseInput, CaseValidationError, CorpusCase, CorpusCasePayload,
         M3_EXECUTION_MANIFEST_PATH, M4_STABLE_MAN_CASE_COUNT, M5_STABLE_MDOC_CASE_COUNT,
         M6_STABLE_PREPROCESS_CASE_COUNT, MDOC_TAG_PUNCT_DIAGNOSTICS, MantdocBackend,
-        case_input_from_payload, conformance_root, m4_expected_diagnostic_codes,
-        m5_expected_diagnostic_codes, m6_expected_diagnostic_codes, manifests_root,
-        parse_m3_execution_manifest, parser_config_fingerprint, run_case, sha256_hex,
+        case_input_from_payload, m4_expected_diagnostic_codes, m5_expected_diagnostic_codes,
+        m6_expected_diagnostic_codes, parse_m3_execution_manifest, parser_config_fingerprint,
+        run_case, sha256_hex,
     };
 
     #[test]
-    fn harness_is_rooted_in_the_checked_in_non_package_contract() {
-        assert!(conformance_root().join("README.md").is_file());
-        assert!(manifests_root("v1").join("oracle.toml").is_file());
-        let oracle = std::fs::read_to_string(manifests_root("v1").join("oracle.toml"))
-            .expect("M0 oracle manifest");
-        assert!(oracle.contains(LEGACY_ORACLE_ID));
+    fn harness_keeps_its_native_test_data_with_the_parser() {
+        assert!(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/conformance/data/m3-execution.toml")
+                .is_file()
+        );
     }
 
     #[test]
     fn m3_execution_gate_manifest_is_valid_and_has_the_reviewed_case_count() {
         assert!(
-            conformance_root()
-                .join("manifests/v1/m3-execution.toml")
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/conformance/data/m3-execution.toml")
                 .is_file()
         );
         assert_eq!(
             M3_EXECUTION_MANIFEST_PATH,
-            "tests/conformance/manifests/v1/m3-execution.toml"
+            "crates/mantdoc/tests/conformance/data/m3-execution.toml"
         );
         let manifest = parse_m3_execution_manifest().expect("checked-in M3 execution manifest");
         assert_eq!(manifest.cases.len(), 29);
@@ -3147,7 +3088,6 @@ mod tests {
                 logical_root: "".into(),
                 decompressed_source_sha256: sha256_hex(&bytes).into(),
                 parser_config_fingerprint: parser_config_fingerprint(backend.parser.config()),
-                oracle_id: LEGACY_ORACLE_ID.into(),
                 source_graph_hash: None,
             },
             source_name: mantdoc::SourceName::new("plain.1").unwrap(),
@@ -3173,7 +3113,6 @@ mod tests {
                 logical_root: "".into(),
                 decompressed_source_sha256: "00".into(),
                 parser_config_fingerprint: parser_config_fingerprint(backend.parser.config()),
-                oracle_id: LEGACY_ORACLE_ID.into(),
                 source_graph_hash: None,
             },
             source_name: mantdoc::SourceName::new("mutated.1").unwrap(),
@@ -3196,7 +3135,6 @@ mod tests {
                 logical_root: "".into(),
                 decompressed_source_sha256: sha256_hex(&bytes).into(),
                 parser_config_fingerprint: "00".into(),
-                oracle_id: LEGACY_ORACLE_ID.into(),
                 source_graph_hash: None,
             },
             source_name: mantdoc::SourceName::new("config.1").unwrap(),
