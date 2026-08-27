@@ -27,6 +27,24 @@ fn no_fill_toggles_are_scoped_by_mdoc_display_blocks() {
 }
 
 #[test]
+fn literal_text_does_not_receive_filled_sentence_punctuation() {
+    let name = SourceName::new("mdoc-literal-sentence.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt LITERAL 1\n.Os\n.Sh DESCRIPTION\n.Bd -literal\n\\&...\n.Ed\n",
+        ))
+        .unwrap();
+    let literal = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("\\&..."))
+        .unwrap();
+    assert!(literal.flags().no_fill);
+    assert!(!literal.flags().sentence_end);
+}
+
+#[test]
 fn filled_c_blank_recovery_omits_only_the_filled_pair() {
     let name = SourceName::new("mdoc-c-blank.1").unwrap();
     let report = Parser::default()

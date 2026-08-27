@@ -30,7 +30,9 @@ impl StructureEvents {
         // mandoc exposes `text. ` as `text.` with sentence punctuation.
         // Macro arguments retain their macro-specific punctuation semantics.
         for node in &flat {
-            if builder.node_kind(*node) == Some(NodeKind::Text) {
+            if builder.node_kind(*node) == Some(NodeKind::Text)
+                && !builder.node_flags(*node).is_some_and(|flags| flags.no_fill)
+            {
                 mark_sentence_end(builder, *node);
             }
         }
