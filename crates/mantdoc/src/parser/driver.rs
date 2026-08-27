@@ -1,10 +1,10 @@
 use super::{
     ArgumentIssue, DiagnosticCode, DocumentBuilder, EscapeIssueKind, IncludeRequest, InputTrap,
     MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, ScanOutcome, ScannedLine,
-    Scanner, ScopeFlow, ScopeLine, Severity, Source, SourcePosition, SourceResolver, SourceSpan,
-    Syntax, append_node, append_text_node, append_textual_node, apply_environment_request,
-    apply_string_request, arm_input_trap, collect_pending_macro_scope, collect_scope,
-    condition_body_source_start_from_offset, condition_body_template,
+    Scanner, ScopeFlow, ScopeLine, Severity, Source, SourceMachine, SourcePosition, SourceResolver,
+    SourceSpan, Syntax, append_node, append_text_node, append_textual_node,
+    apply_environment_request, apply_string_request, arm_input_trap, collect_pending_macro_scope,
+    collect_scope, condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
     emit_bad_comment_style, emit_declared_character_escape_warnings, emit_escape_issues,
@@ -40,15 +40,22 @@ use super::{
     validate_character_request, visible_bytes,
 };
 
+impl<R: SourceResolver + ?Sized> SourceMachine<'_, '_, '_, R> {
+    pub(super) fn run(self) -> ScanOutcome {
+        run_source(self)
+    }
+}
+
 #[allow(clippy::too_many_lines)] // M2's explicit scanner-stage dispatch is kept in source order.
 #[allow(clippy::needless_borrow)] // Mutable session fields preserve the existing helper call shape.
-pub(super) fn scan_source<R: SourceResolver + ?Sized>(
-    source: Source<'_>,
-    source_id: crate::SourceId,
-    include_depth: usize,
-    session: &mut ParseSession<'_, R>,
-    outcome: ScanOutcome,
-) -> ScanOutcome {
+fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>) -> ScanOutcome {
+    let SourceMachine {
+        source,
+        source_id,
+        include_depth,
+        session,
+        outcome,
+    } = machine;
     let config = session.config;
     let mut builder = &mut *session.builder;
     let mut environment = &mut *session.environment;
@@ -2117,7 +2124,7 @@ pub(super) fn scan_source<R: SourceResolver + ?Sized>(
                     active_sources.push(included.name.clone());
                     let mut included_session =
                         ParseSession::new(config, builder, environment, active_sources, resolver);
-                    let outcome = scan_source(
+                    let outcome = SourceMachine::new(
                         Source::new(&included.name, &included.bytes),
                         resolved_source_id,
                         include_depth + 1,
@@ -2135,7 +2142,8 @@ pub(super) fn scan_source<R: SourceResolver + ?Sized>(
                             total_loop_iterations,
                             saw_mdoc_operating_system,
                         },
-                    );
+                    )
+                    .run();
                     active_sources.pop();
                     diagnostics = outcome.diagnostics;
                     deferred_post_validation_diagnostics =

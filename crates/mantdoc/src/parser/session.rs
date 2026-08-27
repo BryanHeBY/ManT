@@ -1,5 +1,5 @@
-use super::{Diagnostic, DocumentBuilder, Environment, ParserConfig, SourceResolver};
-use crate::SourceName;
+use super::{Diagnostic, DocumentBuilder, Environment, ParserConfig, Source, SourceResolver};
+use crate::{SourceId, SourceName};
 
 pub(super) struct ParseSession<'a, R: SourceResolver + ?Sized> {
     pub(super) config: &'a ParserConfig,
@@ -55,6 +55,34 @@ impl ScanOutcome {
             previous_conditional: None,
             total_loop_iterations: 0,
             saw_mdoc_operating_system,
+        }
+    }
+}
+
+pub(super) struct SourceMachine<'source, 'session, 'context, R: SourceResolver + ?Sized> {
+    pub(super) source: Source<'source>,
+    pub(super) source_id: SourceId,
+    pub(super) include_depth: usize,
+    pub(super) session: &'session mut ParseSession<'context, R>,
+    pub(super) outcome: ScanOutcome,
+}
+
+impl<'source, 'session, 'context, R: SourceResolver + ?Sized>
+    SourceMachine<'source, 'session, 'context, R>
+{
+    pub(super) const fn new(
+        source: Source<'source>,
+        source_id: SourceId,
+        include_depth: usize,
+        session: &'session mut ParseSession<'context, R>,
+        outcome: ScanOutcome,
+    ) -> Self {
+        Self {
+            source,
+            source_id,
+            include_depth,
+            session,
+            outcome,
         }
     }
 }

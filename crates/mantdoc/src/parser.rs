@@ -172,13 +172,14 @@ impl Parser {
             &mut active_sources,
             resolver,
         );
-        let mut outcome = scan_source(
+        let mut outcome = SourceMachine::new(
             source,
             DocumentBuilder::root_source(),
             0,
             &mut session,
             ScanOutcome::root(source.bytes.len(), root_source_has_mdoc_os),
-        );
+        )
+        .run();
         outcome.saw_mdoc_operating_system |= root_source_has_mdoc_os;
         let structure = crate::preprocess::structure(&mut builder, &self.config.limits);
         apply_preprocess_outcome(&mut outcome, structure, &self.config.limits);
@@ -240,7 +241,6 @@ use diagnostics::{
     apply_man_structure_outcome, apply_mdoc_structure_outcome, apply_preprocess_outcome,
     apply_tree_depth_limit, reorder_deferred_post_validation_diagnostics,
 };
-use driver::scan_source;
 use emit::{
     append_node, append_text_node, append_textual_node, contains_valid_utf8_non_ascii,
     emit_bad_comment_style, emit_escape_issues, emit_filled_macro_argument_tabs,
@@ -281,7 +281,7 @@ use runtime::{
     update_man_example_fill_presentation, update_man_indent_register, update_preprocessor_depth,
     update_table_preprocessor_depth, validate_character_request, visible_bytes,
 };
-use session::{ParseSession, ScanOutcome};
+use session::{ParseSession, ScanOutcome, SourceMachine};
 
 struct DenyResolver;
 
