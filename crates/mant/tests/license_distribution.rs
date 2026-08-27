@@ -144,7 +144,7 @@ fn repository_notice_names_every_non_product_distribution_boundary() {
     let notice = include_str!("../../../THIRD_PARTY_NOTICES.md");
     assert!(notice.contains("tests/fixtures/roff/real/"));
     assert!(notice.contains("docs/assets/fonts/"));
-    assert!(notice.contains("crates/libmandoc-rs/THIRD_PARTY_NOTICES.md"));
+    assert!(!notice.contains("crates/libmandoc-rs/"));
     assert!(notice.contains("THIRD_PARTY_LICENSES.html"));
     assert!(notice.contains("tldr-pages/tldr"));
     assert!(notice.contains("LICENSES/CC-BY-4.0.txt"));
