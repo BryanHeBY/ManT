@@ -21,8 +21,15 @@ pub(super) struct TextPage {
 
 pub(super) fn render_find(catalog: &DocumentCatalog, page: PageRequest) -> TextPage {
     let mut text = format!("{} matches", catalog.total);
-    if catalog.returned < catalog.total {
-        let _ = write!(text, "; {} returned", catalog.returned);
+    if catalog.offset != 0 || catalog.returned < catalog.total {
+        let _ = write!(
+            text,
+            "; offset={}, returned={}",
+            catalog.offset, catalog.returned
+        );
+    }
+    if let Some(next_offset) = catalog.next_offset {
+        let _ = write!(text, ", nextOffset={next_offset}");
     }
     let records = mant_protocol::render_catalog_text(catalog, false);
     if !records.is_empty() {

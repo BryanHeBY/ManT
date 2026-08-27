@@ -106,7 +106,16 @@ fn oversized_request_lines_are_fatal_and_keep_stderr_silent() {
 }
 
 fn request_document_tools(input: &mut impl Write) {
-    call_tool(input, 3, "mant_find", &json!({ "query": "mcp-" }));
+    call_tool(
+        input,
+        3,
+        "mant_find",
+        &json!({
+            "query": "^mcp-",
+            "syntax": "regex",
+            "case": "sensitive"
+        }),
+    );
     call_tool(
         input,
         4,
@@ -186,7 +195,9 @@ fn request_compatibility_and_page_tools(input: &mut impl Write) {
             "pattern": "needle",
             "word": "true",
             "contextLines": "1",
-            "maxMatches": "1"
+            "maxMatches": "1",
+            "scope": "markdown",
+            "offset": "1"
         }),
     );
     call_tool(
@@ -260,9 +271,14 @@ fn assert_tool_catalog(tools: &[Value]) {
         }
         if tool["name"] == "mant_find" {
             assert!(tool["inputSchema"]["properties"]["maxResults"].is_object());
+            assert!(tool["inputSchema"]["properties"]["syntax"].is_object());
+            assert!(tool["inputSchema"]["properties"]["case"].is_object());
+            assert!(tool["inputSchema"]["properties"]["offset"].is_object());
         }
         if tool["name"] == "mant_search" {
             assert!(tool["inputSchema"]["properties"]["maxMatches"].is_object());
+            assert!(tool["inputSchema"]["properties"]["scope"].is_object());
+            assert!(tool["inputSchema"]["properties"]["offset"].is_object());
             assert!(tool["inputSchema"]["properties"].get("limit").is_none());
         }
     }
@@ -320,6 +336,10 @@ fn assert_tool_replies(replies: &[Value]) {
 
     let compatible_search = successful_text(reply(replies, 11));
     assert!(compatible_search.contains("needle"), "{compatible_search}");
+    assert!(
+        compatible_search.contains("[search: offset=1, returned=1, totalMatchingLineGroups=2]"),
+        "{compatible_search}"
+    );
     let compatible_read = successful_text(reply(replies, 12));
     assert!(
         compatible_read.contains("Read the MCP needle."),

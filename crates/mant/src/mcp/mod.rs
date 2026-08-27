@@ -11,7 +11,7 @@ mod transport;
 
 use mant_engine::QueryViewResult;
 use mant_protocol::{
-    QueryRequest, QueryView, ScopeQueryRequest, ScopeQueryView, ScopeRequestSchema, SearchScope,
+    QueryRequest, QueryView, ScopeQueryRequest, ScopeQueryView, ScopeRequestSchema,
 };
 use rmcp::{
     ServerHandler,
@@ -175,16 +175,16 @@ impl MantMcpServer {
         let page = parameters.page;
         let request = ScopeQueryRequest {
             schema: ScopeRequestSchema::V0Dot10,
-            scope: parameters.scope,
+            scope: parameters.documents,
             view: ScopeQueryView::Search {
                 pattern: parameters.pattern,
                 syntax: parameters.syntax,
                 case: parameters.case,
-                scope: SearchScope::Visible,
+                scope: parameters.scope,
                 word: parameters.word,
                 context_lines: parameters.context_lines,
                 limit: parameters.max_matches,
-                offset: 0,
+                offset: parameters.offset,
             },
         };
         let mut response = self.query_scope(request).await?;
@@ -254,11 +254,14 @@ mod tests {
                 assert_eq!(properties["documents"]["type"], "array");
                 assert!(schema_type_contains(&properties["maxMatches"], "integer"));
                 assert_eq!(properties["maxMatches"]["maximum"], 100);
-                assert!(!properties.contains_key("offset"));
-                assert!(!properties.contains_key("scope"));
+                assert!(properties.contains_key("offset"));
+                assert!(properties.contains_key("scope"));
             }
             if tool.name == "mant_find" {
                 assert_eq!(properties["maxResults"]["maximum"], 10_000);
+                assert!(properties.contains_key("syntax"));
+                assert!(properties.contains_key("case"));
+                assert!(properties.contains_key("offset"));
             }
             if tool.name == "mant_read" {
                 assert_eq!(properties["selectors"]["type"], "array");
@@ -328,20 +331,39 @@ mod tests {
             "word": "false",
             "contextLines": "1",
             "maxMatches": "3",
+            "scope": "markdown",
+            "offset": "4",
             "startChar": "7",
             "maxChars": "512"
         }))
         .expect("stringified search parameters");
         let search = search.validate().expect("valid normalized search");
-        assert_eq!(search.scope.documents.len(), 2);
-        assert!(search.scope.traversal.follow_links);
-        assert_eq!(search.scope.traversal.max_depth, Some(2));
-        assert_eq!(search.scope.traversal.max_documents, Some(8));
+        assert_eq!(search.documents.documents.len(), 2);
+        assert!(search.documents.traversal.follow_links);
+        assert_eq!(search.documents.traversal.max_depth, Some(2));
+        assert_eq!(search.documents.traversal.max_documents, Some(8));
         assert!(!search.word);
         assert_eq!(search.context_lines, 1);
         assert_eq!(search.max_matches, 3);
+        assert_eq!(search.scope, mant_protocol::SearchScope::Markdown);
+        assert_eq!(search.offset, 4);
         assert_eq!(search.page.start_char, 7);
         assert_eq!(search.page.max_chars, 512);
+
+        let find: FindParams = serde_json::from_value(json!({
+            "query": "^git",
+            "syntax": "regex",
+            "case": "smart",
+            "offset": "5",
+            "maxResults": "12"
+        }))
+        .expect("catalog search controls");
+        let find = find.validate().expect("valid catalog controls");
+        let catalog = catalog_query(&find);
+        assert_eq!(catalog.syntax, mant_protocol::SearchSyntax::Regex);
+        assert_eq!(catalog.case, mant_protocol::SearchCase::Smart);
+        assert_eq!(catalog.offset, 5);
+        assert_eq!(catalog.limit, 12);
 
         let explain: ExplainParams = serde_json::from_value(json!({
             "documents": "manual/1/tar",
@@ -414,9 +436,11 @@ mod tests {
             pattern: pattern.to_owned(),
             syntax: None,
             case: None,
+            scope: None,
             word: false,
             context_lines,
             max_matches,
+            offset: 0,
             start_char: 0,
             max_chars: None,
         };
@@ -480,19 +504,21 @@ mod tests {
             pattern: " needle ".to_owned(),
             syntax: None,
             case: None,
+            scope: None,
             word: false,
             context_lines: 0,
             max_matches: None,
+            offset: 0,
             start_char: 0,
             max_chars: None,
         }
         .validate()
         .expect("search parameters");
-        assert_eq!(search.scope.documents[0].selector, "mant");
-        assert_eq!(search.scope.documents[1].selector, "manual/1/git");
-        assert!(search.scope.traversal.follow_links);
-        assert_eq!(search.scope.traversal.max_depth, Some(2));
-        assert_eq!(search.scope.traversal.max_documents, Some(8));
+        assert_eq!(search.documents.documents[0].selector, "mant");
+        assert_eq!(search.documents.documents[1].selector, "manual/1/git");
+        assert!(search.documents.traversal.follow_links);
+        assert_eq!(search.documents.traversal.max_depth, Some(2));
+        assert_eq!(search.documents.traversal.max_documents, Some(8));
         assert_eq!(search.pattern, " needle ");
     }
 

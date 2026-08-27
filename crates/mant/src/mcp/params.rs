@@ -37,8 +37,12 @@ const MAX_PATTERN_BYTES: usize = 4096;
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct FindParams {
-    /// Optional case-insensitive literal, bounded to 1024 UTF-8 bytes at runtime.
+    /// Optional name or catalog-path pattern, bounded to 1024 UTF-8 bytes at runtime.
     pub(super) query: Option<String>,
+    /// Interpret `query` literally (the default) or as a regular expression.
+    pub(super) syntax: Option<SearchSyntax>,
+    /// Case-folding policy. The default is `insensitive`.
+    pub(super) case: Option<SearchCase>,
     /// Restrict results to registered Markdown or native manuals.
     pub(super) kind: Option<CatalogDocumentKind>,
     /// Restrict Markdown results to one configured source.
@@ -51,6 +55,9 @@ pub(super) struct FindParams {
     #[schemars(range(min = 1, max = 10_000))]
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_results: Option<u32>,
+    /// Skip this many matching catalog rows before materialization.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) offset: u32,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) start_char: u32,
@@ -160,6 +167,8 @@ pub(super) struct SearchParams {
     pub(super) syntax: Option<SearchSyntax>,
     /// Case-folding policy. The default is `insensitive`.
     pub(super) case: Option<SearchCase>,
+    /// Search visible text (the default) or generated CommonMark markup.
+    pub(super) scope: Option<mant_protocol::SearchScope>,
     /// Restrict matches to Unicode-aware word boundaries.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) word: bool,
@@ -171,6 +180,9 @@ pub(super) struct SearchParams {
     #[schemars(range(min = 1, max = 100))]
     #[serde(default, deserialize_with = "deserialize_compat_optional_scalar")]
     pub(super) max_matches: Option<u32>,
+    /// Skip this many global matching-line groups before materialization.
+    #[serde(default, deserialize_with = "deserialize_compat_scalar")]
+    pub(super) offset: u32,
     /// Zero-based Unicode scalar offset into the canonical result text.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
     pub(super) start_char: u32,
@@ -188,10 +200,13 @@ pub(super) struct PageRequest {
 
 pub(super) struct ValidatedFindParams {
     pub(super) query: Option<String>,
+    pub(super) syntax: SearchSyntax,
+    pub(super) case: SearchCase,
     pub(super) kind: Option<CatalogDocumentKind>,
     pub(super) source: Option<String>,
     pub(super) manual_section: Option<String>,
     pub(super) max_results: u32,
+    pub(super) offset: u32,
     pub(super) page: PageRequest,
 }
 
@@ -215,13 +230,15 @@ pub(super) struct ValidatedExplainParams {
 }
 
 pub(super) struct ValidatedSearchParams {
-    pub(super) scope: DocumentScope,
+    pub(super) documents: DocumentScope,
     pub(super) pattern: String,
     pub(super) syntax: SearchSyntax,
     pub(super) case: SearchCase,
+    pub(super) scope: mant_protocol::SearchScope,
     pub(super) word: bool,
     pub(super) context_lines: u16,
     pub(super) max_matches: u32,
+    pub(super) offset: u32,
     pub(super) page: PageRequest,
 }
 
@@ -336,10 +353,13 @@ impl FindParams {
         }
         Ok(ValidatedFindParams {
             query,
+            syntax: self.syntax.unwrap_or_default(),
+            case: self.case.unwrap_or_default(),
             kind: self.kind,
             source,
             manual_section,
             max_results,
+            offset: self.offset,
             page,
         })
     }
@@ -411,7 +431,7 @@ impl SearchParams {
             "maxMatches",
         )?;
         Ok(ValidatedSearchParams {
-            scope: validate_scope(
+            documents: validate_scope(
                 self.documents,
                 self.follow_links,
                 self.max_depth,
@@ -420,9 +440,11 @@ impl SearchParams {
             pattern: bounded_exact(&self.pattern, "pattern", MAX_PATTERN_BYTES)?,
             syntax: self.syntax.unwrap_or_default(),
             case: self.case.unwrap_or_default(),
+            scope: self.scope.unwrap_or_default(),
             word: self.word,
             context_lines: self.context_lines,
             max_matches,
+            offset: self.offset,
             page: validate_page(self.start_char, self.max_chars)?,
         })
     }
@@ -509,13 +531,13 @@ fn validate_scope(
 pub(super) fn catalog_query(parameters: &ValidatedFindParams) -> CatalogQuery {
     CatalogQuery {
         pattern: parameters.query.clone(),
-        syntax: SearchSyntax::Literal,
-        case: SearchCase::Insensitive,
+        syntax: parameters.syntax,
+        case: parameters.case,
         kind: parameters.kind,
         source: parameters.source.clone(),
         manual_section: parameters.manual_section.clone(),
         limit: parameters.max_results,
-        offset: 0,
+        offset: parameters.offset,
     }
 }
 
