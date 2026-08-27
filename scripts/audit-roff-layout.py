@@ -107,6 +107,12 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         metavar="DIR",
         help="scan one or more local manual roots instead of fixtures",
     )
+    parser.add_argument(
+        "--pages-file",
+        type=Path,
+        metavar="FILE",
+        help="audit exactly the absolute manual paths in FILE",
+    )
     sampling = parser.add_mutually_exclusive_group()
     sampling.add_argument(
         "--max-pages",
@@ -248,6 +254,33 @@ def discover_pages(roots: Sequence[Path]) -> list[Path]:
             if (path.is_file() or path.is_symlink()) and MANUAL_SUFFIX.search(path.name)
         )
     return sorted(pages, key=lambda path: path.as_posix())
+
+
+def explicit_pages(path: Path, roots: Sequence[Path]) -> list[Path]:
+    """Read an exact page set without relaxing its selected manual roots."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise ValueError(f"cannot read --pages-file {path}: {error}") from error
+    pages: set[Path] = set()
+    for number, value in enumerate(lines, 1):
+        if not value:
+            continue
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            raise ValueError(f"--pages-file {path}:{number} is not an absolute path")
+        if not MANUAL_SUFFIX.search(candidate.name):
+            raise ValueError(f"--pages-file {path}:{number} is not a manual page")
+        if not any(candidate.is_relative_to(root) for root in roots):
+            raise ValueError(
+                f"--pages-file {path}:{number} is outside the selected manual roots"
+            )
+        if not (candidate.is_file() or candidate.is_symlink()):
+            raise ValueError(f"--pages-file {path}:{number} is not a readable manual page")
+        pages.add(candidate)
+    if not pages:
+        raise ValueError(f"--pages-file {path} did not select any manual pages")
+    return sorted(pages, key=lambda candidate: candidate.as_posix())
 
 
 def source_bytes(path: Path) -> bytes | None:
@@ -681,11 +714,31 @@ def main(argv: Sequence[str]) -> int:
             raise ValueError(f"ManT executable not found: {arguments.mant}; run `cargo build -p mant`")
         roots = [path.resolve() for path in arguments.manpath] if arguments.manpath else [FIXTURE_ROOT]
         corpus = arguments.corpus or ("fixtures" if not arguments.manpath else "local-manpath")
-        pages = discover_pages(roots)
-        if arguments.man_section:
-            sections = set(arguments.man_section)
-            pages = [path for path in pages if manual_section(path) in sections]
-        pages, unreadable = filter_pages_by_source(pages, compile_source_patterns(arguments.source_pattern))
+        explicit_page_set = arguments.pages_file is not None
+        if explicit_page_set and (
+            arguments.max_pages
+            or arguments.max_pages_per_section
+            or arguments.man_section
+            or arguments.source_pattern
+            or arguments.recorded_only
+            or arguments.recheck_recorded
+            or arguments.recheck_review_recorded
+            or arguments.replay_fidelity_records
+        ):
+            raise ValueError(
+                "--pages-file cannot be combined with sampling, source filters, or ledger selection options"
+            )
+        if explicit_page_set:
+            pages = explicit_pages(arguments.pages_file, roots)
+            unreadable: list[Path] = []
+        else:
+            pages = discover_pages(roots)
+            if arguments.man_section:
+                sections = set(arguments.man_section)
+                pages = [path for path in pages if manual_section(path) in sections]
+            pages, unreadable = filter_pages_by_source(
+                pages, compile_source_patterns(arguments.source_pattern)
+            )
         records = {path: (relative_label(path, roots), source_digest(path)) for path in pages}
         database = read_database(
             arguments.audit_db,
@@ -723,11 +776,12 @@ def main(argv: Sequence[str]) -> int:
                 if records[path][1] is None
                 or (corpus, records[path][0], records[path][1]) not in database
             ]
-        pages = (
-            stable_sample_by_section(pages, arguments.max_pages_per_section)
-            if arguments.max_pages_per_section
-            else stable_sample(pages, arguments.max_pages)
-        )
+        if not explicit_page_set:
+            pages = (
+                stable_sample_by_section(pages, arguments.max_pages_per_section)
+                if arguments.max_pages_per_section
+                else stable_sample(pages, arguments.max_pages)
+            )
     except ValueError as error:
         print(f"audit-roff-layout: {error}", file=sys.stderr)
         return 2
@@ -743,6 +797,8 @@ def main(argv: Sequence[str]) -> int:
     print(f"  profile:   {arguments.reference_kind}/{reference_id}")
     print(f"  roots:     {', '.join(str(root) for root in roots)}")
     print(f"  pages:     {len(pages)}")
+    if arguments.pages_file:
+        print(f"  page set:  {arguments.pages_file}")
     print(f"  corpus:    {corpus}")
     if arguments.replay_fidelity_records:
         print(f"  replay:    completed rows from {arguments.fidelity_db}")
