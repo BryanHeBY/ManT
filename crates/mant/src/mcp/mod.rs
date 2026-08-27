@@ -160,7 +160,7 @@ impl MantMcpServer {
         Ok(finish_page(&render_scope_explain(&response, page)?))
     }
 
-    /// Search visible text or generated CommonMark across bounded documents.
+    /// Search visible text or generated `CommonMark` across bounded documents.
     #[tool(
         name = "mant_search",
         annotations(

@@ -167,7 +167,7 @@ pub(super) struct SearchParams {
     pub(super) syntax: Option<SearchSyntax>,
     /// Case-folding policy. The default is `insensitive`.
     pub(super) case: Option<SearchCase>,
-    /// Search visible text (the default) or generated CommonMark markup.
+    /// Search visible text (the default) or generated `CommonMark` markup.
     pub(super) scope: Option<mant_protocol::SearchScope>,
     /// Restrict matches to Unicode-aware word boundaries.
     #[serde(default, deserialize_with = "deserialize_compat_scalar")]
