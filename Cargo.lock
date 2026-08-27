@@ -953,10 +953,10 @@ dependencies = [
  "flate2",
  "grep-matcher",
  "grep-regex",
- "libmandoc-rs",
  "mant-ir",
  "mant-protocol",
  "mant-sources",
+ "mantdoc",
  "pulldown-cmark",
  "regex-syntax",
  "serde",
@@ -1008,6 +1008,17 @@ dependencies = [
  "minus",
  "ratatui",
  "unicode-width",
+]
+
+[[package]]
+name = "mantdoc"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "flate2",
+ "serde",
+ "serde_json",
+ "unicode-width",
+ "zstd",
 ]
 
 [[package]]
