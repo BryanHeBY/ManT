@@ -2364,6 +2364,32 @@ fn clicking_unsafe_tldr_more_information_does_not_reach_the_host() {
 }
 
 #[test]
+fn clicking_safe_tldr_more_information_reaches_the_host() {
+    let mut bundle = tldr_bundle();
+    bundle.tldr.as_mut().expect("tldr").more_information =
+        Some("https://example.test/tldr".to_owned());
+    let backend = TestBackend::new(72, 18);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&bundle);
+    terminal.draw(|frame| app.draw(frame)).expect("draw app");
+    let width = app.geometry.content.width;
+    let region = app.rendered_cache[&width]
+        .search("https://example.test/tldr")
+        .into_iter()
+        .next()
+        .expect("visible tldr URL");
+
+    click_document_cell(&mut app, region.start_column, region.row);
+
+    assert_eq!(
+        app.take_external_request()
+            .as_ref()
+            .map(crate::ExternalUri::as_str),
+        Some("https://example.test/tldr")
+    );
+}
+
+#[test]
 fn keyboard_navigation_moves_from_tldr_and_markdown_overview_to_manual_sections() {
     let mut with_tldr = navigation_bundle();
     with_tldr.tldr = tldr_bundle().tldr;

@@ -1001,6 +1001,26 @@ mod tests {
                 .collect::<Vec<_>>(),
             [1, 2, 3, 4, 5]
         );
+
+        let cross_boundary_query = SearchQuery { offset: 2, ..query };
+        let ScopeQueryResult::Search { search } =
+            execute_scope_search(&loaded, &cross_boundary_query).expect("scope search")
+        else {
+            panic!("search result");
+        };
+
+        assert_eq!(search.total, 13);
+        assert_eq!(search.returned, 5);
+        assert_eq!(search.next_offset, Some(7));
+        assert_eq!(search.documents.len(), 2);
+        assert_eq!(
+            search
+                .documents
+                .iter()
+                .flat_map(|document| document.matches.iter().map(|hit| hit.ordinal))
+                .collect::<Vec<_>>(),
+            [3, 4, 5, 6, 7]
+        );
     }
 
     #[test]

@@ -471,6 +471,32 @@ fn unsafe_tldr_more_information_remains_visible_but_inert() {
 }
 
 #[test]
+fn safe_tldr_more_information_stays_activatable() {
+    let mut bundle = geometry_bundle();
+    bundle.tldr.as_mut().expect("tldr").more_information =
+        Some("https://example.test/tldr".to_owned());
+
+    let view = DocumentView::new(&bundle);
+    let link_line = view
+        .lines
+        .iter()
+        .find(|line| {
+            line.spans
+                .iter()
+                .any(|span| span.content.contains("https://example.test/tldr"))
+        })
+        .expect("visible more-information line");
+
+    assert_eq!(link_line.links.len(), 1);
+    assert_eq!(
+        link_line.links[0].target,
+        LinkTarget::External(
+            ExternalUri::parse("https://example.test/tldr").expect("valid external URI")
+        )
+    );
+}
+
+#[test]
 fn wrapped_rows_preserve_their_indent() {
     let line = LogicalLine::plain(3, "abcdefgh", Style::default());
     let rows = wrap_line(&line, 7);
