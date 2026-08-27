@@ -142,7 +142,7 @@ fn rust_dependency_notice_is_generated_from_the_locked_product_graph() {
     assert!(licenses.contains("ManT Rust dependency licenses"));
     assert!(licenses.contains("cargo-about"));
     assert!(licenses.contains(&format!("mant {version}")));
-    assert!(licenses.contains("mantdoc 0.1.0-alpha.1"));
+    assert!(licenses.contains("mantdoc 0.1.0"));
     assert!(licenses.contains("ratatui 0.30.2"));
     assert!(licenses.contains("rustls 0.23.43"));
 }
