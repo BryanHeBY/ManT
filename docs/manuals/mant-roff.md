@@ -6,7 +6,7 @@ mant-roff — native man, mdoc, tbl, eqn, and roff compatibility in ManT
 
 ## Description
 
-ManT reads native manual pages through a vendored `libmandoc` 1.14.6 parser and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are `man(7)` and `mdoc(7)` with the subset of roff requests, escapes, `tbl(7)`, and `eqn(7)` that occur inside those manuals.
+ManT reads native manual pages through its Rust `mantdoc` parser and lowers its validated owned syntax tree into [mant-ir(7)](mant-ir.md). The supported authoring languages are `man(7)` and `mdoc(7)` with the subset of roff requests, escapes, `tbl(7)`, and `eqn(7)` that occur inside those manuals.
 
 ManT is a semantic manual reader, not a general troff formatter. Device geometry, page headers and footers, traps, diversions, arbitrary postprocessor commands, and print-specific typography are outside its output model.
 
@@ -17,21 +17,21 @@ This reference uses four distinct support levels:
 | Level | Meaning |
 | --- | --- |
 | Semantic | ManT emits a dedicated IR node or typed property |
-| Visible | libmandoc parses the construct and ManT retains its visible children, but source-specific semantics may be flattened |
+| Visible | `mantdoc` parses the construct and ManT retains its visible children, but source-specific semantics may be flattened |
 | Presentation-only | Arguments are consumed and deliberately omitted because the IR has no device state |
 | Rejected | Processing stops or the unsafe operation is denied |
 
-A macro not listed as semantic may still be visible because libmandoc expands or validates it before lowering. That behavior is compatibility fallback, not a promise that every groff layout detail is reproduced.
+A macro not listed as semantic may still be visible because `mantdoc` expands or validates it before lowering. That behavior is compatibility fallback, not a promise that every groff layout detail is reproduced.
 
 ## Input Boundary
 
-Native discovery accepts ordinary, gzip, and zstd-compressed manual sources. Decompression and reads are bounded before bytes enter libmandoc. The original source path remains in the IR.
+Native discovery accepts ordinary, gzip, and zstd-compressed manual sources. Decompression and reads are bounded before bytes enter `mantdoc`. The original source path remains in the IR.
 
-Input bytes use libmandoc's deterministic UTF-8/Latin-1 detection. A leading UTF-8 byte-order mark and recognized `coding: UTF-8`, `coding: latin-1`, `coding: iso-latin-1`, or `coding: ISO-8859-1` declarations select the corresponding supported path. A declaration naming another charset cannot make the parse more destructive: because the bundled converter cannot implement that charset, ManT retains automatic UTF-8/Latin-1 detection rather than replacing every high byte with `?`. This is a preservation fallback, not a promise to interpret arbitrary declared encodings such as ISO-8859-9.
+Input bytes use `mantdoc`'s deterministic UTF-8/Latin-1 detection. A leading UTF-8 byte-order mark and recognized `coding: UTF-8`, `coding: latin-1`, `coding: iso-latin-1`, or `coding: ISO-8859-1` declarations select the corresponding supported path. A declaration naming another charset cannot make the parse more destructive: because the native converter cannot implement that charset, ManT retains automatic UTF-8/Latin-1 detection rather than replacing every high byte with `?`. This is a preservation fallback, not a promise to interpret arbitrary declared encodings such as ISO-8859-9.
 
-Indexed redirect-only pages containing `.so target` may resolve only to another discovered page inside the same approved manual hierarchy. Standalone `--input` files reject `.so` redirects because no trusted hierarchy accompanies them. An embedded `.so` request is not followed; libmandoc reports the denied include while ManT preserves the surrounding page content.
+Indexed redirect-only pages containing `.so target` may resolve only to another discovered page inside the same approved manual hierarchy. Standalone `--input` files reject `.so` redirects because no trusted hierarchy accompanies them. An embedded `.so` request is not followed; `mantdoc` reports the denied include while ManT preserves the surrounding page content.
 
-libmandoc file inclusion is disabled. Requests that read, write, execute, pipe, or include arbitrary files remain denied or ignored by the upstream safe parser. ManT never invokes the host `man`, `groff`, `nroff`, or shell executable.
+`mantdoc` file inclusion is disabled by default. Requests that read, write, execute, pipe, or include arbitrary files remain denied or ignored by the safe native parser. ManT never invokes the host `man`, `groff`, `nroff`, or shell executable.
 
 ## man Language
 
@@ -48,7 +48,7 @@ The following `man(7)` macros have dedicated lowering behavior:
 | `B`, `SB` | Strong inline content |
 | `I` | Emphasized inline content |
 | `BI`, `BR`, `IB`, `IR`, `RB`, `RI` | Alternating inline font runs without inserted spaces |
-| `EX`, `EE` | Preformatted no-fill region through libmandoc's fill state |
+| `EX`, `EE` | Preformatted no-fill region through `mantdoc`'s fill state |
 | `SY`, `YS` | Synopsis head plus body; inside `EX` the source lines remain one preformatted block |
 | `UR`, `UE` | Inline external link; a label and its target both remain visible without splitting the surrounding sentence |
 | `MT`, `ME` | Inline email link; a label and its address both remain visible without splitting the surrounding sentence |
@@ -56,7 +56,7 @@ The following `man(7)` macros have dedicated lowering behavior:
 
 `br` inside a flow becomes an inline line break. `sp` becomes explicit vertical space. Filled source lines normally join with spaces; an indented input line and no-fill input preserve line boundaries. In a no-fill display, a run of raw blank input lines is one visual separator, while an explicit `sp` retains its requested separation. A final unescaped `\c` suppresses that implicit space or line break and joins the next input line directly.
 
-`OP`, `AT`, `DT`, `SM`, `UC`, and other libmandoc-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
+`OP`, `AT`, `DT`, `SM`, `UC`, and other `mantdoc`-recognized man macros retain printable children where available but do not currently have a dedicated ManT semantic variant. For example, `SM` does not preserve point size, and `OP` does not become a distinct optional-argument node.
 
 ## mdoc Structure
 
@@ -68,13 +68,13 @@ The required mdoc prologue and structural macros are normalized as follows:
 | `Sh`, `Ss` | Top-level sections and child sections |
 | `Nm`, `Nd` | Strong document name and NAME description dash |
 | `Pp` | Explicit vertical paragraph separation |
-| `Tg` | Zero-width navigation anchor when validated by libmandoc |
+| `Tg` | Zero-width navigation anchor when validated by `mantdoc` |
 | `Sx` | Resolved same-document section link, including one unique parenthetical heading qualifier, or visible text when unresolved |
 | `Xr` | Typed link to a manual name and section |
 | `Lk`, `Mt` | External URI or email link; an unlabeled target remains visible and any trailing sentence punctuation stays outside the link |
 | `Bx` | BSD lifecycle forms such as `-alpha`, `-beta`, and `-devel` expand to their portable descriptive text; version forms render as canonical `versionBSD` names with an optional release |
 
-Validated libmandoc tags on mdoc definitions are retained for page-local navigation. Tags and section IDs share one document-local namespace and are disambiguated during IR validation.
+Validated `mantdoc` tags on mdoc definitions are retained for page-local navigation. Tags and section IDs share one document-local namespace and are disambiguated during IR validation.
 
 After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, and assignment `NAME=value` spellings through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Hanging paragraph plus relative-indent layouts are reconstructed as definitions only in that environment context. Ordinary prose and unrelated uppercase terms are never scanned or promoted.
 
@@ -123,7 +123,7 @@ Displays lower as follows:
 | `Bf -symbolic` | Strong styling applied to contained blocks |
 | `An -split`, `An -nosplit` | Author layout mode used while forming visible author content |
 
-Closing macros such as `Ed`, `Ef`, and `El` terminate libmandoc scopes and do not produce independent visible nodes.
+Closing macros such as `Ed`, `Ef`, and `El` terminate `mantdoc` scopes and do not produce independent visible nodes.
 
 ## mdoc Inline Semantics
 
@@ -145,7 +145,7 @@ The following macros receive dedicated inline treatment:
 | Function declaration | `Fn` |
 | Multi-line function declaration | `Fo`, `Fa`, `Fc` |
 
-Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
+Delimiter macros preserve their visible punctuation and `mantdoc` spacing roles:
 
 | Delimiters | Opening form | Closing form |
 | --- | --- | --- |
@@ -159,9 +159,9 @@ Delimiter macros preserve their visible punctuation and libmandoc spacing roles:
 | Arbitrary | `Eo opening`, body | `Ec closing` |
 | Stateful (obsolete) | `Es opening closing`, then `En` | Resolved per `En` use |
 
-The opener owns the complete scoped body in libmandoc's tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter. `Eo` and `Ec` retain their literal, author-supplied delimiters. The obsolete `Es` macro changes parser state but emits no text; libmandoc resolves that state onto each `En` invocation before ManT lowers it.
+The opener owns the complete scoped body in `mantdoc`'s tree, so ManT surrounds that body once. Closing macros terminate the scope and do not emit a second delimiter. `Eo` and `Ec` retain their literal, author-supplied delimiters. The obsolete `Es` macro changes parser state but emits no text; `mantdoc` resolves that state onto each `En` invocation before ManT lowers it.
 
-`Fn` and `Fo` retain the function name, join their arguments inside parentheses, and preserve the formatter-owned terminating semicolon when libmandoc marks the declaration for synopsis presentation. The same `Fn` in prose remains an inline function reference without a semicolon. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2);` in `SYNOPSIS` rather than discarding the function name or punctuation.
+`Fn` and `Fo` retain the function name, join their arguments inside parentheses, and preserve the formatter-owned terminating semicolon when `mantdoc` marks the declaration for synopsis presentation. The same `Fn` in prose remains an inline function reference without a semicolon. For example, `Fo audit_open` with two `Fa` lines lowers to `audit_open(arg1, arg2);` in `SYNOPSIS` rather than discarding the function name or punctuation.
 
 Other standard mdoc semantic macros, including `Fd`, `Cd`, `Dv`, `Er`, `Ev`, `Rv`, `Ex`, `Lb`, `St`, `Rs`, and bibliography fields, currently use visible-child fallback. Text remains readable, but specialized typography, punctuation synthesis, or domain identity is not guaranteed unless listed above.
 
@@ -172,12 +172,12 @@ different wording for the same source key.
 
 ## Roff Requests
 
-libmandoc preprocesses macro definitions, strings, registers, conditionals, loops, translations, and supported compatibility requests before ManT receives the owned tree. ManT does not expose that formatter state as IR.
+`mantdoc` preprocesses macro definitions, strings, registers, conditionals, loops, translations, and supported compatibility requests before ManT receives the owned tree. ManT does not expose that formatter state as IR.
 
 Each `.while` loop is limited to 10,000 body executions. One parse also permits
 at most 10,000 aggregate body replays across all loops and user-macro calls;
 the first source occurrence of each body is not a replay. Reaching either limit
-keeps the finite prefix, emits libmandoc's infinite-loop diagnostic, and
+keeps the finite prefix, emits the corresponding `mantdoc` infinite-loop diagnostic, and
 continues with the source after the loop. These bounds apply equally to
 discovered manuals and direct roff `--input`, so hostile formatter control flow
 cannot hold a CLI or MCP parser session indefinitely or multiply many bounded
@@ -191,20 +191,20 @@ Requests with direct lowering behavior are:
 | `sp` | Vertical-space block, with normalized height |
 | `nf`, `fi` | Enter and leave preformatted flow |
 | `ft` | Consumed formatter state; explicit text font escapes remain semantic |
-| `in` | Consumed indentation state around structures normalized by libmandoc |
+| `in` | Consumed indentation state around structures normalized by `mantdoc` |
 | `ad`, `na` | Adjustment state omitted |
 | `hy`, `nh` | Hyphenation state omitted |
 | `ne` | Page-layout reservation omitted |
 | `nr` | Register request omitted after upstream evaluation |
 | `ta` | Tab-stop state omitted |
 
-`ce`, `rj`, `ll`, `mc`, `po`, and `ti` can be represented by libmandoc nodes but ManT does not promise their device-specific alignment or page geometry. Printable descendants remain visible where the upstream AST provides them.
+`ce`, `rj`, `ll`, `mc`, `po`, and `ti` can be represented by `mantdoc` nodes but ManT does not promise their device-specific alignment or page geometry. Printable descendants remain visible where the native AST provides them.
 
 `TS`/`TE` and `EQ`/`EN` are handled as structured preprocessors, described below. For the complete distinction between requests implemented, ignored, unsupported, and insecure in the pinned parser, consult upstream `roff(7)` for mandoc 1.14.6. ManT adds the stricter source and include boundary described in this manual.
 
 ## Escapes
 
-ManT decodes visible roff text after libmandoc parsing. These escape families have explicit behavior:
+ManT decodes visible roff text after `mantdoc` parsing. These escape families have explicit behavior:
 
 | Escape | Result |
 | --- | --- |
@@ -215,11 +215,11 @@ ManT decodes visible roff text after libmandoc parsing. These escape families ha
 | `\c` at the end of an input line | Suppress the implicit space or line break before the next input line |
 | `\h'N'` with a positive literal relative distance | Preserve at least one visible word boundary; exact horizontal geometry is not reproduced |
 | `\p` | Inline line break |
-| `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned libmandoc catalog; bracketed `uXXXX` Unicode names and `_`-joined scalar sequences are decoded, while an unknown name remains visible in escaped source form |
+| `\(XX`, `\[NAME]`, `\C'desc'` | Named special character from the pinned `mantdoc` catalog; bracketed `uXXXX` Unicode names and `_`-joined scalar sequences are decoded, while an unknown name remains visible in escaped source form |
 | `\E` | Copy-mode-safe nested escape |
 | `\X'tty: link URI'` | External terminal link start; `\X'tty: link'` ends it |
 
-Named characters resolve through the complete character catalog compiled from the pinned libmandoc source. ManT deliberately applies copy-friendly compatibility folds to common quotes and symbols; other catalog entries use their declared Unicode scalar. Groff-style bracketed Unicode names such as `\[u2192]` and composite names such as `\[u0061_0301]` are decoded independently of that catalog. A name absent from both forms is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
+Named characters resolve through the complete character catalog pinned in `mantdoc`. ManT deliberately applies copy-friendly compatibility folds to common quotes and symbols; other catalog entries use their declared Unicode scalar. Groff-style bracketed Unicode names such as `\[u2192]` and composite names such as `\[u0061_0301]` are decoded independently of that catalog. A name absent from both forms is retained as `\(XX`, `\[NAME]`, or `\C'desc'` instead of being silently deleted, while known zero-width controls remain invisible.
 
 Font names map as follows:
 
@@ -243,15 +243,15 @@ Color, point size, vertical or non-literal motion, drawing, overstrike, register
 
 ## Tables
 
-`tbl(7)` rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by libmandoc. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
+`tbl(7)` rows become IR tables, including tables nested inside an mdoc literal or unfilled display. ManT retains cell text, left/center/right alignment, column spans, and row spans supplied by `mantdoc`. It does not reproduce line drawing, exact column widths, vertical positioning, fonts, or device-specific rules.
 
-Cell text passes through the same roff inline decoder as ordinary prose. ManT also recognizes a `T{`/`T}` text block containing `.Nm`, because libmandoc 1.14.6 otherwise exposes that cell as empty; an omitted argument resolves to the validated document name. Other complex nested block markup may flatten to the visible cell payload exposed by libmandoc. If an empty semantic text block cannot be recovered from the bounded input source, ManT emits `manual.unhandled-table-text-block` instead of claiming silent fidelity.
+Cell text passes through the same roff inline decoder as ordinary prose. ManT also recognizes a `T{`/`T}` text block containing `.Nm`, because the pinned compatibility behavior otherwise exposes that cell as empty; an omitted argument resolves to the validated document name. Other complex nested block markup may flatten to the visible cell payload exposed by `mantdoc`. If an empty semantic text block cannot be recovered from the bounded input source, ManT emits `manual.unhandled-table-text-block` instead of claiming silent fidelity.
 
-Some formatter-specific strings disappear before libmandoc exposes a cell. For ordinary tab-separated rows, ManT compares the validated cells with the bounded source row and retains an otherwise missing cell in its original escaped spelling. It emits one `manual.unexpanded-table-cell` diagnostic for the document rather than presenting an empty table or pretending that the formatter-specific value was evaluated.
+Some formatter-specific strings disappear before `mantdoc` exposes a cell. For ordinary tab-separated rows, ManT compares the validated cells with the bounded source row and retains an otherwise missing cell in its original escaped spelling. It emits one `manual.unexpanded-table-cell` diagnostic for the document rather than presenting an empty table or pretending that the formatter-specific value was evaluated.
 
 ## Equations
 
-Display `eqn(7)` input becomes an `equation` block containing libmandoc's normalized expression text. Delimiter-selected equations inside filled prose remain inline symbolic tokens rather than splitting the paragraph. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through the pinned eqn parser. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common GNU `ldots` macro is normalized to `...`.
+Display `eqn(7)` input becomes an `equation` block containing `mantdoc`'s normalized expression text. Delimiter-selected equations inside filled prose remain inline symbolic tokens rather than splitting the paragraph. The same active delimiters are applied to ordinary `tbl(7)` cells, whose opaque cell strings are normalized through the pinned eqn parser. Configuration-only `EQ`/`EN` blocks emit no empty equation. The common GNU `ldots` macro is normalized to `...`.
 
 ManT preserves these expressions for text, Markdown, JSON, and TUI consumers; it does not typeset mathematical layout or execute an external `eqn` preprocessor. At most 256 distinct opaque table expressions are reparsed per document. Later expressions remain visible in their source spelling and produce `manual.inline-equation-budget`, preventing adversarial tables from turning semantic recovery into unbounded parser work.
 
@@ -262,11 +262,11 @@ detect either omission without matching diagnostic prose.
 
 ## Diagnostics and Fallback
 
-libmandoc style, warning, error, and unsupported findings become structured document diagnostics with source locations when available. A nonfatal finding does not discard an otherwise useful manual.
+`mantdoc` style, warning, error, and unsupported findings become structured document diagnostics with source locations when available. A nonfatal finding does not discard an otherwise useful manual.
 
 Unknown source macros can be expanded by an earlier `.de` definition. If no visible semantic subtree results, ManT does not invent content. Formatter arguments such as widths, font names, register values, and macro-control tokens are never emitted merely to avoid dropping syntax.
 
-Terminal-unsafe control bytes are masked before native parsing. Roff comments and nodes marked non-printing by libmandoc remain invisible.
+Terminal-unsafe control bytes are masked before native parsing. Roff comments and nodes marked non-printing by `mantdoc` remain invisible.
 
 ## Compatibility Guidance
 

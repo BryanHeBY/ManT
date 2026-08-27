@@ -1,6 +1,6 @@
 //! Identifies addressable semantic entries after source-specific lowering.
 //!
-//! Both libmandoc macro sets and Markdown produce definition lists. This
+//! Both native roff macro sets and Markdown produce definition lists. This
 //! pass assigns one canonical option identity without leaking source macros
 //! into the stable document contract.
 

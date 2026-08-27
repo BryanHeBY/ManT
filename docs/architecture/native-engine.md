@@ -19,7 +19,7 @@ The architecture follows four constraints:
 source adapters
 └─ mant-engine          resolution, lowering, composition, query, rendering
    ├─ mant-sources      local Markdown registry and optional updates
-   ├─ libmandoc-rs     owned native parser boundary
+   ├─ mantdoc          owned native Rust parser boundary
    └─ mant-ir           semantic center: ResolvedContent and document IR
       ├───────────────> mant-ui and human renderers (direct semantic use)
       └─ projection ──> mant-protocol ──┬─> host callbacks and JSON
@@ -38,7 +38,7 @@ mant
 ├── mant-engine ───────────┬──> mant-ir
 │                          ├──> mant-protocol
 │                          ├──> mant-sources
-│                          └──> libmandoc-rs
+│                          └──> mantdoc
 ├── mant-sources (update feature)
 ├── mant-protocol
 └── mant-ir
@@ -57,9 +57,9 @@ The crates have deliberately asymmetric responsibilities:
 | --- | --- | --- |
 | `mant-ir` | Logical document addresses; source-neutral document and quick-reference IR; typed node IDs and ranges; visitors and derived indexes | Versioned process envelopes, parsing, files, or rendering |
 | `mant-protocol` | Shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation | Parsing, files, query execution, terminal policy, transports, or processes |
-| `libmandoc-rs` | An owned libmandoc parse tree, diagnostics, parser lifecycle, C build boundary, and default-off bounded upstream reference renderers | ManT types, source discovery, or ManT's semantic presentation |
+| `mantdoc` | Immutable arena parser tree, typed diagnostics, bounded source resolution, compression adapters, and optional Rust reference renderers | ManT types, source discovery, or ManT's semantic presentation |
 | `mant-sources` | Registered Markdown discovery and optional transactional Git/archive installation | Native manuals, rendering, or MCP |
-| `mant-engine` | Source resolution, Markdown parsing, libmandoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
+| `mant-engine` | Source resolution, Markdown parsing, mantdoc lowering, tldr composition, projections, and renderers | CLI policy, terminal lifecycle, or MCP transport |
 | `mant-ui` | Interactive navigation, document tabs, discovery, links, history, search, selection, typed copy requests, layout, and terminal lifecycle | Filesystem lookup, source mutation, or system clipboard access |
 | `mant` | User-facing modes, terminal detection, native/OSC 52 clipboard delivery, source updates, request JSON, schemas, and MCP stdio | A second parser or frontend-specific document model |
 
@@ -168,47 +168,26 @@ explicitly indexed leaf symlink may identify an external file, but every `.so`
 target must remain inside the logical manual root. Direct `--input` pages have
 no collection root and therefore reject redirect-only aliases.
 
-`libmandoc-rs` wraps the bundled C parser behind a small private shim. Parser
-calls retain the completed native session only while shallow borrowed node
-snapshots are copied directly into owned Rust data; the session is released
-before the fully owned result returns, and there is no intermediate owned C
-AST. Reference-renderer calls instead format the tree in the same native
-session without building the Rust AST. `mant-engine` alone lowers the owned
-tree into `mant-ir`. Linux, macOS, and Windows use the same parser version;
-Windows supplies bytes through a
-checked memory-only configuration instead of exposing POSIX file transport to
-C. ManT invokes libmandoc with native includes denied after Rust has resolved
-the source chain.
+`mantdoc` constructs its immutable arena directly in Rust; no parser session,
+FFI tree, or C-owned source buffer crosses the engine boundary. `mant-engine`
+projects that tree into its existing lowering shape and then lowers it into
+`mant-ir`. Linux, macOS, and Windows execute the same parser and source-policy
+code path.
 
-The standalone crate additionally offers exact `man`/`mdoc` input selection
-and two least-authority `.so` boundaries: a strict caller-approved filesystem
-root on every native target, plus a bounded `SourceBundle` virtual tree with
-no host-filesystem fallback. On Windows, the strict root is resolved and read
-by Rust while the C parser remains memory-only; reparse points are rejected
-and the opened handle's final path is checked against the approved root. Its
-default-off `render` feature exposes
-libmandoc's ASCII, locale-independent UTF-8, and HTML reference formatters
-through a per-call output sink. These are library capabilities, not a second
-ManT rendering path: `mant-engine` continues to consume the owned parser tree
-and render the shared source-neutral IR.
+The crate offers exact `man`/`mdoc` input selection and two least-authority
+`.so` boundaries: a strict caller-approved filesystem root on every target,
+plus a bounded `SourceBundle` virtual tree with no host-filesystem fallback.
+Its default-off `render` feature provides bounded ASCII, UTF-8, and HTML
+reference renderers through a per-call output sink. These are library
+capabilities, not a second ManT rendering path: `mant-engine` continues to
+consume the parser tree and render the shared source-neutral IR.
 
-The pinned libmandoc 1.14.6 snapshot originally kept character, diagnostic,
-tag, roff-request, formatter-tab, HTML-ID, and recursion state in process
-globals. The local vendor patch makes those parser and formatter session slots
-thread-local, and the shim keeps source roots and diagnostic capture
-thread-local as well. Independent parser calls
-therefore run concurrently without a process-wide lock; one-time native
-initialization remains synchronized. Date conversion avoids process-global
-timezone mutation and uses reentrant platform APIs where local time is
-required. Recursive re-entry on one thread is not supported, and the Rust
-node transfer and native equation expansion stop after 256 levels so hostile
-nesting cannot carry an unbounded C tree into recursive Rust consumers. A
-finite truncated tree remains successful and carries a typed parser finding;
-the engine projects those findings as `manual.syntax-depth-truncated` and
-`manual.equation-depth-truncated`. A
-mixed Rust/C ThreadSanitizer runner guards this boundary locally because
-instrumenting only Rust would miss races inside the vendored parser and
-optional formatters.
+Each parse owns its state, so independent calls are concurrent without a
+process-wide lock or host locale/timezone mutation. Syntax and equation tree
+limits retain the established 256-level finite-prefix behavior and emit typed
+findings; the engine projects them as `manual.syntax-depth-truncated` and
+`manual.equation-depth-truncated`. Focused Miri, concurrent-session, and fuzz
+gates guard this pure-Rust boundary.
 
 ### Markdown and installed sources
 

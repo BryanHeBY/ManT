@@ -17,8 +17,8 @@ pub(super) struct QueryService {
 impl QueryService {
     pub(super) fn new() -> Self {
         Self {
-            // Bound blocking filesystem and parser work. Patched libmandoc
-            // sessions can run concurrently, but neither native parsing nor
+            // Bound blocking filesystem and parser work. Native mantdoc
+            // sessions can run concurrently, but neither parsing nor
             // independent Markdown/catalog reads should grow without limit.
             gate: Arc::new(Semaphore::new(4)),
         }

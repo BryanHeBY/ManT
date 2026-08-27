@@ -35,7 +35,7 @@ they request it explicitly.
 logical selector / physical input
               │
               v
-DocumentResolver ──> Markdown parser or libmandoc lowering
+DocumentResolver ──> Markdown parser or mantdoc lowering
               │
               v
       mant_ir::ResolvedContent
@@ -105,13 +105,13 @@ for those versioned DTOs.
 
 | Platform | Markdown engine | Native man/mdoc engine |
 | --- | --- | --- |
-| Linux with glibc | Yes | Bundled `libmandoc-rs` |
-| macOS | Yes | Bundled `libmandoc-rs` |
-| Windows | Yes | Bundled `libmandoc-rs` |
+| Linux with glibc | Yes | Native Rust `mantdoc` |
+| macOS | Yes | Native Rust `mantdoc` |
+| Windows | Yes | Native Rust `mantdoc` |
 
-Every supported target compiles `libmandoc-rs`. Windows uses its memory-only C
-transport while Rust owns file I/O, decompression, paths, and `.so` redirects.
-Native root discovery is also Rust-owned: Linux reads man-db mappings or
+Every supported target compiles the same native Rust parser. File I/O,
+decompression, paths, and `.so` redirects are Rust-owned. Native root discovery
+is also Rust-owned: Linux reads man-db mappings or
 mandoc `man.conf`, macOS reads its PATH, active developer selection, and
 `MANPATH`/`MANCONFIG` configuration, and Windows optionally reads `ManT`'s own
 `man.conf`, all without spawning a host manual utility.
@@ -120,8 +120,8 @@ mandoc `man.conf`, macOS reads its PATH, active developer selection, and
 
 `mant-engine` returns an owned `mant_ir::ResolvedContent` for direct semantic
 use and owned `mant-protocol` values at versioned integration boundaries. It does not expose
-libmandoc C structures. Applications that only need raw roff syntax should use
-[`libmandoc-rs`](https://crates.io/crates/libmandoc-rs) directly. Applications
+parser storage internals. Applications that only need raw roff syntax should use
+[`mantdoc`](https://crates.io/crates/mantdoc) directly. Applications
 that need the complete command or reader should install
 [`mant`](https://crates.io/crates/mant).
 
@@ -132,5 +132,4 @@ Compatibility and migration notes are recorded in the
 
 ## License
 
-Apache-2.0. Native builds also contain the separately attributed vendored mandoc
-sources supplied by `libmandoc-rs`.
+Apache-2.0.

@@ -5,7 +5,7 @@ development-only AST-to-IR structure audit. It complements, rather than
 replaces, the content differential ledger.
 
 The audit parses one local roff page through two ManT-owned paths: the owned
-libmandoc AST supplies source-level structural obligations, and the normal
+`mantdoc` AST supplies source-level structural obligations, and the normal
 source-aware native-manual path supplies `mant-ir`. It reports candidates when
 lowering appears to lose no-fill line boundaries, paragraph/list/definition
 containers, table rows/cells/spans, relative indentation, or typed links. It
@@ -33,7 +33,7 @@ The profiler retains compact topology signatures in the JSON report. An mdoc
 generic-versus-definition kind and direct item count. Native tbl(7) rows and
 mdoc `Bl -column` rows are compared in document order; they must retain every
 parser-reported cell and its column/row spans. The source-aware lowering path
-may recover additional cells when pinned libmandoc retains fewer cells than
+may recover additional cells when the native AST retains fewer cells than
 the tbl format declares, so enrichment is accepted while cell loss is not.
 tbl vertical continuations must lower to an empty continuation cell. Table
 wrappers may be transparently merged by the lowering path, so the audit
@@ -43,7 +43,7 @@ given the wrong semantic kind even when its global count happens to match.
 
 The corresponding man(7) `.TP`/`.IP` totals remain telemetry rather than a
 strict equality test. A run of hanging tags can legally be folded into one
-definition with several aliases, and libmandoc does not preserve enough shared
+definition with several aliases, and the parser does not preserve enough shared
 source identity to distinguish that normalisation from a container boundary in
 the generic IR. Real mdoc definition lists *are* source-addressable and remain
 strictly checked.
@@ -80,7 +80,7 @@ delimited equation must remain an inline code-valued expression without
 splitting its paragraph; and an equation carried by a tbl cell must remain in
 that cell. The normalized value must match as well as the placement. An empty
 configuration-only `.EQ delim … .EN` is counted as parser state and must not
-invent a display block. For table-cell delimiter expressions that libmandoc
+invent a display block. For table-cell delimiter expressions that the native parser
 keeps as opaque text, the profiler reads the bounded source, finds expressions
 using the active delimiter pair, and normalizes each fragment through the same
 pinned eqn parser. It never implements a second equation grammar merely to
@@ -90,7 +90,7 @@ self-contained.
 
 This distinction is intentional. The ledger should surface credible lowering
 loss, not prescribe byte-for-byte formatter emulation or turn normal
-libmandoc normalisation into a review queue.
+parser normalisation into a review queue.
 
 A valid pure `.so` alias is recorded as covered but does not inherit the
 target page's AST obligations. Its source identity owns only the redirect;

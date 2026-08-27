@@ -55,7 +55,7 @@ integrators must act.
    must choose a new protocol family regardless of the crate's current semver.
 
 4. Run a broad local roff fidelity audit before freezing the release. Use the
-   syntax-priority, source-directed, and recorded-corpus workflows in the
+   native structure, source-directed, and recorded-corpus workflows in the
    [development guide](development.md#roff-fidelity-audit), inspect every new
    candidate and hard failure, and promote each confirmed ManT defect to a
    licensed fixture with a focused Rust regression before tagging. Record the
@@ -79,7 +79,7 @@ integrators must act.
    packager tests:
 
    ```sh
-   for package in mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant; do
+   for package in mant-ir mant-protocol mantdoc mant-sources mant-engine mant-ui mant; do
      cargo package --locked --list -p "$package"
    done
    ```
@@ -103,7 +103,7 @@ order:
 
 ```text
 mant-ir ─> mant-protocol
-mant-ir + mant-protocol + mant-sources + libmandoc-rs ─> mant-engine
+mant-ir + mant-protocol + mant-sources + mantdoc ─> mant-engine
 mant-ir + mant-protocol + mant-engine (dev) ─> mant-ui
 mant-ir + mant-protocol + mant-sources + mant-engine + mant-ui ─> mant
 ```
@@ -112,7 +112,7 @@ Here an arrow means the package on the left must be visible in crates.io before
 the package on the right is validated. The `mant-engine` edge into `mant-ui` is
 a development dependency used by doctests and integration tests, not a runtime
 frontend dependency. `scripts/publish-crates.sh` encodes the complete linear
-order: `mant-ir`, `mant-protocol`, `libmandoc-rs`, `mant-sources`,
+order: `mant-ir`, `mant-protocol`, `mantdoc`, `mant-sources`,
 `mant-engine`, `mant-ui`, then `mant`.
 
 Each previously published package must configure the same crates.io Trusted
@@ -145,10 +145,6 @@ not `0.10.0`. If a lower-level crate makes a breaking pre-1.0 change, bump its
 minor version, update and bump every dependent that adopts it, then publish
 bottom-up. If a dependent starts using an API introduced in `0.9.2`, change its
 minimum to `^0.9.2` and bump that dependent even when no Rust source changed.
-Because `libmandoc-rs` declares `links = "libmandoc_rs"`, Cargo permits only
-one version of that native-link crate in a dependency graph; its breaking
-minor upgrades therefore require coordinated dependent releases even when
-other pure-Rust crates could otherwise coexist at multiple versions.
 Do not publish changed crate source under an existing version: the native
 product artifacts are built from workspace paths, while Cargo installations
 resolve the published crates, so failing to bump a changed package could make
@@ -173,7 +169,7 @@ git tag mant-ir-v0.9.1
 git push origin mant-ir-v0.9.1
 ```
 
-Valid package prefixes are `mant-ir`, `mant-protocol`, `libmandoc-rs`,
+Valid package prefixes are `mant-ir`, `mant-protocol`, `mantdoc`,
 `mant-sources`, `mant-engine`, and `mant-ui`. The tag version must exactly match
 that package's manifest. The same `release.yml` workflow verifies full CI for
 the tagged SHA, skips native product archives and the GitHub Release, pauses at
@@ -209,7 +205,7 @@ cargo publish --locked -p mant-protocol
 cargo info mant-protocol@0.7.0
 ```
 
-`mant-engine` also depends on the exact `0.7.0` releases of `libmandoc-rs` and
+`mant-engine` also depends on the exact `0.7.0` releases of `mantdoc` and
 `mant-sources`. The initial tag job can publish those established crates and
 then stop when crates.io rejects creation of `mant-engine`. Once both
 dependencies are visible, bootstrap the remaining new name from the same
@@ -272,7 +268,7 @@ IR, protocol, and input references available to CLI and MCP discovery without
 a repository checkout.
 
 Linux x64 uses the baseline target so the executable does not require AVX2.
-Windows x64 is distributed as a ZIP and contains bundled libmandoc alongside
+Windows x64 is distributed as a ZIP with the same pure-Rust parser and
 Markdown support. Its `manuals\*.md` files can be installed below
 `%APPDATA%\ManT\documents`.
 macOS supports Cargo installation and local source builds, but public macOS
@@ -322,8 +318,8 @@ $env:MANT_RELEASE_TAG = "vMAJOR.MINOR.PATCH"
 
 Before publishing, regenerate `THIRD_PARTY_LICENSES.html` with cargo-about
 0.9.2 and confirm there is no diff. Then inspect that the executable,
-self-hosted document, project license, generated Rust dependency report,
-parser third-party notice, upstream inventory, and complete reusable license
+self-hosted document, project license, generated Rust dependency report, and
+complete reusable license
 texts are present:
 
 ```sh

@@ -257,7 +257,7 @@ findings belong to `document.diagnostics`, `outline.diagnostics`, or
 
 Manual pages have one parser path: ManT performs bounded reads, decompression,
 and constrained redirect-only `.so` alias resolution, then gives plain roff
-bytes to `libmandoc-rs` with includes denied. Renderer selection is
+bytes to `mantdoc` with includes denied. Renderer selection is
 deliberately absent from `mant.request/v0.10`. This native-manual source family is
 available on Linux, macOS, and Windows through the same owned IR boundary.
 
@@ -670,7 +670,7 @@ hard-code the illustrative value above.
 
 `DocumentResponse` is the v0.10 wire projection of ManT's renderer-neutral
 `mant-ir::Document`. It describes semantics and normalized layout without
-exposing libmandoc pointers, roff macro nodes, internal indexes, HTML, or TUI
+exposing parser-internal pointers, roff macro nodes, internal indexes, HTML, or TUI
 components. Schema and producer metadata belong to the response envelope, not
 to the reusable in-memory IR.
 
@@ -686,7 +686,7 @@ to the reusable in-memory IR.
 | `blocks` | Optional content before the first addressable section |
 | `sections` | Recursive section tree |
 
-`producer.engine` is `libmandoc` for man/mdoc input and `pulldown-cmark` for
+`producer.engine` is `mantdoc` for man/mdoc input and `pulldown-cmark` for
 Markdown.
 
 `source.format` is one of `man`, `mdoc`, or `markdown`. Temporary decompression

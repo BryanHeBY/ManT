@@ -56,7 +56,7 @@ mant --mcp
 
 `mant` is ManT's native interactive reader, structured command-line interface,
 and MCP server. Linux with glibc, macOS, and Windows parse local man and mdoc
-sources through bundled libmandoc. Every supported platform exposes hierarchy,
+sources through the native Rust `mantdoc` parser. Every supported platform exposes hierarchy,
 semantic entries, references, and visible text through one normalized document
 model.
 
@@ -153,8 +153,8 @@ Other platforms never elide these suffixes.
 On Linux with glibc, macOS, and Windows, manual page names are located through
 ManT's native manual index. ManT reads raw, gzip, and zstd roff sources and
 resolves redirect-only `.so` alias chains within the indexed manual root. All
-file and decompression I/O for manual sources remains in ManT; bundled
-libmandoc receives only the final plain roff bytes. Neither a system `man` nor
+file and decompression I/O for manual sources remains in ManT; the bundled
+native Rust `mantdoc` parser receives only the final plain roff bytes. Neither a system `man` nor
 a system `mandoc` executable is required for ordinary use.
 
 An unqualified name with pages in several native categories follows `MANSECT`
@@ -772,8 +772,8 @@ Markdown preserves those data bytes exactly.
 ## Diagnostics
 
 `--doctor` performs an offline, read-only inspection of the effective data root,
-source configuration and installations, registered documents, bundled
-libmandoc, native manual index, conditional Git requirement, and tldr roots. It
+source configuration and installations, registered documents, bundled native
+`mantdoc` parser, manual index, conditional Git requirement, and tldr roots. It
 does not create directories or lock files, invoke external programs, access the
 network, update caches, or remove orphaned sources. Suggested repairs name the
 existing explicit maintenance command instead of running it.

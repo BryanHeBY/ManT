@@ -1,6 +1,6 @@
 //! Indexed access to physical roff source lines.
 //!
-//! libmandoc exposes one-based source coordinates.  Lowering occasionally
+//! The native parser exposes one-based source coordinates. Lowering occasionally
 //! needs to recover syntax that the native AST intentionally flattens, so all
 //! coordinate conversion and source-line access belongs here.  Building the
 //! index once avoids repeatedly walking `str::lines()` from the beginning for

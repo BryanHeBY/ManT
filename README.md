@@ -12,8 +12,8 @@ scripts, and agents.
 
 One native `mant` executable provides a full-screen TUI, deterministic
 Markdown/text/JSON output, generated schemas, and a read-only MCP server. Every
-interface consumes the same typed document model. Bundled libmandoc gives
-Linux with glibc, macOS, and Windows the same manual-page parser without
+interface consumes the same typed document model. Native Rust `mantdoc` gives
+Linux, macOS, and Windows the same manual-page parser without
 requiring a system `man` or `mandoc` executable at runtime.
 
 ![ManT reading its own Markdown manual with a tldr quick reference and semantic outline](docs/assets/screenshots/mant-reader.png)
@@ -222,7 +222,7 @@ mant --version
 ```
 
 `mant --doctor` performs an offline, read-only check of the effective data
-paths, registered documents, installed sources, bundled libmandoc, native
+paths, registered documents, installed sources, native Rust parser, native
 manual index, optional Git requirement, and tldr caches. It suggests the
 existing explicit maintenance commands without running them. Warnings keep a
 successful status; a broken promised capability returns status `1`.

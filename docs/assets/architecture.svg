@@ -50,7 +50,7 @@
     <rect x="615" y="45" width="250" height="80" rx="12" class="card"/>
   </g>
   <text x="160" y="77" text-anchor="middle" class="title">Native manuals</text>
-  <text x="160" y="103" text-anchor="middle" class="detail">ManualIndex · libmandoc-rs</text>
+  <text x="160" y="103" text-anchor="middle" class="detail">ManualIndex · mantdoc</text>
   <text x="450" y="77" text-anchor="middle" class="title">Markdown</text>
   <text x="450" y="103" text-anchor="middle" class="detail">mant-sources · parser</text>
   <text x="740" y="77" text-anchor="middle" class="title">tldr caches</text>

@@ -937,7 +937,7 @@
         ]
       },
       "DocumentMeta": {
-        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "description": "Metadata normalized from TH, Dt, and the validated native roff result.",
         "type": "object",
         "properties": {
           "aliasTarget": {
@@ -2204,7 +2204,7 @@
         ]
       },
       "DocumentMeta": {
-        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "description": "Metadata normalized from TH, Dt, and the validated native roff result.",
         "type": "object",
         "properties": {
           "aliasTarget": {
@@ -3195,7 +3195,7 @@
         ]
       },
       "DocumentMeta": {
-        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "description": "Metadata normalized from TH, Dt, and the validated native roff result.",
         "type": "object",
         "properties": {
           "aliasTarget": {
@@ -4148,7 +4148,7 @@
             "const": "markdown"
           },
           {
-            "description": "Parse the input as roff with libmandoc.",
+            "description": "Parse the input as roff with the native `mantdoc` parser.",
             "type": "string",
             "const": "roff"
           }
@@ -5117,7 +5117,7 @@
         ]
       },
       "DocumentMeta": {
-        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "description": "Metadata normalized from TH, Dt, and the validated native roff result.",
         "type": "object",
         "properties": {
           "aliasTarget": {
@@ -7634,7 +7634,7 @@
         ]
       },
       "DocumentMeta": {
-        "description": "Metadata normalized from TH, Dt, and the validated libmandoc result.",
+        "description": "Metadata normalized from TH, Dt, and the validated native roff result.",
         "type": "object",
         "properties": {
           "aliasTarget": {

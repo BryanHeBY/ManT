@@ -59,7 +59,7 @@ pub struct DocumentSource {
     pub path: Option<String>,
 }
 
-/// Metadata normalized from TH, Dt, and the validated libmandoc result.
+/// Metadata normalized from TH, Dt, and the validated native roff result.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMeta {

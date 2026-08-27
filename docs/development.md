@@ -5,14 +5,13 @@ live in the [project README](../README.md).
 
 ## Prerequisites
 
-- Linux with glibc, macOS, or Windows
+- Linux, macOS, or Windows
 - Rust 1.88 or newer with `cargo`, `clippy`, and `rustfmt`
-- For native-manual work: GCC on Linux, Clang on macOS, or MSVC on Windows;
-  Unix also needs zlib development headers
 
-The workspace vendors libmandoc and maintains its own manual index, so system
-`man` and `mandoc` executables are not prerequisites. Markdown parsing and the
-deterministic fixture suite do not require installed manual sources either.
+The workspace uses the native Rust `mantdoc` parser and maintains its own
+manual index, so system `man` and `mandoc` executables are not prerequisites.
+Markdown parsing and the deterministic fixture suite do not require installed
+manual sources either.
 
 ## Start from a fresh clone
 
@@ -35,15 +34,15 @@ On Windows, run the native product boundary from PowerShell:
 .\scripts\check-windows.ps1
 ```
 
-It tests `libmandoc-rs`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-engine`, `mant-ui`, and `mant`,
+It tests `mantdoc`, `mant-ir`, `mant-protocol`, `mant-sources`, `mant-engine`, `mant-ui`, and `mant`,
 including the shared roff fixture suites.
 
 The product crates are workspace `default-members`, so a bare `cargo build`,
 `cargo test`, or `cargo clippy` works on Windows. Both platform verification
-scripts include the standalone `libmandoc-rs` package and native parser tests.
-They also run that package with `--all-features`, as does native macOS CI, so
-its default-off reference renderers and Serde contract execute on every
-supported target without enabling unrelated workspace maintenance features.
+scripts include the standalone `mantdoc` package and native parser tests. They
+also run it with `--all-features`, as does native macOS CI, so its default-off
+reference renderers and Serde contract execute on every supported target
+without enabling unrelated workspace maintenance features.
 
 The script checks formatting and installer syntax, runs every workspace test,
 runs clippy with all targets and features, builds the optimized executable,
@@ -61,16 +60,9 @@ macOS adds native compile and test coverage without repeating the Linux lint
 pass. Windows retains its full native verification boundary for Windows-only
 path, shell, packaging, and parser behavior.
 
-Project verification and release builds set
-`LIBMANDOC_RS_DENY_WARNINGS=1`, which promotes warnings from libmandoc's C
-build to errors on GCC, Apple Clang, and MSVC. Pinned upstream 1.14.6 retains a
-documented MSVC baseline for `C4100`, `C4146`, `C4200`, `C4244`, and `C4267`.
-`C4200` is confined to four C99 flexible-array members that MSVC diagnoses as
-an extension even in C11 mode. ManT-owned C shim and compatibility sources do
-not inherit that baseline. The crate leaves the policy disabled for ordinary
-downstream builds so a new compiler warning cannot break an otherwise
-compatible published dependency; maintainers can opt into the same strict
-boundary for a focused command by setting the variable explicitly.
+Project verification and release builds use the workspace's strict Rust and
+Clippy warning policy. The parser has no compiler-specific C warning baseline
+or native shim configuration.
 
 Each native job caches downloaded crates and compiled third-party dependencies
 using a key derived from its Rust compiler, Cargo manifests, lockfiles, and
@@ -87,6 +79,24 @@ cargo test --locked -p mant-ui
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo build --locked --release -p mant
 ```
+
+While changing the native `mantdoc` migration, use its complete focused
+work-loop instead of repeatedly paying for the product/release boundary:
+
+```sh
+bash scripts/check-mantdoc.sh /tmp/mandoc-1.14.6.tar.gz
+# Include the non-blocking M9 renderer observation while changing rendering.
+bash scripts/check-mantdoc.sh /tmp/mandoc-1.14.6.tar.gz --renderer
+```
+
+It runs formatting and manifest checks alongside the initial native test build,
+then shares that Cargo target cache for Clippy and a single build of the
+conformance tools. Locally it uses at most 12 deterministic shards and 20
+workers (bounded further by available CPUs); CI intentionally uses four of
+each. M3/M4/M6 run alongside deterministic M5/L2/M8 shards; `--renderer`
+folds M9 into the same process wave. `scripts/check.sh` remains
+the mandatory full workspace, packaging, documentation, fuzz-compilation, and
+product-smoke boundary before handoff.
 
 Dependency policy is declared in `deny.toml`. CI runs cargo-deny across all
 features and every supported target family to reject known vulnerabilities,
@@ -129,23 +139,22 @@ crates/mant-sources/          Local Markdown registry and transactional source u
 crates/mant-engine/           Resolution, lowering, projections, search, and rendering
 crates/mant-ui/               Ratatui reader, navigation, search, and terminal styling
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
-crates/libmandoc-rs/          Owned libmandoc parse/render API, private C shim, vendored source
+crates/mantdoc/               Native Rust roff/man/mdoc/tbl/eqn parser and renderers
 fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
 scripts/check.sh             Canonical local and CI verification sequence
+scripts/check-mantdoc.sh     Concurrent focused native-migration verification work-loop
 scripts/check-windows.ps1    Native Windows verification sequence
-scripts/check-libmandoc-symbols.sh  Reject downstream-visible unprefixed C symbols
 scripts/check-packaged-crates.sh  Build and test exact published crate source sets
 scripts/build-and-smoke.sh   Unix debug/release product build and smoke test
 scripts/build-and-smoke.ps1 Windows debug/release product build and smoke test
 scripts/find-successful-ci.sh  Exact-commit full CI verification for automation
 scripts/generate-rust-licenses.sh  Rebuild the locked Rust license report
 scripts/finalize-cyclonedx.mjs  Normalize generated release SBOMs reproducibly
-scripts/install-ci-native-dependencies.sh  Install native Linux CI prerequisites
 scripts/install.sh           Latest-release installer for Linux and macOS
 scripts/install.ps1          Latest-release installer for Windows x64
-scripts/fuzz.sh              Run selected cargo-fuzz targets for a bounded time
+scripts/fuzz.sh              Run selected cargo-fuzz targets concurrently for a bounded time
 scripts/package-release.sh   Reproducible Linux release archive assembly
 scripts/package-release.ps1 Windows x64 ZIP assembly
 scripts/package-manuals.sh   Reproducible platform-independent manual archive
@@ -232,9 +241,8 @@ boundaries:
 - `markdown_pipeline` exercises Markdown parsing, semantic selectors, search,
   outlines, excerpts, and every output renderer.
 - `tldr_page` covers the TLDR subset and command-token parser independently.
-- `roff_pipeline` crosses the native libmandoc boundary, exercises its bounded
-  ASCII/UTF-8/HTML reference renderers, and then exercises the same semantic
-  projections and renderers as Markdown.
+- `roff_pipeline` exercises `mantdoc`'s bounded ASCII/UTF-8/HTML reference
+  renderers, then the same semantic projections and renderers as Markdown.
 - `catalog_query` covers bounded literal/regex discovery, hierarchical paths,
   relevance ordering, filters, and pagination without touching the host file
   system.
@@ -247,7 +255,12 @@ transactions, network downloads, and terminal event handling remain in
 deterministic unit and integration tests because byte mutation cannot model
 their state transitions faithfully.
 
-Install `cargo-fuzz` and a nightly toolchain, then run every target serially.
+Install `cargo-fuzz` and a nightly toolchain, then run every target with a
+bounded concurrent worker pool (the default is up to four workers). Every
+checked-in native parser seed is also replayed in parallel by the ordinary
+stable `mantdoc` test suite, so a seed remains a deterministic regression even
+where the mutation engine is unavailable. Set `FUZZ_JOBS=1` when reproducing
+or minimizing one target serially.
 The first argument is the number of seconds per target; additional arguments
 select individual targets:
 
@@ -256,10 +269,15 @@ cargo install cargo-fuzz --locked
 rustup toolchain install nightly --profile minimal
 scripts/fuzz.sh 60
 scripts/fuzz.sh 300 roff_pipeline markdown_pipeline
+FUZZ_JOBS=1 scripts/fuzz.sh 60 mantdoc_scanner
 ```
 
 Minimize any artifact with `cargo fuzz tmin`, turn the minimized input into a
 named regression test, and only then discard or archive the generated corpus.
+The scheduled/manual `Mantdoc robustness` workflow runs the longer four-worker
+fuzz soak and a focused Miri session-isolation check. They intentionally stay
+outside the per-push critical path; the stable seed replay and deterministic
+sharded differential remain the fast mandatory gates.
 
 On Linux, regenerate the README reader image with:
 
@@ -277,37 +295,21 @@ come from the host, however, so byte-identical captures are expected only with
 the same host toolchain. Always inspect the resulting image before committing
 it.
 
-`libmandoc-rs` also has a self-contained package boundary: its parser,
-compression, include-policy, virtual source, diagnostics, optional `serde`,
-and optional reference-renderer tests must pass from Cargo's staged package
-directory without requiring fixtures from sibling crates.
-Its heavier concurrency check stays outside routine CI and must instrument
-both languages across the FFI boundary:
+`mantdoc` has a self-contained package boundary: its parser, compression,
+include policy, virtual source tree, diagnostics, optional `serde`, and
+optional reference renderers pass from Cargo's staged package directory
+without sibling fixtures. The scheduled `Mantdoc robustness` workflow runs
+four independent fuzz workers and a focused Miri session-isolation test;
+routine checks replay the checked-in corpus deterministically.
+
+For native parser performance work, run the dependency-free generated benchmark
+before and after the change on the same host and release profile.  Its inputs
+are intentionally identical to the M0 legacy benchmark, so its three rows can
+be compared directly for parse throughput; keep the original M0 command when
+an oracle-side measurement also needs refreshing:
 
 ```sh
-rustup toolchain install nightly --profile minimal
-rustup component add rust-src --toolchain nightly
-crates/libmandoc-rs/scripts/check-thread-safety
-crates/libmandoc-rs/scripts/check-address-safety
-```
-
-The runner recompiles `std` with TSAN, explicitly instruments the vendored C
-objects, uses an isolated target directory, and exercises in-memory parsing,
-source-relative `.so`, virtual bundles, and all reference renderers. Use
-`--rounds N` for a longer local soak. The ASan companion checks exact
-caller-owned input tails, owned-AST access after releasing the native parser,
-and output-limit boundaries in both languages. The runners support `x86_64`
-and `aarch64` Linux/glibc and macOS; Windows retains ordinary concurrent and
-boundary regressions in CI but is outside these local sanitizer runners. The
-runners, patch series, and upstream checksum are repository maintenance inputs
-and are intentionally absent from the published crate, which ships only the
-resulting buildable vendor tree.
-
-For ownership-transfer performance work, run the dependency-free generated
-benchmark before and after the change on the same host and release profile:
-
-```sh
-cargo bench --locked --package libmandoc-rs --bench ast_transfer
+cargo bench --locked --package mantdoc --bench parse
 ```
 
 It reports complete parse-to-owned-AST latency, input size, node count, and
@@ -336,23 +338,18 @@ The existing real-fixture catalogue also feeds an optional differential audit ag
 
 ```sh
 cargo build --package mant
-cargo build --package libmandoc-rs --example roff_ast_profile
+cargo build --package mant-engine --example roff_structure_profile
 python3 scripts/audit-roff-fidelity.py --fixtures --json /tmp/mant-fidelity.json
 python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages 100
 python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages-per-section 25 --findings-only
 python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
   --source-pattern '^[.]Dd' --recheck-recorded --findings-only
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
-  --max-pages-per-section 25 --syntax-priority \
-  --syntax-cache /tmp/mant-roff-syntax.json.gz \
-  --syntax-report /tmp/mant-roff-syntax-report.json --findings-only
-python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man \
-  --max-pages-per-section 12 --syntax-priority \
-  --review-dir /tmp/mant-roff-review
-python3 scripts/audit-roff-fidelity.py --manpath /tmp/debian-man \
-  --max-pages 200 --syntax-priority --dedupe-across-corpora \
-  --syntax-cache /tmp/mant-debian-syntax.json.gz \
-  --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv \
+python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+  --max-pages-per-section 25 --findings-only
+python3 scripts/audit-roff-structure.py --manpath /usr/share/man \
+  --max-pages-per-section 12 --recheck-recorded --findings-only
+python3 scripts/audit-roff-structure.py --manpath /tmp/debian-man \
+  --max-pages 200 --audit-db tests/fixtures/roff/STRUCTURE_AUDIT.csv \
   --corpus debian-sid-amd64 --findings-only
 python3 scripts/audit-roff-fidelity.py --manpath /usr/share/man --max-pages-per-section 25 \
   --audit-db tests/fixtures/roff/FIDELITY_AUDIT.csv --corpus archlinux-host
@@ -368,7 +365,7 @@ The audit compares normalized visible tokens and contiguous token phrases, plus 
 
 ### Roff structure audit
 
-Content comparison intentionally normalizes away line wrapping and layout, so it cannot detect every AST-to-IR topology error. The companion audit owns a narrower internal oracle: the same libmandoc AST that ManT lowers. It compares source-aware IR against observable no-fill lines, list and definition items, table rows and spans, relative indentation, explicit breaks, and typed links; terminal geometry remains out of scope.
+Content comparison intentionally normalizes away line wrapping and layout, so it cannot detect every AST-to-IR topology error. The companion audit uses the native `mantdoc` arena projection that ManT lowers. It compares source-aware IR against observable no-fill lines, list and definition items, table rows and spans, relative indentation, explicit breaks, and typed links; terminal geometry remains out of scope.
 
 ```sh
 cargo build --package mant-engine --example roff_structure_profile
@@ -469,15 +466,17 @@ the current scope, renderer identity, commands, and human conclusions. Replay
 corpora serially because atomic CSV checkpoints protect interruption, not
 concurrent writers.
 
-`--syntax-priority` replaces path-only ranking with deterministic greedy coverage over the actual owned libmandoc AST. The development-only `roff_ast_profile` example reports macro names, node roles and parent/child shapes, normalized list/display/font state, tables, equations, parser diagnostic classes, and rendering-relevant node flags without copying document text. It also reports bounded interaction features: a node or parent/child context paired with its flags and normalized attributes, plus attribute pairs on the same node. The sampler weights these combinations ahead of isolated features, first preferring shapes absent from the completed CSV ledger and then underrepresented and rarer forms. This distinguishes merely having seen `.SY`, a no-fill node, and a font from having exercised their exact combination.
-
-`--syntax-report` records per-feature corpus, ledger, reused-source, and selected-page counts plus representative paths; it measures exercised parser structure, not semantic correctness. `--syntax-cache` avoids reparsing unchanged `(corpus, path, source hash)` identities and supports compact `.json.gz` files. Both the profiler response and cache carry a feature-schema identity, so changing the set of observed AST flags or shapes invalidates and rebuilds an older cache instead of silently treating stale profiles as complete. Profiling uses bounded subprocess batches and isolates an abnormal native-parser exit down to the exact page instead of losing the whole scan. Unreadable host paths remain visible as report errors but do not masquerade as syntax features.
-
-`--review-dir` writes a local, untracked review bundle for every selected page: the decompressed source, normalized reference text, ManT text, its exact finding, and a path-safe manifest. Use a bounded syntax-prioritized selection to build a deliberate manual review batch, and never commit the bundle because it can contain third-party manuals and renderer-specific output. The regular JSON report and CSV ledger remain compact metadata rather than a copy of the reviewed corpus.
+The native `roff_structure_profile` example reports macro names, node roles and
+parent/child shapes, normalized list/display/font state, tables, equations,
+parser diagnostic classes, and rendering-relevant node flags without copying
+document text. `audit-roff-structure.py` records this topology in its dedicated
+incremental ledger, using deterministic path-ordered sampling. It measures
+exercised parser/lowering structure, not semantic correctness; unreadable host
+paths remain visible as report errors rather than becoming features.
 
 Treat fidelity loss as three related but distinct classes: an unhandled construct, a recognized construct with an unmapped operand, or an incorrectly lowered recognized construct. Structured parser/lowering diagnostics can expose the first two classes, but a zero diagnostic count never proves fidelity because the third class requires an external oracle or a focused semantic regression. The local differential audit is therefore the discovery surface; reproducible fixtures and exact Rust assertions remain the CI gate.
 
-The optional CSV audit database makes successive local runs incremental. A page is omitted from a normal run only when its corpus name, relative path, and decompressed-source SHA-256 match a row whose automated scan completed; an upgraded page and a historical `scan_status=skipped` row are scanned again. For a newly extracted distribution or release corpus, `--dedupe-across-corpora` additionally reuses a completed record only when decompressed bytes, topic, and exact manual section all match. Sources containing `.so` or `.mso` are never reused this way because their result depends on the owning hierarchy. Reused pages remain visible in the syntax report with their originating corpus and path; they do not create misleading duplicate CSV scan rows.
+The optional CSV audit database makes successive local runs incremental. A page is omitted from a normal run only when its corpus name, relative path, and decompressed-source SHA-256 match a row whose automated scan completed; an upgraded page and a historical `scan_status=skipped` row are scanned again. For a newly extracted distribution or release corpus, `--dedupe-across-corpora` additionally reuses a completed record only when decompressed bytes, topic, and exact manual section all match. Sources containing `.so` or `.mso` are never reused this way because their result depends on the owning hierarchy. Reused pages remain visible in the audit report with their originating corpus and path; they do not create misleading duplicate CSV scan rows.
 
 Pages containing `.so` requests use the indexed-manual path with an exact derived `MANT_MANPATH`, so aliases exercise the product resolver and localized hierarchies do not fall through to the default language. Renderer failures and empty comparison surfaces are hard audit failures rather than silently accepted coverage. Automated candidates enter as `review_status=pending`; a later clean recheck clears that automated state. After inspecting the source and both renderings, mark durable conclusions `false-positive`, `confirmed-open`, or `confirmed-fixed` and explain the decision in `note`. `--retry-skipped` migrates historical gaps, `--pending-only` revisits unresolved signals, `--recheck-recorded` deliberately ignores the completion index, and `--recorded-only` re-runs every unchanged page represented by that corpus. For multiple roots, paths are relative to their common parent so same-named `man/` directories remain distinguishable. The CSV records corpus exploration; fixed fixtures and focused Rust tests, rather than the host database, remain the CI regression boundary.
 

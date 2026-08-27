@@ -160,7 +160,7 @@ independently from character `startChar`/`nextChar` paging.
 ## Document sources
 
 On Linux, macOS, and Windows, `ManT` indexes raw, gzip, and zstd manual sources
-and parses their roff through bundled libmandoc. It does not require a system
+and parses their roff through the native Rust `mantdoc` crate. It does not require a system
 `man` or `mandoc` executable at runtime. A leaf manual-page symlink may point
 outside its indexed root, but directory symlinks are not traversed and every
 `.so` target must remain inside that root. Windows defaults to
@@ -209,7 +209,7 @@ remains an exact logical name and is never guessed to be a manual shorthand.
 
 - `mant-ir` defines the source-neutral in-memory document and quick-reference model.
 - `mant-protocol` defines shared query contracts, logical projections, versioned JSON DTOs, and deterministic compact presentation.
-- `libmandoc-rs` owns the cross-platform libmandoc parser boundary.
+- `mantdoc` owns the cross-platform native Rust roff parser boundary.
 - `mant-sources` owns local Markdown discovery and optional source updates.
 - `mant-engine` performs document lookup, lowering, projections, search, and output.
 - `mant-ui` provides the source-neutral Ratatui frontend.
@@ -230,6 +230,5 @@ Compatibility and migration notes are recorded in the
 
 ## License
 
-Apache-2.0. Native builds also contain the separately attributed upstream
-mandoc sources distributed by `libmandoc-rs`; downloaded tldr-pages content
-is CC BY 4.0 and is attributed when rendered.
+Apache-2.0. Downloaded tldr-pages content is CC BY 4.0 and is attributed when
+rendered.

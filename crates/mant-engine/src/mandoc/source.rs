@@ -187,7 +187,7 @@ pub(super) fn redirect_target(path: &Path, source: &[u8]) -> Result<Option<Vec<u
     match (payloads.as_slice(), has_other_content) {
         ([payload], false) => parse_so_target(path, payload).map(Some),
         // An embedded include is not an alias. Leave it in the source so the
-        // safe libmandoc policy emits a diagnostic and preserves surrounding
+        // safe native-parser policy emits a diagnostic and preserves surrounding
         // content instead of rejecting the complete page before parsing.
         _ => Ok(None),
     }
@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn decodes_gzip_and_zstd_before_calling_libmandoc() {
+    fn decodes_gzip_and_zstd_before_calling_the_native_parser() {
         let source = b".TH COMPRESSED 1\n.SH NAME\ncompressed \\- decoded by mant\n";
         let base = std::env::temp_dir().join(format!("mant-compressed-{}", process::id()));
         fs::create_dir_all(&base).expect("create compressed fixture directory");

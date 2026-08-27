@@ -75,7 +75,7 @@ pub enum InputFormat {
     Auto,
     /// Parse the input as Markdown.
     Markdown,
-    /// Parse the input as roff with libmandoc.
+    /// Parse the input as roff with the native `mantdoc` parser.
     Roff,
 }
 
