@@ -424,12 +424,12 @@ fn explicit_roff_syntax_does_not_select_or_structure_macro_packages() {
 }
 
 #[test]
-fn point_size_and_page_length_requests_are_non_public_formatter_requests() {
+fn formatter_metric_requests_are_non_public() {
     let name = SourceName::new("point-size.roff").unwrap();
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".ps 36\n.pl 8000\n.if dps active\nvisible\n",
+            b".ps 36\n.pl 8000\n.ss \\n[.ss] 0\n.if dps active\nvisible\n",
         ))
         .unwrap();
     assert!(report.diagnostics.is_empty());

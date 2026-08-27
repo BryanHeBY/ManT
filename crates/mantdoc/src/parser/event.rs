@@ -278,7 +278,7 @@ impl RequestKind {
             b"rm" => Self::Environment(EnvironmentRequest::Remove),
             b"rn" => Self::Environment(EnvironmentRequest::Rename),
             b"als" => Self::Environment(EnvironmentRequest::Alias),
-            b"ad" | b"ftr" | b"na" | b"ne" | b"nh" | b"pl" | b"ps" => {
+            b"ad" | b"ftr" | b"na" | b"ne" | b"nh" | b"pl" | b"ps" | b"ss" => {
                 Self::Environment(EnvironmentRequest::FormatterState)
             }
             b"tr" => Self::Transparent(TransparentRequest::Translation),
