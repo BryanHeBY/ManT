@@ -224,28 +224,33 @@ and IR difference.
 
 ### Current compatibility checkpoint
 
-The process-isolated parser oracle has completed the pinned 1.14.6 upstream
-input set with 572/572 equal canonical AST and diagnostic reports. It applies
-the separately recorded `native-deterministic` policy only to legacy's
-host-derived empty `.Os` metadata: 366 reports use that explicit policy; no
-other field, diagnostic, or node is normalized. This is an input-contract
-checkpoint, not closure of the renderer, engine-IR, or real-corpus gates.
+The native self-regression and presentation gates remain a useful floor, but
+they are not an independent AST or IR compatibility result. A direct
+process-isolated legacy comparison on 2026-08-28 reproduced AST source-column
+differences in `regress/roff/args/man` and `regress/roff/esc/bs_man`. The
+cause is man(7)'s copy-mode argument cursor: legacy expands copied text
+without advancing the AST cursor, while the native scanner retains physical
+source spans. The first attempted generic width rebase fixed a GCC real-manual
+case but regressed both upstream cases, so it was rejected rather than
+accepted into the canonical snapshot.
 
-The process-isolated engine oracle has likewise completed all 572 inputs with
-572/572 equal IR reports after removing only parser provenance and applying
-the same explicit empty-`.Os` host policy to 366 reports. The compatibility
-projection includes historical wrapper diagnostics without weakening the raw
-upstream diagnostic profile.
+Consequently, any earlier aggregate statement that the 572 upstream inputs had
+already achieved full legacy parser or engine-oracle equality is superseded.
+The whole set must be rerun from the isolated release runners, with every
+difference retained in the replayable inventory. The only permitted
+normalization remains the separately recorded `native-deterministic` policy
+for legacy's host-derived empty `.Os` metadata; it must not hide spans,
+diagnostics, AST nodes, or IR differences.
 
-The UPSTREAM-GOLDEN checkpoint has also completed from a clean native build:
+The UPSTREAM-GOLDEN presentation checkpoint is still independently current:
 all 572 inputs parse through the immutable canonical snapshot; all 659
 applicable ASCII, UTF-8, and HTML renderer outputs are byte-identical; and all
 249 lint outputs are byte-identical apart from the separately counted `Xr`
 manual-database event. The remaining 253 Markdown and 28 tag outputs retain
 the explicit capability classifications above rather than being silently
-treated as renderer parity. The stable M3, M4, M5, M6, lint, canonical, and M9
-lanes are therefore the regression floor while the independent engine-IR
-oracle and exhaustive real-corpus audit begin.
+treated as renderer parity. M3, M4, M5, M6, lint, canonical, and M9 are thus a
+regression floor, not a substitute for the pending independent AST,
+diagnostic, and engine-IR audit.
 
 ### CORPUS-RESTORE and MASS-AUDIT: exhaust the existing real corpus
 
