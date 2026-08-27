@@ -26,6 +26,7 @@ function Invoke-Native {
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 $Packages = @(
+    "--package", "mantdoc",
     "--package", "mant-ir",
     "--package", "mant-protocol",
     "--package", "mant-sources",

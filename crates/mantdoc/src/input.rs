@@ -273,7 +273,10 @@ mod tests {
     };
 
     use super::Compression;
-    use crate::{DiagnosticCode, FatalErrorKind, Parser, SourceBundle, SourceName};
+    use crate::{FatalErrorKind, Parser, SourceBundle, SourceName};
+
+    #[cfg(unix)]
+    use crate::DiagnosticCode;
 
     #[cfg(feature = "gzip")]
     use crate::{Limits, ParserConfig};
