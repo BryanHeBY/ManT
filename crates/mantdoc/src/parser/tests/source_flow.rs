@@ -218,6 +218,24 @@ fn retained_comments_are_not_visible_line_start_nodes() {
 }
 
 #[test]
+fn comments_after_the_first_top_level_request_are_not_public_nodes() {
+    let name = SourceName::new("comment-window.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".\\\" leading comment\n.de macro\n..\n.\\\" later comment\n.TH COMMENT-WINDOW 1 28-Aug-2026\n",
+        ))
+        .unwrap();
+    let comments = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Comment)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(comments, [" leading comment"]);
+}
+
+#[test]
 fn escaped_comment_control_is_skipped_with_a_style_diagnostic() {
     let name = SourceName::new("escaped-comment-control.roff").unwrap();
     let report = Parser::default()

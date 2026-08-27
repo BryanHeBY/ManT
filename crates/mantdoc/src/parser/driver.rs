@@ -105,6 +105,11 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
         // man(7)'s EX/EE style validation observes presentation toggles rather
         // than the nesting model used to retain no-fill AST flags.
         let mut man_example_fill_enabled = environment.is_filled();
+        // `roff.c` starts with MPARSE_COMMENT enabled, then disables comment
+        // node retention at the first ordinary text line or top-level request.
+        // It is deliberately distinct from recognising input comments: later
+        // comments are still consumed, but no longer public AST nodes.
+        let mut retain_leading_comments = true;
         let mut man_indent_state = ManIndentState::default();
         let mut input_trap = InputTrap::default();
         // A bare `.if`/`.ie` owns the next physical line as a one-line scope.
@@ -335,6 +340,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     terminal_inline_conditional,
                     suppress_filled_text_tabs,
                 } => {
+                    retain_leading_comments = false;
                     let bytes = bytes.as_ref();
                     // A trailing odd escape joins the next physical *text*
                     // line before man/mdoc assign it to a macro head or body.
@@ -713,6 +719,9 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     }
                 }
                 SourceEvent::Comment { start, end, bytes } => {
+                    if !retain_leading_comments {
+                        continue;
+                    }
                     let bytes = bytes.as_ref();
                     // libmandoc preserves a comment as a distinct node, but does
                     // not mark it as an implicit no-print node. Consumers use the
@@ -748,6 +757,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     argument_start,
                     generated,
                 }) => {
+                    retain_leading_comments = false;
                     let name = name.as_ref();
                     let arguments = arguments.as_ref();
                     let raw_arguments = raw_arguments.as_ref();
