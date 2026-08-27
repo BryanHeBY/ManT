@@ -8,10 +8,11 @@ use super::{
     is_line_scope_breaker, is_line_scoped_element, is_next_line_scoped_element,
     is_term_scope_breaker, line_scope_ancestors, line_scope_macro_name, make_block,
     mark_man_targets, normalize_pending_term_indent, normalize_visible_macro_tabulation_escapes,
-    paragraph_recovery_offset, re_target, record_title_metadata, remove_child, section_scope_name,
-    suppress_filled_c_blank_lines, title_argument, title_argument_missing, title_date_argument,
-    title_lowercase, title_missing_date, title_section_argument, title_section_missing,
-    title_unparseable_date, validate_and_discard_all_arguments, validate_inline_paragraph_controls,
+    paragraph_recovery_offset, re_target, rebase_expanded_argument_locations,
+    record_title_metadata, remove_child, section_scope_name, suppress_filled_c_blank_lines,
+    title_argument, title_argument_missing, title_date_argument, title_lowercase,
+    title_missing_date, title_section_argument, title_section_missing, title_unparseable_date,
+    validate_and_discard_all_arguments, validate_inline_paragraph_controls,
     validate_maximum_arguments, validate_no_arguments, validate_option_arguments,
     validate_section_paragraph_controls,
 };
@@ -29,6 +30,9 @@ impl ManStructureMachine {
         // cursor with no repeated package classification or allocation.
         for node in &flat {
             normalize_visible_macro_tabulation_escapes(builder, *node);
+            if builder.node_macro_name(*node).is_some() {
+                rebase_expanded_argument_locations(builder, *node);
+            }
             if builder
                 .node_macro_name(*node)
                 .is_some_and(is_line_scoped_element)

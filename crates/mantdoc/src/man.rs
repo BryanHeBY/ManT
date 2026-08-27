@@ -51,6 +51,43 @@ fn remove_child(
     }
 }
 
+/// Project man(7) argument locations through control-line expansion.
+///
+/// Scanner spans remain physical until package structuring. Mandoc's man
+/// parser instead assigns later argument nodes after direct roff expansion;
+/// the parser records that private cursor delta on each direct child.
+fn rebase_expanded_argument_locations(builder: &mut DocumentBuilder, node: NodeId) {
+    let Some(arguments) = builder.children(node).map(<[NodeId]>::to_vec) else {
+        return;
+    };
+    let mut prior_delta = 0_i32;
+    for argument in arguments {
+        if prior_delta != 0 {
+            rebase_expanded_subtree_locations(builder, argument, prior_delta);
+        }
+        prior_delta =
+            prior_delta.saturating_add(builder.node_argument_expansion_width_delta(argument));
+    }
+}
+
+/// Reparsed arguments can acquire inline descendants before man structuring;
+/// every descendant inherits its parent's legacy virtual cursor.
+fn rebase_expanded_subtree_locations(builder: &mut DocumentBuilder, root: NodeId, delta: i32) {
+    let mut pending = vec![root];
+    while let Some(node) = pending.pop() {
+        if let Some(mut location) = builder.node_location(node) {
+            let start = location.start.saturating_add_signed(delta);
+            if start <= location.end {
+                location.start = start;
+                let _ = builder.set_node_location(node, Some(location));
+            }
+        }
+        if let Some(children) = builder.children(node) {
+            pending.extend(children.iter().copied());
+        }
+    }
+}
+
 /// Validate the finite argument surface of the man-ext optional-argument
 /// macro without changing its ordinary inline AST projection.  Unlike `MT`,
 /// `OP` retains all scanner children even after reporting a superfluous one.

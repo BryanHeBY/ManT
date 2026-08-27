@@ -1485,6 +1485,69 @@ fn ip_tab_separated_tag_stays_one_head_argument_before_the_width() {
 }
 
 #[test]
+fn man_argument_cursor_counts_direct_but_not_copy_mode_string_expansion() {
+    let name = SourceName::new("man-copy-mode-cursor.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH CURSOR 1 28-Aug-2026\n.SH DESCRIPTION\n.ds s foo\n.IB \"\\\\*[s]\\*(Aq\" after\n",
+        ))
+        .unwrap();
+    let after = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("after"))
+        .unwrap();
+    let position = report
+        .document
+        .source_position(after.location().unwrap())
+        .unwrap();
+    assert_eq!((position.line, position.column), (4, 14));
+}
+
+#[test]
+fn man_argument_cursor_keeps_copy_mode_output_at_its_authored_width() {
+    let name = SourceName::new("man-copy-mode-width.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH CURSOR 1 28-Aug-2026\n.SH DESCRIPTION\n.IB \"one\\\\ one\" \"\\\\ \"\n",
+        ))
+        .unwrap();
+    let escaped_blank = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("\\ "))
+        .unwrap();
+    let position = report
+        .document
+        .source_position(escaped_blank.location().unwrap())
+        .unwrap();
+    assert_eq!((position.line, position.column), (3, 17));
+}
+
+#[test]
+fn man_argument_cursor_rebases_after_a_direct_string_expansion() {
+    let name = SourceName::new("man-direct-string-cursor.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH CURSOR 1 28-Aug-2026\n.SH DESCRIPTION\n.IP \"one\\*(Aqt\" 4\nbody\n",
+        ))
+        .unwrap();
+    let width = report
+        .document
+        .preorder()
+        .find(|node| node.text() == Some("4"))
+        .unwrap();
+    let position = report
+        .document
+        .source_position(width.location().unwrap())
+        .unwrap();
+    assert_eq!((position.line, position.column), (3, 12));
+}
+
+#[test]
 fn section_title_punctuation_is_not_a_flow_sentence_boundary() {
     let name = SourceName::new("man-heading-punctuation.1").unwrap();
     let report = Parser::default()

@@ -40,6 +40,61 @@ use super::{
     update_man_indent_register, update_preprocessor_depth, update_table_preprocessor_depth,
     visible_bytes,
 };
+use crate::roff::Environment;
+
+/// Return the legacy man(7) cursor adjustment for one copy-mode argument.
+///
+/// Mandoc expands a control line before allocating man arguments, except that
+/// expansion reactivated by a doubled escape is copy-mode output and leaves
+/// the argument cursor at its authored width. Native parsing preserves the
+/// physical spelling, so probe the direct-expansion projection only when a
+/// doubled escape makes the ordinary visible-width delta ambiguous.
+fn man_copy_mode_cursor_width_delta(
+    environment: &Environment,
+    bytes: &[u8],
+    escape: u8,
+    limits: &Limits,
+    used_expansion_steps: usize,
+) -> Option<i32> {
+    let cursor_bytes = man_cursor_expansion_bytes(bytes, escape)?;
+    let remaining_steps = limits
+        .max_expansion_steps
+        .saturating_sub(used_expansion_steps);
+    let expansion = environment
+        .clone()
+        .expand(
+            &cursor_bytes,
+            escape,
+            &[],
+            remaining_steps,
+            limits.max_expanded_line_bytes,
+        )
+        .ok()?;
+    i32::try_from(expansion.bytes.len())
+        .ok()?
+        .checked_sub(i32::try_from(bytes.len()).ok()?)
+}
+
+/// Hide each doubled escape from the cursor-only expansion probe while
+/// retaining its authored width. A third consecutive escape begins a direct
+/// reference and is deliberately left visible to the environment.
+fn man_cursor_expansion_bytes(bytes: &[u8], escape: u8) -> Option<Vec<u8>> {
+    let mut cursor = 0;
+    let mut rewritten = None::<Vec<u8>>;
+    while cursor < bytes.len() {
+        if bytes[cursor] == escape && bytes.get(cursor + 1) == Some(&escape) {
+            let output = rewritten.get_or_insert_with(|| bytes[..cursor].to_vec());
+            output.extend_from_slice(&[0x1d, 0x1e]);
+            cursor += 2;
+            continue;
+        }
+        if let Some(output) = &mut rewritten {
+            output.push(bytes[cursor]);
+        }
+        cursor += 1;
+    }
+    rewritten
+}
 
 enum DriverWork<'source> {
     Event(SourceEvent<'source>),
@@ -4651,6 +4706,17 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     std::str::from_utf8(&argument.bytes).is_err();
                                 let lexical_width = i32::try_from(argument.bytes.len())
                                     .expect("argument bytes are bounded below i32::MAX");
+                                let man_cursor_width_delta = (builder.macro_set() == MacroSet::Man)
+                                    .then(|| {
+                                        man_copy_mode_cursor_width_delta(
+                                            environment,
+                                            &argument.bytes,
+                                            scanner.escape_character(),
+                                            limits,
+                                            expansion_steps,
+                                        )
+                                    })
+                                    .flatten();
                                 // Copy-mode turns `\\\\e` into the public `\\e`
                                 // spelling.  The AST intentionally exposes that
                                 // shorter spelling, but libmandoc still anchors
@@ -4757,8 +4823,10 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     } else {
                                         i32::try_from(text.len())
                                     .expect("normalized argument bytes are bounded below i32::MAX")
-                                    .saturating_sub(lexical_width)
+                                            .saturating_sub(lexical_width)
                                     };
+                                let argument_width_delta =
+                                    man_cursor_width_delta.unwrap_or(expansion_width_delta);
                                 if append_text_node(
                                     builder,
                                     element,
@@ -4801,7 +4869,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         );
                                         let _ = builder.set_node_argument_expansion_width_delta(
                                             argument_node,
-                                            expansion_width_delta,
+                                            argument_width_delta,
                                         );
                                         let _ = builder.set_node_argument_quoted(
                                             argument_node,
