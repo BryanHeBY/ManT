@@ -10,6 +10,7 @@
 
 pub mod canonical;
 pub mod corpus;
+mod coverage;
 mod gates;
 
 #[allow(unused_imports)]

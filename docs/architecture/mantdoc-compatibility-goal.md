@@ -183,6 +183,11 @@ Current format classification is intentionally explicit:
 - Preserve exact per-case replay information and never update goldens
   automatically in response to a difference.
 
+The checked-in matrix is
+`crates/mantdoc/tests/conformance/data/upstream-1.14.6-coverage.toml`.  Its
+Rust validation test rejects an incomplete, duplicated, or reclassified input
+or output set before an upstream-golden claim can be advanced.
+
 ### ORACLE: compare contracts absent from upstream golden files
 
 After upstream golden closure, build isolated release runners below

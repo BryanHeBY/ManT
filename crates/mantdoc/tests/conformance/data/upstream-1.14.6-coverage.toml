@@ -1,0 +1,85 @@
+# Capability matrix for the checksum-pinned mandoc 1.14.6 regression archive.
+#
+# This is a test-owned statement of what each upstream artifact proves.  It
+# prevents native parser snapshots and presentation diffs from being presented
+# as broader AST or renderer evidence than they are.
+schema = "mantdoc.upstream-coverage/v1"
+corpus_id = "mandoc-stable-1.14.6"
+
+[[input_family]]
+name = "char"
+count = 32
+coverage = "all inputs enter the immutable native canonical parser snapshot"
+additional_gate = "strict presentation and lint gates when the case declares that output"
+
+[[input_family]]
+name = "eqn"
+count = 22
+coverage = "all inputs enter the immutable native canonical parser snapshot"
+additional_gate = "M6 complete tbl/eqn preprocessing gate"
+
+[[input_family]]
+name = "man"
+count = 99
+coverage = "all inputs enter the immutable native canonical parser snapshot"
+additional_gate = "M4 complete man parser and reviewed diagnostic gate"
+
+[[input_family]]
+name = "mdoc"
+count = 276
+coverage = "all inputs enter the immutable native canonical parser snapshot"
+additional_gate = "M5 complete mdoc parser and reviewed diagnostic gate"
+
+[[input_family]]
+name = "roff"
+count = 107
+coverage = "all inputs enter the immutable native canonical parser snapshot"
+additional_gate = "M3 selected programmable-roff execution contract"
+
+[[input_family]]
+name = "tbl"
+count = 36
+coverage = "all inputs enter the immutable native canonical parser snapshot"
+additional_gate = "M6 complete tbl/eqn preprocessing gate"
+
+[[output_format]]
+name = "ascii"
+count = 565
+classification = "strict"
+gate = "M9 mantdoc-render-diff"
+comparison = "byte-for-byte native renderer output"
+
+[[output_format]]
+name = "utf8"
+count = 26
+classification = "strict"
+gate = "M9 mantdoc-render-diff"
+comparison = "byte-for-byte native renderer output"
+
+[[output_format]]
+name = "html"
+count = 68
+classification = "strict"
+gate = "M9 mantdoc-render-diff"
+comparison = "byte-for-byte native renderer output"
+
+[[output_format]]
+name = "lint"
+count = 249
+classification = "strict"
+gate = "mantdoc-lint-diff"
+comparison = "severity, logical source, position, order, and message"
+
+[[output_format]]
+name = "markdown"
+count = 253
+classification = "classified"
+gate = "independent legacy engine-IR oracle"
+comparison = "not byte-compared: mandoc presentation backend outside the parser renderer contract"
+
+[[output_format]]
+name = "tag"
+count = 28
+classification = "classified"
+gate = "mantdoc-tag-diff and independent AST/engine-anchor oracle"
+comparison = "not raw-AST compared: mandoc tag backend adds generated anchors and backend locations"
