@@ -15,20 +15,19 @@ usage() {
   cat <<'EOF' >&2
 usage: scripts/check-mantdoc.sh [archive] [--renderer] [--shards N] [--jobs N]
 
-archive defaults to /tmp/mandoc-1.14.6.tar.gz.  --renderer adds the
-non-blocking M9 ASCII/UTF-8/HTML observation lane to the strict native M3-M6
-parser/recovery gate.  The complete native canonical snapshot remains a
-separate release gate.
+archive defaults to $HOME/dev/tmp/mandoc-1.14.6.tar.gz. M9's exact
+ASCII/UTF-8/HTML comparison is always part of the strict native gate;
+--renderer remains accepted as a no-op compatibility spelling. The complete
+native canonical snapshot remains a separate release gate.
 EOF
 }
 
-archive=/tmp/mandoc-1.14.6.tar.gz
+archive="$HOME/dev/tmp/mandoc-1.14.6.tar.gz"
 if (( $# > 0 )) && [[ $1 != --* ]]; then
   archive=$1
   shift
 fi
 
-renderer=false
 max_shards=12
 max_jobs=20
 cpu_count=$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '1')
@@ -43,7 +42,9 @@ jobs=${MANTDOC_JOBS:-$cpu_count}
 while (( $# > 0 )); do
   case $1 in
     --renderer)
-      renderer=true
+      # M9 is strict and enabled unconditionally. Keep the historical switch
+      # so existing local invocations do not fail merely because they now run
+      # a stronger gate.
       ;;
     --shards|--jobs)
       if (( $# < 2 )); then
@@ -126,10 +127,7 @@ cargo clippy --quiet --locked --package mantdoc --all-targets --all-features -- 
   -D clippy::redundant_clone \
   -D clippy::unnecessary_struct_initialization
 
-lanes=m3,m4,m5,m6
-if [[ $renderer == true ]]; then
-  lanes+=,m9
-fi
+lanes=m3,m4,m5,m6,m9
 printf '\n==> run deterministic native differential lanes (%s shards, %s workers)\n' \
   "$shards" "$jobs"
 python3 scripts/run-mantdoc-differential-shards.py "$archive" \

@@ -13,9 +13,9 @@ cargo run --locked --package mantdoc --example mantdoc-corpus-inventory \
 ```
 
 `scripts/run-mantdoc-differential-shards.py` builds these private examples once
-and runs the independent M3--M6 lanes concurrently. The canonical parser
-snapshot and renderer comparison are intentional release-level checks, not
-ordinary library tests.
+and runs the independent M3--M6 parser lanes plus strict M9 upstream renderer
+comparison concurrently. The native canonical parser snapshot remains a
+separate regression check, not an independent compatibility oracle.
 
 All long-lived expectations live beside this support code or in focused,
 source-attributed test data. Historical C-oracle migration material is not a

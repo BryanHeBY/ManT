@@ -86,7 +86,7 @@ work-loop instead of repeatedly paying for the product/release boundary:
 ```sh
 mkdir -p "$HOME/dev/tmp"
 bash scripts/check-mantdoc.sh "$HOME/dev/tmp/mandoc-1.14.6.tar.gz"
-# Include the non-blocking M9 renderer observation while changing rendering.
+# `--renderer` remains accepted for old invocations; strict M9 runs by default.
 bash scripts/check-mantdoc.sh "$HOME/dev/tmp/mandoc-1.14.6.tar.gz" --renderer
 ```
 
@@ -94,8 +94,8 @@ It runs formatting and manifest checks alongside the initial native test build,
 then shares that Cargo target cache for Clippy and a single build of the
 conformance tools. Locally it uses at most 12 deterministic shards and 20
 workers (bounded further by available CPUs); CI intentionally uses four of
-each. M3/M4/M6 run alongside deterministic M5/L2/M8 shards; `--renderer`
-folds M9 into the same process wave. `scripts/check.sh` remains
+each. M3/M4/M6 run alongside deterministic M5 and strict M9 shards;
+`--renderer` is retained only for command-line compatibility. `scripts/check.sh` remains
 the mandatory full workspace, packaging, documentation, fuzz-compilation, and
 product-smoke boundary before handoff.
 

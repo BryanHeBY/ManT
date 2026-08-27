@@ -1,9 +1,8 @@
-//! Observe exact upstream renderer-golden differences for native `mantdoc`.
+//! Verify exact upstream renderer-golden output for native `mantdoc`.
 //!
-//! This is an M9 evidence tool, not a pass/fail compatibility gate while the
-//! native reference renderers are being implemented. It validates the pinned
-//! archive and every selected output digest, then reports exact byte equality
-//! without invoking or linking the C renderer.
+//! M9 is a strict compatibility gate. It validates the pinned archive and
+//! every selected output digest, then fails on either an exact byte difference
+//! or a renderer error without invoking or linking a C renderer.
 
 use std::{
     env,
@@ -168,11 +167,15 @@ fn run_all(
         println!("first_difference_format={format}");
         println!("first_difference={result}");
     }
-    if errors == 0 {
+    if comparisons_are_clean(different, errors) {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
     }
+}
+
+const fn comparisons_are_clean(differences: usize, errors: usize) -> bool {
+    differences == 0 && errors == 0
 }
 
 fn parse_shard(value: &OsStr) -> Result<(usize, usize), String> {
@@ -233,6 +236,7 @@ fn run_one(program: &OsStr, archive: &Path, case: &str, show_preview: bool) -> E
             Ok(OutputComparison::Different { offset }) => {
                 println!("{format}_equal=false");
                 println!("{format}_first_difference_byte={offset}");
+                failed = true;
             }
             Err(error) => {
                 eprintln!(
@@ -493,11 +497,11 @@ fn render_format(format: &str) -> Result<RenderFormat, String> {
 
 #[cfg(test)]
 mod tests {
+    use super::conformance::{CorpusCase, ReferenceOutput};
     use super::{
-        available_renderer_formats, difference_window, extract_upstream_html_test_output,
-        render_format, visible_difference_fragment,
+        available_renderer_formats, comparisons_are_clean, difference_window,
+        extract_upstream_html_test_output, render_format, visible_difference_fragment,
     };
-    use crate::conformance::CorpusCase;
 
     #[test]
     fn only_compares_native_renderer_formats() {
@@ -506,12 +510,12 @@ mod tests {
             input_archive_path: "fixture.in".into(),
             source_sha256: "hash".into(),
             expected_outputs: vec![
-                crate::conformance::ReferenceOutput {
+                ReferenceOutput {
                     format: "ascii".into(),
                     archive_path: "fixture.out_ascii".into(),
                     sha256: "hash".into(),
                 },
-                crate::conformance::ReferenceOutput {
+                ReferenceOutput {
                     format: "lint".into(),
                     archive_path: "fixture.out_lint".into(),
                     sha256: "hash".into(),
@@ -551,5 +555,12 @@ mod tests {
     #[test]
     fn difference_preview_marks_spaces_without_changing_bytes() {
         assert_eq!(visible_difference_fragment(b"one  two"), "one··two");
+    }
+
+    #[test]
+    fn strict_renderer_gate_rejects_differences_as_well_as_errors() {
+        assert!(comparisons_are_clean(0, 0));
+        assert!(!comparisons_are_clean(1, 0));
+        assert!(!comparisons_are_clean(0, 1));
     }
 }

@@ -2,7 +2,7 @@
 """Run independent native mantdoc conformance lanes concurrently.
 
 The M3, M4, and M6 smoke gates are independent whole-corpus tasks. M5 and the
-observational M9 renderer-golden oracle additionally partition their
+strict M9 renderer-golden gate additionally partition their
 checksum-ordered corpus by ``case_index % shard_count``. This helper builds the
 feature-gated tools once, runs every independent task concurrently, then sums
 machine-readable counters. A shard always validates the whole upstream
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEFAULT_LANES = ("m3", "m4", "m5", "m6")
+DEFAULT_LANES = ("m3", "m4", "m5", "m6", "m9")
 SHARDED_LANES = frozenset(("m5", "m9"))
 KNOWN_LANES = frozenset((*DEFAULT_LANES, "m9"))
 AGGREGATE_COUNTERS = {
@@ -111,7 +111,7 @@ def main() -> int:
     parser.add_argument(
         "--lanes",
         default=",".join(DEFAULT_LANES),
-        help="comma-separated subset of m3,m4,m5,m6,m9 (default: M3-M6)",
+        help="comma-separated subset of m3,m4,m5,m6,m9 (default: M3-M6 and strict M9)",
     )
     parser.add_argument(
         "--list-renderer-differences",
