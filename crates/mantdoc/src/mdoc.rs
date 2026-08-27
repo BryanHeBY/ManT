@@ -43,7 +43,6 @@ use blocks::{
     recover_unmatched_ec, take_trailing_line_start_text_children,
 };
 mod inline;
-pub(crate) use inline::is_mdoc_callable_macro;
 use inline::{
     append_explicit_partial_tail, clear_initial_implicit_body_delimiter_flags,
     clear_leading_explicit_partial_punctuation, clear_terminal_implicit_body_opening_flags,

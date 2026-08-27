@@ -1,12 +1,12 @@
 use super::{
     ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EmitContext,
     EnvironmentRequestContext, EscapeIssueKind, IncludeRequest, InputTrap, MacroSet,
-    ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, RequestHandling, RequestKind,
-    ScanOutcome, ScannedLine, Scanner, ScopeCollector, ScopeFlow, ScopeLine, ScopeMachine,
-    Severity, Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver, SourceSpan,
-    Syntax, TransparentRequestContext, append_node, append_text_node, append_textual_node,
-    apply_environment_request, apply_string_request, collect_pending_macro_scope,
-    condition_body_source_start_from_offset, condition_body_template,
+    ManIndentState, NodeFlags, NodeId, NodeKind, PackageToken, ParseSession, RequestHandling,
+    RequestKind, ScanOutcome, ScannedLine, Scanner, ScopeCollector, ScopeFlow, ScopeLine,
+    ScopeMachine, Severity, Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver,
+    SourceSpan, Syntax, TransparentRequestContext, append_node, append_text_node,
+    append_textual_node, apply_environment_request, apply_string_request,
+    collect_pending_macro_scope, condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
     emit_bad_comment_style, emit_declared_character_escape_warnings, emit_escape_issues,
@@ -94,7 +94,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
     // closer, so publish the recovery finding on the next physical line.
     let mut pending_while_out_of_scope = false;
     'lines: while let Some(line) = scanner.next_line() {
-        let event = SourceEvent::from(line);
+        let event = SourceEvent::from_scanned(line, builder.macro_set());
         let pending_next_line_condition = next_line_condition.take();
         if pending_while_out_of_scope {
             let (start, end) = event.range();
@@ -488,6 +488,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                 mut end,
                 name,
                 request: raw_request,
+                package: raw_package,
                 arguments,
                 raw_arguments,
                 argument_start,
@@ -504,10 +505,8 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     raw_arguments,
                     scanner.escape_character(),
                     raw_request.is_definition()
-                        || is_builtin_package_macro(builder.macro_set(), name)
-                        || (builder.macro_set() == MacroSet::Mdoc
-                            && std::str::from_utf8(name)
-                                .is_ok_and(crate::mdoc::is_mdoc_callable_macro))
+                        || raw_package.is_builtin(builder.macro_set())
+                        || raw_package.is_mdoc_callable()
                         || environment.macro_definition(name).is_some()
                         || environment.is_suppressed_macro_name(name),
                 );
@@ -547,6 +546,9 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                 let request = attached_name
                     .as_ref()
                     .map_or(raw_request, |_| RequestKind::classify(name));
+                let package = attached_name.as_ref().map_or(raw_package, |_| {
+                    PackageToken::classify(builder.macro_set(), name)
+                });
                 // A physical control line is outside every user-macro
                 // argument frame.  Validate active `\$1`-style selectors
                 // before its request-specific parser consumes or reparses
@@ -2660,8 +2662,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                 let renamed_package_macro = environment.renamed_package_macro(name).is_some();
                 let dispatched_package_macro =
                     environment.renamed_package_macro(name).unwrap_or(name);
+                let dispatched_package_token = environment
+                    .renamed_package_macro(name)
+                    .map_or(package, |dispatched| {
+                        PackageToken::classify(builder.macro_set(), dispatched)
+                    });
                 let builtin_package_macro =
-                    is_builtin_package_macro(builder.macro_set(), dispatched_package_macro);
+                    dispatched_package_token.is_builtin(builder.macro_set());
                 if !builtin_package_macro && environment.is_suppressed_macro_name(name) {
                     push_diagnostic(
                         &mut diagnostics,
@@ -3845,9 +3852,9 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 }));
                                 continue;
                             }
-                            let mdoc_callable = builder.macro_set() == MacroSet::Mdoc
-                                && std::str::from_utf8(request)
-                                    .is_ok_and(crate::mdoc::is_mdoc_callable_macro);
+                            let mdoc_callable =
+                                PackageToken::classify(builder.macro_set(), request)
+                                    .is_mdoc_callable();
                             // Macro output keeps the caller's physical span
                             // for safe source slicing, but libmandoc exposes
                             // the generated control's column *inside the

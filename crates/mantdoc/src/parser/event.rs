@@ -1,4 +1,4 @@
-use super::ScannedLine;
+use super::{MacroSet, PackageToken, ScannedLine};
 
 pub(super) enum SourceEvent<'source> {
     TooLong {
@@ -36,8 +36,8 @@ impl SourceEvent<'_> {
     }
 }
 
-impl<'source> From<ScannedLine<'source>> for SourceEvent<'source> {
-    fn from(line: ScannedLine<'source>) -> Self {
+impl<'source> SourceEvent<'source> {
+    pub(super) fn from_scanned(line: ScannedLine<'source>, macro_set: MacroSet) -> Self {
         match line {
             ScannedLine::TooLong { start, end } => Self::TooLong { start, end },
             ScannedLine::Text { start, end, bytes } => Self::Text { start, end, bytes },
@@ -57,6 +57,7 @@ impl<'source> From<ScannedLine<'source>> for SourceEvent<'source> {
                 end,
                 name,
                 request: RequestKind::classify(name),
+                package: PackageToken::classify(macro_set, name),
                 arguments,
                 raw_arguments,
                 argument_start,
@@ -71,6 +72,7 @@ pub(super) struct ControlEvent<'source> {
     pub(super) end: u32,
     pub(super) name: &'source [u8],
     pub(super) request: RequestKind,
+    pub(super) package: PackageToken,
     pub(super) arguments: &'source [u8],
     pub(super) raw_arguments: &'source [u8],
     pub(super) argument_start: u32,

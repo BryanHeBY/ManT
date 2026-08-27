@@ -1,7 +1,7 @@
 use super::{
     Argument, ArgumentIssue, Diagnostic, DiagnosticCode, DocumentBuilder, Environment, EscapeIssue,
-    EscapeIssueKind, Limits, MacroSet, NodeFlags, NodeId, NodeKind, PackageFillScope, Severity,
-    SourceSpan, TranslationRequestIssue, decode_visible_bytes, diagnostic,
+    EscapeIssueKind, Limits, MacroSet, NodeFlags, NodeId, NodeKind, PackageFillScope, PackageToken,
+    Severity, SourceSpan, TranslationRequestIssue, decode_visible_bytes, diagnostic,
     invalid_input_byte_offsets, lex_arguments, normalize_ast_escapes, normalize_escapes,
     push_diagnostic, trailing_whitespace_start, translation_request_issue, visible_bytes,
 };
@@ -1148,24 +1148,7 @@ pub(super) fn retain_user_macro_tab_argument_prefix(
 /// Implemented man macros whose arguments are visible text rather than pure
 /// layout state. Their parser path applies the special tabulation warning.
 pub(super) fn is_man_visible_argument_macro(macro_set: MacroSet, name: &[u8]) -> bool {
-    macro_set == MacroSet::Man
-        && matches!(
-            name,
-            b"B" | b"I"
-                | b"R"
-                | b"SM"
-                | b"SB"
-                | b"BR"
-                | b"BI"
-                | b"IB"
-                | b"IR"
-                | b"RB"
-                | b"RI"
-                | b"IP"
-                | b"HP"
-                | b"TP"
-                | b"TQ"
-        )
+    PackageToken::classify(macro_set, name).is_man_visible_argument()
 }
 
 /// A trailing odd escape consumes the physical newline in roff input.  The
@@ -1228,56 +1211,5 @@ pub(super) fn update_fill_mode(
 /// names still take the ordinary roff macro path, so document-local helpers
 /// remain executable.
 pub(super) fn is_builtin_package_macro(macro_set: MacroSet, name: &[u8]) -> bool {
-    macro_set == MacroSet::Man
-        && matches!(
-            name,
-            b"TH"
-                | b"SH"
-                | b"SS"
-                | b"TP"
-                | b"TQ"
-                | b"LP"
-                | b"PP"
-                | b"P"
-                | b"IP"
-                | b"HP"
-                | b"RS"
-                | b"RE"
-                | b"UR"
-                | b"UE"
-                | b"MT"
-                | b"ME"
-                | b"SY"
-                | b"YS"
-                | b"SM"
-                | b"SB"
-                | b"R"
-                | b"B"
-                | b"I"
-                | b"BR"
-                | b"BI"
-                | b"IB"
-                | b"IR"
-                | b"RB"
-                | b"RI"
-                | b"EX"
-                | b"EE"
-                | b"nf"
-                | b"fi"
-                | b"ce"
-                | b"rj"
-                | b"PD"
-                | b"in"
-                | b"br"
-                | b"sp"
-                | b"na"
-                | b"ad"
-                | b"nh"
-                | b"hy"
-        )
-        // `At` already has a validator-defined default word and `Bc` closes
-        // an mdoc `Bo` block. Preserve their package dispatch even when roff
-        // has a same-named user definition; otherwise `.am Bc` turns the
-        // authored closer into macro output and leaves the `Bo` unclosed.
-        || (macro_set == MacroSet::Mdoc && matches!(name, b"At" | b"Bc"))
+    PackageToken::classify(macro_set, name).is_builtin(macro_set)
 }

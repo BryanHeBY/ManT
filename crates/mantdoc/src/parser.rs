@@ -233,6 +233,7 @@ mod report;
 mod request;
 mod runtime;
 mod session;
+mod token;
 use condition::{
     BranchOutcome, condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, emit_escaped_condition_name,
@@ -290,6 +291,7 @@ use runtime::{
     update_table_preprocessor_depth, validate_character_request, visible_bytes,
 };
 use session::{ParseSession, ScanOutcome, SourceMachine};
+use token::PackageToken;
 
 struct DenyResolver;
 
