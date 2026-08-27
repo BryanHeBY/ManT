@@ -15,13 +15,12 @@ pub(super) fn mark_man_targets(builder: &mut DocumentBuilder, heads: &[NodeId]) 
         };
         if matches!(macro_name.as_str(), "SH" | "SS") {
             let heading = visible_head_text(builder, *head);
-            let tag = heading.split_whitespace().collect::<Vec<_>>().join("_");
+            let Some(tag) = fallback_heading_tag(&heading) else {
+                continue;
+            };
             let Some(text) = first_head_text(builder, *head) else {
                 continue;
             };
-            if tag.is_empty() {
-                continue;
-            }
             let direct_text = builder
                 .children(*head)
                 .and_then(|children| children.first())
@@ -75,6 +74,27 @@ pub(super) fn mark_man_targets(builder: &mut DocumentBuilder, heads: &[NodeId]) 
             },
         );
     }
+}
+
+/// Reproduce the fallback `SH`/`SS` route through `tag_put()`: validation
+/// first replaces heading whitespace with underscores, then the common tag
+/// registry keeps only the prefix before its first roff escape.  The latter
+/// matters for ordinary man headings such as `Objective\\-C`; preserving the
+/// whole escape spelling would create a destination libmandoc never exposes.
+fn fallback_heading_tag(heading: &str) -> Option<String> {
+    let tag = heading.split_whitespace().collect::<Vec<_>>().join("_");
+    let mut start = 0;
+    let bytes = tag.as_bytes();
+    match bytes {
+        [b'-', ..] => start = 1,
+        [b'\\', b'&' | b'-' | b'e', ..] => start = 2,
+        _ => {}
+    }
+    let end = bytes[start..]
+        .iter()
+        .position(|byte| matches!(*byte, b' ' | b'\t' | b'\\'))
+        .map_or(bytes.len(), |offset| start + offset);
+    (start < end).then(|| tag[start..end].to_owned())
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]

@@ -1118,6 +1118,21 @@ fn assigns_and_suppresses_man_destination_tags_like_libmandoc() {
     assert!(term_head.flags().permalink);
     assert_eq!(term_head.tag(), Some("term"));
 
+    let escaped_heading_name = SourceName::new("man-escaped-heading-tag.1").unwrap();
+    let escaped_heading_report = Parser::default()
+        .parse(Source::new(
+            &escaped_heading_name,
+            b".TH TAGS 1 28-Aug-2026\n.SH NAME\ntags\n.SS \"Options Controlling Objective\\-C and Objective\\-C++ Dialects\"\nbody\n",
+        ))
+        .unwrap();
+    let escaped_heading = escaped_heading_report
+        .document
+        .preorder()
+        .find(|node| node.kind() == NodeKind::Head && node.macro_name() == Some("SS"))
+        .unwrap();
+    assert!(escaped_heading.flags().deep_link_target);
+    assert_eq!(escaped_heading.tag(), Some("Options_Controlling_Objective"));
+
     let width_name = SourceName::new("man-width-tag.1").unwrap();
     let width_report = Parser::default()
         .parse(Source::new(
