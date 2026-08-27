@@ -1346,6 +1346,39 @@ fn roff_break_keeps_a_preceding_paragraph_eligible_for_fo_targets() {
 }
 
 #[test]
+fn paragraph_resets_function_tag_priority_without_erasing_an_equal_target() {
+    let name = SourceName::new("mdoc-function-tag-priority.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 25, 2026\n.Dt FO 1\n.Os\n.Sh DESCRIPTION\n.Fn call\n.Pp\n.Fo call\n.Fc\n",
+        ))
+        .unwrap();
+    let nodes = report.document.preorder().collect::<Vec<_>>();
+    let function = nodes
+        .iter()
+        .copied()
+        .find(|node| node.kind() == NodeKind::Element && node.macro_name() == Some("Fn"))
+        .unwrap();
+    assert!(function.flags().deep_link_target);
+    assert!(function.flags().permalink);
+    let paragraph = nodes
+        .iter()
+        .copied()
+        .find(|node| node.kind() == NodeKind::Element && node.macro_name() == Some("Pp"))
+        .unwrap();
+    assert!(paragraph.flags().deep_link_target);
+    assert_eq!(paragraph.tag(), Some("call"));
+    let head = nodes
+        .iter()
+        .copied()
+        .find(|node| node.kind() == NodeKind::Head && node.macro_name() == Some("Fo"))
+        .unwrap();
+    assert!(!head.flags().deep_link_target);
+    assert!(head.flags().permalink);
+}
+
+#[test]
 fn fn_uses_an_eligible_paragraph_as_its_target() {
     let name = SourceName::new("mdoc-fn-tag.1").unwrap();
     let report = Parser::default()
@@ -1373,24 +1406,28 @@ fn fn_uses_an_eligible_paragraph_as_its_target() {
 }
 
 #[test]
-fn later_functions_in_one_paragraph_do_not_gain_a_second_automatic_target() {
-    let name = SourceName::new("mdoc-fn-one-target.1").unwrap();
+fn every_description_function_contributes_an_automatic_target_candidate() {
+    let name = SourceName::new("mdoc-fn-standalone-targets.1").unwrap();
     let report = Parser::default()
-            .parse(Source::new(
-                &name,
-                b".Dd August 25, 2026\n.Dt FN 1\n.Os\n.Sh DESCRIPTION\n.Pp\n.Fn first\nand\n.Fn second\n",
-            ))
-            .unwrap();
+        .parse(Source::new(
+            &name,
+            b".Dd August 25, 2026\n.Dt FN 1\n.Os\n.Sh DESCRIPTION\n.Pp\n.Fn grouped\nand\n.Fn second\n.Ss Independent declarations\nThe functions\n.Fn third\nand\n.Fn fourth\n",
+        ))
+        .unwrap();
     let functions = report
         .document
         .preorder()
         .filter(|node| node.kind() == NodeKind::Element && node.macro_name() == Some("Fn"))
         .collect::<Vec<_>>();
-    assert_eq!(functions.len(), 2);
+    assert_eq!(functions.len(), 4);
     assert!(!functions[0].flags().deep_link_target);
     assert!(functions[0].flags().permalink);
-    assert!(!functions[1].flags().deep_link_target);
-    assert!(!functions[1].flags().permalink);
+    assert!(functions[1].flags().deep_link_target);
+    assert!(functions[1].flags().permalink);
+    assert!(functions[2].flags().deep_link_target);
+    assert!(functions[2].flags().permalink);
+    assert!(functions[3].flags().deep_link_target);
+    assert!(functions[3].flags().permalink);
 }
 
 #[test]

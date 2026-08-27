@@ -97,10 +97,11 @@ use attributes::{
 };
 mod tags;
 use tags::{
-    automatic_mdoc_function_tag, default_volume, emphasis_fallback_elements, inline_target_name,
-    mark_definition_item_head_targets, mark_definition_item_xo_head_targets, mark_destination,
-    mark_emphasis_targets, mark_first_visible_permalink, mark_manual_target, mark_permalink,
-    mark_section_targets, mark_target, mark_unique_function_targets, visible_head_text,
+    AutomaticFunctionTarget, automatic_mdoc_function_tag, default_volume,
+    emphasis_fallback_elements, inline_target_name, mark_definition_item_head_targets,
+    mark_definition_item_xo_head_targets, mark_destination, mark_emphasis_targets,
+    mark_first_visible_permalink, mark_function_targets, mark_manual_target, mark_permalink,
+    mark_section_targets, mark_target, visible_head_text,
 };
 mod recovery;
 pub(crate) use driver::structure;

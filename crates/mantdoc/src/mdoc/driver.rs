@@ -2,9 +2,9 @@ use super::context::MdocContext;
 use super::post::{NetBsdValidation, PostValidation, PrologueStatus, merge_syntax_recoveries};
 use super::state::{StructureEvent, StructureEvents};
 use super::{
-    ArgumentPlacement, BTreeMap, BTreeSet, DocumentBuilder, MacroSet, NodeId, NodeKind,
-    NormalizedEnclosure, NormalizedListKind, Recovery, ScopeFrame, SourceSpan, StructureOutcome,
-    accepts_pending_manual_tag, active_column_item, active_column_list,
+    ArgumentPlacement, AutomaticFunctionTarget, BTreeMap, BTreeSet, DocumentBuilder, MacroSet,
+    NodeId, NodeKind, NormalizedEnclosure, NormalizedListKind, Recovery, ScopeFrame, SourceSpan,
+    StructureOutcome, accepts_pending_manual_tag, active_column_item, active_column_list,
     append_broken_full_block_body, append_broken_implicit_block_body, append_column_ta_cell,
     append_explicit_partial_tail, append_implicit_column_table_row, append_to_parent,
     apply_attributes, argument_location, automatic_mdoc_function_tag, broken_item_recoveries,
@@ -113,14 +113,11 @@ pub(crate) fn structure(
     let mut deferred_fixed_head_argument_items = BTreeSet::<NodeId>::new();
     let mut target_heads = Vec::new();
     let mut synopsis_bodies = Vec::new();
-    // `tag_put()` applies function-name destinations globally: repeated
-    // automatic function spellings do not retain a per-node tag.  Defer the
-    // tag string while retaining every selected target flag immediately.
-    // The bool records whether the macro kind exposes the globally unique
-    // spelling as a public tag.  `Fn` does; `Fo` merely owns/surrenders a
-    // destination bit in that namespace.
-    let mut automatic_function_targets = Vec::<(NodeId, String, bool)>::new();
-    let mut automatic_function_tag_occurrences = Vec::<String>::new();
+    // `post_fname()` gives each automatic function tag a source-order
+    // priority.  Pp resets it to `TAG_STRONG`; the final tag pass resolves
+    // equal and competing names after all destinations are known.
+    let mut automatic_function_targets = Vec::<AutomaticFunctionTarget>::new();
+    let mut function_tag_priority = 2_u32;
     // mandoc validates Pp after it has completed the containing body, while
     // roff layout requests such as br and sp are validated immediately.
     // Keep the two queues separate to preserve observable finding order.
@@ -147,14 +144,10 @@ pub(crate) fn structure(
     // only the matching permalink.
     let mut pending_transparent_permalink = None::<String>;
     let mut pending_paragraph_href = None::<String>;
-    // Function names validate a preceding paragraph as their destination.
-    // Keep only the immediately eligible paragraph so ordinary prose cannot
-    // acquire a target just because a later Fn happens to occur.
+    // Function names can transfer their target to the immediately eligible
+    // paragraph-layout event.  This is independent of automatic duplicate
+    // resolution, which is handled by the deferred global tag pass.
     let mut pending_function_paragraph = None::<NodeId>;
-    // Only the first function destination in one paragraph/flow region gains
-    // the automatic target.  Later `.Fn` nodes remain plain syntax until a
-    // new paragraph starts or an explicit `.Tg` assigns a destination.
-    let mut function_target_taken = false;
     let mut enclosure = None::<NormalizedEnclosure>;
     let mut implicitly_closed = Vec::<&'static str>::new();
     let mut in_synopsis = false;
@@ -526,9 +519,6 @@ pub(crate) fn structure(
                 pending_manual_tag = None;
             }
             if builder.node_kind(node) != Some(NodeKind::Text)
-                // Bk only groups the following words for layout.  It does not
-                // break the preceding-paragraph relation that lets a nested
-                // Fn become that paragraph's automatic destination.
                 && !matches!(
                     macro_name.as_deref(),
                     Some("Pp" | "Lp" | "Tg" | "Bk" | "Fn" | "Fo" | "br")
@@ -1609,7 +1599,9 @@ pub(crate) fn structure(
                         mark_no_print(builder, tag_node);
                         pending_paragraph_href = Some(tag);
                     }
-                    function_target_taken = false;
+                    // `post_par()` restarts libmandoc's `fn_prio` even when
+                    // this paragraph later normalizes away from public flow.
+                    function_tag_priority = 2;
                     pending_function_paragraph = Some(node);
                     if in_synopsis && synopsis_keep_boundary {
                         // A paragraph boundary ends the current SYNOPSIS Nm
@@ -1771,9 +1763,6 @@ pub(crate) fn structure(
                     let function_tag = function_name
                         .as_deref()
                         .and_then(automatic_mdoc_function_tag);
-                    if let Some(function_tag) = function_tag {
-                        automatic_function_tag_occurrences.push(function_tag.to_owned());
-                    }
                     let paragraph = pending_function_paragraph.take();
                     if let Some((tag_node, tag)) = pending_manual_tag.take() {
                         if let Some(paragraph) = paragraph {
@@ -1783,33 +1772,20 @@ pub(crate) fn structure(
                             mark_target(builder, node, Some(&tag));
                         }
                         mark_no_print(builder, tag_node);
-                        function_target_taken = true;
-                    } else if !in_synopsis
-                        && let (Some(paragraph), Some(function_name)) =
-                            (paragraph, function_name.as_deref())
-                    {
-                        mark_manual_target(builder, paragraph, function_name);
-                        mark_permalink(builder, node, None);
-                        function_target_taken = true;
-                    } else if !in_synopsis && !function_target_taken {
-                        // A standalone function declaration owns its normal
-                        // destination spelling, unlike the paragraph-target
-                        // form above where the function is only a permalink.
-                        mark_target(builder, node, None);
-                        if let Some(function_tag) = function_tag {
-                            automatic_function_targets.push((node, function_tag.to_owned(), true));
-                        }
-                        function_target_taken = true;
+                    } else if !in_synopsis && let Some(function_tag) = function_tag {
+                        automatic_function_targets.push(AutomaticFunctionTarget {
+                            destination: paragraph.unwrap_or(node),
+                            permalink: paragraph.map(|_| node),
+                            tag: function_tag.to_owned(),
+                            priority: function_tag_priority,
+                            exposes_tag: paragraph.is_none(),
+                        });
+                        function_tag_priority = function_tag_priority.saturating_add(1);
                     }
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Ft") => {
                     validate_tag(builder, node, "Ft", &mut deferred.post_validation);
-                    // A function-type declaration starts a new declaration
-                    // package.  This differs from ordinary paragraph prose:
-                    // each following standalone `.Fn` is eligible for its
-                    // own automatic destination.
-                    function_target_taken = false;
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Fa") => {
@@ -1852,7 +1828,6 @@ pub(crate) fn structure(
                         location: builder.node_location(node),
                     });
                     let _ = builder.macro_name(node, "Ft");
-                    function_target_taken = false;
                     append_to_parent(builder, root, &mut root_children, active_body, node);
                 }
                 Some("Fr") => {
@@ -3141,34 +3116,19 @@ pub(crate) fn structure(
                         if let Some((tag_node, tag)) = pending_manual_tag.take() {
                             mark_target(builder, head, Some(&tag));
                             mark_no_print(builder, tag_node);
-                        } else if let (Some(paragraph), Some(function_name)) = (
-                            pending_function_paragraph.take(),
-                            node_arguments(builder, head).first().cloned(),
-                        ) {
-                            // A preceding Pp owns Fo's automatic function
-                            // destination.  Fo's head remains the permalink
-                            // source, except that an inline font escape leaves
-                            // the normalized leading function word visible as
-                            // its public tag as well.
-                            if let Some(function_tag) =
-                                automatic_mdoc_function_tag(function_name.as_str())
-                            {
-                                mark_manual_target(builder, paragraph, function_tag);
-                                let permalink_tag =
-                                    (function_tag != function_name).then_some(function_tag);
-                                mark_permalink(builder, head, permalink_tag);
-                            } else {
-                                mark_target(builder, head, None);
-                            }
-                            function_target_taken = true;
                         } else if let Some(function_tag) = node_arguments(builder, head)
                             .first()
                             .and_then(|name| automatic_mdoc_function_tag(name))
                         {
-                            mark_target(builder, head, None);
-                            let function_tag = function_tag.to_owned();
-                            automatic_function_tag_occurrences.push(function_tag.clone());
-                            automatic_function_targets.push((head, function_tag, false));
+                            let paragraph = pending_function_paragraph.take();
+                            automatic_function_targets.push(AutomaticFunctionTarget {
+                                destination: paragraph.unwrap_or(head),
+                                permalink: paragraph.map(|_| head),
+                                tag: function_tag.to_owned(),
+                                priority: function_tag_priority,
+                                exposes_tag: paragraph.is_none(),
+                            });
+                            function_tag_priority = function_tag_priority.saturating_add(1);
                         }
                     }
                     append_to_parent(builder, root, &mut root_children, flow_parent, node);
@@ -4069,7 +4029,6 @@ pub(crate) fn structure(
         synopsis_bodies: &synopsis_bodies,
         target_heads: &target_heads,
         automatic_function_targets: &automatic_function_targets,
-        automatic_function_tag_occurrences: &automatic_function_tag_occurrences,
         prologue: PrologueStatus {
             saw_title: saw_title_prologue,
             saw_date: saw_date_prologue,

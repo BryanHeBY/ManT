@@ -1,10 +1,11 @@
 use super::{
-    DocumentBuilder, NodeId, NodeKind, Recovery, StructureOutcome, emphasis_fallback_elements,
-    first_mdoc_content_node, mark_definition_item_xo_head_targets, mark_emphasis_targets,
-    mark_section_targets, mark_synopsis_pretty, mark_unique_function_targets, node_kind_name,
-    normalize_inline_paragraph_controls, normalize_list_trailing_paragraph_controls,
-    normalize_section_paragraph_boundaries, normalize_trailing_no_space_in_implicit_blocks,
-    paragraph_layout_recovery_offset, rebase_option_expansion_locations,
+    AutomaticFunctionTarget, DocumentBuilder, NodeId, NodeKind, Recovery, StructureOutcome,
+    emphasis_fallback_elements, first_mdoc_content_node, mark_definition_item_xo_head_targets,
+    mark_emphasis_targets, mark_function_targets, mark_section_targets, mark_synopsis_pretty,
+    node_kind_name, normalize_inline_paragraph_controls,
+    normalize_list_trailing_paragraph_controls, normalize_section_paragraph_boundaries,
+    normalize_trailing_no_space_in_implicit_blocks, paragraph_layout_recovery_offset,
+    rebase_option_expansion_locations,
 };
 
 /// Merge syntax findings discovered by nested structure passes back into
@@ -56,8 +57,7 @@ pub(super) struct PostValidation<'a> {
     pub(super) outcome: &'a mut StructureOutcome,
     pub(super) synopsis_bodies: &'a [NodeId],
     pub(super) target_heads: &'a [NodeId],
-    pub(super) automatic_function_targets: &'a [(NodeId, String, bool)],
-    pub(super) automatic_function_tag_occurrences: &'a [String],
+    pub(super) automatic_function_targets: &'a [AutomaticFunctionTarget],
     pub(super) prologue: PrologueStatus,
     pub(super) netbsd: NetBsdValidation,
 }
@@ -87,12 +87,16 @@ impl PostValidation<'_> {
             synopsis_bodies,
             target_heads,
             automatic_function_targets,
-            automatic_function_tag_occurrences,
             prologue,
             netbsd,
         } = self;
 
         let _ = builder.replace_children(root, root_children);
+        // Resolve function candidates before paragraph normalization.  A
+        // leading Pp may be folded into the surrounding flow, and that pass
+        // preserves an already assigned destination exactly like libmandoc's
+        // final `tag_postprocess()` walk.
+        mark_function_targets(builder, automatic_function_targets);
         normalize_trailing_no_space_in_implicit_blocks(builder, root);
         let mut paragraph_layout_recoveries = Vec::new();
         normalize_list_trailing_paragraph_controls(builder, root, &mut paragraph_layout_recoveries);
@@ -141,11 +145,6 @@ impl PostValidation<'_> {
         }
         mark_definition_item_xo_head_targets(builder);
         mark_section_targets(builder, target_heads);
-        mark_unique_function_targets(
-            builder,
-            automatic_function_targets,
-            automatic_function_tag_occurrences,
-        );
         validate_see_also_reference_order(builder, root, &mut outcome.recoveries);
         outcome.recoveries.extend(section_paragraph_recoveries);
         if !prologue.saw_operating_system_request && (prologue.saw_date || prologue.saw_title) {

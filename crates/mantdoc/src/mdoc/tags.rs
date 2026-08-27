@@ -1,5 +1,5 @@
 use super::{
-    BTreeMap, BTreeSet, DocumentBuilder, NodeId, NodeKind, NormalizedListKind,
+    BTreeMap, DocumentBuilder, NodeId, NodeKind, NormalizedListKind,
     is_implicit_partial_block_macro,
 };
 
@@ -536,38 +536,60 @@ pub(super) fn automatic_mdoc_function_tag(value: &str) -> Option<&str> {
     (length > 0).then_some(&value[..length])
 }
 
-/// Commit automatic function tags only when their spelling appears once in
-/// the document.  The target bit was already set at source-order time; this
-/// pass supplies the global duplicate suppression performed by `tag_put()`.
-pub(super) fn mark_unique_function_targets(
+/// Deferred form of an mdoc function-name `tag_put(NULL, fn_prio++, …)`.
+///
+/// libmandoc assigns priorities while it parses and moves a selected inline
+/// destination to the preceding paragraph only during its final tag pass.
+/// Keeping both nodes here avoids prematurely consuming a Pp's destination
+/// and makes an equal-priority spelling retain both valid targets.
+pub(super) struct AutomaticFunctionTarget {
+    pub(super) destination: NodeId,
+    pub(super) permalink: Option<NodeId>,
+    pub(super) tag: String,
+    pub(super) priority: u32,
+    pub(super) exposes_tag: bool,
+}
+
+/// Resolve automatic function destinations using libmandoc's monotonically
+/// increasing `fn_prio`: lower values win, and equal values deliberately
+/// retain all candidates.  A Pp resets the counter to `TAG_STRONG`, so the
+/// same function spelling in a following paragraph can supersede an earlier
+/// later-in-paragraph declaration while an equal first declaration remains.
+pub(super) fn mark_function_targets(
     builder: &mut DocumentBuilder,
-    targets: &[(NodeId, String, bool)],
-    occurrences: &[String],
+    targets: &[AutomaticFunctionTarget],
 ) {
-    let mut counts = BTreeMap::<&str, usize>::new();
-    for tag in occurrences {
-        *counts.entry(tag).or_default() += 1;
+    let mut winning_priorities = BTreeMap::<&str, u32>::new();
+    for target in targets {
+        winning_priorities
+            .entry(&target.tag)
+            .and_modify(|priority| *priority = (*priority).min(target.priority))
+            .or_insert(target.priority);
     }
-    let mut retained_duplicates = BTreeSet::<&str>::new();
-    for (node, tag, exposes_tag) in targets {
-        if *exposes_tag && counts.get(tag.as_str()) == Some(&1) {
-            // `tag_put(NULL, …)` records the target bit without allocating a
-            // redundant tag when the public first word is already the exact
-            // destination spelling.  A separate tag is only observable when
-            // normalization shortened or otherwise transformed that word.
+    for target in targets {
+        if winning_priorities.get(target.tag.as_str()) != Some(&target.priority) {
+            continue;
+        }
+        if let Some(permalink) = target.permalink {
+            // `tag_move_id()` gives the paragraph the ID and leaves the
+            // original Fn/Fo node as the self-link.
+            mark_manual_target(builder, target.destination, &target.tag);
             let public_first_word = builder
-                .children(*node)
+                .children(permalink)
                 .and_then(|children| children.first())
                 .and_then(|child| builder.node_text(*child));
-            if public_first_word != Some(tag.as_str()) {
-                let _ = builder.set_node_tag(*node, tag.as_str());
-            }
-        } else if !retained_duplicates.insert(tag) {
-            // `tag_put()` keeps the first declaration's destination bit for
-            // a repeated automatic function spelling, then suppresses every
-            // later candidate.  The spelling remains tagless in both cases
-            // because it is not globally unique.
-            clear_target(builder, *node);
+            let permalink_tag =
+                (public_first_word != Some(target.tag.as_str())).then_some(target.tag.as_str());
+            mark_permalink(builder, permalink, permalink_tag);
+        } else {
+            let public_first_word = builder
+                .children(target.destination)
+                .and_then(|children| children.first())
+                .and_then(|child| builder.node_text(*child));
+            let visible_tag = (target.exposes_tag
+                && public_first_word != Some(target.tag.as_str()))
+            .then_some(target.tag.as_str());
+            mark_target(builder, target.destination, visible_tag);
         }
     }
 }
