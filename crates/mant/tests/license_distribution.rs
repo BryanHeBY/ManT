@@ -84,11 +84,7 @@ fn mantdoc_package_excludes_c_oracle_sources() {
     let files = package_files("mantdoc");
     assert!(files.iter().any(|path| path == "src/lib.rs"));
     assert!(files.iter().any(|path| path == "benches/parse.rs"));
-    assert!(
-        files
-            .iter()
-            .any(|path| path == "THIRD_PARTY_NOTICES.md")
-    );
+    assert!(files.iter().any(|path| path == "THIRD_PARTY_NOTICES.md"));
     assert!(
         files
             .iter()
