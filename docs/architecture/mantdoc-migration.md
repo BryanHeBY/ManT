@@ -894,6 +894,22 @@ Exit gate: all four completion gates in section 1 are closed from a clean clone;
 current parser; packaged artifacts contain no mandoc C object or obsolete
 license payload.
 
+#### Historical C oracle custody
+
+Before physical removal, the patched C wrapper was extracted to the independent
+[`BryanHeBY/libmandoc-rs`](https://github.com/BryanHeBY/libmandoc-rs) repository.
+Its standalone history is rooted at subtree commit `77d14c583b9bb149bfa9ee8e04216b3d053cc302`
+from ManT implementation baseline `31ea8bfff55492aae52950c295563e00c9c83751`;
+standalone bootstrap commit `21d0f47` materializes the workspace metadata,
+locked dependencies, vendor-maintenance inputs, and native symbol audit. The
+repository's `main` and `dev` branches run its own Linux/MSRV, macOS, and
+Windows CI.
+
+This repository preserves the historical 1.14.6-plus-patches oracle and its
+license obligations; it is not a fallback backend or dependency of ManT. M11
+physical cleanup may therefore delete the in-tree copy only after the native
+snapshots and M10 evidence remain reproducible without it.
+
 ## 13. CI evolution
 
 Add checks incrementally so incomplete milestones do not weaken existing gates:
