@@ -100,6 +100,16 @@ fn same_line_conditional_control_keeps_its_authored_control_column() {
         report.document.source_position(request.location().unwrap()),
         Some(crate::SourcePosition { line: 3, column: 7 })
     );
+    let argument = request.children().next().unwrap();
+    assert_eq!(
+        report
+            .document
+            .source_position(argument.location().unwrap()),
+        Some(crate::SourcePosition {
+            line: 3,
+            column: 11
+        })
+    );
 }
 
 #[test]

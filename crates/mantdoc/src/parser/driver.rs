@@ -830,6 +830,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                 SourceEvent::Control(ControlEvent {
                     start,
                     control_start,
+                    macro_start,
                     mut end,
                     name,
                     request: raw_request,
@@ -2179,43 +2180,36 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             // authored body offset, but a copy-mode macro
                             // body must not expose that offset as its public
                             // AST location.
-                            let generated_start = split_macro_control(
+                            let reentered_user_macro = split_macro_control(
                                 &body,
                                 scanner.control_character(),
                                 scanner.escape_character(),
                             )
-                            .filter(|(request, _)| {
+                            .is_some_and(|(request, _)| {
                                 !is_builtin_package_macro(builder.macro_set(), request)
                                     && environment.macro_definition(request).is_some()
-                            })
-                            .map_or_else(
-                                || {
-                                    // `SourceEvent::from_generated()` derives a
-                                    // control request's public cursor one byte
-                                    // after its event start.  Inline condition
-                                    // bodies are anchored at the control byte,
-                                    // so compensate only for a re-entered
-                                    // request; ordinary text keeps its exact
-                                    // body origin.
-                                    if body.first().is_some_and(|byte| {
-                                        *byte == scanner.control_character()
-                                            || *byte == scanner.no_break_control_character()
-                                    }) {
-                                        body_source_start.saturating_sub(1)
+                            });
+                            let macro_start = (!reentered_user_macro
+                                && body.first().is_some_and(|byte| {
+                                    *byte == scanner.control_character()
+                                        || *byte == scanner.no_break_control_character()
+                                }))
+                            .then_some(body_source_start);
+                            pending_events.push(DriverWork::Event(
+                                SourceEvent::from_generated_with_macro_start(
+                                    body,
+                                    if reentered_user_macro {
+                                        start
                                     } else {
                                         body_source_start
-                                    }
-                                },
-                                |_| start,
-                            );
-                            pending_events.push(DriverWork::Event(SourceEvent::from_generated(
-                                body,
-                                generated_start,
-                                end,
-                                builder.macro_set(),
-                                &mut scanner,
-                                raw_condition_arguments.contains(&b'\t'),
-                            )));
+                                    },
+                                    end,
+                                    builder.macro_set(),
+                                    &mut scanner,
+                                    raw_condition_arguments.contains(&b'\t'),
+                                    macro_start,
+                                ),
+                            ));
                             continue;
                         }
                         continue;
@@ -4638,6 +4632,12 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     if !builder.macro_name(element, visible_bytes(dispatched_package_macro)) {
                         truncated = true;
                         continue;
+                    }
+                    if let Some(macro_start) = macro_start
+                        && let Ok(span) = SourceSpan::new(source_id, macro_start, macro_start)
+                        && let Some(position) = builder.source_position(&span)
+                    {
+                        let _ = builder.set_node_logical_start(element, position);
                     }
                     maximum_depth = maximum_depth.max(2);
                     let character_request =

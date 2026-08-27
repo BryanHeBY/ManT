@@ -71,6 +71,7 @@ impl<'source> SourceEvent<'source> {
                 Self::Control(ControlEvent {
                     start,
                     control_start,
+                    macro_start: None,
                     end,
                     name: Cow::Borrowed(name),
                     request: RequestKind::classify(name),
@@ -96,6 +97,33 @@ impl<'source> SourceEvent<'source> {
         macro_set: MacroSet,
         scanner: &mut Scanner<'source>,
         suppress_filled_text_tabs: bool,
+    ) -> Self {
+        Self::from_generated_with_macro_start(
+            bytes,
+            start,
+            end,
+            macro_set,
+            scanner,
+            suppress_filled_text_tabs,
+            None,
+        )
+    }
+
+    /// Reclassify generated input while preserving an explicitly published
+    /// macro location.
+    ///
+    /// The scanner cursor for a control line begins at its request name, but
+    /// mandoc publishes a same-line conditional body macro at its introducing
+    /// control byte.  Keep those two coordinates independent: arguments must
+    /// still be measured from the request-name cursor.
+    pub(super) fn from_generated_with_macro_start(
+        bytes: Vec<u8>,
+        start: u32,
+        end: u32,
+        macro_set: MacroSet,
+        scanner: &mut Scanner<'source>,
+        suppress_filled_text_tabs: bool,
+        macro_start: Option<u32>,
     ) -> Self {
         let Some(introducer) = bytes.first().copied() else {
             return Self::Text {
@@ -169,6 +197,7 @@ impl<'source> SourceEvent<'source> {
         Self::Control(ControlEvent {
             start,
             control_start,
+            macro_start,
             end,
             name: Cow::Owned(name),
             request,
@@ -192,6 +221,9 @@ fn trim_horizontal_space(bytes: &[u8]) -> &[u8] {
 pub(super) struct ControlEvent<'source> {
     pub(super) start: u32,
     pub(super) control_start: u32,
+    /// Optional logical location for the public macro node.  This does not
+    /// alter the request-name cursor used by argument parsing or diagnostics.
+    pub(super) macro_start: Option<u32>,
     pub(super) end: u32,
     pub(super) name: Cow<'source, [u8]>,
     pub(super) request: RequestKind,
