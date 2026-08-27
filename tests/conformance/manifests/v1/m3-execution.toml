@@ -1,0 +1,273 @@
+# Native M3 execution gate for the checksum-pinned mandoc 1.14.6 archive.
+#
+# This is intentionally a narrow execution-stage contract.  It locks the
+# source identity, raw-roff bounded report shape, work count, truncation state,
+# and stable diagnostics for the roff requests implemented in M3.  It is not an
+# AST, renderer, or legacy-oracle parity assertion; those comparisons begin in
+# M7 after the common adapter has been frozen.
+schema = "mantdoc.m3-execution/v1"
+corpus_id = "mandoc-stable-1.14.6"
+oracle_id = "libmandoc-rs-0.9.1-863d2b3"
+
+[[case]]
+id = "regress/roff/while/basic"
+source_sha256 = "d813c3525d97160e55c941ef1c5a188b1da47c213201d1c142d1c7c922c93469"
+ast_nodes = 63
+expansion_steps = 124
+truncated = false
+
+[[case]]
+id = "regress/roff/return/basic"
+source_sha256 = "e6b93751acbbacc8a40a819fa0343ec9f162bc188cf4cc56f8bde4334522d14c"
+ast_nodes = 30
+expansion_steps = 5
+truncated = false
+diagnostics = [
+  { code = "roff.return-outside-macro", start = 205, end = 211 },
+  { code = "roff.macro-argument-outside", start = 341, end = 344 },
+  { code = "roff.return-outside-macro", start = 371, end = 377 },
+]
+
+[[case]]
+id = "regress/roff/shift/basic"
+source_sha256 = "11ea50829ab4ff70663840d3719104a9fec920d056e2f68c11cd128b374560d4"
+ast_nodes = 45
+expansion_steps = 12
+truncated = false
+
+[[case]]
+id = "regress/roff/while/break"
+source_sha256 = "2a17f42ffdd9238208dc31ca23dda11fa18c93b103c292598972043230469ebf"
+ast_nodes = 48
+expansion_steps = 43
+truncated = false
+
+[[case]]
+id = "regress/roff/while/nesting"
+source_sha256 = "e45b1ea0273beccff0cfac21d0bdb3f4e677c8ca6052f1506f1cff690f24b411"
+# Later mdoc structural normalisation removes three implementation-only raw
+# nodes while retaining this case's expansion count, diagnostics, and public
+# canonical AST/IR result.
+ast_nodes = 27
+expansion_steps = 15
+truncated = false
+diagnostics = [
+  { code = "roff.while-nested", start = 241, end = 259 },
+  { code = "roff.while-cannot-continue", start = 315, end = 315 },
+]
+
+[[case]]
+id = "regress/roff/while/into"
+source_sha256 = "3383bda5a07eeb00a4447ddaf309b76c47f5e9976e4df1ff4f0ce00a986b494a"
+ast_nodes = 29
+expansion_steps = 4
+truncated = false
+diagnostics = [
+  { code = "roff.while-inner-scope", start = 284, end = 284 },
+  { code = "roff.while-out-of-scope", start = 307, end = 317 },
+]
+
+[[case]]
+id = "regress/roff/while/outof"
+source_sha256 = "4e571748a073b6338227c10a1728a97473fb78721dd52202be3f68f0af42981a"
+# See `while/nesting`: this post-M3 structural normalisation removes an
+# implementation-only node while preserving the execution contract below.
+ast_nodes = 28
+expansion_steps = 4
+truncated = false
+diagnostics = [
+  { code = "roff.while-out-of-scope", start = 272, end = 276 },
+  { code = "roff.while-cannot-continue", start = 293, end = 293 },
+]
+
+[[case]]
+id = "regress/roff/nr/argc"
+source_sha256 = "dfa8a189e68031b7e17c513fc99b8ec6ccd2d72fe45854855a965d6c9168d5fc"
+ast_nodes = 36
+expansion_steps = 5
+truncated = false
+
+[[case]]
+id = "regress/roff/nr/divzero"
+source_sha256 = "59d45d8ff8e01b26e4c212aff5acdac6804fb94c6ffb9531daf9c950a085c2ff"
+ast_nodes = 13
+expansion_steps = 3
+truncated = false
+diagnostics = [
+  { code = "roff.division-by-zero", start = 199, end = 200 },
+  { code = "roff.division-by-zero", start = 217, end = 218 },
+]
+
+[[case]]
+id = "regress/roff/nr/eval"
+source_sha256 = "c995f9daa084472cd76bbf2997dc3f0363888c00bb7aaa7f3e7ef22017cff340"
+ast_nodes = 53
+expansion_steps = 22
+truncated = false
+
+[[case]]
+id = "regress/roff/nr/incr"
+source_sha256 = "bb4322028f574af57216d04de90edfd47bd17e27fab5bcc6a99582766478fe51"
+ast_nodes = 38
+expansion_steps = 18
+truncated = false
+
+[[case]]
+id = "regress/roff/nr/rr"
+source_sha256 = "89513351ff59517b9e2c4a991b6a16b125b242aff4a468e0a8175da6d6fb771a"
+ast_nodes = 14
+expansion_steps = 6
+truncated = false
+
+[[case]]
+id = "regress/roff/nr/scale"
+source_sha256 = "3d86554f90a16b7b6931a4b508949d0b044afb85da868c99ee64a58bcd91bc7f"
+ast_nodes = 22
+expansion_steps = 12
+truncated = false
+
+[[case]]
+id = "regress/roff/nr/undef"
+source_sha256 = "31bec4240cd7da5e52c19be75a3dd6b770eb840bd17a9f55d608fc3cf21b6909"
+ast_nodes = 24
+expansion_steps = 3
+truncated = false
+
+[[case]]
+id = "regress/roff/cond/if"
+source_sha256 = "1dc93960870a797081329ae901119930de5eee2110a1644acb63b10419b1c33c"
+ast_nodes = 64
+# The unified conditional dispatcher does not charge an extra macro-replay
+# step for direct package controls. Public nodes and diagnostics are unchanged.
+expansion_steps = 4
+truncated = false
+diagnostics = [
+  { code = "roff.condition", start = 332, end = 334 },
+  { code = "roff.condition", start = 371, end = 373 },
+]
+
+[[case]]
+id = "regress/roff/cond/ie"
+source_sha256 = "c54f254a787bcdc7d47611c9d311be53d3f51779ee86ae2582195f38f5fbe9f7"
+ast_nodes = 29
+expansion_steps = 3
+truncated = false
+
+[[case]]
+id = "regress/roff/cond/numeric"
+source_sha256 = "abbc5737fbc21517c010fbe6588b0d82a07adfdf5a6cd6a64cb044a956c92a6a"
+ast_nodes = 117
+expansion_steps = 1
+truncated = false
+
+[[case]]
+id = "regress/roff/cond/register"
+source_sha256 = "c134accaa05d50b934b0e23f5f1d1d3e5787d80cc0a8de085057e2aceeda73f7"
+ast_nodes = 20
+expansion_steps = 2
+truncated = false
+diagnostics = [
+  { code = "roff.escaped-name", start = 398, end = 399 },
+  { code = "input.tab-in-filled-text", start = 328, end = 329 },
+]
+
+[[case]]
+id = "regress/roff/cond/string"
+source_sha256 = "5e8fcb8388936512efae34ee56f710fc53cf1162048265110b07a89c86c4f918"
+ast_nodes = 32
+expansion_steps = 2
+truncated = false
+diagnostics = [
+  { code = "roff.escaped-name", start = 707, end = 708 },
+  { code = "input.tab-in-filled-text", start = 636, end = 637 },
+]
+
+[[case]]
+id = "regress/roff/cond/strcmp"
+source_sha256 = "9a28edc49efce5d9a4617ee8556c2565217573d17e6e525ade5b99ca8f4c66ae"
+ast_nodes = 35
+expansion_steps = 1
+truncated = false
+
+[[case]]
+id = "regress/roff/cond/close"
+source_sha256 = "78aba7a7a3a1504d744ee31f00ac2e8efddb59d06de2dcca2268bf157ebef584"
+ast_nodes = 60
+# Same-line braced bodies retain their structural `\&` normalization work;
+# direct package controls still do not count as macro replays.
+expansion_steps = 6
+truncated = true
+diagnostics = [{ code = "roff.unterminated-scope", start = 1223, end = 1230 }]
+
+[[case]]
+id = "regress/roff/de/factorial"
+source_sha256 = "214c0212ae84797ae778727802ec49a90c8f2cbb73d49acb75b6a3bb4ffdaca5"
+ast_nodes = 199
+expansion_steps = 350
+truncated = false
+
+[[case]]
+id = "regress/roff/de/indir"
+source_sha256 = "c7502c1ba99fc9295bc79a10cbcb2e8bca9edb40e948cb389cd04d248b242606"
+ast_nodes = 33
+expansion_steps = 2
+truncated = false
+diagnostics = [
+  { code = "roff.undefined-reference", start = 311, end = 315 },
+  { code = "roff.undefined-reference", start = 387, end = 391 },
+  { code = "roff.empty-request", start = 383, end = 385 },
+  { code = "roff.empty-request", start = 426, end = 428 },
+]
+
+[[case]]
+id = "regress/roff/de/startde"
+source_sha256 = "59ae972ecc8399d6e8492cec2ede43c2af9bf3f024b3f0f33b94571a1e7618fc"
+ast_nodes = 39
+expansion_steps = 2
+truncated = false
+
+[[case]]
+id = "regress/roff/de/tab"
+source_sha256 = "97a9fc01301c7b334d45068101ca5ee405251ba86b144f559a2a826ac10e6a8b"
+ast_nodes = 53
+expansion_steps = 24
+truncated = false
+diagnostics = [
+  { code = "roff.all-arguments", start = 489, end = 507 },
+  { code = "roff.unknown-macro", start = 643, end = 648 },
+  { code = "input.tab-in-filled-text", start = 392, end = 393 },
+  { code = "input.tab-in-filled-text", start = 449, end = 450 },
+]
+
+[[case]]
+id = "regress/roff/ds/append"
+source_sha256 = "2dffc80f9266818e83467b40fe76dd8af19a26e0a22a6fb5309e23ff341ab711"
+ast_nodes = 30
+expansion_steps = 3
+truncated = false
+
+[[case]]
+id = "regress/roff/ds/nested"
+source_sha256 = "d9be785b8efe0e4ddaa0320f864d448a2539effc9d30205a26811ec2b8023456"
+ast_nodes = 26
+expansion_steps = 6
+truncated = false
+
+[[case]]
+id = "regress/roff/ds/quoting"
+source_sha256 = "20609923bf603b321eafaf55f36fb7724551e26ec58e1a537b7ca122eedf65ff"
+ast_nodes = 43
+expansion_steps = 8
+truncated = false
+
+[[case]]
+id = "regress/roff/ig/basic"
+source_sha256 = "8b4490622c320e374a861cca6fbaf277a3ee63a45b633cc170704146e4a1c426"
+ast_nodes = 29
+expansion_steps = 0
+truncated = false
+diagnostics = [
+  { code = "roff.excess-arguments", start = 277, end = 281 },
+  { code = "roff.unmatched-end", start = 346, end = 347 },
+  { code = "roff.unclosed-ignore-block", start = 405, end = 407 },
+]

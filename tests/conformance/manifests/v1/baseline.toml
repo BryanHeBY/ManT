@@ -1,0 +1,134 @@
+schema = "mantdoc.baseline/v1"
+oracle_id = "libmandoc-rs-0.9.1-863d2b3"
+captured_at = "2026-08-24T21:52:03+08:00"
+
+[environment]
+workspace_commit = "863d2b3867dfb38b7b4db265073a3d4b9b1a10e9"
+host = "x86_64-unknown-linux-gnu"
+os = "Linux 6.18.33.2-microsoft-standard-WSL2 x86_64 GNU/Linux"
+rustc = "rustc 1.98.0 (88d9e12ae 2026-08-18) LLVM 22.1.8"
+cargo = "cargo 1.98.0 (797e8a9bc 2026-08-05)"
+profile = "bench"
+notes = "First generated AST-transfer baseline. It is comparative evidence, not a portable CI threshold."
+
+[[verification]]
+command = "bash crates/libmandoc-rs/scripts/sync-vendor --verify"
+result = "passed; cached upstream tarball checksum verified and all 28 patches reproduced vendor tree"
+
+[[verification]]
+command = "cargo test --locked --package libmandoc-rs --all-features"
+result = "passed: 75 unit, 2 locale integration, 15 renderer integration, 9 .so integration, 3 doctests; 4 TSAN-only stress tests ignored"
+
+[[verification]]
+command = "cargo bench --locked --package libmandoc-rs --bench ast_transfer"
+result = "passed; results below"
+
+[[generated_case]]
+id = "generated/small"
+paragraphs = 100
+iterations = 1000
+input_bytes = 6246
+nodes = 406
+estimated_owned_ast_bytes = 262283
+ns_per_parse = 243875
+
+[[generated_case]]
+id = "generated/medium"
+paragraphs = 1000
+iterations = 100
+input_bytes = 62946
+nodes = 4006
+estimated_owned_ast_bytes = 2521995
+ns_per_parse = 1863145
+
+[[generated_case]]
+id = "generated/large"
+paragraphs = 10000
+iterations = 10
+input_bytes = 638946
+nodes = 40006
+estimated_owned_ast_bytes = 26868915
+ns_per_parse = 22486937
+
+[legacy_limits]
+rust_managed_compressed_decode_bytes = 16777216
+source_bundle_files = 4096
+source_bundle_file_bytes = 16777216
+source_bundle_total_bytes = 67108864
+owned_ast_copy_depth = 256
+equation_copy_depth = 256
+roff_line_expansion_steps = 1000
+roff_reparse_steps = 1000
+roff_while_iterations_per_loop = 10000
+roff_while_iterations_aggregate = 10000
+mdoc_macro_recursion = 64
+renderer_default_output_bytes = 8388608
+renderer_max_output_bytes = 67108864
+renderer_default_width = 78
+renderer_min_width = 20
+renderer_max_width = 1000
+engine_manual_bytes = 16777216
+engine_so_redirects = 16
+engine_inline_equation_normalizations = 256
+fuzz_input_bytes = 65536
+fuzz_timeout_seconds = 10
+fuzz_rss_mebibytes = 2048
+
+[legacy_limit_caveat]
+parse_bytes_plain_input = "libmandoc-rs itself has no outer plain-byte limit; caller/product must bound it"
+unix_native_gzip = "uses libmandoc native transport and is outside Rust 16 MiB decoder cap"
+mantdoc_direction = "M1 exposes one Limits configuration; M0 compatibility tests retain every listed observable bound before any deliberate revision"
+
+[mantdoc_m1_limits]
+max_source_lines = 16777216
+rationale = "independent source-map allocation bound; one u32 line-start entry per physical line, applied before Document construction"
+
+[[storage_microbenchmark]]
+id = "m1/arena-vs-recursive-flat-50000"
+command = "cargo test --offline --release --package mantdoc arena_layout_microbenchmark -- --ignored --nocapture"
+topology = "synthetic root with 50,000 element children; same NodeRecord payload; completed documents only"
+rounds = 100
+arena_bytes = 9400184
+recursive_bytes = 10400208
+arena_ns_per_preorder = 150987
+recursive_ns_per_preorder = 168364
+decision = "retain immutable arena plus compact NodeId child edges; shrink builder capacity before returning Document"
+notes = "single-host M1 design evidence, not a portable release threshold"
+
+[[native_parse_benchmark]]
+id = "m10/native-parse-generated-transfer"
+captured_at = "2026-08-27T00:00:00+08:00"
+command = "cargo bench --locked --package mantdoc --bench parse"
+profile = "bench"
+input_generator = "the same generated manuals as `libmandoc-rs` `ast_transfer`"
+notes = "single-host release-candidate evidence, not a portable CI threshold. Native and legacy node counts differ slightly because their public storage topologies are intentionally different; compare this primarily as whole-parser throughput on identical bytes."
+
+[[native_parse_benchmark.case]]
+id = "generated/small"
+input_bytes = 6246
+nodes = 409
+iterations = 1000
+ns_per_parse = 146561
+
+[[native_parse_benchmark.case]]
+id = "generated/medium"
+input_bytes = 62946
+nodes = 4009
+iterations = 100
+ns_per_parse = 1348200
+
+[[native_parse_benchmark.case]]
+id = "generated/large"
+input_bytes = 638946
+nodes = 40009
+iterations = 10
+ns_per_parse = 18147644
+
+[native_canonical_snapshot]
+schema = "mantdoc.native-canonical-snapshot/v1"
+path = "tests/conformance/baselines/v1/mandoc-1.14.6-native-canonical.sha256"
+command = "cargo run --locked --package mantdoc-conformance --bin mantdoc-canonical-snapshot -- /tmp/mandoc-1.14.6.tar.gz --verify tests/conformance/baselines/v1/mandoc-1.14.6-native-canonical.sha256"
+case_count = 572
+records_sha256 = "15903096bff085a01e2f371dab28df84542a37e24c2d7187b45daff1cd51d30b"
+file_sha256 = "6d345fd2f89642d48bc3186528c766a7ce337d0786b2c8b1685b66da6c2c5e11"
+notes = "Generated only after the complete C-backed L2 differential was 572/572 exact. It is the post-removal native parser regression oracle, not a copy of upstream source or legacy C output."

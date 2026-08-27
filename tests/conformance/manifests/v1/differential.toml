@@ -1,0 +1,64 @@
+schema = "mantdoc.differential/v1"
+oracle_id = "libmandoc-rs-0.9.1-863d2b3"
+output_encoding = "UTF-8 JSON Lines; one canonical record per case and layer"
+
+[case_identity]
+required = ["corpus_id", "case_id", "logical_root", "decompressed_source_sha256", "parser_config_fingerprint", "oracle_id"]
+include_source_graph_hash_when = ["bundle", "resolver", "include"]
+
+[ast]
+schema = "mantdoc.canonical-ast/v1"
+traversal = "preorder"
+stable_node_identity = "sibling-index path from synthetic root"
+include = [
+  "document.macro_set",
+  "document.metadata",
+  "node.path",
+  "node.kind",
+  "node.macro_name",
+  "node.text",
+  "node.tag",
+  "node.location.line_column",
+  "node.flags",
+  "node.list_kind",
+  "node.display_kind",
+  "node.font",
+  "node.author_mode",
+  "node.enclosure",
+  "node.compact",
+  "node.offset",
+  "node.width",
+  "node.table_cells",
+  "node.equation",
+  "node.child_count"
+]
+exclude = ["arena_id", "string_table_id", "allocation_order", "legacy_c_pointer", "internal_origin_chain_unavailable_from_oracle"]
+normalization = ["null-is-distinct-from-empty-string", "legacy_line_or_column_zero-means-unavailable", "public-text-tag-equation-sentinels-already-normalized"]
+
+[diagnostics]
+schema = "mantdoc.canonical-diagnostic/v1"
+include = ["ordinal", "severity", "location", "legacy_code", "native_code"]
+legacy_code_source = "libmandoc-rs Diagnostic::code(); never infer from legacy Serde"
+strict_legacy_codes = ["SyntaxTreeDepthLimit", "EquationTreeDepthLimit"]
+message_matching = "raw message in non-gating sidecar only; compare no prose by default"
+legacy_null_code = "compare ordinal, severity, location, and count; new native code is recorded but does not fabricate oracle parity"
+
+[ir]
+schema = "mantdoc.canonical-ir/v1"
+provenance = "separate object; differences require explicit approval"
+semantic_include = ["source_format", "metadata", "root_blocks", "sections", "block_and_inline_topology", "stable_ids_after_normalization", "lists", "definitions", "tables", "equations", "layout_hints", "links", "tags", "navigation", "diagnostics"]
+same_input_requirement = "legacy and mantdoc lowering receive identical raw bytes and source-aware text"
+
+[renderer]
+schema = "mantdoc.canonical-render/v1"
+formats = ["ascii", "utf8", "html"]
+strict_when = "upstream golden is documented stable and environment-independent"
+semantic_when = "normalize only documented wrapping, margin, header/footer, and device typography differences"
+
+[accepted_difference]
+schema = "mantdoc.accepted-difference/v1"
+path = "tests/conformance/accepted-differences/v1.jsonl"
+required = ["id", "status", "layer", "classification", "oracle_id", "corpus_id", "case_id", "decompressed_source_sha256", "parser_config_fingerprint", "canonical_json_pointer", "reason", "evidence", "reviewed_at"]
+allowed_classifications = ["mantdoc-bug", "oracle-patch-delta", "upstream-head-correction", "intentional-semantic-fix", "diagnostic-only", "malformed-recovery-difference", "not-yet-implemented"]
+forbidden = ["macro-wide-ignore", "path-glob-ignore", "unhashed-source", "unreviewed-golden-rewrite"]
+not_yet_implemented_policy = "requires owner and expiry milestone; prohibited at final cutover"
