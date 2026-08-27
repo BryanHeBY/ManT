@@ -181,18 +181,40 @@ fn coalesce_pending_definition_terms(
             pending.push(item);
             continue;
         }
-        if !pending.is_empty() {
+        if pending
+            .first()
+            .and_then(primary_option_name)
+            .is_some_and(|name| {
+                primary_option_name(&item).is_some_and(|candidate| candidate == name)
+                    && pending.iter().all(|pending| {
+                        primary_option_name(pending).as_deref() == Some(name.as_str())
+                    })
+            })
+        {
             let pending_terms = pending
                 .drain(..)
                 .flat_map(|pending: DefinitionItem| pending.terms);
             item.terms.splice(0..0, pending_terms);
             item.inline_term = terms_fit_inline(&item.terms, max_term_width);
+        } else {
+            output.append(&mut pending);
         }
         output.push(item);
     }
 
     output.extend(pending);
     output
+}
+
+fn primary_option_name(item: &DefinitionItem) -> Option<String> {
+    item.terms.iter().find_map(|term| {
+        let text = plain_text(term);
+        let token = text.split_whitespace().next()?;
+        let name =
+            token.trim_matches(|character: char| matches!(character, '[' | ']' | '(' | ')' | ','));
+        (name.starts_with('-') && name != "-")
+            .then(|| name.split(['=', '[']).next().unwrap_or(name).to_owned())
+    })
 }
 
 #[derive(Clone, Copy)]
