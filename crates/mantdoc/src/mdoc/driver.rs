@@ -56,6 +56,71 @@ use super::{
     validate_tag, visible_head_text,
 };
 
+struct MdocStructureEvent {
+    flat_index: usize,
+    node: NodeId,
+    suppressed: bool,
+    blank_line_recovery: Option<Recovery>,
+}
+
+struct MdocStructureMachine {
+    nodes: std::iter::Enumerate<std::vec::IntoIter<NodeId>>,
+    synopsis_events: std::iter::Peekable<std::vec::IntoIter<(usize, bool)>>,
+    suppressed_nodes: BTreeSet<NodeId>,
+    blank_line_recoveries: BTreeMap<NodeId, Recovery>,
+}
+
+impl MdocStructureMachine {
+    fn prepare(builder: &mut DocumentBuilder, flat: Vec<NodeId>) -> Self {
+        let synopsis_events = builder.take_mdoc_synopsis_events().into_iter().peekable();
+        // Ordinary source text is tokenized before this package pass. Only
+        // direct flat text events receive the generic sentence fallback;
+        // macro arguments keep their macro-specific punctuation semantics.
+        for node in &flat {
+            if builder.node_kind(*node) == Some(NodeKind::Text) {
+                mark_sentence_end(builder, *node);
+            }
+        }
+        apply_presentation_flags(builder, &flat);
+        trim_mdoc_filled_text_trailing_whitespace(builder, &flat);
+        for node in &flat {
+            let macro_name = builder.node_macro_name(*node);
+            if matches!(macro_name, Some("Fd" | "Fl" | "Sy" | "Ar" | "Em" | "Sq")) {
+                rebase_expanded_argument_locations(builder, *node);
+            }
+        }
+        let suppressed = suppress_filled_c_blank_lines(builder, &flat);
+        let blank_line_recoveries = normalize_filled_blank_lines(builder, &flat, &suppressed);
+        Self {
+            nodes: flat.into_iter().enumerate(),
+            synopsis_events,
+            suppressed_nodes: BTreeSet::from_iter(suppressed),
+            blank_line_recoveries,
+        }
+    }
+
+    fn step(&mut self) -> Option<MdocStructureEvent> {
+        let (flat_index, node) = self.nodes.next()?;
+        Some(MdocStructureEvent {
+            flat_index,
+            node,
+            suppressed: self.suppressed_nodes.contains(&node),
+            blank_line_recovery: self.blank_line_recoveries.remove(&node),
+        })
+    }
+
+    fn next_synopsis_transition(&mut self, flat_index: usize) -> Option<bool> {
+        let (boundary, _) = self.synopsis_events.peek()?;
+        (*boundary <= flat_index)
+            .then(|| self.synopsis_events.next().map(|(_, state)| state))
+            .flatten()
+    }
+
+    fn finish(self) {
+        debug_assert!(self.nodes.len() == 0, "mdoc event machine finished early");
+    }
+}
+
 /// Restructure the initial M5 mdoc macro families in a bounded arena.
 #[allow(clippy::too_many_lines)] // One source-order state machine keeps scope ownership auditable.
 pub(crate) fn structure(
@@ -71,29 +136,7 @@ pub(crate) fn structure(
     let Some(flat) = builder.children(root).map(<[NodeId]>::to_vec) else {
         return outcome;
     };
-    let synopsis_events = builder.take_mdoc_synopsis_events();
-    let mut synopsis_event_cursor = 0_usize;
-
-    // mdoc's ordinary source text is tokenized before the package pass, so a
-    // terminal sentence marker belongs only to direct flat text events here.
-    // Do not apply this fallback to macro arguments: their post-validation
-    // punctuation semantics are macro-specific.
-    for node in &flat {
-        if builder.node_kind(*node) == Some(NodeKind::Text) {
-            mark_sentence_end(builder, *node);
-        }
-    }
-    apply_presentation_flags(builder, &flat);
-    trim_mdoc_filled_text_trailing_whitespace(builder, &flat);
-    for node in &flat {
-        let macro_name = builder.node_macro_name(*node);
-        if matches!(macro_name, Some("Fd" | "Fl" | "Sy" | "Ar" | "Em" | "Sq")) {
-            rebase_expanded_argument_locations(builder, *node);
-        }
-    }
-    let c_blank_followers = suppress_filled_c_blank_lines(builder, &flat);
-    let mut filled_blank_line_recoveries =
-        normalize_filled_blank_lines(builder, &flat, &c_blank_followers);
+    let mut machine = MdocStructureMachine::prepare(builder, flat);
 
     let mut root_children = Vec::new();
     let mut section_parent = root;
@@ -209,31 +252,34 @@ pub(crate) fn structure(
     let mut netbsd_operating_system_validation = false;
     let mut saw_netbsd_rcs_id = false;
 
-    for (flat_index, node) in flat.into_iter().enumerate() {
-        while let Some((boundary, state)) = synopsis_events.get(synopsis_event_cursor)
-            && *boundary <= flat_index
-        {
-            synopsis_event_cursor += 1;
-            if in_synopsis == *state {
+    while let Some(event) = machine.step() {
+        let MdocStructureEvent {
+            flat_index,
+            node,
+            suppressed,
+            blank_line_recovery,
+        } = event;
+        while let Some(state) = machine.next_synopsis_transition(flat_index) {
+            if in_synopsis == state {
                 continue;
             }
             // A disabled `nS` finishes a surrounding synopsis-name flow, but
             // must not tear down an explicit partial enclosure that remains
             // open across the state request.  Its later closer still owns
             // the resumed non-synopsis text.
-            if !*state && scopes.is_empty() {
+            if !state && scopes.is_empty() {
                 active_body = section_parent;
                 flow_parent = section_parent;
             }
             synopsis_name_body = None;
             synopsis_keep_boundary = false;
-            in_synopsis = *state;
-            synopsis_from_register = *state;
+            in_synopsis = state;
+            synopsis_from_register = state;
         }
-        if c_blank_followers.contains(&node) {
+        if suppressed {
             continue;
         }
-        if let Some(recovery) = filled_blank_line_recoveries.remove(&node) {
+        if let Some(recovery) = blank_line_recovery {
             outcome.recoveries.push(recovery);
         }
         if builder.node_kind(node) == Some(NodeKind::Comment) {
@@ -4031,6 +4077,7 @@ pub(crate) fn structure(
             }
         }
     }
+    machine.finish();
 
     if let Some((tag_node, tag)) = pending_manual_tag.take()
         && tag.is_empty()
