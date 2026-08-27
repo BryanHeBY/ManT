@@ -789,7 +789,7 @@ fn environment_names_from_terms(terms: &[Vec<Inline>]) -> Vec<String> {
 /// Context remains responsible for deciding that a definition actually
 /// describes environment variables; this parser is never run over prose.
 pub(crate) fn environment_variable_alias(value: &str) -> Option<String> {
-    let token = value.trim().split_whitespace().next()?;
+    let token = value.split_whitespace().next()?;
     let spelling = token.split_once('=').map_or(token, |(name, _)| name);
     let body = environment_variable_body(spelling)?;
     is_environment_variable_body(body).then(|| spelling.to_owned())
