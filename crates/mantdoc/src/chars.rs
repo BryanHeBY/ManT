@@ -11,9 +11,10 @@ pub enum SpecialCharacter {
 
 /// Resolve a roff named special character without its escape delimiters.
 ///
-/// The catalog is copied from mandoc 1.14.6 `chars.c`, the pinned legacy
-/// oracle for this migration. Unknown names return `None`; known zero-width
-/// controls remain distinct from unknown names.
+/// The catalog is derived from mandoc 1.14.6 `chars.c` and is distributed
+/// under its ISC notice; see this package's `THIRD_PARTY_NOTICES.md` and
+/// `LICENSES/mandoc-chars-1.14.6.txt`. Unknown names return `None`; known
+/// zero-width controls remain distinct from unknown names.
 #[must_use]
 pub fn special_character(name: &str) -> Option<SpecialCharacter> {
     lookup(name)

@@ -71,6 +71,9 @@ install -m 0644 \
   LICENSES/CC-BY-4.0.txt \
   "$package/LICENSES/CC-BY-4.0.txt"
 install -m 0644 \
+  LICENSES/mandoc-chars-1.14.6.txt \
+  "$package/LICENSES/mandoc-chars-1.14.6.txt"
+install -m 0644 \
   THIRD_PARTY_NOTICES.md \
   "$package/LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md"
 install -m 0644 \

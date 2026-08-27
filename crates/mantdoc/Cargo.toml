@@ -3,7 +3,9 @@ name = "mantdoc"
 version = "0.1.0-alpha.1"
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
+# The package combines Apache-2.0 Rust code with the ISC-licensed mandoc
+# special-character catalog documented in THIRD_PARTY_NOTICES.md.
+license = "Apache-2.0 AND ISC"
 publish.workspace = true
 description = "Native Rust parser for roff, man, mdoc, tbl, and eqn sources"
 repository.workspace = true
@@ -11,7 +13,15 @@ homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "mdoc", "roff", "parser", "mandoc"]
 categories = ["parser-implementations", "text-processing"]
-include = ["/Cargo.toml", "/LICENSE", "/README.md", "/benches/**", "/src/**"]
+include = [
+  "/Cargo.toml",
+  "/LICENSE",
+  "/LICENSES/**",
+  "/README.md",
+  "/THIRD_PARTY_NOTICES.md",
+  "/benches/**",
+  "/src/**",
+]
 
 [package.metadata.docs.rs]
 all-features = true

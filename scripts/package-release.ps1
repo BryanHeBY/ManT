@@ -72,6 +72,9 @@ Copy-Item `
     (Join-Path $Root "LICENSES/CC-BY-4.0.txt") `
     (Join-Path $Package "LICENSES/CC-BY-4.0.txt")
 Copy-Item `
+    (Join-Path $Root "LICENSES/mandoc-chars-1.14.6.txt") `
+    (Join-Path $Package "LICENSES/mandoc-chars-1.14.6.txt")
+Copy-Item `
     (Join-Path $Root "THIRD_PARTY_NOTICES.md") `
     (Join-Path $Package "LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md")
 Copy-Item `

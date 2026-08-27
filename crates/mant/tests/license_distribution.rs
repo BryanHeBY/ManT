@@ -84,6 +84,16 @@ fn mantdoc_package_excludes_c_oracle_sources() {
     let files = package_files("mantdoc");
     assert!(files.iter().any(|path| path == "src/lib.rs"));
     assert!(files.iter().any(|path| path == "benches/parse.rs"));
+    assert!(
+        files
+            .iter()
+            .any(|path| path == "THIRD_PARTY_NOTICES.md")
+    );
+    assert!(
+        files
+            .iter()
+            .any(|path| path == "LICENSES/mandoc-chars-1.14.6.txt")
+    );
     assert!(files.iter().all(|path| {
         !path.contains("vendor/")
             && !path.contains("shim/")
@@ -100,6 +110,7 @@ fn native_archives_copy_rust_and_product_notices_without_c_parser_notices() {
     assert!(unix.contains("LICENSES/RUST_DEPENDENCIES.html"));
     assert!(!unix.contains("crates/libmandoc-rs/"));
     assert!(unix.contains("LICENSES/CC-BY-4.0.txt"));
+    assert!(unix.contains("LICENSES/mandoc-chars-1.14.6.txt"));
     assert!(unix.contains("LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md"));
 
     let windows = include_str!("../../../scripts/package-release.ps1");
@@ -107,6 +118,7 @@ fn native_archives_copy_rust_and_product_notices_without_c_parser_notices() {
     assert!(windows.contains("LICENSES/RUST_DEPENDENCIES.html"));
     assert!(!windows.contains("crates/libmandoc-rs/"));
     assert!(windows.contains("LICENSES/CC-BY-4.0.txt"));
+    assert!(windows.contains("LICENSES/mandoc-chars-1.14.6.txt"));
     assert!(windows.contains("LICENSES/PRODUCT_THIRD_PARTY_NOTICES.md"));
 }
 
@@ -148,5 +160,11 @@ fn repository_notice_names_every_non_product_distribution_boundary() {
     assert!(notice.contains("THIRD_PARTY_LICENSES.html"));
     assert!(notice.contains("tldr-pages/tldr"));
     assert!(notice.contains("LICENSES/CC-BY-4.0.txt"));
+    assert!(notice.contains("LICENSES/mandoc-chars-1.14.6.txt"));
     assert!(workspace_root().join("LICENSES/CC-BY-4.0.txt").is_file());
+    assert!(
+        workspace_root()
+            .join("LICENSES/mandoc-chars-1.14.6.txt")
+            .is_file()
+    );
 }

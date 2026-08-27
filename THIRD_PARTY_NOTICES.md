@@ -12,6 +12,15 @@ Every native release archive carries this file as
 `LICENSES/RUST_DEPENDENCIES.html`; CI rejects it when it no longer matches the
 locked multi-platform graph.
 
+## mantdoc special-character catalog
+
+The native `mantdoc` parser contains a Rust representation of the named roff
+character catalog from mandoc 1.14.6 `chars.c`. It is Copyright (c) 2009,
+2010, 2011 Kristaps Dzonsons and Copyright (c) 2011, 2014, 2015, 2017, 2018,
+2020 Ingo Schwarze, and is distributed under the ISC license. The complete
+required copyright and permission notice is in
+[`LICENSES/mandoc-chars-1.14.6.txt`](LICENSES/mandoc-chars-1.14.6.txt).
+
 ## tldr-pages content
 
 When `mant --update-tldr` downloads pages from the
@@ -43,3 +52,13 @@ under `docs/assets/fonts/`. They are licensed under the SIL Open Font License
 1.1; the complete text and pinned file hashes are stored alongside the fonts.
 The font files are repository documentation assets and are not included in
 crates.io packages or native release archives.
+# Third-party notices for `mantdoc`
+
+## mandoc special-character catalog
+
+`src/chars.rs` contains a Rust representation of the named-character catalog
+from `chars.c` in mandoc 1.14.6. The catalog is Copyright (c) 2009, 2010,
+2011 Kristaps Dzonsons and Copyright (c) 2011, 2014, 2015, 2017, 2018, 2020
+Ingo Schwarze. It is distributed under the ISC license. The complete required
+copyright and permission notice is in
+[`LICENSES/mandoc-chars-1.14.6.txt`](LICENSES/mandoc-chars-1.14.6.txt).
