@@ -948,21 +948,6 @@ fn source_offset_or_line_start(start: u32, end: u32, offset: u32) -> u32 {
         .unwrap_or(start)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::source_offset_or_line_start;
-
-    #[test]
-    fn expansion_offsets_outside_the_invocation_fall_back_to_line_start() {
-        assert_eq!(source_offset_or_line_start(40, 80, 12), 52);
-        assert_eq!(source_offset_or_line_start(40, 80, 41), 40);
-        assert_eq!(
-            source_offset_or_line_start(u32::MAX - 2, u32::MAX, 4),
-            u32::MAX - 2
-        );
-    }
-}
-
 /// Locate the next source-spelled missing string interpolation in one input
 /// line. Environment expansion deliberately owns recursive and dynamic names,
 /// so it returns only missing names; this pass restores mandoc's direct
@@ -1408,4 +1393,19 @@ pub(super) fn emit_invalid_character_argument(
 
 pub(super) fn visible_bytes(bytes: &[u8]) -> String {
     decode_visible_bytes(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_offset_or_line_start;
+
+    #[test]
+    fn expansion_offsets_outside_the_invocation_fall_back_to_line_start() {
+        assert_eq!(source_offset_or_line_start(40, 80, 12), 52);
+        assert_eq!(source_offset_or_line_start(40, 80, 41), 40);
+        assert_eq!(
+            source_offset_or_line_start(u32::MAX - 2, u32::MAX, 4),
+            u32::MAX - 2
+        );
+    }
 }
