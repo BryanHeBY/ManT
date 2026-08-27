@@ -21,12 +21,12 @@ fn same_line_conditionals_reparse_nested_requests() {
 }
 
 #[test]
-fn undefined_two_character_register_condition_does_not_leak_its_request_body() {
+fn gcc_style_nested_register_condition_does_not_leak_its_request_body() {
     let name = SourceName::new("conditional-register-body.1").unwrap();
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".TH GCC 1\n.if rF .nr rF 1\n.SH NAME\ngcc - compiler\n.if \\n[rF] unexpected\n",
+            b".TH GCC 1\n.if \\n(.g .if rF .nr rF 1\n.if rF .nr rF 1\n.SH NAME\ngcc - compiler\n.if \\n[rF] unexpected\n",
         ))
         .unwrap();
     let text = report
