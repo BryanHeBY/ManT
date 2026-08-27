@@ -88,6 +88,7 @@ pub(super) enum RequestKind {
     OperatingSystem,
     Definition,
     Environment(EnvironmentRequest),
+    Transparent(TransparentRequest),
     Other,
 }
 
@@ -101,6 +102,13 @@ pub(super) enum EnvironmentRequest {
     Rename,
     Alias,
     FormatterState,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum TransparentRequest {
+    Translation,
+    Character,
+    InputTrap,
 }
 
 impl EnvironmentRequest {
@@ -144,6 +152,9 @@ impl RequestKind {
             b"rn" => Self::Environment(EnvironmentRequest::Rename),
             b"als" => Self::Environment(EnvironmentRequest::Alias),
             b"ftr" | b"na" | b"pl" | b"ps" => Self::Environment(EnvironmentRequest::FormatterState),
+            b"tr" => Self::Transparent(TransparentRequest::Translation),
+            b"char" => Self::Transparent(TransparentRequest::Character),
+            b"it" => Self::Transparent(TransparentRequest::InputTrap),
             _ => Self::Other,
         }
     }

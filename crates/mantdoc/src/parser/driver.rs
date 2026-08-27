@@ -4,8 +4,8 @@ use super::{
     ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, RequestHandling, RequestKind,
     ScanOutcome, ScannedLine, Scanner, ScopeCollector, ScopeFlow, ScopeLine, ScopeMachine,
     Severity, Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver, SourceSpan,
-    Syntax, append_node, append_text_node, append_textual_node, apply_environment_request,
-    apply_string_request, arm_input_trap, collect_pending_macro_scope,
+    Syntax, TransparentRequestContext, append_node, append_text_node, append_textual_node,
+    apply_environment_request, apply_string_request, collect_pending_macro_scope,
     condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
@@ -15,10 +15,10 @@ use super::{
     emit_man_alternating_font_trailing_whitespace, emit_mdoc_control_trailing_whitespace,
     emit_mdoc_empty_display, emit_mdoc_implicit_trailing_delimiter_spacing,
     emit_outside_macro_argument_escapes, emit_trailing_whitespace,
-    emit_translation_request_diagnostics, emit_unterminated_quoted_argument,
-    emit_unterminated_register_reference_escapes, emit_unterminated_string_reference_escapes,
-    emit_user_macro_leading_tabs, environment_error_diagnostic, evaluate_condition,
-    execute_environment_request, execute_scope_line, execute_scope_macro_lines,
+    emit_unterminated_quoted_argument, emit_unterminated_register_reference_escapes,
+    emit_unterminated_string_reference_escapes, emit_user_macro_leading_tabs,
+    environment_error_diagnostic, evaluate_condition, execute_environment_request,
+    execute_scope_line, execute_scope_macro_lines, execute_transparent_request,
     expand_copy_mode_definition, expand_declared_character_escapes, expand_environment,
     has_physical_line_continuation, has_protected_tabulation_escape, ignore_marker,
     inline_scope_body_template, is_bad_comment_style, is_builtin_package_macro,
@@ -38,7 +38,7 @@ use super::{
     strip_outside_macro_argument_escapes, trailing_whitespace_start, translate_visible,
     trim_horizontal_space, update_fill_mode, update_man_example_fill_presentation,
     update_man_indent_register, update_preprocessor_depth, update_table_preprocessor_depth,
-    validate_character_request, visible_bytes,
+    visible_bytes,
 };
 
 impl<R: SourceResolver + ?Sized> SourceMachine<'_, '_, '_, R> {
@@ -2508,18 +2508,21 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     );
                     continue;
                 }
-                if name == b"tr" {
-                    emit_translation_request_diagnostics(
+                if let RequestKind::Transparent(transparent_request) = request {
+                    execute_transparent_request(TransparentRequestContext {
+                        request: transparent_request,
                         arguments,
-                        scanner.escape_character(),
+                        escape: scanner.escape_character(),
+                        source_id,
+                        end,
                         control_start,
                         argument_start,
-                        source_id,
+                        environment,
+                        input_trap: &mut input_trap,
                         limits,
-                        &mut diagnostics,
-                        &mut truncated,
-                    );
-                    environment.define_translation(arguments, scanner.escape_character());
+                        diagnostics: &mut diagnostics,
+                        truncated: &mut truncated,
+                    });
                     continue;
                 }
                 if name == b"ft" {
@@ -2628,43 +2631,6 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             );
                         }
                     }
-                }
-                if name == b"char" {
-                    validate_character_request(
-                        arguments,
-                        scanner.escape_character(),
-                        environment,
-                        source_id,
-                        argument_start,
-                        end,
-                        limits,
-                        &mut diagnostics,
-                        &mut truncated,
-                    );
-                    continue;
-                }
-                if name == b"it" {
-                    if !arm_input_trap(&mut input_trap, arguments) {
-                        let display = visible_bytes(trim_horizontal_space(arguments));
-                        let display = (!display.is_empty()).then(|| format!(" {display}"));
-                        push_diagnostic(
-                            &mut diagnostics,
-                            limits,
-                            diagnostic(
-                                DiagnosticCode::ROFF_NON_NUMERIC_ARGUMENT,
-                                Severity::Error,
-                                source_id,
-                                control_start,
-                                control_start.saturating_add(2),
-                                format!(
-                                    "skipping request without numeric argument: it{}",
-                                    display.unwrap_or_default()
-                                ),
-                            ),
-                            &mut truncated,
-                        );
-                    }
-                    continue;
                 }
                 let renamed_package_macro = environment.renamed_package_macro(name).is_some();
                 let dispatched_package_macro =

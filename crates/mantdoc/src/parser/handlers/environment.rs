@@ -4,11 +4,7 @@ use super::super::{
     environment_error_diagnostic, lex_arguments, normalize_roff_name_prefix, push_diagnostic,
     register_division_by_zero,
 };
-
-pub(in crate::parser) enum RequestHandling {
-    Handled,
-    Unhandled,
-}
+use super::RequestHandling;
 
 pub(in crate::parser) struct EnvironmentRequestContext<'a> {
     pub(in crate::parser) request: EnvironmentRequest,
