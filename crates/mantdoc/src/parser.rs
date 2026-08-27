@@ -226,6 +226,7 @@ mod condition;
 mod diagnostics;
 mod driver;
 mod emit;
+mod event;
 mod execution;
 mod report;
 mod request;
@@ -254,6 +255,7 @@ use emit::{
     normalize_document_escapes, recover_unterminated_quoted_arguments,
     retain_user_macro_tab_argument_prefix, update_fill_mode,
 };
+use event::{ControlEvent, RequestKind, SourceEvent};
 use execution::{
     collect::{
         collect_pending_macro_scope, collect_scope, definition_scope_remainder_line,

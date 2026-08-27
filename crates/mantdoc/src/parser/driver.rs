@@ -1,10 +1,11 @@
 use super::{
-    ArgumentIssue, DiagnosticCode, DocumentBuilder, EscapeIssueKind, IncludeRequest, InputTrap,
-    MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, ScanOutcome, ScannedLine,
-    Scanner, ScopeFlow, ScopeLine, Severity, Source, SourceMachine, SourcePosition, SourceResolver,
-    SourceSpan, Syntax, append_node, append_text_node, append_textual_node,
-    apply_environment_request, apply_string_request, arm_input_trap, collect_pending_macro_scope,
-    collect_scope, condition_body_source_start_from_offset, condition_body_template,
+    ArgumentIssue, ControlEvent, DiagnosticCode, DocumentBuilder, EscapeIssueKind, IncludeRequest,
+    InputTrap, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, RequestKind,
+    ScanOutcome, ScannedLine, Scanner, ScopeFlow, ScopeLine, Severity, Source, SourceEvent,
+    SourceMachine, SourcePosition, SourceResolver, SourceSpan, Syntax, append_node,
+    append_text_node, append_textual_node, apply_environment_request, apply_string_request,
+    arm_input_trap, collect_pending_macro_scope, collect_scope,
+    condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
     emit_bad_comment_style, emit_declared_character_escape_warnings, emit_escape_issues,
@@ -94,14 +95,10 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
     // closer, so publish the recovery finding on the next physical line.
     let mut pending_while_out_of_scope = false;
     'lines: while let Some(line) = scanner.next_line() {
+        let event = SourceEvent::from(line);
         let pending_next_line_condition = next_line_condition.take();
         if pending_while_out_of_scope {
-            let (start, end) = match &line {
-                ScannedLine::TooLong { start, end }
-                | ScannedLine::Text { start, end, .. }
-                | ScannedLine::Comment { start, end, .. }
-                | ScannedLine::Control { start, end, .. } => (*start, *end),
-            };
+            let (start, end) = event.range();
             push_diagnostic(
                 &mut diagnostics,
                 limits,
@@ -121,12 +118,12 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
         // next-line body.  In particular, a malformed predicate may end at
         // the physical line immediately before its `.el`; preserve the pair
         // so the false arm remains visible.
-        let paired_else = matches!(&line, ScannedLine::Control { name, .. } if *name == b"el");
+        let paired_else = event.is_else_request();
         if pending_next_line_condition == Some(false) && !paired_else {
             continue;
         }
-        match line {
-            ScannedLine::TooLong { start, end } => {
+        match event {
+            SourceEvent::TooLong { start, end } => {
                 push_diagnostic(
                     &mut diagnostics,
                     limits,
@@ -141,7 +138,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     &mut truncated,
                 );
             }
-            ScannedLine::Text { start, end, bytes } => {
+            SourceEvent::Text { start, end, bytes } => {
                 let authored_has_tab = bytes.contains(&b'\t');
                 let authored_trailing_whitespace = trailing_whitespace_start(bytes).is_some();
                 if is_bad_comment_style(
@@ -455,7 +452,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     }
                 }
             }
-            ScannedLine::Comment { start, end, bytes } => {
+            SourceEvent::Comment { start, end, bytes } => {
                 // libmandoc preserves a comment as a distinct node, but does
                 // not mark it as an implicit no-print node. Consumers use the
                 // node kind to omit comments from rendered output.
@@ -477,16 +474,16 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     maximum_depth = maximum_depth.max(2);
                 }
             }
-            ScannedLine::Control {
+            SourceEvent::Control(ControlEvent {
                 start,
                 control_start,
                 mut end,
-                no_break: _,
                 name,
+                request: raw_request,
                 arguments,
                 raw_arguments,
                 argument_start,
-            } => {
+            }) => {
                 // The physical scanner stops a control name at an adjacent
                 // escape so condition openers such as `.el\{` can keep their
                 // own grammar.  Roff names have a small, observable exception:
@@ -498,7 +495,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     name,
                     raw_arguments,
                     scanner.escape_character(),
-                    matches!(name, b"de" | b"de1" | b"am" | b"dei" | b"ami")
+                    raw_request.is_definition()
                         || is_builtin_package_macro(builder.macro_set(), name)
                         || (builder.macro_set() == MacroSet::Mdoc
                             && std::str::from_utf8(name)
@@ -539,6 +536,9 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                 let raw_arguments = attached_name
                     .as_ref()
                     .map_or(raw_arguments, |recovery| recovery.arguments.as_slice());
+                let request = attached_name
+                    .as_ref()
+                    .map_or(raw_request, |_| RequestKind::classify(name));
                 // A physical control line is outside every user-macro
                 // argument frame.  Validate active `\$1`-style selectors
                 // before its request-specific parser consumes or reparses
@@ -566,7 +566,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     ),
                     None => argument_start,
                 };
-                if name == b"Os" {
+                if request == RequestKind::OperatingSystem {
                     saw_mdoc_operating_system = true;
                 }
                 let mut continued_arguments = None;
@@ -577,10 +577,8 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                 // the scope collector, not to this control line's argument
                 // list.  Consuming its first body line here would prevent
                 // the explicit scope executor from seeing it.
-                if !matches!(
-                    name,
-                    b"while" | b"if" | b"ie" | b"el" | b"cc" | b"c2" | b"ec"
-                ) && has_physical_line_continuation(arguments, scanner.escape_character())
+                if !request.owns_scope_continuation()
+                    && has_physical_line_continuation(arguments, scanner.escape_character())
                 {
                     let mut joined_arguments = arguments.to_vec();
                     let mut joined_raw_arguments = raw_arguments.to_vec();
