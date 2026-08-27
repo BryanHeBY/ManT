@@ -79,6 +79,13 @@ test lane.
 Work proceeds in this order until the two first exits are evidenced, not merely
 sampled:
 
+**Execution priority (2026-08-28).**  This goal is now active.  No broad
+refactor, performance work, or expansion of the real-corpus audit may displace
+the two gates below: first close the already observed programmable-roff
+defects, then absorb the complete upstream golden suite.  Each repair is
+committed by function with its regression and verification recorded in the
+commit body.
+
 1. **FIX-NOW** — repair every known programmable-roff execution defect and
    turn it into a minimal regression.  This explicitly includes conditional
    bodies, `.ie`/`.el`, `.while`, registers, strings, user macros, escape and
