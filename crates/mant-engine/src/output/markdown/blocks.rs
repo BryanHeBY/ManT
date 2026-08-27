@@ -17,7 +17,7 @@ pub(super) struct RenderedBlocks {
 }
 
 pub(super) struct RenderedEntry {
-    pub(super) index: usize,
+    pub(super) indices: Vec<usize>,
     pub(super) start: usize,
     pub(super) end: usize,
     pub(super) identity: DefinitionIdentity,
@@ -39,7 +39,8 @@ pub(super) fn render_blocks_with_entries(
     let mut entries = Vec::new();
     if options.preserve_anchors {
         let mut cursor = 0;
-        for (index, (entry, source)) in definition_entries(blocks).into_iter().enumerate() {
+        for located in definition_entries(blocks) {
+            let entry = located.item;
             let Some(identity) = &entry.identity else {
                 continue;
             };
@@ -50,11 +51,11 @@ pub(super) fn render_blocks_with_entries(
             let start = cursor + relative;
             let end = definition_item_end(&text, start);
             entries.push(RenderedEntry {
-                index: index + 1,
+                indices: located.indices,
                 start,
                 end,
                 identity: identity.clone(),
-                source,
+                source: located.source,
             });
             cursor = start.saturating_add(anchor.len());
         }

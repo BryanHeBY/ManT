@@ -66,42 +66,89 @@ pub(crate) fn identify_definitions(
     retained
 }
 
-/// Return identified definition items in the single source order shared by
-/// projection and search ownership, including the source of their containing
-/// definition list.
-pub(crate) fn definition_entries(blocks: &[Block]) -> Vec<(&DefinitionItem, Option<SourceSpan>)> {
+/// One identified definition together with its semantic coordinates.
+///
+/// `indices` contains the one-based position at every entry nesting level.
+/// Keeping these coordinates beside the borrowed item gives outline,
+/// excerpt, and addressable-Markdown projections one topology instead of
+/// independently flattening definition descriptions.
+pub(crate) struct DefinitionEntry<'a> {
+    pub(crate) item: &'a DefinitionItem,
+    pub(crate) source: Option<SourceSpan>,
+    pub(crate) indices: Vec<usize>,
+    pub(crate) ancestors: Vec<&'a DefinitionItem>,
+}
+
+/// Return identified definition items in semantic pre-order.
+///
+/// Definitions nested inside lists or table cells remain direct entries of
+/// the surrounding scope. Definitions inside an entry description become
+/// children of that entry, matching [`mant_ir::SemanticIndex`].
+pub(crate) fn definition_entries(blocks: &[Block]) -> Vec<DefinitionEntry<'_>> {
     let mut entries = Vec::new();
-    collect_definition_entries(blocks, &mut entries);
+    collect_definition_scope(blocks, &[], &mut Vec::new(), &mut entries);
     entries
 }
 
-fn collect_definition_entries<'a>(
+fn collect_definition_scope<'a>(
     blocks: &'a [Block],
-    output: &mut Vec<(&'a DefinitionItem, Option<SourceSpan>)>,
+    parent_indices: &[usize],
+    ancestors: &mut Vec<&'a DefinitionItem>,
+    output: &mut Vec<DefinitionEntry<'a>>,
+) {
+    let mut direct_index = 0;
+    collect_direct_definitions(blocks, parent_indices, ancestors, &mut direct_index, output);
+}
+
+fn collect_direct_definitions<'a>(
+    blocks: &'a [Block],
+    parent_indices: &[usize],
+    ancestors: &mut Vec<&'a DefinitionItem>,
+    direct_index: &mut usize,
+    output: &mut Vec<DefinitionEntry<'a>>,
 ) {
     for block in blocks {
         match block {
             Block::List { items, .. } => {
                 for item in items {
-                    collect_definition_entries(&item.blocks, output);
+                    collect_direct_definitions(
+                        &item.blocks,
+                        parent_indices,
+                        ancestors,
+                        direct_index,
+                        output,
+                    );
                 }
             }
             Block::DefinitionList { items, source, .. } => {
                 for item in items {
-                    if item
-                        .identity
-                        .as_ref()
-                        .is_some_and(|identity| !identity.names.is_empty())
-                    {
-                        output.push((item, *source));
+                    if item.identity.is_none() {
+                        continue;
                     }
-                    collect_definition_entries(&item.description, output);
+                    *direct_index += 1;
+                    let mut indices = parent_indices.to_vec();
+                    indices.push(*direct_index);
+                    output.push(DefinitionEntry {
+                        item,
+                        source: *source,
+                        indices: indices.clone(),
+                        ancestors: ancestors.clone(),
+                    });
+                    ancestors.push(item);
+                    collect_definition_scope(&item.description, &indices, ancestors, output);
+                    ancestors.pop();
                 }
             }
             Block::Table { rows, .. } => {
                 for row in rows {
                     for cell in &row.cells {
-                        collect_definition_entries(&cell.blocks, output);
+                        collect_direct_definitions(
+                            &cell.blocks,
+                            parent_indices,
+                            ancestors,
+                            direct_index,
+                            output,
+                        );
                     }
                 }
             }

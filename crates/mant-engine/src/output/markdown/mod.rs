@@ -184,7 +184,7 @@ impl ArtifactBuilder {
         }
         let block = self.push(&rendered.text);
         for entry in rendered.entries {
-            let path = OutlinePath::entry(coordinates, entry.index)
+            let path = OutlinePath::nested_entry(coordinates, &entry.indices)
                 .expect("enumerated entry paths are one-based");
             self.nodes.push(MarkdownNodeRange {
                 range: block.start + entry.start..block.start + entry.end,

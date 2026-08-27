@@ -16,7 +16,7 @@ use mant_protocol::{
     QueryOutline,
 };
 
-use crate::{ResolvedContent, definitions::definition_entries};
+use crate::{ResolvedContent, definitions::definition_entries, inline::plain_text};
 
 pub(crate) const TLDR_ID: &str = "tldr";
 const TLDR_TITLE: &str = "TLDR QUICK REFERENCE";
@@ -1014,20 +1014,24 @@ fn collect_sections<'a>(
             id: section.id.clone(),
             title: section.title.clone(),
         });
-        for (index, (entry, source)) in definition_entries(&section.blocks).into_iter().enumerate()
-        {
-            let Some(identity) = &entry.identity else {
-                continue;
-            };
+        for located in definition_entries(&section.blocks) {
+            let entry = located.item;
+            let mut entry_breadcrumbs = child_breadcrumbs.clone();
+            append_entry_breadcrumbs(
+                &mut entry_breadcrumbs,
+                Some(&coordinates),
+                &located.indices,
+                &located.ancestors,
+            );
             output.push(LocatedNode::Entry {
                 order: output.len(),
                 coordinates: coordinates.clone(),
-                path: OutlinePath::entry(Some(&coordinates), index + 1)
+                path: OutlinePath::nested_entry(Some(&coordinates), &located.indices)
                     .expect("enumerated entry paths are one-based"),
-                title: identity.names.join(", "),
-                breadcrumbs: child_breadcrumbs.clone(),
+                title: definition_title(entry),
+                breadcrumbs: entry_breadcrumbs,
                 entry,
-                source,
+                source: located.source,
             });
         }
         collect_sections(&section.children, &coordinates, &child_breadcrumbs, output);
@@ -1040,21 +1044,67 @@ fn collect_root_entries<'a>(blocks: &'a [Block], output: &mut Vec<LocatedNode<'a
         id: DOCUMENT_ROOT_ID.into(),
         title: DOCUMENT_ROOT_TITLE.to_owned(),
     }];
-    for (index, (entry, source)) in definition_entries(blocks).into_iter().enumerate() {
-        let Some(identity) = &entry.identity else {
-            continue;
-        };
+    for located in definition_entries(blocks) {
+        let entry = located.item;
+        let mut entry_breadcrumbs = breadcrumbs.clone();
+        append_entry_breadcrumbs(
+            &mut entry_breadcrumbs,
+            None,
+            &located.indices,
+            &located.ancestors,
+        );
         output.push(LocatedNode::Entry {
             order: output.len(),
             coordinates: Vec::new(),
-            path: OutlinePath::entry(None, index + 1)
+            path: OutlinePath::nested_entry(None, &located.indices)
                 .expect("enumerated entry paths are one-based"),
-            title: identity.names.join(", "),
-            breadcrumbs: breadcrumbs.clone(),
+            title: definition_title(entry),
+            breadcrumbs: entry_breadcrumbs,
             entry,
-            source,
+            source: located.source,
         });
     }
+}
+
+fn append_entry_breadcrumbs(
+    breadcrumbs: &mut Vec<OutlineReference>,
+    section: Option<&[usize]>,
+    indices: &[usize],
+    ancestors: &[&DefinitionItem],
+) {
+    for (depth, ancestor) in ancestors.iter().enumerate() {
+        let path = OutlinePath::nested_entry(section, &indices[..=depth])
+            .expect("ancestor entry paths are one-based");
+        let identity = ancestor
+            .identity
+            .as_ref()
+            .expect("semantic entry ancestors have identities");
+        breadcrumbs.push(OutlineReference {
+            path: path.to_string().into(),
+            id: identity.id.clone(),
+            title: definition_title(ancestor),
+        });
+    }
+}
+
+fn definition_title(entry: &DefinitionItem) -> String {
+    let identity = entry
+        .identity
+        .as_ref()
+        .expect("semantic entries have identities");
+    if !identity.names.is_empty() {
+        return identity.names.join(", ");
+    }
+    let forms = entry
+        .terms
+        .iter()
+        .map(|term| plain_text(term))
+        .filter(|form| !form.is_empty())
+        .collect::<Vec<_>>();
+    if !forms.is_empty() {
+        return forms.join(" | ");
+    }
+    identity.id.to_string()
 }
 
 fn is_ancestor(ancestor: &[usize], descendant: &[usize]) -> bool {
@@ -1289,6 +1339,63 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    #[test]
+    fn every_projected_entry_path_round_trips_through_read_and_explain() {
+        fn collect_entry_paths(nodes: &[OutlineNode], output: &mut Vec<String>) {
+            for node in nodes {
+                if matches!(node, OutlineNode::DocumentEntry { .. }) {
+                    output.push(node.path().to_owned());
+                }
+                collect_entry_paths(node.children(), output);
+            }
+        }
+
+        let mut query = query_with_semantic_entries();
+        query.document.as_mut().expect("document").sections[1].children[0]
+            .blocks
+            .push(Block::DefinitionList {
+                items: vec![definition(
+                    "generic-readline-term",
+                    DefinitionRole::Term,
+                    &[],
+                    &["operate-and-get-next (C-o)"],
+                    vec![Block::Paragraph {
+                        children: vec![Inline::Text {
+                            value: "Accept the current line and fetch the next history entry."
+                                .to_owned(),
+                        }],
+                        layout: LayoutHint::default(),
+                        source: None,
+                    }],
+                )],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            });
+
+        let outline = build_outline_projection(&query, EntryProjection::All, None)
+            .expect("complete semantic outline");
+        let mut paths = Vec::new();
+        collect_entry_paths(&outline.nodes, &mut paths);
+        assert_eq!(paths, ["2/e1", "2/e1/e1", "2/e2", "2.1/e1"]);
+
+        for path in paths {
+            let excerpt = select_excerpt(&query, std::slice::from_ref(&path))
+                .unwrap_or_else(|error| panic!("read must accept projected path {path}: {error}"));
+            assert!(matches!(
+                excerpt.selections.as_slice(),
+                [ExcerptSelection::DocumentEntry { outline, .. }] if outline.path() == path
+            ));
+            let explanation = super::select_explanation(&query, &path).unwrap_or_else(|error| {
+                panic!("explain must accept projected path {path}: {error}")
+            });
+            assert!(matches!(
+                explanation.selections.as_slice(),
+                [ExcerptSelection::DocumentEntry { outline, .. }] if outline.path() == path
+            ));
+        }
     }
 
     #[test]
