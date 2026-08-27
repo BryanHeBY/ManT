@@ -192,7 +192,7 @@ fn char_requests_report_invalid_left_operands_at_their_precise_source_spans() {
         [
             (
                 DiagnosticCode::ROFF_INVALID_CHARACTER_ARGUMENT,
-                "argument is not a character: char",
+                "argument is not a character: char ",
             ),
             (
                 DiagnosticCode::ROFF_INVALID_CHARACTER_ARGUMENT,

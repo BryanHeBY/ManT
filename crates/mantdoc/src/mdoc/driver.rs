@@ -180,6 +180,7 @@ pub(crate) fn structure(
     let mut operating_system_flavour = None::<&'static str>;
     let mut netbsd_operating_system_validation = false;
     let mut saw_netbsd_rcs_id = false;
+    let mut saw_openbsd_rcs_id = false;
 
     while let Some(event) = machine.step() {
         let StructureEvent {
@@ -223,6 +224,12 @@ pub(crate) fn structure(
                     .is_some_and(|text| text.contains("$NetBSD:"))
                 {
                     saw_netbsd_rcs_id = true;
+                }
+                if builder
+                    .node_text(node)
+                    .is_some_and(|text| text.contains("$OpenBSD:"))
+                {
+                    saw_openbsd_rcs_id = true;
                 }
             }
             continue;
@@ -608,7 +615,8 @@ pub(crate) fn structure(
                         });
                     }
                     saw_date_prologue = true;
-                    if first_date_prologue.is_none() {
+                    let is_first_date_prologue = first_date_prologue.is_none();
+                    if is_first_date_prologue {
                         first_date_prologue = Some((
                             node_arguments(builder, node).join(" ").into_boxed_str(),
                             builder
@@ -618,6 +626,21 @@ pub(crate) fn structure(
                         ));
                     }
                     record_date(builder, node, outcome);
+                    // mandoc reports this OpenBSD-specific style finding with
+                    // the first `.Dd`, after any validation of that date and
+                    // before diagnostics from subsequent prologue requests.
+                    if is_first_date_prologue
+                        && saw_openbsd_rcs_id
+                        && active_body == root
+                        && let Some((date, location)) = &first_date_prologue
+                        && !date.is_empty()
+                        && !date.starts_with("$Mdocdate")
+                    {
+                        outcome.recoveries.push(Recovery::MdocDateMissing {
+                            date: date.clone(),
+                            location: location.clone(),
+                        });
+                    }
                     coalesce_text_children(builder, node);
                     mark_no_print(builder, node);
                     // A late date request is still no-printing metadata, but

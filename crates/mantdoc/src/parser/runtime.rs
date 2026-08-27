@@ -1372,7 +1372,6 @@ pub(super) fn emit_invalid_character_argument(
     truncated: &mut bool,
 ) {
     let display = visible_bytes(raw_arguments);
-    let display = (!display.is_empty()).then(|| format!(" {display}"));
     push_diagnostic(
         diagnostics,
         limits,
@@ -1382,10 +1381,7 @@ pub(super) fn emit_invalid_character_argument(
             source_id,
             start,
             end,
-            format!(
-                "argument is not a character: char{}",
-                display.as_deref().unwrap_or("")
-            ),
+            format!("argument is not a character: char {display}"),
         ),
         truncated,
     );

@@ -349,7 +349,6 @@ pub(crate) fn structure(builder: &mut DocumentBuilder, max_nodes: usize) -> Stru
                     outcome.recoveries.push(Recovery::TitleSectionMissing {
                         title: title_argument(builder, node)
                             .and_then(|argument| builder.node_text(argument))
-                            .filter(|title| !title.is_empty())
                             .map(|title| title.to_owned().into_boxed_str()),
                         location: title_section_argument(builder, node)
                             .and_then(|argument| builder.node_location(argument))

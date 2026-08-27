@@ -304,6 +304,8 @@ impl DiagnosticCode {
     pub const MDOC_OPERATING_SYSTEM_EXPLICIT: &'static str = "mdoc.operating-system-explicit";
     /// A NetBSD-style mdoc document uses an `$Mdocdate` date prologue.
     pub const MDOC_MDOCDATE_FOUND: &'static str = "mdoc.mdocdate-found";
+    /// An OpenBSD-style mdoc document lacks an `$Mdocdate` date prologue.
+    pub const MDOC_MDOCDATE_MISSING: &'static str = "mdoc.mdocdate-missing";
     /// A legacy-checked operating system lacks a matching RCS id comment.
     pub const MDOC_RCS_ID_MISSING: &'static str = "mdoc.rcs-id-missing";
     /// An mdoc `.Os` request appeared after visible document content.

@@ -370,7 +370,7 @@ pub(super) fn emit_escape_issues(
             EscapeIssueKind::InvalidBracketWhitespaceControl(control) => (
                 DiagnosticCode::ESCAPE_INVALID,
                 if control == b' ' {
-                    "invalid escape sequence: \\[".to_owned()
+                    "invalid escape sequence: \\[ ".to_owned()
                 } else {
                     format!("invalid escape sequence: \\[{}]", char::from(control))
                 },

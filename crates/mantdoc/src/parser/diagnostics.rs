@@ -96,7 +96,7 @@ fn diagnostic_from_man_recovery(recovery: crate::man::Recovery) -> Diagnostic {
         crate::man::Recovery::TitleSectionMissing { title, location } => (
             DiagnosticCode::MAN_TITLE_SECTION_MISSING,
             title.map_or_else(
-                || "missing manual section, using \"\": TH".into(),
+                || "missing manual section, using \"\": TH ".into(),
                 |title| format!("missing manual section, using \"\": TH {title}"),
             ),
             location,
@@ -817,6 +817,12 @@ pub(super) fn apply_mdoc_structure_outcome(
                 format!("Mdocdate found: Dd {date} (NetBSD)"),
                 location,
             ),
+            crate::mdoc::Recovery::MdocDateMissing { date, location } => (
+                DiagnosticCode::MDOC_MDOCDATE_MISSING,
+                Severity::Style,
+                format!("Mdocdate missing: Dd {date} (OpenBSD)"),
+                location,
+            ),
             crate::mdoc::Recovery::RcsIdMissing { flavour } => (
                 DiagnosticCode::MDOC_RCS_ID_MISSING,
                 Severity::Style,
@@ -1031,11 +1037,7 @@ pub(super) fn apply_mdoc_structure_outcome(
             } => (
                 DiagnosticCode::MDOC_ITEM_OUTSIDE_LIST,
                 Severity::Error,
-                if arguments.is_empty() {
-                    "skipping item outside list: It".to_owned()
-                } else {
-                    format!("skipping item outside list: It {arguments}")
-                },
+                format!("skipping item outside list: It {arguments}"),
                 location,
             ),
             crate::mdoc::Recovery::ColumnOutsideColumnList { location } => (

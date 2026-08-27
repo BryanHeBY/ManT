@@ -145,11 +145,7 @@ pub(super) fn emit_escaped_request_name(
         }
         break offset;
     };
-    let preview_end = if matches!(name.bytes.get(escape_offset + 1), Some(b' ' | b'\t')) {
-        escape_offset.saturating_add(1)
-    } else {
-        escape_offset.saturating_add(2).min(name.bytes.len())
-    };
+    let preview_end = escape_offset.saturating_add(2).min(name.bytes.len());
     let start = argument_start.saturating_add(
         u32::try_from(name.offset).expect("argument offsets are bounded by line length"),
     );
