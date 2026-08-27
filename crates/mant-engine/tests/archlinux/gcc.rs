@@ -76,5 +76,7 @@ fn keeps_large_hierarchy_fonts_and_pod_displays_without_control_text() {
 /// No roff escapes or `0` / `4` dimension values leak into text.
 #[test]
 fn does_not_leak_roff_markup() {
-    common::assert_document_has_no_source_markup("archlinux/gcc", archlinux_manual("gcc"));
+    let document = archlinux_manual("gcc");
+    common::assert_document_has_no_source_markup("archlinux/gcc", document);
+    common::assert_document_omits_text("archlinux/gcc", document, ".if rF .nr rF 1");
 }

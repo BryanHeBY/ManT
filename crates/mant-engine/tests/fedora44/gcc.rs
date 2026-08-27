@@ -29,5 +29,7 @@ fn keeps_complete_sections_and_semantic_option_outlines() {
 /// No roff escapes leak into inline text.
 #[test]
 fn does_not_leak_roff_markup() {
-    common::assert_document_has_no_source_markup("fedora44/gcc", fedora44_manual("gcc"));
+    let document = fedora44_manual("gcc");
+    common::assert_document_has_no_source_markup("fedora44/gcc", document);
+    common::assert_document_omits_text("fedora44/gcc", document, ".if rF .nr rF 1");
 }

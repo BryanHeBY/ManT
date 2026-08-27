@@ -427,6 +427,25 @@ pub fn assert_document_has_no_source_markup(name: &str, document: &Document) {
     }
 }
 
+pub fn assert_document_omits_text(name: &str, document: &Document, rejected: &str) {
+    for block in document_blocks(document) {
+        visit_block_inlines(block, &mut |inline| {
+            let value = match inline {
+                Inline::Text { value } | Inline::Code { value } => value,
+                Inline::Strong { .. }
+                | Inline::Emphasis { .. }
+                | Inline::Link { .. }
+                | Inline::Anchor { .. }
+                | Inline::LineBreak => return,
+            };
+            assert!(
+                !value.contains(rejected),
+                "fixture {name} retained an executed roff request as visible text",
+            );
+        });
+    }
+}
+
 /// Generated Git manuals use GNU roff colour and point-size escapes around a
 /// highlighted title and its footnote. Both the Arch and Fedora packages carry
 /// this construct, making it a useful full-pipeline guard against presentation

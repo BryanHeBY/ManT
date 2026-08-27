@@ -87,6 +87,7 @@ EXTERNAL_ROFF_CONTEXT = re.compile(
     rb"(?:^|[ \t])[.'](?:so|mso)(?:[ \t]|$)", re.MULTILINE
 )
 ROFF_REQUEST = re.compile(r"^[.'](?P<name>[A-Za-z][A-Za-z0-9]*)(?:[ \t]+(?P<args>.*))?$")
+INLINE_ROFF_CONTROL = re.compile(r"(?<=[ \t])(?P<body>[.'][A-Za-z][A-Za-z0-9]*(?:[ \t]+.*)?)$")
 ROFF_FONT_ESCAPE = re.compile(r"\\f(?:\[[^]]*]|.)")
 
 TRANSLATION = str.maketrans(
@@ -1511,6 +1512,34 @@ def differential_signatures(
     review = []
     reference = strip_terminal_formatting(reference)
     mant = strip_terminal_formatting(mant)
+    reference_visible_lines = [
+        " ".join(line.split()) for line in reference.splitlines() if line.strip()
+    ]
+    mant_visible_lines = [
+        " ".join(line.split()) for line in mant.splitlines() if line.strip()
+    ]
+    leaked_controls = []
+    for source_line in source.splitlines():
+        if not re.match(r"^[.'](?:if|ie|while)(?:[ \t]|$)", source_line):
+            continue
+        # A selected one-line conditional is reparsed as roff input.  Inspect
+        # every control-looking suffix because nested conditionals can contain
+        # another request (for example `.if ... .if ... .nr ...`).
+        cursor = 0
+        while match := INLINE_ROFF_CONTROL.search(source_line, cursor):
+            candidate = " ".join(match.group("body").split())
+            if (
+                any(candidate in line for line in mant_visible_lines)
+                and not any(candidate in line for line in reference_visible_lines)
+                and not any(candidate in existing for existing in leaked_controls)
+            ):
+                leaked_controls.append(candidate)
+            cursor = match.start("body") + 1
+    for candidate in leaked_controls[:3]:
+        review.append(
+            "selected conditional leaked an authored roff control line: "
+            f"{candidate!r}"
+        )
     if MDOC_NAME_DESCRIPTION.search(source):
         reference_attached = len(EM_DASH_ATTACHED_TO_WORD.findall(reference))
         mant_attached = len(EM_DASH_ATTACHED_TO_WORD.findall(mant))
@@ -2450,6 +2479,13 @@ def self_check() -> None:
         ".Fn function\n", "function();", "function();"
     )
     assert differential_signatures(
+        ".if \\n(.g .if rF .nr rF 1\n",
+        "NAME\n",
+        "prefix .if rF .nr rF 1 suffix\nNAME\n",
+    ) == [
+        "selected conditional leaked an authored roff control line: '.if rF .nr rF 1'"
+    ]
+    assert differential_signatures(
         '.Fo function\n.Fa "int first" "int second"\n.Fc\n',
         "function(int first, int second);",
         "function(int first int second);",
@@ -2887,7 +2923,8 @@ def main(argv: Sequence[str]) -> int:
     if arguments.source_pattern:
         print(f"  source:    {' AND '.join(arguments.source_pattern)}")
     print(
-        "  contract:  visible tokens, continuity, and source-conditioned punctuation; "
+        "  contract:  visible tokens, continuity, selected-control leakage, and "
+        "source-conditioned punctuation; "
         "layout is intentionally ignored unless --layout-signals is selected"
     )
     print()
