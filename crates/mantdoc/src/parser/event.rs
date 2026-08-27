@@ -87,7 +87,41 @@ pub(super) enum RequestKind {
     EscapeCharacter,
     OperatingSystem,
     Definition,
+    Environment(EnvironmentRequest),
     Other,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum EnvironmentRequest {
+    DefineString,
+    AppendString,
+    DefineRegister,
+    RemoveRegister,
+    Remove,
+    Rename,
+    Alias,
+    FormatterState,
+}
+
+impl EnvironmentRequest {
+    pub(super) const fn name(self) -> &'static [u8] {
+        match self {
+            Self::DefineString => b"ds",
+            Self::AppendString => b"as",
+            Self::DefineRegister => b"nr",
+            Self::RemoveRegister => b"rr",
+            Self::Remove => b"rm",
+            Self::Rename => b"rn",
+            Self::Alias => b"als",
+            // These requests are formatter-side no-ops in the parser. Their
+            // exact spelling is immaterial to environment mutation.
+            Self::FormatterState => b"",
+        }
+    }
+
+    pub(super) const fn appends_string(self) -> bool {
+        matches!(self, Self::AppendString)
+    }
 }
 
 impl RequestKind {
@@ -102,6 +136,14 @@ impl RequestKind {
             b"ec" => Self::EscapeCharacter,
             b"Os" => Self::OperatingSystem,
             b"de" | b"de1" | b"am" | b"dei" | b"ami" => Self::Definition,
+            b"ds" => Self::Environment(EnvironmentRequest::DefineString),
+            b"as" => Self::Environment(EnvironmentRequest::AppendString),
+            b"nr" => Self::Environment(EnvironmentRequest::DefineRegister),
+            b"rr" => Self::Environment(EnvironmentRequest::RemoveRegister),
+            b"rm" => Self::Environment(EnvironmentRequest::Remove),
+            b"rn" => Self::Environment(EnvironmentRequest::Rename),
+            b"als" => Self::Environment(EnvironmentRequest::Alias),
+            b"ftr" | b"na" | b"pl" | b"ps" => Self::Environment(EnvironmentRequest::FormatterState),
             _ => Self::Other,
         }
     }

@@ -228,6 +228,7 @@ mod driver;
 mod emit;
 mod event;
 mod execution;
+mod handlers;
 mod report;
 mod request;
 mod runtime;
@@ -255,13 +256,16 @@ use emit::{
     normalize_document_escapes, recover_unterminated_quoted_arguments,
     retain_user_macro_tab_argument_prefix, update_fill_mode,
 };
-use event::{ControlEvent, RequestKind, SourceEvent};
+use event::{ControlEvent, EnvironmentRequest, RequestKind, SourceEvent};
 use execution::{
     collect::{
         ScopeCollector, collect_pending_macro_scope, definition_scope_remainder_line,
         record_suppressed_scope_definitions,
     },
     replay::{ScopeMachine, execute_scope_line, execute_scope_macro_lines},
+};
+use handlers::environment::{
+    EnvironmentRequestContext, RequestHandling, execute_environment_request,
 };
 pub use report::{FatalError, FatalErrorKind, ParseReport, ParseStatistics};
 use request::{

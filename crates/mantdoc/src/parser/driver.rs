@@ -1,26 +1,27 @@
 use super::{
-    ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EscapeIssueKind,
-    IncludeRequest, InputTrap, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession,
-    RequestKind, ScanOutcome, ScannedLine, Scanner, ScopeCollector, ScopeFlow, ScopeLine,
-    ScopeMachine, Severity, Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver,
-    SourceSpan, Syntax, append_node, append_text_node, append_textual_node,
-    apply_environment_request, apply_string_request, arm_input_trap, collect_pending_macro_scope,
+    ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder,
+    EnvironmentRequestContext, EscapeIssueKind, IncludeRequest, InputTrap, MacroSet,
+    ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, RequestHandling, RequestKind,
+    ScanOutcome, ScannedLine, Scanner, ScopeCollector, ScopeFlow, ScopeLine, ScopeMachine,
+    Severity, Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver, SourceSpan,
+    Syntax, append_node, append_text_node, append_textual_node, apply_environment_request,
+    apply_string_request, arm_input_trap, collect_pending_macro_scope,
     condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
     emit_bad_comment_style, emit_declared_character_escape_warnings, emit_escape_issues,
-    emit_escaped_condition_name, emit_escaped_request_name, emit_filled_macro_argument_tabs,
-    emit_filled_text_tabs, emit_font_request_diagnostics, emit_invalid_input_bytes,
-    emit_long_input_line, emit_man_alternating_font_trailing_whitespace,
-    emit_mdoc_control_trailing_whitespace, emit_mdoc_empty_display,
-    emit_mdoc_implicit_trailing_delimiter_spacing, emit_outside_macro_argument_escapes,
-    emit_trailing_whitespace, emit_translation_request_diagnostics,
-    emit_unterminated_quoted_argument, emit_unterminated_register_reference_escapes,
-    emit_unterminated_string_reference_escapes, emit_user_macro_leading_tabs,
-    environment_error_diagnostic, evaluate_condition, execute_scope_line,
-    execute_scope_macro_lines, expand_copy_mode_definition, expand_declared_character_escapes,
-    expand_environment, has_physical_line_continuation, has_protected_tabulation_escape,
-    ignore_marker, inline_scope_body_template, is_bad_comment_style, is_builtin_package_macro,
+    emit_escaped_condition_name, emit_filled_macro_argument_tabs, emit_filled_text_tabs,
+    emit_font_request_diagnostics, emit_invalid_input_bytes, emit_long_input_line,
+    emit_man_alternating_font_trailing_whitespace, emit_mdoc_control_trailing_whitespace,
+    emit_mdoc_empty_display, emit_mdoc_implicit_trailing_delimiter_spacing,
+    emit_outside_macro_argument_escapes, emit_trailing_whitespace,
+    emit_translation_request_diagnostics, emit_unterminated_quoted_argument,
+    emit_unterminated_register_reference_escapes, emit_unterminated_string_reference_escapes,
+    emit_user_macro_leading_tabs, environment_error_diagnostic, evaluate_condition,
+    execute_environment_request, execute_scope_line, execute_scope_macro_lines,
+    expand_copy_mode_definition, expand_declared_character_escapes, expand_environment,
+    has_physical_line_continuation, has_protected_tabulation_escape, ignore_marker,
+    inline_scope_body_template, is_bad_comment_style, is_builtin_package_macro,
     is_definition_terminator, is_environment_request, is_ignore_terminator,
     is_legacy_roff_font_selector, is_macro_comment_request, is_man_visible_argument_macro,
     is_scope_opener, join_arguments, legacy_table_input_text, lex_arguments,
@@ -29,10 +30,9 @@ use super::{
     macro_scope_body_origin, normalize_character_request_arguments, normalize_document_escapes,
     normalize_macro_argument_number_escapes, normalize_roff_name_prefix, push_diagnostic,
     record_expansion_steps, record_suppressed_scope_definitions, recover_attached_control_name,
-    recover_unterminated_quoted_arguments, register_division_by_zero,
-    retain_user_macro_tab_argument_prefix, roff_escape_name_width, scope_closer_offset,
-    scope_line_start, scope_opener_remainder, scope_remainder_source_start,
-    scope_replay_logical_start, set_first_root_child_logical_start,
+    recover_unterminated_quoted_arguments, retain_user_macro_tab_argument_prefix,
+    roff_escape_name_width, scope_closer_offset, scope_line_start, scope_opener_remainder,
+    scope_remainder_source_start, scope_replay_logical_start, set_first_root_child_logical_start,
     set_first_scope_child_logical_start, set_first_scope_child_opening_column,
     set_new_root_children_logical_start, split_escaped_condition_body, split_macro_control,
     strip_outside_macro_argument_escapes, trailing_whitespace_start, translate_visible,
@@ -2560,45 +2560,28 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         continue;
                     }
                 }
-                if matches!(name, b"ds" | b"as") {
-                    if let Ok(request_arguments) =
-                        lex_arguments(arguments, scanner.escape_character(), limits)
-                    {
-                        emit_escaped_request_name(
-                            &request_arguments,
-                            scanner.escape_character(),
-                            argument_start,
+                if let RequestKind::Environment(environment_request) = request
+                    && matches!(
+                        execute_environment_request(EnvironmentRequestContext {
+                            request: environment_request,
+                            arguments,
+                            escape: scanner.escape_character(),
                             source_id,
+                            start,
+                            end,
+                            control_start,
+                            argument_start,
+                            environment,
+                            builder,
                             limits,
-                            &mut diagnostics,
-                            &mut truncated,
-                        );
-                    }
-                    match apply_string_request(
-                        &mut environment,
-                        arguments,
-                        scanner.escape_character(),
-                        name == b"as",
-                        limits,
-                        source_id,
-                        start,
-                        end,
-                        &mut expansion_steps,
-                        &mut diagnostics,
-                        &mut truncated,
-                    ) {
-                        Ok(()) => continue,
-                        Err(error) => {
-                            truncated = true;
-                            push_diagnostic(
-                                &mut diagnostics,
-                                limits,
-                                environment_error_diagnostic(error, source_id, start, end),
-                                &mut truncated,
-                            );
-                            continue;
-                        }
-                    }
+                            expansion_steps: &mut expansion_steps,
+                            diagnostics: &mut diagnostics,
+                            truncated: &mut truncated,
+                        }),
+                        RequestHandling::Handled
+                    )
+                {
+                    continue;
                 }
                 if name == b"Os"
                     && (builder.macro_set() == MacroSet::Mdoc || config.syntax == Syntax::Mdoc)
@@ -2682,89 +2665,6 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         );
                     }
                     continue;
-                }
-                if matches!(name, b"nr" | b"rr")
-                    && let Ok(arguments) =
-                        lex_arguments(arguments, scanner.escape_character(), limits)
-                {
-                    emit_escaped_request_name(
-                        &arguments,
-                        scanner.escape_character(),
-                        argument_start,
-                        source_id,
-                        limits,
-                        &mut diagnostics,
-                        &mut truncated,
-                    );
-                }
-                if name == b"rm"
-                    && let Ok(arguments) =
-                        lex_arguments(arguments, scanner.escape_character(), limits)
-                {
-                    for argument in &arguments {
-                        let normalized =
-                            normalize_roff_name_prefix(&argument.bytes, scanner.escape_character());
-                        if normalized.invalid_escape_preview.is_some() {
-                            emit_escaped_request_name(
-                                std::slice::from_ref(argument),
-                                scanner.escape_character(),
-                                argument_start,
-                                source_id,
-                                limits,
-                                &mut diagnostics,
-                                &mut truncated,
-                            );
-                            break;
-                        }
-                    }
-                }
-                if is_environment_request(name)
-                    && let Ok(arguments) =
-                        lex_arguments(arguments, scanner.escape_character(), limits)
-                {
-                    let division_by_zero = (name == b"nr")
-                        .then(|| register_division_by_zero(&arguments))
-                        .flatten();
-                    match apply_environment_request(
-                        &mut environment,
-                        builder,
-                        name,
-                        scanner.escape_character(),
-                        &arguments,
-                        limits,
-                    ) {
-                        Ok(()) => {
-                            if let Some(expression) = division_by_zero {
-                                push_diagnostic(
-                                    &mut diagnostics,
-                                    limits,
-                                    diagnostic(
-                                        DiagnosticCode::ROFF_DIVISION_BY_ZERO,
-                                        Severity::Error,
-                                        source_id,
-                                        control_start.saturating_add(2),
-                                        control_start.saturating_add(3),
-                                        format!(
-                                            "divide by zero: {}",
-                                            visible_bytes(&expression.bytes)
-                                        ),
-                                    ),
-                                    &mut truncated,
-                                );
-                            }
-                            continue;
-                        }
-                        Err(error) => {
-                            truncated = true;
-                            push_diagnostic(
-                                &mut diagnostics,
-                                limits,
-                                environment_error_diagnostic(error, source_id, start, end),
-                                &mut truncated,
-                            );
-                            continue;
-                        }
-                    }
                 }
                 let renamed_package_macro = environment.renamed_package_macro(name).is_some();
                 let dispatched_package_macro =
