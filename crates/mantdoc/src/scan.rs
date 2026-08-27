@@ -117,6 +117,17 @@ impl<'a> Scanner<'a> {
         (self.control, self.no_break_control, self.escape)
     }
 
+    /// Borrow one physical source line by its scanner offsets.
+    ///
+    /// Generated events never use this: it exists solely for roff's initial
+    /// comment-retention window, where an inline `\\\"` tail becomes a
+    /// distinct public comment node.
+    pub(crate) fn physical_line(&self, start: u32, end: u32) -> Option<&'a [u8]> {
+        let start = usize::try_from(start).ok()?;
+        let end = usize::try_from(end).ok()?;
+        self.source.get(start..end)
+    }
+
     /// Restore a prior control, no-break-control, and escape spelling snapshot.
     pub(crate) fn restore_character_state(&mut self, state: (u8, u8, u8)) {
         (self.control, self.no_break_control, self.escape) = state;

@@ -757,6 +757,37 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     argument_start,
                     generated,
                 }) => {
+                    if retain_leading_comments && !generated {
+                        let escape = scanner.escape_character();
+                        if let Some(line) = scanner.physical_line(start, end) {
+                            let retained = crate::scan::strip_inline_comment(line, escape);
+                            if retained.len() < line.len() {
+                                let comment_start = start
+                                    .saturating_add(
+                                        u32::try_from(retained.len()).unwrap_or(u32::MAX),
+                                    )
+                                    .saturating_add(1);
+                                let comment = &line[retained.len().saturating_add(2)..];
+                                if append_textual_node(
+                                    builder,
+                                    root,
+                                    NodeKind::Comment,
+                                    comment_start..end,
+                                    NodeFlags::default(),
+                                    visible_bytes(comment),
+                                    &mut EmitContext::new(
+                                        source_id,
+                                        limits,
+                                        &mut text_bytes,
+                                        &mut diagnostics,
+                                        &mut truncated,
+                                    ),
+                                ) {
+                                    maximum_depth = maximum_depth.max(2);
+                                }
+                            }
+                        }
+                    }
                     retain_leading_comments = false;
                     let name = name.as_ref();
                     let arguments = arguments.as_ref();

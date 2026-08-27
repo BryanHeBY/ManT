@@ -236,6 +236,23 @@ fn comments_after_the_first_top_level_request_are_not_public_nodes() {
 }
 
 #[test]
+fn leading_inline_control_comment_is_retained_before_the_comment_window_closes() {
+    let name = SourceName::new("inline-comment-window.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".de macro \\\" retained tail\n..\n.TH INLINE-COMMENT-WINDOW 1 28-Aug-2026\n",
+        ))
+        .unwrap();
+    assert!(
+        report
+            .document
+            .preorder()
+            .any(|node| node.kind() == NodeKind::Comment && node.text() == Some(" retained tail"))
+    );
+}
+
+#[test]
 fn escaped_comment_control_is_skipped_with_a_style_diagnostic() {
     let name = SourceName::new("escaped-comment-control.roff").unwrap();
     let report = Parser::default()
