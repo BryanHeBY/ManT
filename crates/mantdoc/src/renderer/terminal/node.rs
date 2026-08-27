@@ -143,17 +143,17 @@ pub(super) fn render_terminal_node(
     }
     if is_mdoc_description_block(node) {
         if let Some(body) = node.children().find(|child| child.kind() == NodeKind::Body) {
-            let children = body.children().collect::<Vec<_>>();
-            let paragraph = children
-                .iter()
-                .position(|child| child.macro_name() == Some("Pp"));
             // A recovered description can contain more than one physical
             // source line. Its body remains description flow until a Pp
             // restores ordinary structural rendering.
-            let description_end = paragraph.unwrap_or(children.len());
             let mut description = String::new();
-            for child in &children[..description_end] {
-                collect_terminal_text(*child, format, limits, &mut description);
+            let mut tail = body.children().peekable();
+            while tail
+                .peek()
+                .is_some_and(|child| child.macro_name() != Some("Pp"))
+            {
+                let child = tail.next().expect("peek confirmed a description child");
+                collect_terminal_text(child, format, limits, &mut description);
             }
             let prefix = if matches!(format, RenderFormat::Utf8) {
                 "–"
@@ -172,8 +172,8 @@ pub(super) fn render_terminal_node(
                 indentation,
                 maximum,
             )?;
-            for child in &children[description_end..] {
-                render_terminal_node(*child, format, limits, indentation, output, maximum)?;
+            for child in tail {
+                render_terminal_node(child, format, limits, indentation, output, maximum)?;
             }
         }
         return Ok(());
@@ -857,16 +857,12 @@ pub(super) fn render_terminal_node(
         let saved_field_width = explicit_width
             .is_none()
             .then(|| {
-                let parent = node.parent()?;
-                parent
-                    .children()
-                    .take_while(|sibling| sibling.id() != node.id())
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .take_while(|sibling| sibling.macro_name() != Some("PP"))
-                    .any(|sibling| matches!(sibling.macro_name(), Some("TP" | "IP" | "HP")))
-                    .then(|| terminal_man_field_width(node))
+                std::iter::successors(node.previous_sibling(), |sibling| {
+                    sibling.previous_sibling()
+                })
+                .take_while(|sibling| sibling.macro_name() != Some("PP"))
+                .any(|sibling| matches!(sibling.macro_name(), Some("TP" | "IP" | "HP")))
+                .then(|| terminal_man_field_width(node))
             })
             .flatten();
         let restores_field_margin = saved_field_width.is_some()

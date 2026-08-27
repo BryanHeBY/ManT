@@ -150,7 +150,7 @@ impl Parser {
                 message: "source byte offsets exceed the public u32 span range".into(),
             });
         }
-        let source_lines = source.bytes.split(|byte| *byte == b'\n').count();
+        let source_lines = memchr::memchr_iter(b'\n', source.bytes).count() + 1;
         if source_lines > self.config.limits.max_source_lines {
             return Err(FatalError::source_line_limit(
                 source.name.as_str(),

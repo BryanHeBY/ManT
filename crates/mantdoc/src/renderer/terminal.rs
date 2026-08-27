@@ -853,19 +853,16 @@ pub(super) fn terminal_first_text(node: NodeRef<'_>) -> Option<&str> {
 }
 
 pub(super) fn terminal_has_visible_predecessor(node: NodeRef<'_>) -> bool {
-    let Some(parent) = node.parent() else {
-        return false;
-    };
-    parent
-        .children()
-        .take_while(|sibling| sibling.id() != node.id())
-        .any(|sibling| {
-            // `PD` selects future paragraph density and an initial `.sp`
-            // has no device effect before any visible field. Neither is a
-            // predecessor capable of making a following section-leading
-            // `PP` manufacture a vertical gap.
-            !matches!(sibling.macro_name(), Some("PD" | "sp")) && !sibling.flags().no_print
-        })
+    std::iter::successors(node.previous_sibling(), |sibling| {
+        sibling.previous_sibling()
+    })
+    .any(|sibling| {
+        // `PD` selects future paragraph density and an initial `.sp`
+        // has no device effect before any visible field. Neither is a
+        // predecessor capable of making a following section-leading
+        // `PP` manufacture a vertical gap.
+        !matches!(sibling.macro_name(), Some("PD" | "sp")) && !sibling.flags().no_print
+    })
 }
 
 /// `term_vspace()` is additive, even when a transparent anchor separates the
@@ -885,17 +882,13 @@ pub(super) fn append_terminal_following_vertical_slot(
 }
 
 pub(super) fn terminal_follows_vertical_space(node: NodeRef<'_>) -> bool {
-    let Some(parent) = node.parent() else {
-        return false;
-    };
-    parent
-        .children()
-        .take_while(|sibling| sibling.id() != node.id())
-        // `Tg` creates an anchor but has no terminal-device presentation, so
-        // it cannot consume an adjacent vertical slot.
-        .filter(|sibling| sibling.macro_name() != Some("Tg") && !sibling.flags().no_print)
-        .last()
-        .is_some_and(terminal_ends_with_vertical_space)
+    std::iter::successors(node.previous_sibling(), |sibling| {
+        sibling.previous_sibling()
+    })
+    // `Tg` creates an anchor but has no terminal-device presentation, so
+    // it cannot consume an adjacent vertical slot.
+    .find(|sibling| sibling.macro_name() != Some("Tg") && !sibling.flags().no_print)
+    .is_some_and(terminal_ends_with_vertical_space)
 }
 
 pub(super) fn terminal_ends_with_vertical_space(node: NodeRef<'_>) -> bool {
@@ -920,21 +913,14 @@ pub(super) fn terminal_man_ip_is_in_rs_body(node: NodeRef<'_>) -> bool {
 }
 
 pub(super) fn terminal_man_rs_follows_empty_hanging_paragraph(node: NodeRef<'_>) -> bool {
-    let Some(parent) = node.parent() else {
-        return false;
-    };
-    parent
-        .children()
-        .take_while(|sibling| sibling.id() != node.id())
-        .last()
-        .is_some_and(|previous| {
-            previous.kind() == NodeKind::Block
-                && previous.macro_name() == Some("HP")
-                && previous
-                    .children()
-                    .find(|child| child.kind() == NodeKind::Body)
-                    .is_some_and(|body| body.children().all(|child| child.flags().no_print))
-        })
+    node.previous_sibling().is_some_and(|previous| {
+        previous.kind() == NodeKind::Block
+            && previous.macro_name() == Some("HP")
+            && previous
+                .children()
+                .find(|child| child.kind() == NodeKind::Body)
+                .is_some_and(|body| body.children().all(|child| child.flags().no_print))
+    })
 }
 
 /// Whether a recovered line break immediately follows a completed man field.
@@ -950,14 +936,10 @@ pub(super) fn terminal_man_field_sibling_break(node: NodeRef<'_>) -> bool {
     if !matches!(parent.macro_name(), Some("SH" | "SS")) {
         return false;
     }
-    parent
-        .children()
-        .take_while(|sibling| sibling.id() != node.id())
-        .last()
-        .is_some_and(|previous| {
-            previous.kind() == NodeKind::Block
-                && matches!(previous.macro_name(), Some("IP" | "TP" | "HP"))
-        })
+    node.previous_sibling().is_some_and(|previous| {
+        previous.kind() == NodeKind::Block
+            && matches!(previous.macro_name(), Some("IP" | "TP" | "HP"))
+    })
 }
 
 /// Recover man(7)'s shared `lmargin` register for field macros.
@@ -971,14 +953,9 @@ pub(super) fn terminal_man_field_width(node: NodeRef<'_>) -> isize {
     if let Some(width) = terminal_man_explicit_field_width(node) {
         return width;
     }
-    let Some(parent) = node.parent() else {
-        return 7;
-    };
-    let preceding = parent
-        .children()
-        .take_while(|sibling| sibling.id() != node.id())
-        .collect::<Vec<_>>();
-    for sibling in preceding.into_iter().rev() {
+    for sibling in std::iter::successors(node.previous_sibling(), |sibling| {
+        sibling.previous_sibling()
+    }) {
         if sibling.macro_name() == Some("PP") {
             break;
         }
@@ -1121,13 +1098,13 @@ pub(super) fn render_terminal_column_list(
         if table_precedes_next_item {
             append_blank_line(output, maximum)?;
         }
-        let table_rows = child
+        let mut table_rows = child
             .children()
             .filter(|cell| cell.kind() == NodeKind::Body)
             .flat_map(NodeRef::children)
             .filter(|row| row.kind() == NodeKind::Table && !row.table_cells().is_empty())
-            .collect::<Vec<_>>();
-        if !table_rows.is_empty() {
+            .peekable();
+        if table_rows.peek().is_some() {
             // The mdoc parser wraps a tbl range in an otherwise empty `It`
             // when it occurs between ordinary column-list rows.  The public
             // compatible tree keeps that wrapper, but terminal layout must
@@ -3193,25 +3170,20 @@ pub(super) fn terminal_mdoc_long_name_field(
 /// scan exactly matches the device's state without adding renderer state to
 /// the public arena.
 pub(super) fn terminal_author_mode(node: NodeRef<'_>) -> AuthorMode {
-    let mut mode = if terminal_authors_section(node) {
+    let default = if terminal_authors_section(node) {
         AuthorMode::Split
     } else {
         AuthorMode::NoSplit
     };
-    let Some(parent) = node.parent() else {
-        return mode;
-    };
-    for sibling in parent.children() {
-        if sibling.id() == node.id() {
-            break;
-        }
-        if sibling.macro_name() == Some("An")
-            && let Some(updated) = sibling.author_mode()
-        {
-            mode = updated;
-        }
-    }
-    mode
+    std::iter::successors(node.previous_sibling(), |sibling| {
+        sibling.previous_sibling()
+    })
+    .find_map(|sibling| {
+        (sibling.macro_name() == Some("An"))
+            .then(|| sibling.author_mode())
+            .flatten()
+    })
+    .unwrap_or(default)
 }
 
 /// A split author begins a fresh terminal line after an earlier `An` sibling.
@@ -3219,12 +3191,10 @@ pub(super) fn terminal_author_mode(node: NodeRef<'_>) -> AuthorMode {
 /// first author attached to preceding prose; an explicit `-split` directive
 /// counts as the earlier sibling and therefore starts the next author line.
 pub(super) fn terminal_author_starts_line(node: NodeRef<'_>) -> bool {
-    node.parent().is_some_and(|parent| {
-        parent
-            .children()
-            .take_while(|sibling| sibling.id() != node.id())
-            .any(|sibling| sibling.macro_name() == Some("An"))
+    std::iter::successors(node.previous_sibling(), |sibling| {
+        sibling.previous_sibling()
     })
+    .any(|sibling| sibling.macro_name() == Some("An"))
 }
 
 pub(super) fn terminal_mdoc_section_named(node: NodeRef<'_>, name: &str) -> bool {
@@ -4294,13 +4264,7 @@ pub(super) fn terminal_mdoc_sm_relinked_invalid_argument(node: NodeRef<'_>) -> b
 }
 
 pub(super) fn terminal_mdoc_sm_relinked_argument_precedes(node: NodeRef<'_>) -> bool {
-    let Some(parent) = node.parent() else {
-        return false;
-    };
-    parent
-        .children()
-        .take_while(|sibling| sibling.id() != node.id())
-        .last()
+    node.previous_sibling()
         .is_some_and(|previous| terminal_mdoc_sm_relink_before(previous).is_some())
 }
 
@@ -4315,12 +4279,9 @@ pub(super) fn terminal_mdoc_sm_relink_before(node: NodeRef<'_>) -> Option<Termin
     }
     node.text()?;
     let target = node.source_position()?;
-    let parent = node.parent()?;
-    let preceding = parent
-        .children()
-        .take_while(|sibling| sibling.id() != node.id())
-        .collect::<Vec<_>>();
-    for sibling in preceding.into_iter().rev() {
+    for sibling in std::iter::successors(node.previous_sibling(), |sibling| {
+        sibling.previous_sibling()
+    }) {
         let Some(position) = sibling.source_position() else {
             continue;
         };
@@ -5054,12 +5015,10 @@ pub(super) fn terminal_has_visible_preceding_sibling(
     format: RenderFormat,
     limits: &Limits,
 ) -> bool {
-    node.parent().is_some_and(|parent| {
-        parent
-            .children()
-            .take_while(|sibling| sibling.id() != node.id())
-            .any(|sibling| terminal_has_visible_text(sibling, format, limits))
+    std::iter::successors(node.previous_sibling(), |sibling| {
+        sibling.previous_sibling()
     })
+    .any(|sibling| terminal_has_visible_text(sibling, format, limits))
 }
 
 pub(super) fn terminal_reference_authors(authors: &[String]) -> String {
@@ -5120,8 +5079,8 @@ pub(super) fn collect_terminal_inline_text(
     limits: &Limits,
     output: &mut String,
 ) {
-    let children = node.children().collect::<Vec<_>>();
-    for (index, child) in children.iter().copied().enumerate() {
+    let mut previous = None;
+    for child in node.children() {
         // `\c` is collected as the same private attachment marker used by
         // ordinary terminal flow.  A man font element applies its style only
         // after collecting all of its arguments, so consume that marker here
@@ -5132,8 +5091,10 @@ pub(super) fn collect_terminal_inline_text(
         if attach_previous {
             let _ = output.pop();
         }
-        if index > 0 && !output.is_empty() && !attach_previous {
-            let separator = if children[index - 1].separator_after() == Some(b'\t') {
+        if !output.is_empty() && !attach_previous {
+            let separator = if previous
+                .is_some_and(|node: NodeRef<'_>| node.separator_after() == Some(b'\t'))
+            {
                 "\t"
             } else {
                 " "
@@ -5143,6 +5104,7 @@ pub(super) fn collect_terminal_inline_text(
         let mut fragment = String::new();
         collect_terminal_text(child, format, limits, &mut fragment);
         output.push_str(&fragment);
+        previous = Some(child);
     }
 }
 

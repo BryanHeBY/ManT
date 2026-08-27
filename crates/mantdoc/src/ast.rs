@@ -354,6 +354,8 @@ impl InputUnicodeProvenance {
 struct NodeRecord {
     kind: NodeKind,
     parent: Option<NodeId>,
+    #[cfg(feature = "render")]
+    previous_sibling: Option<NodeId>,
     child_start: u32,
     child_len: u32,
     macro_name: Option<StringId>,
@@ -465,6 +467,8 @@ impl NodeRecord {
         Self {
             kind: NodeKind::Root,
             parent: None,
+            #[cfg(feature = "render")]
+            previous_sibling: None,
             child_start: 0,
             child_len: 0,
             macro_name: None,
@@ -542,14 +546,10 @@ impl SourceRecord {
         let byte_len = u32::try_from(source.bytes.len())
             .expect("parser rejects sources that cannot fit public span offsets");
         let mut line_starts = vec![0];
-        for (index, byte) in source.bytes.iter().enumerate() {
-            if *byte == b'\n' {
-                line_starts.push(
-                    u32::try_from(index + 1)
-                        .expect("parser rejects sources that cannot fit public span offsets"),
-                );
-            }
-        }
+        line_starts.extend(memchr::memchr_iter(b'\n', source.bytes).map(|index| {
+            u32::try_from(index + 1)
+                .expect("parser rejects sources that cannot fit public span offsets")
+        }));
         Self {
             name: source.name.clone(),
             byte_len,
@@ -734,6 +734,14 @@ impl<'doc> NodeRef<'doc> {
     #[must_use]
     pub fn parent(self) -> Option<Self> {
         self.record.parent.and_then(|id| self.document.node(id))
+    }
+
+    /// Return the preceding direct sibling retained for native device state.
+    #[cfg(feature = "render")]
+    pub(crate) fn previous_sibling(self) -> Option<Self> {
+        self.record
+            .previous_sibling
+            .and_then(|id| self.document.node(id))
     }
 
     /// Return the source macro/request name without a leading dot.
@@ -999,6 +1007,7 @@ impl<'doc> NodeRef<'doc> {
 }
 
 /// Direct-child iterator for a [`NodeRef`].
+#[derive(Clone)]
 pub struct Children<'doc> {
     document: &'doc Document,
     edges: std::slice::Iter<'doc, NodeId>,
@@ -1008,17 +1017,35 @@ impl<'doc> Iterator for Children<'doc> {
     type Item = NodeRef<'doc>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.edges.next().and_then(|id| self.document.node(*id))
+        self.edges.next().map(|id| {
+            self.document
+                .node(*id)
+                .expect("document child edges always reference retained nodes")
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.edges.size_hint()
     }
 }
 
 impl DoubleEndedIterator for Children<'_> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.edges
-            .next_back()
-            .and_then(|id| self.document.node(*id))
+        self.edges.next_back().map(|id| {
+            self.document
+                .node(*id)
+                .expect("document child edges always reference retained nodes")
+        })
     }
 }
+
+impl ExactSizeIterator for Children<'_> {
+    fn len(&self) -> usize {
+        self.edges.len()
+    }
+}
+
+impl std::iter::FusedIterator for Children<'_> {}
 
 /// Ancestor iterator for a [`NodeRef`].
 pub struct Ancestors<'doc> {

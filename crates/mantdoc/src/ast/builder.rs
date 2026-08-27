@@ -1025,6 +1025,17 @@ impl DocumentBuilder {
     }
 
     pub(crate) fn finish(mut self) -> Document {
+        #[cfg(feature = "render")]
+        for children in &self.children {
+            let mut previous = None;
+            for child in children {
+                self.document.nodes[child.0 as usize].previous_sibling = previous;
+                previous = Some(*child);
+            }
+        }
+        self.document
+            .child_edges
+            .reserve_exact(self.children.iter().map(Vec::len).sum());
         for (index, children) in self.children.into_iter().enumerate() {
             let start = self.document.child_edges.len();
             self.document.child_edges.extend(children);
