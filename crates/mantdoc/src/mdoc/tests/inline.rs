@@ -497,6 +497,41 @@ fn repeated_automatic_function_spellings_keep_only_the_first_destination() {
 }
 
 #[test]
+fn automatic_function_targets_cross_inline_prose_only_in_definition_sections() {
+    let name = SourceName::new("mdoc-function-target-scope.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt FUNCTIONS 1\n.Os\n.Sh DESCRIPTION\nIntro.\n.Pp\nThe\n.Nm functions\nhelper is\n.Fn example ,\n.Sh RETURN VALUES\nIntro.\n.Pp\nFunction\n.Fn example\nreturns a value.\n.Sh LOCAL EXTENSIONS\nIntro.\n.Pp\nFunction\n.Fn extension\nreturns a value.\n",
+        ))
+        .unwrap();
+    let paragraphs = report
+        .document
+        .preorder()
+        .filter(|node| node.macro_name() == Some("Pp"))
+        .collect::<Vec<_>>();
+    assert_eq!(paragraphs.len(), 3);
+    assert_eq!(paragraphs[0].tag(), Some("example"));
+    assert!(paragraphs[0].flags().deep_link_target);
+    assert!(!paragraphs[1].flags().deep_link_target);
+    assert_eq!(paragraphs[2].tag(), Some("extension"));
+    assert!(paragraphs[2].flags().deep_link_target);
+
+    let functions = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Element && node.macro_name() == Some("Fn"))
+        .collect::<Vec<_>>();
+    assert_eq!(functions.len(), 3);
+    assert!(!functions[0].flags().deep_link_target);
+    assert!(functions[0].flags().permalink);
+    assert!(!functions[1].flags().deep_link_target);
+    assert!(!functions[1].flags().permalink);
+    assert!(!functions[2].flags().deep_link_target);
+    assert!(functions[2].flags().permalink);
+}
+
+#[test]
 fn empty_fo_head_retains_its_block_and_reports_the_missing_function_name() {
     let name = SourceName::new("mdoc-empty-fo-head.1").unwrap();
     let report = Parser::default()

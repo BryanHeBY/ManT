@@ -118,6 +118,10 @@ pub(crate) fn structure(
     // equal and competing names after all destinations are known.
     let mut automatic_function_targets = Vec::<AutomaticFunctionTarget>::new();
     let mut function_tag_priority = 2_u32;
+    // `post_fname()` only contributes automatic destinations in DESCRIPTION
+    // and custom sections.  A function spelling in RETURN VALUES is prose,
+    // not a documented definition, even when it follows a paragraph break.
+    let mut automatic_function_targets_enabled = false;
     // mandoc validates Pp after it has completed the containing body, while
     // roff layout requests such as br and sp are validated immediately.
     // Keep the two queues separate to preserve observable finding order.
@@ -519,6 +523,7 @@ pub(crate) fn structure(
                 pending_manual_tag = None;
             }
             if builder.node_kind(node) != Some(NodeKind::Text)
+                && !macro_name.as_deref().is_some_and(is_inline_mdoc_macro)
                 && !matches!(
                     macro_name.as_deref(),
                     Some("Pp" | "Lp" | "Tg" | "Bk" | "Fn" | "Fo" | "br")
@@ -798,6 +803,9 @@ pub(crate) fn structure(
                     // element has been formed.
                     let section_title =
                         visible_head_text(builder, head).unwrap_or(raw_section_title);
+                    automatic_function_targets_enabled = section_title
+                        .eq_ignore_ascii_case("DESCRIPTION")
+                        || named_mdoc_section(&section_title).is_none();
                     in_name_section = section_title.eq_ignore_ascii_case("NAME");
                     if !has_section && !in_name_section {
                         outcome.recoveries.push(Recovery::FirstSectionNotName {
@@ -1794,7 +1802,9 @@ pub(crate) fn structure(
                             mark_target(builder, node, Some(&tag));
                         }
                         mark_no_print(builder, tag_node);
-                    } else if !in_synopsis && let Some(function_tag) = function_tag {
+                    } else if automatic_function_targets_enabled
+                        && let Some(function_tag) = function_tag
+                    {
                         automatic_function_targets.push(AutomaticFunctionTarget {
                             destination: paragraph.unwrap_or(node),
                             permalink: paragraph.map(|_| node),
@@ -3134,7 +3144,7 @@ pub(crate) fn structure(
                         mark_synopsis_pretty(builder, head);
                         mark_synopsis_pretty(builder, body);
                     }
-                    if name == "Fo" && !in_synopsis {
+                    if name == "Fo" && automatic_function_targets_enabled {
                         if let Some((tag_node, tag)) = pending_manual_tag.take() {
                             mark_target(builder, head, Some(&tag));
                             mark_no_print(builder, tag_node);
