@@ -1962,7 +1962,24 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     truncated: &mut truncated,
                                 }
                                 .run(&scope.lines);
-                                if let Some(opener_start) = scope_opening_column {
+                                let first_scope_child_is_scope_head = builder
+                                    .children(root)
+                                    .and_then(|children| children.get(first_scope_child))
+                                    .copied()
+                                    .and_then(|node| builder.node_source_position(node))
+                                    .zip(scope.lines.first().and_then(|line| {
+                                        SourceSpan::new(
+                                            source_id,
+                                            scope_line_start(line),
+                                            scope_line_start(line),
+                                        )
+                                        .ok()
+                                        .and_then(|span| builder.source_position(&span))
+                                    }))
+                                    .is_some_and(|(node, scope_head)| node.line == scope_head.line);
+                                if first_scope_child_is_scope_head
+                                    && let Some(opener_start) = scope_opening_column
+                                {
                                     set_first_scope_child_opening_column(
                                         builder,
                                         root,
