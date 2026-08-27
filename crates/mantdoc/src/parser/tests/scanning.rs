@@ -198,6 +198,29 @@ fn filled_text_tab_keeps_the_legacy_visible_diagnostic() {
 }
 
 #[test]
+fn unterminated_quote_points_at_the_unclosed_argument_not_a_prior_quote() {
+    let name = SourceName::new("unterminated-quote.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH QUOTE 1 28-Aug-2026\n.SH DESCRIPTION\n.BI \"-x\" \" transliteration\n",
+        ))
+        .unwrap();
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_str() == DiagnosticCode::ARGUMENT_UNTERMINATED_QUOTE)
+        .unwrap();
+    assert_eq!(diagnostic.message.as_ref(), "unterminated quoted argument");
+    let position = diagnostic
+        .primary
+        .as_ref()
+        .and_then(|span| report.document.source_position(span))
+        .unwrap();
+    assert_eq!((position.line, position.column), (3, 10));
+}
+
+#[test]
 fn copy_mode_string_tabs_survive_expansion_and_warn_in_filled_text() {
     let name = SourceName::new("string-tab.1").unwrap();
     let report = Parser::default()

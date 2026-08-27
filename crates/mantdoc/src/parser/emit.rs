@@ -635,6 +635,7 @@ pub(super) fn emit_mdoc_new_sentence_line_warnings(
 #[allow(clippy::too_many_arguments)] // Keeps ordered quote and tail recovery together.
 pub(super) fn emit_unterminated_quoted_argument(
     arguments: &[u8],
+    escape: u8,
     argument_start: u32,
     line_end: u32,
     source_id: crate::SourceId,
@@ -642,14 +643,7 @@ pub(super) fn emit_unterminated_quoted_argument(
     diagnostics: &mut Vec<Diagnostic>,
     truncated: &mut bool,
 ) {
-    let quote_offset = arguments
-        .iter()
-        .enumerate()
-        .find_map(|(offset, byte)| {
-            (*byte == b'"' && (offset == 0 || arguments[offset - 1].is_ascii_whitespace()))
-                .then_some(offset)
-        })
-        .unwrap_or(0);
+    let quote_offset = unterminated_quote_offset(arguments, escape).unwrap_or(0);
     let quote_start = argument_start.saturating_add(
         u32::try_from(quote_offset).expect("bounded control-line offsets fit public spans"),
     );
@@ -681,6 +675,56 @@ pub(super) fn emit_unterminated_quoted_argument(
             truncated,
         );
     }
+}
+
+/// Return the opening quote of the lexical token that did not close.
+///
+/// A control line can contain a valid quoted argument before the malformed
+/// one.  The diagnostic points at the latter opening delimiter, not at the
+/// first quote on the line.  Keep the scan aligned with `lex_arguments()` so
+/// custom escape characters and doubled quotes remain transparent here too.
+fn unterminated_quote_offset(arguments: &[u8], escape: u8) -> Option<usize> {
+    let mut cursor = 0;
+    while cursor < arguments.len() {
+        while cursor < arguments.len() && arguments[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if cursor == arguments.len() {
+            return None;
+        }
+        if arguments[cursor] != b'"' {
+            while cursor < arguments.len() && !arguments[cursor].is_ascii_whitespace() {
+                cursor += if arguments[cursor] == escape && cursor + 1 < arguments.len() {
+                    2
+                } else {
+                    1
+                };
+            }
+            continue;
+        }
+        let quote_start = cursor;
+        cursor += 1;
+        let mut closed = false;
+        while cursor < arguments.len() {
+            if arguments[cursor] == escape && cursor + 1 < arguments.len() {
+                cursor += 2;
+            } else if arguments[cursor] == b'"' {
+                if arguments.get(cursor + 1) == Some(&b'"') {
+                    cursor += 2;
+                } else {
+                    cursor += 1;
+                    closed = true;
+                    break;
+                }
+            } else {
+                cursor += 1;
+            }
+        }
+        if !closed {
+            return Some(quote_start);
+        }
+    }
+    None
 }
 
 /// Complete the one malformed quoted token locally after its public finding

@@ -3125,6 +3125,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             Err(ArgumentIssue::UnterminatedQuote) => {
                                 emit_unterminated_quoted_argument(
                                     arguments,
+                                    scanner.escape_character(),
                                     argument_start,
                                     end,
                                     source_id,
@@ -4659,6 +4660,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         Err(ArgumentIssue::UnterminatedQuote) => {
                             emit_unterminated_quoted_argument(
                                 arguments,
+                                argument_escape,
                                 argument_start,
                                 end,
                                 source_id,
