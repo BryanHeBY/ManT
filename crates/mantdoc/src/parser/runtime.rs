@@ -817,7 +817,9 @@ pub(super) fn expand_environment_with_missing_reference_policy(
                         &mut missing_reference_cursor,
                     )
                     .and_then(|offset| u32::try_from(offset).ok())
-                    .map_or(start, |offset| start.saturating_add(offset));
+                    .map_or(start, |offset| {
+                        source_offset_or_line_start(start, end, offset)
+                    });
                     push_diagnostic(
                         diagnostics,
                         limits,
@@ -834,7 +836,9 @@ pub(super) fn expand_environment_with_missing_reference_policy(
                 }
             }
             for offset in result.malformed_escape_offsets {
-                let finding_start = start.saturating_add(
+                let finding_start = source_offset_or_line_start(
+                    start,
+                    end,
                     u32::try_from(offset).expect("parser bounds every expanded source line"),
                 );
                 let finding_end = finding_start.saturating_add(2).min(end);
@@ -879,7 +883,9 @@ pub(super) fn expand_environment_with_missing_reference_policy(
                 .windows(2)
                 .position(|window| window == [escape, b'*'])
                 .unwrap_or(0);
-            let finding_start = start.saturating_add(
+            let finding_start = source_offset_or_line_start(
+                start,
+                end,
                 u32::try_from(reference_offset).expect("parser bounds every expanded source line"),
             );
             let finding_end = finding_start.saturating_add(2).min(end);
@@ -925,6 +931,35 @@ pub(super) fn expand_environment_with_missing_reference_policy(
             );
             Some(bytes.to_vec())
         }
+    }
+}
+
+/// Translate an offset in expansion input back into its owning physical span.
+///
+/// Physical source lines preserve their direct escape columns.  A user macro,
+/// however, may execute an arbitrary-length stored body while its diagnostic
+/// span belongs to the short invocation line.  Those generated offsets have no
+/// source location in that invocation; mandoc's compatible recovery is the
+/// line start.  Crucially, never let that projection invert a public span.
+fn source_offset_or_line_start(start: u32, end: u32, offset: u32) -> u32 {
+    start
+        .checked_add(offset)
+        .filter(|candidate| *candidate <= end)
+        .unwrap_or(start)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_offset_or_line_start;
+
+    #[test]
+    fn expansion_offsets_outside_the_invocation_fall_back_to_line_start() {
+        assert_eq!(source_offset_or_line_start(40, 80, 12), 52);
+        assert_eq!(source_offset_or_line_start(40, 80, 41), 40);
+        assert_eq!(
+            source_offset_or_line_start(u32::MAX - 2, u32::MAX, 4),
+            u32::MAX - 2
+        );
     }
 }
 
