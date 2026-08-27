@@ -31,3 +31,8 @@ The checked-in expectations are native test assets, not a compatibility
 exception ledger: parser behavior must equal the native golden or the gate
 fails. The historical extraction and C-oracle work remain recoverable through
 Git history and the standalone `libmandoc-rs` repository.
+
+The stricter completion contract is documented in
+[`mantdoc-compatibility-goal.md`](mantdoc-compatibility-goal.md). It prioritizes
+known execution defects and existing upstream golden files before independent
+AST/diagnostic/IR oracle work and the exhaustive real-manual audit.

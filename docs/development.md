@@ -84,9 +84,10 @@ While changing the native `mantdoc` migration, use its complete focused
 work-loop instead of repeatedly paying for the product/release boundary:
 
 ```sh
-bash scripts/check-mantdoc.sh /tmp/mandoc-1.14.6.tar.gz
+mkdir -p "$HOME/dev/tmp"
+bash scripts/check-mantdoc.sh "$HOME/dev/tmp/mandoc-1.14.6.tar.gz"
 # Include the non-blocking M9 renderer observation while changing rendering.
-bash scripts/check-mantdoc.sh /tmp/mandoc-1.14.6.tar.gz --renderer
+bash scripts/check-mantdoc.sh "$HOME/dev/tmp/mandoc-1.14.6.tar.gz" --renderer
 ```
 
 It runs formatting and manifest checks alongside the initial native test build,
@@ -141,6 +142,7 @@ crates/mant-ui/               Ratatui reader, navigation, search, and terminal s
 crates/mant/                  Mode selection, CLI, request JSON, and MCP stdio boundary
 crates/mantdoc/               Native Rust roff/man/mdoc/tbl/eqn parser and renderers
 docs/architecture/mantdoc-refactoring.md  Native parser structural and Clippy debt audit
+docs/architecture/mantdoc-compatibility-goal.md  Native compatibility completion contract
 fuzz/                        Standalone cargo-fuzz workspace
 tests/contracts/             Stable JSON contract fixtures consumed by Rust tests
 tests/fixtures/              Fixed Markdown and real roff integration sources
