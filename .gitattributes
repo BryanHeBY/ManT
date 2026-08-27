@@ -4,9 +4,6 @@
 *.svg text eol=lf
 *.patch text eol=lf
 *.sh text eol=lf
-crates/libmandoc-rs/patches/series text eol=lf
-crates/libmandoc-rs/scripts/* text eol=lf
-crates/libmandoc-rs/vendor/mandoc-1.14.6/** text eol=lf
 *.gz binary
 *.zst binary
 *.zip binary
