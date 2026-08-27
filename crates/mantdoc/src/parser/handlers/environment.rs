@@ -4,7 +4,7 @@ use super::super::{
     environment_error_diagnostic, lex_arguments, normalize_roff_name_prefix, push_diagnostic,
     register_division_by_zero,
 };
-use super::RequestHandling;
+use super::RequestTransition;
 
 pub(in crate::parser) struct EnvironmentRequestContext<'a> {
     pub(in crate::parser) request: EnvironmentRequest,
@@ -25,13 +25,13 @@ pub(in crate::parser) struct EnvironmentRequestContext<'a> {
 
 pub(in crate::parser) fn execute_environment_request(
     context: EnvironmentRequestContext<'_>,
-) -> RequestHandling {
+) -> RequestTransition {
     if matches!(
         context.request,
         EnvironmentRequest::DefineString | EnvironmentRequest::AppendString
     ) {
         execute_string_request(context);
-        RequestHandling::Handled
+        RequestTransition::Consumed
     } else {
         execute_generic_request(context)
     }
@@ -88,7 +88,7 @@ fn execute_string_request(context: EnvironmentRequestContext<'_>) {
     }
 }
 
-fn execute_generic_request(context: EnvironmentRequestContext<'_>) -> RequestHandling {
+fn execute_generic_request(context: EnvironmentRequestContext<'_>) -> RequestTransition {
     let EnvironmentRequestContext {
         request,
         arguments,
@@ -108,7 +108,7 @@ fn execute_generic_request(context: EnvironmentRequestContext<'_>) -> RequestHan
     let Ok(arguments) = lex_arguments(arguments, escape, limits) else {
         // Preserve the existing dispatcher recovery: malformed generic
         // arguments continue to package/user-macro classification.
-        return RequestHandling::Unhandled;
+        return RequestTransition::Continue;
     };
 
     emit_request_name_diagnostics(
@@ -163,7 +163,7 @@ fn execute_generic_request(context: EnvironmentRequestContext<'_>) -> RequestHan
             );
         }
     }
-    RequestHandling::Handled
+    RequestTransition::Consumed
 }
 
 #[allow(clippy::too_many_arguments)]

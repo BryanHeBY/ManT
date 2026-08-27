@@ -3,6 +3,7 @@ use super::super::{
     arm_input_trap, diagnostic, emit_translation_request_diagnostics, push_diagnostic,
     trim_horizontal_space, validate_character_request, visible_bytes,
 };
+use super::RequestTransition;
 
 pub(in crate::parser) struct TransparentRequestContext<'a> {
     pub(in crate::parser) request: TransparentRequest,
@@ -19,12 +20,15 @@ pub(in crate::parser) struct TransparentRequestContext<'a> {
     pub(in crate::parser) truncated: &'a mut bool,
 }
 
-pub(in crate::parser) fn execute_transparent_request(mut context: TransparentRequestContext<'_>) {
+pub(in crate::parser) fn execute_transparent_request(
+    mut context: TransparentRequestContext<'_>,
+) -> RequestTransition {
     match context.request {
         TransparentRequest::Translation => execute_translation(&mut context),
         TransparentRequest::Character => execute_character(&mut context),
         TransparentRequest::InputTrap => execute_input_trap(&mut context),
     }
+    RequestTransition::Consumed
 }
 
 fn execute_translation(context: &mut TransparentRequestContext<'_>) {

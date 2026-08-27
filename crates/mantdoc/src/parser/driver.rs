@@ -2,7 +2,7 @@ use super::{
     ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EmitContext,
     EnvironmentRequestContext, EscapeIssueKind, IncludeRequest, InputTrap, MacroSet,
     ManIndentState, NodeFlags, NodeId, NodeKind, PackageToken, ParseState, ParserCore,
-    ReplayMachine, RequestHandling, RequestKind, ScannedLine, Scanner, ScopeCollector, ScopeFlow,
+    ReplayMachine, RequestKind, RequestTransition, ScannedLine, Scanner, ScopeCollector, ScopeFlow,
     ScopeLine, Severity, Source, SourceEvent, SourceFrame, SourcePosition, SourceResolver,
     SourceSpan, Syntax, TransparentRequestContext, append_node, append_text_node,
     append_textual_node, apply_environment_request, apply_string_request,
@@ -2577,7 +2577,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         continue;
                     }
                     if let RequestKind::Transparent(transparent_request) = request {
-                        execute_transparent_request(TransparentRequestContext {
+                        let transition = execute_transparent_request(TransparentRequestContext {
                             request: transparent_request,
                             arguments,
                             escape: scanner.escape_character(),
@@ -2591,7 +2591,9 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             diagnostics: &mut diagnostics,
                             truncated: &mut truncated,
                         });
-                        continue;
+                        if transition == RequestTransition::Consumed {
+                            continue;
+                        }
                     }
                     if name == b"ft" {
                         emit_font_request_diagnostics(
@@ -2649,7 +2651,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 diagnostics: &mut diagnostics,
                                 truncated: &mut truncated,
                             }),
-                            RequestHandling::Handled
+                            RequestTransition::Consumed
                         )
                     {
                         continue;

@@ -266,7 +266,7 @@ use execution::{
     replay::{ReplayMachine, execute_scope_line, execute_scope_macro_lines},
 };
 use handlers::{
-    RequestHandling,
+    RequestTransition,
     environment::{EnvironmentRequestContext, execute_environment_request},
     transparent::{TransparentRequestContext, execute_transparent_request},
 };
