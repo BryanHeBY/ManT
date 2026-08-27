@@ -110,20 +110,21 @@ pub(super) fn lower_mdoc_list(
             .as_deref()
             .and_then(horizontal_distance_columns)
             .unwrap_or(6);
+        let lowered_items = items
+            .into_iter()
+            .map(|item| {
+                definition_item(
+                    item.node,
+                    context,
+                    list_indent,
+                    paragraph_distance,
+                    max_term_width,
+                    item.spacing_enabled,
+                )
+            })
+            .collect();
         Block::DefinitionList {
-            items: items
-                .into_iter()
-                .map(|item| {
-                    definition_item(
-                        item.node,
-                        context,
-                        list_indent,
-                        paragraph_distance,
-                        max_term_width,
-                        item.spacing_enabled,
-                    )
-                })
-                .collect(),
+            items: coalesce_pending_definition_terms(lowered_items, max_term_width),
             compact: node.compact,
             layout: layout(indent_columns),
             source: source_span(node),
@@ -157,6 +158,41 @@ pub(super) fn lower_mdoc_list(
             source: source_span(node),
         }
     }
+}
+
+/// Attach consecutive description-less definition heads to the next item.
+///
+/// Both man(7) `.TQ` and mdoc(7) commonly express several equivalent input
+/// forms as a run of heads followed by one shared body.  The man lowering
+/// path already folds pending `.TQ` heads in [`append_definition`]; mdoc lists
+/// arrive as one complete collection, so perform the same structural
+/// normalization before the source-specific list representation leaves this
+/// module.  A trailing run stays intact because no shared description proves
+/// that the terms belong to one definition.
+fn coalesce_pending_definition_terms(
+    items: Vec<DefinitionItem>,
+    max_term_width: usize,
+) -> Vec<DefinitionItem> {
+    let mut output = Vec::with_capacity(items.len());
+    let mut pending = Vec::new();
+
+    for mut item in items {
+        if item.description.is_empty() {
+            pending.push(item);
+            continue;
+        }
+        if !pending.is_empty() {
+            let pending_terms = pending
+                .drain(..)
+                .flat_map(|pending: DefinitionItem| pending.terms);
+            item.terms.splice(0..0, pending_terms);
+            item.inline_term = terms_fit_inline(&item.terms, max_term_width);
+        }
+        output.push(item);
+    }
+
+    output.extend(pending);
+    output
 }
 
 #[derive(Clone, Copy)]

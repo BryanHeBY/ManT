@@ -3102,6 +3102,47 @@ can be an IPv4 or IPv6 address.\nT}\n.TE\n",
     }
 
     #[test]
+    fn groups_mdoc_option_forms_that_share_one_description() {
+        let document = parse_manual_bytes(
+            std::path::Path::new("shared-option-forms.1"),
+            b".Dd August 27, 2026\n.Dt SHARED-OPTION-FORMS 1\n.Os\n.Sh OPTIONS\n\
+.Bl -tag -width Ds\n\
+.It Fl L Xo\n.Sm off\n.Oo Ar bind_address : Oc\n.Ar port : host : hostport\n.Sm on\n.Xc\n\
+.It Fl L Xo\n.Sm off\n.Oo Ar bind_address : Oc\n.Ar port : remote_socket\n.Sm on\n.Xc\n\
+.It Fl L Xo\n.Sm off\n.Ar local_socket : host : hostport\n.Sm on\n.Xc\n\
+.It Fl L Xo\n.Sm off\n.Ar local_socket : remote_socket\n.Sm on\n.Xc\n\
+Forward a local socket.\n.El\n",
+        )
+        .expect("lower option forms with a shared description");
+
+        let Block::DefinitionList { items, .. } = &document.sections[0].blocks[0] else {
+            panic!("expected an option definition list");
+        };
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0]
+                .terms
+                .iter()
+                .map(|term| inline_text(term))
+                .collect::<Vec<_>>(),
+            [
+                "-L [bind_address:]port:host:hostport",
+                "-L [bind_address:]port:remote_socket",
+                "-L local_socket:host:hostport",
+                "-L local_socket:remote_socket",
+            ]
+        );
+        assert_eq!(items[0].identity.as_ref().unwrap().names, ["-L"]);
+        assert!(document.sections[0].blocks.iter().any(|block| {
+            matches!(block, Block::DefinitionList { items, .. }
+            if items[0].description.iter().any(|description| {
+                matches!(description, Block::Paragraph { children, .. }
+                    if inline_text(children).contains("Forward a local socket"))
+            }))
+        }));
+    }
+
+    #[test]
     fn carries_mdoc_spacing_state_into_display_lines() {
         let document = parse_manual_bytes(
             std::path::Path::new("display-spacing.8"),
