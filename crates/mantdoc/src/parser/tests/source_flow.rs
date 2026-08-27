@@ -418,7 +418,7 @@ fn bracketed_whitespace_controls_keep_legacy_invalid_escape_findings() {
             .map(|diagnostic| diagnostic.message.as_ref())
             .collect::<Vec<_>>(),
         [
-            "invalid escape sequence: \\[",
+            "invalid escape sequence: \\[ ",
             "invalid escape sequence: \\[%]",
             "invalid escape sequence: \\[&]",
             "invalid escape sequence: \\[:]",

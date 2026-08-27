@@ -177,7 +177,7 @@ fn collect_scope(
                             start.saturating_add(1),
                             format!(
                                 "escaped character not allowed in a name: {}",
-                                visible_bytes(&preview).trim_end()
+                                visible_bytes(&preview)
                             ),
                         ),
                         truncated,

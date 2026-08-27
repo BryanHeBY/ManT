@@ -594,11 +594,10 @@ pub(super) fn normalize_roff_name_prefix(name: &[u8], escape: u8) -> NormalizedR
             cursor += 2;
             continue;
         }
-        let preview_end = if matches!(name.get(cursor + 1), Some(b' ' | b'\t')) {
-            cursor.saturating_add(1)
-        } else {
-            cursor.saturating_add(2).min(name.len())
-        };
+        // The escaped byte remains part of mandoc's visible diagnostic
+        // spelling, including an escaped space or tab.  The recovered name
+        // still ends before the escape itself.
+        let preview_end = cursor.saturating_add(2).min(name.len());
         return NormalizedRoffName {
             name: normalized,
             invalid_escape_preview: Some(name[..preview_end].to_vec()),

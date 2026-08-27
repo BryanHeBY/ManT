@@ -778,7 +778,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 start.saturating_add(1),
                                 format!(
                                     "escaped character not allowed in a name: {}",
-                                    visible_bytes(preview).trim_end()
+                                    visible_bytes(preview)
                                 ),
                             ),
                             &mut truncated,
@@ -2437,7 +2437,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         control_start.saturating_add(1),
                                         format!(
                                             "escaped character not allowed in a name: {}",
-                                            visible_bytes(&preview).trim_end()
+                                            visible_bytes(&preview)
                                         ),
                                     ),
                                     &mut truncated,

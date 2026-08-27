@@ -160,7 +160,7 @@ pub(super) fn emit_escaped_request_name(
             start.saturating_add(1),
             format!(
                 "escaped character not allowed in a name: {}",
-                visible_bytes(&name.bytes[..preview_end]).trim_end()
+                visible_bytes(&name.bytes[..preview_end])
             ),
         ),
         truncated,

@@ -148,7 +148,7 @@ fn string_definition_names_normalize_literal_escapes_and_reject_other_escapes() 
     let report = Parser::default()
         .parse(Source::new(
             &name,
-            b".ds std\\\\esc stdval\n\\*[std\\\\esc]\n.ds esc\\eesc ignored\n\\*[esc]\n",
+            b".ds std\\\\esc stdval\n\\*[std\\\\esc]\n.ds esc\\eesc ignored\n\\*[esc]\n.ds bl\\ e ignored\n",
         ))
         .unwrap();
     assert_eq!(
@@ -165,6 +165,10 @@ fn string_definition_names_normalize_literal_escapes_and_reject_other_escapes() 
             (
                 DiagnosticCode::ROFF_UNDEFINED_REFERENCE,
                 "undefined string, using \"\": esc",
+            ),
+            (
+                DiagnosticCode::ROFF_ESCAPED_NAME,
+                "escaped character not allowed in a name: bl\\ ",
             ),
         ]
     );

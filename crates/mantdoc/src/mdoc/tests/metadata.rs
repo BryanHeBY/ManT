@@ -37,6 +37,35 @@ fn normalizes_deterministic_mdocdate_without_consulting_host_time() {
 }
 
 #[test]
+fn openbsd_rcs_id_requires_mdocdate_in_the_first_date_prologue() {
+    let name = SourceName::new("openbsd-mdocdate.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".\\\" $OpenBSD: openbsd-mdocdate.1,v 1.0 2026/08/28 00:00:00 maintainer Exp $\n.Dd bad date\n.Dt DATE 1\n.Os\n.Sh NAME\n.Nm date\n.Nd test\n",
+        ))
+        .unwrap();
+
+    assert_eq!(
+        report
+            .diagnostics
+            .iter()
+            .map(|diagnostic| (diagnostic.code.as_str(), diagnostic.message.as_ref()))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "mdoc.date-unparseable",
+                "cannot parse date, using it verbatim: Dd bad date",
+            ),
+            (
+                "mdoc.mdocdate-missing",
+                "Mdocdate missing: Dd bad date (OpenBSD)",
+            ),
+        ]
+    );
+}
+
+#[test]
 fn assigns_and_suppresses_mdoc_section_destination_tags() {
     let name = SourceName::new("mdoc-tags.1").unwrap();
     let report = Parser::default()

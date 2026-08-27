@@ -1146,12 +1146,18 @@ fn m5_expected_diagnostic_codes(case_id: &str) -> &'static [&'static str] {
             "mdoc.empty-macro",
             "mdoc.title-not-uppercase",
         ],
-        "regress/mdoc/Dd/badarg" | "regress/mdoc/Dd/long" => &["mdoc.date-unparseable"],
-        "regress/mdoc/Dd/manarg" => &["mdoc.date-legacy"],
+        "regress/mdoc/Dd/badarg" | "regress/mdoc/Dd/long" => {
+            &["mdoc.date-unparseable", "mdoc.mdocdate-missing"]
+        }
+        "regress/mdoc/Dd/manarg" => &["mdoc.date-legacy", "mdoc.mdocdate-missing"],
         "regress/mdoc/Dd/noarg" => &["mdoc.date-missing"],
-        "regress/mdoc/Dd/order" => &["mdoc.prologue-order"],
+        "regress/mdoc/Dd/order" => &["mdoc.prologue-order", "mdoc.mdocdate-missing"],
         "regress/mdoc/Dd/late" => &["mdoc.late-prologue"],
-        "regress/mdoc/Dd/dupe" => &["mdoc.duplicate-prologue", "mdoc.duplicate-prologue"],
+        "regress/mdoc/Dd/dupe" => &[
+            "mdoc.mdocdate-missing",
+            "mdoc.duplicate-prologue",
+            "mdoc.duplicate-prologue",
+        ],
         "regress/mdoc/Dt/dupe" => &["mdoc.duplicate-prologue", "mdoc.late-title"],
         "regress/mdoc/Dt/case" => &["mdoc.title-not-uppercase"],
         "regress/mdoc/Dt/badsec" => &["mdoc.title-section-unknown"],
@@ -2356,11 +2362,11 @@ mod tests {
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/badarg"),
-            ["mdoc.date-unparseable"]
+            ["mdoc.date-unparseable", "mdoc.mdocdate-missing"]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/manarg"),
-            ["mdoc.date-legacy"]
+            ["mdoc.date-legacy", "mdoc.mdocdate-missing"]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/noarg"),
@@ -2368,7 +2374,7 @@ mod tests {
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/order"),
-            ["mdoc.prologue-order"]
+            ["mdoc.prologue-order", "mdoc.mdocdate-missing"]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/late"),
@@ -2384,7 +2390,11 @@ mod tests {
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dd/dupe"),
-            ["mdoc.duplicate-prologue", "mdoc.duplicate-prologue"]
+            [
+                "mdoc.mdocdate-missing",
+                "mdoc.duplicate-prologue",
+                "mdoc.duplicate-prologue",
+            ]
         );
         assert_eq!(
             m5_expected_diagnostic_codes("regress/mdoc/Dt/dupe"),
