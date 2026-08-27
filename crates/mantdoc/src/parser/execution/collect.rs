@@ -317,6 +317,7 @@ fn collect_scope(
                     }
                     while let Some(next_close) = scope_closer_offset(remaining, escape) {
                         if discarded_nesting == 0 && !discard_line_tail && next_close > 0 {
+                            let logical_column_prefix = scope_logical_column_prefix(&frames);
                             frames
                                 .last_mut()
                                 .expect("scope collector always retains a root frame")
@@ -325,6 +326,7 @@ fn collect_scope(
                                     start,
                                     end,
                                     bytes: remaining[..next_close].to_vec(),
+                                    logical_column_prefix,
                                     terminal_inline: false,
                                 });
                         }
@@ -339,6 +341,7 @@ fn collect_scope(
                                     start,
                                     end,
                                     bytes: remaining.to_vec(),
+                                    logical_column_prefix: 0,
                                     terminal_inline: false,
                                 });
                             }
@@ -346,6 +349,7 @@ fn collect_scope(
                         }
                     }
                     if discarded_nesting == 0 && !discard_line_tail && !remaining.is_empty() {
+                        let logical_column_prefix = scope_logical_column_prefix(&frames);
                         frames
                             .last_mut()
                             .expect("scope collector always retains a root frame")
@@ -354,6 +358,7 @@ fn collect_scope(
                                 start,
                                 end,
                                 bytes: remaining.to_vec(),
+                                logical_column_prefix,
                                 terminal_inline: false,
                             });
                     }
@@ -367,6 +372,7 @@ fn collect_scope(
                 if has_nested_close && frames.len() > 1 {
                     let text = scope_closer_text(bytes, escape);
                     if discarded_nesting == 0 && !text.is_empty() {
+                        let logical_column_prefix = scope_logical_column_prefix(&frames);
                         frames
                             .last_mut()
                             .expect("scope collector always retains a root frame")
@@ -375,6 +381,7 @@ fn collect_scope(
                                 start,
                                 end,
                                 bytes: text,
+                                logical_column_prefix,
                                 terminal_inline: false,
                             });
                     }
@@ -412,6 +419,7 @@ fn collect_scope(
                             retained.extend_from_slice(suffix);
                         }
                         if !retained.is_empty() {
+                            let logical_column_prefix = scope_logical_column_prefix(&frames);
                             frames
                                 .last_mut()
                                 .expect("scope collector always retains a root frame")
@@ -420,6 +428,7 @@ fn collect_scope(
                                     start,
                                     end,
                                     bytes: retained,
+                                    logical_column_prefix,
                                     terminal_inline: true,
                                 });
                         }
@@ -430,6 +439,7 @@ fn collect_scope(
                     }
                     let closes_inactive_scope = innermost_scope_is_statically_inactive(&frames);
                     if discarded_nesting == 0 && !discard_line_tail && close > 0 {
+                        let logical_column_prefix = scope_logical_column_prefix(&frames);
                         frames
                             .last_mut()
                             .expect("scope collector always retains a root frame")
@@ -438,6 +448,7 @@ fn collect_scope(
                                 start,
                                 end,
                                 bytes: remaining[..close].to_vec(),
+                                logical_column_prefix,
                                 terminal_inline: false,
                             });
                     }
@@ -457,6 +468,7 @@ fn collect_scope(
                     }
                 }
                 if discarded_nesting == 0 && !discard_line_tail && !remaining.is_empty() {
+                    let logical_column_prefix = scope_logical_column_prefix(&frames);
                     frames
                         .last_mut()
                         .expect("scope collector always retains a root frame")
@@ -465,6 +477,7 @@ fn collect_scope(
                             start,
                             end,
                             bytes: remaining.to_vec(),
+                            logical_column_prefix,
                             terminal_inline,
                         });
                 }
@@ -626,6 +639,7 @@ pub(in crate::parser) fn close_collected_scope(
                 start,
                 end: closed.end,
                 bytes,
+                logical_column_prefix: 0,
                 terminal_inline: false,
             },
         );
@@ -660,6 +674,12 @@ pub(in crate::parser) fn close_collected_scope(
         .lines
         .push(line);
     None
+}
+
+fn scope_logical_column_prefix(frames: &[PendingScope]) -> u32 {
+    frames
+        .last()
+        .map_or(0, |scope| scope.end.saturating_sub(scope.start))
 }
 
 pub(in crate::parser) fn scoped_request_kind(
@@ -737,6 +757,7 @@ pub(in crate::parser) fn definition_scope_remainder_line(
             start,
             end,
             bytes: bytes.to_vec(),
+            logical_column_prefix: 0,
             terminal_inline: false,
         };
     };
@@ -761,6 +782,7 @@ pub(in crate::parser) fn definition_scope_remainder_line(
             start,
             end,
             bytes: bytes.to_vec(),
+            logical_column_prefix: 0,
             terminal_inline: false,
         }
     }

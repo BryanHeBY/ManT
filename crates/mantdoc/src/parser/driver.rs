@@ -2000,6 +2000,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     start: blank_start,
                                     end: blank_start,
                                     bytes: Vec::new(),
+                                    logical_column_prefix: 0,
                                     terminal_inline: false,
                                 },
                             );

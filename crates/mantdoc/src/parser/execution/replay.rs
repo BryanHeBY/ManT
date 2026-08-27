@@ -1,16 +1,16 @@
 use super::super::{
     ArgumentIssue, BranchOutcome, Diagnostic, DiagnosticCode, DocumentBuilder, EmitContext,
-    Environment, Limits, NodeFlags, NodeId, NodeKind, Scanner, ScopeFlow, ScopeLine, Severity,
-    SourcePosition, SourceSpan, append_node, append_text_node, apply_environment_request,
+    Environment, Limits, MacroSet, NodeFlags, NodeId, NodeKind, Scanner, ScopeFlow, ScopeLine,
+    Severity, SourcePosition, SourceSpan, append_node, append_text_node, apply_environment_request,
     apply_string_request, condition_body_source_start_from_offset, condition_body_template,
     condition_parts, consume_ignore_block, copy_mode_reparse, diagnostic, emit_escape_issues,
-    environment_error_diagnostic, evaluate_condition, expand_environment, ignore_marker,
-    is_builtin_package_macro, is_definition_terminator, is_environment_request,
-    is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator, is_scope_opener,
-    join_arguments, lex_arguments, lex_condition_arguments, normalize_document_escapes,
-    push_diagnostic, record_expansion_steps, scope_line_end, scope_line_start,
-    set_new_root_children_logical_start, split_macro_control, translate_visible,
-    trim_horizontal_space, visible_bytes,
+    emit_trailing_whitespace_with_logical_start, environment_error_diagnostic, evaluate_condition,
+    expand_environment, ignore_marker, is_builtin_package_macro, is_definition_terminator,
+    is_environment_request, is_macro_comment_request, is_scope_closer, is_scope_ignore_terminator,
+    is_scope_opener, join_arguments, lex_arguments, lex_condition_arguments,
+    normalize_document_escapes, push_diagnostic, record_expansion_steps, scope_line_end,
+    scope_line_start, set_new_root_children_logical_start, split_macro_control,
+    trailing_whitespace_start, translate_visible, trim_horizontal_space, visible_bytes,
 };
 use super::collect::collect_pending_macro_scope;
 
@@ -1791,6 +1791,7 @@ pub(in crate::parser) fn inline_scope_body_line(
             start,
             end,
             bytes,
+            logical_column_prefix: 0,
             terminal_inline: false,
         },
     }
@@ -2035,9 +2036,36 @@ pub(in crate::parser) fn execute_scope_line(
     match line {
         ScopeLine::Text {
             bytes,
+            logical_column_prefix,
             terminal_inline,
             ..
         } => {
+            let authored_trailing_whitespace = trailing_whitespace_start(bytes).is_some();
+            let logical_line_start = (*logical_column_prefix != 0)
+                .then(|| {
+                    SourceSpan::new(source_id, start, start)
+                        .ok()
+                        .and_then(|span| builder.source_position(&span))
+                        .map(|position| SourcePosition {
+                            line: position.line,
+                            column: position.column.saturating_add(*logical_column_prefix),
+                        })
+                })
+                .flatten();
+            if builder.macro_set() != MacroSet::None
+                && (builder.macro_set() == MacroSet::Mdoc || environment.is_filled())
+            {
+                emit_trailing_whitespace_with_logical_start(
+                    bytes,
+                    builder.macro_set(),
+                    start,
+                    logical_line_start,
+                    source_id,
+                    limits,
+                    diagnostics,
+                    truncated,
+                );
+            }
             let Some(bytes) = expand_environment(
                 environment,
                 bytes,
@@ -2053,6 +2081,21 @@ pub(in crate::parser) fn execute_scope_line(
             ) else {
                 return ScopeFlow::Halt;
             };
+            if !authored_trailing_whitespace
+                && builder.macro_set() != MacroSet::None
+                && (builder.macro_set() == MacroSet::Mdoc || environment.is_filled())
+            {
+                emit_trailing_whitespace_with_logical_start(
+                    &bytes,
+                    builder.macro_set(),
+                    start,
+                    logical_line_start,
+                    source_id,
+                    limits,
+                    diagnostics,
+                    truncated,
+                );
+            }
             let escape = scanner.escape_character();
             let Some(bytes) = translate_visible(
                 environment,
@@ -2177,6 +2220,7 @@ pub(in crate::parser) fn execute_scope_line(
                     start,
                     end,
                     bytes: arguments.clone(),
+                    logical_column_prefix: 0,
                     terminal_inline: false,
                 };
                 return execute_scope_line(

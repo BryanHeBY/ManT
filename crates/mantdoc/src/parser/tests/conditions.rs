@@ -43,6 +43,28 @@ fn gcc_style_nested_register_condition_does_not_leak_its_request_body() {
 }
 
 #[test]
+fn selected_scope_text_keeps_the_post_closer_trailing_whitespace_finding() {
+    let name = SourceName::new("conditional-trailing-whitespace.3").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".Dd August 28, 2026\n.Dt CONDITIONAL 3\n.Os\n.Sh DESCRIPTION\n.Bd -filled\n.if n \\{\\\nselected body \\}\n.Ed\n",
+        ))
+        .unwrap();
+
+    let diagnostic = report
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_str() == DiagnosticCode::INPUT_TRAILING_WHITESPACE)
+        .unwrap();
+    let location = report
+        .document
+        .source_position(diagnostic.primary.as_ref().unwrap())
+        .unwrap();
+    assert_eq!((location.line, location.column), (7, 22));
+}
+
+#[test]
 fn nested_inline_conditional_in_a_scope_keeps_its_body_location() {
     let name = SourceName::new("nested-scope-location.1").unwrap();
     let report = Parser::default()

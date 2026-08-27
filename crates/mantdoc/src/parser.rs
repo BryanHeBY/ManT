@@ -273,11 +273,11 @@ use emit::{
     emit_filled_text_tabs, emit_font_request_diagnostics, emit_invalid_input_bytes,
     emit_man_alternating_font_trailing_whitespace, emit_mdoc_control_trailing_whitespace,
     emit_mdoc_empty_display, emit_mdoc_implicit_trailing_delimiter_spacing,
-    emit_trailing_whitespace, emit_translation_request_diagnostics,
-    emit_unterminated_quoted_argument, emit_user_macro_leading_tabs,
-    has_physical_line_continuation, is_bad_comment_style, is_builtin_package_macro,
-    is_legacy_roff_font_selector, is_man_visible_argument_macro, legacy_table_input_text,
-    normalize_document_escapes, recover_unterminated_quoted_arguments,
+    emit_trailing_whitespace, emit_trailing_whitespace_with_logical_start,
+    emit_translation_request_diagnostics, emit_unterminated_quoted_argument,
+    emit_user_macro_leading_tabs, has_physical_line_continuation, is_bad_comment_style,
+    is_builtin_package_macro, is_legacy_roff_font_selector, is_man_visible_argument_macro,
+    legacy_table_input_text, normalize_document_escapes, recover_unterminated_quoted_arguments,
     retain_user_macro_tab_argument_prefix, update_fill_mode,
 };
 use event::{ControlEvent, EnvironmentRequest, RequestKind, SourceEvent, TransparentRequest};
@@ -336,6 +336,9 @@ enum ScopeLine {
         start: u32,
         end: u32,
         bytes: Vec<u8>,
+        /// Number of control-line bytes that remain part of this text line's
+        /// logical roff input frame after a multiline `\\{\\` opener.
+        logical_column_prefix: u32,
         /// This text starts after a roff conditional-scope closer on the
         /// same physical source line.  Terminal rendering must keep it in
         /// the preceding inline flow even though it is replayed separately.

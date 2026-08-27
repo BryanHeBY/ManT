@@ -510,6 +510,31 @@ pub(super) fn emit_trailing_whitespace(
     diagnostics: &mut Vec<Diagnostic>,
     truncated: &mut bool,
 ) {
+    emit_trailing_whitespace_with_logical_start(
+        bytes,
+        macro_set,
+        line_start,
+        None,
+        source_id,
+        limits,
+        diagnostics,
+        truncated,
+    );
+}
+
+/// Emit a terminal-whitespace finding while preserving a roff input frame's
+/// logical source column when that frame spans a physical line continuation.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn emit_trailing_whitespace_with_logical_start(
+    bytes: &[u8],
+    macro_set: MacroSet,
+    line_start: u32,
+    logical_line_start: Option<crate::SourcePosition>,
+    source_id: crate::SourceId,
+    limits: &Limits,
+    diagnostics: &mut Vec<Diagnostic>,
+    truncated: &mut bool,
+) {
     let Some(trailing_start) = trailing_whitespace_start(bytes) else {
         return;
     };
@@ -523,6 +548,15 @@ pub(super) fn emit_trailing_whitespace(
     };
     let offset = u32::try_from(offset).expect("scanned line offsets fit public u32 spans");
     let start = line_start.saturating_add(offset);
+    let primary = SourceSpan::new(source_id, start, start.saturating_add(1))
+        .expect("trailing whitespace position remains a monotonic source span");
+    let primary = match logical_line_start {
+        Some(logical_start) => primary.with_logical_start(crate::SourcePosition {
+            line: logical_start.line,
+            column: logical_start.column.saturating_add(offset),
+        }),
+        None => primary,
+    };
     push_diagnostic(
         diagnostics,
         limits,
@@ -533,7 +567,8 @@ pub(super) fn emit_trailing_whitespace(
             start,
             start.saturating_add(1),
             "whitespace at end of input line",
-        ),
+        )
+        .with_primary(primary),
         truncated,
     );
 }
