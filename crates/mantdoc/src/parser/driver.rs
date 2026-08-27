@@ -1,10 +1,10 @@
 use super::{
-    ArgumentIssue, Diagnostic, DiagnosticCode, DocumentBuilder, Environment, EscapeIssueKind,
-    IncludeRequest, InputTrap, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParserConfig,
-    ScanOutcome, ScannedLine, Scanner, ScopeFlow, ScopeLine, Severity, Source, SourcePosition,
-    SourceResolver, SourceSpan, Syntax, append_node, append_text_node, append_textual_node,
-    apply_environment_request, apply_string_request, arm_input_trap, collect_pending_macro_scope,
-    collect_scope, condition_body_source_start_from_offset, condition_body_template,
+    ArgumentIssue, DiagnosticCode, DocumentBuilder, EscapeIssueKind, IncludeRequest, InputTrap,
+    MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession, ScanOutcome, ScannedLine,
+    Scanner, ScopeFlow, ScopeLine, Severity, Source, SourcePosition, SourceResolver, SourceSpan,
+    Syntax, append_node, append_text_node, append_textual_node, apply_environment_request,
+    apply_string_request, arm_input_trap, collect_pending_macro_scope, collect_scope,
+    condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
     emit_bad_comment_style, emit_declared_character_escape_warnings, emit_escape_issues,
@@ -41,29 +41,32 @@ use super::{
 };
 
 #[allow(clippy::too_many_lines)] // M2's explicit scanner-stage dispatch is kept in source order.
-#[allow(clippy::needless_borrow)] // Borrowed session fields remain explicit at the recursive boundary.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::needless_borrow)] // Mutable session fields preserve the existing helper call shape.
 pub(super) fn scan_source<R: SourceResolver + ?Sized>(
     source: Source<'_>,
-    config: &ParserConfig,
     source_id: crate::SourceId,
     include_depth: usize,
-    mut builder: &mut DocumentBuilder,
-    mut environment: &mut Environment,
-    mut diagnostics: Vec<Diagnostic>,
-    mut deferred_post_validation_diagnostics: Vec<Diagnostic>,
-    mut text_bytes: usize,
-    mut expansion_steps: usize,
-    mut truncated: bool,
-    mut maximum_depth: usize,
-    mut previous_conditional: Option<bool>,
-    mut total_loop_iterations: usize,
-    mut source_bytes: usize,
-    mut source_files: usize,
-    mut saw_mdoc_operating_system: bool,
-    active_sources: &mut Vec<crate::SourceName>,
-    resolver: &mut R,
+    session: &mut ParseSession<'_, R>,
+    outcome: ScanOutcome,
 ) -> ScanOutcome {
+    let config = session.config;
+    let mut builder = &mut *session.builder;
+    let mut environment = &mut *session.environment;
+    let active_sources = &mut *session.active_sources;
+    let resolver = &mut *session.resolver;
+    let ScanOutcome {
+        mut diagnostics,
+        mut deferred_post_validation_diagnostics,
+        mut source_bytes,
+        mut source_files,
+        mut text_bytes,
+        mut expansion_steps,
+        mut truncated,
+        mut maximum_depth,
+        mut previous_conditional,
+        mut total_loop_iterations,
+        mut saw_mdoc_operating_system,
+    } = outcome;
     let limits = &config.limits;
     let root = DocumentBuilder::root();
     let mut scanner = Scanner::new(source.bytes, limits);
@@ -2112,26 +2115,26 @@ pub(super) fn scan_source<R: SourceResolver + ?Sized>(
                     source_bytes += included.bytes.len();
                     source_files += 1;
                     active_sources.push(included.name.clone());
+                    let mut included_session =
+                        ParseSession::new(config, builder, environment, active_sources, resolver);
                     let outcome = scan_source(
                         Source::new(&included.name, &included.bytes),
-                        config,
                         resolved_source_id,
                         include_depth + 1,
-                        builder,
-                        environment,
-                        diagnostics,
-                        deferred_post_validation_diagnostics,
-                        text_bytes,
-                        expansion_steps,
-                        truncated,
-                        maximum_depth,
-                        previous_conditional,
-                        total_loop_iterations,
-                        source_bytes,
-                        source_files,
-                        saw_mdoc_operating_system,
-                        active_sources,
-                        resolver,
+                        &mut included_session,
+                        ScanOutcome {
+                            diagnostics,
+                            deferred_post_validation_diagnostics,
+                            source_bytes,
+                            source_files,
+                            text_bytes,
+                            expansion_steps,
+                            truncated,
+                            maximum_depth,
+                            previous_conditional,
+                            total_loop_iterations,
+                            saw_mdoc_operating_system,
+                        },
                     );
                     active_sources.pop();
                     diagnostics = outcome.diagnostics;

@@ -165,26 +165,19 @@ impl Parser {
         environment.configure_limits(&self.config.limits);
         let mut active_sources = vec![source.name.clone()];
         let root_source_has_mdoc_os = source_has_mdoc_operating_system_request(source.bytes);
-        let mut outcome = scan_source(
-            source,
+        let mut session = ParseSession::new(
             &self.config,
-            DocumentBuilder::root_source(),
-            0,
             &mut builder,
             &mut environment,
-            Vec::new(),
-            Vec::new(),
-            0,
-            0,
-            false,
-            1,
-            None,
-            0,
-            source.bytes.len(),
-            1,
-            root_source_has_mdoc_os,
             &mut active_sources,
             resolver,
+        );
+        let mut outcome = scan_source(
+            source,
+            DocumentBuilder::root_source(),
+            0,
+            &mut session,
+            ScanOutcome::root(source.bytes.len(), root_source_has_mdoc_os),
         );
         outcome.saw_mdoc_operating_system |= root_source_has_mdoc_os;
         let structure = crate::preprocess::structure(&mut builder, &self.config.limits);
@@ -236,6 +229,7 @@ mod execution;
 mod report;
 mod request;
 mod runtime;
+mod session;
 use condition::{
     condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, emit_escaped_condition_name,
@@ -287,6 +281,7 @@ use runtime::{
     update_man_example_fill_presentation, update_man_indent_register, update_preprocessor_depth,
     update_table_preprocessor_depth, validate_character_request, visible_bytes,
 };
+use session::{ParseSession, ScanOutcome};
 
 struct DenyResolver;
 
@@ -297,20 +292,6 @@ impl SourceResolver for DenyResolver {
     ) -> Result<Option<crate::ResolvedSource>, crate::ResolveError> {
         Ok(None)
     }
-}
-
-struct ScanOutcome {
-    diagnostics: Vec<Diagnostic>,
-    deferred_post_validation_diagnostics: Vec<Diagnostic>,
-    source_bytes: usize,
-    source_files: usize,
-    text_bytes: usize,
-    expansion_steps: usize,
-    truncated: bool,
-    maximum_depth: usize,
-    previous_conditional: Option<bool>,
-    total_loop_iterations: usize,
-    saw_mdoc_operating_system: bool,
 }
 
 /// One physical line retained while a bounded roff `\\{ ... \\}` scope is
