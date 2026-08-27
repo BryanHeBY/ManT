@@ -209,12 +209,20 @@ fn identify_blocks(
                 }
             }
             Block::DefinitionList { items, layout, .. } => {
-                let item_context =
-                    if context == DefinitionContext::Commands && layout.indent_columns > 0 {
-                        DefinitionContext::Parameters
-                    } else {
-                        context
-                    };
+                let inferred_context = if context == DefinitionContext::Generic
+                    && is_key_binding_command_group(items)
+                {
+                    DefinitionContext::Commands
+                } else {
+                    context
+                };
+                let item_context = if inferred_context == DefinitionContext::Commands
+                    && layout.indent_columns > 0
+                {
+                    DefinitionContext::Parameters
+                } else {
+                    inferred_context
+                };
                 for item in items {
                     let role = identify_item(item, item_context, used, reserved, retained);
                     let child_context = match role {
@@ -252,6 +260,68 @@ fn identify_blocks(
             | Block::Unsupported { .. } => {}
         }
     }
+}
+
+/// Recognize a definition group whose authored forms are editor commands and
+/// optional key bindings.
+///
+/// Manuals such as Bash group Readline commands under topical headings like
+/// "Killing and Yanking" or "Miscellaneous", so a heading-only classifier
+/// cannot recover their executable names. Requiring a whole multi-item group
+/// of command-name tokens plus at least one recognizable binding keeps this
+/// inference narrower than treating arbitrary hyphenated glossary terms as
+/// commands.
+fn is_key_binding_command_group(items: &[DefinitionItem]) -> bool {
+    items.len() > 1
+        && items.iter().all(|item| {
+            item.terms
+                .first()
+                .is_some_and(|term| key_binding_command_form(&plain_text(term)).is_some())
+        })
+        && items.iter().any(|item| {
+            item.terms.first().is_some_and(|term| {
+                key_binding_command_form(&plain_text(term))
+                    .is_some_and(|(_, binding)| binding.is_some())
+            })
+        })
+}
+
+fn key_binding_command_form(value: &str) -> Option<(&str, Option<&str>)> {
+    let value = value.trim();
+    let split = value
+        .char_indices()
+        .find(|(_, character)| character.is_whitespace());
+    let (name, suffix) = split.map_or((value, ""), |(index, _)| {
+        (&value[..index], value[index..].trim())
+    });
+    let mut characters = name.chars();
+    if !characters
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic())
+        || !characters
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        return None;
+    }
+    if suffix.is_empty() {
+        return Some((name, None));
+    }
+    let binding = suffix.strip_prefix('(')?.strip_suffix(')')?.trim();
+    (!binding.is_empty() && looks_like_key_binding(binding)).then_some((name, Some(binding)))
+}
+
+fn looks_like_key_binding(value: &str) -> bool {
+    value
+        .split(|character: char| matches!(character, ',' | ' '))
+        .filter(|part| !part.is_empty() && *part != "usually" && *part != "...")
+        .any(|part| {
+            part.starts_with("C-")
+                || part.starts_with("M-")
+                || matches!(
+                    part,
+                    "TAB" | "Return" | "Newline" | "Rubout" | "ESC" | "<space>"
+                )
+        })
 }
 
 /// Reattach source-neutral indented continuations to their owning definition.
