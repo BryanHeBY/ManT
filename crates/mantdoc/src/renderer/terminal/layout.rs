@@ -118,6 +118,89 @@ pub(in crate::renderer) fn terminal_line_length_value(
     .max(1)
 }
 
+#[derive(Clone, Copy, Default)]
+enum TerminalAlignment {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
+struct TerminalLayoutLine<'a> {
+    alignment: TerminalAlignment,
+    no_wrap: bool,
+    literal_tabs: bool,
+    keep_spacing: bool,
+    width: usize,
+    temporary_indent: Option<usize>,
+    hanging_indent: Option<usize>,
+    text: &'a str,
+}
+
+impl<'a> TerminalLayoutLine<'a> {
+    fn decode(raw: &'a str, default_width: usize) -> Self {
+        let (alignment, raw) = if let Some(line) = raw.strip_prefix(TERMINAL_CENTER_MARKER) {
+            (TerminalAlignment::Center, line)
+        } else if let Some(line) = raw.strip_prefix(TERMINAL_RIGHT_MARKER) {
+            (TerminalAlignment::Right, line)
+        } else {
+            (TerminalAlignment::Left, raw)
+        };
+        let (no_wrap, raw) = take_flag(raw, TERMINAL_NO_WRAP_MARKER);
+        let (literal_tabs, raw) = take_flag(raw, TERMINAL_LITERAL_TAB_MARKER);
+        let (keep_spacing, raw) = take_flag(raw, TERMINAL_KEEP_SPACING_MARKER);
+        let (width, raw) = terminal_line_length(raw, default_width);
+        let (temporary_indent, raw) = terminal_temporary_indent(raw);
+        let (hanging_indent, text) = terminal_hanging_indent(raw);
+        Self {
+            alignment,
+            no_wrap,
+            literal_tabs,
+            keep_spacing,
+            width,
+            temporary_indent,
+            hanging_indent,
+            text,
+        }
+    }
+
+    fn align(self, output: &mut String, start: usize, maximum: usize) -> Result<(), RenderError> {
+        match self.alignment {
+            TerminalAlignment::Left => Ok(()),
+            TerminalAlignment::Center => {
+                center_terminal_output_segment(output, start, self.width, maximum)
+            }
+            TerminalAlignment::Right => {
+                right_adjust_terminal_output_segment(output, start, self.width, maximum)
+            }
+        }
+    }
+}
+
+fn take_flag(input: &str, marker: char) -> (bool, &str) {
+    input
+        .strip_prefix(marker)
+        .map_or((false, input), |remainder| (true, remainder))
+}
+
+struct TerminalLayoutProgram<'a> {
+    encoded: &'a str,
+    visible_lines: usize,
+}
+
+impl<'a> TerminalLayoutProgram<'a> {
+    fn decode(encoded: &'a str) -> Self {
+        let visible_lines = encoded
+            .split('\n')
+            .filter(|line| terminal_tab_stop_request(line).is_none())
+            .count();
+        Self {
+            encoded,
+            visible_lines,
+        }
+    }
+}
+
 /// Wrap filled terminal prose with Unicode display-width accounting.
 ///
 /// Explicit line breaks and table tabs remain structural boundaries. The
@@ -151,39 +234,20 @@ pub(in crate::renderer) fn wrap_terminal_output(
         periodic: vec![5],
         ..TerminalTabStops::default()
     };
-    let mut lines = Vec::new();
-    for line in input.split('\n') {
-        if let Some(request) = terminal_tab_stop_request(line) {
-            terminal_apply_tab_stop_request(&mut tab_stops, request);
-        } else {
-            lines.push((line, tab_stops.clone()));
-        }
-    }
+    let program = TerminalLayoutProgram::decode(&input);
     let mut output = String::new();
-    let line_count = lines.len();
-    for (line_index, (raw_line, tab_stops)) in lines.into_iter().enumerate() {
+    let mut line_index = 0_usize;
+    for raw_line in program.encoded.split('\n') {
+        if let Some(request) = terminal_tab_stop_request(raw_line) {
+            terminal_apply_tab_stop_request(&mut tab_stops, request);
+            continue;
+        }
         if line_index > 0 {
             append(&mut output, "\n", maximum)?;
         }
         let output_start = output.len();
-        let (centered, raw_line) = raw_line
-            .strip_prefix(TERMINAL_CENTER_MARKER)
-            .map_or((false, raw_line), |line| (true, line));
-        let (right_adjusted, raw_line) = raw_line
-            .strip_prefix(TERMINAL_RIGHT_MARKER)
-            .map_or((false, raw_line), |line| (true, line));
-        let (no_wrap, line) = raw_line
-            .strip_prefix(TERMINAL_NO_WRAP_MARKER)
-            .map_or((false, raw_line), |line| (true, line));
-        let (literal_tabs, line) = line
-            .strip_prefix(TERMINAL_LITERAL_TAB_MARKER)
-            .map_or((false, line), |line| (true, line));
-        let (keep_spacing, line) = line
-            .strip_prefix(TERMINAL_KEEP_SPACING_MARKER)
-            .map_or((false, line), |line| (true, line));
-        let (line_width, line) = terminal_line_length(line, width);
-        let (temporary_indent, line) = terminal_temporary_indent(line);
-        let (hanging_indent, line) = terminal_hanging_indent(line);
+        let layout = TerminalLayoutLine::decode(raw_line, width);
+        let line = layout.text;
         // The default `T`/`.5i` tab policy starts at the fifth column of the
         // text field, then advances in five-column fields. The distinct
         // `Bd -literal` device state uses eight-column stops unless an
@@ -191,7 +255,7 @@ pub(in crate::renderer) fn wrap_terminal_output(
         let expanded = line.contains('\t').then(|| {
             if tab_stops.configured {
                 expand_terminal_tabs(line, &tab_stops)
-            } else if literal_tabs {
+            } else if layout.literal_tabs {
                 expand_literal_terminal_tabs(line)
             } else {
                 expand_filled_terminal_tabs(line)
@@ -199,13 +263,13 @@ pub(in crate::renderer) fn wrap_terminal_output(
         });
         let line = expanded.as_deref().unwrap_or(line);
         if line_index < protected_header_lines
-            || line_index >= line_count.saturating_sub(protected_footer_lines)
-            || no_wrap
-            || keep_spacing
+            || line_index >= program.visible_lines.saturating_sub(protected_footer_lines)
+            || layout.no_wrap
+            || layout.keep_spacing
             || line.is_empty()
             || line.contains('\t')
         {
-            let temporary_line = temporary_indent.map(|target| {
+            let temporary_line = layout.temporary_indent.map(|target| {
                 let indentation = line.bytes().take_while(|byte| *byte == b' ').count();
                 format!("{}{}", " ".repeat(target), &line[indentation..])
             });
@@ -222,26 +286,20 @@ pub(in crate::renderer) fn wrap_terminal_output(
                 )
                 .replace(TERMINAL_NONBREAKING_SPACE_MARKER, " ");
             append(&mut output, &line, maximum)?;
-            if centered {
-                center_terminal_output_segment(&mut output, output_start, line_width, maximum)?;
-            } else if right_adjusted {
-                right_adjust_terminal_output_segment(
-                    &mut output,
-                    output_start,
-                    line_width,
-                    maximum,
-                )?;
-            }
+            layout.align(&mut output, output_start, maximum)?;
+            line_index += 1;
             continue;
         }
         let indent_width = line.bytes().take_while(|byte| *byte == b' ').count();
         let (indent, content) = line.split_at(indent_width);
-        let initial_indent_width = temporary_indent.unwrap_or(indent_width);
-        let initial_indent =
-            temporary_indent.map_or_else(|| indent.to_owned(), |target| " ".repeat(target));
-        let continuation_indent_width = hanging_indent.unwrap_or(indent_width);
-        let continuation_indent =
-            hanging_indent.map_or_else(|| indent.to_owned(), |target| " ".repeat(target));
+        let initial_indent_width = layout.temporary_indent.unwrap_or(indent_width);
+        let initial_indent = layout
+            .temporary_indent
+            .map_or_else(|| indent.to_owned(), |target| " ".repeat(target));
+        let continuation_indent_width = layout.hanging_indent.unwrap_or(indent_width);
+        let continuation_indent = layout
+            .hanging_indent
+            .map_or_else(|| indent.to_owned(), |target| " ".repeat(target));
         let mut current_width = 0_usize;
         let mut first_word = true;
         let mut initial_line = true;
@@ -270,10 +328,10 @@ pub(in crate::renderer) fn wrap_terminal_output(
             };
             if first_word
                 && raw_word.contains(TERMINAL_OPTIONAL_BREAK_MARKER)
-                && initial_indent_width.saturating_add(word_width) > line_width
+                && initial_indent_width.saturating_add(word_width) > layout.width
                 && let Some((prefix, suffix)) = terminal_optional_break(
                     raw_word,
-                    line_width.saturating_sub(initial_indent_width),
+                    layout.width.saturating_sub(initial_indent_width),
                 )
             {
                 let prefix = prefix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, "");
@@ -294,9 +352,11 @@ pub(in crate::renderer) fn wrap_terminal_output(
                 && current_width
                     .saturating_add(separator)
                     .saturating_add(word_width)
-                    > line_width
+                    > layout.width
             {
-                let available = line_width.saturating_sub(current_width.saturating_add(separator));
+                let available = layout
+                    .width
+                    .saturating_sub(current_width.saturating_add(separator));
                 if let Some((prefix, suffix)) = terminal_optional_break(raw_word, available) {
                     let prefix = prefix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, "");
                     let suffix = suffix.replace(TERMINAL_OPTIONAL_BREAK_MARKER, "");
@@ -346,11 +406,8 @@ pub(in crate::renderer) fn wrap_terminal_output(
             first_word = false;
             sentence_spacing = false;
         }
-        if centered {
-            center_terminal_output_segment(&mut output, output_start, line_width, maximum)?;
-        } else if right_adjusted {
-            right_adjust_terminal_output_segment(&mut output, output_start, line_width, maximum)?;
-        }
+        layout.align(&mut output, output_start, maximum)?;
+        line_index += 1;
     }
     Ok(output
         .replace(TERMINAL_NONBREAKING_SPACE_MARKER, " ")
