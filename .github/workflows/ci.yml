@@ -184,10 +184,11 @@ jobs:
           archive="$RUNNER_TEMP/mandoc-1.14.6.tar.gz"
           curl --fail --location --retry 3 --retry-all-errors \
             --output "$archive" https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz
-          # M3, M4, and M6 are independent whole-corpus checks. Strict lint,
-          # M5, and M9 renderer comparison add deterministic index-modulo
-          # shards. Four shards preserve complete coverage without serializing
-          # the parser and renderer gates.
+          # The immutable 572-input native canonical snapshot plus M3, M4,
+          # and M6 are independent whole-corpus checks. Strict lint, M5, and
+          # M9 renderer comparison add deterministic index-modulo shards. Four
+          # shards preserve complete coverage without serializing parser and
+          # renderer gates.
           python3 scripts/run-mantdoc-differential-shards.py "$archive" --shards 4 --jobs 4
 
   macos-native:

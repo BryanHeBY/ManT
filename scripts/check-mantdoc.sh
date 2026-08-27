@@ -127,7 +127,7 @@ cargo clippy --quiet --locked --package mantdoc --all-targets --all-features -- 
   -D clippy::redundant_clone \
   -D clippy::unnecessary_struct_initialization
 
-lanes=lint,m3,m4,m5,m6,m9
+lanes=canonical,lint,m3,m4,m5,m6,m9
 printf '\n==> run deterministic native differential lanes (%s shards, %s workers)\n' \
   "$shards" "$jobs"
 python3 scripts/run-mantdoc-differential-shards.py "$archive" \

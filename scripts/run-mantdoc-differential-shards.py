@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run independent native mantdoc conformance lanes concurrently.
 
-The M3, M4, and M6 smoke gates are independent whole-corpus tasks. The strict
-lint, M5, and M9 renderer-golden gates additionally partition their
+The native canonical snapshot plus M3, M4, and M6 are independent whole-corpus
+tasks. The strict lint, M5, and M9 renderer-golden gates additionally partition their
 checksum-ordered corpus by ``case_index % shard_count``. This helper builds the
 feature-gated tools once, runs every independent task concurrently, then sums
 machine-readable counters. A shard always validates the whole upstream
@@ -22,11 +22,12 @@ from dataclasses import dataclass
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEFAULT_LANES = ("lint", "m3", "m4", "m5", "m6", "m9")
+DEFAULT_LANES = ("canonical", "lint", "m3", "m4", "m5", "m6", "m9")
 SHARDED_LANES = frozenset(("lint", "m5", "m9"))
-KNOWN_LANES = frozenset((*DEFAULT_LANES, "lint", "m9"))
+KNOWN_LANES = frozenset(DEFAULT_LANES)
 AGGREGATE_COUNTERS = {
     "case_count",
+    "canonical_case_count",
     "diagnostic_case_count",
     "renderer_output_count",
     "renderer_equal_output_count",
@@ -55,8 +56,16 @@ def command_for(
     list_renderer_differences: bool,
 ) -> list[str]:
     inventory = ROOT / "target" / "debug" / "examples" / "mantdoc-corpus-inventory"
+    canonical = ROOT / "target" / "debug" / "examples" / "mantdoc-canonical-snapshot"
     lint_diff = ROOT / "target" / "debug" / "examples" / "mantdoc-lint-diff"
     renderer_diff = ROOT / "target" / "debug" / "examples" / "mantdoc-render-diff"
+    if lane == "canonical":
+        return [
+            str(canonical),
+            str(archive),
+            "--verify",
+            str(ROOT / "crates/mantdoc/tests/conformance/data/mandoc-1.14.6-native-canonical.sha256"),
+        ]
     if lane == "m3":
         return [str(inventory), str(archive), "--m3-execution"]
     if lane == "m4":
@@ -119,7 +128,10 @@ def main() -> int:
     parser.add_argument(
         "--lanes",
         default=",".join(DEFAULT_LANES),
-        help="comma-separated subset of lint,m3,m4,m5,m6,m9 (default: strict lint and M3-M6/M9)",
+        help=(
+            "comma-separated subset of canonical,lint,m3,m4,m5,m6,m9 "
+            "(default: canonical, strict lint, and M3-M6/M9)"
+        ),
     )
     parser.add_argument(
         "--list-renderer-differences",
@@ -134,7 +146,7 @@ def main() -> int:
         parser.error("--jobs must be positive")
     lanes = tuple(lane for lane in args.lanes.split(",") if lane)
     if not lanes or any(lane not in KNOWN_LANES for lane in lanes):
-        parser.error("--lanes must be a nonempty subset of lint,m3,m4,m5,m6,m9")
+        parser.error("--lanes must be a nonempty subset of canonical,lint,m3,m4,m5,m6,m9")
     if args.list_renderer_differences and "m9" not in lanes:
         parser.error("--list-renderer-differences requires the m9 lane")
     if not args.archive.is_file():

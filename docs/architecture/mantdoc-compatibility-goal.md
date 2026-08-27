@@ -100,23 +100,35 @@ regression and no known control-line leak.
 1. Verify the archive and every source/output identity before selecting cases.
 2. Execute all 572 inputs.  Existing smoke lanes must not be described as AST
    parity when they do not compare a complete AST.
-3. Compare all 659 applicable ASCII, UTF-8, and HTML outputs byte-for-byte.
+3. Verify the immutable native canonical regression snapshot over all 572
+   inputs before comparing upstream projections.  It is a self-regression
+   asset, not an independent oracle.
+4. Compare all 659 applicable ASCII, UTF-8, and HTML outputs byte-for-byte.
    M9 differences and errors both fail the strict gate.
-4. Project and compare all 249 lint outputs, including severity, logical
+5. Project and compare all 249 lint outputs, including severity, logical
    source, line, column, order, and message.  The sole current exclusion is
    the reported `Xr` manual lookup: it is emitted by the `mandoc` command-line
    driver after parsing against its host manual database, a capability neither
    libmandoc-rs nor mantdoc's parser owns.  The lint lane counts that exact
    external finding separately; no parser finding is normalized or ignored.
-5. Classify every Markdown and tag golden.  If a renderer is outside the
+6. Classify every Markdown and tag golden.  If a renderer is outside the
    `libmandoc-rs` replacement contract, retain parser coverage and extract any
    tag, anchor, link, or IR assertion the golden can support.
-6. Convert every discovered parser, validation, diagnostic, or rendering bug
+7. Convert every discovered parser, validation, diagnostic, or rendering bug
    to a focused regression before fixing it, then rerun its complete upstream
    family.
 
 Exit requires 572/572 inputs and 1,189/1,189 outputs to be strictly compared
 or explicitly classified, with zero unreviewed applicable golden difference.
+
+Current format classification is intentionally explicit:
+
+| Upstream format | Count | Compatibility treatment |
+| --- | ---: | --- |
+| `ascii`, `utf8`, `html` | 659 | Strict byte-for-byte mantdoc renderer gate (M9). |
+| `lint` | 249 | Strict parser diagnostic gate: severity, source, position, order, and message. One `Xr` host manual-database lookup is counted as a CLI-driver-only event. |
+| `markdown` | 253 | A separate mandoc presentation backend, not a mantdoc or libmandoc-rs renderer contract. Every source remains covered by the immutable parser snapshot, lint when available, and M9 formats; ManT Markdown is validated as an engine output in the independent oracle/IR phase rather than matched byte-for-byte to a different product format. |
+| `tag` | 28 | A mandoc tag-backend projection, not the raw AST `Node::tag` field: it adds generated section anchors and backend-selected source locations. `mantdoc-tag-diff` records the exact raw projection gap (currently 0/28 direct matches) so it cannot be mistaken for AST parity. Existing parser and engine anchor regressions retain validated explicit destinations; an engine-anchor projection and the independent AST oracle close the remaining semantic comparison. |
 
 ### TEST-INFRA: make the claim match the gate
 

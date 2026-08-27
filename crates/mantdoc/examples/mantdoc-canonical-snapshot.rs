@@ -79,7 +79,7 @@ fn usage(program: &OsStr) {
 
 fn success(snapshot: &Path, records: &[String]) -> ExitCode {
     println!("snapshot={}", snapshot.display());
-    println!("case_count={}", records.len());
+    println!("canonical_case_count={}", records.len());
     println!("records_sha256={}", records_sha256(records));
     ExitCode::SUCCESS
 }
