@@ -281,6 +281,12 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(search.contains("needle"));
     assert_eq!(search.matches("Outline root").count(), 1);
     assert_eq!(search.matches("needle").count(), 1);
+    assert!(
+        search.contains("[search: offset=0, returned=1, totalMatchingLineGroups=2, nextOffset=1]"),
+        "{search}"
+    );
+    assert!(!search.contains("--offset"), "{search}");
+    assert!(!search.contains("total matching lines"), "{search}");
 
     let read = successful_text(reply(replies, 5));
     assert_page_header(read);

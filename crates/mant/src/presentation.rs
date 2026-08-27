@@ -562,14 +562,20 @@ pub(super) fn render_scope_query_result(
                     output_terminal,
                 );
                 output.push('\n');
+                // A document-local continuation is not a valid cursor for a
+                // globally paginated scope. Retain the local counts and
+                // coordinates, but let the outer scope presentation report
+                // its one authoritative next offset.
+                let mut local_search = found.search.clone();
+                local_search.next_offset = None;
                 let rendered = match format {
                     QueryFormat::Markdown => {
-                        let search = output_terminal.then(|| terminal_search(&found.search));
+                        let search = output_terminal.then(|| terminal_search(&local_search));
                         mant_engine::render_search_markdown(
-                            search.as_ref().unwrap_or(&found.search),
+                            search.as_ref().unwrap_or(&local_search),
                         )
                     }
-                    QueryFormat::Text => render_terminal_search(&found.search, color),
+                    QueryFormat::Text => render_terminal_search(&local_search, color),
                     QueryFormat::Json | QueryFormat::Man => unreachable!(),
                 };
                 output.push_str(rendered.trim());

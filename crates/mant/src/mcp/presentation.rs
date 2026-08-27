@@ -109,15 +109,21 @@ pub(super) fn render_scope_search(
             response.scope.documents.len()
         );
     }
-    append_status_line(
-        &mut text,
-        &format!(
-            "[search: returned={}, total={}]",
-            search.returned, search.total
-        ),
-    );
+    append_status_line(&mut text, &search_status(search));
     append_scope_status(&mut text, response);
     Ok(page_text(&text, page))
+}
+
+fn search_status(search: &mant_protocol::ScopeSearch) -> String {
+    let mut status = format!(
+        "[search: offset={}, returned={}, totalMatchingLineGroups={}",
+        search.offset, search.returned, search.total
+    );
+    if let Some(next_offset) = search.next_offset {
+        let _ = write!(status, ", nextOffset={next_offset}");
+    }
+    status.push(']');
+    status
 }
 
 fn append_scope_status(text: &mut String, response: &ScopeQueryResponse) {
