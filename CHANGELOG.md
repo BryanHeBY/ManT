@@ -12,6 +12,19 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mantdoc 0.1.0
+
+- Publish the first stable native Rust parser for roff, man, mdoc, tbl, and
+  eqn sources. Its byte-first API exposes a bounded parser session, immutable
+  owned arena tree, typed diagnostics, explicit source resolution, and optional
+  gzip, zstd, serde, and reference-renderer capabilities.
+- Replace the in-tree C/FFI parser dependency with the native implementation.
+  The repository validates its parser and renderer behavior against a
+  checksum-pinned mandoc 1.14.6 corpus without redistributing that payload.
+- Preserve the ISC attribution and license for the mandoc-derived
+  special-character catalog carried by the published crate and native release
+  archives.
+
 ### mant-ir 0.10.0
 
 - Add a rebuildable `SemanticIndex` that keeps content definitions independent

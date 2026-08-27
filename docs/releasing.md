@@ -188,40 +188,27 @@ release: the product `vMAJOR.MINOR.PATCH` tag already anchors every unpublished
 crate version selected from that commit. Use a package tag when publishing a
 library fix independently of a new `mant` binary release.
 
-### One-time new-crate bootstrap for `0.7.0`
+### One-time `mantdoc` bootstrap
 
-The `mant-ir`, `mant-protocol`, and `mant-engine` names first enter crates.io in
-`0.7.0`. Trusted Publishing cannot create a crate, so each required a one-time
-manual upload from the frozen, green release commit before its Trusted
-Publisher could be configured. `mant-ir` and `mant-protocol` could be
-bootstrapped before the tag; wait for `mant-ir` to become visible before
-packaging its exact-version dependent:
+`mantdoc 0.1.0` is a new crates.io package. Establish that package name from
+the frozen, green release commit before pushing `mantdoc-v0.1.0`; the package
+tag workflow can then use its configured Trusted Publisher like every later
+release.
+
+Use a temporary, narrowly scoped token for this one-time upload:
 
 ```sh
 cargo login
-cargo publish --locked -p mant-ir
-cargo info mant-ir@0.7.0
-cargo publish --locked -p mant-protocol
-cargo info mant-protocol@0.7.0
-```
-
-`mant-engine` also depends on the exact `0.7.0` releases of `mantdoc` and
-`mant-sources`. The initial tag job can publish those established crates and
-then stop when crates.io rejects creation of `mant-engine`. Once both
-dependencies are visible, bootstrap the remaining new name from the same
-release commit:
-
-```sh
-cargo publish --locked -p mant-engine
-cargo info mant-engine@0.7.0
+cargo publish --locked -p mantdoc
+cargo info mantdoc@0.1.0
 cargo logout
 ```
 
-Use a temporary narrowly scoped token for these manual uploads. Configure the
-same Trusted Publisher for all three new packages after their initial upload,
-then rerun the failed tag job. The publish script skips every immutable version
-already present and continues with `mant-ui` and `mant`. Do not repeat this
-bootstrap after `0.7.0`.
+After the package is visible, configure the repository's Trusted Publisher for
+`mantdoc`, then push the matching package tag. Do not repeat the manual
+bootstrap for later `mantdoc` versions; the release workflow validates the tag,
+requires a matching green CI run, and publishes through the protected
+`crates-io` environment.
 
 ## Tag and draft release
 

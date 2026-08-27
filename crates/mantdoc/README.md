@@ -1,12 +1,25 @@
 # mantdoc
 
-`mantdoc` is `ManT`'s native Rust replacement for `libmandoc-rs`.  It is an
-unpublished `0.1.0-alpha` workspace crate while the parser is being built in
-milestones.  It contains no C build script, FFI, native library link, or unsafe
-code. See the repository [migration guide](../../docs/mantdoc-migration.md) for
-the deliberate public API differences from `libmandoc-rs`.
+`mantdoc` is `ManT`'s native Rust parser for roff, man, mdoc, tbl, and eqn
+sources. It replaces `libmandoc-rs` without a C build script, FFI, native
+library link, or unsafe code. See the repository
+[migration guide](../../docs/mantdoc-migration.md) for its deliberate public
+API differences from `libmandoc-rs`.
 
-The frozen pre-0.1 surface is deliberately byte-first and storage-independent:
+## Stability
+
+`0.1.0` is the first public release. Its API is deliberately byte-first and
+storage-independent. Compatible additions use `0.1.x`; a breaking public API
+change will use the next pre-1.0 minor release.
+
+- `mantdoc` is a parser and bounded reference renderer, not a general-purpose
+  groff device implementation. Unsupported formatter/device behavior remains
+  visible through typed diagnostics or normalized text where possible.
+- Resource limits apply to source input, expansion, nesting, resolver access,
+  diagnostics, renderer output, and source-map storage. A malformed or
+  over-limit input never requires a host-global parser state.
+
+The stable surface includes:
 
 - `Parser` accepts a `Source` and a caller-selected `ParserConfig`/`Limits`.
   `Limits::max_source_lines` independently bounds source-map line-index storage.
@@ -34,25 +47,20 @@ The frozen pre-0.1 surface is deliberately byte-first and storage-independent:
   `SourceId`. Deserializing this value does not reconstruct a parser session or
   an arena-backed `Document`.
 
-M2 implements the bounded byte scanner, argument lexer, dynamic control and
-escape characters, and visible-text normalization on top of these contracts.
-M3 adds a per-parse roff environment: bounded strings, integer registers,
-copy-mode and nested macros, delayed expansion, numeric/nroff inline
-conditionals, and explicit `.so` resolution. Resolved includes execute at their
-source position, share the session environment, retain source-map identities,
-and are bounded for cycles, nesting, bytes, sources, lines, and diagnostics.
-The supported `.while` subset rechecks numeric/register predicates and enforces
-both local and aggregate iteration budgets. It includes nested `\\{ ... \\}`
-scopes whose text, environment requests, and ordinary controls re-execute on
-each iteration, using explicit collection/execution stacks bounded by
-`max_tree_depth`; `.break` exits the nearest loop. Simple macros invoked in a
-scope execute with their invocation arguments and can close that active scope.
-General conditional scopes, `continue`, and macros opening scopes that close in
-later physical input remain later work. Macro-local `.shift` and `.return` are
-supported. Remaining macro control-flow and the man/mdoc structural parsers
-remain later work.
-The public contract is frozen as a pre-0.1 migration baseline. The crate
-remains unpublished while the final release and distribution checks complete.
+## Parsing model
+
+Each parse owns its roff environment: strings, registers, copy-mode and nested
+macros, delayed expansion, numeric/nroff conditionals, loops, translations,
+and explicit `.so` resolution. Resolved sources execute in source order and
+share bounded session state. The parser uses iterative collection and execution
+stacks for untrusted nesting; `.break`, macro-local `.shift`, and `.return`
+remain session-local.
+
+The man and mdoc structural parsers, tbl/eqn preprocessors, and optional
+renderers produce an immutable owned tree plus recoverable diagnostics. The
+exact compatibility boundary is exercised against the checksum-pinned mandoc
+1.14.6 regression corpus in repository-only tests; it does not redistribute
+upstream source or renderer output.
 
 The M1 arena decision is measured with:
 

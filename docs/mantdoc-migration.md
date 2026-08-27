@@ -5,10 +5,9 @@ source-compatible rename. It keeps the parser semantics and owned-AST fields
 that ManT needs, while deliberately replacing the recursive public tree and
 ambient I/O with a bounded arena and explicit authority.
 
-This guide describes the public contract currently available in the unpublished
-`0.1.0-alpha` workspace crate. `mantdoc` is now ManT's sole parser backend;
-the historical C oracle lives independently and is not a build, test, or
-runtime dependency. For the current design, see the
+This guide describes the stable `mantdoc 0.1.0` public contract. `mantdoc` is
+ManT's sole parser backend; the historical C oracle lives independently and is
+not a build, test, or runtime dependency. For the current design, see the
 [native parser architecture](architecture/mantdoc.md).
 
 ## Core parse
