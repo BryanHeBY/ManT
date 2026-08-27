@@ -233,7 +233,7 @@ mod report;
 mod request;
 mod runtime;
 mod session;
-mod token;
+pub(crate) mod token;
 use condition::{
     BranchOutcome, condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, emit_escaped_condition_name,

@@ -51,17 +51,21 @@ impl<'source> SourceEvent<'source> {
                 arguments,
                 raw_arguments,
                 argument_start,
-            } => Self::Control(ControlEvent {
-                start,
-                control_start,
-                end,
-                name,
-                request: RequestKind::classify(name),
-                package: PackageToken::classify(macro_set, name),
-                arguments,
-                raw_arguments,
-                argument_start,
-            }),
+            } => {
+                let package = PackageToken::classify(macro_set, name);
+                debug_assert!(package.name().is_none_or(|known| known == name));
+                Self::Control(ControlEvent {
+                    start,
+                    control_start,
+                    end,
+                    name,
+                    request: RequestKind::classify(name),
+                    package,
+                    arguments,
+                    raw_arguments,
+                    argument_start,
+                })
+            }
         }
     }
 }

@@ -3,7 +3,7 @@ use crate::MacroSet;
 macro_rules! define_tokens {
     ($name:ident { $($variant:ident => $spelling:literal),+ $(,)? }) => {
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-        pub(super) enum $name {
+        pub(crate) enum $name {
             $($variant),+
         }
 
@@ -11,14 +11,13 @@ macro_rules! define_tokens {
             #[cfg(test)]
             const ALL: &'static [Self] = &[$(Self::$variant),+];
 
-            #[cfg(test)]
-            pub(super) const fn name(self) -> &'static [u8] {
+            pub(crate) const fn name(self) -> &'static [u8] {
                 match self {
                     $(Self::$variant => $spelling),+
                 }
             }
 
-            fn classify(name: &[u8]) -> Option<Self> {
+            pub(crate) fn classify(name: &[u8]) -> Option<Self> {
                 match name {
                     $($spelling => Some(Self::$variant),)+
                     _ => None,
@@ -113,7 +112,7 @@ define_tokens!(MdocToken {
 });
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum PackageToken {
+pub(crate) enum PackageToken {
     Roff(RoffToken),
     Man(ManToken),
     Mdoc(MdocToken),
@@ -135,7 +134,6 @@ impl PackageToken {
         }
     }
 
-    #[cfg(test)]
     pub(super) const fn name(self) -> Option<&'static [u8]> {
         match self {
             Self::Roff(token) => Some(token.name()),
@@ -182,7 +180,7 @@ impl PackageToken {
         )
     }
 
-    pub(super) const fn is_mdoc_callable(self) -> bool {
+    pub(crate) const fn is_mdoc_callable(self) -> bool {
         matches!(
             self,
             Self::Mdoc(

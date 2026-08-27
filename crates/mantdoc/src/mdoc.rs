@@ -14,6 +14,12 @@ use crate::{
 };
 
 mod driver;
+mod spec;
+use spec::{
+    explicit_partial_block_close, implicit_partial_block_name, is_implicit_partial_block_macro,
+    is_inline_mdoc_macro, is_mdoc_callable_macro, is_mdoc_noncallable_macro,
+    mdoc_inline_argument_limit,
+};
 mod lists;
 use lists::{
     active_column_item, active_column_list, append_column_ta_cell,
@@ -46,14 +52,12 @@ mod inline;
 use inline::{
     append_explicit_partial_tail, clear_initial_implicit_body_delimiter_flags,
     clear_leading_explicit_partial_punctuation, clear_terminal_implicit_body_opening_flags,
-    explicit_partial_block_close, explicit_partial_tail_events, implicit_partial_block_name,
-    is_implicit_partial_block_macro, is_inline_mdoc_macro, is_mdoc_closing_delimiter,
-    is_mdoc_middle_delimiter, is_mdoc_noncallable_macro, mark_implicit_partial_tail_sentence_ends,
-    mark_opening_delimiter, matching_explicit_partial_close_index, mdoc_inline_argument_limit,
-    move_explicit_leading_open_delimiter, move_leading_open_delimiter,
-    move_leading_open_delimiters, move_paragraph_permalink, no_space_macro_requires_warning,
-    split_explicit_partial_block_tail, split_inline_macro_events, split_mdoc_inline_children,
-    split_mdoc_inline_tokens, split_mdoc_inline_tokens_with_options,
+    explicit_partial_tail_events, is_mdoc_closing_delimiter, is_mdoc_middle_delimiter,
+    mark_implicit_partial_tail_sentence_ends, mark_opening_delimiter,
+    matching_explicit_partial_close_index, move_explicit_leading_open_delimiter,
+    move_leading_open_delimiter, move_leading_open_delimiters, move_paragraph_permalink,
+    no_space_macro_requires_warning, split_explicit_partial_block_tail, split_inline_macro_events,
+    split_mdoc_inline_children, split_mdoc_inline_tokens, split_mdoc_inline_tokens_with_options,
     structure_item_head_explicit_partial, structure_matched_explicit_partial_blocks,
     structure_nested_implicit_explicit_scopes, structure_nested_implicit_partial_blocks,
     structure_unclosed_explicit_partial_blocks, tag_empty_macro_requires_warning,
