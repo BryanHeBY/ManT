@@ -183,26 +183,27 @@ pub(super) fn record_title(
             "UNTITLED".into()
         });
     let section = values.get(1).cloned();
-    let volume = match section.as_deref() {
-        Some(section) if let Some(volume) = default_volume(section) => volume.into_boxed_str(),
-        Some(section) => {
-            let location = builder
-                .children(node)
-                .and_then(|children| children.get(1).copied())
-                .and_then(|argument| builder.node_location(argument));
-            outcome.recoveries.push(Recovery::UnknownTitleSection {
-                section: section.into(),
-                location,
-            });
-            section.into()
-        }
-        None => {
-            outcome.recoveries.push(Recovery::MissingTitleSection {
-                title: title.clone().into_boxed_str(),
-                location,
-            });
-            "LOCAL".into()
-        }
+    let volume = if let Some(section) = section.as_deref() {
+        default_volume(section).map_or_else(
+            || {
+                let location = builder
+                    .children(node)
+                    .and_then(|children| children.get(1).copied())
+                    .and_then(|argument| builder.node_location(argument));
+                outcome.recoveries.push(Recovery::UnknownTitleSection {
+                    section: section.into(),
+                    location,
+                });
+                section.into()
+            },
+            String::into_boxed_str,
+        )
+    } else {
+        outcome.recoveries.push(Recovery::MissingTitleSection {
+            title: title.clone().into_boxed_str(),
+            location,
+        });
+        "LOCAL".into()
     };
     let metadata = builder.metadata_mut();
     metadata.title = Some(title.into_boxed_str());
