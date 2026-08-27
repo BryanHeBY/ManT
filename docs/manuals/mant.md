@@ -643,6 +643,25 @@ Multi-document deterministic output supports `--search` and `--explain`. Outline
 - `--explain ENTRY`: Return exactly one semantic option, command, variable, or
   environment entry.
 
+For progressive agent exploration, begin with the default summary, then reuse
+the bracketed stable ID of a relevant section as `--outline-root` and request
+only the needed entry kinds. A second rooted outline can expand one returned
+entry before `--node` reads its complete content. The IDs below illustrate
+values returned by one installed `bash(1)`; callers reuse the values from their
+own preceding response:
+
+```sh
+mant bash --outline
+mant bash --outline --outline-root shell-builtin-commands-80 --outline-entries command
+mant bash --outline --outline-root set-2 --outline-entries all
+mant bash --node set-2 --format markdown
+```
+
+Rooting changes only the returned tree boundary. Original paths and IDs remain
+stable, unrelated siblings are omitted, and every call independently rebuilds
+the current local projection. Prefer a returned ID over a display heading or
+an alias that may be ambiguous.
+
 Outline path `0` and node ID `tldr` designate the reserved tldr outline node,
 which contains either an external tldr page or a Markdown document's explicitly
 marked tldr preface. It is not a native manual section. Remaining headings use

@@ -67,6 +67,8 @@ that crate was not published for that change.
   `--outline=entries|sections|options` syntax is removed.
 - Give `mant_outline` the same `entries` and `root` inputs as native request
   JSON, keeping MCP, CLI, and the TUI on one projection model.
+- Guide agents through stateless summary → rooted expansion → focused read
+  calls while preserving returned paths and stable IDs across each step.
 
 ## 0.9.1 - 2026-08-24
 

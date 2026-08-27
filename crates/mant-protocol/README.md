@@ -112,6 +112,9 @@ index, and `Kinds` retains selected roles plus their required ancestors. An
 optional root selector can focus any projection on one section or entry.
 Outline entries keep exact selector aliases separate from authored forms and
 can expose evidence-backed value domains.
+This supports stateless agent exploration: inspect the compact summary, reuse
+a returned stable ID as the next request's root, expand all or selected entry
+kinds below it, then read the chosen node without renumbering its path.
 
 Normalized document content is defined separately by
 [`mant-ir`](https://crates.io/crates/mant-ir). Parsing, lookup, projection, and

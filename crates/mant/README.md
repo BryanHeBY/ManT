@@ -117,6 +117,10 @@ The default outline returns section topology plus compact entry coverage.
 `--outline-root` focuses the result on one exact section or semantic entry.
 Expanded entries preserve nested command/parameter/value relationships and
 keep exact aliases separate from complete authored forms.
+A stateless agent can start with the default summary, reuse a returned stable
+ID as `--outline-root`, expand only that subtree with `--outline-entries`, and
+finally pass the resulting selector to `--node`. Prefer bracketed stable IDs
+over display titles or aliases that may be ambiguous.
 Text projections use semantic ANSI styles on capable terminals and remain plain
 under redirection; Markdown, JSON, man, request JSON, and MCP never contain ANSI.
 Terminal-bound Markdown masks control characters in dynamic document identities,

@@ -68,8 +68,10 @@ pub(super) struct OutlineParams {
     #[schemars(length(min = 1))]
     pub(super) document: String,
     /// Include no entries, compact summaries (the default), all entries, or selected kinds.
+    /// Start compact, then expand a relevant returned root with all or selected kinds.
     pub(super) entries: Option<EntryProjection>,
-    /// Optional section or semantic entry selector used as the outline root.
+    /// Returned section or entry path, stable ID, or unambiguous alias used as the tree root.
+    /// Stable IDs are preferred for stateless follow-up calls.
     #[schemars(length(min = 1))]
     pub(super) root: Option<String>,
     /// Zero-based Unicode scalar offset into the canonical result text.

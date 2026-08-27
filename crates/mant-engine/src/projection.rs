@@ -1292,8 +1292,39 @@ mod tests {
     }
 
     #[test]
-    fn outline_root_resolves_exact_nodes_and_rejects_ambiguous_aliases() {
+    fn outline_root_preserves_identity_excludes_siblings_and_rejects_ambiguous_aliases() {
         let mut query = query_with_semantic_entries();
+        let section_rooted = build_outline_projection(
+            &query,
+            EntryProjection::All,
+            Some(NodeSelector::new("options-2")),
+        )
+        .expect("section-rooted outline");
+        let [
+            OutlineNode::DocumentSection {
+                path, id, children, ..
+            },
+        ] = section_rooted.nodes.as_slice()
+        else {
+            panic!("expected one rooted section");
+        };
+        assert_eq!(path.as_str(), "2", "rooting must not rebase paths");
+        assert_eq!(id.as_str(), "options-2");
+        assert!(
+            children
+                .iter()
+                .any(|node| node.id() == "option-local-forward")
+        );
+        assert!(children.iter().any(|node| node.id() == "common-3"));
+        assert!(children.iter().any(|node| node.id() == "other-4"));
+        assert!(
+            !section_rooted
+                .nodes
+                .iter()
+                .any(|node| node.id() == "name-1" || node.id() == "files-5"),
+            "unrelated siblings must not leak into a rooted projection"
+        );
+
         let rooted = build_outline_projection(
             &query,
             EntryProjection::Summary,
