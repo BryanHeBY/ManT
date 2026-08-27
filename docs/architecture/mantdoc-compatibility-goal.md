@@ -77,7 +77,11 @@ test lane.
 ## Active execution lock
 
 Work proceeds in this order until the two first exits are evidenced, not merely
-sampled:
+sampled.  A green projection gate is a regression floor, not proof that its
+input generator, AST topology, and diagnostic contract have been exercised.
+The GCC control-line leak demonstrated that distinction: output-oriented lanes
+were green while a programmable-roff path still admitted an authored request
+as document text.
 
 **Execution priority (2026-08-28).**  This goal is now active.  No broad
 refactor, performance work, or expansion of the real-corpus audit may displace
@@ -86,15 +90,17 @@ defects, then absorb the complete upstream golden suite.  Each repair is
 committed by function with its regression and verification recorded in the
 commit body.
 
-1. **FIX-NOW** — repair every known programmable-roff execution defect and
-   turn it into a minimal regression.  This explicitly includes conditional
-   bodies, `.ie`/`.el`, `.while`, registers, strings, user macros, escape and
-   control characters, and any leaked control-line fragment in AST, IR, or
-   rendered output.
-2. **UPSTREAM-GOLDEN** — absorb and run the complete checksum-pinned mandoc
-   1.14.6 regression corpus before expanding the implementation surface or
-   declaring AST parity.  Existing upstream golden inputs and diagnostics are
-   the next source of requirements.
+1. **FIX-NOW** — repair every already observed programmable-roff execution
+   defect and turn it into a minimal regression before pursuing a new feature.
+   The GCC `.if rF .nr rF 1` leak is the seed case.  This explicitly includes
+   conditional bodies, `.ie`/`.el`, `.while`, registers, strings, user macros,
+   escape and control characters, and any leaked control-line fragment in AST,
+   IR, or rendered output.
+2. **UPSTREAM-GOLDEN** — next, port or otherwise represent the relevant
+   upstream mandoc 1.14.6 golden cases as native behavioral requirements, then
+   run the complete checksum-pinned corpus.  Existing upstream tests are the
+   primary source of requirements; a passing projection output alone does not
+   permit declaring AST, execution-state, or diagnostic parity.
 
 The independent legacy oracle, restoration of the 45,036-source real corpus,
 state-machine redesign, broad refactoring, and performance work remain
@@ -104,45 +110,52 @@ current strict gates pass.
 
 ### FIX-NOW: close known execution defects first
 
-1. Re-verify the existing same-line conditional-body fix, including the GCC
-   source `.if rF .nr rF 1`; do not rewrite already correct commits merely to
-   reorganize them.
+1. Reproduce each known finding from its original source and preserve the
+   failing AST, diagnostic, IR, and rendered projection as debugging evidence.
 2. Exercise same-line, next-line, and braced bodies for `.if`, `.ie`, `.el`,
-   and `.while`, including nested conditions and generated input.
+   and `.while`, including nested conditions, generated input, and the active
+   control and escape characters.
 3. Cover register changes, strings, user macros, ignored blocks, translation,
-   control and escape characters, and macros or loops nested inside selected
-   condition bodies.
+   and macros or loops nested inside selected condition bodies.
 4. Align terminal, numeric, string, negated, parenthesized, and character
    predicates with libmandoc, including the active escape character.
 5. Make an authored roff control line appearing in AST text, engine IR, or
    rendered output a hard audit failure.  Detection must include short tokens
    such as `if`, `nr`, register names, and numeric operands.
-6. Run focused parser tests, the full `mantdoc` and `mant-engine` suites,
-   strict Clippy, current conformance lanes, and the affected real fixtures.
+6. Convert every reproduced defect to a focused native regression before its
+   repair.  Run the affected upstream family plus the full `mantdoc` and
+   `mant-engine` suites, strict Clippy, current conformance lanes, and the
+   original real fixture before accepting the repair.
 
 Exit requires every currently known defect to have a minimal pure-Rust
 regression and no known control-line leak.
 
 ### UPSTREAM-GOLDEN: use existing upstream evidence before inventing more
 
-1. Verify the archive and every source/output identity before selecting cases.
-2. Execute all 572 inputs.  Existing smoke lanes must not be described as AST
+1. Inventory the upstream tests by parser subsystem and identify the cases
+   already represented by native regressions versus cases only observed through
+   an output golden.  Prioritise programmable-roff and diagnostic cases found
+   in FIX-NOW.
+2. Add focused native regressions or direct capability mappings for the
+   uncovered upstream requirements; do not copy a native output as an oracle.
+3. Verify the archive and every source/output identity before selecting cases.
+4. Execute all 572 inputs.  Existing smoke lanes must not be described as AST
    parity when they do not compare a complete AST.
-3. Verify the immutable native canonical regression snapshot over all 572
+5. Verify the immutable native canonical regression snapshot over all 572
    inputs before comparing upstream projections.  It is a self-regression
    asset, not an independent oracle.
-4. Compare all 659 applicable ASCII, UTF-8, and HTML outputs byte-for-byte.
+6. Compare all 659 applicable ASCII, UTF-8, and HTML outputs byte-for-byte.
    M9 differences and errors both fail the strict gate.
-5. Project and compare all 249 lint outputs, including severity, logical
+7. Project and compare all 249 lint outputs, including severity, logical
    source, line, column, order, and message.  The sole current exclusion is
    the reported `Xr` manual lookup: it is emitted by the `mandoc` command-line
    driver after parsing against its host manual database, a capability neither
    libmandoc-rs nor mantdoc's parser owns.  The lint lane counts that exact
    external finding separately; no parser finding is normalized or ignored.
-6. Classify every Markdown and tag golden.  If a renderer is outside the
+8. Classify every Markdown and tag golden.  If a renderer is outside the
    `libmandoc-rs` replacement contract, retain parser coverage and extract any
    tag, anchor, link, or IR assertion the golden can support.
-7. Convert every discovered parser, validation, diagnostic, or rendering bug
+9. Convert every discovered parser, validation, diagnostic, or rendering bug
    to a focused regression before fixing it, then rerun its complete upstream
    family.
 
