@@ -166,6 +166,38 @@ fn a_continued_line_keeps_next_line_scopes_open() {
 }
 
 #[test]
+fn a_physical_text_continuation_stays_in_its_tp_head() {
+    let name = SourceName::new("man-physical-continuation.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH CONTINUATION 1\n.SH DESCRIPTION\n.TP\nfirst\\\nsecond\ndefinition\n",
+        ))
+        .unwrap();
+    let term = report
+        .document
+        .preorder()
+        .find(|node| node.kind() == NodeKind::Block && node.macro_name() == Some("TP"))
+        .expect("TP block");
+    let mut parts = term.children();
+    let head = parts.next().expect("TP head");
+    let body = parts.next().expect("TP body");
+    assert_eq!(
+        head.children()
+            .filter_map(NodeRef::text)
+            .collect::<Vec<_>>(),
+        ["firstsecond"]
+    );
+    assert_eq!(
+        body.children()
+            .filter_map(NodeRef::text)
+            .collect::<Vec<_>>(),
+        ["definition"]
+    );
+    assert!(report.diagnostics.is_empty());
+}
+
+#[test]
 fn unmatched_re_breaks_out_of_the_current_implicit_term() {
     let name = SourceName::new("man-unmatched-re.1").unwrap();
     let report = Parser::default()

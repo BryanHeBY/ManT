@@ -132,7 +132,47 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         &mut truncated,
                     );
                 }
-                SourceEvent::Text { start, end, bytes } => {
+                SourceEvent::Text {
+                    start,
+                    mut end,
+                    bytes,
+                } => {
+                    // A trailing odd escape joins the next physical *text*
+                    // line before man/mdoc assign it to a macro head or body.
+                    // This is distinct from `\\c`: the escape itself consumes
+                    // the newline, as in Bash's multi-line `.TP` forms.
+                    let mut continued_text = None;
+                    if table_preprocessor_depth == 0
+                        && has_physical_line_continuation(bytes, scanner.escape_character())
+                    {
+                        let mut joined = bytes.to_vec();
+                        let mut joined_any = false;
+                        while has_physical_line_continuation(&joined, scanner.escape_character()) {
+                            let Some(next_line) = scanner.next_line() else {
+                                break;
+                            };
+                            match next_line {
+                                ScannedLine::Text {
+                                    end: continuation_end,
+                                    bytes,
+                                    ..
+                                } => {
+                                    let _ = joined.pop();
+                                    joined.extend_from_slice(bytes);
+                                    end = continuation_end;
+                                    joined_any = true;
+                                }
+                                line => {
+                                    scanner.unread_line(line);
+                                    break;
+                                }
+                            }
+                        }
+                        if joined_any {
+                            continued_text = Some(joined);
+                        }
+                    }
+                    let bytes = continued_text.as_deref().unwrap_or(bytes);
                     let authored_has_tab = bytes.contains(&b'\t');
                     let authored_trailing_whitespace = trailing_whitespace_start(bytes).is_some();
                     if is_bad_comment_style(
