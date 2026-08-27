@@ -74,6 +74,27 @@ The existing M3, M4, M5, M6, and M9 names remain reserved for conformance
 lanes.  Project phases use names so logs cannot confuse a milestone with a
 test lane.
 
+## Active execution lock
+
+Work proceeds in this order until the two first exits are evidenced, not merely
+sampled:
+
+1. **FIX-NOW** — repair every known programmable-roff execution defect and
+   turn it into a minimal regression.  This explicitly includes conditional
+   bodies, `.ie`/`.el`, `.while`, registers, strings, user macros, escape and
+   control characters, and any leaked control-line fragment in AST, IR, or
+   rendered output.
+2. **UPSTREAM-GOLDEN** — absorb and run the complete checksum-pinned mandoc
+   1.14.6 regression corpus before expanding the implementation surface or
+   declaring AST parity.  Existing upstream golden inputs and diagnostics are
+   the next source of requirements.
+
+The independent legacy oracle, restoration of the 45,036-source real corpus,
+state-machine redesign, broad refactoring, and performance work remain
+required phases, but they must not displace either active priority.  A fix may
+only move onward after its focused regression, affected upstream family, and
+current strict gates pass.
+
 ### FIX-NOW: close known execution defects first
 
 1. Re-verify the existing same-line conditional-body fix, including the GCC
