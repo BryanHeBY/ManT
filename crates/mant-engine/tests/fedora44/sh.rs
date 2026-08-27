@@ -1,6 +1,6 @@
 //! Tests for Fedora Linux 44's `sh(1)` alias of the Bash manual.
 
-use mant_engine::{render_excerpt_markdown, select_explanation};
+use mant_engine::{ProjectionError, render_excerpt_markdown, select_explanation};
 use mant_ir::{EntryKind, ParameterKind, SemanticEntry, SemanticIndex, SourceFormat, ValueDomain};
 
 use crate::common::{self, collect_sections, source_path_ends_with};
@@ -126,6 +126,76 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
     let rendered = render_excerpt_markdown(&builtin);
     assert!(rendered.contains("SHELL BUILTIN COMMANDS"));
     assert!(!rendered.contains("set-mark (C-@"));
+}
+
+#[test]
+fn preserves_complete_readline_variable_names_without_shadowing_builtins() {
+    let document = fedora44_manual("sh");
+    let index = SemanticIndex::build(document);
+    let mut sections = Vec::new();
+    collect_sections(&document.sections, &mut sections);
+    let readline = sections
+        .iter()
+        .find(|section| section.title == "Readline Variables")
+        .expect("Readline Variables section");
+    let variables = index.section(&readline.id);
+
+    assert_eq!(variables.len(), 49);
+    assert!(
+        variables
+            .iter()
+            .all(|entry| entry.kind == EntryKind::Variable)
+    );
+    for name in [
+        "bind-tty-special-chars",
+        "echo-control-characters",
+        "enable-active-region",
+        "horizontal-scroll-mode",
+        "isearch-terminators",
+        "keyseq-timeout",
+    ] {
+        assert!(
+            variables
+                .iter()
+                .any(|entry| entry.aliases.iter().any(|alias| alias == name)),
+            "missing complete Readline variable {name}"
+        );
+    }
+    for prefix in ["bind", "echo", "enable", "set"] {
+        assert!(
+            variables
+                .iter()
+                .all(|entry| entry.aliases.iter().all(|alias| alias != prefix)),
+            "Readline variables must not expose the short prefix {prefix}"
+        );
+    }
+
+    let query = common::query_for_document("sh", document);
+    for name in [
+        "horizontal-scroll-mode",
+        "isearch-terminators",
+        "keyseq-timeout",
+    ] {
+        assert!(
+            select_explanation(&query, name).is_ok(),
+            "complete Readline variable {name} must be explainable"
+        );
+    }
+    for builtin in ["bind", "echo", "enable", "set"] {
+        let excerpt = select_explanation(&query, builtin)
+            .unwrap_or_else(|error| panic!("builtin {builtin} must remain exact: {error}"));
+        let rendered = render_excerpt_markdown(&excerpt);
+        assert!(rendered.contains("SHELL BUILTIN COMMANDS"), "{rendered}");
+    }
+    for ambiguous in ["history", "complete"] {
+        assert!(
+            matches!(
+                select_explanation(&query, ambiguous),
+                Err(ProjectionError::AmbiguousSelector { .. })
+            ),
+            "genuinely repeated exact alias {ambiguous} must report candidates"
+        );
+    }
 }
 
 fn has_parameter(entry: &SemanticEntry, parameter_kind: ParameterKind, alias: &str) -> bool {

@@ -842,7 +842,7 @@ fn is_variable_term(value: &str) -> bool {
     !head.is_empty()
         && head
             .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
         && head
             .chars()
             .next()

@@ -53,6 +53,9 @@ that crate was not published for that change.
   nested entry path now round-trips through focused reads.
 - Recognize multi-item key-binding command groups under topical headings and
   preserve complete hyphenated Readline command names as exact aliases.
+- Recognize complete hyphenated Readline variable names inside variable
+  sections. Their first segments are never aliases or IDs, so names such as
+  `bind-tty-special-chars` cannot silently shadow the `bind` builtin.
 - Separate inferred native semantic IDs from formatter navigation anchors and
   derive role-qualified IDs from complete recognized names, preventing short
   anchors such as `set` or `re` from shadowing unrelated exact aliases.
