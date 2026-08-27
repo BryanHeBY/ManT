@@ -107,6 +107,11 @@ impl<'a> Scanner<'a> {
         self.control
     }
 
+    /// Return the current no-break control character after any prior `.c2` request.
+    pub(crate) const fn no_break_control_character(&self) -> u8 {
+        self.no_break_control
+    }
+
     /// Snapshot the mutable character spellings without changing input cursor.
     pub(crate) const fn character_state(&self) -> (u8, u8, u8) {
         (self.control, self.no_break_control, self.escape)

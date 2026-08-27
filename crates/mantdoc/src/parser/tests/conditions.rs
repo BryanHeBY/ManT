@@ -1,6 +1,181 @@
 use super::*;
 
 #[test]
+fn same_line_conditionals_reparse_nested_requests() {
+    let name = SourceName::new("nested-inline-condition.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".if 1 .if 1 nested-true\n.if 1 .if 0 hidden\n.nr count 0\n.if 1 .if 1 .nr count 1\n.if \\n[count] register-updated\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .node(report.document.root())
+        .unwrap()
+        .children()
+        .filter_map(|node| node.text().map(str::to_owned))
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["nested-true", "register-updated"]);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn selected_conditionals_reenter_definition_and_else_dispatch() {
+    let name = SourceName::new("conditional-rerun.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".if 1 .de emit\ndefined through selected request\n..\n.emit\n.if 1 .ie 0 hidden\n.el selected else\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["defined through selected request", "selected else"]);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn selected_conditionals_reenter_ignore_copy_mode() {
+    let name = SourceName::new("conditional-ignore-rerun.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".nr zY 1\n.if \\n(zY=1 .ig zY\nhidden copy-mode input\n.zY\nvisible\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["visible"]);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn nop_and_selected_nop_reparse_their_remainder() {
+    let name = SourceName::new("nop-rerun.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".nop direct text\n.if 1 .nop selected text\n.nop .if 1 nested control\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["direct text", "selected text", "nested control"]);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn single_line_while_reparses_nested_controls_and_loop_flow() {
+    let name = SourceName::new("while-rerun.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".nr count 2\n.while \\n[count] .if 1 .nr count -1\n.if !\\n[count] nested-register-body\n.while 1 .break\nafter-break\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["nested-register-body", "after-break"]);
+    assert!(!report.statistics.truncated);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn selected_controls_share_register_string_translation_and_character_state() {
+    let name = SourceName::new("conditional-environment-rerun.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".if 1 .ds selected string-state\n.if 1 .nr selected-register 1\n.if \\n[selected-register] \\*[selected]\n.if 1 .tr xy\nx\n.if 1 .cc !\n!if 1 !ds dynamic control-state\n!if 1 !cc .\n\\*[dynamic]\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["string-state", "y", "control-state"]);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn collected_scopes_reparse_nested_single_line_programs() {
+    let name = SourceName::new("scope-inline-rerun.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".if 1 \\{\\\n.if 1 .if 1 nested-condition\n.nr count 2\n.while \\n[count] .if 1 .nr count -1\n.if !\\n[count] nested-while\n.\\}\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["nested-condition", "nested-while"]);
+    assert!(!report.statistics.truncated);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn collected_scopes_let_selected_definitions_consume_following_lines() {
+    let name = SourceName::new("scope-inline-definition.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".if 1 \\{\\\n.if 1 .de emit\ndefined in collected scope\n..\n.emit\n.\\}\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["defined in collected scope"]);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
+fn macro_frames_reparse_single_line_while_programs() {
+    let name = SourceName::new("macro-inline-while.roff").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".de program\n.nr count 2\n.while \\n[count] .if 1 .nr count -1\n.if !\\n[count] macro-while\n..\n.program\n",
+        ))
+        .unwrap();
+    let text = report
+        .document
+        .preorder()
+        .filter(|node| node.kind() == NodeKind::Text)
+        .filter_map(crate::NodeRef::text)
+        .collect::<Vec<_>>();
+    assert_eq!(text, ["macro-while"]);
+    assert!(!report.statistics.truncated);
+    assert!(report.diagnostics.is_empty(), "{:#?}", report.diagnostics);
+}
+
+#[test]
 fn m3_string_and_macro_defined_conditionals_accept_the_two_token_form() {
     let name = SourceName::new("defined-condition.roff").unwrap();
     let report = Parser::default()

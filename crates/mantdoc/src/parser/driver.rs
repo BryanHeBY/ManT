@@ -1,7 +1,7 @@
 use super::{
-    ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EmitContext,
-    EnvironmentRequestContext, EscapeIssueKind, IncludeRequest, InputTrap, MacroSet,
-    ManIndentState, NodeFlags, NodeId, NodeKind, PackageToken, ParseState, ParserCore,
+    ArgumentIssue, BranchOutcome, ControlEvent, Diagnostic, DiagnosticCode, DocumentBuilder,
+    EmitContext, EnvironmentRequestContext, EscapeIssueKind, IncludeRequest, InputTrap, Limits,
+    MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, PackageToken, ParseState, ParserCore,
     ReplayMachine, RequestKind, RequestTransition, ScannedLine, Scanner, ScopeCollector, ScopeFlow,
     ScopeLine, Severity, Source, SourceEvent, SourceFrame, SourcePosition, SourceResolver,
     SourceSpan, Syntax, TransparentRequestContext, append_node, append_text_node,
@@ -40,6 +40,34 @@ use super::{
     update_man_indent_register, update_preprocessor_depth, update_table_preprocessor_depth,
     visible_bytes,
 };
+
+enum DriverWork<'source> {
+    Event(SourceEvent<'source>),
+    InlineWhile(InlineWhile),
+}
+
+struct InlineWhile {
+    predicate: Vec<u8>,
+    body: Vec<u8>,
+    start: u32,
+    end: u32,
+    body_start: u32,
+    iterations: usize,
+    empty_scope_finding: Option<Diagnostic>,
+}
+
+fn finish_inline_while(
+    inline: &InlineWhile,
+    limits: &Limits,
+    diagnostics: &mut Vec<Diagnostic>,
+    deferred: &mut Vec<Diagnostic>,
+    truncated: &mut bool,
+) {
+    if let Some(finding) = &inline.empty_scope_finding {
+        push_diagnostic(diagnostics, limits, finding.clone(), truncated);
+        deferred.push(finding.clone());
+    }
+}
 
 impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
     #[allow(clippy::too_many_lines)] // M2's explicit scanner-stage dispatch is kept in source order.
@@ -88,8 +116,159 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
         // macro closed that loop.  Scope collection has already consumed the
         // closer, so publish the recovery finding on the next physical line.
         let mut pending_while_out_of_scope = false;
-        'lines: while let Some(line) = scanner.next_line() {
-            let event = SourceEvent::from_scanned(line, builder.macro_set());
+        // Selected single-line bodies are ordinary roff input, not visible
+        // text.  Keep them on an explicit LIFO so nested conditions re-enter
+        // this same dispatcher without recursion or physical-line copying.
+        let mut pending_events = Vec::<DriverWork<'_>>::new();
+        'lines: loop {
+            let work = if let Some(work) = pending_events.pop() {
+                work
+            } else if let Some(line) = scanner.next_line() {
+                DriverWork::Event(SourceEvent::from_scanned(line, builder.macro_set()))
+            } else {
+                break;
+            };
+            let event = match work {
+                DriverWork::Event(event) => event,
+                DriverWork::InlineWhile(mut inline) => {
+                    let Some(predicate) = expand_environment(
+                        environment,
+                        &inline.predicate,
+                        scanner.escape_character(),
+                        &[],
+                        limits,
+                        source_id,
+                        inline.start,
+                        inline.end,
+                        &mut expansion_steps,
+                        &mut diagnostics,
+                        &mut truncated,
+                    ) else {
+                        break 'lines;
+                    };
+                    let Some(condition) = evaluate_condition(environment, &predicate) else {
+                        push_diagnostic(
+                            &mut diagnostics,
+                            limits,
+                            diagnostic(
+                                DiagnosticCode::ROFF_CONDITION,
+                                Severity::Warning,
+                                source_id,
+                                inline.start,
+                                inline.end,
+                                "roff while predicate is outside the M3 numeric/nroff subset",
+                            ),
+                            &mut truncated,
+                        );
+                        finish_inline_while(
+                            &inline,
+                            limits,
+                            &mut diagnostics,
+                            &mut deferred_post_validation_diagnostics,
+                            &mut truncated,
+                        );
+                        continue 'lines;
+                    };
+                    if !condition {
+                        finish_inline_while(
+                            &inline,
+                            limits,
+                            &mut diagnostics,
+                            &mut deferred_post_validation_diagnostics,
+                            &mut truncated,
+                        );
+                        continue 'lines;
+                    }
+                    if inline.iterations >= limits.max_loop_iterations {
+                        truncated = true;
+                        push_diagnostic(
+                            &mut diagnostics,
+                            limits,
+                            diagnostic(
+                                DiagnosticCode::LIMIT_LOOP_ITERATIONS,
+                                Severity::Warning,
+                                source_id,
+                                inline.start,
+                                inline.end,
+                                "roff while request exceeds max_loop_iterations",
+                            ),
+                            &mut truncated,
+                        );
+                        finish_inline_while(
+                            &inline,
+                            limits,
+                            &mut diagnostics,
+                            &mut deferred_post_validation_diagnostics,
+                            &mut truncated,
+                        );
+                        continue 'lines;
+                    }
+                    if total_loop_iterations >= limits.max_total_loop_iterations {
+                        truncated = true;
+                        push_diagnostic(
+                            &mut diagnostics,
+                            limits,
+                            diagnostic(
+                                DiagnosticCode::LIMIT_TOTAL_LOOP_ITERATIONS,
+                                Severity::Warning,
+                                source_id,
+                                inline.start,
+                                inline.end,
+                                "roff while requests exceed max_total_loop_iterations",
+                            ),
+                            &mut truncated,
+                        );
+                        finish_inline_while(
+                            &inline,
+                            limits,
+                            &mut diagnostics,
+                            &mut deferred_post_validation_diagnostics,
+                            &mut truncated,
+                        );
+                        continue 'lines;
+                    }
+                    if !record_expansion_steps(
+                        &mut expansion_steps,
+                        1,
+                        limits,
+                        source_id,
+                        inline.start,
+                        inline.end,
+                        &mut diagnostics,
+                        &mut truncated,
+                    ) {
+                        break 'lines;
+                    }
+                    let Some(body) = expand_environment(
+                        environment,
+                        &inline.body,
+                        scanner.escape_character(),
+                        &[],
+                        limits,
+                        source_id,
+                        inline.body_start,
+                        inline.end,
+                        &mut expansion_steps,
+                        &mut diagnostics,
+                        &mut truncated,
+                    ) else {
+                        break 'lines;
+                    };
+                    inline.iterations += 1;
+                    total_loop_iterations += 1;
+                    let body_start = inline.body_start;
+                    let end = inline.end;
+                    pending_events.push(DriverWork::InlineWhile(inline));
+                    pending_events.push(DriverWork::Event(SourceEvent::from_generated(
+                        body,
+                        body_start,
+                        end,
+                        builder.macro_set(),
+                        &mut scanner,
+                    )));
+                    continue 'lines;
+                }
+            };
             let pending_next_line_condition = next_line_condition.take();
             if pending_while_out_of_scope {
                 let (start, end) = event.range();
@@ -136,7 +315,9 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     start,
                     mut end,
                     bytes,
+                    terminal_inline_conditional,
                 } => {
+                    let bytes = bytes.as_ref();
                     // A trailing odd escape joins the next physical *text*
                     // line before man/mdoc assign it to a macro head or body.
                     // This is distinct from `\\c`: the escape itself consumes
@@ -457,6 +638,14 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             }
                         }
                         maximum_depth = maximum_depth.max(2);
+                        if terminal_inline_conditional
+                            && let Some(node) = builder
+                                .children(root)
+                                .and_then(|nodes| nodes.last())
+                                .copied()
+                        {
+                            let _ = builder.set_node_terminal_inline_conditional(node, true);
+                        }
                     }
                     if let Some(name) = sprung_input_trap {
                         let name_end = name
@@ -498,6 +687,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     }
                 }
                 SourceEvent::Comment { start, end, bytes } => {
+                    let bytes = bytes.as_ref();
                     // libmandoc preserves a comment as a distinct node, but does
                     // not mark it as an implicit no-print node. Consumers use the
                     // node kind to omit comments from rendered output.
@@ -530,7 +720,11 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     arguments,
                     raw_arguments,
                     argument_start,
+                    generated,
                 }) => {
+                    let name = name.as_ref();
+                    let arguments = arguments.as_ref();
+                    let raw_arguments = raw_arguments.as_ref();
                     // The physical scanner stops a control name at an adjacent
                     // escape so condition openers such as `.el\{` can keep their
                     // own grammar.  Roff names have a small, observable exception:
@@ -763,6 +957,34 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             &mut truncated,
                         );
                     }
+                    // The scanner has already applied these requests.  A
+                    // selected inline body is roff preprocessor input and
+                    // must not become a generic AST macro merely because the
+                    // document has not selected man or mdoc yet.  Keep the
+                    // legacy physical-line projection unchanged.
+                    if generated
+                        && matches!(
+                            request,
+                            RequestKind::ControlCharacter
+                                | RequestKind::NoBreakControlCharacter
+                                | RequestKind::EscapeCharacter
+                        )
+                    {
+                        continue;
+                    }
+                    if generated
+                        && matches!(name, b"break" | b"continue")
+                        && let Some(index) = pending_events
+                            .iter()
+                            .rposition(|work| matches!(work, DriverWork::InlineWhile(_)))
+                    {
+                        if name == b"break" {
+                            pending_events.truncate(index);
+                        } else {
+                            pending_events.truncate(index + 1);
+                        }
+                        continue;
+                    }
                     if name == b"while"
                         && let Ok(arguments) =
                             lex_arguments(arguments, scanner.escape_character(), limits)
@@ -850,6 +1072,35 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         }
                         if scope_requested && scope.as_ref().is_some_and(|scope| !scope.terminated)
                         {
+                            continue;
+                        }
+                        if !scope_requested {
+                            let body_start = arguments.get(1).map_or_else(
+                                || {
+                                    argument_start
+                                        .saturating_add(
+                                            u32::try_from(predicate_template.offset).expect(
+                                                "while predicate offsets fit public source spans",
+                                            ),
+                                        )
+                                        .saturating_add(1)
+                                },
+                                |argument| {
+                                    argument_start.saturating_add(
+                                        u32::try_from(argument.offset)
+                                            .expect("while body offsets fit public source spans"),
+                                    )
+                                },
+                            );
+                            pending_events.push(DriverWork::InlineWhile(InlineWhile {
+                                predicate: predicate_template.bytes.clone(),
+                                body: body_template,
+                                start,
+                                end,
+                                body_start,
+                                iterations: 0,
+                                empty_scope_finding,
+                            }));
                             continue;
                         }
                         let mut iterations = 0_usize;
@@ -1740,243 +1991,25 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             ) else {
                                 break 'lines;
                             };
-                            if let Some((request, raw_arguments)) = split_macro_control(
-                                &body,
-                                scanner.control_character(),
-                                scanner.escape_character(),
-                            ) {
-                                if matches!(request, b"cc" | b"c2" | b"ec") {
-                                    scanner.apply_character_request(request, raw_arguments);
-                                    continue;
-                                }
-                                if is_environment_request(request) {
-                                    if matches!(request, b"ds" | b"as") {
-                                        if let Err(error) = apply_string_request(
-                                            environment,
-                                            raw_arguments,
-                                            scanner.escape_character(),
-                                            request == b"as",
-                                            limits,
-                                            source_id,
-                                            start,
-                                            end,
-                                            &mut expansion_steps,
-                                            &mut diagnostics,
-                                            &mut truncated,
-                                        ) {
-                                            truncated = true;
-                                            push_diagnostic(
-                                                &mut diagnostics,
-                                                limits,
-                                                environment_error_diagnostic(
-                                                    error, source_id, start, end,
-                                                ),
-                                                &mut truncated,
-                                            );
-                                        }
-                                        continue;
-                                    }
-                                    let Ok(arguments) = lex_arguments(
-                                        raw_arguments,
-                                        scanner.escape_character(),
-                                        limits,
-                                    ) else {
-                                        truncated = true;
-                                        push_diagnostic(
-                                            &mut diagnostics,
-                                            limits,
-                                            diagnostic(
-                                                DiagnosticCode::ARGUMENT_LIMIT,
-                                                Severity::Warning,
-                                                source_id,
-                                                start,
-                                                end,
-                                                "roff conditional body arguments exceed configured parser limits",
-                                            ),
-                                            &mut truncated,
-                                        );
-                                        continue;
-                                    };
-                                    if let Err(error) = apply_environment_request(
-                                        environment,
-                                        builder,
-                                        request,
-                                        scanner.escape_character(),
-                                        &arguments,
-                                        limits,
-                                    ) {
-                                        truncated = true;
-                                        push_diagnostic(
-                                            &mut diagnostics,
-                                            limits,
-                                            environment_error_diagnostic(
-                                                error, source_id, start, end,
-                                            ),
-                                            &mut truncated,
-                                        );
-                                    }
-                                    continue;
-                                }
-                                // A same-line conditional can dispatch a man or
-                                // mdoc package macro just like ordinary physical
-                                // input.  Treating it as raw text loses semantic
-                                // constructs such as Pod's `.el .IP ...` option
-                                // terms, because the normal scanner dispatch is
-                                // bypassed by the conditional executor.
-                                if is_builtin_package_macro(builder.macro_set(), request) {
-                                    let body = ScopeLine::Control {
-                                        start: body_source_start,
-                                        end,
-                                        argument_start: body_source_start
-                                            .saturating_add(1)
-                                            .saturating_add(
-                                                u32::try_from(request.len())
-                                                    .expect("request names fit source spans"),
-                                            )
-                                            .saturating_add(u32::from(!raw_arguments.is_empty())),
-                                        name: request.to_vec(),
-                                        arguments: raw_arguments.to_vec(),
-                                    };
-                                    if matches!(
-                                        execute_scope_line(
-                                            &body,
-                                            builder,
-                                            root,
-                                            source_id,
-                                            &mut scanner,
-                                            environment,
-                                            limits,
-                                            &mut text_bytes,
-                                            &mut expansion_steps,
-                                            &mut maximum_depth,
-                                            &mut total_loop_iterations,
-                                            &mut diagnostics,
-                                            &mut truncated,
-                                        ),
-                                        ScopeFlow::Halt
-                                    ) {
-                                        break 'lines;
-                                    }
-                                    continue;
-                                }
-                                if !is_builtin_package_macro(builder.macro_set(), request)
-                                    && let Some(definition) =
-                                        environment.macro_definition(request).cloned()
-                                {
-                                    let Ok(arguments) = lex_arguments(
-                                        raw_arguments,
-                                        scanner.escape_character(),
-                                        limits,
-                                    ) else {
-                                        truncated = true;
-                                        push_diagnostic(
-                                            &mut diagnostics,
-                                            limits,
-                                            diagnostic(
-                                                DiagnosticCode::ARGUMENT_LIMIT,
-                                                Severity::Warning,
-                                                source_id,
-                                                start,
-                                                end,
-                                                "inline roff conditional macro arguments exceed configured parser limits",
-                                            ),
-                                            &mut truncated,
-                                        );
-                                        continue;
-                                    };
-                                    let arguments = arguments
-                                        .into_iter()
-                                        .map(|argument| argument.bytes)
-                                        .collect::<Vec<_>>();
-                                    if matches!(
-                                        execute_scope_macro_lines(
-                                            definition.lines,
-                                            &arguments,
-                                            1,
-                                            builder,
-                                            root,
-                                            source_id,
-                                            start,
-                                            end,
-                                            &mut scanner,
-                                            environment,
-                                            limits,
-                                            &mut text_bytes,
-                                            &mut expansion_steps,
-                                            &mut maximum_depth,
-                                            &mut total_loop_iterations,
-                                            &mut diagnostics,
-                                            &mut truncated,
-                                        ),
-                                        ScopeFlow::Halt
-                                    ) {
-                                        break 'lines;
-                                    }
-                                    continue;
-                                }
-                            }
-                            let result = normalize_document_escapes(
-                                builder,
-                                &body,
-                                scanner.escape_character(),
-                                limits,
-                            );
-                            if !record_expansion_steps(
-                                &mut expansion_steps,
-                                result.steps,
-                                limits,
-                                source_id,
+                            pending_events.push(DriverWork::Event(SourceEvent::from_generated(
+                                body,
                                 body_source_start,
                                 end,
-                                &mut diagnostics,
-                                &mut truncated,
-                            ) {
-                                break 'lines;
-                            }
-                            emit_escape_issues(
-                                &result.issues,
-                                body_source_start,
-                                end,
-                                &mut EmitContext::new(
-                                    source_id,
-                                    limits,
-                                    &mut text_bytes,
-                                    &mut diagnostics,
-                                    &mut truncated,
-                                ),
-                            );
-                            truncated |= result.truncated;
-                            let flags = NodeFlags {
-                                line_start: true,
-                                line_continuation: result.line_continuation,
-                                ..NodeFlags::default()
-                            };
-                            if append_text_node(
-                                builder,
-                                root,
-                                body_source_start,
-                                end,
-                                flags,
-                                result.text,
-                                &mut EmitContext::new(
-                                    source_id,
-                                    limits,
-                                    &mut text_bytes,
-                                    &mut diagnostics,
-                                    &mut truncated,
-                                ),
-                            ) {
-                                if let Some(node) = builder
-                                    .children(root)
-                                    .and_then(|children| children.last())
-                                    .copied()
-                                {
-                                    let _ =
-                                        builder.set_node_terminal_inline_conditional(node, true);
-                                }
-                                maximum_depth = maximum_depth.max(2);
-                            }
+                                builder.macro_set(),
+                                &mut scanner,
+                            )));
+                            continue;
                         }
+                        continue;
+                    }
+                    if name == b"nop" {
+                        pending_events.push(DriverWork::Event(SourceEvent::from_generated(
+                            arguments.to_vec(),
+                            argument_start,
+                            end,
+                            builder.macro_set(),
+                            &mut scanner,
+                        )));
                         continue;
                     }
                     if name == b"return" {
@@ -3571,6 +3604,46 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                         scanner.escape_character(),
                                         limits,
                                     )
+                                    && let Some((_, body)) = while_arguments.split_first()
+                                    && !is_scope_opener(
+                                        &join_arguments(body),
+                                        scanner.escape_character(),
+                                    )
+                                {
+                                    match execute_scope_macro_lines(
+                                        vec![body_line.clone()],
+                                        &macro_arguments,
+                                        false,
+                                        macro_depth,
+                                        builder,
+                                        root,
+                                        source_id,
+                                        start,
+                                        end,
+                                        &mut scanner,
+                                        environment,
+                                        limits,
+                                        &mut text_bytes,
+                                        &mut expansion_steps,
+                                        &mut maximum_depth,
+                                        &mut total_loop_iterations,
+                                        &mut diagnostics,
+                                        &mut truncated,
+                                    ) {
+                                        ScopeFlow::Halt => break 'lines,
+                                        ScopeFlow::CloseLoopInInnerScope { .. }
+                                        | ScopeFlow::Break
+                                        | ScopeFlow::Continue
+                                        | ScopeFlow::LoopContinue => {}
+                                    }
+                                    continue;
+                                }
+                                if request == b"while"
+                                    && let Ok(while_arguments) = lex_arguments(
+                                        raw_arguments,
+                                        scanner.escape_character(),
+                                        limits,
+                                    )
                                     && let Some((predicate_template, body)) =
                                         while_arguments.split_first()
                                     && is_scope_opener(
@@ -3695,6 +3768,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                     match execute_scope_macro_lines(
                                         macro_loop_body,
                                         &macro_arguments,
+                                        true,
                                         macro_depth + 1,
                                         builder,
                                         root,

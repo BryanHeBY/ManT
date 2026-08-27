@@ -117,19 +117,24 @@ impl ReplayMachine<'_, '_> {
                         arguments,
                         ..
                     } = line
-                        && matches!(name.as_slice(), b"ie" | b"el")
+                        && matches!(name.as_slice(), b"if" | b"ie" | b"el")
                     {
                         if name == b"el" {
-                            frames.push(ReplayFrame::Lines {
-                                lines,
-                                next: next + 1,
-                                previous_conditional: None,
-                            });
                             if !previous_conditional.is_some_and(BranchOutcome::is_skipped) {
+                                frames.push(ReplayFrame::Lines {
+                                    lines,
+                                    next: next + 1,
+                                    previous_conditional: None,
+                                });
                                 continue;
                             }
                             let body = trim_horizontal_space(arguments);
                             if body.is_empty() {
+                                frames.push(ReplayFrame::Lines {
+                                    lines,
+                                    next: next + 1,
+                                    previous_conditional: None,
+                                });
                                 continue;
                             }
                             let body = inline_scope_body_line(
@@ -139,6 +144,28 @@ impl ReplayMachine<'_, '_> {
                                 scanner.control_character(),
                                 scanner.escape_character(),
                             );
+                            if let Some(consumed) = execute_collected_scope_definition(
+                                &body,
+                                &lines[next + 1..],
+                                scanner,
+                                environment,
+                                limits,
+                                source_id,
+                                diagnostics,
+                                truncated,
+                            ) {
+                                frames.push(ReplayFrame::Lines {
+                                    lines,
+                                    next: next + consumed + 1,
+                                    previous_conditional: None,
+                                });
+                                continue;
+                            }
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional: None,
+                            });
                             match execute_scope_line(
                                 &body,
                                 builder,
@@ -172,7 +199,7 @@ impl ReplayMachine<'_, '_> {
                                     source_id,
                                     *start,
                                     *end,
-                                    "inline roff ie arguments in a scope exceed configured parser limits",
+                                    "inline roff conditional arguments in a scope exceed configured parser limits",
                                 ),
                                 truncated,
                             );
@@ -194,7 +221,7 @@ impl ReplayMachine<'_, '_> {
                                     source_id,
                                     *start,
                                     *end,
-                                    "inline roff ie in a scope is missing its predicate",
+                                    "inline roff conditional in a scope is missing its predicate",
                                 ),
                                 truncated,
                             );
@@ -230,7 +257,7 @@ impl ReplayMachine<'_, '_> {
                                     source_id,
                                     *start,
                                     *end,
-                                    "inline roff ie predicate in a scope is outside the M3 numeric/nroff subset",
+                                    "inline roff conditional predicate in a scope is outside the M3 numeric/nroff subset",
                                 ),
                                 truncated,
                             );
@@ -243,12 +270,14 @@ impl ReplayMachine<'_, '_> {
                         };
                         let body =
                             condition_body_template(arguments, &condition_arguments, body_start);
-                        frames.push(ReplayFrame::Lines {
-                            lines,
-                            next: next + 1,
-                            previous_conditional: Some(condition.into()),
-                        });
+                        let previous_conditional =
+                            (name == b"ie").then(|| BranchOutcome::from(condition));
                         if !condition || body.is_empty() {
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + 1,
+                                previous_conditional,
+                            });
                             continue;
                         }
                         let body = inline_scope_body_line(
@@ -258,6 +287,28 @@ impl ReplayMachine<'_, '_> {
                             scanner.control_character(),
                             scanner.escape_character(),
                         );
+                        if let Some(consumed) = execute_collected_scope_definition(
+                            &body,
+                            &lines[next + 1..],
+                            scanner,
+                            environment,
+                            limits,
+                            source_id,
+                            diagnostics,
+                            truncated,
+                        ) {
+                            frames.push(ReplayFrame::Lines {
+                                lines,
+                                next: next + consumed + 1,
+                                previous_conditional,
+                            });
+                            continue;
+                        }
+                        frames.push(ReplayFrame::Lines {
+                            lines,
+                            next: next + 1,
+                            previous_conditional,
+                        });
                         match execute_scope_line(
                             &body,
                             builder,
@@ -772,6 +823,7 @@ impl ReplayMachine<'_, '_> {
 pub(in crate::parser) fn execute_scope_macro_lines(
     lines: Vec<Vec<u8>>,
     arguments: &[Vec<u8>],
+    charge_entry: bool,
     scope_depth: usize,
     builder: &mut DocumentBuilder,
     root: NodeId,
@@ -788,16 +840,18 @@ pub(in crate::parser) fn execute_scope_macro_lines(
     diagnostics: &mut Vec<Diagnostic>,
     truncated: &mut bool,
 ) -> ScopeFlow {
-    if !record_expansion_steps(
-        expansion_steps,
-        1,
-        limits,
-        source_id,
-        start,
-        end,
-        diagnostics,
-        truncated,
-    ) {
+    if charge_entry
+        && !record_expansion_steps(
+            expansion_steps,
+            1,
+            limits,
+            source_id,
+            start,
+            end,
+            diagnostics,
+            truncated,
+        )
+    {
         return ScopeFlow::Halt;
     }
     let mut pending = lines
@@ -856,6 +910,131 @@ pub(in crate::parser) fn execute_scope_macro_lines(
             }
             if request == b"tr" {
                 environment.define_translation(raw_arguments, scanner.escape_character());
+                continue;
+            }
+            if request == b"while"
+                && let Ok(while_arguments) =
+                    lex_arguments(raw_arguments, scanner.escape_character(), limits)
+                && let Some((predicate_template, body)) = while_arguments.split_first()
+                && !is_scope_opener(&join_arguments(body), scanner.escape_character())
+            {
+                if scope_depth >= limits.max_tree_depth {
+                    *truncated = true;
+                    push_diagnostic(
+                        diagnostics,
+                        limits,
+                        diagnostic(
+                            DiagnosticCode::LIMIT_SCOPE_DEPTH,
+                            Severity::Warning,
+                            source_id,
+                            start,
+                            end,
+                            "nested single-line roff while exceeds max_tree_depth",
+                        ),
+                        truncated,
+                    );
+                    continue;
+                }
+                let body = join_arguments(body);
+                let mut iterations = 0_usize;
+                loop {
+                    let Some(predicate) = expand_environment(
+                        environment,
+                        &predicate_template.bytes,
+                        scanner.escape_character(),
+                        &macro_arguments,
+                        limits,
+                        source_id,
+                        start,
+                        end,
+                        expansion_steps,
+                        diagnostics,
+                        truncated,
+                    ) else {
+                        return ScopeFlow::Halt;
+                    };
+                    let Some(condition) = evaluate_condition(environment, &predicate) else {
+                        push_diagnostic(
+                            diagnostics,
+                            limits,
+                            diagnostic(
+                                DiagnosticCode::ROFF_CONDITION,
+                                Severity::Warning,
+                                source_id,
+                                start,
+                                end,
+                                "single-line roff while predicate in a scope macro is outside the M3 numeric/nroff subset",
+                            ),
+                            truncated,
+                        );
+                        break;
+                    };
+                    if !condition {
+                        break;
+                    }
+                    if iterations >= limits.max_loop_iterations
+                        || *total_loop_iterations >= limits.max_total_loop_iterations
+                    {
+                        *truncated = true;
+                        let (code, message) = if iterations >= limits.max_loop_iterations {
+                            (
+                                DiagnosticCode::LIMIT_LOOP_ITERATIONS,
+                                "single-line roff while in a scope macro exceeds max_loop_iterations",
+                            )
+                        } else {
+                            (
+                                DiagnosticCode::LIMIT_TOTAL_LOOP_ITERATIONS,
+                                "single-line roff while requests in scope macros exceed max_total_loop_iterations",
+                            )
+                        };
+                        push_diagnostic(
+                            diagnostics,
+                            limits,
+                            diagnostic(code, Severity::Warning, source_id, start, end, message),
+                            truncated,
+                        );
+                        break;
+                    }
+                    if !record_expansion_steps(
+                        expansion_steps,
+                        1,
+                        limits,
+                        source_id,
+                        start,
+                        end,
+                        diagnostics,
+                        truncated,
+                    ) {
+                        return ScopeFlow::Halt;
+                    }
+                    iterations += 1;
+                    *total_loop_iterations += 1;
+                    match execute_scope_macro_lines(
+                        vec![body.clone()],
+                        &macro_arguments,
+                        false,
+                        scope_depth + 1,
+                        builder,
+                        root,
+                        source_id,
+                        start,
+                        end,
+                        scanner,
+                        environment,
+                        limits,
+                        text_bytes,
+                        expansion_steps,
+                        maximum_depth,
+                        total_loop_iterations,
+                        diagnostics,
+                        truncated,
+                    ) {
+                        ScopeFlow::Continue | ScopeFlow::LoopContinue => {}
+                        ScopeFlow::Break => break,
+                        flow @ ScopeFlow::CloseLoopInInnerScope { .. } => return flow,
+                        ScopeFlow::Halt => return ScopeFlow::Halt,
+                    }
+                }
                 continue;
             }
             if request == b"while"
@@ -972,6 +1151,7 @@ pub(in crate::parser) fn execute_scope_macro_lines(
                     match execute_scope_macro_lines(
                         scope_lines.clone(),
                         &macro_arguments,
+                        true,
                         scope_depth + 1,
                         builder,
                         root,
@@ -1918,6 +2098,37 @@ pub(in crate::parser) fn execute_scope_line(
             // equivalent positions while replaying a stored scope line.
             let control_start = start.saturating_add(1);
             let control_argument_start = *argument_start;
+            if matches!(name.as_slice(), b"while" | b"nop") {
+                let mut generated = Vec::with_capacity(
+                    1 + name.len() + usize::from(!arguments.is_empty()) + arguments.len(),
+                );
+                generated.push(scanner.control_character());
+                generated.extend_from_slice(name);
+                if !arguments.is_empty() {
+                    generated.push(b' ');
+                    generated.extend_from_slice(arguments);
+                }
+                return execute_scope_macro_lines(
+                    vec![generated],
+                    &[],
+                    false,
+                    1,
+                    builder,
+                    root,
+                    source_id,
+                    start,
+                    end,
+                    scanner,
+                    environment,
+                    limits,
+                    text_bytes,
+                    expansion_steps,
+                    maximum_depth,
+                    total_loop_iterations,
+                    diagnostics,
+                    truncated,
+                );
+            }
             if matches!(name.as_slice(), b"cc" | b"c2" | b"ec") {
                 scanner.apply_character_request(name, arguments);
                 return ScopeFlow::Continue;
@@ -2076,6 +2287,35 @@ pub(in crate::parser) fn execute_scope_line(
                 ) else {
                     return ScopeFlow::Halt;
                 };
+                if split_macro_control(
+                    &body,
+                    scanner.control_character(),
+                    scanner.escape_character(),
+                )
+                .is_some_and(|(request, _)| {
+                    matches!(request, b"if" | b"ie" | b"el" | b"while" | b"nop")
+                }) {
+                    return execute_scope_macro_lines(
+                        vec![body],
+                        &[],
+                        false,
+                        1,
+                        builder,
+                        root,
+                        source_id,
+                        start,
+                        end,
+                        scanner,
+                        environment,
+                        limits,
+                        text_bytes,
+                        expansion_steps,
+                        maximum_depth,
+                        total_loop_iterations,
+                        diagnostics,
+                        truncated,
+                    );
+                }
                 if let Some((request, raw_arguments)) = split_macro_control(
                     &body,
                     scanner.control_character(),
@@ -2209,6 +2449,7 @@ pub(in crate::parser) fn execute_scope_line(
                         return execute_scope_macro_lines(
                             definition.lines,
                             &arguments,
+                            true,
                             1,
                             builder,
                             root,
@@ -2294,6 +2535,7 @@ pub(in crate::parser) fn execute_scope_line(
                 return execute_scope_macro_lines(
                     definition.lines,
                     &arguments,
+                    true,
                     1,
                     builder,
                     root,

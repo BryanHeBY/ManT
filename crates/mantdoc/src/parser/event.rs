@@ -1,4 +1,6 @@
-use super::{MacroSet, PackageToken, ScannedLine};
+use std::borrow::Cow;
+
+use super::{MacroSet, PackageToken, ScannedLine, Scanner, strip_inline_comment};
 
 pub(super) enum SourceEvent<'source> {
     TooLong {
@@ -8,12 +10,13 @@ pub(super) enum SourceEvent<'source> {
     Text {
         start: u32,
         end: u32,
-        bytes: &'source [u8],
+        bytes: Cow<'source, [u8]>,
+        terminal_inline_conditional: bool,
     },
     Comment {
         start: u32,
         end: u32,
-        bytes: &'source [u8],
+        bytes: Cow<'source, [u8]>,
     },
     Control(ControlEvent<'source>),
 }
@@ -40,8 +43,17 @@ impl<'source> SourceEvent<'source> {
     pub(super) fn from_scanned(line: ScannedLine<'source>, macro_set: MacroSet) -> Self {
         match line {
             ScannedLine::TooLong { start, end } => Self::TooLong { start, end },
-            ScannedLine::Text { start, end, bytes } => Self::Text { start, end, bytes },
-            ScannedLine::Comment { start, end, bytes } => Self::Comment { start, end, bytes },
+            ScannedLine::Text { start, end, bytes } => Self::Text {
+                start,
+                end,
+                bytes: Cow::Borrowed(bytes),
+                terminal_inline_conditional: false,
+            },
+            ScannedLine::Comment { start, end, bytes } => Self::Comment {
+                start,
+                end,
+                bytes: Cow::Borrowed(bytes),
+            },
             ScannedLine::Control {
                 start,
                 control_start,
@@ -58,28 +70,132 @@ impl<'source> SourceEvent<'source> {
                     start,
                     control_start,
                     end,
-                    name,
+                    name: Cow::Borrowed(name),
                     request: RequestKind::classify(name),
                     package,
-                    arguments,
-                    raw_arguments,
+                    arguments: Cow::Borrowed(arguments),
+                    raw_arguments: Cow::Borrowed(raw_arguments),
                     argument_start,
+                    generated: false,
                 })
             }
         }
     }
+
+    /// Reclassify an expanded same-line body as ordinary parser input.
+    ///
+    /// This is the owned counterpart of [`Self::from_scanned`].  Keeping it
+    /// in the event layer lets conditional reruns use the same request
+    /// dispatcher as physical source without copying ordinary source lines.
+    pub(super) fn from_generated(
+        bytes: Vec<u8>,
+        start: u32,
+        end: u32,
+        macro_set: MacroSet,
+        scanner: &mut Scanner<'source>,
+    ) -> Self {
+        let Some(introducer) = bytes.first().copied() else {
+            return Self::Text {
+                start,
+                end,
+                bytes: Cow::Owned(bytes),
+                terminal_inline_conditional: true,
+            };
+        };
+        let no_break = introducer == scanner.no_break_control_character();
+        if introducer != scanner.control_character() && !no_break {
+            return Self::Text {
+                start,
+                end,
+                bytes: Cow::Owned(bytes),
+                terminal_inline_conditional: true,
+            };
+        }
+        let control_remainder = &bytes[1..];
+        let remainder = trim_horizontal_space(control_remainder);
+        let leading_control_space = control_remainder.len() - remainder.len();
+        let control_start = start
+            .saturating_add(1)
+            .saturating_add(u32::try_from(leading_control_space).unwrap_or(u32::MAX));
+        let escape = scanner.escape_character();
+        let comment_marker_length = if remainder.starts_with(&[escape, b'"']) {
+            Some(2_usize)
+        } else if remainder.starts_with(b"\"") {
+            Some(1_usize)
+        } else {
+            None
+        };
+        if let Some(comment_marker_length) = comment_marker_length {
+            return Self::Comment {
+                start: control_start.saturating_add(
+                    u32::try_from(comment_marker_length.saturating_sub(1)).unwrap_or(u32::MAX),
+                ),
+                end,
+                bytes: Cow::Owned(remainder[comment_marker_length..].to_vec()),
+            };
+        }
+        let name_end = remainder
+            .iter()
+            .enumerate()
+            .position(|(index, byte)| byte.is_ascii_whitespace() || (index > 0 && *byte == escape))
+            .unwrap_or(remainder.len());
+        let name = &remainder[..name_end];
+        let raw_arguments = strip_inline_comment(&remainder[name_end..], escape);
+        let arguments = trim_horizontal_space(raw_arguments);
+        let argument_start = control_start
+            .saturating_add(u32::try_from(name_end).unwrap_or(u32::MAX))
+            .saturating_add(
+                u32::try_from(raw_arguments.len() - arguments.len()).unwrap_or(u32::MAX),
+            );
+        if name == b"\"" || name == [escape, b'"'] {
+            return Self::Comment {
+                start: control_start
+                    .saturating_add(u32::try_from(name_end.saturating_sub(1)).unwrap_or(u32::MAX)),
+                end,
+                bytes: Cow::Owned(remainder[name_end..].to_vec()),
+            };
+        }
+        let name = name.to_vec();
+        let arguments = arguments.to_vec();
+        let raw_arguments = raw_arguments.to_vec();
+        scanner.apply_character_request(&name, &arguments);
+        let package = PackageToken::classify(macro_set, &name);
+        let request = RequestKind::classify(&name);
+        Self::Control(ControlEvent {
+            start,
+            control_start,
+            end,
+            name: Cow::Owned(name),
+            request,
+            package,
+            arguments: Cow::Owned(arguments),
+            raw_arguments: Cow::Owned(raw_arguments),
+            argument_start,
+            generated: true,
+        })
+    }
+}
+
+fn trim_horizontal_space(bytes: &[u8]) -> &[u8] {
+    let start = bytes
+        .iter()
+        .position(|byte| !matches!(*byte, b' ' | b'\t'))
+        .unwrap_or(bytes.len());
+    &bytes[start..]
 }
 
 pub(super) struct ControlEvent<'source> {
     pub(super) start: u32,
     pub(super) control_start: u32,
     pub(super) end: u32,
-    pub(super) name: &'source [u8],
+    pub(super) name: Cow<'source, [u8]>,
     pub(super) request: RequestKind,
     pub(super) package: PackageToken,
-    pub(super) arguments: &'source [u8],
-    pub(super) raw_arguments: &'source [u8],
+    pub(super) arguments: Cow<'source, [u8]>,
+    pub(super) raw_arguments: Cow<'source, [u8]>,
     pub(super) argument_start: u32,
+    /// Whether this event was produced by same-line roff re-entry.
+    pub(super) generated: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
