@@ -110,6 +110,22 @@ fn preserves_complete_readline_command_names_as_selectable_aliases() {
     let markdown = render_excerpt_markdown(&excerpt);
     assert!(markdown.contains("operate-and-get-next"));
     assert!(markdown.contains("fetch the next line"));
+
+    let set_mark = sections
+        .iter()
+        .flat_map(|section| all_entries(index.section(&section.id)))
+        .find(|entry| entry.aliases.iter().any(|alias| alias == "set-mark"))
+        .expect("set-mark Readline command");
+    assert_eq!(set_mark.id.as_str(), "command-set-mark");
+    assert!(
+        select_explanation(&query, "command-set-mark").is_ok(),
+        "generated role-qualified ID must select set-mark"
+    );
+
+    let builtin = select_explanation(&query, "set").expect("set builtin alias");
+    let rendered = render_excerpt_markdown(&builtin);
+    assert!(rendered.contains("SHELL BUILTIN COMMANDS"));
+    assert!(!rendered.contains("set-mark (C-@"));
 }
 
 fn has_parameter(entry: &SemanticEntry, parameter_kind: ParameterKind, alias: &str) -> bool {

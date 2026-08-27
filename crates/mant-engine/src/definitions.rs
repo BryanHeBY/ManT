@@ -528,6 +528,15 @@ fn identify_item(
     reserved: &HashSet<String>,
     retained: &mut HashSet<String>,
 ) -> DefinitionRole {
+    // Markdown declarations already carry an authored semantic identity.
+    // Native parser anchors, by contrast, are navigation destinations whose
+    // formatter-generated tags may contain only the first word of a term.
+    // Keep those anchors addressable, but never reuse them as inferred entry
+    // IDs: doing so turns `set-mark` into the misleading semantic ID `set`.
+    let declared_id = item
+        .identity
+        .as_ref()
+        .map(|identity| identity.id.to_string());
     let (role, case, names) = item.identity.as_ref().map_or_else(
         || infer_identity(item, context),
         |identity| (identity.role, identity.case, identity.names.clone()),
@@ -541,8 +550,7 @@ fn identify_item(
         retained.extend(anchors.iter().cloned());
     }
 
-    let existing = anchors.first().cloned();
-    let preferred = existing.clone().unwrap_or_else(|| {
+    let preferred = declared_id.clone().unwrap_or_else(|| {
         let name = names.first().cloned().unwrap_or_else(|| {
             item.terms
                 .first()
@@ -550,9 +558,10 @@ fn identify_item(
         });
         format!("{}-{}", role_id_prefix(role), role_name_slug(role, &name))
     });
-    // A copied libmandoc anchor may itself be an explicit `.Tg` destination,
-    // so it is allowed to match the reserved set. Generated IDs are not.
-    let id = if existing.is_some() && !used.contains(&preferred) {
+    // An authored Markdown identity is already part of its parsed target set,
+    // so it is allowed to match the reserved set. Generated native IDs are
+    // kept distinct from every source navigation destination.
+    let id = if declared_id.is_some() && !used.contains(&preferred) {
         used.insert(preferred.clone());
         preferred
     } else {
@@ -992,6 +1001,35 @@ mod tests {
             items[0].identity.as_ref().expect("option identity").names,
             ["-C"]
         );
+    }
+
+    #[test]
+    fn keeps_native_navigation_anchors_separate_from_semantic_ids() {
+        let mut command = item("set-mark");
+        command.terms[0].insert(0, Inline::Anchor { id: "set".into() });
+        let mut sections = vec![Section {
+            id: "commands".into(),
+            title: "COMMANDS".to_owned(),
+            spacing_before_lines: 0,
+            blocks: vec![Block::DefinitionList {
+                items: vec![command],
+                compact: true,
+                layout: LayoutHint::default(),
+                source: None,
+            }],
+            children: Vec::new(),
+            source: None,
+        }];
+
+        let retained = identify_definitions(&mut Vec::new(), &mut sections, &HashSet::new(), None);
+        let Block::DefinitionList { items, .. } = &sections[0].blocks[0] else {
+            panic!("command definition list");
+        };
+        let identity = items[0].identity.as_ref().expect("command identity");
+        assert_eq!(identity.id.as_str(), "command-set-mark");
+        assert_eq!(identity.names, ["set-mark"]);
+        assert!(retained.contains("set"));
+        assert!(retained.contains("command-set-mark"));
     }
 
     #[test]
