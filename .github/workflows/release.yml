@@ -7,7 +7,7 @@ on:
       - "v*.*.*"
       - "mant-ir-v*.*.*"
       - "mant-protocol-v*.*.*"
-      - "libmandoc-rs-v*.*.*"
+      - "mantdoc-v*.*.*"
       - "mant-sources-v*.*.*"
       - "mant-engine-v*.*.*"
       - "mant-ui-v*.*.*"
@@ -31,7 +31,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  LIBMANDOC_RS_DENY_WARNINGS: "1"
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
@@ -72,7 +71,7 @@ jobs:
             printf '%s\n' "${id##*[#@]}"
           }
 
-          packages=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui)
+          packages=(mant-ir mant-protocol mantdoc mant-sources mant-engine mant-ui)
           product=false
           package=
           if [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -151,13 +150,8 @@ jobs:
             scripts/build-and-smoke.sh
             scripts/build-and-smoke.ps1
             scripts/finalize-cyclonedx.mjs
-            scripts/install-ci-native-dependencies.sh
           sparse-checkout-cone-mode: false
           persist-credentials: false
-
-      - name: Install Linux native dependencies
-        if: runner.os == 'Linux'
-        run: bash .release-automation/scripts/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |
@@ -351,9 +345,6 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
-
-      - name: Install native publishing dependencies
-        run: bash scripts/install-ci-native-dependencies.sh
 
       - name: Install stable Rust toolchain
         run: |

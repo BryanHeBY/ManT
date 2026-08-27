@@ -78,8 +78,7 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
     assert!(windows.contains("Where-Object { $_.name -eq \"mant\" }"));
     assert!(windows.contains(r#"$ArchiveRoot = "mant-$Version-$Target""#));
     assert!(windows.contains(r#"Copy-Item $Binary (Join-Path $Package "mant.exe")"#));
-    assert!(windows.contains(r"crates/libmandoc-rs/LICENSES/*"));
-    assert!(windows.contains(r"LICENSES/THIRD_PARTY_NOTICES.md"));
+    assert!(!windows.contains(r"crates/libmandoc-rs/"));
     assert!(windows.contains(r"LICENSES/RUST_DEPENDENCIES.html"));
 }
 
@@ -87,7 +86,7 @@ fn release_scripts_keep_the_binary_under_the_binstall_archive_root() {
 fn release_workflow_publishes_and_attests_target_specific_sboms() {
     let workflow = include_str!("../../../.github/workflows/release.yml");
     assert!(workflow.contains("name: Verify release commit"));
-    assert!(workflow.contains("LIBMANDOC_RS_DENY_WARNINGS: \"1\""));
+    assert!(!workflow.contains("LIBMANDOC_RS_DENY_WARNINGS"));
     assert!(workflow.contains("scripts/find-successful-ci.sh \"$source_sha\""));
     assert!(workflow.contains("needs: verify"));
     assert!(workflow.contains("bash .release-automation/scripts/build-and-smoke.sh release"));
@@ -157,7 +156,7 @@ fn manual_release_retries_require_an_explicit_crates_publish_choice() {
     for tag in [
         "mant-ir-v*.*.*",
         "mant-protocol-v*.*.*",
-        "libmandoc-rs-v*.*.*",
+        "mantdoc-v*.*.*",
         "mant-sources-v*.*.*",
         "mant-engine-v*.*.*",
         "mant-ui-v*.*.*",
@@ -330,10 +329,7 @@ fn workspace_crates_own_their_versions_and_use_explicit_caret_dependencies() {
             "mant-protocol",
             include_str!("../../mant-protocol/Cargo.toml"),
         ),
-        (
-            "libmandoc-rs",
-            include_str!("../../libmandoc-rs/Cargo.toml"),
-        ),
+        ("mantdoc", include_str!("../../mantdoc/Cargo.toml")),
         (
             "mant-sources",
             include_str!("../../mant-sources/Cargo.toml"),
@@ -387,10 +383,10 @@ fn mcp_sdk_and_generated_macros_use_the_same_exact_release() {
 fn selected_crates_are_published_in_dependency_order_at_their_own_versions() {
     let publish = include_str!("../../../scripts/publish-crates.sh").replace("\r\n", "\n");
     assert!(publish.contains(
-        "ALL_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui mant)"
+        "ALL_PACKAGES=(mant-ir mant-protocol mantdoc mant-sources mant-engine mant-ui mant)"
     ));
     assert!(publish.contains(
-        "CRATE_TAG_PACKAGES=(mant-ir mant-protocol libmandoc-rs mant-sources mant-engine mant-ui)"
+        "CRATE_TAG_PACKAGES=(mant-ir mant-protocol mantdoc mant-sources mant-engine mant-ui)"
     ));
     assert!(publish.contains("publish_package=${MANT_PUBLISH_PACKAGE:-}"));
     assert!(publish.contains(r#"[[ $tag == "$publish_package-v$version" ]]"#));

@@ -76,13 +76,6 @@ install -m 0644 \
 install -m 0644 \
   THIRD_PARTY_LICENSES.html \
   "$package/LICENSES/RUST_DEPENDENCIES.html"
-install -m 0644 \
-  crates/libmandoc-rs/LICENSES/* \
-  "$package/LICENSES/"
-install -m 0644 \
-  crates/libmandoc-rs/THIRD_PARTY_NOTICES.md \
-  "$package/LICENSES/THIRD_PARTY_NOTICES.md"
-
 # GNU tar pins path order, timestamps, and ownership. `gzip -n` removes the
 # final timestamp/name fields so identical commits produce identical archives.
 mkdir -p "$dist"

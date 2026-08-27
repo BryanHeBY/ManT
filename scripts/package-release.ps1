@@ -77,13 +77,6 @@ Copy-Item `
 Copy-Item `
     (Join-Path $Root "THIRD_PARTY_LICENSES.html") `
     (Join-Path $Package "LICENSES/RUST_DEPENDENCIES.html")
-Copy-Item `
-    (Join-Path $Root "crates/libmandoc-rs/LICENSES/*") `
-    (Join-Path $Package "LICENSES")
-Copy-Item `
-    (Join-Path $Root "crates/libmandoc-rs/THIRD_PARTY_NOTICES.md") `
-    (Join-Path $Package "LICENSES/THIRD_PARTY_NOTICES.md")
-
 Remove-Item $Archive -Force -ErrorAction SilentlyContinue
 Compress-Archive -Path $Package -DestinationPath $Archive -CompressionLevel Optimal
 $Hash = (Get-FileHash $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
