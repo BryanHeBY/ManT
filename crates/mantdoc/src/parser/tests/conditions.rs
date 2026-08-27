@@ -83,6 +83,26 @@ fn filled_scope_text_marks_sentence_end_after_trimming_before_its_closer() {
 }
 
 #[test]
+fn same_line_conditional_control_keeps_its_authored_control_column() {
+    let name = SourceName::new("conditional-control-location.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH CONDITIONAL 1 28-Aug-2026\n.SH DESCRIPTION\n.if n .ti +5n\ntext\n",
+        ))
+        .unwrap();
+    let request = report
+        .document
+        .preorder()
+        .find(|node| node.macro_name() == Some("ti"))
+        .unwrap();
+    assert_eq!(
+        report.document.source_position(request.location().unwrap()),
+        Some(crate::SourcePosition { line: 3, column: 7 })
+    );
+}
+
+#[test]
 fn filled_mdoc_text_warns_when_a_new_sentence_stays_on_one_line() {
     let name = SourceName::new("mdoc-sentence-line.3").unwrap();
     let report = Parser::default()

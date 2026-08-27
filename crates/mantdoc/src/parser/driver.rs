@@ -2188,7 +2188,26 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 !is_builtin_package_macro(builder.macro_set(), request)
                                     && environment.macro_definition(request).is_some()
                             })
-                            .map_or(body_source_start, |_| start);
+                            .map_or_else(
+                                || {
+                                    // `SourceEvent::from_generated()` derives a
+                                    // control request's public cursor one byte
+                                    // after its event start.  Inline condition
+                                    // bodies are anchored at the control byte,
+                                    // so compensate only for a re-entered
+                                    // request; ordinary text keeps its exact
+                                    // body origin.
+                                    if body.first().is_some_and(|byte| {
+                                        *byte == scanner.control_character()
+                                            || *byte == scanner.no_break_control_character()
+                                    }) {
+                                        body_source_start.saturating_sub(1)
+                                    } else {
+                                        body_source_start
+                                    }
+                                },
+                                |_| start,
+                            );
                             pending_events.push(DriverWork::Event(SourceEvent::from_generated(
                                 body,
                                 generated_start,
