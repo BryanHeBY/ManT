@@ -12,7 +12,8 @@ catalog, search, and cross-document interactions without serializing the IR.
   summarize direct entries, descendants, and forms, then expand into commands, parameters,
   configuration keys, variables, values, and generic terms. Compact entry
   aliases preserve browsing density while an optional full-label mode wraps
-  every authored form.
+  every authored form. Row-topology changes retain the selected node's viewport
+  position whenever terminal bounds permit.
 - Settled-scroll navigation following and selectable Markdown/mdoc page-local
   references.
 - A live, bounded catalog finder that delegates complete-snapshot discovery

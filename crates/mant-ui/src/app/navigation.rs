@@ -2,7 +2,7 @@
 
 use std::{collections::HashSet, time::Instant};
 
-use super::{App, NAVIGATION_SYNC_IDLE};
+use super::{App, NAVIGATION_SYNC_IDLE, NavigationViewportRequest};
 use crate::{NavKind, document::LinkTarget, scrollbar::ScrollbarDrag};
 
 impl App {
@@ -22,7 +22,27 @@ impl App {
 
     pub(super) fn set_selected_index(&mut self, index: usize) {
         self.selected = index;
-        self.navigation_visibility_target = Some(index);
+        self.navigation_viewport_request =
+            Some(NavigationViewportRequest::Reveal { node_index: index });
+    }
+
+    pub(super) fn selected_navigation_viewport_row(&self) -> Option<usize> {
+        self.geometry
+            .navigation_rows
+            .iter()
+            .position(|index| *index == self.selected)
+    }
+
+    pub(super) fn preserve_selected_navigation_row(&mut self, row: Option<usize>) {
+        self.navigation_viewport_request = Some(row.map_or(
+            NavigationViewportRequest::Reveal {
+                node_index: self.selected,
+            },
+            |row| NavigationViewportRequest::PreserveRow {
+                node_index: self.selected,
+                row,
+            },
+        ));
     }
 
     pub(super) fn select_section_at_row(&mut self, row: usize) {
@@ -176,6 +196,26 @@ impl App {
         } else if selected.end > self.navigation_scroll.saturating_add(height) {
             self.navigation_scroll = selected.end.saturating_sub(height);
         }
+    }
+
+    pub(super) fn keep_selected_navigation_at_row(
+        &mut self,
+        selected: std::ops::Range<usize>,
+        height: usize,
+        preferred_row: usize,
+        maximum: usize,
+    ) {
+        if height == 0 {
+            return;
+        }
+        let selected_height = selected.end.saturating_sub(selected.start);
+        let maximum_row = if selected_height < height {
+            height - selected_height
+        } else {
+            height - 1
+        };
+        let row = preferred_row.min(maximum_row);
+        self.navigation_scroll = selected.start.saturating_sub(row).min(maximum);
     }
 
     pub(super) fn visible_navigation_indices(&self) -> Vec<usize> {

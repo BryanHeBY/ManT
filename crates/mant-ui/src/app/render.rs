@@ -40,9 +40,10 @@ impl App {
         if self.show_sidebar
             && body_area.width > MIN_SIDEBAR_WIDTH + SIDEBAR_SPLITTER_WIDTH + MIN_CONTENT_WIDTH
         {
-            self.sidebar_width = self
+            let sidebar_width = self
                 .sidebar_width
                 .clamp(MIN_SIDEBAR_WIDTH, maximum_sidebar_width(body_area.width));
+            self.commit_sidebar_width(sidebar_width);
             let [navigation_area, splitter_area, content_area] = Layout::horizontal([
                 Constraint::Length(self.sidebar_width),
                 Constraint::Length(SIDEBAR_SPLITTER_WIDTH),
@@ -177,11 +178,21 @@ impl App {
         let height = usize::from(navigation_area.height);
         let maximum = row_count.saturating_sub(height);
         self.navigation_scroll = self.navigation_scroll.min(maximum);
-        let selected_range = (self.navigation_visibility_target.take() == Some(self.selected))
-            .then(|| navigation::node_row_range(&rows, self.selected))
-            .flatten();
-        if let Some(range) = selected_range {
-            self.keep_selected_navigation_visible(range, height);
+        let request = self
+            .navigation_viewport_request
+            .take()
+            .filter(|request| request.node_index() == self.selected);
+        if let Some((request, range)) =
+            request.zip(navigation::node_row_range(&rows, self.selected))
+        {
+            match request {
+                super::NavigationViewportRequest::Reveal { .. } => {
+                    self.keep_selected_navigation_visible(range, height);
+                }
+                super::NavigationViewportRequest::PreserveRow { row, .. } => {
+                    self.keep_selected_navigation_at_row(range, height, row, maximum);
+                }
+            }
         }
         let visible_rows = rows
             .into_iter()

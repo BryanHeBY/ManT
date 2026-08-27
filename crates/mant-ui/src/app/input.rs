@@ -80,13 +80,16 @@ impl App {
             KeyCode::Char('b') => self.show_sidebar = !self.show_sidebar,
             KeyCode::Char('y') => self.copy_selection(),
             KeyCode::Char('<') => {
-                self.sidebar_width = self.sidebar_width.saturating_sub(2).max(MIN_SIDEBAR_WIDTH);
+                self.commit_sidebar_width(
+                    self.sidebar_width.saturating_sub(2).max(MIN_SIDEBAR_WIDTH),
+                );
             }
             KeyCode::Char('>') => {
-                self.sidebar_width = self
-                    .sidebar_width
-                    .saturating_add(2)
-                    .min(maximum_sidebar_width(self.geometry.body.width));
+                self.commit_sidebar_width(
+                    self.sidebar_width
+                        .saturating_add(2)
+                        .min(maximum_sidebar_width(self.geometry.body.width)),
+                );
             }
             _ => return UpdateOutcome::Unchanged,
         }
@@ -450,10 +453,16 @@ impl App {
 
     pub(super) fn commit_sidebar_at(&mut self, column: u16) -> bool {
         let width = self.sidebar_width_at(column);
+        self.commit_sidebar_width(width)
+    }
+
+    pub(super) fn commit_sidebar_width(&mut self, width: u16) -> bool {
         if self.sidebar_width == width {
             return false;
         }
+        let row = self.selected_navigation_viewport_row();
         self.sidebar_width = width;
+        self.preserve_selected_navigation_row(row);
         true
     }
 

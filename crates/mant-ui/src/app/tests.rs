@@ -133,6 +133,38 @@ fn navigation_bundle() -> ResolvedContent {
     }
 }
 
+fn reflow_navigation_bundle() -> ResolvedContent {
+    let mut bundle = navigation_bundle();
+    bundle.document.as_mut().expect("document").sections = (0..24)
+        .map(|index| Section {
+            id: format!("section-{index}").into(),
+            title: format!("Section {index}"),
+            spacing_before_lines: 0,
+            blocks: Vec::new(),
+            children: vec![Section {
+                id: format!("section-{index}-child").into(),
+                title: format!(
+                    "A deliberately long nested section title before selected node {index}"
+                ),
+                spacing_before_lines: 0,
+                blocks: Vec::new(),
+                children: Vec::new(),
+                source: None,
+            }],
+            source: None,
+        })
+        .collect();
+    bundle
+}
+
+fn selected_navigation_viewport_row(app: &App) -> usize {
+    app.geometry
+        .navigation_rows
+        .iter()
+        .position(|index| *index == app.selected)
+        .expect("selected navigation row is visible")
+}
+
 fn document_catalog() -> DocumentCatalog {
     let documents = vec![
         DocumentSummary {
@@ -1178,6 +1210,43 @@ fn full_outline_labels_mode_wraps_every_visible_title() {
 }
 
 #[test]
+fn outline_reflows_preserve_the_selected_nodes_viewport_row() {
+    let backend = TestBackend::new(80, 14);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut app = App::new(&reflow_navigation_bundle());
+    app.expanded.clear();
+    app.selected = app
+        .document
+        .navigation()
+        .iter()
+        .position(|node| node.id == "section-12")
+        .expect("selected section");
+    app.navigation_scroll = 8;
+
+    terminal
+        .draw(|frame| app.draw(frame))
+        .expect("compact draw");
+    let anchored_row = selected_navigation_viewport_row(&app);
+    assert!(anchored_row > 0);
+
+    for action in [MenuAction::ExpandAll, MenuAction::ToggleFullOutlineLabels] {
+        app.activate_menu_action(action);
+        terminal.draw(|frame| app.draw(frame)).expect("reflow draw");
+        assert_eq!(selected_navigation_viewport_row(&app), anchored_row);
+    }
+
+    assert!(app.commit_sidebar_width(40));
+    terminal.draw(|frame| app.draw(frame)).expect("wide draw");
+    assert_eq!(selected_navigation_viewport_row(&app), anchored_row);
+
+    for action in [MenuAction::ResetSidebar, MenuAction::CollapseAll] {
+        app.activate_menu_action(action);
+        terminal.draw(|frame| app.draw(frame)).expect("reflow draw");
+        assert_eq!(selected_navigation_viewport_row(&app), anchored_row);
+    }
+}
+
+#[test]
 fn navigation_visibility_keeps_the_complete_selected_title_on_screen() {
     let mut app = App::new(&navigation_bundle());
     app.navigation_scroll = 4;
@@ -1190,6 +1259,18 @@ fn navigation_visibility_keeps_the_complete_selected_title_on_screen() {
 
     app.keep_selected_navigation_visible(7..14, 5);
     assert_eq!(app.navigation_scroll, 7);
+
+    app.keep_selected_navigation_at_row(20..23, 10, 4, 50);
+    assert_eq!(app.navigation_scroll, 16);
+
+    app.keep_selected_navigation_at_row(20..28, 10, 6, 50);
+    assert_eq!(app.navigation_scroll, 18, "row moves up only enough to fit");
+
+    app.keep_selected_navigation_at_row(20..35, 10, 4, 50);
+    assert_eq!(
+        app.navigation_scroll, 16,
+        "oversized nodes retain their first row"
+    );
 }
 
 #[test]

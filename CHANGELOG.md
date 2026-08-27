@@ -55,6 +55,9 @@ that crate was not published for that change.
   aliases instead of parameter-heavy authored forms. The selected entry still
   expands to its complete form, and **View → Full Outline Labels** can wrap all
   visible labels for review.
+- Anchor the selected Outline node to its current viewport row across full-label
+  changes, whole-tree expansion or collapse, and sidebar-width reflow, moving
+  it only when terminal bounds or complete-title visibility require it.
 
 ### mant 0.10.0
 

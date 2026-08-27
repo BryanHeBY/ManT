@@ -510,8 +510,10 @@ projection. Semantic entries use their exact aliases as
 compact labels, while the selected entry expands to its complete authored
 form. **View → Full Outline Labels** wraps every visible complete label for
 side-by-side review. This mode changes presentation only; entry identity,
-folding, selection, and document targets remain unchanged. Selecting a node
-puts its target at the top of the content pane.
+folding, selection, and document targets remain unchanged. Full-label changes,
+whole-tree expansion or collapse, and Outline-width changes keep the selected
+node on the same viewport row whenever terminal bounds permit. Selecting a
+node puts its target at the top of the content pane.
 After content scrolling settles, the outline follows the first visible
 document node.
 Underlined references can be followed directly. Markdown fragments and mdoc

@@ -402,11 +402,15 @@ impl App {
             MenuAction::Forward => self.navigate_history(false),
             MenuAction::ToggleSidebar => self.show_sidebar = !self.show_sidebar,
             MenuAction::ToggleFullOutlineLabels => {
+                let row = self.selected_navigation_viewport_row();
                 self.full_outline_labels = !self.full_outline_labels;
-                self.navigation_visibility_target = Some(self.selected);
+                self.preserve_selected_navigation_row(row);
             }
-            MenuAction::ResetSidebar => self.sidebar_width = DEFAULT_SIDEBAR_WIDTH,
+            MenuAction::ResetSidebar => {
+                self.commit_sidebar_width(DEFAULT_SIDEBAR_WIDTH);
+            }
             MenuAction::ExpandAll => {
+                let row = self.selected_navigation_viewport_row();
                 self.expanded = self
                     .document
                     .navigation()
@@ -414,10 +418,13 @@ impl App {
                     .filter(|item| item.has_children)
                     .map(|item| item.id.clone())
                     .collect();
+                self.preserve_selected_navigation_row(row);
             }
             MenuAction::CollapseAll => {
+                let row = self.selected_navigation_viewport_row();
                 self.expanded.clear();
                 self.select_nearest_visible_ancestor();
+                self.preserve_selected_navigation_row(row);
             }
             MenuAction::Previous => self.select_relative(-1),
             MenuAction::Next => self.select_relative(1),

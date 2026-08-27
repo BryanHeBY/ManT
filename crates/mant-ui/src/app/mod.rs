@@ -212,6 +212,20 @@ struct FrameGeometry {
     finder_scrollbar: Option<VerticalScrollbar>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NavigationViewportRequest {
+    Reveal { node_index: usize },
+    PreserveRow { node_index: usize, row: usize },
+}
+
+impl NavigationViewportRequest {
+    const fn node_index(self) -> usize {
+        match self {
+            Self::Reveal { node_index } | Self::PreserveRow { node_index, .. } => node_index,
+        }
+    }
+}
+
 /// All mutable interaction state for one `ManT` reader session.
 pub struct App {
     current_bundle: Arc<ResolvedContent>,
@@ -220,7 +234,7 @@ pub struct App {
     expanded: HashSet<String>,
     content_scroll: usize,
     navigation_scroll: usize,
-    navigation_visibility_target: Option<usize>,
+    navigation_viewport_request: Option<NavigationViewportRequest>,
     sidebar_width: u16,
     show_sidebar: bool,
     full_outline_labels: bool,
@@ -299,7 +313,7 @@ impl App {
             expanded,
             content_scroll: 0,
             navigation_scroll: 0,
-            navigation_visibility_target: Some(0),
+            navigation_viewport_request: Some(NavigationViewportRequest::Reveal { node_index: 0 }),
             sidebar_width: DEFAULT_SIDEBAR_WIDTH,
             show_sidebar: true,
             full_outline_labels: false,
@@ -385,7 +399,8 @@ impl App {
             .collect();
         self.content_scroll = 0;
         self.navigation_scroll = 0;
-        self.navigation_visibility_target = Some(0);
+        self.navigation_viewport_request =
+            Some(NavigationViewportRequest::Reveal { node_index: 0 });
         self.search = SearchState::default();
         self.overlay = Overlay::None;
         self.pointer_drag = PointerDrag::None;
