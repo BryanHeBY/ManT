@@ -60,3 +60,8 @@ required-features = ["render"]
 name = "compare"
 harness = false
 required-features = ["render"]
+
+[[bench]]
+name = "render_html_groups"
+harness = false
+required-features = ["render"]
