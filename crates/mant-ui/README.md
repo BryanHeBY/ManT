@@ -77,9 +77,10 @@ clipboard use `run_with_catalog_and_scope_and_copy`. Its copy callback receives
 a `CopyRequest`: visual selections already contain plain text, while semantic
 node requests carry the complete resolved content, stable node selector, and
 requested format. The callbacks otherwise receive versioned catalog queries,
-exact logical document addresses, and already-classified external URIs;
-callback failures return to the UI as notices rather than giving the frontend
-hidden authority.
+exact logical document addresses, and an `ExternalUri` that has already passed
+the shared HTTP(S)/mailto activation policy; rejected URI schemes remain
+visible document text but never reach the callback. Callback failures return
+to the UI as notices rather than giving the frontend hidden authority.
 
 The upper-right document tab stack records successful loads in stable first-open
 order and deduplicates logical addresses. Selecting an addressed tab emits the

@@ -39,6 +39,10 @@ that crate was not published for that change.
 - Define kind-filtered outlines as matching entries plus their structural
   ancestors, with filtered summaries and an explicitly empty node set when no
   selected kind exists.
+- Give scoped search one authoritative global pagination contract. Per-document
+  groups now carry only their canonical Markdown render descriptor and globally
+  numbered hits; nested local offsets, continuation cursors, and totals are
+  removed from the unreleased v0.10 wire shape.
 
 ### mant-engine 0.10.0
 
@@ -65,6 +69,8 @@ that crate was not published for that change.
   sections discoverable without promoting uppercase prose.
 - Prune unrelated topology and recalculate summaries for selected-kind outline
   projections; a zero-match projection now renders an explicit empty result.
+- Rebase scoped-search hit ordinals across breadth-first document order so one
+  response never contains duplicate line-group numbers.
 
 ### mant-ui 0.10.0
 
@@ -78,6 +84,10 @@ that crate was not published for that change.
 - Anchor the selected Outline node to its current viewport row across full-label
   changes, whole-tree expansion or collapse, and sidebar-width reflow, moving
   it only when terminal bounds or complete-title visibility require it.
+- Represent host-activatable external links with a validated `ExternalUri` so
+  Markdown and tldr producers share the same HTTP(S)/mailto policy. Embedding
+  callbacks now receive `&ExternalUri` instead of an unclassified `&str`;
+  rejected schemes remain visible but inert.
 
 ### mant 0.10.0
 
@@ -97,6 +107,12 @@ that crate was not published for that change.
   absent selectors remain sparse misses.
 - Present empty kind-filtered outlines consistently in terminal, deterministic
   text, CommonMark, and MCP output instead of returning the full section tree.
+- Give completely missed scoped explanations an executable next step: native
+  output names the complete outline command, while MCP names `mant_outline`
+  and `mant_search` without leaking CLI-only flags.
+- Launch native Windows external links through the absolute System32 handler
+  path instead of executable name lookup, and sanitize dynamic TUI notices at
+  their final terminal-rendering boundary.
 
 ## 0.9.1 - 2026-08-24
 

@@ -92,6 +92,12 @@ Adding or changing a Rust field does not by itself authorize a wire change.
 The native discriminator must advance whenever its serialized contract
 changes outside a patch-compatible addition.
 
+Scoped search has one pagination coordinate system. `ScopeSearch` owns the
+global total, offset, truncation flag, and continuation offset; each
+`ScopedSearchDocument` carries only its logical address, depth, canonical
+Markdown render descriptor, and globally numbered hits. Consumers must never
+derive a continuation cursor from an individual document group.
+
 `mant-protocol` deliberately reuses the semantic `Block`, `Section`, `Inline`,
 `DefinitionIdentity`, `DocumentAddress`, source, metadata, diagnostic, and tldr
 types from `mant-ir`. Those types form the wire-bearing semantic subset: a

@@ -562,10 +562,13 @@ Long terminal-aware labels are middle-truncated; when the strip overflows, the
 Mouse input selects and folds outline nodes, follows in-page,
 cross-document, and safe external links, scrolls either pane, drags
 scrollbars, resizes the Outline boundary, and selects rendered document text.
-Safe external links are handed asynchronously to the platform URL handler;
-WSL uses the Windows handler when it is available, and the child process cannot
-read from or write into the TUI terminal streams. A success notice confirms
-that handoff started, not that a browser accepted it.
+Safe external links are classified before they can cross the host boundary:
+only non-empty HTTP, HTTPS, and mailto targets without control characters are
+activatable, while rejected targets remain visible and inert. They are handed
+asynchronously to the platform URL handler; native Windows uses the absolute
+System32 handler path, WSL uses the Windows handler when it is available, and
+the child process cannot read from or write into the TUI terminal streams. A
+success notice confirms that handoff started, not that a browser accepted it.
 A completed drag selection is copied immediately as plain text and shows a
 short success popup. `y`, `Ctrl+Shift+C`, or **Edit → Copy Selection** copies
 the current selection again. Right-clicking inside the document does the same
@@ -637,7 +640,7 @@ mant --document git --document git-config --explain core.worktree --follow-links
 
 `--follow-links` expands either one positional selector or the repeated `--document` set through typed manual references and same-source Markdown document links. Expansion is breadth-first in initial-document and source-link order. Exact logical addresses deduplicate cycles and diamonds. Ordinary prose resembling `name(section)`, filename prefixes such as `git-*`, page-local links, and external links never create graph edges.
 
-`--max-depth` limits the number of followed edges from an initial document and defaults to 8: zero loads only the initial documents, while one also loads their one-hop neighbours. `--max-documents` includes initial documents, defaults to 64, and cannot exceed 256. Both limits require `--follow-links`. Scope resolution also retains at most 64 MiB of normalized semantic content, so a linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity. A document with neither an entry nor a literal occurrence contributes to `missed`; a prose-only occurrence is instead a qualified failure containing its outline node and line so CLI callers can use `--search` and MCP callers can use `mant_search`.
+`--max-depth` limits the number of followed edges from an initial document and defaults to 8: zero loads only the initial documents, while one also loads their one-hop neighbours. `--max-documents` includes initial documents, defaults to 64, and cannot exceed 256. Both limits require `--follow-links`. Scope resolution also retains at most 64 MiB of normalized semantic content, so a linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order; document groups contain coordinate descriptors and globally numbered hits but no competing local cursors. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity. A document with neither an entry nor a literal occurrence contributes to `missed`; when every document misses, text output points to a complete entries outline and then to `--search`. A prose-only occurrence is instead a qualified failure containing its outline node and line so CLI callers can use `--search` and MCP callers can use `mant_search`.
 
 Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--ui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
 

@@ -267,6 +267,8 @@ point even in the full executable.
 
 `mant-ui` receives a complete typed bundle plus host callbacks for catalog
 discovery, document loading, copy delivery, and safe external URI handling.
+Only a validated `ExternalUri` can cross the latter callback, so Markdown and
+tldr link producers cannot bypass the shared HTTP(S)/mailto activation policy.
 The state machine owns a hierarchical Outline tree whose collapsed entry
 groups use the same direct/descendant/form summaries as the default protocol
 outline and whose expanded nodes follow the same `SemanticIndex`, a bounded

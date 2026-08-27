@@ -602,7 +602,7 @@ Example:
 }
 ```
 
-The response uses `mant.scope-query/v0.10`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. `result.kind = "search"` supplies global `total`, `returned`, `offset`, `truncated`, and `nextOffset` values, then groups retained `mant.search/v0.10` projections by exact document address. This search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
+The response uses `mant.scope-query/v0.10`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. `result.kind = "search"` supplies the only `total`, `returned`, `offset`, `truncated`, and `nextOffset` fields, then groups retained hits by exact document address. Each document group contains `address`, `depth`, its canonical Markdown `render` coordinate descriptor, and `matches`; it deliberately has no local pagination fields or nested `mant.search/v0.10` envelope. Hit `ordinal` values are one-based in the complete unpaginated scope and therefore remain unique across document groups and result pages. Search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
 
 For `result.kind = "explain"`, `matches` contains exact document addresses, graph depths, and ordinary `mant.excerpt/v0.10` projections. A document with neither an entry nor a literal occurrence is an ordinary sparse miss counted by `missed`. If the bounded literal probe finds the requested text only in prose, the document instead contributes a qualified `failure` containing its outline node and line; this preserves the CLI `--search` and MCP `mant_search` handoff without treating prose as a semantic entry. Ambiguous or invalid entry selection likewise remains in `failures` for that document and never causes another document's exact match to be guessed or discarded. Therefore `matches.len() + missed + failures.len()` equals the number of resolved documents queried.
 
@@ -1241,9 +1241,12 @@ excluded by the corresponding bound. `document-frontier` reports the configured
 document count, while `content-frontier` reports the fixed 64 MiB aggregate
 normalized-IR guard. `mant_explain` additionally emits
 `[explain: matched=M, missed=K, failed=F]`; documents without an entry contribute
-to `missed` when the selector is entirely absent. A prose-only literal probe
-contributes to `failed` and prints its qualified document, outline node, and
-line so the caller can continue with `mant_search`.
+to `missed` when the selector is entirely absent. When every resolved document
+misses, the body tells the caller to inspect one document with
+`mant_outline(document=..., entries={"kind":"all"})`, repeat for the remaining
+documents, or use `mant_search` when the term may occur only in prose. A
+prose-only literal probe contributes to `failed` and prints its qualified
+document, outline node, and line so the caller can continue with `mant_search`.
 
 Discover both registered Markdown and section-qualified manual pages with:
 
