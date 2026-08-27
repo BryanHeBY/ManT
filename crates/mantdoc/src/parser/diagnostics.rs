@@ -1,6 +1,6 @@
 use super::{
-    Diagnostic, DiagnosticCode, DocumentBuilder, LEGACY_SYNTAX_TREE_DEPTH_MESSAGE, Limits,
-    DiagnosticProfile, ParseState, Severity, push_diagnostic,
+    Diagnostic, DiagnosticCode, DiagnosticProfile, DocumentBuilder,
+    LEGACY_SYNTAX_TREE_DEPTH_MESSAGE, Limits, ParseState, Severity, push_diagnostic,
 };
 
 /// Project findings after all parser stages have established their source
@@ -13,9 +13,8 @@ pub(super) fn apply_diagnostic_profile(
     if profile != DiagnosticProfile::LibmandocRsV0_9 {
         return;
     }
-    diagnostics.retain(|diagnostic| {
-        diagnostic.code.as_str() != DiagnosticCode::MDOC_MDOCDATE_MISSING
-    });
+    diagnostics
+        .retain(|diagnostic| diagnostic.code.as_str() != DiagnosticCode::MDOC_MDOCDATE_MISSING);
     for diagnostic in diagnostics {
         diagnostic.message = diagnostic
             .message

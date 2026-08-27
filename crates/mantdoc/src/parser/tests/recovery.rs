@@ -13,12 +13,16 @@ fn diagnostic_profiles_change_only_the_public_diagnostic_projection() {
     .unwrap();
 
     assert_eq!(upstream.document, legacy.document);
-    assert!(upstream.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_str() == DiagnosticCode::MDOC_MDOCDATE_MISSING
-    }));
-    assert!(!legacy.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code.as_str() == DiagnosticCode::MDOC_MDOCDATE_MISSING
-    }));
+    assert!(
+        upstream.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_str() == DiagnosticCode::MDOC_MDOCDATE_MISSING
+        })
+    );
+    assert!(
+        !legacy.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code.as_str() == DiagnosticCode::MDOC_MDOCDATE_MISSING
+        })
+    );
 }
 
 #[test]
