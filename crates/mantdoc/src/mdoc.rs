@@ -15,7 +15,9 @@ use crate::{
 
 mod context;
 mod driver;
+mod post;
 mod spec;
+mod state;
 use spec::{
     explicit_partial_block_close, implicit_partial_block_name, is_implicit_partial_block_macro,
     is_inline_mdoc_macro, is_mdoc_callable_macro, is_mdoc_noncallable_macro,

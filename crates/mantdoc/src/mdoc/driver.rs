@@ -1,126 +1,57 @@
 use super::context::MdocContext;
+use super::post::{NetBsdValidation, PostValidation, PrologueStatus, merge_syntax_recoveries};
+use super::state::{StructureEvent, StructureEvents};
 use super::{
     ArgumentPlacement, BTreeMap, BTreeSet, DocumentBuilder, MacroSet, NodeId, NodeKind,
     NormalizedEnclosure, NormalizedListKind, Recovery, ScopeFrame, SourceSpan, StructureOutcome,
     accepts_pending_manual_tag, active_column_item, active_column_list,
     append_broken_full_block_body, append_broken_implicit_block_body, append_column_ta_cell,
     append_explicit_partial_tail, append_implicit_column_table_row, append_to_parent,
-    apply_attributes, apply_presentation_flags, argument_location, automatic_mdoc_function_tag,
-    broken_item_recoveries, clear_generated_synopsis_pretty_children,
-    clear_initial_implicit_body_delimiter_flags, clear_leading_explicit_partial_punctuation,
-    clear_quoted_bx_trailing_delimiter_sentence_end, clear_terminal_implicit_body_opening_flags,
-    close_explicit_partial_scope, close_name, coalesce_adjacent_text_children,
-    coalesce_implicit_partial_body_text, coalesce_mdoc_display_phrases, coalesce_text_children,
-    coalesce_text_children_after, collapse_long_option_prefixes, column_item_cell_count,
-    complete_explicit_tail, discard_empty_block, discard_item_body, discard_node_from_parent,
-    discard_previous_paragraph_control, display_attributes, emphasis_fallback_elements,
-    empty_tag_macro_name, expand_fl_elements, expand_standard_exit_status,
-    expand_standard_return_value, explicit_partial_block_close, explicit_partial_tail_events,
-    extend_pending_short_column_item, finalize_last_empty_column_item,
-    finalize_last_fixed_head_list_item, finalize_short_column_items, first_mdoc_content_node,
-    fixed_head_list_type, flush_pending_authors_section, flush_pending_name_section,
-    flush_pending_nd_delimiters, font_attributes, generated_system_name,
-    implicit_partial_ancestor_blocks, implicit_partial_block_name, insert_generated_ar_default,
-    insert_generated_nm_name, insert_generated_nonbreaking_default, insert_generated_system_name,
-    insert_generated_system_names, is_bf_option, is_explicit_partial_close,
-    is_explicit_partial_scope, is_implicit_column_row_macro, is_implicit_partial_block_macro,
-    is_inline_mdoc_macro, is_legacy_roff_font, is_mdoc_closing_delimiter,
-    is_mdoc_noncallable_macro, is_reference_field_macro, item_header_partial_scope,
-    list_attributes, make_block, make_synthetic_block, mark_definition_item_head_targets,
-    mark_definition_item_xo_head_targets, mark_destination, mark_emphasis_targets,
+    apply_attributes, argument_location, automatic_mdoc_function_tag, broken_item_recoveries,
+    clear_generated_synopsis_pretty_children, clear_initial_implicit_body_delimiter_flags,
+    clear_leading_explicit_partial_punctuation, clear_quoted_bx_trailing_delimiter_sentence_end,
+    clear_terminal_implicit_body_opening_flags, close_explicit_partial_scope, close_name,
+    coalesce_adjacent_text_children, coalesce_implicit_partial_body_text,
+    coalesce_mdoc_display_phrases, coalesce_text_children, coalesce_text_children_after,
+    collapse_long_option_prefixes, column_item_cell_count, complete_explicit_tail,
+    discard_empty_block, discard_item_body, discard_node_from_parent,
+    discard_previous_paragraph_control, display_attributes, empty_tag_macro_name,
+    expand_fl_elements, expand_standard_exit_status, expand_standard_return_value,
+    explicit_partial_block_close, explicit_partial_tail_events, extend_pending_short_column_item,
+    finalize_last_empty_column_item, finalize_last_fixed_head_list_item,
+    finalize_short_column_items, fixed_head_list_type, flush_pending_authors_section,
+    flush_pending_name_section, flush_pending_nd_delimiters, font_attributes,
+    generated_system_name, implicit_partial_ancestor_blocks, implicit_partial_block_name,
+    insert_generated_ar_default, insert_generated_nm_name, insert_generated_nonbreaking_default,
+    insert_generated_system_name, insert_generated_system_names, is_bf_option,
+    is_explicit_partial_close, is_explicit_partial_scope, is_implicit_column_row_macro,
+    is_implicit_partial_block_macro, is_inline_mdoc_macro, is_legacy_roff_font,
+    is_mdoc_closing_delimiter, is_mdoc_noncallable_macro, is_reference_field_macro,
+    item_header_partial_scope, list_attributes, make_block, make_synthetic_block,
+    mark_definition_item_head_targets, mark_destination,
     mark_explicit_partial_close_tail_line_start, mark_first_visible_permalink,
     mark_implicit_partial_tail_sentence_ends, mark_link_terminal_delimiter, mark_manual_target,
-    mark_no_print, mark_permalink, mark_section_targets, mark_sentence_end, mark_synopsis_pretty,
-    mark_target, mark_unique_function_targets, matching_explicit_partial_close_index,
-    mdoc_heading_tab_recoveries, mdoc_inline_argument_limit, mdoc_operating_system_flavour,
-    move_explicit_leading_open_delimiter, move_initial_list_content_out,
-    move_leading_open_delimiter, move_leading_open_delimiters, move_paragraph_permalink,
-    named_mdoc_section, no_space_macro_requires_warning, node_arguments, node_kind_name,
-    normalize_filled_blank_lines, normalize_inline_paragraph_controls,
-    normalize_list_trailing_paragraph_controls, normalize_reference_field_order,
-    normalize_section_paragraph_boundaries, normalize_trailing_no_space_in_implicit_blocks,
-    open_name, paragraph_layout_recovery_offset, preceding_manual_tag_paragraph,
-    push_generated_text_at, rebase_expanded_argument_locations, rebase_option_expansion_locations,
-    record_date, record_name, record_operating_system, record_title, recover_unmatched_ec,
-    reference_field_joins_arguments, relocate_crossed_closer_to_nested_implicit_body,
-    split_column_item_cells, split_explicit_partial_block_tail, split_inline_macro_events,
-    split_mdoc_inline_children, split_mdoc_inline_tokens, standard_description,
-    structure_implicit_column_item, structure_implicit_column_table_item,
-    structure_item_head_explicit_partial, structure_matched_explicit_partial_blocks,
-    structure_nested_implicit_explicit_scopes, structure_nested_implicit_partial_blocks,
-    structure_unclosed_explicit_partial_blocks, suppress_filled_c_blank_lines, system_macro_name,
-    tag_empty_macro_requires_warning, tag_macro_name, take_explicit_partial_close_argument,
-    take_implicit_partial_tail, take_inline_column_ta_tail, take_trailing_line_start_text_children,
-    text_offset_location, trim_mdoc_filled_text_trailing_whitespace, unexpected_section_manuals,
+    mark_no_print, mark_permalink, mark_synopsis_pretty, mark_target,
+    matching_explicit_partial_close_index, mdoc_heading_tab_recoveries, mdoc_inline_argument_limit,
+    mdoc_operating_system_flavour, move_explicit_leading_open_delimiter,
+    move_initial_list_content_out, move_leading_open_delimiter, move_leading_open_delimiters,
+    move_paragraph_permalink, named_mdoc_section, no_space_macro_requires_warning, node_arguments,
+    normalize_reference_field_order, open_name, preceding_manual_tag_paragraph,
+    push_generated_text_at, record_date, record_name, record_operating_system, record_title,
+    recover_unmatched_ec, reference_field_joins_arguments,
+    relocate_crossed_closer_to_nested_implicit_body, split_column_item_cells,
+    split_explicit_partial_block_tail, split_inline_macro_events, split_mdoc_inline_children,
+    split_mdoc_inline_tokens, standard_description, structure_implicit_column_item,
+    structure_implicit_column_table_item, structure_item_head_explicit_partial,
+    structure_matched_explicit_partial_blocks, structure_nested_implicit_explicit_scopes,
+    structure_nested_implicit_partial_blocks, structure_unclosed_explicit_partial_blocks,
+    system_macro_name, tag_empty_macro_requires_warning, tag_macro_name,
+    take_explicit_partial_close_argument, take_implicit_partial_tail, take_inline_column_ta_tail,
+    take_trailing_line_start_text_children, text_offset_location, unexpected_section_manuals,
     validate_an, validate_at, validate_function_argument_commas, validate_function_name,
     validate_library, validate_no_break_trailing_delimiter, validate_prefix_following,
     validate_tag, visible_head_text,
 };
-
-struct MdocStructureEvent {
-    flat_index: usize,
-    node: NodeId,
-    suppressed: bool,
-    blank_line_recovery: Option<Recovery>,
-}
-
-struct MdocStructureMachine {
-    nodes: std::iter::Enumerate<std::vec::IntoIter<NodeId>>,
-    synopsis_events: std::iter::Peekable<std::vec::IntoIter<(usize, bool)>>,
-    suppressed_nodes: BTreeSet<NodeId>,
-    blank_line_recoveries: BTreeMap<NodeId, Recovery>,
-}
-
-impl MdocStructureMachine {
-    fn prepare(builder: &mut DocumentBuilder, flat: Vec<NodeId>) -> Self {
-        let synopsis_events = builder.take_mdoc_synopsis_events().into_iter().peekable();
-        // Ordinary source text is tokenized before this package pass. Only
-        // direct flat text events receive the generic sentence fallback;
-        // macro arguments keep their macro-specific punctuation semantics.
-        for node in &flat {
-            if builder.node_kind(*node) == Some(NodeKind::Text) {
-                mark_sentence_end(builder, *node);
-            }
-        }
-        apply_presentation_flags(builder, &flat);
-        trim_mdoc_filled_text_trailing_whitespace(builder, &flat);
-        for node in &flat {
-            let macro_name = builder.node_macro_name(*node);
-            if matches!(macro_name, Some("Fd" | "Fl" | "Sy" | "Ar" | "Em" | "Sq")) {
-                rebase_expanded_argument_locations(builder, *node);
-            }
-        }
-        let suppressed = suppress_filled_c_blank_lines(builder, &flat);
-        let blank_line_recoveries = normalize_filled_blank_lines(builder, &flat, &suppressed);
-        Self {
-            nodes: flat.into_iter().enumerate(),
-            synopsis_events,
-            suppressed_nodes: BTreeSet::from_iter(suppressed),
-            blank_line_recoveries,
-        }
-    }
-
-    fn step(&mut self) -> Option<MdocStructureEvent> {
-        let (flat_index, node) = self.nodes.next()?;
-        Some(MdocStructureEvent {
-            flat_index,
-            node,
-            suppressed: self.suppressed_nodes.contains(&node),
-            blank_line_recovery: self.blank_line_recoveries.remove(&node),
-        })
-    }
-
-    fn next_synopsis_transition(&mut self, flat_index: usize) -> Option<bool> {
-        let (boundary, _) = self.synopsis_events.peek()?;
-        (*boundary <= flat_index)
-            .then(|| self.synopsis_events.next().map(|(_, state)| state))
-            .flatten()
-    }
-
-    fn finish(self) {
-        debug_assert!(self.nodes.len() == 0, "mdoc event machine finished early");
-    }
-}
 
 /// Restructure the initial M5 mdoc macro families in a bounded arena.
 #[allow(clippy::too_many_lines)] // One source-order state machine keeps scope ownership auditable.
@@ -137,7 +68,7 @@ pub(crate) fn structure(
     let Some(flat) = builder.children(root).map(<[NodeId]>::to_vec) else {
         return package.outcome;
     };
-    let mut machine = MdocStructureMachine::prepare(builder, flat);
+    let mut machine = StructureEvents::prepare(builder, flat);
     let outcome = &mut package.outcome;
     let deferred = &mut package.deferred;
 
@@ -251,7 +182,7 @@ pub(crate) fn structure(
     let mut saw_netbsd_rcs_id = false;
 
     while let Some(event) = machine.step() {
-        let MdocStructureEvent {
+        let StructureEvent {
             flat_index,
             node,
             suppressed,
@@ -4083,130 +4014,26 @@ pub(crate) fn structure(
     );
     flush_pending_authors_section(builder, &mut pending_authors_body, &mut outcome.recoveries);
     let syntax_stage_recoveries = deferred.flush_into(outcome);
-    // A crossed closer found while recursively structuring an implicit block
-    // is syntactic rather than a late post-validation finding.  It used to be
-    // appended only after every validator finding, which was observable for a
-    // nested `.Aq` / `.Bq` pair.  Merge just those delayed crossings among the
-    // already source-ordered ordinary crossings.  Do not sort the complete
-    // recovery vector: its trailing validation findings intentionally retain
-    // libmandoc's post-validation order.
-    for recovery in syntax_stage_recoveries {
-        let line = match &recovery {
-            Recovery::BadlyNestedBlock { location, .. } => location
-                .as_ref()
-                .and_then(|span| builder.source_position(span))
-                .map_or(u32::MAX, |position| position.line),
-            _ => unreachable!("syntax-stage findings are crossed blocks"),
-        };
-        // Ordinary crossed blocks are emitted while the line is structured;
-        // the recursive crossings above are discovered only afterwards.  Put
-        // a delayed finding before the next ordinary crossing, or immediately
-        // after the last one when it is later in the source.  If there is no
-        // ordinary crossing (the `Nd/broken` shape), it must precede the
-        // deferred semantic validators altogether.
-        let index = outcome
-            .recoveries
-            .iter()
-            .enumerate()
-            .find_map(|(index, existing)| match existing {
-                Recovery::BadlyNestedBlock { location, .. }
-                    if location
-                        .as_ref()
-                        .and_then(|span| builder.source_position(span))
-                        .is_some_and(|position| position.line > line) =>
-                {
-                    Some(index)
-                }
-                _ => None,
-            })
-            .unwrap_or_else(|| {
-                outcome
-                    .recoveries
-                    .iter()
-                    .rposition(|existing| matches!(existing, Recovery::BadlyNestedBlock { .. }))
-                    .map_or(0, |index| index + 1)
-            });
-        outcome.recoveries.insert(index, recovery);
-    }
-    // Freeze the final root topology before root-level validation. In
-    // particular, `post_prevpar()` may discard a top-level Pp immediately
-    // before a section, which must not count as content before that section.
-    let _ = builder.replace_children(root, &root_children);
-    normalize_trailing_no_space_in_implicit_blocks(builder, root);
-    let mut paragraph_layout_recoveries = Vec::new();
-    normalize_list_trailing_paragraph_controls(builder, root, &mut paragraph_layout_recoveries);
-    normalize_inline_paragraph_controls(builder, root, &mut paragraph_layout_recoveries);
-    paragraph_layout_recoveries.sort_by_key(paragraph_layout_recovery_offset);
-    outcome.recoveries.extend(paragraph_layout_recoveries);
-    // Em/Sy fallback can assign the destination of a preceding paragraph.
-    // Run it before section-boundary cleanup so that cleanup does not mistake
-    // that paragraph for an empty redundant layout control.
-    let emphasis_elements = emphasis_fallback_elements(builder);
-    mark_emphasis_targets(builder, &emphasis_elements);
-    let mut section_paragraph_recoveries = Vec::new();
-    normalize_section_paragraph_boundaries(builder, root, &mut section_paragraph_recoveries);
-
-    // The legacy wrapper defines `has_body` as the presence of any retained
-    // non-comment root child, including no-printing prologue nodes.  Keep
-    // that observable metadata separate from the structural no-body warning
-    // below, which is based on visible document content.
-    builder.metadata_mut().has_body = root_children
-        .iter()
-        .copied()
-        .any(|node| builder.node_kind(node) != Some(NodeKind::Comment));
-    if !saw_title_prologue {
-        let metadata = builder.metadata_mut();
-        metadata.title = Some("UNTITLED".into());
-        if metadata.volume.is_none() {
-            metadata.volume = Some("LOCAL".into());
-        }
-        outcome.recoveries.push(Recovery::MissingTitle);
-    }
-    let final_root_children = builder.children(root).unwrap_or_default();
-    match first_mdoc_content_node(builder, final_root_children) {
-        Some(node) if builder.node_macro_name(node) != Some("Sh") => {
-            let content = builder
-                .node_macro_name(node)
-                .unwrap_or_else(|| node_kind_name(builder.node_kind(node)))
-                .into();
-            outcome
-                .recoveries
-                .push(Recovery::ContentBeforeFirstSection {
-                    content,
-                    location: builder.node_location(node),
-                });
-        }
-        None => outcome.recoveries.push(Recovery::NoDocumentBody),
-        Some(_) => {}
-    }
-
-    rebase_option_expansion_locations(builder, root);
-    // Structural lowering may allocate descendants after their scanner event
-    // was marked. The synopsis presentation state belongs to the entire
-    // section Body, so complete the projection once every retained child has
-    // reached its final parent.
-    for body in synopsis_bodies {
-        mark_synopsis_pretty(builder, body);
-    }
-    mark_definition_item_xo_head_targets(builder);
-    mark_section_targets(builder, &target_heads);
-    mark_unique_function_targets(
+    merge_syntax_recoveries(builder, outcome, syntax_stage_recoveries);
+    PostValidation {
         builder,
-        &automatic_function_targets,
-        &automatic_function_tag_occurrences,
-    );
-    outcome.recoveries.extend(section_paragraph_recoveries);
-    if !saw_operating_system_request && (saw_date_prologue || saw_title_prologue) {
-        outcome.recoveries.push(Recovery::MissingOperatingSystem);
-        // An absent request is distinguishable from bare `.Os`: preserve the
-        // legacy empty metadata value and prevent ParserConfig's bare-`.Os`
-        // transport fallback from manufacturing a host/session value.
-        builder.operating_system("");
+        root,
+        root_children: &root_children,
+        outcome,
+        synopsis_bodies: &synopsis_bodies,
+        target_heads: &target_heads,
+        automatic_function_targets: &automatic_function_targets,
+        automatic_function_tag_occurrences: &automatic_function_tag_occurrences,
+        prologue: PrologueStatus {
+            saw_title: saw_title_prologue,
+            saw_date: saw_date_prologue,
+            saw_operating_system_request,
+        },
+        netbsd: NetBsdValidation {
+            enabled: netbsd_operating_system_validation,
+            saw_rcs_id: saw_netbsd_rcs_id,
+        },
     }
-    if netbsd_operating_system_validation && !saw_netbsd_rcs_id {
-        outcome
-            .recoveries
-            .push(Recovery::RcsIdMissing { flavour: "NetBSD" });
-    }
+    .run();
     package.outcome
 }
