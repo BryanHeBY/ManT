@@ -3,8 +3,8 @@
 
 The native canonical snapshot plus M3, M4, and M6 are independent whole-corpus
 tasks. The strict lint, M5, and M9 renderer-golden gates additionally partition their
-checksum-ordered corpus by ``case_index % shard_count``. This helper builds the
-feature-gated tools once, runs every independent task concurrently, then sums
+checksum-ordered corpus by ``case_index % shard_count``. This helper builds
+release tools once, runs every independent task concurrently, then sums
 machine-readable counters. A shard always validates the whole upstream
 inventory before selecting its own cases, so no filesystem walk or scheduling
 order becomes part of the result.
@@ -55,10 +55,10 @@ def command_for(
     shard: str,
     list_renderer_differences: bool,
 ) -> list[str]:
-    inventory = ROOT / "target" / "debug" / "examples" / "mantdoc-corpus-inventory"
-    canonical = ROOT / "target" / "debug" / "examples" / "mantdoc-canonical-snapshot"
-    lint_diff = ROOT / "target" / "debug" / "examples" / "mantdoc-lint-diff"
-    renderer_diff = ROOT / "target" / "debug" / "examples" / "mantdoc-render-diff"
+    inventory = ROOT / "target" / "release" / "examples" / "mantdoc-corpus-inventory"
+    canonical = ROOT / "target" / "release" / "examples" / "mantdoc-canonical-snapshot"
+    lint_diff = ROOT / "target" / "release" / "examples" / "mantdoc-lint-diff"
+    renderer_diff = ROOT / "target" / "release" / "examples" / "mantdoc-render-diff"
     if lane == "canonical":
         return [
             str(canonical),
@@ -159,6 +159,7 @@ def main() -> int:
         "cargo",
         "build",
         "--locked",
+        "--release",
         "--package",
         "mantdoc",
         "--examples",

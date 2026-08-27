@@ -26,7 +26,8 @@ upstream checks. It validates a checksum-pinned `mandoc-1.14.6` archive without
 copying its payload, then checks every input against an immutable 572-case
 native canonical regression snapshot, upstream lint output, and upstream
 renderer outputs. `scripts/run-mantdoc-differential-shards.py`
-builds the private examples once and runs independent lanes in parallel.
+builds the private examples once in release mode and runs independent lanes in
+parallel.
 
 The checked-in expectations are native test assets, not a compatibility
 exception ledger: parser behavior must equal the native golden or the gate
