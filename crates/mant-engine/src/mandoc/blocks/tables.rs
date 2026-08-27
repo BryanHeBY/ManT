@@ -324,6 +324,9 @@ fn lower_table_text_block(
             .collect::<Vec<_>>();
         if !nodes.is_empty() {
             if let Some(inline) = source_table_inline(source_line.trim(), context.default_name) {
+                if requires_legacy_table_warning(source_line) {
+                    context.warn_unhandled_table_text_block_line(line);
+                }
                 builder.append_filled(inline, FilledBoundary::Word);
                 continue;
             }
@@ -348,6 +351,9 @@ fn lower_table_text_block(
             continue;
         }
         if let Some(inline) = source_table_inline(source_line, context.default_name) {
+            if requires_legacy_table_warning(source_line) {
+                context.warn_unhandled_table_text_block_line(line);
+            }
             builder.append_filled(inline, FilledBoundary::Word);
         } else if source_line.starts_with('.') || source_line.starts_with('\'') {
             context.warn_unhandled_table_text_block_line(line);
@@ -356,6 +362,20 @@ fn lower_table_text_block(
         }
     }
     builder.finish()
+}
+
+fn requires_legacy_table_warning(source_line: &str) -> bool {
+    let Some(request) = source_line.trim_start().strip_prefix(['.', '\'']) else {
+        return false;
+    };
+    let name = request
+        .split_once(char::is_whitespace)
+        .map_or(request, |(name, _)| name);
+    // The native source recovery understands `.SM`, but the legacy engine
+    // deliberately reported this tbl request as semantically unretained.
+    // Retain that diagnostic in its compatibility IR without throwing away
+    // the now-recoverable text.
+    name == "SM"
 }
 
 fn source_table_inline(source_line: &str, default_name: Option<&str>) -> Option<Vec<Inline>> {
@@ -418,5 +438,13 @@ mod tests {
             "Core",
             "Production-grade, first-class"
         ));
+    }
+
+    #[test]
+    fn keeps_the_legacy_tbl_warning_for_recovered_small_text() {
+        assert!(super::requires_legacy_table_warning(".SM value"));
+        assert!(super::requires_legacy_table_warning("  'SM value"));
+        assert!(!super::requires_legacy_table_warning(".BR value (1)"));
+        assert!(!super::requires_legacy_table_warning("value"));
     }
 }
