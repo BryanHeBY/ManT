@@ -450,7 +450,7 @@ pub fn project_query_view(
     }
 }
 
-fn select_explanation_with_text_hint(
+pub(crate) fn select_explanation_with_text_hint(
     query: &ResolvedContent,
     entry: &str,
 ) -> Result<QueryExcerpt, ProjectionError> {

@@ -69,7 +69,7 @@ fn stdio_mode_exposes_compact_text_first_document_tools() {
     request_document_tools(&mut input);
     input.flush().expect("flush tool calls");
 
-    let replies = (0..(11 + usize::from(cfg!(windows))))
+    let replies = (0..(12 + usize::from(cfg!(windows))))
         .map(|_| parse_reply(lines.next().expect("tool reply")))
         .collect::<Vec<_>>();
     assert_tool_replies(&replies);
@@ -162,6 +162,15 @@ fn request_document_tools(input: &mut impl Write) {
         &json!({
             "documents": ["documents/mcp-registered"],
             "entry": "/f"
+        }),
+    );
+    call_tool(
+        input,
+        15,
+        "mant_explain",
+        &json!({
+            "documents": ["documents/mcp-registered"],
+            "entry": "VISUAL"
         }),
     );
     call_tool(
@@ -328,6 +337,14 @@ fn assert_tool_replies(replies: &[Value]) {
     assert!(ambiguity.contains("option-f"), "{ambiguity}");
     assert!(ambiguity.contains("option-f-2"), "{ambiguity}");
 
+    let probe = successful_text(reply(replies, 15));
+    assert!(probe.contains("has no semantic entry 'VISUAL'"), "{probe}");
+    assert!(probe.contains("outline node 1 (Query) at line"), "{probe}");
+    assert!(
+        probe.contains("[explain: matched=0, missed=0, failed=1]"),
+        "{probe}"
+    );
+
     let bounded = successful_text(reply(replies, 10));
     assert!(
         bounded.contains("[scope: documents=1, unresolved-roots=0, unresolved-links=0, depth-frontier=1, document-frontier=0, content-frontier=0]"),
@@ -492,7 +509,7 @@ fn registered_document_fixture() -> PathBuf {
     fs::create_dir_all(&documents).expect("create document directory");
     fs::write(
         documents.join("mcp-registered.md"),
-        "# MCP registered\n\nRead the MCP needle.\n\n[Linked details](mcp-linked.md)\n\nA second needle stays in the same outline node.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n\n## Invalid declaration\n\n<!-- mant:entries role=option case=insensitive -->\n- `/driver..exclude`: Keep malformed entries out of the outline.\n",
+        "# MCP registered\n\nRead the MCP needle.\n\n[Linked details](mcp-linked.md)\n\nA second needle stays in the same outline node.\n\n> preserved unsupported quote\n\n## Query\n\nGeneral query behavior. The VISUAL name appears only in prose.\n\n<!-- mant:entries role=option case=insensitive -->\n- `/f`: Force a query.\n\n## Commands\n\n<!-- mant:entries role=command case=insensitive -->\n- `query`: Query registry data.\n\n## Options\n\n<!-- mant:entries role=option case=insensitive -->\n- `/S COMPUTER`: Select a remote computer.\n\n## Environment\n\n<!-- mant:entries role=environment-variable case=insensitive -->\n- `PATH`, `$env:PATH`: Control executable discovery.\n\n## Delete\n\n<!-- mant:entries role=option case=insensitive -->\n- `/F`: Force deletion.\n\n## Invalid declaration\n\n<!-- mant:entries role=option case=insensitive -->\n- `/driver..exclude`: Keep malformed entries out of the outline.\n",
     )
     .expect("write registered document");
     fs::write(

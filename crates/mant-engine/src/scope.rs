@@ -16,8 +16,8 @@ use mant_protocol::{
 };
 
 use crate::{
-    DocumentResolver, ProjectionError, QueryError, QueryPolicy, search_query, select_explanation,
-    validate_search_query,
+    DocumentResolver, ProjectionError, QueryError, QueryPolicy,
+    query::select_explanation_with_text_hint, search_query, validate_search_query,
 };
 
 /// A logical scope together with the loaded documents in matching order.
@@ -603,7 +603,7 @@ fn execute_scope_explain(loaded: &LoadedDocumentScope, entry: &str) -> ScopeQuer
     let mut missed = 0_u32;
     let mut failures = Vec::new();
     for (scoped, bundle) in loaded.scope.documents.iter().zip(&loaded.documents) {
-        match select_explanation(bundle, entry) {
+        match select_explanation_with_text_hint(bundle, entry) {
             Ok(excerpt) => matches.push(ScopedExplanation {
                 address: scoped.address.clone(),
                 depth: scoped.depth,
@@ -879,6 +879,58 @@ mod tests {
                 maximum: MAX_SEMANTIC_ENTRY_BYTES,
             }))
         );
+    }
+
+    #[test]
+    fn scope_explain_retains_a_visible_text_probe_as_a_qualified_failure() {
+        let address = DocumentAddress::Markdown {
+            path: "shell".to_owned(),
+            origin: MarkdownOrigin::Documents,
+        };
+        let loaded = LoadedDocumentScope {
+            scope: ResolvedDocumentScope {
+                query: DocumentScope {
+                    documents: vec![DocumentSelector {
+                        selector: "documents/shell".to_owned(),
+                        source: None,
+                        manual_section: None,
+                    }],
+                    traversal: mant_protocol::DocumentTraversal::default(),
+                },
+                documents: vec![ScopedDocument {
+                    address: address.clone(),
+                    depth: 0,
+                    root_indices: vec![0],
+                    reached_from: Vec::new(),
+                }],
+                edges: Vec::new(),
+                frontier: Vec::new(),
+                unresolved: Vec::new(),
+            },
+            documents: vec![
+                crate::query_markdown_text(
+                    "# Shell\n\n## Startup\n\nThe `VISUAL` name selects an editor.\n",
+                    Some("shell.md".to_owned()),
+                )
+                .expect("probe fixture"),
+            ],
+        };
+
+        let ScopeQueryResult::Explain {
+            matches,
+            missed,
+            failures,
+            ..
+        } = execute_scope_explain(&loaded, "VISUAL")
+        else {
+            panic!("explain result");
+        };
+        assert!(matches.is_empty());
+        assert_eq!(missed, 0);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].address, address);
+        assert!(failures[0].reason.contains("outline node 1 (Startup)"));
+        assert!(failures[0].reason.contains("at line"));
     }
 
     #[test]
