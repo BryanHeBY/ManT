@@ -313,14 +313,35 @@ fn diagnostic_from_man_recovery(recovery: crate::man::Recovery) -> Diagnostic {
 /// request stream. Keep their scanner budget reservation, then reproduce that
 /// observable diagnostic phase just before publishing the report.
 pub(super) fn reorder_deferred_post_validation_diagnostics(outcome: &mut ParseState) {
-    for diagnostic in outcome.deferred_post_validation_diagnostics.drain(..) {
-        if let Some(index) = outcome
-            .diagnostics
+    publish_deferred_diagnostics(
+        &mut outcome.diagnostics,
+        &mut outcome.deferred_post_validation_diagnostics,
+    );
+    publish_deferred_diagnostics(
+        &mut outcome.diagnostics,
+        &mut outcome.deferred_filled_text_tab_diagnostics,
+    );
+}
+
+/// Publish scanner-recorded ordinary-text tab findings before a later visible
+/// man-macro argument finding.  This is a distinct phase boundary from the
+/// generic post-validation queue: it preserves source ordering between the
+/// two kinds of tab diagnostics without moving either ahead of scanner styles.
+pub(super) fn publish_deferred_filled_text_tabs(
+    diagnostics: &mut Vec<Diagnostic>,
+    deferred: &mut Vec<Diagnostic>,
+) {
+    publish_deferred_diagnostics(diagnostics, deferred);
+}
+
+fn publish_deferred_diagnostics(diagnostics: &mut Vec<Diagnostic>, deferred: &mut Vec<Diagnostic>) {
+    for diagnostic in deferred.drain(..) {
+        if let Some(index) = diagnostics
             .iter()
             .position(|candidate| candidate == &diagnostic)
         {
-            outcome.diagnostics.remove(index);
-            outcome.diagnostics.push(diagnostic);
+            diagnostics.remove(index);
+            diagnostics.push(diagnostic);
         }
     }
 }

@@ -222,6 +222,38 @@ fn filled_text_tabs_are_published_after_the_input_scan() {
 }
 
 #[test]
+fn filled_text_tabs_flush_before_visible_man_macro_argument_tabs() {
+    let name = SourceName::new("filled-tab-macro-order.1").unwrap();
+    let report = Parser::default()
+        .parse(Source::new(
+            &name,
+            b".TH TABS 1 2026-08-28\n.SH DESCRIPTION\nplain\ttab\n.IP macro\ttab 3n\ntext\n",
+        ))
+        .unwrap();
+    let locations = report
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.as_str() == DiagnosticCode::INPUT_TAB_IN_FILLED_TEXT)
+        .map(|diagnostic| {
+            report
+                .document
+                .source_position(diagnostic.primary.as_ref().unwrap())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        locations,
+        vec![
+            crate::SourcePosition { line: 3, column: 6 },
+            crate::SourcePosition {
+                line: 4,
+                column: 10
+            },
+        ]
+    );
+}
+
+#[test]
 fn unterminated_quote_points_at_the_unclosed_argument_not_a_prior_quote() {
     let name = SourceName::new("unterminated-quote.1").unwrap();
     let report = Parser::default()

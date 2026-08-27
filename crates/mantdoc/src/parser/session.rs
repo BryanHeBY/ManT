@@ -32,6 +32,9 @@ impl<'a, R: SourceResolver + ?Sized> ParserCore<'a, R> {
 pub(super) struct ParseState {
     pub(super) diagnostics: Vec<Diagnostic>,
     pub(super) deferred_post_validation_diagnostics: Vec<Diagnostic>,
+    /// Filled ordinary-text tabs publish at end of the scan phase unless a
+    /// later visible man macro publishes an argument-tab finding first.
+    pub(super) deferred_filled_text_tab_diagnostics: Vec<Diagnostic>,
     pub(super) source_bytes: usize,
     pub(super) source_files: usize,
     pub(super) text_bytes: usize,
@@ -48,6 +51,7 @@ impl ParseState {
         Self {
             diagnostics: Vec::new(),
             deferred_post_validation_diagnostics: Vec::new(),
+            deferred_filled_text_tab_diagnostics: Vec::new(),
             source_bytes,
             source_files: 1,
             text_bytes: 0,

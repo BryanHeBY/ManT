@@ -265,7 +265,8 @@ use condition::{
 };
 use diagnostics::{
     apply_diagnostic_profile, apply_man_structure_outcome, apply_mdoc_structure_outcome,
-    apply_preprocess_outcome, apply_tree_depth_limit, reorder_deferred_post_validation_diagnostics,
+    apply_preprocess_outcome, apply_tree_depth_limit, publish_deferred_filled_text_tabs,
+    reorder_deferred_post_validation_diagnostics,
 };
 use emit::{
     EmitContext, append_node, append_text_node, append_textual_node, contains_valid_utf8_non_ascii,

@@ -28,8 +28,9 @@ use super::{
     lex_condition_arguments, lex_user_macro_arguments, macro_argument_copy_mode_reparse,
     macro_body_control_column, macro_conditional_body_origin, macro_definition_directly_invokes,
     macro_scope_body_origin, normalize_character_request_arguments, normalize_document_escapes,
-    normalize_macro_argument_number_escapes, normalize_roff_name_prefix, push_diagnostic,
-    record_expansion_steps, record_suppressed_scope_definitions, recover_attached_control_name,
+    normalize_macro_argument_number_escapes, normalize_roff_name_prefix,
+    publish_deferred_filled_text_tabs, push_diagnostic, record_expansion_steps,
+    record_suppressed_scope_definitions, recover_attached_control_name,
     recover_unterminated_quoted_arguments, retain_user_macro_tab_argument_prefix,
     roff_escape_name_width, scope_closer_offset, scope_line_start, scope_opener_remainder,
     scope_remainder_source_start, scope_replay_logical_start, set_first_root_child_logical_start,
@@ -142,6 +143,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
         let ParseState {
             mut diagnostics,
             mut deferred_post_validation_diagnostics,
+            mut deferred_filled_text_tab_diagnostics,
             mut source_bytes,
             mut source_files,
             mut text_bytes,
@@ -510,12 +512,10 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                                 &mut diagnostics,
                                 &mut truncated,
                             );
-                            // roff records filled-text tabs while scanning,
-                            // but libmandoc publishes their findings after
-                            // ordinary input and package validation.  Reserve
-                            // their budget now, then let the report phase move
-                            // only these exact findings behind the scan stream.
-                            deferred_post_validation_diagnostics
+                            // Keep ordinary-text tabs in their own scanner
+                            // phase.  A later visible man macro flushes this
+                            // queue before publishing its argument tabs.
+                            deferred_filled_text_tab_diagnostics
                                 .extend_from_slice(&diagnostics[diagnostic_start..]);
                         }
                     }
@@ -657,7 +657,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             &mut diagnostics,
                             &mut truncated,
                         );
-                        deferred_post_validation_diagnostics
+                        deferred_filled_text_tab_diagnostics
                             .extend_from_slice(&diagnostics[diagnostic_start..]);
                     }
                     emit_declared_character_escape_warnings(
@@ -1066,6 +1066,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                     if environment.is_filled()
                         && is_man_visible_argument_macro(builder.macro_set(), name)
                     {
+                        let diagnostic_start = diagnostics.len();
                         emit_filled_macro_argument_tabs(
                             arguments,
                             argument_start,
@@ -1074,6 +1075,19 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             &mut diagnostics,
                             &mut truncated,
                         );
+                        if diagnostics.len() > diagnostic_start {
+                            // Ordinary text tabs stay in roff's scan phase
+                            // until a later visible man macro actually emits
+                            // an argument-tab finding. Publish the queued
+                            // findings immediately before that new group, not
+                            // merely before the next visible macro.
+                            let macro_tab_diagnostics = diagnostics.split_off(diagnostic_start);
+                            publish_deferred_filled_text_tabs(
+                                &mut diagnostics,
+                                &mut deferred_filled_text_tab_diagnostics,
+                            );
+                            diagnostics.extend(macro_tab_diagnostics);
+                        }
                     }
                     if builder.macro_set() == MacroSet::Mdoc {
                         // The argument parser owns the paired quote/tail
@@ -2486,6 +2500,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                             ParseState {
                                 diagnostics,
                                 deferred_post_validation_diagnostics,
+                                deferred_filled_text_tab_diagnostics,
                                 source_bytes,
                                 source_files,
                                 text_bytes,
@@ -2502,6 +2517,8 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
                         diagnostics = outcome.diagnostics;
                         deferred_post_validation_diagnostics =
                             outcome.deferred_post_validation_diagnostics;
+                        deferred_filled_text_tab_diagnostics =
+                            outcome.deferred_filled_text_tab_diagnostics;
                         text_bytes = outcome.text_bytes;
                         expansion_steps = outcome.expansion_steps;
                         truncated = outcome.truncated;
@@ -5014,6 +5031,7 @@ impl<R: SourceResolver + ?Sized> SourceFrame<'_, '_, '_, R> {
         ParseState {
             diagnostics,
             deferred_post_validation_diagnostics,
+            deferred_filled_text_tab_diagnostics,
             source_bytes,
             source_files,
             text_bytes,
