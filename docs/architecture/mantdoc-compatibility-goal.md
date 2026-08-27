@@ -201,6 +201,16 @@ host-derived empty `.Os` metadata: 366 reports use that explicit policy; no
 other field, diagnostic, or node is normalized. This is an input-contract
 checkpoint, not closure of the renderer, engine-IR, or real-corpus gates.
 
+The UPSTREAM-GOLDEN checkpoint has also completed from a clean native build:
+all 572 inputs parse through the immutable canonical snapshot; all 659
+applicable ASCII, UTF-8, and HTML renderer outputs are byte-identical; and all
+249 lint outputs are byte-identical apart from the separately counted `Xr`
+manual-database event. The remaining 253 Markdown and 28 tag outputs retain
+the explicit capability classifications above rather than being silently
+treated as renderer parity. The stable M3, M4, M5, M6, lint, canonical, and M9
+lanes are therefore the regression floor while the independent engine-IR
+oracle and exhaustive real-corpus audit begin.
+
 ### CORPUS-RESTORE and MASS-AUDIT: exhaust the existing real corpus
 
 Restore and hash-check every source identity in the union of the six ledgers.
