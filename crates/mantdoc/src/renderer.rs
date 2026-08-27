@@ -5,7 +5,7 @@
 // merging equal catalogue spellings obscures source-order device semantics.
 #![allow(clippy::too_many_lines)]
 
-use std::{collections::BTreeMap, fmt, path::Path};
+use std::{fmt, path::Path};
 
 use unicode_width::UnicodeWidthChar;
 
