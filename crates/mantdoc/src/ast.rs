@@ -571,6 +571,28 @@ pub struct Document {
     nodes: Vec<NodeRecord>,
     child_edges: Vec<NodeId>,
     strings: Vec<Box<str>>,
+    terminal_request_presence: u8,
+}
+
+const TERMINAL_REQUEST_PD: u8 = 1 << 0;
+const TERMINAL_REQUEST_FT: u8 = 1 << 1;
+const TERMINAL_REQUEST_PO: u8 = 1 << 2;
+const TERMINAL_REQUEST_IN: u8 = 1 << 3;
+const TERMINAL_REQUEST_LL: u8 = 1 << 4;
+const TERMINAL_REQUEST_BF: u8 = 1 << 5;
+const TERMINAL_REQUEST_SM: u8 = 1 << 6;
+
+const fn terminal_request_bit(name: &str) -> u8 {
+    match name.as_bytes() {
+        b"PD" => TERMINAL_REQUEST_PD,
+        b"ft" => TERMINAL_REQUEST_FT,
+        b"po" => TERMINAL_REQUEST_PO,
+        b"in" => TERMINAL_REQUEST_IN,
+        b"ll" => TERMINAL_REQUEST_LL,
+        b"Bf" => TERMINAL_REQUEST_BF,
+        b"Sm" => TERMINAL_REQUEST_SM,
+        _ => 0,
+    }
 }
 
 impl Document {
@@ -582,6 +604,7 @@ impl Document {
             nodes: vec![NodeRecord::root()],
             child_edges: Vec::new(),
             strings: Vec::new(),
+            terminal_request_presence: 0,
         }
     }
 
@@ -661,6 +684,10 @@ impl Document {
     fn string(&self, id: StringId) -> &str {
         self.strings[id.0 as usize].as_ref()
     }
+
+    fn has_terminal_request(&self, name: &str) -> bool {
+        self.terminal_request_presence & terminal_request_bit(name) != 0
+    }
 }
 
 /// Borrowed read-only view of one node.
@@ -694,6 +721,10 @@ impl<'doc> NodeRef<'doc> {
     #[must_use]
     pub fn macro_name(self) -> Option<&'doc str> {
         self.record.macro_name.map(|id| self.document.string(id))
+    }
+
+    pub(crate) fn document_has_terminal_request(self, name: &str) -> bool {
+        self.document.has_terminal_request(name)
     }
 
     /// Return normalized visible text.

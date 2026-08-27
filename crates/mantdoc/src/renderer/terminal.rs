@@ -802,6 +802,9 @@ pub(super) fn terminal_has_visible_table(node: NodeRef<'_>) -> bool {
 }
 
 pub(super) fn terminal_man_paragraph_density(node: NodeRef<'_>) -> Option<usize> {
+    if !node.document_has_terminal_request("PD") {
+        return None;
+    }
     let mut density = None;
     let mut root = node;
     while let Some(parent) = root.parent() {
@@ -2568,6 +2571,9 @@ pub(super) fn terminal_text_font(node: NodeRef<'_>) -> TerminalFont {
 /// down the path to the target, which handles requests nested inside a roff
 /// body without relying on arena IDs or mutable global state.
 pub(super) fn terminal_request_font_before(node: NodeRef<'_>) -> TerminalRequestFontState {
+    if !node.document_has_terminal_request("ft") {
+        return TerminalRequestFontState::default();
+    }
     let mut lineage = vec![node];
     let mut cursor = node;
     while let Some(parent) = cursor.parent() {
@@ -2660,6 +2666,9 @@ pub(super) fn terminal_mdoc_function_tail(node: NodeRef<'_>) -> bool {
 }
 
 pub(super) fn terminal_page_offset_before(node: NodeRef<'_>) -> TerminalPageOffsetState {
+    if !node.document_has_terminal_request("po") {
+        return TerminalPageOffsetState::default();
+    }
     let mut lineage = vec![node];
     let mut cursor = node;
     while let Some(parent) = cursor.parent() {
@@ -2723,6 +2732,9 @@ pub(super) fn terminal_page_offset_units(value: &str) -> Option<isize> {
 /// absolute device column wins over the structural field passed by the AST;
 /// a first relative request uses that structural field as its base.
 pub(super) fn terminal_request_indent_before(node: NodeRef<'_>, base: usize) -> Option<usize> {
+    if !node.document_has_terminal_request("in") {
+        return None;
+    }
     let mut lineage = vec![node];
     let mut cursor = node;
     while let Some(parent) = cursor.parent() {
@@ -2809,6 +2821,9 @@ pub(super) fn terminal_apply_indent_request(
 /// page-offset requests, every prior sibling subtree along the ancestor path
 /// contributes state, while the request's own AST argument stays public.
 pub(super) fn terminal_line_length_before(node: NodeRef<'_>) -> TerminalLineLength {
+    if !node.document_has_terminal_request("ll") {
+        return TerminalLineLength::Default;
+    }
     let mut lineage = vec![node];
     let mut cursor = node;
     while let Some(parent) = cursor.parent() {
@@ -2881,6 +2896,9 @@ pub(super) fn terminal_apply_line_length_request(
 /// that recovery node for source compatibility; terminal presentation uses it
 /// as a state transition from the enclosing Bf font back to Roman.
 pub(super) fn terminal_bf_scope_closed_before(node: NodeRef<'_>) -> bool {
+    if !node.document_has_terminal_request("Bf") {
+        return false;
+    }
     let closes_bf = node
         .ancestors()
         .any(|ancestor| ancestor.macro_name() == Some("Bf"));
@@ -4285,6 +4303,9 @@ pub(super) fn terminal_mdoc_sm_relinked_argument_precedes(node: NodeRef<'_>) -> 
 /// terminal spacing differs: valid `off two` retains `two` as the first
 /// no-space phrase, while recovery for `bad two` resumes ordinary word flow.
 pub(super) fn terminal_mdoc_sm_relink_before(node: NodeRef<'_>) -> Option<TerminalMdocSmRelink> {
+    if !node.document_has_terminal_request("Sm") {
+        return None;
+    }
     node.text()?;
     let target = node.source_position()?;
     let parent = node.parent()?;
@@ -4345,6 +4366,9 @@ pub(super) fn terminal_mdoc_sm_starts_new_source_phrase(node: NodeRef<'_>) -> bo
 /// keeps those nested phrases faithful without making the public AST carry a
 /// renderer-only control bit.
 pub(super) fn terminal_mdoc_spacing_disabled_before(node: NodeRef<'_>) -> bool {
+    if !node.document_has_terminal_request("Sm") {
+        return false;
+    }
     let Some(target) = node.source_position() else {
         return false;
     };

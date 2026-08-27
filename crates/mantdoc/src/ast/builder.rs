@@ -1034,6 +1034,14 @@ impl DocumentBuilder {
                 u32::try_from(self.document.child_edges.len() - start)
                     .expect("node count bounds each node's child count");
         }
+        self.document.terminal_request_presence = self
+            .document
+            .nodes
+            .iter()
+            .filter_map(|record| record.macro_name)
+            .fold(0, |presence, name| {
+                presence | super::terminal_request_bit(self.document.string(name))
+            });
         // Builders grow geometrically, but a completed document is immutable.
         // Reclaim that transient capacity before it becomes observable memory.
         self.document.nodes.shrink_to_fit();
