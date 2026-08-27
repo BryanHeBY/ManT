@@ -51,6 +51,14 @@ class Identity:
     sha256: str
 
 
+@dataclass(frozen=True)
+class Inspection:
+    """The verification outcome and, when matched, its authoritative root."""
+
+    status: str
+    root: Path | None = None
+
+
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -65,7 +73,10 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         action="append",
         default=[],
         metavar="CORPUS=ROOT",
-        help="absolute directory that owns one corpus's ledger-relative paths",
+        help=(
+            "absolute directory that owns corpus ledger-relative paths; repeat "
+            "a corpus to supply ordered, checksum-verified fallback roots"
+        ),
     )
     parser.add_argument(
         "--output",
@@ -139,35 +150,51 @@ def validate_identity(identity: Identity, ledger: Path, line: int) -> None:
         raise ValueError(f"unsafe ledger-relative source path at {ledger}:{line}: {identity.path}")
 
 
-def source_roots(values: Iterable[str]) -> dict[str, Path]:
-    roots: dict[str, Path] = {}
+def source_roots(values: Iterable[str]) -> dict[str, tuple[Path, ...]]:
+    roots: dict[str, list[Path]] = {}
     for value in values:
         corpus, separator, raw_path = value.partition("=")
         path = Path(raw_path)
         if not separator or not corpus or not raw_path or not path.is_absolute():
             raise ValueError(f"--source-root must be CORPUS=absolute-path: {value!r}")
-        if corpus in roots:
-            raise ValueError(f"duplicate --source-root corpus: {corpus}")
-        roots[corpus] = path
-    return roots
+        candidates = roots.setdefault(corpus, [])
+        if path in candidates:
+            raise ValueError(f"duplicate --source-root mapping: {value!r}")
+        candidates.append(path)
+    return {corpus: tuple(candidates) for corpus, candidates in roots.items()}
 
 
-def inspect_identity(identity: Identity, roots: dict[str, Path]) -> tuple[Identity, str]:
-    root = roots.get(identity.corpus)
-    if root is None:
-        return identity, "missing-root"
-    candidate = root / identity.path
-    if not candidate.is_file() and not candidate.is_symlink():
-        return identity, "missing-path"
-    observed = source_digest(candidate)
-    if observed is None:
-        return identity, "unreadable"
-    return identity, "verified" if observed == identity.sha256 else "hash-mismatch"
+def inspect_identity(
+    identity: Identity, roots: dict[str, tuple[Path, ...]]
+) -> tuple[Identity, Inspection]:
+    candidates = roots.get(identity.corpus)
+    if candidates is None:
+        return identity, Inspection("missing-root")
+
+    saw_unreadable = False
+    saw_mismatch = False
+    for root in candidates:
+        candidate = root / identity.path
+        if not candidate.is_file() and not candidate.is_symlink():
+            continue
+        observed = source_digest(candidate)
+        if observed is None:
+            saw_unreadable = True
+        elif observed == identity.sha256:
+            return identity, Inspection("verified", root)
+        else:
+            saw_mismatch = True
+
+    if saw_mismatch:
+        return identity, Inspection("hash-mismatch")
+    if saw_unreadable:
+        return identity, Inspection("unreadable")
+    return identity, Inspection("missing-path")
 
 
 def inspect_all(
-    identities: Sequence[Identity], roots: dict[str, Path], jobs: int
-) -> dict[Identity, str]:
+    identities: Sequence[Identity], roots: dict[str, tuple[Path, ...]], jobs: int
+) -> dict[Identity, Inspection]:
     with ThreadPoolExecutor(max_workers=jobs) as executor:
         results = executor.map(lambda identity: inspect_identity(identity, roots), identities)
         return dict(results)
@@ -182,7 +209,7 @@ def external_output_path(output: Path) -> Path:
     return resolved_output
 
 
-def write_jsonl(output: Path, records: Iterable[dict[str, str]]) -> Path:
+def write_jsonl(output: Path, records: Iterable[dict[str, object]]) -> Path:
     resolved_output = external_output_path(output)
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", newline="", dir=resolved_output.parent, delete=False
@@ -194,28 +221,39 @@ def write_jsonl(output: Path, records: Iterable[dict[str, str]]) -> Path:
     return resolved_output
 
 
-def write_manifest(output: Path, identities: Sequence[Identity], roots: dict[str, Path]) -> Path:
+def write_manifest(
+    output: Path, identities: Sequence[Identity], results: dict[Identity, Inspection]
+) -> Path:
     return write_jsonl(
         output,
         (
-            {
-                "id": f"{identity.corpus}:{identity.path}",
-                "source_name": identity.path,
-                "source_path": str((roots[identity.corpus] / identity.path).resolve()),
-                "source_sha256": identity.sha256,
-            }
+            manifest_record(identity, results[identity])
             for identity in identities
         ),
     )
 
 
+def manifest_record(identity: Identity, inspection: Inspection) -> dict[str, object]:
+    if inspection.status != "verified" or inspection.root is None:
+        raise ValueError(f"cannot emit an unverified source: {identity.corpus}:{identity.path}")
+    return {
+        "id": f"{identity.corpus}:{identity.path}",
+        "source_name": identity.path,
+        "source_path": str((inspection.root / identity.path).resolve()),
+        "source_sha256": identity.sha256,
+    }
+
+
 def write_unavailable_report(
-    output: Path, identities: Sequence[Identity], results: dict[Identity, str], roots: dict[str, Path]
+    output: Path,
+    identities: Sequence[Identity],
+    results: dict[Identity, Inspection],
+    roots: dict[str, tuple[Path, ...]],
 ) -> Path:
-    def records() -> Iterable[dict[str, str]]:
+    def records() -> Iterable[dict[str, object]]:
         for identity in identities:
-            status = results[identity]
-            if status == "verified":
+            inspection = results[identity]
+            if inspection.status == "verified":
                 continue
             record = {
                 "schema": "mantdoc.real-corpus-unavailable/v1",
@@ -223,20 +261,21 @@ def write_unavailable_report(
                 "corpus": identity.corpus,
                 "path": identity.path,
                 "source_sha256": identity.sha256,
-                "status": status,
+                "status": inspection.status,
             }
-            if (root := roots.get(identity.corpus)) is not None:
-                record["source_root"] = str(root.resolve())
-                record["source_path"] = str((root / identity.path).resolve())
+            if candidates := roots.get(identity.corpus):
+                record["source_roots"] = [str(root.resolve()) for root in candidates]
             yield record
 
     return write_jsonl(output, records())
 
 
-def summarize(identities: Sequence[Identity], results: dict[Identity, str]) -> bool:
-    statuses = Counter(results.values())
+def summarize(identities: Sequence[Identity], results: dict[Identity, Inspection]) -> bool:
+    statuses = Counter(inspection.status for inspection in results.values())
     by_corpus = Counter(
-        identity.corpus for identity, status in results.items() if status != "verified"
+        identity.corpus
+        for identity, inspection in results.items()
+        if inspection.status != "verified"
     )
     print("real_corpus_manifest_schema=mantdoc.real-corpus-manifest/v1")
     print(f"unique_identity_count={len(identities)}")
@@ -244,7 +283,7 @@ def summarize(identities: Sequence[Identity], results: dict[Identity, str]) -> b
         print(f"{status.replace('-', '_')}_count={statuses[status]}")
     for corpus, count in sorted(by_corpus.items()):
         print(f"unavailable_corpus={corpus} count={count}")
-    return all(status == "verified" for status in results.values())
+    return all(inspection.status == "verified" for inspection in results.values())
 
 
 def self_check() -> None:
@@ -260,6 +299,23 @@ def self_check() -> None:
         raise AssertionError("unsafe source path was accepted")
     digest = hashlib.sha256(b"fixture\n").hexdigest()
     assert SOURCE_SHA256.fullmatch(digest) is not None
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        stale = root / "stale"
+        restored = root / "restored"
+        stale.mkdir()
+        restored.mkdir()
+        relative_path = Path("man/man1/fixture.1")
+        stale_candidate = stale / relative_path
+        restored_candidate = restored / relative_path
+        stale_candidate.parent.mkdir(parents=True)
+        restored_candidate.parent.mkdir(parents=True)
+        stale_candidate.write_bytes(b"stale\n")
+        restored_candidate.write_bytes(b"fixture\n")
+        identity = Identity("overlay", relative_path.as_posix(), digest)
+        result = inspect_identity(identity, {"overlay": (stale, restored)})[1]
+        assert result == Inspection("verified", restored)
+        assert manifest_record(identity, result)["source_path"] == str(restored_candidate)
 
 
 def main(argv: Sequence[str]) -> int:
@@ -283,7 +339,7 @@ def main(argv: Sequence[str]) -> int:
         if arguments.output is not None:
             if not complete:
                 raise ValueError("refusing to write an incomplete oracle manifest")
-            manifest = write_manifest(arguments.output, identities, roots)
+            manifest = write_manifest(arguments.output, identities, results)
             print(f"manifest={manifest}")
         return 0 if complete or not arguments.require_complete else 1
     except ValueError as error:

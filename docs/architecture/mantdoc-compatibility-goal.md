@@ -267,12 +267,28 @@ Every identity must be available, safely reusable in an equivalent execution
 context, explicitly non-roff, or reported as a blocking missing source.
 
 `scripts/build-real-corpus-manifest.py` is the restoration boundary: it accepts
-only explicit `corpus=absolute-root` mappings, verifies decompressed SHA-256
-identities in parallel, and emits an external oracle JSONL manifest only after
-all 45,036 unique identities verify. A missing root, member, decoder failure,
-or digest mismatch is reported by corpus and blocks manifest creation; it is
-never converted into an audit skip. Its optional external unavailable report
-retains each exact identity and state for restoration triage.
+only explicit `corpus=absolute-root` mappings, including ordered fallback roots
+for a single corpus, verifies decompressed SHA-256 identities in parallel, and
+emits an external oracle JSONL manifest only after all 45,036 unique identities
+verify. A fallback root is accepted only when it supplies the exact ledger
+digest, and the manifest records the root actually selected for each source.
+A missing root, member, decoder failure, or digest mismatch is reported by
+corpus and blocks manifest creation; it is never converted into an audit skip.
+Its optional external unavailable report retains each exact identity and state
+for restoration triage.
+
+**Restoration checkpoint (2026-08-28).**  The complete union now verifies
+45,036 / 45,036 identities (100.00%), with zero missing, unreadable, or
+digest-mismatched sources.  The replayable manifest is external at
+`$HOME/dev/tmp/mantdoc-real-corpus/full-restored-manifest.jsonl`.  Historical
+Arch files require explicitly ordered roots for official 2026-08-19 packages,
+the retained `iproute2` 7.1 package, four independently pinned browser and
+neofetch packages, and the current host tree; every selection is still made by
+the ledger digest, not path precedence.  In particular, the scdoc `1.9.7` tag
+retains `VERSION=1.9.6` in its Makefile; its two outputs reproduce the ledger
+only with that source-defined version and `SOURCE_DATE_EPOCH=1787097600`
+(2026-08-19 UTC).  These are recorded provenance facts, not compatibility
+normalizations.
 
 Run the release oracle without sampling over every applicable identity.  For
 each source compare AST, diagnostics, engine IR, supported renderers, and
