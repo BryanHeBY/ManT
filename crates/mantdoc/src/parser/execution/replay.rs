@@ -14,9 +14,44 @@ use super::super::{
 };
 use super::collect::collect_pending_macro_scope;
 
-#[allow(clippy::too_many_arguments)]
+pub(in crate::parser) struct ScopeMachine<'state, 'source> {
+    pub(in crate::parser) builder: &'state mut DocumentBuilder,
+    pub(in crate::parser) root: NodeId,
+    pub(in crate::parser) source_id: crate::SourceId,
+    pub(in crate::parser) scanner: &'state mut Scanner<'source>,
+    pub(in crate::parser) environment: &'state mut Environment,
+    pub(in crate::parser) limits: &'state Limits,
+    pub(in crate::parser) text_bytes: &'state mut usize,
+    pub(in crate::parser) expansion_steps: &'state mut usize,
+    pub(in crate::parser) maximum_depth: &'state mut usize,
+    pub(in crate::parser) total_loop_iterations: &'state mut usize,
+    pub(in crate::parser) diagnostics: &'state mut Vec<Diagnostic>,
+    pub(in crate::parser) truncated: &'state mut bool,
+}
+
+impl ScopeMachine<'_, '_> {
+    pub(in crate::parser) fn run(self, lines: &[ScopeLine]) -> ScopeFlow {
+        execute_scope_lines(
+            lines,
+            self.builder,
+            self.root,
+            self.source_id,
+            self.scanner,
+            self.environment,
+            self.limits,
+            self.text_bytes,
+            self.expansion_steps,
+            self.maximum_depth,
+            self.total_loop_iterations,
+            self.diagnostics,
+            self.truncated,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)] // Private transition core; callers use `ScopeMachine`.
 #[allow(clippy::too_many_lines)] // An explicit frame stack avoids recursive execution of untrusted nested scopes.
-pub(in crate::parser) fn execute_scope_lines(
+fn execute_scope_lines(
     lines: &[ScopeLine],
     builder: &mut DocumentBuilder,
     root: NodeId,

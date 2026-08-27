@@ -1,10 +1,10 @@
 use super::{
     ArgumentIssue, BranchOutcome, ControlEvent, DiagnosticCode, DocumentBuilder, EscapeIssueKind,
     IncludeRequest, InputTrap, MacroSet, ManIndentState, NodeFlags, NodeId, NodeKind, ParseSession,
-    RequestKind, ScanOutcome, ScannedLine, Scanner, ScopeFlow, ScopeLine, Severity, Source,
-    SourceEvent, SourceMachine, SourcePosition, SourceResolver, SourceSpan, Syntax, append_node,
-    append_text_node, append_textual_node, apply_environment_request, apply_string_request,
-    arm_input_trap, collect_pending_macro_scope, collect_scope,
+    RequestKind, ScanOutcome, ScannedLine, Scanner, ScopeFlow, ScopeLine, ScopeMachine, Severity,
+    Source, SourceEvent, SourceMachine, SourcePosition, SourceResolver, SourceSpan, Syntax,
+    append_node, append_text_node, append_textual_node, apply_environment_request,
+    apply_string_request, arm_input_trap, collect_pending_macro_scope, collect_scope,
     condition_body_source_start_from_offset, condition_body_template,
     condition_body_template_from_offset, condition_parts, consume_ignore_block,
     contains_valid_utf8_non_ascii, copy_mode_reparse, definition_scope_remainder_line, diagnostic,
@@ -17,7 +17,7 @@ use super::{
     emit_trailing_whitespace, emit_translation_request_diagnostics,
     emit_unterminated_quoted_argument, emit_unterminated_register_reference_escapes,
     emit_unterminated_string_reference_escapes, emit_user_macro_leading_tabs,
-    environment_error_diagnostic, evaluate_condition, execute_scope_line, execute_scope_lines,
+    environment_error_diagnostic, evaluate_condition, execute_scope_line,
     execute_scope_macro_lines, expand_copy_mode_definition, expand_declared_character_escapes,
     expand_environment, has_physical_line_continuation, has_protected_tabulation_escape,
     ignore_marker, inline_scope_body_template, is_bad_comment_style, is_builtin_package_macro,
@@ -930,21 +930,21 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 })
                                 .and_then(|span| builder.source_position(&span))
                                 .map(|position| position.line);
-                            let flow = execute_scope_lines(
-                                &scope.lines,
-                                &mut builder,
+                            let flow = ScopeMachine {
+                                builder: &mut builder,
                                 root,
                                 source_id,
-                                &mut scanner,
+                                scanner: &mut scanner,
                                 environment,
                                 limits,
-                                &mut text_bytes,
-                                &mut expansion_steps,
-                                &mut maximum_depth,
-                                &mut total_loop_iterations,
-                                &mut diagnostics,
-                                &mut truncated,
-                            );
+                                text_bytes: &mut text_bytes,
+                                expansion_steps: &mut expansion_steps,
+                                maximum_depth: &mut maximum_depth,
+                                total_loop_iterations: &mut total_loop_iterations,
+                                diagnostics: &mut diagnostics,
+                                truncated: &mut truncated,
+                            }
+                            .run(&scope.lines);
                             let first_scope_child_is_scope_head = builder
                                 .children(root)
                                 .and_then(|children| children.get(first_scope_child))
@@ -1539,21 +1539,21 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         if condition {
                             let first_scope_child =
                                 builder.children(root).map_or(0, <[NodeId]>::len);
-                            let flow = execute_scope_lines(
-                                &scope.lines,
-                                &mut builder,
+                            let flow = ScopeMachine {
+                                builder: &mut builder,
                                 root,
                                 source_id,
-                                &mut scanner,
+                                scanner: &mut scanner,
                                 environment,
                                 limits,
-                                &mut text_bytes,
-                                &mut expansion_steps,
-                                &mut maximum_depth,
-                                &mut total_loop_iterations,
-                                &mut diagnostics,
-                                &mut truncated,
-                            );
+                                text_bytes: &mut text_bytes,
+                                expansion_steps: &mut expansion_steps,
+                                maximum_depth: &mut maximum_depth,
+                                total_loop_iterations: &mut total_loop_iterations,
+                                diagnostics: &mut diagnostics,
+                                truncated: &mut truncated,
+                            }
+                            .run(&scope.lines);
                             if let Some(opener_start) = scope_opening_column {
                                 set_first_scope_child_opening_column(
                                     &mut builder,
@@ -3736,21 +3736,22 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                         column: scope_cursor,
                                     },
                                 );
-                                match execute_scope_lines(
-                                    &scope.lines,
-                                    &mut builder,
+                                match (ScopeMachine {
+                                    builder: &mut builder,
                                     root,
                                     source_id,
-                                    &mut scanner,
+                                    scanner: &mut scanner,
                                     environment,
                                     limits,
-                                    &mut text_bytes,
-                                    &mut expansion_steps,
-                                    &mut maximum_depth,
-                                    &mut total_loop_iterations,
-                                    &mut diagnostics,
-                                    &mut truncated,
-                                ) {
+                                    text_bytes: &mut text_bytes,
+                                    expansion_steps: &mut expansion_steps,
+                                    maximum_depth: &mut maximum_depth,
+                                    total_loop_iterations: &mut total_loop_iterations,
+                                    diagnostics: &mut diagnostics,
+                                    truncated: &mut truncated,
+                                })
+                                .run(&scope.lines)
+                                {
                                     ScopeFlow::Halt => break 'lines,
                                     ScopeFlow::CloseLoopInInnerScope { .. } => {
                                         pending_while_out_of_scope = true;

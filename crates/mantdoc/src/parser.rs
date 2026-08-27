@@ -261,7 +261,7 @@ use execution::{
         collect_pending_macro_scope, collect_scope, definition_scope_remainder_line,
         record_suppressed_scope_definitions,
     },
-    replay::{execute_scope_line, execute_scope_lines, execute_scope_macro_lines},
+    replay::{ScopeMachine, execute_scope_line, execute_scope_macro_lines},
 };
 pub use report::{FatalError, FatalErrorKind, ParseReport, ParseStatistics};
 use request::{
