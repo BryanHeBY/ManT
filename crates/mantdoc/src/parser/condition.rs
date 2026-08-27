@@ -339,7 +339,6 @@ pub(super) fn condition_body_source_start_from_offset(
         .unwrap_or(fallback)
 }
 
-#[allow(clippy::naive_bytecount)] // This bounded compatibility lexer counts literal tabs without a runtime dependency.
 pub(super) fn lex_condition_arguments(
     bytes: &[u8],
     escape: u8,
@@ -374,7 +373,7 @@ pub(super) fn lex_condition_arguments(
             .iter()
             .take_while(|byte| byte.is_ascii_whitespace())
             .any(|byte| *byte == b'\t'),
-        embedded_tab_count: bytes[..end].iter().filter(|byte| **byte == b'\t').count(),
+        embedded_tab_count: memchr::memchr_iter(b'\t', &bytes[..end]).count(),
         separator_width: bytes[end..]
             .iter()
             .take_while(|byte| byte.is_ascii_whitespace())

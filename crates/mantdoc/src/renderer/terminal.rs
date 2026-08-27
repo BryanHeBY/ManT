@@ -19,6 +19,7 @@ use super::{
     render_terminal_visible_text_with_font, render_terminal_whitespace_escapes,
     render_unicode_character_escapes,
 };
+use num_traits::ToPrimitive;
 
 /// Render terminal formats from semantic section blocks rather than a flat
 /// preorder stream. This retains a section's Head/Body boundary even though a
@@ -3367,14 +3368,9 @@ pub(super) fn terminal_signed_layout_units(value: &str) -> Option<isize> {
 /// The caller has already tried all scaled forms.  The terminal device
 /// truncates a finite bare decimal toward zero and accepts only values an
 /// `isize` can represent.
-#[allow(clippy::cast_precision_loss)] // Bounds only compare the f64 parser domain with the target integer range.
 pub(super) fn terminal_plain_field_width(value: &str) -> Option<isize> {
     let value = value.parse::<f64>().ok()?;
-    if !value.is_finite() || value < isize::MIN as f64 || value > isize::MAX as f64 {
-        return None;
-    }
-    #[allow(clippy::cast_possible_truncation)]
-    Some(value as isize)
+    value.to_isize()
 }
 
 /// Apply man(7)'s persistent `.in` request to a terminal field.  The parser
@@ -3418,11 +3414,10 @@ pub(super) fn terminal_signed_roff_en_prefix(value: &str) -> Option<isize> {
         Some('i') => 240.0,
         Some('f') => 65_536.0,
         Some('M') => 0.24,
-        Some('m' | 'n') => 24.0,
         Some('P' | 'v') => 40.0,
         Some('p') => 10.0 / 3.0,
         Some('u') => 1.0,
-        Some(_) | None => 24.0,
+        _ => 24.0,
     };
     terminal_hen(scale, multiplier)
 }
@@ -3432,10 +3427,15 @@ pub(super) fn terminal_hen(scale: f64, multiplier: f64) -> Option<isize> {
     if !basic.is_finite() {
         return None;
     }
-    // Finite values are clamped to the target range before reproducing C's
-    // truncating conversion from scaled layout units.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    let basic = basic.clamp(isize::MIN as f64, isize::MAX as f64) as isize;
+    // Out-of-range finite values saturate exactly like Rust's float-to-int
+    // conversion, while representable values retain truncation toward zero.
+    let basic = basic.to_isize().unwrap_or_else(|| {
+        if basic.is_sign_negative() {
+            isize::MIN
+        } else {
+            isize::MAX
+        }
+    });
     Some(if basic >= 0 {
         basic.saturating_add(11) / 24
     } else {
@@ -3496,7 +3496,6 @@ pub(super) fn terminal_temporary_indent_target(value: &str, indentation: usize) 
 /// libmandoc's `term_vspan()`: the terminal's basic unit is one fortieth of a
 /// line, while centimetres, inches, picas, points, ens, and ems retain the
 /// device's fixed conversion factors.
-#[allow(clippy::cast_possible_truncation)] // Match C's deliberate cast after the 0.4995 rounding offset.
 pub(super) fn terminal_vertical_span(value: &str) -> Option<isize> {
     let value = value.trim();
     let numeric_end = value
@@ -3513,16 +3512,24 @@ pub(super) fn terminal_vertical_span(value: &str) -> Option<isize> {
         Some('i') => 6.0,
         Some('M') => 0.006,
         Some('m' | 'n') => 0.6,
-        Some('P' | 'v') => 1.0,
         Some('p') => 1.0 / 12.0,
         _ => 1.0,
     };
     let scaled = number * factor;
-    let rounded = if scaled.is_sign_positive() {
-        (scaled + 0.4995) as isize
+    let adjusted = if scaled.is_sign_positive() {
+        scaled + 0.4995
     } else {
-        (scaled - 0.4995) as isize
+        scaled - 0.4995
     };
+    let rounded = adjusted.to_isize().unwrap_or_else(|| {
+        if adjusted.is_nan() {
+            0
+        } else if adjusted.is_sign_negative() {
+            isize::MIN
+        } else {
+            isize::MAX
+        }
+    });
     Some(if rounded < 66 { rounded } else { 1 })
 }
 
@@ -4399,8 +4406,7 @@ pub(super) fn terminal_mdoc_spacing_disabled_before(node: NodeRef<'_>) -> bool {
                 Some(_) => {}
             }
         }
-        let children = current.children().collect::<Vec<_>>();
-        pending.extend(children.into_iter().rev());
+        pending.extend(current.children().rev());
     }
     !spacing_enabled
 }

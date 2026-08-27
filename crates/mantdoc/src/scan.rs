@@ -329,7 +329,6 @@ pub(crate) enum ArgumentIssue {
 }
 
 /// Lex byte arguments with roff-style quoted and escaped whitespace forms.
-#[allow(clippy::naive_bytecount)] // The bounded lexer already walks these bytes; a dependency would not improve this private count.
 pub(crate) fn lex_arguments(
     bytes: &[u8],
     escape: u8,
@@ -350,7 +349,6 @@ pub(crate) fn lex_user_macro_arguments(
     lex_arguments_inner(bytes, escape, limits, true)
 }
 
-#[allow(clippy::naive_bytecount)] // The bounded lexer already walks these bytes; a dependency would not improve this private count.
 fn lex_arguments_inner(
     bytes: &[u8],
     escape: u8,
@@ -424,7 +422,7 @@ fn lex_arguments_inner(
             quoted,
             separator_after,
             separator_contains_tab,
-            embedded_tab_count: token.iter().filter(|byte| **byte == b'\t').count(),
+            embedded_tab_count: memchr::memchr_iter(b'\t', &token).count(),
             separator_width,
             bytes: token,
         });

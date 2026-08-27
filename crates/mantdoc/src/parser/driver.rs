@@ -48,7 +48,6 @@ impl<R: SourceResolver + ?Sized> SourceMachine<'_, '_, '_, R> {
 }
 
 #[allow(clippy::too_many_lines)] // M2's explicit scanner-stage dispatch is kept in source order.
-#[allow(clippy::needless_borrow)] // Mutable session fields preserve the existing helper call shape.
 fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>) -> ScanOutcome {
     let SourceMachine {
         source,
@@ -58,8 +57,8 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
         outcome,
     } = machine;
     let config = session.config;
-    let mut builder = &mut *session.builder;
-    let mut environment = &mut *session.environment;
+    let builder = &mut *session.builder;
+    let environment = &mut *session.environment;
     let active_sources = &mut *session.active_sources;
     let resolver = &mut *session.resolver;
     let ScanOutcome {
@@ -384,7 +383,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     ..NodeFlags::default()
                 };
                 if append_text_node(
-                    &mut builder,
+                    builder,
                     root,
                     source_id,
                     start,
@@ -433,11 +432,11 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     if matches!(
                         execute_scope_line(
                             &trap,
-                            &mut builder,
+                            builder,
                             root,
                             source_id,
                             &mut scanner,
-                            &mut environment,
+                            environment,
                             limits,
                             &mut text_bytes,
                             &mut expansion_steps,
@@ -458,7 +457,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                 // node kind to omit comments from rendered output.
                 let flags = NodeFlags::default();
                 if append_textual_node(
-                    &mut builder,
+                    builder,
                     root,
                     NodeKind::Comment,
                     source_id,
@@ -929,7 +928,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 .and_then(|span| builder.source_position(&span))
                                 .map(|position| position.line);
                             let flow = ScopeMachine {
-                                builder: &mut builder,
+                                builder,
                                 root,
                                 source_id,
                                 scanner: &mut scanner,
@@ -961,7 +960,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     && let Some(opener_start) = scope_opening_column
                                 {
                                     set_first_scope_child_opening_column(
-                                        &mut builder,
+                                        builder,
                                         root,
                                         first_scope_child,
                                         source_id,
@@ -969,7 +968,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     );
                                 }
                             } else if let Some(replay_position) =
-                                scope_replay_logical_start(&builder, source_id, scope)
+                                scope_replay_logical_start(builder, source_id, scope)
                             {
                                 let position = scope_opening_column
                                     .filter(|_| first_scope_child_is_scope_head)
@@ -983,13 +982,13 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                         column: opening.column,
                                     });
                                 set_first_root_child_logical_start(
-                                    &mut builder,
+                                    builder,
                                     root,
                                     first_scope_child,
                                     position,
                                 );
                                 set_new_root_children_logical_start(
-                                    &mut builder,
+                                    builder,
                                     root,
                                     first_scope_child.saturating_add(1),
                                     replay_position,
@@ -1003,7 +1002,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                         && let Some(position) = virtual_scope_opening_position
                                     {
                                         set_first_scope_child_logical_start(
-                                            &mut builder,
+                                            builder,
                                             root,
                                             first_scope_child,
                                             position,
@@ -1040,7 +1039,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         {
                             if matches!(request, b"ds" | b"as") {
                                 if let Err(error) = apply_string_request(
-                                    &mut environment,
+                                    environment,
                                     raw_arguments,
                                     scanner.escape_character(),
                                     request == b"as",
@@ -1082,7 +1081,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 break;
                             };
                             if let Err(error) = apply_environment_request(
-                                &mut environment,
+                                environment,
                                 builder,
                                 request,
                                 scanner.escape_character(),
@@ -1188,7 +1187,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 );
                                 truncated |= result.truncated;
                                 if append_text_node(
-                                    &mut builder,
+                                    builder,
                                     root,
                                     source_id,
                                     start,
@@ -1245,7 +1244,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         let empty_while_body =
                             empty_scope_finding.is_some() && result.text.is_empty();
                         if append_text_node(
-                            &mut builder,
+                            builder,
                             root,
                             source_id,
                             start,
@@ -1536,7 +1535,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             let first_scope_child =
                                 builder.children(root).map_or(0, <[NodeId]>::len);
                             let flow = ScopeMachine {
-                                builder: &mut builder,
+                                builder,
                                 root,
                                 source_id,
                                 scanner: &mut scanner,
@@ -1552,7 +1551,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             .run(&scope.lines);
                             if let Some(opener_start) = scope_opening_column {
                                 set_first_scope_child_opening_column(
-                                    &mut builder,
+                                    builder,
                                     root,
                                     first_scope_child,
                                     source_id,
@@ -1594,7 +1593,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                         // above), so keep it printable and source-bound.
                         if builder.macro_set() == MacroSet::Man && condition {
                             let _ = append_text_node(
-                                &mut builder,
+                                builder,
                                 root,
                                 source_id,
                                 end,
@@ -1663,7 +1662,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             if is_environment_request(request) {
                                 if matches!(request, b"ds" | b"as") {
                                     if let Err(error) = apply_string_request(
-                                        &mut environment,
+                                        environment,
                                         raw_arguments,
                                         scanner.escape_character(),
                                         request == b"as",
@@ -1709,7 +1708,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     continue;
                                 };
                                 if let Err(error) = apply_environment_request(
-                                    &mut environment,
+                                    environment,
                                     builder,
                                     request,
                                     scanner.escape_character(),
@@ -1749,7 +1748,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 if matches!(
                                     execute_scope_line(
                                         &body,
-                                        &mut builder,
+                                        builder,
                                         root,
                                         source_id,
                                         &mut scanner,
@@ -1802,7 +1801,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                         definition.lines,
                                         &arguments,
                                         1,
-                                        &mut builder,
+                                        builder,
                                         root,
                                         source_id,
                                         start,
@@ -1858,7 +1857,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             ..NodeFlags::default()
                         };
                         if append_text_node(
-                            &mut builder,
+                            builder,
                             root,
                             source_id,
                             body_source_start,
@@ -2826,7 +2825,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     retain_user_macro_tab_argument_prefix(&mut arguments, raw_arguments);
                     if appended_package_macro {
                         let Some(element) = append_node(
-                            &mut builder,
+                            builder,
                             root,
                             NodeKind::Element,
                             source_id,
@@ -2851,7 +2850,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             let argument_offset = u32::try_from(argument.offset)
                                 .expect("argument offsets are bounded by line length");
                             if !append_text_node(
-                                &mut builder,
+                                builder,
                                 element,
                                 source_id,
                                 argument_start
@@ -2923,7 +2922,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             &copy_mode_reparse(&source_line, scanner.escape_character()),
                             scanner.escape_character(),
                             start,
-                            &builder,
+                            builder,
                             source_id,
                             limits,
                             &mut diagnostics,
@@ -3102,7 +3101,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                                 continue;
                                             };
                                             let Some(predicate) = expand_environment(
-                                                &mut environment,
+                                                environment,
                                                 &predicate,
                                                 scanner.escape_character(),
                                                 &macro_arguments,
@@ -3558,7 +3557,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     macro_loop_body,
                                     &macro_arguments,
                                     macro_depth + 1,
-                                    &mut builder,
+                                    builder,
                                     root,
                                     source_id,
                                     start,
@@ -3592,7 +3591,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     ),
                                 );
                                 set_first_scope_child_logical_start(
-                                    &mut builder,
+                                    builder,
                                     root,
                                     first_macro_loop_child,
                                     SourcePosition {
@@ -3601,7 +3600,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     },
                                 );
                                 match (ScopeMachine {
-                                    builder: &mut builder,
+                                    builder,
                                     root,
                                     source_id,
                                     scanner: &mut scanner,
@@ -3628,7 +3627,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             }
                             if matches!(request, b"ds" | b"as") {
                                 if let Err(error) = apply_string_request(
-                                    &mut environment,
+                                    environment,
                                     raw_arguments,
                                     scanner.escape_character(),
                                     request == b"as",
@@ -3652,7 +3651,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             }
                             if is_environment_request(request) {
                                 let Some(expanded_arguments) = expand_environment(
-                                    &mut environment,
+                                    environment,
                                     raw_arguments,
                                     scanner.escape_character(),
                                     &macro_arguments,
@@ -3674,7 +3673,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     continue;
                                 };
                                 if let Err(error) = apply_environment_request(
-                                    &mut environment,
+                                    environment,
                                     builder,
                                     request,
                                     scanner.escape_character(),
@@ -3834,7 +3833,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                 ..NodeFlags::default()
                             };
                             let Some(element) = append_node(
-                                &mut builder,
+                                builder,
                                 root,
                                 NodeKind::Element,
                                 source_id,
@@ -3981,7 +3980,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     let logical_text_width = u32::try_from(result.text.len())
                                         .expect("expanded macro arguments fit public columns");
                                     if append_text_node(
-                                        &mut builder,
+                                        builder,
                                         element,
                                         source_id,
                                         generated_argument_start,
@@ -4100,7 +4099,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                             ..NodeFlags::default()
                         };
                         if append_text_node(
-                            &mut builder,
+                            builder,
                             root,
                             source_id,
                             start,
@@ -4137,7 +4136,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     ..NodeFlags::default()
                 };
                 let Some(element) = append_node(
-                    &mut builder,
+                    builder,
                     root,
                     NodeKind::Element,
                     source_id,
@@ -4349,7 +4348,7 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                                     .saturating_sub(lexical_width)
                             };
                             if append_text_node(
-                                &mut builder,
+                                builder,
                                 element,
                                 source_id,
                                 argument_start,
@@ -4450,17 +4449,8 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     }
                     let source_end =
                         usize::try_from(end).expect("parser checks public span offsets first");
-                    // This is a bounded parser path, and adding a generic
-                    // byte-counting dependency solely for this exceptional
-                    // provenance calculation would widen the public supply
-                    // chain without affecting normal scanning throughput.
-                    #[allow(clippy::naive_bytecount)]
                     let final_line = u32::try_from(
-                        source.bytes[..source_end]
-                            .iter()
-                            .filter(|byte| **byte == b'\n')
-                            .count()
-                            + 1,
+                        memchr::memchr_iter(b'\n', &source.bytes[..source_end]).count() + 1,
                     )
                     .expect("source line count fits the public source limit");
                     let argument_offset = usize::try_from(argument_start)
@@ -4468,12 +4458,15 @@ fn run_source<R: SourceResolver + ?Sized>(machine: SourceMachine<'_, '_, '_, R>)
                     let logical_base_column = source.bytes[..argument_offset]
                         .iter()
                         .rposition(|byte| *byte == b'\n')
-                        .map_or(argument_start.saturating_add(1), |line_start| {
-                            argument_start.saturating_sub(
-                                u32::try_from(line_start)
-                                    .expect("source offsets fit the public source limit"),
-                            )
-                        });
+                        .map_or_else(
+                            || argument_start.saturating_add(1),
+                            |line_start| {
+                                argument_start.saturating_sub(
+                                    u32::try_from(line_start)
+                                        .expect("source offsets fit the public source limit"),
+                                )
+                            },
+                        );
                     for (node, offset) in continued_argument_nodes {
                         let _ = builder.set_node_logical_start(
                             node,

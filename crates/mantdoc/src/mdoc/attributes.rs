@@ -1,6 +1,7 @@
 use super::{
     BTreeMap, BlockAttributes, DisplayKind, DocumentBuilder, ListWidthRule, MdocListMarker, NodeId,
-    NodeKind, NormalizedFont, NormalizedListKind, Recovery, SourceSpan,
+    NodeKind, NormalizedFont, NormalizedListKind, Recovery, SourceSpan, TerminalDisplayStyle,
+    TerminalListStyle,
 };
 
 #[allow(clippy::too_many_lines)] // Mirrors mdoc's ordered list-option validation and recovery.
@@ -70,10 +71,13 @@ pub(super) fn list_attributes(
             first_type_index = Some(index);
             attributes.list_type =
                 list_type_name(value).expect("selected list type was matched above");
-            attributes.terminal_hanging_list = value == "-hang";
-            attributes.terminal_overhanging_list = value == "-ohang";
-            attributes.terminal_inset_list = value == "-inset";
-            attributes.terminal_diagnostic_list = value == "-diag";
+            attributes.terminal_list_style = match value {
+                "-hang" => TerminalListStyle::Hanging,
+                "-ohang" => TerminalListStyle::Overhanging,
+                "-inset" => TerminalListStyle::Inset,
+                "-diag" => TerminalListStyle::Diagnostic,
+                _ => TerminalListStyle::Regular,
+            };
             attributes.list_marker = match value {
                 "-bullet" => Some(MdocListMarker::Bullet),
                 "-dash" => Some(MdocListMarker::Dash),
@@ -337,9 +341,7 @@ pub(super) fn display_attributes(
         .children(node)
         .map(<[NodeId]>::to_vec)
         .unwrap_or_default();
-    let mut attributes = BlockAttributes {
-        ..BlockAttributes::default()
-    };
+    let mut attributes = BlockAttributes::default();
     let mut index = 0;
     while let Some(argument) = arguments.get(index).copied() {
         let value = builder.node_text(argument).unwrap_or_default();
@@ -364,8 +366,11 @@ pub(super) fn display_attributes(
                     });
                 } else {
                     attributes.display_kind = Some(display_kind);
-                    attributes.literal_display = value == "-literal";
-                    attributes.centered_display = value == "-centered";
+                    attributes.terminal_display_style = match value {
+                        "-literal" => TerminalDisplayStyle::Literal,
+                        "-centered" => TerminalDisplayStyle::Centered,
+                        _ => TerminalDisplayStyle::Regular,
+                    };
                 }
             }
             "-compact" => {
@@ -503,15 +508,31 @@ pub(super) fn apply_attributes(
         let _ = builder.set_node_list_kind(*node, attributes.list_kind);
         let _ = builder.set_node_list_marker(*node, attributes.list_marker);
         let _ = builder.set_node_column_widths(*node, attributes.column_widths.clone());
-        let _ = builder.set_node_terminal_hanging_list(*node, attributes.terminal_hanging_list);
-        let _ =
-            builder.set_node_terminal_overhanging_list(*node, attributes.terminal_overhanging_list);
-        let _ = builder.set_node_terminal_inset_list(*node, attributes.terminal_inset_list);
-        let _ =
-            builder.set_node_terminal_diagnostic_list(*node, attributes.terminal_diagnostic_list);
+        let _ = builder.set_node_terminal_hanging_list(
+            *node,
+            attributes.terminal_list_style == TerminalListStyle::Hanging,
+        );
+        let _ = builder.set_node_terminal_overhanging_list(
+            *node,
+            attributes.terminal_list_style == TerminalListStyle::Overhanging,
+        );
+        let _ = builder.set_node_terminal_inset_list(
+            *node,
+            attributes.terminal_list_style == TerminalListStyle::Inset,
+        );
+        let _ = builder.set_node_terminal_diagnostic_list(
+            *node,
+            attributes.terminal_list_style == TerminalListStyle::Diagnostic,
+        );
         let _ = builder.set_node_display_kind(*node, attributes.display_kind);
-        let _ = builder.set_node_literal_display(*node, attributes.literal_display);
-        let _ = builder.set_node_centered_display(*node, attributes.centered_display);
+        let _ = builder.set_node_literal_display(
+            *node,
+            attributes.terminal_display_style == TerminalDisplayStyle::Literal,
+        );
+        let _ = builder.set_node_centered_display(
+            *node,
+            attributes.terminal_display_style == TerminalDisplayStyle::Centered,
+        );
         let _ = builder.set_node_font(*node, attributes.font);
         let _ = builder.set_node_compact(*node, attributes.compact);
         if let Some(offset) = &attributes.offset {
@@ -699,10 +720,7 @@ pub(super) fn normalize_filled_blank_lines(
 pub(super) fn blank_line_location(builder: &DocumentBuilder, node: NodeId) -> Option<SourceSpan> {
     let mut location = builder.node_location(node)?;
     let position = builder.node_source_position(node)?;
-    location.logical_start = Some(crate::SourcePosition {
-        line: position.line,
-        column: position.column,
-    });
+    location.logical_start = Some(position);
     Some(location)
 }
 

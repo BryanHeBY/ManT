@@ -1979,9 +1979,10 @@ fn wrap_html_reference_paragraph(content: &str, opening_width: usize) -> String 
                     .char_indices()
                     .take_while(|(_, character)| character.is_whitespace())
                     .last()
-                    .map_or(character.len_utf8(), |(index, character)| {
-                        index + character.len_utf8()
-                    });
+                    .map_or_else(
+                        || character.len_utf8(),
+                        |(index, character)| index + character.len_utf8(),
+                    );
             let whitespace = &content[cursor..whitespace_end];
             if whitespace.contains('\n') {
                 output.push_str(whitespace);
@@ -2314,10 +2315,13 @@ fn render_html_function_declaration(node: NodeRef<'_>, limits: &Limits) -> Strin
         .map_or_else(String::new, |tag| format!(" id=\"{tag}\""));
     let code = format!("<code class=\"Fn\"{id}>{name}</code>");
     let name = if head.flags().permalink {
-        tag.map_or(code.clone(), |tag| {
-            let tag = escape_html(&tag);
-            format!("<a class=\"permalink\" href=\"#{tag}\">{code}</a>")
-        })
+        tag.map_or_else(
+            || code.clone(),
+            |tag| {
+                let tag = escape_html(&tag);
+                format!("<a class=\"permalink\" href=\"#{tag}\">{code}</a>")
+            },
+        )
     } else {
         code
     };

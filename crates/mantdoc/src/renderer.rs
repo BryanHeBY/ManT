@@ -3,7 +3,7 @@
 // This module deliberately keeps terminal state machines and the pinned device
 // character catalogue contiguous. Splitting either by arbitrary line count or
 // merging equal catalogue spellings obscures source-order device semantics.
-#![allow(clippy::match_same_arms, clippy::too_many_lines)]
+#![allow(clippy::too_many_lines)]
 
 use std::{collections::BTreeMap, fmt, path::Path};
 

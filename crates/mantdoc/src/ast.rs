@@ -314,8 +314,9 @@ impl fmt::Debug for NodeId {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 struct StringId(u32);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum InputUnicodeProvenance {
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum InputUnicodeProvenance {
+    #[default]
     None,
     Invalid,
     ValidNonAscii,
@@ -323,7 +324,7 @@ enum InputUnicodeProvenance {
 }
 
 impl InputUnicodeProvenance {
-    const fn new(has_invalid_input_bytes: bool, has_valid_utf8_non_ascii: bool) -> Self {
+    pub(crate) const fn new(has_invalid_input_bytes: bool, has_valid_utf8_non_ascii: bool) -> Self {
         match (has_invalid_input_bytes, has_valid_utf8_non_ascii) {
             (false, false) => Self::None,
             (true, false) => Self::Invalid,
@@ -332,12 +333,19 @@ impl InputUnicodeProvenance {
         }
     }
 
-    const fn has_invalid_input_bytes(self) -> bool {
+    pub(crate) const fn has_invalid_input_bytes(self) -> bool {
         matches!(self, Self::Invalid | Self::Mixed)
     }
 
-    const fn has_valid_utf8_non_ascii(self) -> bool {
+    pub(crate) const fn has_valid_utf8_non_ascii(self) -> bool {
         matches!(self, Self::ValidNonAscii | Self::Mixed)
+    }
+
+    pub(crate) const fn merged(self, other: Self) -> Self {
+        Self::new(
+            self.has_invalid_input_bytes() || other.has_invalid_input_bytes(),
+            self.has_valid_utf8_non_ascii() || other.has_valid_utf8_non_ascii(),
+        )
     }
 }
 

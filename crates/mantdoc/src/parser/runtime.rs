@@ -3,6 +3,7 @@ use super::{
     EnvironmentError, Limits, MacroSet, Severity, SourcePosition, SourceSpan, decode_visible_bytes,
     join_arguments, lex_arguments, trim_horizontal_space,
 };
+use num_traits::ToPrimitive;
 
 /// One armed roff input-line trap (`.it`).
 ///
@@ -35,18 +36,13 @@ impl InputTrap {
 /// permits both a scale suffix and the macro invocation immediately after the
 /// number, so `.it 1vtrap` means one line and `trap`, while `.it 1 trap arg`
 /// preserves `arg` for the injected macro invocation.
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
-)] // The finite, nonnegative f64 is clamped before matching C's integer trap counter.
 pub(super) fn arm_input_trap(trap: &mut InputTrap, arguments: &[u8]) -> bool {
     let mut parser = InputTrapNumberParser::new(arguments);
     let Some(count) = parser.parse_expression() else {
         return false;
     };
     let count = if count.is_finite() && count > 0.0 {
-        count.min(usize::MAX as f64) as usize
+        count.to_usize().unwrap_or(usize::MAX)
     } else {
         0
     };
@@ -217,7 +213,6 @@ pub(super) fn update_man_indent_register(
     let _ = environment.define_register(b"an-margin", value.as_bytes(), None, limits);
 }
 
-#[allow(clippy::cast_possible_truncation)] // Match C's `strtod() * 24.0` integer auxiliary value.
 pub(super) fn man_indent_units(arguments: &[u8]) -> i64 {
     let argument = trim_horizontal_space(arguments)
         .split(u8::is_ascii_whitespace)
@@ -235,7 +230,7 @@ pub(super) fn man_indent_units(arguments: &[u8]) -> i64 {
     };
     // `man_macro.c` applies `strtod(argument) * 24.0` and ignores a
     // non-positive result for the stored RS auxiliary value.
-    (value * 24.0).max(0.0) as i64
+    (value * 24.0).max(0.0).to_i64().unwrap_or(i64::MAX)
 }
 
 pub(super) fn update_preprocessor_depth(depth: &mut usize, name: &[u8]) {

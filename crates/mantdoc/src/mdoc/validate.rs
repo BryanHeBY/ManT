@@ -979,7 +979,7 @@ pub(super) fn validate_at(
         node,
         generated,
         false,
-        expanded.and(builder.node_location(first)),
+        expanded.and_then(|_| builder.node_location(first)),
     ) else {
         return Vec::new();
     };

@@ -290,12 +290,10 @@ impl Environment {
             return Err(EnvironmentError::DefinitionBytesLimit);
         }
         let entry = self.strings.entry(name.to_vec()).or_default();
-        if append {
-            entry.extend_from_slice(value);
-        } else {
+        if !append {
             entry.clear();
-            entry.extend_from_slice(value);
         }
+        entry.extend_from_slice(value);
         self.definition_bytes = retained;
         self.implicit_empty_strings.remove(name);
         Ok(())

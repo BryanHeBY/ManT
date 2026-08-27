@@ -1002,6 +1002,8 @@ name = "mantdoc"
 version = "0.1.0-alpha.1"
 dependencies = [
  "flate2",
+ "memchr",
+ "num-traits",
  "serde",
  "serde_json",
  "unicode-width",

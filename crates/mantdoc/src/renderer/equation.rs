@@ -212,7 +212,7 @@ fn parse_terminal_equation(tokens: &[EquationTerminalToken]) -> TerminalEquation
         let text = token.text.as_ref();
         let keyword = (!token.quoted).then_some(text);
         match keyword {
-            Some("mark" | "lineup") => {}
+            Some("mark" | "lineup" | "define" | "ndefine" | "tdefine" | "undef" | "delim") => {}
             Some("gfont" | "gsize" | "fwd" | "back" | "down" | "up") => {
                 index = index.saturating_add(usize::from(tokens.get(index).is_some()));
             }
@@ -395,9 +395,6 @@ fn parse_terminal_equation(tokens: &[EquationTerminalToken]) -> TerminalEquation
                     "dotdot" => tree.boxes[decorated].top = Some("\\[ad]".into()),
                     _ => unreachable!("matched eqn decoration keyword"),
                 }
-            }
-            Some("define" | "ndefine" | "tdefine" | "undef" | "delim") => {
-                // Parser-side preprocessing has already applied these requests.
             }
             _ => {
                 parent = tree.move_to_available(parent);
@@ -1149,10 +1146,10 @@ fn ascii_equation_special_character(name: &str) -> Option<&'static str> {
         "*b" => "<beta>",
         "*g" => "<gamma>",
         "*d" => "<delta>",
-        "*e" => "<epsilon>",
+        "*e" | "+e" => "<epsilon>",
         "*z" => "<zeta>",
         "*y" => "<eta>",
-        "*h" => "<theta>",
+        "*h" | "+h" => "<theta>",
         "*i" => "<iota>",
         "*k" => "<kappa>",
         "*l" => "<lambda>",
@@ -1160,20 +1157,15 @@ fn ascii_equation_special_character(name: &str) -> Option<&'static str> {
         "*n" => "<nu>",
         "*c" => "<xi>",
         "*o" => "o",
-        "*p" => "<pi>",
+        "*p" | "+p" => "<pi>",
         "*r" => "<rho>",
-        "*s" => "<sigma>",
+        "*s" | "ts" => "<sigma>",
         "*t" => "<tau>",
         "*u" => "<upsilon>",
-        "*f" => "<phi>",
+        "*f" | "+f" => "<phi>",
         "*x" => "<chi>",
         "*q" => "<psi>",
         "*w" => "<omega>",
-        "+h" => "<theta>",
-        "+f" => "<phi>",
-        "+p" => "<pi>",
-        "+e" => "<epsilon>",
-        "ts" => "<sigma>",
         _ => return None,
     };
     Some(spelling)

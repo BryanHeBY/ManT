@@ -236,7 +236,6 @@ pub(super) fn html_apply_font_request(selector: Option<&str>, state: &mut HtmlRe
         // roff's HTML device accepts `.ft P` and an empty `.ft` but keeps
         // its already-open HTML font wrapper.  Inline `\fP` remains a real
         // swap in `html_font_escape`; this is request-specific behaviour.
-        "" | "P" => None,
         _ => None,
     };
     if let Some(next) = next {
@@ -659,11 +658,6 @@ pub(super) fn terminal_zero_width_roff_atom(text: &str, cursor: usize) -> (Strin
     }
     match bytes.get(start + 1) {
         Some(b'z') => (String::new(), start, false),
-        Some(b'c' | b'&') => (
-            String::new(),
-            start.saturating_add(2).min(bytes.len()),
-            false,
-        ),
         Some(b'f') => {
             let Some((font_end, _)) = terminal_font_escape(bytes, start) else {
                 return (
@@ -824,11 +818,10 @@ pub(super) fn render_unicode_character_escapes(text: &str, format: RenderFormat)
         let character = named_unicode_scalar(value);
         if let Some(character) = character {
             push_renderer_device_character(&mut output, character, format);
-            cursor = close + 1;
         } else {
             output.push_str(&text[cursor..=close]);
-            cursor = close + 1;
         }
+        cursor = close + 1;
     }
     output
 }

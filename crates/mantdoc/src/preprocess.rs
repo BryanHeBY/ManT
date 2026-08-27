@@ -10,8 +10,8 @@
 use crate::{
     Limits, NodeId, NodeKind, SourceSpan, TableAlignment, TableCell,
     ast::{
-        DocumentBuilder, EquationTerminal, EquationTerminalToken, TableTerminalBorder,
-        TableTerminalCell, TableTerminalFont, TableTerminalRow,
+        DocumentBuilder, EquationTerminal, EquationTerminalToken, InputUnicodeProvenance,
+        TableTerminalBorder, TableTerminalCell, TableTerminalFont, TableTerminalRow,
     },
 };
 

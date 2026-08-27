@@ -944,12 +944,10 @@ pub(super) fn append_terminal_table_rule(
         let (after, before, rules) =
             table_terminal_boundary(terminal, None, None, column, gaps[column], all_box);
         line.push_str(&line_character.to_string().repeat(after));
-        if rules == 0 {
-            line.push_str(&line_character.to_string().repeat(before));
-        } else {
+        if rules != 0 {
             line.push_str(&"+".repeat(rules));
-            line.push_str(&line_character.to_string().repeat(before));
         }
+        line.push_str(&line_character.to_string().repeat(before));
         // A standalone full-width tbl rule owns one final device cell at
         // each participating layout boundary. Partial horizontal layout
         // cells are handled by the data-row geometry instead; applying this

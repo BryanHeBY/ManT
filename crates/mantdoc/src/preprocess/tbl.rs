@@ -1,8 +1,9 @@
 use super::{
-    DocumentBuilder, DynamicPreprocessRecovery, LimitFinding, Limits, NodeId, NodeKind,
-    PreprocessRecovery, SourceSpan, TableAlignment, TableCell, TableTerminalBorder,
-    TableTerminalCell, TableTerminalFont, TableTerminalRow,
+    DocumentBuilder, DynamicPreprocessRecovery, InputUnicodeProvenance, LimitFinding, Limits,
+    NodeId, NodeKind, PreprocessRecovery, SourceSpan, TableAlignment, TableCell,
+    TableTerminalBorder, TableTerminalCell, TableTerminalFont, TableTerminalRow,
 };
+use num_traits::ToPrimitive;
 
 #[derive(Clone)]
 pub(super) struct SourceLine {
@@ -120,7 +121,6 @@ struct RowWithColumns {
     terminal: TableTerminalRow,
 }
 
-#[allow(clippy::struct_excessive_bools)] // Each flag maps to an independent tbl cell recovery invariant.
 #[derive(Default)]
 struct RawCell {
     text: String,
@@ -129,8 +129,7 @@ struct RawCell {
     /// example `.Nm` with its default name), but its source remains semantic
     /// content that the engine reconstructs from the retained source span.
     semantic_content: bool,
-    has_invalid_input_bytes: bool,
-    has_valid_utf8_non_ascii: bool,
+    input_unicode_provenance: InputUnicodeProvenance,
 }
 
 struct PendingTextBlock {
@@ -1106,8 +1105,7 @@ fn table_terminal_width(value: &[u8]) -> Option<u16> {
     if basic > f64::from(u16::MAX) * 24.0 {
         return None;
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let cells = ((basic as u128).saturating_add(11) / 24).max(1);
+    let cells = (basic.to_u128()?.saturating_add(11) / 24).max(1);
     u16::try_from(cells).ok()
 }
 
@@ -1234,8 +1232,10 @@ fn parse_data_rows(lines: &[SourceLine], layout: &TableLayout) -> ParsedDataRows
                             text: String::new(),
                             text_block: true,
                             semantic_content: false,
-                            has_invalid_input_bytes: line.has_invalid_input_bytes,
-                            has_valid_utf8_non_ascii: line.has_valid_utf8_non_ascii,
+                            input_unicode_provenance: InputUnicodeProvenance::new(
+                                line.has_invalid_input_bytes,
+                                line.has_valid_utf8_non_ascii,
+                            ),
                         });
                         if !next.trim().is_empty() {
                             append_cell_text(
@@ -1293,8 +1293,10 @@ fn parse_data_rows(lines: &[SourceLine], layout: &TableLayout) -> ParsedDataRows
                 text: String::new(),
                 text_block: true,
                 semantic_content: false,
-                has_invalid_input_bytes: line.has_invalid_input_bytes,
-                has_valid_utf8_non_ascii: line.has_valid_utf8_non_ascii,
+                input_unicode_provenance: InputUnicodeProvenance::new(
+                    line.has_invalid_input_bytes,
+                    line.has_valid_utf8_non_ascii,
+                ),
             });
             if !after.trim().is_empty() {
                 append_cell_text(
@@ -1470,8 +1472,10 @@ fn append_plain_cells(
         text: table_field_text(text),
         text_block: false,
         semantic_content: false,
-        has_invalid_input_bytes,
-        has_valid_utf8_non_ascii,
+        input_unicode_provenance: InputUnicodeProvenance::new(
+            has_invalid_input_bytes,
+            has_valid_utf8_non_ascii,
+        ),
     }));
 }
 
@@ -1515,8 +1519,12 @@ fn append_cell_text(
         cell.text.push(' ');
     }
     cell.text.push_str(value);
-    cell.has_invalid_input_bytes |= has_invalid_input_bytes;
-    cell.has_valid_utf8_non_ascii |= has_valid_utf8_non_ascii;
+    cell.input_unicode_provenance =
+        cell.input_unicode_provenance
+            .merged(InputUnicodeProvenance::new(
+                has_invalid_input_bytes,
+                has_valid_utf8_non_ascii,
+            ));
 }
 
 fn advance_past_horizontal_layout_rows(
@@ -1613,8 +1621,8 @@ fn push_table_row(
             text: (!empty_text_block).then(|| {
                 table_cell_text(
                     &raw.text,
-                    raw.has_invalid_input_bytes,
-                    raw.has_valid_utf8_non_ascii,
+                    raw.input_unicode_provenance.has_invalid_input_bytes(),
+                    raw.input_unicode_provenance.has_valid_utf8_non_ascii(),
                 )
             }),
             // The upstream parser only marks a text block after it received
@@ -1647,8 +1655,8 @@ fn push_table_row(
             cells.push(TableCell {
                 text: Some(table_cell_text(
                     &raw.text,
-                    raw.has_invalid_input_bytes,
-                    raw.has_valid_utf8_non_ascii,
+                    raw.input_unicode_provenance.has_invalid_input_bytes(),
+                    raw.input_unicode_provenance.has_valid_utf8_non_ascii(),
                 )),
                 text_block: raw.text_block,
                 vertical_continuation: false,

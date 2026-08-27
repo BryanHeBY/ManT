@@ -683,7 +683,6 @@ fn mark_subtree_no_fill(builder: &mut DocumentBuilder, root: NodeId) {
     }
 }
 
-#[allow(clippy::unnecessary_to_owned)] // The owned edge list ends the arena borrow before mutation.
 fn mark_children_no_fill(builder: &mut DocumentBuilder, root: NodeId) {
     let Some(children) = builder.children(root) else {
         return;
@@ -889,8 +888,8 @@ fn validate_inline_paragraph_controls(
                 // `check_par()` treats only the first request inside a PP
                 // body as following the paragraph macro.  Text before a
                 // later `.br` is ordinary flow, not a PP-control sibling.
-                let context =
-                    previous_control.or((index == 0 && parent_is_paragraph_body).then_some("PP"));
+                let context = previous_control
+                    .or_else(|| (index == 0 && parent_is_paragraph_body).then_some("PP"));
                 if let Some(context @ ("br" | "sp" | "PP")) = context {
                     recoveries.push(Recovery::ParagraphSkip {
                         macro_name: "br",

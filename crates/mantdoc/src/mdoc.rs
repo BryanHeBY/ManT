@@ -122,7 +122,6 @@ enum ArgumentPlacement {
     Drop,
 }
 
-#[allow(clippy::struct_excessive_bools)] // Each flag retains a distinct terminal list/display provenance.
 #[derive(Clone, Default)]
 struct BlockAttributes {
     list_kind: Option<NormalizedListKind>,
@@ -130,16 +129,7 @@ struct BlockAttributes {
     list_marker: Option<MdocListMarker>,
     /// `Bl -hang` shares the public Definition projection with `-tag`, but
     /// retains a distinct terminal first-line field rule.
-    terminal_hanging_list: bool,
-    /// `Bl -ohang` shares the public Definition projection with `-tag`, but
-    /// renders its Head and Body as separate equally indented terminal lines.
-    terminal_overhanging_list: bool,
-    /// `Bl -inset` shares the public Definition projection with `-tag`, but
-    /// begins terminal Body content directly after its term.
-    terminal_inset_list: bool,
-    /// `Bl -diag` shares the public Definition projection with `-tag`, but
-    /// uses a bold terminal term and a two-cell Body gap.
-    terminal_diagnostic_list: bool,
+    terminal_list_style: TerminalListStyle,
     /// Selected mdoc list selector without its leading dash.
     list_type: &'static str,
     /// Number of declaration phrases following `Bl -column`.
@@ -153,14 +143,29 @@ struct BlockAttributes {
     display_kind: Option<DisplayKind>,
     /// `-literal` and `-unfilled` share the public normalized display kind,
     /// but the terminal device assigns their tabs differently.
-    literal_display: bool,
-    /// `-centered` is publicly a filled display, but its terminal device
-    /// field centers each completed visual line.
-    centered_display: bool,
+    terminal_display_style: TerminalDisplayStyle,
     font: Option<NormalizedFont>,
     compact: bool,
     offset: Option<String>,
     width: Option<String>,
+}
+
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+enum TerminalListStyle {
+    #[default]
+    Regular,
+    Hanging,
+    Overhanging,
+    Inset,
+    Diagnostic,
+}
+
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+enum TerminalDisplayStyle {
+    #[default]
+    Regular,
+    Literal,
+    Centered,
 }
 
 /// Width retention is more specific than the public normalized list kind:

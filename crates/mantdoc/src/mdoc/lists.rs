@@ -413,7 +413,7 @@ pub(super) fn structure_implicit_column_item(
         && let Some(tokens) = builder.children(node).map(<[NodeId]>::to_vec)
     {
         let mut cells = vec![Vec::new()];
-        let mut body_locations = vec![location.clone()];
+        let mut body_locations = vec![location];
         for token in tokens {
             if builder.node_text(token) == Some("Ta") {
                 cells.push(Vec::new());
@@ -629,11 +629,7 @@ pub(super) fn make_block(
 /// phrase even though generic argument lexing otherwise treats it like a
 /// space.  The scanner records that delimiter privately so the public arena
 /// can remain source-agnostic after this package pass finishes.
-#[allow(
-    clippy::naive_bytecount,
-    clippy::too_many_arguments,
-    clippy::too_many_lines
-)] // Ordered column-cell recovery mirrors libmandoc's stateful parser without exposing scanner provenance publicly.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)] // Ordered column-cell recovery mirrors libmandoc's stateful parser without exposing scanner provenance publicly.
 pub(super) fn split_column_item_cells(
     builder: &mut DocumentBuilder,
     item: NodeId,
@@ -649,7 +645,7 @@ pub(super) fn split_column_item_cells(
     let additional_text_nodes = tokens
         .iter()
         .filter_map(|token| builder.node_text(*token))
-        .map(|text| text.bytes().filter(|byte| *byte == b'\t').count())
+        .map(|text| memchr::memchr_iter(b'\t', text.as_bytes()).count())
         .sum::<usize>();
     let mut cells = vec![Vec::new()];
     let mut suppress_first_tab_column_system_name = vec![false];

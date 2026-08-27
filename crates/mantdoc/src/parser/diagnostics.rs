@@ -324,9 +324,10 @@ pub(super) fn apply_preprocess_outcome(
         let location = (limit.code != DiagnosticCode::LEGACY_EQUATION_TREE_DEPTH_LIMIT)
             .then_some(limit.location)
             .flatten();
-        let diagnostic = location.map_or(diagnostic.clone(), |location| {
-            diagnostic.with_primary(location)
-        });
+        let diagnostic = match location {
+            Some(location) => diagnostic.with_primary(location),
+            None => diagnostic,
+        };
         push_diagnostic(
             &mut outcome.diagnostics,
             limits,
@@ -341,9 +342,10 @@ pub(super) fn apply_preprocess_outcome(
             Severity::Error,
             recovery.message,
         );
-        let diagnostic = recovery.location.map_or(diagnostic.clone(), |location| {
-            diagnostic.with_primary(location)
-        });
+        let diagnostic = match recovery.location {
+            Some(location) => diagnostic.with_primary(location),
+            None => diagnostic,
+        };
         push_diagnostic(
             &mut outcome.diagnostics,
             limits,
@@ -358,9 +360,10 @@ pub(super) fn apply_preprocess_outcome(
             recovery.severity,
             recovery.message,
         );
-        let diagnostic = recovery.location.map_or(diagnostic.clone(), |location| {
-            diagnostic.with_primary(location)
-        });
+        let diagnostic = match recovery.location {
+            Some(location) => diagnostic.with_primary(location),
+            None => diagnostic,
+        };
         push_diagnostic(
             &mut outcome.diagnostics,
             limits,
@@ -1047,7 +1050,10 @@ pub(super) fn apply_mdoc_structure_outcome(
             severity,
             message,
         );
-        let diagnostic = location.map_or(diagnostic.clone(), |span| diagnostic.with_primary(span));
+        let diagnostic = match location {
+            Some(span) => diagnostic.with_primary(span),
+            None => diagnostic,
+        };
         let diagnostic_primary = diagnostic.primary.clone();
         let diagnostic_count = outcome.diagnostics.len();
         push_diagnostic(
