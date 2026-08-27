@@ -11,7 +11,7 @@ homepage.workspace = true
 readme = "README.md"
 keywords = ["man", "mdoc", "roff", "parser", "mandoc"]
 categories = ["parser-implementations", "text-processing"]
-include = ["/Cargo.toml", "/LICENSE", "/README.md", "/benches/parse.rs", "/src/**"]
+include = ["/Cargo.toml", "/LICENSE", "/README.md", "/benches/**", "/src/**"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -40,3 +40,8 @@ workspace = true
 [[bench]]
 name = "parse"
 harness = false
+
+[[bench]]
+name = "render"
+harness = false
+required-features = ["render"]

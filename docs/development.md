@@ -312,11 +312,26 @@ an oracle-side measurement also needs refreshing:
 cargo bench --locked --package mantdoc --bench parse
 ```
 
-It reports complete parse-to-owned-AST latency, input size, node count, and
-estimated owned Rust payload for small, medium, and large generated manuals.
-Treat its timing as comparative local evidence rather than a stable CI
-threshold; sanitizer and semantic regression tests remain the correctness
-gates.
+State-machine and renderer performance work also uses two generated pipeline
+benchmarks.  They retain the same small/medium/large man inputs while adding
+macro-, mdoc-, tbl-, and eqn-heavy parser/renderer cases:
+
+```bash
+cargo bench --locked --package mantdoc --bench render --features render
+cargo bench --locked --package mant-engine --bench manual_pipeline
+```
+
+Run timing comparisons on the same idle host and release toolchain.  The
+renderer benchmark deliberately uses fewer iterations because the current
+terminal device reconstructs source-ordered state during tree traversal; its
+large case is intended to expose complexity regressions, not to be part of the
+routine correctness gate.
+
+The parse benchmark reports complete parse-to-owned-AST latency, input size,
+and node count.  The two pipeline benchmarks report parse-plus-lower or
+parse-plus-render latency and their relevant output size.  Treat timing as
+comparative local evidence rather than a stable CI threshold; sanitizer and
+semantic regression tests remain the correctness gates.
 
 When changing a versioned IR projection or protocol type, update the Rust contract,
 generated-schema, process, and projection tests in the same change. External
