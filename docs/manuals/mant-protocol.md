@@ -385,7 +385,9 @@ does not follow redirect-only `.so` pages.
 `entries` is a tagged projection. `{"kind":"none"}` emits only section
 topology, `{"kind":"summary"}` is the default, and `{"kind":"all"}` emits
 the complete nested semantic index. `{"kind":"kinds","kinds":[...]}` retains
-the selected entry kinds plus any ancestors required to reach them. Parameter
+the selected entry kinds plus any ancestors required to reach them, pruning
+unrelated branches. If no selected entry exists, `nodes` is empty and compact
+text/CommonMark presentation reports an explicit zero-match result. Parameter
 kinds use objects such as
 `{"kind":"parameter","parameterKind":"option"}`. `root`, when present,
 is a section or entry path, stable ID, or unambiguous alias. Exact paths and IDs
@@ -602,7 +604,7 @@ Example:
 
 The response uses `mant.scope-query/v0.10`. Its `scope` field contains the request, ordered resolved documents, unique edges, optional unresolved targets, and the typed traversal frontier. `result.kind = "search"` supplies global `total`, `returned`, `offset`, `truncated`, and `nextOffset` values, then groups retained `mant.search/v0.10` projections by exact document address. This search-level `truncated` describes result pagination, not document traversal. Limit and offset apply globally, not once per document.
 
-For `result.kind = "explain"`, `matches` contains exact document addresses, graph depths, and ordinary `mant.excerpt/v0.10` projections. A missing entry in one resolved document is an ordinary sparse miss counted by `missed`; it is not a projection failure. Ambiguous or invalid entry selection remains in `failures` for that document and never causes another document's exact match to be guessed or discarded. Therefore `matches.len() + missed + failures.len()` equals the number of resolved documents queried.
+For `result.kind = "explain"`, `matches` contains exact document addresses, graph depths, and ordinary `mant.excerpt/v0.10` projections. A document with neither an entry nor a literal occurrence is an ordinary sparse miss counted by `missed`. If the bounded literal probe finds the requested text only in prose, the document instead contributes a qualified `failure` containing its outline node and line; this preserves the CLI `--search` and MCP `mant_search` handoff without treating prose as a semantic entry. Ambiguous or invalid entry selection likewise remains in `failures` for that document and never causes another document's exact match to be guessed or discarded. Therefore `matches.len() + missed + failures.len()` equals the number of resolved documents queried.
 
 The CLI constructs the same contract with repeated `--document`, or with one positional selector plus `--follow-links`. An interactive scope has no serialized `full` view: the host resolves `DocumentScope` directly, opens its first readable root, and gives the loaded set to the TUI's confirmed text search.
 
@@ -764,8 +766,9 @@ An identity makes one definition addressable:
 }
 ```
 
-Roles are `option`, `command`, `variable`, and `environment-variable`. `case` is
-`sensitive` or `insensitive` and controls alias matching without changing
+Roles are `option`, `marker`, `operand`, `command`, `configuration-key`,
+`environment-variable`, `variable`, `value`, and `term`. `case` is `sensitive`
+or `insensitive` and controls alias matching without changing
 canonical spelling. `names` contains
 normalized aliases suitable for `--node`, `--explain`, outline navigation,
 and MCP tools. The complete styled term remains in `terms`; consumers should
@@ -863,9 +866,21 @@ Nested values can declare a `choices` value domain. Cross-document `entry-set`
 and `union` domains are available only when a producer has explicit evidence;
 ManT does not infer them from prose.
 
+Environment-variable aliases share one source-neutral grammar across native
+and Markdown documents: bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` or
+`${Env:NAME}`, Windows `%NAME%`, and assignment `NAME=value`. Assignment values
+are excluded from selectors but retained in `forms`; wrapped aliases also
+expose their unwrapped body as a lower-precedence shorthand. Recognition is
+limited to an explicit environment semantic context and never scans prose.
+
 Paths are convenient human locations. IDs and aliases are better selectors
 when nearby section numbering changes. Neither is globally unique across
-documents.
+documents. Entry paths such as `28.4/e29` are source-order coordinates rather
+than stable IDs and can move when the source manual changes. The separately
+returned `id` is document-local; inferred native IDs use a role-qualified full
+semantic name and do not reuse shorter formatter navigation tags. Even IDs do
+not promise compatibility across unrelated revisions of a host-provided
+manual, so clients should reuse them from a current discovery response.
 
 An illustrative response is:
 
@@ -1226,7 +1241,9 @@ excluded by the corresponding bound. `document-frontier` reports the configured
 document count, while `content-frontier` reports the fixed 64 MiB aggregate
 normalized-IR guard. `mant_explain` additionally emits
 `[explain: matched=M, missed=K, failed=F]`; documents without an entry contribute
-to `missed` instead of disappearing from the compact result.
+to `missed` when the selector is entirely absent. A prose-only literal probe
+contributes to `failed` and prints its qualified document, outline node, and
+line so the caller can continue with `mant_search`.
 
 Discover both registered Markdown and section-qualified manual pages with:
 

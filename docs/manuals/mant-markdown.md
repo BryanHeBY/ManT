@@ -85,6 +85,8 @@ The directive must be the only construct on its line and immediately precede a c
 
 `attached` applies only to option entries. With `infer`, a declaration such as `` `--output=FILE` `` exposes `--output` and accepts attached values. With `fixed`, punctuation remains part of the exact option name. This is useful for real Windows tokens such as `-ca.cert`.
 
+Environment-variable declarations use one cross-platform name grammar shared with native manuals. Accepted spellings are bare names such as `PATH`, shell references such as `$PATH`, PowerShell provider references such as `$Env:PATH` and `${Env:ProgramData}`, and Windows references such as `%ProgramFiles(x86)%`. Provider matching is ASCII case-insensitive. An assignment term such as `RUST_LOG=debug` exposes `RUST_LOG` as its selector while preserving the complete assignment as an authored form. A name starts with an ASCII letter or underscore and then uses ASCII letters, digits, `_`, `-`, or parentheses. The directive supplies the semantic context; ManT never scans ordinary prose for name-shaped words.
+
 Each list item must begin with one or more code spans containing names and then an explicit description delimiter. Ambiguous, malformed, mixed-purpose, or colliding declarations remain ordinary lists and produce author-facing diagnostics instead of silently losing selectors.
 
 Ordinary option-shaped definition lists produced by native manuals can receive identities automatically. Markdown lists require either the explicit directive or the conservative complete-list inference described in the shipped examples; authors should use the directive when role or case policy matters.

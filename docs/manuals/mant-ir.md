@@ -103,6 +103,8 @@ A definition-list item may carry `DefinitionIdentity` when ManT can identify a s
 
 The identity is assigned during lowering, before source-specific macro information is discarded. Ordinary prose definitions remain valid definition items without an identity.
 
+For inferred native definitions, the engine derives a role-qualified identity from the complete semantic name. Formatter navigation tags remain page-local anchors but do not become semantic IDs merely because their spelling is short or collides with a command. A producer-supplied non-empty identity remains authoritative. These IDs are stable within a compatible logical document; they do not promise that an independently updated host manual retains the same semantic inventory.
+
 `SemanticIndex` is a rebuildable sidecar over these content definitions. It
 classifies entries with `EntryKind`, preserves exact selector `aliases`
 separately from complete author-written `forms`, and retains nested ownership
@@ -145,7 +147,9 @@ document. `SemanticIndex` independently projects semantic definitions for
 outline discovery and can always be rebuilt from the document. `NodePath` and
 outline paths are ephemeral coordinates derived from the current tree; nested
 semantic entries use paths such as `2/e3/e1`. These coordinates are not
-long-term storage identifiers.
+long-term storage identifiers and can change when a source document inserts or
+removes earlier entries. A product version therefore does not freeze paths in
+host-provided manuals.
 
 ## Quick References
 

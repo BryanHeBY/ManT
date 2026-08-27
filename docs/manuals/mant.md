@@ -364,6 +364,9 @@ complete bullet list. Both the role and matching policy are required:
 
 <!-- mant:entries role=environment-variable case=insensitive -->
 - `PATH`, `$env:PATH`: Control executable discovery.
+- `${Env:ProgramData}`: Locate shared application data.
+- `%ProgramFiles(x86)%`: Locate 32-bit programs.
+- `RUST_LOG=debug`: Select a diagnostic filter.
 
 <!-- mant:entries role=variable case=insensitive -->
 - `$?`: Hold the last PowerShell success state.
@@ -372,7 +375,15 @@ complete bullet list. Both the role and matching policy are required:
 ```
 
 `role` is `option`, `command`, `variable`, or `environment-variable`; `case`
-is `sensitive` or `insensitive`. A variable begins with `$` and may use an
+is `sensitive` or `insensitive`. An environment-variable entry accepts bare
+`NAME`, shell `$NAME`, PowerShell `$Env:NAME` or `${Env:NAME}`, Windows
+`%NAME%`, and assignment `NAME=value` spellings. The selector for an assignment
+omits its value while the authored form retains it; wrapper-free lookup such as
+`PATH` is also available for wrapped spellings. Names start with an ASCII
+letter or underscore and then use ASCII letters, digits, `_`, `-`, or
+parentheses. This grammar is shared with native-manual inference, but is
+applied only inside an environment-variable list or environment section, never
+to arbitrary prose. A general variable begins with `$` and may use an
 ASCII identifier or one of the special names `$?`, `$$`, and `$^`; `$_` is an
 ordinary identifier form. `$env:PATH` remains an environment variable rather
 than a general variable. Option declarations may additionally use
@@ -626,7 +637,7 @@ mant --document git --document git-config --explain core.worktree --follow-links
 
 `--follow-links` expands either one positional selector or the repeated `--document` set through typed manual references and same-source Markdown document links. Expansion is breadth-first in initial-document and source-link order. Exact logical addresses deduplicate cycles and diamonds. Ordinary prose resembling `name(section)`, filename prefixes such as `git-*`, page-local links, and external links never create graph edges.
 
-`--max-depth` limits the number of followed edges from an initial document and defaults to 8: zero loads only the initial documents, while one also loads their one-hop neighbours. `--max-documents` includes initial documents, defaults to 64, and cannot exceed 256. Both limits require `--follow-links`. Scope resolution also retains at most 64 MiB of normalized semantic content, so a linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity; its `missed` count records resolved documents without that entry.
+`--max-depth` limits the number of followed edges from an initial document and defaults to 8: zero loads only the initial documents, while one also loads their one-hop neighbours. `--max-documents` includes initial documents, defaults to 64, and cannot exceed 256. Both limits require `--follow-links`. Scope resolution also retains at most 64 MiB of normalized semantic content, so a linked page that would exceed that aggregate budget remains visible in `frontier` with a `max-content-bytes` reason. JSON results distinguish missing initial documents and links through `unresolved.from`, and retain every logical link excluded by a depth, document, or content bound. Search applies one global `--limit` and `--offset` over breadth-first document order. Explain checks each document independently, so the same option in two manuals is two qualified results rather than a cross-document ambiguity. A document with neither an entry nor a literal occurrence contributes to `missed`; a prose-only occurrence is instead a qualified failure containing its outline node and line so CLI callers can use `--search` and MCP callers can use `mant_search`.
 
 Multi-document deterministic output supports `--search` and `--explain`. Outline, node, tldr, full Markdown, and man-format output remain single-document operations instead of silently selecting or concatenating pages. `--ui` opens the first initial document; confirmed text search spans the resolved set, cross-document results participate in history, and the ordinary document finder remains global.
 
@@ -635,7 +646,9 @@ Multi-document deterministic output supports `--search` and `--explain`. Outline
 - `--outline-entries MODE|KINDS`: Select `none`, `summary`, `all`, or a
   comma-separated list of `command`, `option`, `marker`, `operand`,
   `configuration-key`, `environment-variable`, `variable`, `value`, and
-  `term`.
+  `term`. A kind filter retains only matching entries and their structural
+  ancestors. With no matches it reports an explicit zero result instead of an
+  empty-looking copy of the complete section tree.
 - `--outline-root SELECTOR`: Start the projection at one exact section or entry
   path, stable ID, or unambiguous semantic alias.
 - `--node SELECTOR`: Return an outline node selected by path, stable ID, or
@@ -654,14 +667,14 @@ own preceding response:
 ```sh
 mant bash --outline
 mant bash --outline --outline-root shell-builtin-commands-80 --outline-entries command
-mant bash --outline --outline-root set-2 --outline-entries all
-mant bash --node set-2 --format markdown
+mant bash --outline --outline-root command-set --outline-entries all
+mant bash --node command-set --format markdown
 ```
 
-Rooting changes only the returned tree boundary. Original paths and IDs remain
-stable, unrelated siblings are omitted, and every call independently rebuilds
-the current local projection. Prefer a returned ID over a display heading or
-an alias that may be ambiguous.
+Rooting changes only the returned tree boundary. Paths and IDs remain unchanged
+between projections of the same current document, unrelated siblings are
+omitted, and every call independently rebuilds the local source. Prefer a
+returned ID over a display heading or an alias that may be ambiguous.
 
 Outline path `0` and node ID `tldr` designate the reserved tldr outline node,
 which contains either an external tldr page or a Markdown document's explicitly
@@ -670,6 +683,13 @@ one-based paths such as `2.3`, and semantic entries use paths such as `2.3/e4`.
 Nested entries append another component, for example `2.3/e4/e2`. One semantic
 entry may retain several author-written forms without creating duplicate
 nodes; aliases remain exact selectable spellings rather than display forms.
+Paths are source-order coordinates and can move when an installed manual
+changes; `2.3/e4` is not a stable ID. The separately printed bracketed ID is a
+document-local selector derived from semantic identity. Automatically inferred
+native entry IDs use the full recognized name plus a role prefix, so a
+navigation anchor such as `set` cannot turn `set-mark` into a misleading entry
+ID or shadow the `set` command. IDs are stable only for that logical identity
+within a compatible source document, not across arbitrary host-manual updates.
 `--tldr` selects that reserved node alone and, unlike a general node
 projection, explicitly permits a quick reference without a full document. It
 uses the normal document priority chain, but considers only Markdown documents

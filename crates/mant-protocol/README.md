@@ -114,7 +114,10 @@ Outline entries keep exact selector aliases separate from authored forms and
 can expose evidence-backed value domains.
 This supports stateless agent exploration: inspect the compact summary, reuse
 a returned stable ID as the next request's root, expand all or selected entry
-kinds below it, then read the chosen node without renumbering its path.
+kinds below it, then read the chosen node without renumbering its path within
+that current document projection. Paths remain source-order coordinates and
+can move when the source manual changes. A kind filter with no matches returns
+an empty node set rather than the unrelated section topology.
 
 Normalized document content is defined separately by
 [`mant-ir`](https://crates.io/crates/mant-ir). Parsing, lookup, projection, and

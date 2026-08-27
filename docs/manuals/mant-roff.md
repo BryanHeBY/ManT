@@ -76,6 +76,8 @@ The required mdoc prologue and structural macros are normalized as follows:
 
 Validated libmandoc tags on mdoc definitions are retained for page-local navigation. Tags and section IDs share one document-local namespace and are disambiguated during IR validation.
 
+After source lowering, ManT assigns semantic identities only inside a reliable structural context. Definition lists under environment sections recognize bare `NAME`, shell `$NAME`, PowerShell `$Env:NAME` and `${Env:NAME}`, Windows `%NAME%`, and assignment `NAME=value` spellings through the same grammar used by explicit Markdown declarations. The assignment value is not part of the selector. Hanging paragraph plus relative-indent layouts are reconstructed as definitions only in that environment context. Ordinary prose and unrelated uppercase terms are never scanned or promoted.
+
 ## Manual References
 
 ManT retains explicit manual-reference semantics and recognizes two conservative compatibility forms:

@@ -36,6 +36,9 @@ that crate was not published for that change.
   content targets, optional value domains, summaries, and nested children.
   Exact paths and IDs win before aliases, and ambiguous aliases return stable
   candidates.
+- Define kind-filtered outlines as matching entries plus their structural
+  ancestors, with filtered summaries and an explicitly empty node set when no
+  selected kind exists.
 
 ### mant-engine 0.10.0
 
@@ -50,6 +53,15 @@ that crate was not published for that change.
   nested entry path now round-trips through focused reads.
 - Recognize multi-item key-binding command groups under topical headings and
   preserve complete hyphenated Readline command names as exact aliases.
+- Separate inferred native semantic IDs from formatter navigation anchors and
+  derive role-qualified IDs from complete recognized names, preventing short
+  anchors such as `set` or `re` from shadowing unrelated exact aliases.
+- Apply one context-bounded environment-variable grammar to native and
+  Markdown definitions, including shell, PowerShell provider, Windows percent,
+  and assignment forms. This makes Git, systemd, Windows, and ManT environment
+  sections discoverable without promoting uppercase prose.
+- Prune unrelated topology and recalculate summaries for selected-kind outline
+  projections; a zero-match projection now renders an explicit empty result.
 
 ### mant-ui 0.10.0
 
@@ -77,6 +89,11 @@ that crate was not published for that change.
 - Expose catalog regex/case/result offsets and search representation/global
   offsets through MCP. Scoped search presentation now reports one unambiguous
   global matching-line-group total and never emits a document-local CLI cursor.
+- Preserve the bounded prose-only explain probe in scoped CLI and MCP results,
+  including its document, outline node, and line as a qualified failure; truly
+  absent selectors remain sparse misses.
+- Present empty kind-filtered outlines consistently in terminal, deterministic
+  text, CommonMark, and MCP output instead of returning the full section tree.
 
 ## 0.9.1 - 2026-08-24
 
