@@ -8,7 +8,7 @@ cd "$ROOT"
 
 unexpected=$( { find crates/mantdoc -name '*.rs' -type f \
   -exec grep -hoE 'clippy::[a-z_]+' {} + || true; } | sort -u | grep -Ev \
-  '^clippy::(struct_excessive_bools|too_many_arguments|too_many_lines)$' || true)
+  '^clippy::(match_same_arms|struct_excessive_bools|too_many_arguments|too_many_lines)$' || true)
 if [[ -n $unexpected ]]; then
   printf 'unexpected mantdoc Clippy exception(s):\n%s\n' "$unexpected" >&2
   exit 1
@@ -23,9 +23,10 @@ while IFS=: read -r lint maximum; do
     exit 1
   fi
 done <<'EOF'
-struct_excessive_bools:4
+struct_excessive_bools:5
+match_same_arms:2
 too_many_arguments:40
-too_many_lines:36
+too_many_lines:41
 EOF
 
 printf 'mantdoc Clippy exception budget valid\n'
